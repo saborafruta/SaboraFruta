@@ -970,7 +970,7 @@ class Op2Tests(TestCase):
         self.assertContains(pagina, 'Orçamento aprovado por Maria da Silva')
         self.assertContains(pagina, 'data, o horário e o IP')
 
-    def test_tipo_de_impressao_aparece_somente_no_campo_identificado(self):
+    def test_tipo_de_impressao_nao_aparece_no_resumo_da_variante(self):
         item = self._item(quantidade=4)
         Personalizacao.objects.create(
             item=item, tipo=Personalizacao.Tipo.ARTE,
@@ -980,7 +980,7 @@ class Op2Tests(TestCase):
 
         resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
 
-        self.assertContains(
+        self.assertNotContains(
             resposta,
             '<span class="op2-label block">Tipo de impressão</span>'
             '<span class="text-xs">Sublimação</span>',

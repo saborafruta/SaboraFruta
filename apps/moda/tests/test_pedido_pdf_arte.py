@@ -125,8 +125,8 @@ class ArteNoPdfTests(TestCase):
         self.assertIn('DRY-0', texto)
         self.assertNotIn('DRY-1', texto)
         self.assertNotIn('Tipo impressao', texto)
-        self.assertIn('Sublimação', texto)
-        self.assertIn('Silk', texto)
+        self.assertNotIn('Sublimação', texto)
+        self.assertNotIn('Silk', texto)
 
     def test_orcamento_unifica_produto_e_discrimina_valores_por_grade(self):
         from apps.moda.services.orcamento_pdf import _estilos

@@ -408,22 +408,6 @@ class PedidoPdfService:
         for item in grupo.itens:
             cor = colors.HexColor(item.grade_cor)
             cor_clara = colors.HexColor(item.grade_fundo)
-            tecnicas = [
-                personalizacao.get_tecnica_display()
-                for personalizacao in item.personalizacoes.all()
-                if personalizacao.tecnica
-            ]
-            if tecnicas:
-                estilo_variante = ParagraphStyle(
-                    f'variante_personalizacao_{item.pk}', parent=e['celula'],
-                    textColor=cor, backColor=cor_clara,
-                    borderColor=cor, borderWidth=.4, borderPadding=3,
-                    spaceBefore=3, spaceAfter=2,
-                )
-                informacoes.append(Paragraph(
-                    f'<b>{esc(item.grade_rotulo)}</b> - Personalização: '
-                    f'{esc(" / ".join(tecnicas))}', estilo_variante,
-                ))
             pessoas = list(item.individuais.all())
             if pessoas:
                 informacoes += cls._personalizacao_item(

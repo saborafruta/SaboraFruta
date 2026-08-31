@@ -37,6 +37,7 @@
 .op2-aside .op2-gallery-product{padding:9px}.op2-aside .op2-gallery-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.op2-aside .op2-gallery-image img,.op2-aside .op2-gallery-add{height:105px;min-height:105px}
 .op2-personalizacao-grid{grid-template-columns:minmax(115px,.7fr) minmax(150px,1fr) minmax(110px,.65fr) auto}
 .op2-product-group{padding:12px;border:1px solid rgba(148,163,184,.28);border-radius:14px;background:rgba(148,163,184,.035)}.op2-product-group+.op2-product-group{margin-top:12px}.op2-product-group-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.op2-product-group-total{white-space:nowrap;text-align:right}.op2-item-variant{box-shadow:none;background:rgba(255,255,255,.015)}.op2-grade-tag{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid currentColor}.op2-grade-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px}
+.op2-item-summary{grid-template-columns:minmax(240px,1fr) minmax(240px,1fr)}
 @media(max-width:767px){.op2-personalizacao-grid{grid-template-columns:1fr}}
 </style>
 <div class="op2-shell" x-data="op2WorkspaceCompleto()" x-init="recolherMenu()">
@@ -122,7 +123,6 @@
               </header>
 
               <div class="op2-item-summary">
-                <div><span class="op2-label block">Tipo de impressão</span>{% for arte in item.personalizacoes.all %}<span class="text-xs">{{ arte.get_tecnica_display }}</span>{% empty %}<span class="text-xs opacity-60">Não informado</span>{% endfor %}</div>
                 <div><span class="op2-label block">Grade</span>{% for g in item.grade.all %}{% if g.quantidade %}<span class="op2-chip">{{ g.tamanho.sigla }}: {{ g.quantidade }}</span>{% endif %}{% empty %}<span class="text-xs opacity-60">Sem grade</span>{% endfor %}</div>
                 <div><span class="op2-label block">Nomes / números</span>{% for pessoa in item.individuais.all %}<span class="op2-chip">{{ pessoa.tamanho }}{% if pessoa.numero %} #{{ pessoa.numero }}{% endif %}{% if pessoa.nome %} {{ pessoa.nome }}{% endif %}</span>{% empty %}<span class="text-xs opacity-60">Nenhum</span>{% endfor %}</div>
               </div>
