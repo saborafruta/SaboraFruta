@@ -40,6 +40,25 @@ def _filial(request):
     return request.filial_ativa
 
 
+def _vincular_vendas(titulos, filial):
+    """Resolve a origem real em lote, sem confundir documento com nº da venda."""
+    from apps.pdv.models import VendaPDV
+
+    venda_ids = {
+        t.documento_id for t in titulos
+        if t.documento_tipo == 'venda_pdv' and t.documento_id
+    }
+    vendas = {
+        v.pk: v for v in VendaPDV.objects.for_filial(filial)
+        .filter(pk__in=venda_ids).only('pk', 'numero_venda', 'data_venda')
+    } if venda_ids else {}
+    for titulo in titulos:
+        titulo.venda_vinculada = (
+            vendas.get(titulo.documento_id)
+            if titulo.documento_tipo == 'venda_pdv' else None
+        )
+
+
 def _kpis(qs_base):
     hoje = timezone.localdate()
     primeiro_dia_mes = hoje.replace(day=1)
@@ -132,6 +151,8 @@ class ContaReceberListView(PermissaoRequiredMixin, View):
 
         paginator = Paginator(qs, 50)
         page_obj = paginator.get_page(request.GET.get('page', 1))
+        page_obj.object_list = list(page_obj.object_list)
+        _vincular_vendas(page_obj.object_list, filial)
 
         # Querystring sem page para paginação
         qd = request.GET.copy()
@@ -169,11 +190,9 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
     permissao_acao = 'ver'
 
     def get(self, request):
-        from apps.pdv.models import VendaPDV
-
         filial = _filial(request)
 
-        status = request.GET.get('status', '')
+        status = request.GET.get('status', 'pendentes')
         q = request.GET.get('q', '').strip()
         data_ini = request.GET.get('data_ini', '')
         data_fim = request.GET.get('data_fim', '')
@@ -183,9 +202,7 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
             .select_related('cliente')
             .order_by('cliente__razao_social', 'data_vencimento')
         )
-        if status:
-            qs = qs.filter(status=status)
-        else:
+        if not status or status == 'pendentes':
             # Sem status escolhido, o relatório foca nos títulos em aberto.
             qs = qs.filter(status__in=[
                 StatusContaReceber.ABERTO,
@@ -193,6 +210,8 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
                 StatusContaReceber.VENCIDO,
                 StatusContaReceber.NEGOCIADO,
             ])
+        elif status != 'todos':
+            qs = qs.filter(status=status)
         if q:
             qs = qs.filter(
                 Q(cliente__razao_social__icontains=q)
@@ -204,18 +223,7 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
             qs = qs.filter(data_vencimento__lte=data_fim)
 
         titulos = list(qs)
-
-        # Carrega as vendas PDV vinculadas (documento_tipo="venda_pdv") só
-        # para exibir número/data da compra no cabeçalho de cada título.
-        venda_ids = [
-            t.documento_id for t in titulos
-            if t.documento_tipo == 'venda_pdv' and t.documento_id
-        ]
-        vendas = {}
-        if venda_ids:
-            vendas = {
-                v.pk: v for v in VendaPDV.objects.filter(pk__in=venda_ids)
-            }
+        _vincular_vendas(titulos, filial)
 
         grupos: dict = {}
         for t in titulos:
@@ -229,8 +237,7 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
                 }
                 grupos[t.cliente_id] = g
 
-            venda = vendas.get(t.documento_id) if t.documento_tipo == 'venda_pdv' else None
-            g['titulos'].append({'titulo': t, 'venda': venda})
+            g['titulos'].append({'titulo': t, 'venda': t.venda_vinculada})
             g['total_saldo'] += t.valor_saldo or Decimal('0')
             g['total_valor'] += t.valor_final or Decimal('0')
 
@@ -242,7 +249,12 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
         total_geral_saldo = sum((g['total_saldo'] for g in clientes), Decimal('0'))
         total_geral_valor = sum((g['total_valor'] for g in clientes), Decimal('0'))
 
-        status_label = dict(STATUS_CHOICES).get(status) if status else 'Em aberto'
+        status_label = {
+            **dict(STATUS_CHOICES),
+            'todos': 'Todos os status',
+            'pendentes': 'Somente pendentes',
+            '': 'Somente pendentes',
+        }.get(status, status)
 
         return render(request, 'financeiro/receber/relatorio.html', {
             'title': 'Relatório de Contas a Receber',

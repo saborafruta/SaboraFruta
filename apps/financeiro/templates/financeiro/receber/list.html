@@ -167,14 +167,16 @@
   </div>
 
   <!-- ── Filtros ── -->
-  <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-12 gap-3">
+  <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
     <div class="md:col-span-4">
-      <input type="text" name="q" value="{{ q }}"
+      <label for="receber-busca" class="block text-xs mb-1">Cliente ou documento</label>
+      <input id="receber-busca" type="text" name="q" value="{{ q }}"
              placeholder="Cliente ou nº do documento..."
              class="form-input">
     </div>
     <div class="md:col-span-2">
-      <select name="status" class="form-input">
+      <label for="receber-status" class="block text-xs mb-1">Status</label>
+      <select id="receber-status" name="status" class="form-input">
         <option value="pendentes" {% if status_filtro == 'pendentes' %}selected{% endif %}>Somente pendentes</option>
         <option value="todos" {% if status_filtro == 'todos' %}selected{% endif %}>Todos os status</option>
         {% for val, label in status_choices %}
@@ -183,10 +185,12 @@
       </select>
     </div>
     <div class="md:col-span-2">
-      <input type="date" name="data_ini" value="{{ data_ini }}" class="form-input" title="Vencimento de">
+      <label for="receber-vencimento-de" class="block text-xs mb-1">Vencimento de</label>
+      <input id="receber-vencimento-de" type="date" name="data_ini" value="{{ data_ini }}" class="form-input" title="Vencimento de">
     </div>
     <div class="md:col-span-2">
-      <input type="date" name="data_fim" value="{{ data_fim }}" class="form-input" title="Vencimento até">
+      <label for="receber-vencimento-ate" class="block text-xs mb-1">Vencimento até</label>
+      <input id="receber-vencimento-ate" type="date" name="data_fim" value="{{ data_fim }}" class="form-input" title="Vencimento até">
     </div>
     <div class="md:col-span-2 flex gap-2">
       <button type="submit" class="btn-secondary w-full justify-center">Filtrar</button>
@@ -243,6 +247,7 @@
             {{ c.cliente.razao_social }}
           </div>
           <div class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Nº da conta #{{ c.pk }} ·
             {% if c.documento_numero %}Doc. {{ c.documento_numero }} — {% endif %}
             Parc. {{ c.parcela }}/{{ c.total_parcelas }}
           </div>
@@ -252,7 +257,15 @@
           {{ c.get_status_display }}
         </span>
       </div>
-      <div class="grid grid-cols-3 gap-2 text-xs">
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div>
+          <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nº da venda</span>
+          <div class="font-semibold">{% if c.venda_vinculada %}#{{ c.venda_vinculada.numero_venda|stringformat:"06d" }}{% else %}—{% endif %}</div>
+        </div>
+        <div>
+          <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Data da venda</span>
+          <div class="font-semibold">{{ c.venda_vinculada.data_venda|date:"d/m/Y"|default:"—" }}</div>
+        </div>
         <div>
           <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vencimento</span>
           <div class="font-semibold">{{ c.data_vencimento|date:"d/m/Y" }}</div>
@@ -299,9 +312,11 @@
         <thead>
           <tr class="table-header"
               :style="temaClaro ? 'border-bottom:1px solid #e5e7eb; background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e; background:#1e1e20;'">
-            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">#</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nº da conta</th>
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</th>
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Documento</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nº da venda</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Data da venda</th>
             <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Parcela</th>
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vencimento</th>
             <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
@@ -324,6 +339,12 @@
             </td>
             <td class="px-4 py-3 text-xs font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
               {{ c.documento_numero|default:"—" }}
+            </td>
+            <td class="px-4 py-3 text-xs font-mono whitespace-nowrap">
+              {% if c.venda_vinculada %}#{{ c.venda_vinculada.numero_venda|stringformat:"06d" }}{% else %}—{% endif %}
+            </td>
+            <td class="px-4 py-3 text-sm whitespace-nowrap">
+              {{ c.venda_vinculada.data_venda|date:"d/m/Y"|default:"—" }}
             </td>
             <td class="px-4 py-3 text-center text-xs font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
               {{ c.parcela }}/{{ c.total_parcelas }}
@@ -388,7 +409,7 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="9" class="px-4 py-12 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            <td colspan="11" class="px-4 py-12 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
               <svg class="w-10 h-10 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                       d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>

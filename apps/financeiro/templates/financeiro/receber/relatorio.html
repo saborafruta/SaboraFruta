@@ -116,17 +116,22 @@
              :style="temaClaro ? 'border-color:#eef2f7;' : 'border-color:#2a2a2e;'">
           <div>
             <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-              {% if row.venda %}Venda #{{ row.venda.numero_venda }}{% elif row.titulo.documento_numero %}Doc. {{ row.titulo.documento_numero }}{% else %}Título #{{ row.titulo.pk }}{% endif %}
+              Nº da conta #{{ row.titulo.pk }}
             </strong>
             <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              {% if row.titulo.documento_numero %} · Documento: {{ row.titulo.documento_numero }}{% endif %}
               · Parc. {{ row.titulo.parcela }}/{{ row.titulo.total_parcelas }}
-              · Venc. {{ row.titulo.data_vencimento|date:"d/m/Y" }}
+              · Vencimento: {{ row.titulo.data_vencimento|date:"d/m/Y" }}
             </span>
           </div>
-          <div class="text-center">
-            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Compra:</span>
+          <div>
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nº da venda:</span>
             <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-              {% if row.venda %}{{ row.venda.data_venda|date:"d/m/Y" }}{% else %}{{ row.titulo.data_emissao|date:"d/m/Y" }}{% endif %}
+              {% if row.venda %}#{{ row.venda.numero_venda|stringformat:"06d" }}{% else %}—{% endif %}
+            </strong>
+            <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"> · Data da venda:</span>
+            <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {{ row.venda.data_venda|date:"d/m/Y"|default:"—" }}
             </strong>
           </div>
           <div class="text-right">

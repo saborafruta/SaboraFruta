@@ -1,0 +1,126 @@
+from datetime import date, datetime, timezone as dt_timezone
+from decimal import Decimal
+from unittest.mock import patch
+
+from django.shortcuts import render
+from django.test import RequestFactory, TestCase, override_settings
+from django.utils import timezone
+
+from apps.cadastros.models import Cliente
+from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.financeiro.models.receber_pagar import ContaReceber
+from apps.financeiro.views.receber import (
+    ContaReceberListView, ContaReceberRelatorioView, _vincular_vendas,
+)
+from apps.pdv.models import VendaPDV
+
+
+@override_settings(TIME_ZONE='America/Sao_Paulo')
+class ReceberVendaTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        empresa = Empresa.objects.create(
+            razao_social='Empresa Teste', cnpj='11222333000181',
+            regime_tributario='simples', codigo_regime_tributario=1,
+        )
+        cls.filial = Filial.objects.create(
+            empresa=empresa, razao_social='Matriz', nome_fantasia='Matriz',
+            cnpj='11222333000181', uf='RN', is_matriz=True,
+        )
+        cls.cliente = Cliente.objects.create(
+            filial=cls.filial, razao_social='Cliente Teste', cpf_cnpj='12345678901',
+        )
+        perfil = PerfilAcesso.objects.create(empresa=empresa, nome='Admin', is_admin=True)
+        cls.usuario = Usuario.objects.create_user(
+            email='receber@example.test', nome='Operador', password='teste',
+            empresa=empresa, filial=cls.filial, perfil=perfil, is_superuser=True,
+        )
+        cls.venda = VendaPDV.objects.create(
+            filial=cls.filial, cliente=cls.cliente, usuario=cls.usuario,
+            numero_venda=1014, status='finalizada', valor_total=Decimal('41'),
+            # 18/08 em UTC ainda é 17/08 no histórico em São Paulo.
+            data_venda=datetime(2026, 8, 18, 1, 0, tzinfo=dt_timezone.utc),
+        )
+        cls.conta = ContaReceber.objects.create(
+            filial=cls.filial, cliente=cls.cliente,
+            documento_tipo='venda_pdv', documento_id=cls.venda.pk,
+            documento_numero='DOC-DIFERENTE', valor_original=41, valor_final=41,
+            valor_saldo=41, data_emissao=date(2026, 8, 19),
+            data_vencimento=date(2026, 8, 27), status='vencido',
+        )
+
+    def _get(self, view, **params):
+        request = RequestFactory().get('/financeiro/receber/', params)
+        request.user = self.usuario
+        request.filial_ativa = self.filial
+        request.session = {}
+        with timezone.override('America/Sao_Paulo'), patch(
+            'apps.financeiro.views.receber.render', wraps=render,
+        ) as rendering:
+            response = view().get(request)
+        return response, rendering.call_args.args[2]
+
+    def test_listagem_e_relatorio_separam_conta_documento_venda_e_datas(self):
+        for view in (ContaReceberListView, ContaReceberRelatorioView):
+            with self.subTest(view=view):
+                response, _ = self._get(view)
+                self.assertContains(response, 'Nº da conta')
+                self.assertContains(response, f'#{self.conta.pk}')
+                self.assertContains(response, 'DOC-DIFERENTE')
+                self.assertContains(response, '#001014')
+                self.assertContains(response, '17/08/2026')
+                self.assertContains(response, '27/08/2026')
+                self.assertNotContains(response, '19/08/2026')
+
+    def test_sem_vinculo_nao_inventa_venda_por_documento_ou_emissao(self):
+        ContaReceber.objects.filter(pk=self.conta.pk).update(
+            documento_tipo='', documento_id=None, documento_numero='1014',
+        )
+        for view in (ContaReceberListView, ContaReceberRelatorioView):
+            with self.subTest(view=view):
+                response, _ = self._get(view)
+                self.assertContains(response, '1014')
+                self.assertNotContains(response, '#001014')
+                self.assertNotContains(response, '19/08/2026')
+
+    def test_vinculo_inexistente_ou_de_outra_filial_nao_exibe_venda(self):
+        outra = Filial.objects.create(
+            empresa=self.filial.empresa, razao_social='Outra',
+            cnpj='11222333000262', uf='RN',
+        )
+        VendaPDV.objects.filter(pk=self.venda.pk).update(filial=outra)
+        _vincular_vendas([self.conta], self.filial)
+        self.assertIsNone(self.conta.venda_vinculada)
+        self.conta.documento_id = 999999
+        _vincular_vendas([self.conta], self.filial)
+        self.assertIsNone(self.conta.venda_vinculada)
+
+    def test_vendas_carregadas_em_uma_consulta_para_varias_parcelas(self):
+        parcelas = [self.conta] * 20
+        with self.assertNumQueries(1):
+            _vincular_vendas(parcelas, self.filial)
+            for conta in parcelas:
+                self.assertEqual(conta.venda_vinculada.numero_venda, 1014)
+                self.assertEqual(conta.venda_vinculada.data_venda, self.venda.data_venda)
+
+    def test_relatorio_respeita_pendentes_todos_e_status_especifico(self):
+        paga = ContaReceber.objects.create(
+            filial=self.filial, cliente=self.cliente, valor_original=10,
+            valor_final=10, valor_saldo=0, valor_pago=10,
+            data_emissao=date(2026, 8, 17), data_vencimento=date(2026, 8, 27),
+            status='pago',
+        )
+        for status, total in [('pendentes', 1), ('todos', 2), ('pago', 1), ('', 1)]:
+            with self.subTest(status=status):
+                _, context = self._get(ContaReceberRelatorioView, status=status)
+                self.assertEqual(context['total_titulos'], total)
+                if status == 'pago':
+                    self.assertEqual(context['clientes'][0]['titulos'][0]['titulo'], paga)
+
+    def test_periodo_filtra_vencimento_e_nao_data_da_venda(self):
+        for view in (ContaReceberListView, ContaReceberRelatorioView):
+            with self.subTest(view=view):
+                response, _ = self._get(view, data_ini='2026-08-27', data_fim='2026-08-27')
+                self.assertContains(response, '#001014')
+                response, _ = self._get(view, data_ini='2026-08-17', data_fim='2026-08-17')
+                self.assertNotContains(response, '#001014')
