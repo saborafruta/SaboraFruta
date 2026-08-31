@@ -20,7 +20,7 @@ from reportlab.platypus import (
 
 from .pdf_marca import LARGURA_UTIL, MARGEM, cnpj, esc, logo
 from .item_groups import agrupar_itens_op
-from .pedido_pdf import DESENHAVEIS, PedidoPdfService, _imagem
+from .pedido_pdf import DESENHAVEIS, _imagem
 
 MARINHO = colors.HexColor('#052344')
 TEXTO = colors.HexColor('#172033')
@@ -202,10 +202,6 @@ class OrcamentoPdfService:
         ])
         e = _estilos()
         elementos = cls._empresa(pedido, e) + cls._cliente(pedido, e)
-        anexos = PedidoPdfService._artes_do_pedido(
-            pedido, e, LARGURA_UTIL, cor=MARINHO, cor_clara=FUNDO,
-            arredondada=True,
-        )
         fechamento = cls._resumo_comercial(pedido, e)
         medidor = Canvas(BytesIO())
         altura = lambda blocos: sum(b.wrapOn(medidor, LARGURA_UTIL, 100000)[1] for b in blocos)
@@ -214,9 +210,9 @@ class OrcamentoPdfService:
         if itens:
             elementos += cls._paginar_produtos(
                 itens[0], disponivel,
-                altura(fechamento[0]._content) + 9 if not anexos else 0, medidor,
+                altura(fechamento[0]._content) + 9, medidor,
             )
-        elementos += anexos + [Spacer(1, 9)] + fechamento
+        elementos += [Spacer(1, 9)] + fechamento
         doc.build(elementos)
         return buffer.getvalue()
 
@@ -490,9 +486,31 @@ class OrcamentoPdfService:
         largura = cls.LARGURAS[1] - 12
         fotos = []
         conteudo = [Paragraph(_texto(grupo.nome), e['nome']), Spacer(1, 4)]
+        compartilhadas = [
+            par for par in cls._especificacoes(grupo.itens[0])
+            if par[0] != 'Impressão / arte'
+        ]
+        if compartilhadas:
+            celulas = [
+                Paragraph(f'<b>{_texto(rotulo)}:</b> {_texto(valor)}', e['celula'])
+                for rotulo, valor in compartilhadas
+            ]
+            linhas = [celulas[indice:indice + 3] for indice in range(0, len(celulas), 3)]
+            while len(linhas[-1]) < 3:
+                linhas[-1].append('')
+            especificacoes = Table(
+                linhas, colWidths=[largura / 3] * 3, hAlign='LEFT',
+            )
+            especificacoes.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ]))
+            conteudo += [especificacoes, Spacer(1, 3)]
         for item in grupo.itens:
-            linha = cls._produto(item, e)
-            fotos_item = linha[0]
+            fotos_item = cls._fotos(item, e, 22 * mm)
             if fotos_item:
                 if isinstance(fotos_item, list):
                     fotos.extend(fotos_item)
@@ -509,9 +527,25 @@ class OrcamentoPdfService:
                 f'{_texto(item.grade_rotulo)} · {item.quantidade} peça(s) · '
                 f'{brl(item.valor_unitario)} por peça', estilo_grade,
             ))
-            # Remove apenas o título repetido e seu espaçador. Especificações,
-            # grade e personalizações continuam pertencendo à variante certa.
-            conteudo.extend(linha[1][2:])
+            personalizacoes = [
+                valor for rotulo, valor in cls._especificacoes(item)
+                if rotulo == 'Impressão / arte'
+            ]
+            if personalizacoes:
+                conteudo.append(Paragraph(
+                    f'<b>Personalização:</b> {_texto(" / ".join(personalizacoes))}',
+                    e['celula'],
+                ))
+            grade = [g for g in item.grade.all() if g.quantidade]
+            if grade:
+                resumo = ' | '.join(
+                    f'{g.tamanho.sigla} {g.quantidade}' for g in grade
+                )
+                conteudo += [Spacer(1, 2), Paragraph(
+                    f'<b>Grade:</b> {_texto(resumo)} | '
+                    f'<b>Total {sum(g.quantidade for g in grade)}</b>', e['celula'],
+                )]
+            conteudo += cls._pessoas(item, e, largura)
         valor = (
             Paragraph(brl(grupo.valor_unitario_unico), e['td_dir'])
             if grupo.valor_unitario_unico is not None

@@ -277,23 +277,25 @@ class PedidoPdfService:
         medidor = Canvas(BytesIO())
         if not itens:
             blocos = cls._cliente(pedido, e)
-            blocos += cls._artes_do_pedido(pedido, e)
             blocos += cls._observacoes_op(pedido, e, LARGURA_UTIL)
             elementos.append(KeepInFrame(LARGURA_UTIL - 12, altura_util, blocos, mode='shrink'))
         else:
             for indice, grupo in enumerate(grupos):
+                if len(grupo.itens) > 1:
+                    elementos.append(cls._pagina_grupo(
+                        pedido, grupo, e, LARGURA_UTIL, altura_util,
+                        incluir_observacoes=indice == 0,
+                    ))
+                    if indice < len(grupos) - 1:
+                        elementos.append(PageBreak())
+                    continue
                 meia = (LARGURA_UTIL - 6 * mm) / 2
-                if len(grupo.itens) == 1:
-                    esquerda = cls._coluna_producao(
-                        pedido, grupo.itens[0], e, meia, altura_util, medidor,
-                    )
-                else:
-                    esquerda = cls._coluna_producao_grupo(
-                        pedido, grupo, e, meia, altura_util, medidor,
-                    )
+                esquerda = cls._coluna_producao(
+                    pedido, grupo.itens[0], e, meia, altura_util, medidor,
+                )
                 # A imagem depende apenas do conteúdo da DIREITA. A lista
                 # de pessoas não disputa mais altura com a arte.
-                complemento = cls._artes_do_pedido(pedido, e, meia) if indice == 0 else []
+                complemento = []
                 if indice == 0:
                     complemento += cls._observacoes_op(pedido, e, meia)
                 complemento_frame = KeepInFrame(
@@ -301,12 +303,9 @@ class PedidoPdfService:
                 )
                 _, altura_complemento = complemento_frame.wrapOn(medidor, meia, altura_util)
                 altura_arte = altura_util - altura_complemento - 4
-                if len(grupo.itens) == 1:
-                    direita = cls._arte(
-                        grupo.itens[0], e, meia, altura_maxima=altura_arte,
-                    )
-                else:
-                    direita = cls._artes_grupo(grupo, e, meia, altura_arte)
+                direita = cls._arte(
+                    grupo.itens[0], e, meia, altura_maxima=altura_arte,
+                )
                 if not direita:
                     direita = [
                         _barra_secao(4, f'IMAGENS E IMPRESSÃO - {grupo.nome}', e, meia),
@@ -392,24 +391,70 @@ class PedidoPdfService:
         return [produto_frame, max(candidatos, key=lambda c: c[:2])[2]]
 
     @classmethod
-    def _coluna_producao_grupo(cls, pedido, grupo, e, largura, altura, medidor):
-        """Uma coluna por produto, com todas as grades coloridas dentro dela."""
+    def _pagina_grupo(
+        cls, pedido, grupo, e, largura, altura, *, incluir_observacoes=False,
+    ):
+        """Produto compartilhado no topo; grade e personalização por variante."""
+        base = grupo.itens[0]
         blocos = cls._cliente(pedido, e, largura)
-        for indice, item in enumerate(grupo.itens):
+        blocos += cls._item(
+            pedido, base, e, 0, largura_util=largura,
+            titulo=f'PRODUTO - {grupo.nome}', incluir_grade=False,
+        )
+        largura_variantes = largura * .44
+        largura_artes = largura - largura_variantes - 5 * mm
+        variantes = []
+        for item in grupo.itens:
             cor = colors.HexColor(item.grade_cor)
             cor_clara = colors.HexColor(item.grade_fundo)
-            titulo = f'{grupo.nome} · GRADE {item.grade_rotulo}'
-            blocos += cls._item(
-                pedido, item, e, indice, largura_util=largura,
-                titulo=titulo, cor=cor, cor_clara=cor_clara,
+            variantes += [
+                Spacer(1, 4),
+                _barra_secao(
+                    None, f'VARIANTE - {item.grade_rotulo}', e,
+                    largura_variantes, cor=cor, cor_clara=cor_clara,
+                ),
+            ]
+            tecnicas = [
+                personalizacao.get_tecnica_display()
+                for personalizacao in item.personalizacoes.all()
+                if personalizacao.tecnica
+            ]
+            if tecnicas:
+                variantes += [Spacer(1, 3), Paragraph(
+                    f'<b>Personalização:</b> {esc(" / ".join(tecnicas))}',
+                    e['celula'],
+                )]
+            variantes += cls._grade(
+                item, e, largura_variantes, cor=cor, cor_clara=cor_clara,
+                titulo='DISTRIBUIÇÃO DA GRADE',
             )
             pessoas = list(item.individuais.all())
             if pessoas:
-                blocos += cls._personalizacao_item(
-                    item, e, largura, pessoas=pessoas,
-                    colunas=min(2, len(pessoas)), fator_fonte=.86,
+                variantes += cls._personalizacao_item(
+                    item, e, largura_variantes, cor=cor, cor_clara=cor_clara,
+                    pessoas=pessoas, colunas=min(2, len(pessoas)),
+                    fator_fonte=.86,
                 )
-        return [KeepInFrame(largura, altura, blocos, mode='shrink')]
+        artes = cls._artes_grupo(grupo, e, largura_artes, altura * .52)
+        if not artes:
+            artes = [Paragraph('Nenhuma imagem anexada ao produto.', e['pequeno'])]
+        miolo = Table([[
+            KeepInFrame(largura_variantes, altura, variantes, mode='shrink'),
+            KeepInFrame(largura_artes, altura, artes, mode='shrink'),
+        ]], colWidths=[largura_variantes, largura_artes])
+        miolo.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (0, 0), 0),
+            ('RIGHTPADDING', (0, 0), (0, 0), 5 * mm),
+            ('LEFTPADDING', (1, 0), (1, 0), 0),
+            ('RIGHTPADDING', (1, 0), (1, 0), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        blocos += [Spacer(1, 3), miolo]
+        if incluir_observacoes:
+            blocos += cls._observacoes_op(pedido, e, largura)
+        return KeepInFrame(largura, altura, blocos, mode='shrink')
 
     @classmethod
     def _artes_grupo(cls, grupo, e, largura, altura):
@@ -642,7 +687,7 @@ class PedidoPdfService:
     @classmethod
     def _item(
         cls, pedido, item, e, indice, largura_util=LARGURA_UTIL, *,
-        titulo=None, cor=AZUL, cor_clara=AZUL_CLARO,
+        titulo=None, cor=AZUL, cor_clara=AZUL_CLARO, incluir_grade=True,
     ) -> list:
         """
         Um produto: identificação, arte e grade.
@@ -697,18 +742,21 @@ class PedidoPdfService:
             else:
                 indices[chave] = len(campos)
                 campos.append(par)
+        pares_por_linha = 3 if largura_util >= 200 * mm else 2
         dados = []
-        for inicio in range(0, len(campos), 2):
+        for inicio in range(0, len(campos), pares_por_linha):
             linha = []
-            for rotulo, valor in campos[inicio:inicio + 2]:
+            for rotulo, valor in campos[inicio:inicio + pares_por_linha]:
                 linha += [Paragraph(f'<b>{esc(rotulo)}</b>', e['pequeno']),
                           Paragraph(esc(valor), e['celula'])]
-            while len(linha) < 4:
+            while len(linha) < pares_por_linha * 2:
                 linha += ['', '']
             dados.append(linha)
+        largura_rotulo = 22 * mm
         blocos.append(_tabela(
             dados,
-            [22 * mm, largura_util / 2 - 22 * mm] * 2,
+            [largura_rotulo, largura_util / pares_por_linha - largura_rotulo]
+            * pares_por_linha,
             cabecalho=False,
         ))
 
@@ -719,9 +767,10 @@ class PedidoPdfService:
                 e['observacao_produto'],
             ))
 
-        blocos += cls._grade(
-            item, e, largura_util, cor=cor, cor_clara=cor_clara,
-        )
+        if incluir_grade:
+            blocos += cls._grade(
+                item, e, largura_util, cor=cor, cor_clara=cor_clara,
+            )
         # Na ficha horizontal, deixar os sub-blocos fluírem aproveita o
         # restante da página. O KeepTogether empurrava o produto inteiro
         # para outra folha mesmo quando ainda havia bastante espaço.
@@ -823,7 +872,7 @@ class PedidoPdfService:
     @staticmethod
     def _grade(
         item, e, largura_util=LARGURA_UTIL, cor=AZUL,
-        cor_clara=AZUL_CLARO, arredondada=False,
+        cor_clara=AZUL_CLARO, arredondada=False, titulo='GRADE',
     ) -> list:
         celulas = list(item.grade.all())
         if not celulas:
@@ -849,7 +898,7 @@ class PedidoPdfService:
         ]))
 
         return [Spacer(1, 4), _barra_secao(
-            3, 'GRADE', e, largura_util, cor=cor, cor_clara=cor_clara,
+            3, titulo, e, largura_util, cor=cor, cor_clara=cor_clara,
             arredondada=arredondada,
         ), Spacer(1, 3), tabela]
 

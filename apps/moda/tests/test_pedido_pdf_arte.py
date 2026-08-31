@@ -20,7 +20,8 @@ from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial
 from apps.moda.models import (
     ArquivoPedido, Grade, ItemGradePedido, ItemPedidoProducao, PedidoProducao,
-    PersonalizacaoIndividual, ProdutoModa, Tamanho, VisualItemPedido,
+    Personalizacao, PersonalizacaoIndividual, ProdutoModa, Tamanho,
+    VisualItemPedido,
 )
 from apps.moda.services.orcamento_pdf import OrcamentoPdfService
 from apps.moda.services.pedido_pdf import (
@@ -92,21 +93,36 @@ class ArteNoPdfTests(TestCase):
         tamanho = Tamanho.objects.create(filial=self.filial, sigla='G', ordem=10)
         adulto = Grade.objects.create(filial=self.filial, nome='Adulto')
         oversized = Grade.objects.create(filial=self.filial, nome='Oversized')
-        for grade, quantidade, valor in (
-            (adulto, 2, '70.00'), (oversized, 3, '75.00'),
-        ):
+        itens = []
+        for indice, (grade, quantidade, valor, tecnica) in enumerate((
+            (adulto, 2, '70.00', Personalizacao.Tecnica.SUBLIMACAO),
+            (oversized, 3, '75.00', Personalizacao.Tecnica.SILK),
+        )):
             item = ItemPedidoProducao.objects.create(
                 pedido=pedido, produto=produto, grade_tamanho=grade,
                 quantidade=quantidade, valor_unitario=Decimal(valor),
+                observacoes=f'Estrutura da peça:\nMalha: DRY-{indice}',
             )
+            itens.append(item)
+            Personalizacao.objects.create(item=item, tecnica=tecnica)
             ItemGradePedido.objects.create(
                 item=item, tamanho=tamanho, quantidade=quantidade,
             )
 
         pdf = PedidoPdfService.gerar(pedido)
+        from apps.moda.services.item_groups import agrupar_itens_op
+        from apps.moda.services.pedido_pdf import LARGURA_UTIL, PAGINA, _estilos
+        grupo = agrupar_itens_op(itens)[0]
+        texto = self._texto_layout(PedidoPdfService._pagina_grupo(
+            pedido, grupo, _estilos(), LARGURA_UTIL, PAGINA[1],
+        ))
 
         self.assertTrue(pdf.startswith(b'%PDF'))
         self.assertEqual(_paginas(pdf), 1)
+        self.assertIn('DRY-0', texto)
+        self.assertNotIn('DRY-1', texto)
+        self.assertIn('Sublimação', texto)
+        self.assertIn('Silk', texto)
 
     def test_orcamento_unifica_produto_e_discrimina_valores_por_grade(self):
         from apps.moda.services.orcamento_pdf import _estilos
@@ -118,13 +134,16 @@ class ArteNoPdfTests(TestCase):
         tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=10)
         adulto = Grade.objects.create(filial=self.filial, nome='Adulto')
         oversized = Grade.objects.create(filial=self.filial, nome='Oversized')
-        for grade, quantidade, valor in (
-            (adulto, 2, '70.00'), (oversized, 3, '75.00'),
-        ):
+        for indice, (grade, quantidade, valor, tecnica) in enumerate((
+            (adulto, 2, '70.00', Personalizacao.Tecnica.SUBLIMACAO),
+            (oversized, 3, '75.00', Personalizacao.Tecnica.SILK),
+        )):
             item = ItemPedidoProducao.objects.create(
                 pedido=pedido, produto=produto, grade_tamanho=grade,
                 quantidade=quantidade, valor_unitario=Decimal(valor),
+                observacoes=f'Estrutura da peça:\nMalha: DRY-{indice}',
             )
+            Personalizacao.objects.create(item=item, tecnica=tecnica)
             ItemGradePedido.objects.create(
                 item=item, tamanho=tamanho, quantidade=quantidade,
             )
@@ -136,37 +155,37 @@ class ArteNoPdfTests(TestCase):
         self.assertIn('Adulto · 2 peça(s) · R$70,00 por peça', texto)
         self.assertIn('Oversized · 3 peça(s) · R$75,00 por peça', texto)
         self.assertIn('Por grade', texto)
+        self.assertIn('DRY-0', texto)
+        self.assertNotIn('DRY-1', texto)
+        self.assertIn('Sublimação', texto)
+        self.assertIn('Silk', texto)
 
-    def test_arte_do_pedido_vira_imagem_no_pdf(self):
+    def test_anexos_complementares_nao_entram_no_pdf_da_op(self):
         pedido = self._pedido()
         antes = _imagens(PedidoPdfService.gerar(pedido))
 
         self._anexar(pedido, ArquivoPedido.Tipo.ARTE, descricao='Frente camisa')
 
-        self.assertEqual(_imagens(PedidoPdfService.gerar(pedido)), antes + 1)
+        self.assertEqual(_imagens(PedidoPdfService.gerar(pedido)), antes)
 
-    def test_referencia_do_cliente_tambem_entra(self):
+    def test_referencia_do_cliente_nao_entra_no_pdf_da_op(self):
         pedido = self._pedido()
         antes = _imagens(PedidoPdfService.gerar(pedido))
 
         self._anexar(pedido, ArquivoPedido.Tipo.REFERENCIA, nome='ref.png')
 
-        self.assertEqual(_imagens(PedidoPdfService.gerar(pedido)), antes + 1)
+        self.assertEqual(_imagens(PedidoPdfService.gerar(pedido)), antes)
 
-    def test_varias_artes_entram_todas(self):
-        """
-        Quatro artes, quatro imagens — e elas precisam ser DIFERENTES entre
-        si no teste. O reportlab reaproveita imagem repetida num objeto só,
-        então quatro arquivos byte a byte iguais contariam como um e o teste
-        acusaria um defeito que não existe.
-        """
+    def test_varios_anexos_complementares_nao_entram_no_pdf_da_op(self):
         pedido = self._pedido()
         antes = _imagens(PedidoPdfService.gerar(pedido))
 
-        for i, cor in enumerate([(200, 0, 0), (0, 200, 0), (0, 0, 200), (200, 200, 0)]):
+        for i, cor in enumerate([
+            (200, 0, 0), (0, 200, 0), (0, 0, 200), (200, 200, 0),
+        ]):
             self._anexar(pedido, ArquivoPedido.Tipo.ARTE, nome=f'arte{i}.png', cor=cor)
 
-        self.assertEqual(_imagens(PedidoPdfService.gerar(pedido)), antes + 4)
+        self.assertEqual(_imagens(PedidoPdfService.gerar(pedido)), antes)
 
     def test_varios_mockups_da_mesma_posicao_entram_no_pdf(self):
         pedido = self._pedido()
@@ -243,7 +262,7 @@ class ArteNoPdfTests(TestCase):
         self.assertEqual(altura_com_nomes, 105 * mm)
         self.assertGreater(altura_sem_nomes, altura_com_nomes)
 
-    def test_orcamento_tambem_exibe_todos_os_anexos(self):
+    def test_orcamento_nao_exibe_anexos_complementares(self):
         pedido = self._pedido()
         antes = _imagens(OrcamentoPdfService.gerar(pedido))
         self._anexar(
@@ -251,7 +270,7 @@ class ArteNoPdfTests(TestCase):
             nome='documento.png', cor=(15, 80, 180),
         )
 
-        self.assertEqual(_imagens(OrcamentoPdfService.gerar(pedido)), antes + 1)
+        self.assertEqual(_imagens(OrcamentoPdfService.gerar(pedido)), antes)
 
     def test_orcamento_exibe_pagamento_previsto_validade_e_prazo_padrao(self):
         from reportlab.platypus import Paragraph, Table
@@ -642,26 +661,25 @@ class ArteNoPdfTests(TestCase):
             self.addCleanup(visual.imagem.delete, save=False)
         self.assertEqual(_imagens(OrcamentoPdfService.gerar(pedido)), antes + 5)
 
-    def test_documento_anexado_tambem_entra_no_pdf(self):
+    def test_documento_anexado_nao_entra_no_pdf(self):
         pedido = self._pedido()
         antes = _imagens(PedidoPdfService.gerar(pedido))
 
         self._anexar(pedido, ArquivoPedido.Tipo.DOCUMENTO, nome='contrato.png')
 
-        self.assertEqual(_imagens(PedidoPdfService.gerar(pedido)), antes + 1)
+        self.assertEqual(_imagens(PedidoPdfService.gerar(pedido)), antes)
 
-    def test_outro_anexo_tambem_entra_no_pdf(self):
+    def test_outro_anexo_nao_entra_no_pdf(self):
         pedido = self._pedido()
         antes = _imagens(PedidoPdfService.gerar(pedido))
 
         self._anexar(pedido, ArquivoPedido.Tipo.OUTRO, nome='recado.png')
 
-        self.assertEqual(_imagens(PedidoPdfService.gerar(pedido)), antes + 1)
+        self.assertEqual(_imagens(PedidoPdfService.gerar(pedido)), antes)
 
     def test_arquivo_que_nao_e_imagem_nao_quebra_o_pdf(self):
         """
-        CDR e PDF não viram desenho. O documento tem de sair assim mesmo,
-        com o NOME do arquivo no lugar -- some a imagem, não a informação.
+        CDR e PDF são anexos complementares e não entram na folha da OP.
         """
         pedido = self._pedido()
         ArquivoPedido.objects.create(

@@ -1328,6 +1328,56 @@ class Op2Tests(TestCase):
             [('Adulto', 2), ('OverSized', 4)],
         )
 
+    def test_editar_variante_sincroniza_dados_comuns_sem_alterar_grade_e_personalizacao(self):
+        tamanho_p = Tamanho.objects.create(filial=self.filial, sigla='P2', ordem=10)
+        tamanho_g = Tamanho.objects.create(filial=self.filial, sigla='G2', ordem=20)
+        adulto = Grade.objects.create(filial=self.filial, nome='Adulto 2')
+        oversized = Grade.objects.create(filial=self.filial, nome='OverSized 2')
+        ItemGrade.objects.create(grade=adulto, tamanho=tamanho_p, ordem=10)
+        ItemGrade.objects.create(grade=oversized, tamanho=tamanho_g, ordem=10)
+        item = self._item(quantidade=2)
+        item.grade_tamanho = adulto
+        item.save(update_fields=['grade_tamanho'])
+        ItemGradePedido.objects.create(item=item, tamanho=tamanho_p, quantidade=2)
+        Personalizacao.objects.create(item=item, tecnica='silk')
+        irmao = self._item(quantidade=4)
+        irmao.grade_tamanho = oversized
+        irmao.observacoes = 'Malha: ANTIGA'
+        irmao.save(update_fields=['grade_tamanho', 'observacoes'])
+        ItemGradePedido.objects.create(item=irmao, tamanho=tamanho_g, quantidade=4)
+        Personalizacao.objects.create(item=irmao, tecnica='sublimacao')
+        self._login_op2()
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            **self._modelo_completo(),
+            'acao': 'editar_item',
+            'item_id': str(item.pk),
+            'produto_id': str(self.produto.pk),
+            'grades': str(adulto.pk),
+            f'grade_{adulto.pk}_{tamanho_p.pk}': '2',
+            'quantidade': '2',
+            'valor_unitario': '75.50',
+            'referencia': 'REF-COMUM',
+            'acabamento': 'Barra comum',
+            'estrutura_tipo': 'camisa',
+            'estrutura_malha': 'DRYTECH',
+            'estrutura_tipo_impressao': 'SILK',
+        })
+
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
+        irmao.refresh_from_db()
+        self.assertEqual(irmao.valor_unitario, Decimal('75.50'))
+        self.assertEqual(irmao.referencia, 'REF-COMUM')
+        self.assertEqual(irmao.acabamento, 'Barra comum')
+        self.assertIn('Malha: DRYTECH', irmao.observacoes)
+        self.assertEqual(irmao.grade_tamanho, oversized)
+        self.assertEqual(irmao.quantidade, 4)
+        self.assertEqual(
+            list(irmao.grade.values_list('tamanho__sigla', 'quantidade')),
+            [('G2', 4)],
+        )
+        self.assertEqual(irmao.personalizacoes.get().tecnica, 'sublimacao')
+
     def test_excluir_item_com_ordem_de_producao_nao_retorna_erro_500(self):
         item = self._item(quantidade=3)
         ordem = OrdemProducao.objects.create(
