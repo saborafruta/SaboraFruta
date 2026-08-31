@@ -1286,6 +1286,12 @@ class Op2Tests(TestCase):
             [(item.grade_tamanho.nome, item.quantidade) for item in adicionados],
             [('Adulto', 2), ('OverSized', 4)],
         )
+        detalhe = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+        html = detalhe.content.decode()
+        self.assertEqual(html.count('data-product-group='), 1)
+        self.assertContains(detalhe, 'Adulto · 2 peças')
+        self.assertContains(detalhe, 'OverSized · 4 peças')
+        self.assertContains(detalhe, 'As grades ficam juntas no mesmo produto')
 
     def test_editor_completo_adiciona_nova_linha_ao_incluir_outra_grade(self):
         tamanho = Tamanho.objects.create(filial=self.filial, sigla='G1', ordem=10)

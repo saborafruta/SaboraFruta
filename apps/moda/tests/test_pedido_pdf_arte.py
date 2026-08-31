@@ -19,8 +19,8 @@ from django.urls import reverse
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial
 from apps.moda.models import (
-    ArquivoPedido, ItemPedidoProducao, PedidoProducao, VisualItemPedido,
-    PersonalizacaoIndividual, Tamanho,
+    ArquivoPedido, Grade, ItemGradePedido, ItemPedidoProducao, PedidoProducao,
+    PersonalizacaoIndividual, ProdutoModa, Tamanho, VisualItemPedido,
 )
 from apps.moda.services.orcamento_pdf import OrcamentoPdfService
 from apps.moda.services.pedido_pdf import (
@@ -83,6 +83,59 @@ class ArteNoPdfTests(TestCase):
         pdf = PedidoPdfService.gerar(self._pedido())
         self.base = _imagens(pdf)
         self.assertTrue(pdf.startswith(b'%PDF'))
+
+    def test_mesmo_produto_com_duas_grades_ocupa_uma_folha_da_op(self):
+        pedido = self._pedido()
+        produto = ProdutoModa.objects.create(
+            filial=self.filial, codigo='CAM-01', nome='Camisa Dry Tech',
+        )
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='G', ordem=10)
+        adulto = Grade.objects.create(filial=self.filial, nome='Adulto')
+        oversized = Grade.objects.create(filial=self.filial, nome='Oversized')
+        for grade, quantidade, valor in (
+            (adulto, 2, '70.00'), (oversized, 3, '75.00'),
+        ):
+            item = ItemPedidoProducao.objects.create(
+                pedido=pedido, produto=produto, grade_tamanho=grade,
+                quantidade=quantidade, valor_unitario=Decimal(valor),
+            )
+            ItemGradePedido.objects.create(
+                item=item, tamanho=tamanho, quantidade=quantidade,
+            )
+
+        pdf = PedidoPdfService.gerar(pedido)
+
+        self.assertTrue(pdf.startswith(b'%PDF'))
+        self.assertEqual(_paginas(pdf), 1)
+
+    def test_orcamento_unifica_produto_e_discrimina_valores_por_grade(self):
+        from apps.moda.services.orcamento_pdf import _estilos
+
+        pedido = self._pedido()
+        produto = ProdutoModa.objects.create(
+            filial=self.filial, codigo='CAM-02', nome='Camisa Dry Tech',
+        )
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=10)
+        adulto = Grade.objects.create(filial=self.filial, nome='Adulto')
+        oversized = Grade.objects.create(filial=self.filial, nome='Oversized')
+        for grade, quantidade, valor in (
+            (adulto, 2, '70.00'), (oversized, 3, '75.00'),
+        ):
+            item = ItemPedidoProducao.objects.create(
+                pedido=pedido, produto=produto, grade_tamanho=grade,
+                quantidade=quantidade, valor_unitario=Decimal(valor),
+            )
+            ItemGradePedido.objects.create(
+                item=item, tamanho=tamanho, quantidade=quantidade,
+            )
+
+        tabela = OrcamentoPdfService._itens(pedido, _estilos())[0]
+        texto = self._texto_layout(tabela._cellvalues[1])
+
+        self.assertEqual(len(tabela._cellvalues), 2)
+        self.assertIn('Adulto · 2 peça(s) · R$70,00 por peça', texto)
+        self.assertIn('Oversized · 3 peça(s) · R$75,00 por peça', texto)
+        self.assertIn('Por grade', texto)
 
     def test_arte_do_pedido_vira_imagem_no_pdf(self):
         pedido = self._pedido()

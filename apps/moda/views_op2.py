@@ -32,6 +32,7 @@ from .services.historico import HistoricoService
 from .services.financeiro import FinanceiroPedidoService
 from .services.grade_pedido import GradePedidoService
 from .services.individual import IndividualService
+from .services.item_groups import agrupar_itens_op
 from .services.kanban_comercial import status_choices_kanban, status_destino_kanban
 from .services.op2_estrutura import (
     OP2_ESTRUTURA_OPCOES, juntar_observacoes_item, opcoes_estrutura_filial,
@@ -742,6 +743,7 @@ class Op2DetailView(ModaBaseView):
             'grade__tamanho', 'personalizacoes', 'visuais__mockup',
             'individuais__tamanho', 'ordens',
         ))
+        grupos_itens = agrupar_itens_op(itens)
         modelos = list(
             ProdutoModa.objects.for_filial(_filial(request)).filter(
                 ativo=True,
@@ -823,6 +825,7 @@ class Op2DetailView(ModaBaseView):
             ],
             'pode_editar_cliente': request.user.tem_permissao('cadastros', 'editar'),
             'itens': itens,
+            'grupos_itens': grupos_itens,
             'modelos': modelos,
             'modelos_grade': {
                 str(produto.pk): {
@@ -1157,7 +1160,10 @@ class Op2ActionView(ModaBaseView):
         if len(criados) == 1:
             messages.success(request, f'{criados[0].nome_exibicao} adicionado.')
         else:
-            messages.success(request, f'{len(criados)} itens adicionados, um para cada grade.')
+            messages.success(
+                request,
+                f'Produto adicionado com {len(criados)} grades agrupadas.',
+            )
 
     def _acao_visual_item(self, request, pedido):
         item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
@@ -1306,7 +1312,7 @@ class Op2ActionView(ModaBaseView):
         if adicionais:
             messages.success(
                 request,
-                f'Produto atualizado em {len(grades)} grades, uma linha para cada grade.',
+                f'Produto atualizado com {len(grades)} grades agrupadas.',
             )
         else:
             messages.success(request, 'Produto atualizado.')

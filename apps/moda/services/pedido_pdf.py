@@ -32,6 +32,7 @@ from reportlab.platypus import (
 from .pdf_marca import (
     ALTURA_TARJA, bloco_empresa, desenhar_tarja, esc, estilos_empresa, logo,
 )
+from .item_groups import agrupar_itens_op
 
 AZUL = colors.HexColor('#0f4aa1')
 AZUL_ESCURO = colors.HexColor('#173f7f')
@@ -270,6 +271,7 @@ class PedidoPdfService:
         e = _estilos()
         elementos = []
         itens = list(pedido.itens.all())
+        grupos = agrupar_itens_op(itens)
         # O frame do ReportLab desconta 6 pt em cada borda além das margens.
         altura_util = PAGINA[1] - doc.topMargin - doc.bottomMargin - 14
         medidor = Canvas(BytesIO())
@@ -279,11 +281,16 @@ class PedidoPdfService:
             blocos += cls._observacoes_op(pedido, e, LARGURA_UTIL)
             elementos.append(KeepInFrame(LARGURA_UTIL - 12, altura_util, blocos, mode='shrink'))
         else:
-            for indice, item in enumerate(itens):
+            for indice, grupo in enumerate(grupos):
                 meia = (LARGURA_UTIL - 6 * mm) / 2
-                esquerda = cls._coluna_producao(
-                    pedido, item, e, meia, altura_util, medidor,
-                )
+                if len(grupo.itens) == 1:
+                    esquerda = cls._coluna_producao(
+                        pedido, grupo.itens[0], e, meia, altura_util, medidor,
+                    )
+                else:
+                    esquerda = cls._coluna_producao_grupo(
+                        pedido, grupo, e, meia, altura_util, medidor,
+                    )
                 # A imagem depende apenas do conteúdo da DIREITA. A lista
                 # de pessoas não disputa mais altura com a arte.
                 complemento = cls._artes_do_pedido(pedido, e, meia) if indice == 0 else []
@@ -294,10 +301,15 @@ class PedidoPdfService:
                 )
                 _, altura_complemento = complemento_frame.wrapOn(medidor, meia, altura_util)
                 altura_arte = altura_util - altura_complemento - 4
-                direita = cls._arte(item, e, meia, altura_maxima=altura_arte)
+                if len(grupo.itens) == 1:
+                    direita = cls._arte(
+                        grupo.itens[0], e, meia, altura_maxima=altura_arte,
+                    )
+                else:
+                    direita = cls._artes_grupo(grupo, e, meia, altura_arte)
                 if not direita:
                     direita = [
-                        _barra_secao(4, f'IMAGENS E IMPRESSÃO - {item.nome_exibicao}', e, meia),
+                        _barra_secao(4, f'IMAGENS E IMPRESSÃO - {grupo.nome}', e, meia),
                         Spacer(1, 4),
                         Paragraph('Nenhuma imagem anexada.', e['pequeno']),
                     ]
@@ -324,7 +336,7 @@ class PedidoPdfService:
                     ('LINEBEFORE', (1, 0), (1, 0), .5, BORDA),
                 ]))
                 elementos.append(pagina)
-                if indice < len(itens) - 1:
+                if indice < len(grupos) - 1:
                     elementos.append(PageBreak())
 
         cabecalho = cls._cabecalho_folha(pedido, base_url)
@@ -378,6 +390,40 @@ class PedidoPdfService:
             legibilidade = fonte * fator / getattr(frame, '_scale', 1)
             candidatos.append((legibilidade, -colunas, frame))
         return [produto_frame, max(candidatos, key=lambda c: c[:2])[2]]
+
+    @classmethod
+    def _coluna_producao_grupo(cls, pedido, grupo, e, largura, altura, medidor):
+        """Uma coluna por produto, com todas as grades coloridas dentro dela."""
+        blocos = cls._cliente(pedido, e, largura)
+        for indice, item in enumerate(grupo.itens):
+            cor = colors.HexColor(item.grade_cor)
+            cor_clara = colors.HexColor(item.grade_fundo)
+            titulo = f'{grupo.nome} · GRADE {item.grade_rotulo}'
+            blocos += cls._item(
+                pedido, item, e, indice, largura_util=largura,
+                titulo=titulo, cor=cor, cor_clara=cor_clara,
+            )
+            pessoas = list(item.individuais.all())
+            if pessoas:
+                blocos += cls._personalizacao_item(
+                    item, e, largura, pessoas=pessoas,
+                    colunas=min(2, len(pessoas)), fator_fonte=.86,
+                )
+        return [KeepInFrame(largura, altura, blocos, mode='shrink')]
+
+    @classmethod
+    def _artes_grupo(cls, grupo, e, largura, altura):
+        blocos = []
+        altura_item = max(24 * mm, altura / max(1, len(grupo.itens)) - 9 * mm)
+        for item in grupo.itens:
+            cor = colors.HexColor(item.grade_cor)
+            cor_clara = colors.HexColor(item.grade_fundo)
+            blocos += cls._arte(
+                item, e, largura, altura_imagem=min(55 * mm, altura_item),
+                cor=cor, cor_clara=cor_clara,
+                titulo=f'IMAGENS · {item.grade_rotulo}',
+            )
+        return blocos
 
     # ── Cabeçalho ────────────────────────────────────────────────────────
 
@@ -594,7 +640,10 @@ class PedidoPdfService:
     # ── Produto, arte e grade ────────────────────────────────────────────
 
     @classmethod
-    def _item(cls, pedido, item, e, indice, largura_util=LARGURA_UTIL) -> list:
+    def _item(
+        cls, pedido, item, e, indice, largura_util=LARGURA_UTIL, *,
+        titulo=None, cor=AZUL, cor_clara=AZUL_CLARO,
+    ) -> list:
         """
         Um produto: identificação, arte e grade.
 
@@ -619,11 +668,15 @@ class PedidoPdfService:
                 width='100%', thickness=0.5, color=BORDA, spaceAfter=6,
             ))
 
-        blocos.append(_barra_secao(2, f'PRODUTO - {item.nome_exibicao}', e, largura_util))
+        blocos.append(_barra_secao(
+            2, titulo or f'PRODUTO - {item.nome_exibicao}', e, largura_util,
+            cor=cor, cor_clara=cor_clara,
+        ))
         blocos.append(Spacer(1, 3))
 
         observacao, estrutura = _estrutura_item(item)
-        campos = [('Produto', item.nome_exibicao)]
+        nome_produto = item.nome_base_op if titulo else item.nome_exibicao
+        campos = [('Produto', nome_produto)]
         campos += [
             (rotulo, valor) for rotulo, valor in (
                 ('Modelo', str(item.modelo) if item.modelo_id else ''),
@@ -666,7 +719,9 @@ class PedidoPdfService:
                 e['observacao_produto'],
             ))
 
-        blocos += cls._grade(item, e, largura_util)
+        blocos += cls._grade(
+            item, e, largura_util, cor=cor, cor_clara=cor_clara,
+        )
         # Na ficha horizontal, deixar os sub-blocos fluírem aproveita o
         # restante da página. O KeepTogether empurrava o produto inteiro
         # para outra folha mesmo quando ainda havia bastante espaço.
@@ -676,7 +731,7 @@ class PedidoPdfService:
     def _arte(
         item, e, largura_util=LARGURA_UTIL, altura_imagem=27 * mm,
         cor=AZUL, cor_clara=AZUL_CLARO, arredondada=False,
-        *, altura_maxima=None,
+        *, altura_maxima=None, titulo=None,
     ) -> list:
         personalizacoes = list(item.personalizacoes.all())
         visuais = list(item.visuais.all())
@@ -697,7 +752,7 @@ class PedidoPdfService:
 
         blocos = [
             _barra_secao(
-                4, f'IMAGENS E IMPRESSÃO - {item.nome_exibicao}', e, largura_util,
+                4, titulo or f'IMAGENS E IMPRESSÃO - {item.nome_exibicao}', e, largura_util,
                 cor=cor, cor_clara=cor_clara, arredondada=arredondada,
             ),
             Spacer(1, 4),

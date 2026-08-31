@@ -19,6 +19,7 @@ from reportlab.platypus import (
 )
 
 from .pdf_marca import LARGURA_UTIL, MARGEM, cnpj, esc, logo
+from .item_groups import agrupar_itens_op
 from .pedido_pdf import DESENHAVEIS, PedidoPdfService, _imagem
 
 MARINHO = colors.HexColor('#052344')
@@ -482,6 +483,48 @@ class OrcamentoPdfService:
         ]
 
     @classmethod
+    def _produto_grupo(cls, grupo, e):
+        if len(grupo.itens) == 1:
+            return cls._produto(grupo.itens[0], e)
+
+        largura = cls.LARGURAS[1] - 12
+        fotos = []
+        conteudo = [Paragraph(_texto(grupo.nome), e['nome']), Spacer(1, 4)]
+        for item in grupo.itens:
+            linha = cls._produto(item, e)
+            fotos_item = linha[0]
+            if fotos_item:
+                if isinstance(fotos_item, list):
+                    fotos.extend(fotos_item)
+                else:
+                    fotos.append(fotos_item)
+            estilo_grade = ParagraphStyle(
+                f'orc_grade_{item.pk}', parent=e['celula'],
+                fontName='Helvetica-Bold', textColor=colors.HexColor(item.grade_cor),
+                backColor=colors.HexColor(item.grade_fundo),
+                borderColor=colors.HexColor(item.grade_cor), borderWidth=.5,
+                borderPadding=3, spaceBefore=3, spaceAfter=3,
+            )
+            conteudo.append(Paragraph(
+                f'{_texto(item.grade_rotulo)} · {item.quantidade} peça(s) · '
+                f'{brl(item.valor_unitario)} por peça', estilo_grade,
+            ))
+            # Remove apenas o título repetido e seu espaçador. Especificações,
+            # grade e personalizações continuam pertencendo à variante certa.
+            conteudo.extend(linha[1][2:])
+        valor = (
+            Paragraph(brl(grupo.valor_unitario_unico), e['td_dir'])
+            if grupo.valor_unitario_unico is not None
+            else Paragraph('Por grade', e['td_dir'])
+        )
+        return [
+            fotos or '', conteudo,
+            Paragraph(str(grupo.quantidade), e['centro']),
+            valor,
+            Paragraph(brl(grupo.subtotal), e['td_dir']),
+        ]
+
+    @classmethod
     def _itens(cls, pedido, e):
         cabecalho = [Paragraph(t, e['th']) for t in (
             'PRODUTO / ESPECIFICAÇÕES', '', 'QUANTIDADE', 'VALOR UNITÁRIO', 'SUBTOTAL',
@@ -489,7 +532,8 @@ class OrcamentoPdfService:
         cabecalho[2] = Paragraph('QUANTIDADE', ParagraphStyle(
             'orc_th_quantidade', parent=e['th'], fontSize=5.3,
         ))
-        dados = [cabecalho] + [cls._produto(item, e) for item in pedido.itens.all()]
+        grupos = agrupar_itens_op(list(pedido.itens.all()))
+        dados = [cabecalho] + [cls._produto_grupo(grupo, e) for grupo in grupos]
         if len(dados) == 1:
             return []
         return [cls._tabela_produtos(dados)]
