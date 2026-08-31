@@ -53,6 +53,17 @@ class Op2ClientesTests(TestCase):
             self.assertContains(resposta, 'contatos.push({nome:\'\',telefone:\'\'})')
             self.assertContains(resposta, 'name="contato_extra_nome"')
             self.assertContains(resposta, 'name="contato_extra_telefone"')
+            html = resposta.content.decode()
+            self.assertLess(html.index('name="contato_extra_telefone"'), html.index('>+ Contato</button>'))
+            self.assertContains(resposta, 'class="flex justify-end mt-2"')
+
+    def test_nova_op_exibe_grades_coloridas_e_campos_de_pagamento_alinhados(self):
+        resposta = self.client.get(reverse('moda:op2-create'))
+        from apps.moda.services.item_groups import GRADE_CORES
+        self.assertEqual(resposta.context['grade_cores_json'], GRADE_CORES)
+        for trecho in ('op2-grade-tag', ':style="estiloGrade(item)"', 'item.grade_nome || \'Sem grade\'', 'class="op2-payment-row"', '.op2-payment-row .form-input{height:42px}'):
+            self.assertContains(resposta, trecho)
+        self.assertNotContains(resposta, "[item.codigo, item.tipo_impressao_label")
 
     def test_contatos_extras_reabrem_separados_e_nao_duplicam_ao_salvar(self):
         self.pedido.observacoes = 'Conferir gola.\n\nContatos extras:\n- Maria: 84999990000'
@@ -88,7 +99,14 @@ const context = vm.createContext({document: {getElementById: id => ({textContent
 vm.runInContext(fs.readFileSync(payload.source, 'utf8'), context);
 vm.runInContext(payload.script, context);
 const state = context[payload.funcao]();
-if (payload.funcao === 'op2NovaMelhorada') assert.equal(state.enviandoFormulario, false);
+if (payload.funcao === 'op2NovaMelhorada') {
+  assert.equal(state.enviandoFormulario, false);
+  state.itens = [{uid:1, produto_id:'5'}, {uid:2, produto_id:'5'}, {uid:3, produto_id:'6'}];
+  assert.equal(state.coresGrade(state.itens[0])[0], '#2563eb');
+  assert.equal(state.coresGrade(state.itens[1])[0], '#7c3aed');
+  assert.equal(state.coresGrade(state.itens[2])[0], '#2563eb');
+  assert.ok(state.estiloGrade(state.itens[1]).includes('background:#ede9fe'));
+}
 const writes = [];
 const proxy = new Proxy(state, {set(target, key, value) { writes.push(key); return Reflect.set(target, key, value); }});
 proxy.selecionarCliente({id: 999, nome: 'Cliente selecionado', contato: 'Contato', telefone: '123'});

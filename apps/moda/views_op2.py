@@ -32,7 +32,7 @@ from .services.historico import HistoricoService
 from .services.financeiro import FinanceiroPedidoService
 from .services.grade_pedido import GradePedidoService
 from .services.individual import IndividualService
-from .services.item_groups import agrupar_itens_op
+from .services.item_groups import GRADE_CORES, agrupar_itens_op
 from .services.kanban_comercial import status_choices_kanban, status_destino_kanban
 from .services.op2_estrutura import (
     OP2_ESTRUTURA_OPCOES, juntar_observacoes_item, opcoes_estrutura_filial,
@@ -528,6 +528,7 @@ class Op2CreateView(ModaBaseView):
                 }
                 for produto in modelos
             },
+            'grade_cores_json': GRADE_CORES,
             'grades_json': [
                 {
                     'id': str(grade.pk),
