@@ -51,6 +51,7 @@ ROTAS_PRONTAS: list = [
     # dois respondem JSON, para o pedido em digitação não ser recarregado.
     path('comercial/clientes/buscar/', vcl.ClienteBuscaView.as_view(), name='cliente-buscar'),
     path('comercial/clientes/novo/json/', vcl.ClienteRapidoJsonView.as_view(), name='cliente-criar-json'),
+    path('comercial/clientes/<int:pk>/editar/json/', vcl.ClienteRapidoUpdateJsonView.as_view(), name='cliente-editar-json'),
 
     # Orçamento é o pedido no primeiro status: a tela filtra, não duplica.
     path('comercial/orcamentos/', vorc.OrcamentoListView.as_view(), name='orcamentos'),

@@ -1,0 +1,118 @@
+import json
+import re
+import shutil
+import subprocess
+from unittest import skipUnless
+from unittest.mock import patch
+
+from django.conf import settings
+from django.test import TestCase
+from django.urls import reverse
+
+from apps.cadastros.models import Cliente
+from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.moda.models import PedidoProducao
+
+
+class Op2ClientesTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.empresa = Empresa.objects.create(razao_social='Clientes teste', cnpj='53345678000191', codigo_regime_tributario=1)
+        cls.filial = Filial.objects.create(empresa=cls.empresa, razao_social='Matriz', cnpj='53345678000272')
+        cls.perfil = PerfilAcesso.objects.create(empresa=cls.empresa, nome='Admin', is_admin=True)
+        cls.usuario = Usuario.objects.create_user('clientes@example.com', 'Teste', perfil=cls.perfil, filial=cls.filial, empresa=cls.empresa, is_superuser=True)
+        cls.cliente = Cliente.objects.create(filial=cls.filial, razao_social='Cliente inicial', tipo_pessoa='F', ativo=True, cidade='Natal', endereco='Endereço preservado')
+        cls.pedido = PedidoProducao.objects.create(filial=cls.filial, cliente=cls.cliente)
+
+    def setUp(self):
+        self.client.force_login(self.usuario)
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+        self.url = reverse('moda:cliente-editar-json', args=[self.cliente.pk])
+
+    def test_telas_oferecem_busca_cadastro_e_edicao_no_mesmo_lugar(self):
+        for url in (reverse('moda:op2-create'), reverse('moda:op2-detail', args=[self.pedido.pk])):
+            with self.subTest(url=url):
+                resposta = self.client.get(url)
+                self.assertEqual(resposta.status_code, 200)
+                for trecho in ('op2_clientes.js', 'digitarCliente()', 'abrirCadastroCliente()', 'abrirCadastroCliente(clienteId)', 'name="razao_social"', 'aria-label="Cadastro de cliente"'):
+                    self.assertContains(resposta, trecho)
+
+    def test_edicao_carrega_os_dados_do_cliente_escolhido(self):
+        resposta = self.client.get(self.url, HTTP_ACCEPT='application/json')
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.json()['campos']['razao_social'], 'Cliente inicial')
+        self.assertEqual(resposta.json()['campos']['cidade'], 'Natal')
+
+    @skipUnless(shutil.which('node'), 'Node necessário para integração JavaScript')
+    def test_scripts_renderizados_inicializam_e_selecionam_pelo_estado_reativo(self):
+        for rota, funcao in ((reverse('moda:op2-create'), 'op2NovaMelhorada'), (reverse('moda:op2-detail', args=[self.pedido.pk]), 'op2WorkspaceCompleto')):
+            with self.subTest(rota=rota):
+                html = self.client.get(rota).content.decode()
+                nodes = dict(re.findall(r'<script id="([^"]+)" type="application/json">(.*?)</script>', html, re.S))
+                script = next(script for script in re.findall(r'<script>(.*?)</script>', html, re.S) if f'function {funcao}(' in script)
+                resultado = subprocess.run([
+                    shutil.which('node'), '-e', '''
+const fs = require('node:fs'), vm = require('node:vm'), assert = require('node:assert/strict');
+const payload = JSON.parse(fs.readFileSync(0, 'utf8'));
+const context = vm.createContext({document: {getElementById: id => ({textContent: payload.nodes[id]}), addEventListener() {}}, clearTimeout() {}});
+vm.runInContext(fs.readFileSync(payload.source, 'utf8'), context);
+vm.runInContext(payload.script, context);
+const state = context[payload.funcao]();
+if (payload.funcao === 'op2NovaMelhorada') assert.equal(state.enviandoFormulario, false);
+const writes = [];
+const proxy = new Proxy(state, {set(target, key, value) { writes.push(key); return Reflect.set(target, key, value); }});
+proxy.selecionarCliente({id: 999, nome: 'Cliente selecionado', contato: 'Contato', telefone: '123'});
+assert.equal(proxy.clienteId, '999');
+for (const key of ['clienteId', 'buscaCliente', 'contatoNome', 'contatoTelefone']) assert.ok(writes.includes(key), key);
+'''], input=json.dumps({'nodes': nodes, 'script': script, 'funcao': funcao, 'source': str(settings.BASE_DIR / 'static/js/op2_clientes.js')}), text=True, capture_output=True, timeout=20)
+                self.assertEqual(resultado.returncode, 0, resultado.stderr)
+
+    def test_edicao_preserva_campos_fora_do_cadastro_rapido_e_vinculo_da_op(self):
+        dados = self.client.get(self.url).json()['campos']
+        dados = {nome: valor for nome, valor in dados.items() if valor is not None}
+        dados.update(razao_social='Cliente corrigido', contato_nome='Contato novo', celular='84999990000')
+        dados.pop('contribuinte_icms', None)
+        resposta = self.client.post(self.url, dados)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertTrue(resposta.json()['ok'])
+        self.cliente.refresh_from_db()
+        self.pedido.refresh_from_db()
+        self.assertEqual(self.cliente.razao_social, 'Cliente corrigido')
+        self.assertEqual(self.cliente.endereco, 'Endereço preservado')
+        self.assertEqual(self.pedido.cliente_id, self.cliente.pk)
+        self.assertEqual(resposta.json()['cliente']['contato'], 'Contato novo')
+
+    def test_edicao_rejeita_documento_duplicado_sem_alterar_cliente(self):
+        Cliente.objects.create(filial=self.filial, razao_social='Outro', cpf_cnpj='12345678901')
+        resposta = self.client.post(self.url, {'razao_social': 'Tentativa', 'cpf_cnpj': '12345678901'})
+        self.assertEqual(resposta.status_code, 400)
+        self.cliente.refresh_from_db()
+        self.assertEqual(self.cliente.razao_social, 'Cliente inicial')
+
+    def test_edicao_rejeita_formulario_vazio(self):
+        resposta = self.client.post(self.url, {})
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn('__all__', resposta.json()['erros'])
+
+    def test_edicao_nao_acessa_cliente_de_outra_empresa(self):
+        empresa = Empresa.objects.create(razao_social='Outra', cnpj='13345678000191', codigo_regime_tributario=1)
+        filial = Filial.objects.create(empresa=empresa, razao_social='Outra', cnpj='13345678000272')
+        cliente = Cliente.objects.create(filial=filial, razao_social='Não acessível')
+        url = reverse('moda:cliente-editar-json', args=[cliente.pk])
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.assertEqual(self.client.post(url, {'razao_social': 'Alteração'}).status_code, 404)
+
+    def test_edicao_respeita_permissao_de_cadastros(self):
+        with patch.object(Usuario, 'tem_permissao', autospec=True, side_effect=lambda usuario, modulo, acao='ver': modulo != 'cadastros'):
+            for metodo in (self.client.get, self.client.post):
+                self.assertEqual(metodo(self.url, HTTP_ACCEPT='application/json').status_code, 403)
+        self.cliente.refresh_from_db()
+        self.assertEqual(self.cliente.razao_social, 'Cliente inicial')
+
+    def test_cadastro_apenas_com_nome_fica_disponivel_na_busca(self):
+        resposta = self.client.post(reverse('moda:cliente-criar-json'), {'razao_social': 'Cliente recém cadastrado'})
+        self.assertEqual(resposta.status_code, 200)
+        busca = self.client.get(reverse('moda:cliente-buscar'), {'q': 'recém'})
+        self.assertIn(resposta.json()['cliente']['id'], [cliente['id'] for cliente in busca.json()['clientes']])

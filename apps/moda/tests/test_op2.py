@@ -911,7 +911,7 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'Editar cadastro do cliente atual')
         self.assertContains(
             resposta,
-            reverse('cadastros:cliente-update', args=[self.cliente.pk]),
+            reverse('moda:cliente-editar-json', args=[0]),
         )
         self.assertContains(resposta, 'buscarClientes()')
         self.assertNotContains(resposta, 'Quantidade entregue')

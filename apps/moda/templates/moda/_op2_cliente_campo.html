@@ -1,0 +1,22 @@
+<input type="hidden" name="cliente" :value="clienteId">
+<template x-for="cliente in clientesAdicionais" :key="cliente.id"><input type="hidden" name="clientes_adicionais" :value="cliente.id"></template>
+<label class="block"><span class="op2-label" x-text="adicionandoCliente?'Pesquisar cliente adicional':'Pesquisar cliente principal'"></span>
+  <input x-ref="buscaCliente" type="search" x-model="buscaCliente" @input="digitarCliente()" @focus="if(!clienteId || adicionandoCliente) buscarClientes()" class="form-input w-full" autocomplete="off" placeholder="Digite nome, documento ou telefone">
+</label>
+<div class="relative" @click.outside="clienteResultados=[]">
+  <div class="op2-client-results" style="position:absolute;z-index:40;left:0;right:0;max-height:240px;overflow:auto;border:1px solid #94a3b8;border-radius:8px" :style="temaClaro?'background:#fff':'background:#18181b'" x-show="(!clienteId || adicionandoCliente) && clientesVisiveis().length" x-cloak>
+    <template x-for="cliente in clientesVisiveis()" :key="cliente.id"><button type="button" class="block w-full text-left px-3 py-2 hover:bg-blue-500/10" @click="selecionarCliente(cliente)"><strong x-text="cliente.nome"></strong><small class="block opacity-70" x-text="[cliente.documento,cliente.contato,cliente.telefone,cliente.cidade].filter(Boolean).join(' · ')"></small></button></template>
+  </div>
+</div>
+<small x-show="clienteBuscando" x-cloak class="block mt-1 opacity-60">Buscando...</small>
+<small x-show="clienteBuscaErro" x-text="clienteBuscaErro" role="alert" class="block mt-1" style="color:#dc2626"></small>
+<small x-show="clienteBuscaConcluida && !clienteBuscando && !clienteBuscaErro && (!clienteId || adicionandoCliente) && buscaCliente.trim().length >= 2 && !clientesVisiveis().length" x-cloak class="block mt-1" style="color:#d97706">Nenhum cliente encontrado. Confira a busca ou cadastre um novo cliente.</small>
+<div class="flex flex-wrap items-center gap-2 mt-2">
+  <button type="button" class="btn-secondary text-xs" @click="adicionarCliente()">+ Adicionar cliente</button>
+  {% if pode_criar_cliente %}<button type="button" class="btn-secondary text-xs" @click="abrirCadastroCliente()">+ Cadastrar cliente</button>{% endif %}
+  {% if pode_editar_cliente %}<button type="button" class="btn-secondary text-xs" x-show="clienteId && !adicionandoCliente" @click="abrirCadastroCliente(clienteId)">Editar cadastro do cliente atual</button>{% endif %}
+  <button type="button" class="btn-secondary text-xs" x-show="adicionandoCliente" x-cloak @click="cancelarClienteAdicional()">Cancelar adição</button>
+</div>
+<div class="flex flex-wrap gap-2 mt-2" x-show="clientesAdicionais.length" x-cloak>
+  <template x-for="cliente in clientesAdicionais" :key="cliente.id"><span class="op2-chip items-center gap-2"><span x-text="cliente.nome"></span>{% if pode_editar_cliente %}<button type="button" @click="abrirCadastroCliente(cliente.id)" :aria-label="'Editar cliente ' + cliente.nome">Editar</button>{% endif %}<button type="button" :aria-label="'Remover cliente ' + cliente.nome" @click="removerClienteAdicional(cliente.id)">×</button></span></template>
+</div>

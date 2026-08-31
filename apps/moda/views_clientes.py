@@ -8,10 +8,11 @@ moda vê a lista e não cria — e isso é o certo, não uma limitação.
 """
 from django.contrib import messages
 from django.http import JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from apps.cadastros.services.cliente_service import ClienteService
+from apps.cadastros.models import Cliente
 from apps.core.services.exceptions import DomainError
 
 from .forms_cliente import ClienteRapidoForm
@@ -163,4 +164,38 @@ class ClienteRapidoJsonView(ModaBaseView):
         return JsonResponse({
             'ok': True,
             'cliente': BuscaClientes.como_dicionario(cliente),
+        })
+
+
+class ClienteRapidoUpdateJsonView(ModaBaseView):
+    """Edita o cadastro selecionado sem descartar o orçamento em digitação."""
+
+    area = 'comercial'
+    permissao_modulo = 'cadastros'
+    permissao_acao = 'editar'
+
+    def get_object(self, request, pk):
+        return get_object_or_404(
+            Cliente.objects.for_filial(request.filial_ativa), pk=pk,
+        )
+
+    def get(self, request, pk):
+        cliente = self.get_object(request, pk)
+        form = ClienteRapidoForm(instance=cliente)
+        return JsonResponse({
+            'ok': True,
+            'campos': {nome: form[nome].value() for nome in form.fields},
+        })
+
+    def post(self, request, pk):
+        cliente = self.get_object(request, pk)
+        form = ClienteRapidoForm(request.POST, instance=cliente)
+        if not form.is_valid():
+            return JsonResponse({'ok': False, 'erros': dict(form.errors)}, status=400)
+        try:
+            cliente = ClienteService.atualizar(cliente, form.cleaned_data)
+        except DomainError as erro:
+            return JsonResponse({'ok': False, 'erro': str(erro)}, status=400)
+        return JsonResponse({
+            'ok': True, 'cliente': BuscaClientes.como_dicionario(cliente),
         })

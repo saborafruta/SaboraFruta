@@ -499,6 +499,7 @@ class Op2CreateView(ModaBaseView):
             'clientes_json': [_cliente_json(cliente) for cliente in clientes],
             'form_cliente': ClienteRapidoForm(),
             'pode_criar_cliente': request.user.tem_permissao('cadastros', 'criar'),
+            'pode_editar_cliente': request.user.tem_permissao('cadastros', 'editar'),
             'modelos': modelos,
             'modelos_grade': {
                 str(produto.pk): {
@@ -825,6 +826,8 @@ class Op2DetailView(ModaBaseView):
             ],
             'pode_editar_cliente': request.user.tem_permissao('cadastros', 'editar'),
             'itens': itens,
+            'pode_criar_cliente': request.user.tem_permissao('cadastros', 'criar'),
+            'form_cliente': ClienteRapidoForm(),
             'grupos_itens': grupos_itens,
             'modelos': modelos,
             'modelos_grade': {
