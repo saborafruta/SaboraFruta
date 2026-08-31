@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from decimal import Decimal
 from unittest.mock import patch
@@ -15,7 +16,7 @@ from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaRec
 from apps.financeiro.services.receber_service import ContaReceberService
 from apps.financeiro.views.receber import (
     ContaReceberCreateView, ContaReceberDetailView, ContaReceberListView,
-    ContaReceberReferenciaView, ContaReceberRelatorioView,
+    ContaReceberEntregaView, ContaReceberReferenciaView, ContaReceberRelatorioView,
 )
 
 
@@ -106,6 +107,34 @@ class ReceberEntregaTests(TestCase):
         self.assertEqual(audit.dados_anteriores['status_entrega'], 'prevista')
         self.assertEqual(audit.dados_novos['status_entrega'], 'entregue')
 
+    def test_edicao_rapida_entrega_retorna_json_e_preserva_financeiro(self):
+        antes = {campo: getattr(self.conta, campo) for campo in (
+            'documento_numero', 'valor_original', 'valor_final', 'valor_saldo',
+            'valor_pago', 'status', 'data_emissao', 'data_vencimento',
+        )}
+        response = ContaReceberEntregaView.as_view()(self.request('post', {
+            'status_entrega': 'entregue',
+            'data_entrega_prevista': '2026-09-10',
+        }), pk=self.conta.pk)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json.loads(response.content)['resumo'], 'Entregue')
+        self.conta.refresh_from_db()
+        self.assertEqual(self.conta.status_entrega, 'entregue')
+        self.assertEqual(self.conta.data_entrega_prevista, date(2026, 9, 10))
+        for campo, valor in antes.items():
+            self.assertEqual(getattr(self.conta, campo), valor, campo)
+        self.assertFalse(PagamentoContaReceber.objects.exists())
+
+    def test_edicao_rapida_entrega_invalida_nao_grava(self):
+        response = ContaReceberEntregaView.as_view()(self.request('post', {
+            'status_entrega': 'prevista',
+        }), pk=self.conta.pk)
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(json.loads(response.content)['ok'])
+        self.conta.refresh_from_db()
+        self.assertEqual(self.conta.status_entrega, 'prevista')
+        self.assertEqual(self.conta.previsao_entrega_complemento, 'Outubro/2026')
+
     def test_filial_desativada_oculta_campos_e_ignora_post_forjado(self):
         self.params.controlar_entrega_contas_receber = False
         self.params.save()
@@ -157,6 +186,9 @@ class ReceberEntregaTests(TestCase):
                     self.assertContains(response, self.conta.documento_numero)
                     if habilitada:
                         self.assertContains(response, 'Previsão: Outubro/2026')
+                        if view is ContaReceberListView:
+                            self.assertContains(response, 'data-entrega-inline-trigger')
+                            self.assertContains(response, 'Atualizar entrega')
                     else:
                         self.assertNotContains(response, 'Previsão: Outubro/2026')
                         self.assertNotContains(response, 'name="entrega"')

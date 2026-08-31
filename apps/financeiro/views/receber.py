@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -448,6 +449,48 @@ class ContaReceberReferenciaView(PermissaoRequiredMixin, View):
                 messages.success(request, 'Referência atualizada. Valores e vencimento foram mantidos.')
                 return redirect('financeiro:receber_detail', pk=conta.pk)
         return self._render(request, conta, form)
+
+
+class ContaReceberEntregaView(PermissaoRequiredMixin, View):
+    """Edição rápida da entrega na listagem, sem expor campos financeiros."""
+
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        filial = _filial(request)
+        conta = get_object_or_404(ContaReceber.objects.for_filial(filial), pk=pk)
+        if not entrega_receber_habilitada(filial):
+            return JsonResponse({'ok': False, 'erro': 'Acompanhamento de entrega desativado.'}, status=404)
+
+        dados = request.POST.copy()
+        dados['documento_numero'] = conta.documento_numero
+        form = ReferenciaContaReceberForm(dados, filial=filial)
+        if not form.is_valid():
+            mensagens = [
+                item['message']
+                for erros in form.errors.get_json_data().values()
+                for item in erros
+            ]
+            return JsonResponse({
+                'ok': False,
+                'erro': ' '.join(mensagens) or 'Revise os dados da entrega.',
+                'campos': form.errors.get_json_data(),
+            }, status=400)
+        try:
+            conta = ContaReceberService.editar_referencia(
+                conta=conta, dados=form.cleaned_data, usuario=request.user,
+            )
+        except DomainError as exc:
+            return JsonResponse({'ok': False, 'erro': str(exc)}, status=400)
+        return JsonResponse({
+            'ok': True,
+            'mensagem': 'Entrega atualizada.',
+            'status': conta.status_entrega,
+            'resumo': conta.entrega_resumo,
+            'data': conta.data_entrega_prevista.isoformat() if conta.data_entrega_prevista else '',
+            'complemento': conta.previsao_entrega_complemento,
+        })
 
 
 class ContaReceberBaixaView(PermissaoRequiredMixin, View):

@@ -1,0 +1,18 @@
+{% if pode_editar and conta.status != 'cancelado' %}
+<button type="button"
+        class="entrega-inline-trigger rounded-md px-2 py-1 text-left transition-colors"
+        data-entrega-inline-trigger
+        data-entrega-conta="{{ conta.pk }}"
+        data-entrega-url="{% url 'financeiro:receber_editar_entrega' conta.pk %}"
+        data-entrega-status="{{ conta.status_entrega }}"
+        data-entrega-data="{{ conta.data_entrega_prevista|date:'Y-m-d' }}"
+        data-entrega-complemento="{{ conta.previsao_entrega_complemento }}"
+        data-entrega-cliente="{{ conta.cliente.razao_social }}"
+        title="Clique para alterar a entrega"
+        aria-label="Alterar entrega de {{ conta.cliente.razao_social }}"
+        @click.stop.prevent="abrirEntrega($el)">
+  {% include "financeiro/receber/_entrega_resumo.html" with conta=conta %}
+</button>
+{% else %}
+  {% include "financeiro/receber/_entrega_resumo.html" with conta=conta %}
+{% endif %}

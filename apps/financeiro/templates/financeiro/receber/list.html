@@ -3,11 +3,68 @@
 
 {% block title %}Contas a Receber{% endblock %}
 {% block page_title %}Contas a Receber{% endblock %}
+{% block extra_head %}
+<style>
+  .entrega-inline-trigger { border:1px solid transparent; }
+  .entrega-inline-trigger:hover, .entrega-inline-trigger:focus-visible { border-color:rgba(96,165,250,.45); background:rgba(37,99,235,.12); outline:none; }
+  .entrega-inline-trigger::after { content:'✎'; margin-left:.35rem; color:#60a5fa; font-size:.68rem; opacity:0; transition:opacity .15s; }
+  .entrega-inline-trigger:hover::after, .entrega-inline-trigger:focus-visible::after { opacity:1; }
+  [data-entrega-status="entregue"] [data-entrega-resumo] { color:#86efac !important; }
+  [data-entrega-status="prevista"] [data-entrega-resumo] { color:#93c5fd !important; }
+  [data-entrega-status="sem_previsao"] [data-entrega-resumo] { color:#94a3b8 !important; }
+  body.tema-claro [data-entrega-status="entregue"] [data-entrega-resumo] { color:#15803d !important; }
+  body.tema-claro [data-entrega-status="prevista"] [data-entrega-resumo] { color:#1d4ed8 !important; }
+  body.tema-claro [data-entrega-status="sem_previsao"] [data-entrega-resumo] { color:#64748b !important; }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="space-y-5"
      x-data="{
        detalheAberto:false, detalheCarregando:false, detalheHtml:'', detalheErro:'', criarAberto:false,
+       entregaAberta:false, entregaSalvando:false, entregaErro:'',
+       entregaEdicao:{id:'', url:'', cliente:'', status:'sem_previsao', data:'', complemento:''},
+       abrirEntrega(botao) {
+         this.entregaErro = '';
+         this.entregaEdicao = {
+           id: botao.dataset.entregaConta,
+           url: botao.dataset.entregaUrl,
+           cliente: botao.dataset.entregaCliente,
+           status: botao.dataset.entregaStatus || 'sem_previsao',
+           data: botao.dataset.entregaData || '',
+           complemento: botao.dataset.entregaComplemento || ''
+         };
+         this.entregaAberta = true;
+         document.body.style.overflow = 'hidden';
+       },
+       fecharEntrega() {
+         if (this.entregaSalvando) return;
+         this.entregaAberta = false;
+         document.body.style.overflow = '';
+       },
+       async salvarEntrega() {
+         if (this.entregaSalvando) return;
+         this.entregaSalvando = true; this.entregaErro = '';
+         try {
+           const response = await fetch(this.entregaEdicao.url, {
+             method:'POST', body:new FormData(this.$refs.entregaForm),
+             headers:{'X-Requested-With':'XMLHttpRequest', 'Accept':'application/json'}
+           });
+           const data = await response.json();
+           if (!response.ok || !data.ok) throw new Error(data.erro || 'Não foi possível atualizar a entrega.');
+           const botoes = document.querySelectorAll(`[data-entrega-inline-trigger][data-entrega-conta='${this.entregaEdicao.id}']`);
+           botoes.forEach((botao) => {
+             botao.dataset.entregaStatus = data.status;
+             botao.dataset.entregaData = data.data || '';
+             botao.dataset.entregaComplemento = data.complemento || '';
+             const resumo = botao.querySelector('[data-entrega-resumo]');
+             if (resumo) resumo.textContent = data.resumo;
+           });
+           this.entregaAberta = false;
+           document.body.style.overflow = '';
+         } catch (error) { this.entregaErro = error.message; }
+         finally { this.entregaSalvando = false; }
+       },
        hidratarDetalhe() {
          this.$nextTick(() => {
            const alvo = document.querySelector('[data-receber-detalhe-content]');
@@ -258,7 +315,7 @@
           {{ c.get_status_display }}
         </span>
       </div>
-      {% if entrega_habilitada %}<div>Entrega: {% include "financeiro/receber/_entrega_resumo.html" with conta=c %}</div>{% endif %}
+      {% if entrega_habilitada %}<div>Entrega: {% include "financeiro/receber/_entrega_acionavel.html" with conta=c %}</div>{% endif %}
       <div class="grid grid-cols-2 gap-2 text-xs">
         <div>
           <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nº da venda</span>
@@ -343,7 +400,7 @@
             <td class="px-4 py-3 text-xs font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
               <div style="min-width:10rem;max-width:18rem;white-space:normal;overflow-wrap:anywhere">{{ c.documento_numero|default:"—" }}</div>
             </td>
-            {% if entrega_habilitada %}<td class="px-4 py-3" style="min-width:10rem;max-width:16rem">{% include "financeiro/receber/_entrega_resumo.html" with conta=c %}</td>{% endif %}
+            {% if entrega_habilitada %}<td class="px-4 py-3" style="min-width:10rem;max-width:16rem">{% include "financeiro/receber/_entrega_acionavel.html" with conta=c %}</td>{% endif %}
             <td class="px-4 py-3 text-xs font-mono whitespace-nowrap">
               {% if c.venda_vinculada %}#{{ c.venda_vinculada.numero_venda|stringformat:"06d" }}{% else %}—{% endif %}
             </td>
@@ -447,6 +504,40 @@
   </div>
 
   {% include "financeiro/_detalhes_conta_shell.html" %}
+  <template x-teleport="body">
+    <div x-show="entregaAberta" x-cloak class="fixed inset-0 z-[190] flex items-center justify-center p-3 sm:p-6"
+         style="background:rgba(15,23,42,.76);backdrop-filter:blur(7px)" @keydown.escape.window="fecharEntrega()" @click.self="fecharEntrega()">
+      <form x-ref="entregaForm" @submit.prevent="salvarEntrega()"
+            class="card w-full max-w-lg overflow-hidden shadow-2xl" @click.stop>
+        {% csrf_token %}
+        <div class="flex items-start justify-between gap-3 border-b px-5 py-4" :style="temaClaro ? 'border-color:#e2e8f0' : 'border-color:#34343a'">
+          <div><h3 class="text-lg font-semibold">Atualizar entrega</h3><p class="mt-1 text-xs opacity-65" x-text="entregaEdicao.cliente"></p></div>
+          <button type="button" class="btn-secondary px-3" aria-label="Fechar" @click="fecharEntrega()">×</button>
+        </div>
+        <div class="space-y-4 p-5">
+          <div x-show="entregaErro" x-cloak role="alert" class="rounded-md border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-500" x-text="entregaErro"></div>
+          <label class="block text-sm font-semibold">Situação da entrega
+            <select name="status_entrega" class="form-input mt-1" x-model="entregaEdicao.status"
+                    @change="if (entregaEdicao.status === 'sem_previsao') { entregaEdicao.data=''; entregaEdicao.complemento=''; }">
+              {% for value, label in entrega_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+            </select>
+          </label>
+          <label class="block text-sm font-semibold">Data prevista <span class="font-normal opacity-60">(opcional)</span>
+            <input type="date" name="data_entrega_prevista" class="form-input mt-1" x-model="entregaEdicao.data" :disabled="entregaEdicao.status === 'sem_previsao'">
+          </label>
+          <label class="block text-sm font-semibold">Previsão aproximada <span class="font-normal opacity-60">(opcional)</span>
+            <input type="text" name="previsao_entrega_complemento" maxlength="100" class="form-input mt-1"
+                   placeholder="Ex.: Outubro/2026" x-model="entregaEdicao.complemento" :disabled="entregaEdicao.status === 'sem_previsao'">
+          </label>
+          <p class="text-xs opacity-65">A entrega é independente do recebimento financeiro e não altera o vencimento.</p>
+        </div>
+        <div class="flex justify-end gap-2 border-t px-5 py-4" :style="temaClaro ? 'border-color:#e2e8f0' : 'border-color:#34343a'">
+          <button type="button" class="btn-secondary" @click="fecharEntrega()">Cancelar</button>
+          <button type="submit" class="btn-primary" :disabled="entregaSalvando" x-text="entregaSalvando ? 'Salvando…' : 'Salvar entrega'">Salvar entrega</button>
+        </div>
+      </form>
+    </div>
+  </template>
   <template x-teleport="body">
     <div x-show="criarAberto" x-cloak class="fixed inset-0 z-[170] flex items-center justify-center p-3 sm:p-6" style="background:rgba(15,23,42,.78);backdrop-filter:blur(8px)" @keydown.escape.window="criarAberto=false">
       <div class="flex w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-2xl dark:border-slate-700 dark:bg-zinc-900" style="height:92vh" @click.stop>

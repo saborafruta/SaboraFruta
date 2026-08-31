@@ -41,6 +41,7 @@ urlpatterns = [
     path("receber/<int:pk>/cancelar/", receber_views.ContaReceberCancelarView.as_view(), name="receber_cancelar"),
     path("receber/<int:pk>/editar-prazo/", receber_views.ContaReceberEditarPrazoView.as_view(), name="receber_editar_prazo"),
     path("receber/<int:pk>/referencia/", receber_views.ContaReceberReferenciaView.as_view(), name="receber_editar_referencia"),
+    path("receber/<int:pk>/entrega/", receber_views.ContaReceberEntregaView.as_view(), name="receber_editar_entrega"),
 
     # ── Contas a Pagar ────────────────────────────────────────────────────────
     path("pagar/",                    pagar_views.ContaPagarListView.as_view(),      name="pagar_list"),
