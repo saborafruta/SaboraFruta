@@ -4,6 +4,25 @@
   margin: 0 0 .55rem;
 }
 
+/*
+ * Listagens precisam usar a area que sobra ao lado da barra lateral. O quadro
+ * global continua limitado nos formularios; somente paginas reconhecidas como
+ * listagem (pelo template base ou por uma tabela configuravel) sao ampliadas.
+ */
+.app-content-frame:has(.erp-list-page),
+.app-content-frame:has(table.erp-configurable-table) {
+  width: 100%;
+  max-width: none !important;
+}
+
+@media (min-width: 1024px) {
+  .app-content-frame:has(.erp-list-page),
+  .app-content-frame:has(table.erp-configurable-table) {
+    padding-right: 1rem !important;
+    padding-left: 1rem !important;
+  }
+}
+
 .erp-table-columns-picker {
   position: fixed;
   z-index: 190;
