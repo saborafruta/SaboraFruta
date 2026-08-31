@@ -65,9 +65,8 @@
     const visibleWidth = COLUMNS.reduce((sum, column) => (
       hidden.has(column.key) ? sum : sum + columnWidth(column)
     ), 0);
-    const tableWidth = visibleWidth;
-    productTable.style.width = `${tableWidth}px`;
-    productTable.style.minWidth = `${tableWidth}px`;
+    productTable.style.width = `max(100%, ${visibleWidth}px)`;
+    productTable.style.minWidth = '100%';
     document.dispatchEvent(new CustomEvent('produto:columns-applied'));
   }
 

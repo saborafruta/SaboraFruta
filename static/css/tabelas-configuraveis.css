@@ -1,0 +1,124 @@
+.erp-table-columns-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 .55rem;
+}
+
+.erp-table-columns-picker {
+  position: fixed;
+  z-index: 190;
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(520px, calc(100vh - 24px));
+  overflow: auto;
+  padding: .85rem;
+  border: 1px solid rgba(96, 165, 250, .28);
+  border-radius: 14px;
+  background: #18181b;
+  color: #e5e7eb;
+  box-shadow: 0 20px 55px rgba(0, 0, 0, .38);
+}
+
+.erp-table-columns-picker[hidden] { display: none !important; }
+body.tema-claro .erp-table-columns-picker {
+  border-color: #bfdbfe;
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, .18);
+}
+
+.erp-table-columns-heading {
+  padding-bottom: .65rem;
+  border-bottom: 1px solid rgba(148, 163, 184, .2);
+}
+.erp-table-columns-heading strong { display: block; font-size: .9rem; }
+.erp-table-columns-heading span {
+  display: block;
+  margin-top: .16rem;
+  color: #94a3b8;
+  font-size: .72rem;
+  line-height: 1.4;
+}
+.erp-table-columns-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .2rem .65rem;
+  padding: .65rem 0;
+}
+.erp-table-columns-options label {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  min-width: 0;
+  min-height: 31px;
+  font-size: .78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.erp-table-columns-options label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.erp-table-columns-options input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: #2563eb;
+}
+.erp-table-columns-reset {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(96, 165, 250, .25);
+  border-radius: 9px;
+  background: rgba(37, 99, 235, .13);
+  color: #bfdbfe;
+  font-size: .76rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+body.tema-claro .erp-table-columns-reset {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+table.erp-configurable-table {
+  width: max(100%, var(--erp-table-visible-width, 100%)) !important;
+  min-width: 100% !important;
+  table-layout: fixed;
+}
+table.erp-configurable-table > thead > tr > th { position: relative; }
+.erp-table-column-resizer {
+  position: absolute;
+  z-index: 4;
+  top: 4px;
+  right: -5px;
+  width: 11px;
+  height: calc(100% - 8px);
+  cursor: col-resize;
+  touch-action: none;
+}
+.erp-table-column-resizer::after {
+  content: "";
+  position: absolute;
+  top: 18%;
+  bottom: 18%;
+  left: 5px;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background .15s;
+}
+table.erp-configurable-table th:hover .erp-table-column-resizer::after,
+.erp-table-column-resizer.is-resizing::after { background: #60a5fa; }
+body.erp-table-column-resizing { cursor: col-resize !important; user-select: none !important; }
+
+/* O fundo do rolador acompanha o card mesmo quando as colunas somam menos que ele. */
+.table-container > .overflow-x-auto:has(> table.erp-configurable-table) {
+  min-width: 100%;
+  background: inherit;
+}
+
+@media (max-width: 639px) {
+  .erp-table-columns-options { grid-template-columns: 1fr; }
+}
