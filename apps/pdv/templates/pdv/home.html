@@ -972,7 +972,9 @@
   html.tema-claro .pdv-topbar .mode-btn.act-venda,
   html.tema-claro .pdv-topbar .mode-btn.act-delivery,
   html.tema-claro .pdv-topbar .mode-btn.act-orcamento { background:#fff3e8;color:#c2410c; }
-  html.tema-claro #pdv-app > .pdv-topbar { border-radius:0;box-shadow:0 12px 30px rgba(241,90,36,.16); }
+  html.tema-claro #pdv-app > .pdv-topbar { position:relative;background:#c2410c !important;border-radius:0;box-shadow:0 12px 30px rgba(241,90,36,.16); }
+  html.tema-claro #pdv-app > .pdv-topbar::before { content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:var(--pdv-header-bg);border-radius:0 0 18px 0; }
+  html.tema-claro #pdv-app > .pdv-topbar > * { position:relative;z-index:1; }
   html.tema-claro .pdv-topbar .mode-seg { background:rgba(194,65,12,.42);border-color:rgba(255,255,255,.34);box-shadow:none; }
   html.tema-claro .pdv-topbar .mode-btn:not(.act-venda):not(.act-delivery):not(.act-orcamento),
   html.tema-claro .pdv-topbar .topbar-btn { background:rgba(194,65,12,.36) !important;border-color:rgba(255,231,213,.36) !important;color:#fff !important; }

@@ -544,12 +544,23 @@
 
     /* === TEMA CLARO — Header da página === */
     body.tema-claro .app-topbar {
-      background:
-        radial-gradient(circle at 22% -60%, rgba(255,255,255,0.22), transparent 42%),
-        linear-gradient(90deg, #f15a24 0%, #e8824a 55%, #c2410c 100%) !important;
+      background: #c2410c !important;
+      border-radius: 0 !important;
       border-bottom: 1px solid rgba(255,255,255,0.16) !important;
       box-shadow: 0 12px 30px rgba(241,90,36,0.16) !important;
     }
+    body.tema-claro .app-topbar::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 22% -60%, rgba(255,255,255,0.22), transparent 42%),
+        linear-gradient(90deg, #f15a24 0%, #e8824a 55%, #c2410c 100%);
+      border-radius: 0 0 18px 0;
+    }
+    body.tema-claro .app-topbar > * { position: relative; z-index: 1; }
     /* Header — textos brancos no tema claro */
     body.tema-claro .app-topbar h1 { color: #fff !important; }
     body.tema-claro .app-topbar > div > div > button > span { color: #fff !important; }
@@ -626,7 +637,7 @@
       <div class="app-shell-content flex-1 flex flex-col min-w-0 w-full">
 <header class="app-topbar relative z-40 h-14 flex items-center justify-between px-4 sm:px-6 flex-shrink-0"
         :style="temaClaro
-          ? 'background:radial-gradient(circle at 22% -60%, rgba(255,255,255,0.22), transparent 42%), linear-gradient(90deg, #f15a24 0%, #e8824a 55%, #c2410c 100%); border-bottom:1px solid rgba(255,255,255,0.16); border-radius:0; box-shadow:0 12px 30px rgba(241,90,36,0.16);'
+          ? 'background:#c2410c; border-bottom:1px solid rgba(255,255,255,0.16); border-radius:0; box-shadow:0 12px 30px rgba(241,90,36,0.16);'
           : 'background:radial-gradient(circle at 44% -80%, rgba(59,130,246,0.22), transparent 42%), linear-gradient(90deg,#0f172a 0%,#172554 42%,#1e3a8a 58%,#0f172a 100%); border-bottom:1px solid rgba(59,130,246,0.20); box-shadow:0 12px 30px rgba(15,23,42,0.36);'">
 
   <div class="flex items-center gap-3">
