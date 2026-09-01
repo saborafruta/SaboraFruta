@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.utils import timezone
 
 from apps.core.models import RegistroAuditoria
 from apps.core.services.auditoria import registrar_auditoria
@@ -196,6 +197,7 @@ class Command(BaseCommand):
                 tem_divergencia = bool(
                     contas_ativas or estoque["faltas"] or estoque["excessos"]
                     or referencias_ausentes or venda.cancelado_em is None
+                    or venda.cancelado_por_id is None
                 )
                 if not tem_divergencia:
                     continue
@@ -206,6 +208,7 @@ class Command(BaseCommand):
                     "filial_id": venda.filial_id,
                     "filial": str(venda.filial),
                     "cancelado_em": str(venda.cancelado_em or ""),
+                    "cancelado_por_id": venda.cancelado_por_id,
                     "motivo": venda.motivo_cancelamento,
                     "contas_ativas": [
                         {
@@ -266,6 +269,16 @@ class Command(BaseCommand):
                     )
                     movimentos_criados.append(movimento.pk)
 
+                metadados_atualizados = []
+                if venda.cancelado_em is None:
+                    venda.cancelado_em = venda.updated_at or venda.data_venda or timezone.now()
+                    metadados_atualizados.append("cancelado_em")
+                if venda.cancelado_por_id is None:
+                    venda.cancelado_por = usuario
+                    metadados_atualizados.append("cancelado_por")
+                if metadados_atualizados:
+                    venda.save(update_fields=[*metadados_atualizados, "updated_at"])
+
                 if venda.sessao_pdv_id:
                     sessoes.add(venda.sessao_pdv_id)
                 registrar_auditoria(
@@ -279,6 +292,7 @@ class Command(BaseCommand):
                     metadados={
                         "contas_canceladas": contas_corrigidas,
                         "movimentacoes_estoque_criadas": movimentos_criados,
+                        "metadados_cancelamento_atualizados": metadados_atualizados,
                         "comando": "auditar_cancelamentos_pdv",
                     },
                 )

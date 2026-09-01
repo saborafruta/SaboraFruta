@@ -175,3 +175,25 @@ class AuditarCancelamentosPDVTests(TestCase):
         self.assertEqual(self.sessao.total_vendas, Decimal("20.00"))
         self.assertTrue(relatorio["sessoes_divergentes"][0]["correcao_bloqueada"])
         self.assertFalse(relatorio["sessoes_divergentes"][0]["corrigida"])
+
+    def test_repara_metadados_antigos_e_nao_os_aponta_novamente(self):
+        relatorio_inicial = self.executar(
+            corrigir=True,
+            confirmar="CORRIGIR_CANCELAMENTOS_PDV",
+        )
+        self.assertTrue(relatorio_inicial["vendas_com_divergencia"][0]["corrigida"])
+        VendaPDV.objects.filter(pk=self.venda.pk).update(
+            cancelado_em=None,
+            cancelado_por=None,
+        )
+
+        relatorio = self.executar(
+            corrigir=True,
+            confirmar="CORRIGIR_CANCELAMENTOS_PDV",
+        )
+
+        self.venda.refresh_from_db()
+        self.assertIsNotNone(self.venda.cancelado_em)
+        self.assertEqual(self.venda.cancelado_por, self.usuario)
+        self.assertTrue(relatorio["vendas_com_divergencia"][0]["corrigida"])
+        self.assertEqual(self.executar()["vendas_com_divergencia"], [])
