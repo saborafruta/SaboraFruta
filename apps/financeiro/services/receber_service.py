@@ -213,6 +213,7 @@ class ContaReceberService:
         numero_parcelas: int | None = None,
     ) -> ContaReceber:
         """Registra o recebimento (total ou parcial) de uma conta a receber."""
+        conta = ContaReceber.objects.select_for_update().get(pk=conta.pk)
         if conta.status == StatusContaReceber.CANCELADO:
             raise DomainError('Não é possível baixar uma conta cancelada.')
         if conta.status == StatusContaReceber.PAGO:
@@ -450,8 +451,16 @@ class ContaReceberService:
     @transaction.atomic
     def cancelar(conta: ContaReceber, motivo: str, usuario) -> ContaReceber:
         """Cancela uma conta a receber ainda não paga."""
-        if conta.status == StatusContaReceber.PAGO:
-            raise DomainError('Não é possível cancelar uma conta já recebida.')
+        conta = ContaReceber.objects.select_for_update().get(pk=conta.pk)
+        if (
+            conta.status in [StatusContaReceber.PAGO, StatusContaReceber.PAGO_PARCIAL]
+            or conta.valor_pago > Decimal('0')
+            or conta.pagamentos.exists()
+        ):
+            raise DomainError(
+                'Não é possível cancelar uma conta com recebimento registrado. '
+                'Exclua ou estorne os recebimentos primeiro.'
+            )
         if conta.status == StatusContaReceber.CANCELADO:
             raise DomainError('Esta conta já está cancelada.')
 

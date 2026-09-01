@@ -25,6 +25,32 @@ from apps.pdv.models import VendaPDV
 from apps.pdv.services.cancelamento_fiscal_service import obter_documento_fiscal
 
 
+def validar_venda_estornavel(venda: VendaPDV) -> None:
+    """Impede cancelar uma venda enquanto houver recebimento financeiro real."""
+    contas = list(
+        ContaReceber.objects.select_for_update().filter(
+            filial=venda.filial,
+            documento_tipo="venda_pdv",
+            documento_id=venda.pk,
+        )
+        .prefetch_related("pagamentos")
+    )
+    contas_recebidas = [
+        conta for conta in contas
+        if conta.pagamentos.exists()
+        or conta.valor_pago > 0
+        or conta.status in [StatusContaReceber.PAGO, StatusContaReceber.PAGO_PARCIAL]
+    ]
+    if contas_recebidas:
+        numeros = ", ".join(
+            f"#{conta.pk}" for conta in contas_recebidas
+        )
+        raise DadosInvalidosError(
+            f"A venda possui recebimento registrado na conta {numeros}. "
+            "Exclua ou estorne o recebimento em Contas a Receber antes de cancelar a venda."
+        )
+
+
 def validar_venda_editavel(venda: VendaPDV) -> None:
     if venda.status != "finalizada":
         raise DadosInvalidosError(
@@ -52,6 +78,7 @@ def estornar_venda_para_edicao(venda: VendaPDV, usuario, *, justificativa=None) 
     if venda.status != "finalizada":
         return  # já tratada (corrida ou clique duplo)
     motivo = justificativa or "Venda editada pelo operador (substituída por uma nova versão)."
+    validar_venda_estornavel(venda)
 
     for item in venda.itens.all():
         if not item.estoque_baixado or not item.movimentacoes_estoque_ids:

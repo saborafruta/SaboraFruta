@@ -1,12 +1,17 @@
 import json
+from datetime import date
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from apps.cadastros.models import Cliente
+from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario, UsuarioFilialAcesso
 from apps.estoque.models import Estoque
+from apps.financeiro.constants.enums import TipoFormaPagamento
+from apps.financeiro.models import ContaReceber, FormaPagamento
+from apps.financeiro.services.receber_service import ContaReceberService
 from apps.pdv.models import VendaPDV
 from apps.pdv.services.venda_pdv_service import VendaPDVService
 from apps.pdv.tests import test_venda_pdv_service as venda_tests
@@ -160,3 +165,47 @@ class CancelamentoAutorizadoTests(TestCase):
         self.assertEqual(self.venda.status,'finalizada')
         self.assertEqual(self.sessao.total_vendas,10)
         self.assertEqual(Estoque.objects.get(produto=self.produto,filial=self.filial).quantidade_atual,4)
+
+    def test_recebimento_parcial_bloqueia_cancelamento_sem_alterar_venda(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial,
+            razao_social="Cliente a prazo",
+        )
+        ClienteFilial.objects.create(cliente=cliente, filial=self.filial)
+        vale = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            descricao="Vale",
+            tipo=TipoFormaPagamento.VALE,
+        )
+        venda = VendaPDVService.finalizar_venda(
+            sessao=self.sessao,
+            filial=self.filial,
+            usuario=self.usuario,
+            cliente_id=cliente.pk,
+            itens=[{"produto_id": self.produto.pk, "quantidade": 1}],
+            pagamentos=[{"forma_id": vale.pk, "valor": "10"}],
+        )
+        conta = ContaReceber.objects.get(documento_tipo="venda_pdv", documento_id=venda.pk)
+        ContaReceberService.registrar_baixa(
+            conta=conta,
+            data_pagamento=date.today(),
+            valor_pago=Decimal("3.00"),
+            forma_pagamento=self.forma,
+            usuario=self.usuario,
+        )
+
+        response = self.post(url=reverse('pdv:api_cancelar_venda_historico', args=[venda.pk]))
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("recebimento", response.json()["erro"].lower())
+        venda.refresh_from_db()
+        conta.refresh_from_db()
+        self.sessao.refresh_from_db()
+        self.assertEqual(venda.status, "finalizada")
+        self.assertEqual(conta.valor_pago, Decimal("3.00"))
+        self.assertEqual(conta.status, "pago_parcial")
+        self.assertEqual(self.sessao.total_vendas, Decimal("20.00"))
+        self.assertEqual(
+            Estoque.objects.get(produto=self.produto, filial=self.filial).quantidade_atual,
+            Decimal("3.000"),
+        )

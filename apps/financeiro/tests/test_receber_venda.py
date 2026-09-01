@@ -8,8 +8,12 @@ from django.utils import timezone
 
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.core.services.exceptions import DomainError
+from apps.financeiro.constants.enums import TipoFormaPagamento
+from apps.financeiro.models import FormaPagamento
 from apps.financeiro.models.conta_bancaria import PlanoContas
 from apps.financeiro.models.receber_pagar import ContaReceber
+from apps.financeiro.services.receber_service import ContaReceberService
 from apps.financeiro.views.receber import (
     ContaReceberListView, ContaReceberRelatorioView, _vincular_vendas,
 )
@@ -161,6 +165,31 @@ class ReceberVendaTests(TestCase):
         self.assertEqual(context['total_geral_valor'], Decimal('51'))
         self.assertEqual(context['total_geral_pago'], Decimal('10'))
         self.assertEqual(context['total_geral_saldo'], Decimal('41'))
+
+    def test_conta_com_baixa_nao_pode_ser_cancelada_diretamente(self):
+        forma = FormaPagamento.objects.create(
+            empresa=self.filial.empresa,
+            descricao="Dinheiro teste",
+            tipo=TipoFormaPagamento.DINHEIRO,
+        )
+        ContaReceberService.registrar_baixa(
+            conta=self.conta,
+            data_pagamento=date(2026, 8, 28),
+            valor_pago=Decimal("10.00"),
+            forma_pagamento=forma,
+            usuario=self.usuario,
+        )
+
+        with self.assertRaisesMessage(DomainError, "recebimento registrado"):
+            ContaReceberService.cancelar(
+                conta=self.conta,
+                motivo="Tentativa indevida",
+                usuario=self.usuario,
+            )
+
+        self.conta.refresh_from_db()
+        self.assertEqual(self.conta.status, "pago_parcial")
+        self.assertEqual(self.conta.valor_pago, Decimal("10.00"))
 
     def test_listagem_mantem_impressao_quando_todas_as_contas_estao_pagas(self):
         ContaReceber.objects.filter(pk=self.conta.pk).update(

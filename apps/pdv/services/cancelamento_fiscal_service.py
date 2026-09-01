@@ -67,6 +67,12 @@ def cancelar_venda_e_documento(venda, usuario, justificativa: str, *, autorizado
     if venda.status != 'finalizada':
         raise DadosInvalidosError('Apenas vendas finalizadas podem ser canceladas.')
 
+    # Valide antes de qualquer chamada fiscal externa. Se já houve baixa no
+    # título, o recebimento precisa ser estornado primeiro para que venda e
+    # financeiro nunca terminem com estados incompatíveis.
+    from apps.pdv.services.edicao_venda_service import validar_venda_estornavel
+    validar_venda_estornavel(venda)
+
     if documento and documento.status == StatusDocumentoFiscal.AUTORIZADA:
         if len(justificativa) < 15:
             raise DadosInvalidosError('O cancelamento da nota fiscal autorizada exige ao menos 15 caracteres.')
