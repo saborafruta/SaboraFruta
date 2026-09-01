@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.financeiro.models.conta_bancaria import PlanoContas
 from apps.financeiro.models.receber_pagar import ContaReceber
 from apps.financeiro.views.receber import (
     ContaReceberListView, ContaReceberRelatorioView, _vincular_vendas,
@@ -41,8 +42,13 @@ class ReceberVendaTests(TestCase):
             # 18/08 em UTC ainda é 17/08 no histórico em São Paulo.
             data_venda=datetime(2026, 8, 18, 1, 0, tzinfo=dt_timezone.utc),
         )
+        cls.categoria = PlanoContas.objects.create(
+            empresa=empresa, codigo='1.99', descricao='Categoria que não deve aparecer',
+            tipo='R', nivel=1, aceita_lancamento=True,
+        )
         cls.conta = ContaReceber.objects.create(
             filial=cls.filial, cliente=cls.cliente,
+            plano_contas=cls.categoria,
             documento_tipo='venda_pdv', documento_id=cls.venda.pk,
             documento_numero='DOC-DIFERENTE', valor_original=41, valor_final=41,
             valor_saldo=41, data_emissao=date(2026, 8, 19),
@@ -80,6 +86,13 @@ class ReceberVendaTests(TestCase):
             'class="app-content-frame erp-list-content w-full max-w-none mx-auto',
         )
         self.assertContains(response, 'class="space-y-5 erp-list-page"')
+
+    def test_listagem_exibe_apenas_nome_na_coluna_cliente(self):
+        response, _ = self._get(ContaReceberListView)
+
+        self.assertContains(response, self.cliente.razao_social)
+        self.assertNotContains(response, 'Forma não definida')
+        self.assertNotContains(response, self.categoria.descricao)
 
     def test_sem_vinculo_nao_inventa_venda_por_documento_ou_emissao(self):
         ContaReceber.objects.filter(pk=self.conta.pk).update(
