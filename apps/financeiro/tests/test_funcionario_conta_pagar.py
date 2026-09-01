@@ -317,6 +317,57 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertEqual(categoria.conta_pai.conta_pai.codigo, "332")
         self.assertEqual(categoria.conta_contabil, self.conta_contabil)
 
+    def test_migration_separa_despesas_com_pessoal_de_despesas_pessoais(self):
+        grupo_funcionarios = PlanoContas.objects.create(
+            empresa=self.empresa,
+            codigo="33201",
+            descricao="Despesas com Pessoal",
+            tipo="D",
+            nivel=2,
+            aceita_lancamento=False,
+            despesa_pessoal=True,
+        )
+        diaria = PlanoContas.objects.create(
+            empresa=self.empresa,
+            conta_pai=grupo_funcionarios,
+            codigo="3320100017",
+            descricao="Diária",
+            tipo="D",
+            nivel=3,
+            despesa_pessoal=True,
+        )
+        hora_extra = PlanoContas.objects.create(
+            empresa=self.empresa,
+            conta_pai=grupo_funcionarios,
+            codigo="3320100018",
+            descricao="Hora extra",
+            tipo="D",
+            nivel=3,
+            despesa_pessoal=True,
+        )
+        gasto_pessoal = PlanoContas.objects.create(
+            empresa=self.empresa,
+            codigo="3900100001",
+            descricao="Compras pessoais",
+            tipo="D",
+            nivel=3,
+            despesa_pessoal=True,
+        )
+
+        migration = import_module(
+            "apps.financeiro.migrations.0061_corrigir_classificacao_despesas_com_pessoal"
+        )
+        migration.corrigir_classificacao(django_apps, None)
+
+        grupo_funcionarios.refresh_from_db()
+        diaria.refresh_from_db()
+        hora_extra.refresh_from_db()
+        gasto_pessoal.refresh_from_db()
+        self.assertFalse(grupo_funcionarios.despesa_pessoal)
+        self.assertFalse(diaria.despesa_pessoal)
+        self.assertFalse(hora_extra.despesa_pessoal)
+        self.assertTrue(gasto_pessoal.despesa_pessoal)
+
     def test_recorrencia_mensal_cria_titulos_com_datas_validas(self):
         contas = ContaPagarService.criar_recorrencia(
             filial=self.filial,

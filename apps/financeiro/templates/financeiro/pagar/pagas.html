@@ -125,7 +125,7 @@
           <div class="min-w-0">
             <div class="truncate font-semibold">{{ conta.descricao_exibicao }}</div>
             <div class="mt-0.5 text-xs opacity-60">{{ conta.beneficiario_nome }}</div>
-            {% if conta.plano_contas.despesa_pessoal %}<span class="mt-1 inline-flex rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">Pessoal</span>{% endif %}
+            {% if conta.plano_contas.despesa_pessoal %}<span class="mt-1 inline-flex rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">Despesa pessoal</span>{% endif %}
             <div class="mt-0.5 text-xs opacity-60">
               {% if conta.documento_numero %}Doc. {{ conta.documento_numero }}{% else %}Título #{{ conta.pk }}{% endif %}
               {% if conta.nota_fiscal_fornecedor %} · NF {{ conta.nota_fiscal_fornecedor }}{% endif %}
@@ -172,7 +172,7 @@
               <td class="px-4 py-3">
                 <a href="{% url 'financeiro:pagar_detail' conta.pk %}" @click.prevent.stop="abrirDetalhe($el.href)" class="font-semibold hover:text-blue-500 hover:underline">{{ conta.descricao_exibicao }}</a>
                 <div class="mt-0.5 text-xs opacity-60">{{ conta.beneficiario_nome }} · {{ conta.beneficiario_documento|default:"Sem documento" }}</div>
-                {% if conta.plano_contas.despesa_pessoal %}<span class="mt-1 inline-flex rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">Pessoal</span>{% endif %}
+                {% if conta.plano_contas.despesa_pessoal %}<span class="mt-1 inline-flex rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">Despesa pessoal</span>{% endif %}
               </td>
               <td class="px-4 py-3 text-xs">
                 {% if conta.documento_numero %}{{ conta.documento_numero }}{% else %}#{{ conta.pk }}{% endif %}
