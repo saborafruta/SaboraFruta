@@ -243,7 +243,11 @@
       duplicateLabels[base] = (duplicateLabels[base] || 0) + 1;
       const key = duplicateLabels[base] === 1 ? base : `${base}-${duplicateLabels[base]}`;
       const measured = Math.round(heading.getBoundingClientRect().width);
-      return { index, key, label, heading, defaultWidth: Math.max(MIN_WIDTH, measured || DEFAULT_WIDTH), col: null };
+      const declared = Number(heading.dataset.columnWidth);
+      const defaultWidth = Number.isFinite(declared) && declared > 0
+        ? Math.max(MIN_WIDTH, Math.round(declared))
+        : Math.max(MIN_WIDTH, measured || DEFAULT_WIDTH);
+      return { index, key, label, heading, defaultWidth, col: null };
     });
     const signature = columns.map(column => column.key).join('|');
     const documentIndex = Array.from(document.querySelectorAll('table')).indexOf(table);

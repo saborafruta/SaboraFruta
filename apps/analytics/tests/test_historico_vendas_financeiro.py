@@ -90,10 +90,12 @@ class HistoricoVendasFinanceiroTests(TestCase):
 
     def test_lista_exibe_status_saldo_e_todos_os_cabecalhos_ordenaveis(self):
         response, contexto = self.contexto_lista()
-        self.assertContains(response, 'Situação financeira')
+        self.assertContains(response, 'Status')
+        self.assertContains(response, 'Nome')
         self.assertContains(response, 'Valor restante')
-        self.assertContains(response, 'Pago completamente')
+        self.assertContains(response, '>Pago<')
         self.assertContains(response, 'Em aberto')
+        self.assertNotContains(response, self.cliente.cpf_cnpj)
         self.assertContains(response, 'Ver pagamentos e recebimentos desta venda')
         self.assertEqual(response.content.count(b'class="hv-sort"'), 9)
         vendas = {v.pk: v for v in contexto['page_obj']}
@@ -129,7 +131,7 @@ class HistoricoVendasFinanceiroTests(TestCase):
         response = dashboards.historico_vendas_relatorio(
             self.request('/analytics/vendas/relatorio/', data_ini='2026-08-31', data_fim='2026-08-31'),
         )
-        self.assertContains(response, 'Situação financeira')
+        self.assertContains(response, 'Status')
         self.assertContains(response, 'Valor restante')
-        self.assertContains(response, 'Pago completamente')
+        self.assertContains(response, 'Pago')
         self.assertContains(response, 'Em aberto')

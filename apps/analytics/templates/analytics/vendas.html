@@ -81,7 +81,7 @@ html.tema-claro {
 .hv-table-wrap { border-radius:14px;overflow-x:auto;border:1px solid var(--hv-border); }
 .hv-table { width:100%;border-collapse:collapse; }
 .hv-th {
-  padding:11px 14px;font-size:11px;font-weight:700;color:var(--hv-muted);
+  padding:10px 7px;font-size:11px;font-weight:700;color:var(--hv-muted);
   text-transform:uppercase;letter-spacing:.08em;text-align:left;
   background:var(--hv-field);border-bottom:1px solid var(--hv-border);white-space:nowrap;
 }
@@ -90,7 +90,7 @@ html.tema-claro {
 .hv-tr:hover .hv-td { background:var(--hv-hover); }
 .hv-tr.cancelada { opacity:1; }
 
-.hv-td { padding:10px 14px;font-size:13px;color:var(--hv-text);vertical-align:middle;background:var(--hv-surface); }
+.hv-td { padding:8px 7px;font-size:13px;color:var(--hv-text);vertical-align:middle;background:var(--hv-surface); }
 .hv-tr.cancelada .hv-td { background:var(--hv-cancel-bg); }
 .hv-header-actions { display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap; }
 .hv-total-top {
@@ -111,46 +111,23 @@ html.tema-claro {
 .hv-sit-warn { color:var(--hv-warning); }
 .hv-sit-gray { color:var(--hv-muted); }
 .hv-sit-msg  { font-size:10px;font-weight:400;color:var(--hv-muted);max-width:200px;white-space:normal;line-height:1.3; }
-/* ── Ações da venda ── */
-.hv-actions-head,.hv-actions-cell { width:52px;min-width:52px;max-width:52px;text-align:center; }
-.hv-actions-head { padding-left:6px;padding-right:6px; }
-.hv-actions-cell { padding-left:8px;padding-right:8px; }
-.hv-actions-trigger {
-  width:34px;height:34px;border-radius:8px;border:1px solid var(--hv-border);
-  display:inline-flex;align-items:center;justify-content:center;background:var(--hv-field);
-  color:var(--hv-link);cursor:pointer;transition:.12s;
-}
-.hv-actions-trigger:hover,.hv-actions-trigger:focus-visible {
-  border-color:var(--hv-link);background:var(--hv-hover);outline:none;
-}
-.hv-actions-overlay {
-  position:fixed;inset:0;z-index:490;display:flex;align-items:center;justify-content:center;
-  padding:18px;background:rgba(0,0,0,.72);backdrop-filter:blur(7px);
-}
-.hv-actions-panel {
-  width:min(460px,100%);border-radius:14px;border:1px solid var(--hv-border);
-  max-height:calc(100vh - 36px);background:var(--hv-surface);
-  box-shadow:0 24px 64px rgba(0,0,0,.5);overflow-y:auto;
-}
-.hv-actions-panel-head {
-  display:flex;align-items:center;justify-content:space-between;gap:16px;
-  padding:14px 16px;border-bottom:1px solid var(--hv-border);color:var(--hv-text);
-}
-.hv-actions-panel-close {
-  width:32px;height:32px;border-radius:7px;border:1px solid var(--hv-border);
-  display:inline-flex;align-items:center;justify-content:center;color:var(--hv-muted);font-size:20px;
-}
-.hv-actions-panel-close:hover,.hv-actions-panel-close:focus-visible { color:var(--hv-text);border-color:var(--hv-link);outline:none; }
-.hv-acts { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:16px; }
+/* ── Botões de ação numerados ── */
+.hv-actions-head,.hv-actions-cell { width:154px;min-width:154px;text-align:center; }
+.hv-actions-cell { padding-left:5px;padding-right:5px; }
+.hv-acts { display:flex;gap:2px;flex-wrap:nowrap;align-items:center;justify-content:center;white-space:nowrap; }
 .hv-ab {
-  width:100%;min-height:42px;border-radius:8px;border:1px solid;padding:7px 10px;gap:8px;
+  width:22px;height:22px;min-width:22px;flex:0 0 22px;border-radius:5px;border:1px solid;padding:0;
   display:inline-flex;align-items:center;justify-content:center;
-  font-size:11px;font-weight:800;cursor:pointer;transition:.12s;
+  font-size:10px;font-weight:800;cursor:pointer;transition:.12s;
   background:transparent;text-decoration:none;line-height:1;
   position:relative;
 }
+.hv-ab:hover .hv-ab-tip,.hv-ab:focus-visible .hv-ab-tip { display:block; }
 .hv-ab-tip {
-  display:block;order:2;color:inherit;font-size:10.5px;font-weight:700;white-space:nowrap;pointer-events:none;
+  display:none;position:absolute;bottom:calc(100% + 5px);left:50%;transform:translateX(-50%);
+  padding:4px 8px;border-radius:5px;border:1px solid var(--hv-border);
+  background:var(--hv-border);color:var(--hv-text);font-size:10px;font-weight:600;
+  white-space:nowrap;z-index:99;pointer-events:none;
 }
 .hv-ab-red  { border-color:#ef4444;color:#ef4444; }
 .hv-ab-red:hover  { background:#b91c1c;color:#fff; }
@@ -228,9 +205,6 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
 .hv-finance-cancel { color:var(--hv-danger);background:rgba(239,68,68,.12); }
 .hv-balance-button { border:0;background:transparent;color:inherit;font:inherit;font-weight:800;cursor:pointer;padding:5px 7px;border-radius:6px;white-space:nowrap; }
 .hv-balance-button:hover,.hv-balance-button:focus-visible { background:rgba(59,130,246,.13);outline:1px solid rgba(96,165,250,.45); }
-@media (max-width:520px) {
-  .hv-acts { grid-template-columns:1fr; }
-}
 </style>
 {% endblock %}
 
@@ -308,8 +282,8 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
       <input class="hv-input" name="pedido" value="{{ filtros.pedido }}" placeholder="Nº" style="width:90px;">
     </div>
     <div class="hv-filter-group" style="flex:1;min-width:180px;">
-      <label class="hv-filter-label">Cliente / CPF</label>
-      <input class="hv-input" name="cliente" value="{{ filtros.cliente }}" placeholder="Nome ou CPF/CNPJ" style="width:100%;">
+      <label class="hv-filter-label">Nome</label>
+      <input class="hv-input" name="cliente" value="{{ filtros.cliente }}" placeholder="Nome do cliente" style="width:100%;">
     </div>
     <div class="hv-filter-group">
       <label class="hv-filter-label">Data início</label>
@@ -357,19 +331,19 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
   <!-- Tabela -->
   {% if page_obj %}
   <div class="hv-table-wrap" style="overflow-x:auto;">
-    <table class="hv-table">
+    <table class="hv-table" data-table-key="historico-vendas">
       <thead>
         <tr>
-          <th class="hv-th"><a class="hv-sort" href="?{{ sort_urls.pedido }}">Pedido <span>{% if ordem == 'pedido' %}↑{% elif ordem == '-pedido' %}↓{% endif %}</span></a></th>
-          <th class="hv-th"><a class="hv-sort" href="?{{ sort_urls.data }}">Data/Hora <span>{% if ordem == 'data' %}↑{% elif ordem == '-data' %}↓{% endif %}</span></a></th>
-          <th class="hv-th"><a class="hv-sort" href="?{{ sort_urls.cliente }}">Cliente / CPF <span>{% if ordem == 'cliente' %}↑{% elif ordem == '-cliente' %}↓{% endif %}</span></a></th>
-          <th class="hv-th"><a class="hv-sort" href="?{{ sort_urls.pagamento }}">Pagamento <span>{% if ordem == 'pagamento' %}↑{% elif ordem == '-pagamento' %}↓{% endif %}</span></a></th>
-          <th class="hv-th" style="text-align:right;"><a class="hv-sort" href="?{{ sort_urls.total }}">Total <span>{% if ordem == 'total' %}↑{% elif ordem == '-total' %}↓{% endif %}</span></a></th>
-          <th class="hv-th"><a class="hv-sort" href="?{{ sort_urls.financeiro }}">Situação financeira <span>{% if ordem == 'financeiro' %}↑{% elif ordem == '-financeiro' %}↓{% endif %}</span></a></th>
-          <th class="hv-th" style="text-align:right;"><a class="hv-sort" href="?{{ sort_urls.saldo }}">Valor restante <span>{% if ordem == 'saldo' %}↑{% elif ordem == '-saldo' %}↓{% endif %}</span></a></th>
-          <th class="hv-th"><a class="hv-sort" href="?{{ sort_urls.fiscal }}">Situação NFC-e <span>{% if ordem == 'fiscal' %}↑{% elif ordem == '-fiscal' %}↓{% endif %}</span></a></th>
-          <th class="hv-th" style="text-align:center;"><a class="hv-sort" href="?{{ sort_urls.nnf }}">nNF <span>{% if ordem == 'nnf' %}↑{% elif ordem == '-nnf' %}↓{% endif %}</span></a></th>
-          <th class="hv-th hv-actions-head">Ações</th>
+          <th class="hv-th" data-column-width="80"><a class="hv-sort" href="?{{ sort_urls.pedido }}">Pedido <span>{% if ordem == 'pedido' %}↑{% elif ordem == '-pedido' %}↓{% endif %}</span></a></th>
+          <th class="hv-th" data-column-width="92"><a class="hv-sort" href="?{{ sort_urls.data }}">Data/Hora <span>{% if ordem == 'data' %}↑{% elif ordem == '-data' %}↓{% endif %}</span></a></th>
+          <th class="hv-th" data-column-width="205"><a class="hv-sort" href="?{{ sort_urls.cliente }}">Nome <span>{% if ordem == 'cliente' %}↑{% elif ordem == '-cliente' %}↓{% endif %}</span></a></th>
+          <th class="hv-th" data-column-width="175"><a class="hv-sort" href="?{{ sort_urls.pagamento }}">Pagamento <span>{% if ordem == 'pagamento' %}↑{% elif ordem == '-pagamento' %}↓{% endif %}</span></a></th>
+          <th class="hv-th" data-column-width="88" style="text-align:right;"><a class="hv-sort" href="?{{ sort_urls.total }}">Total <span>{% if ordem == 'total' %}↑{% elif ordem == '-total' %}↓{% endif %}</span></a></th>
+          <th class="hv-th" data-column-width="96"><a class="hv-sort" href="?{{ sort_urls.financeiro }}">Status <span>{% if ordem == 'financeiro' %}↑{% elif ordem == '-financeiro' %}↓{% endif %}</span></a></th>
+          <th class="hv-th" data-column-width="108" style="text-align:right;"><a class="hv-sort" href="?{{ sort_urls.saldo }}">Valor restante <span>{% if ordem == 'saldo' %}↑{% elif ordem == '-saldo' %}↓{% endif %}</span></a></th>
+          <th class="hv-th" data-column-width="150"><a class="hv-sort" href="?{{ sort_urls.fiscal }}">Situação NFC-e <span>{% if ordem == 'fiscal' %}↑{% elif ordem == '-fiscal' %}↓{% endif %}</span></a></th>
+          <th class="hv-th" data-column-width="55" style="text-align:center;"><a class="hv-sort" href="?{{ sort_urls.nnf }}">nNF <span>{% if ordem == 'nnf' %}↑{% elif ordem == '-nnf' %}↓{% endif %}</span></a></th>
+          <th class="hv-th hv-actions-head" data-column-width="154">Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -399,7 +373,7 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
             <span style="font-size:11px;">{{ venda.data_venda|date:"H:i" }}</span>
           </td>
 
-          <!-- Cliente / CPF -->
+          <!-- Nome -->
           <td class="hv-td">
             {% if venda.cliente %}
               <a href="{% url 'cadastros:cliente-update' venda.cliente.pk %}" target="_blank" rel="noopener"
@@ -407,7 +381,6 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
                  style="font-weight:700;display:inline-block;color:inherit;text-decoration:underline;text-decoration-color:#f15a24;text-underline-offset:3px;">
                 {{ venda.cliente.razao_social }}
               </a>
-              <span class="hv-muted" style="font-size:11px;color:#9090a0;">{{ venda.cliente.cpf_cnpj|default:"" }}</span>
             {% else %}
               <span class="hv-muted" style="color:#6b6b88;">Consumidor Final</span>
             {% endif %}
@@ -427,14 +400,14 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
             R$ {{ venda.valor_total|floatformat:2 }}
           </td>
 
-          <!-- Situação financeira -->
+          <!-- Status -->
           <td class="hv-td">
             {% if venda.status == 'cancelada' %}
               <span class="hv-finance-status hv-finance-cancel">Cancelada</span>
             {% elif venda.saldo_restante > 0 %}
               <span class="hv-finance-status hv-finance-open">Em aberto</span>
             {% else %}
-              <span class="hv-finance-status hv-finance-paid">Pago completamente</span>
+              <span class="hv-finance-status hv-finance-paid">Pago</span>
             {% endif %}
           </td>
 
@@ -504,27 +477,8 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
           </td>
 
           <!-- Ações -->
-          <td class="hv-td hv-actions-cell" x-data="{ acoesAbertas: false }">
-            <button type="button" class="hv-actions-trigger" @click="acoesAbertas=true"
-                    aria-label="Abrir ações da venda {{ venda.numero_venda }}" title="Abrir ações">
-              <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
-              </svg>
-            </button>
-
-            <template x-teleport="body">
-              <div x-show="acoesAbertas" x-cloak class="hv-actions-overlay"
-                   @click.self="acoesAbertas=false" @keydown.escape.window="acoesAbertas=false"
-                   role="dialog" aria-modal="true" aria-label="Ações da venda {{ venda.numero_venda }}">
-                <section class="hv-actions-panel">
-                  <header class="hv-actions-panel-head">
-                    <div>
-                      <strong>Ações da venda #{{ venda.numero_venda|stringformat:"06d" }}</strong>
-                      <div class="hv-muted" style="font-size:11px;margin-top:2px;">Escolha uma operação</div>
-                    </div>
-                    <button type="button" class="hv-actions-panel-close" @click="acoesAbertas=false" aria-label="Fechar">&times;</button>
-                  </header>
-                  <div class="hv-acts" @click="acoesAbertas=false">
+          <td class="hv-td hv-actions-cell">
+            <div class="hv-acts">
 
               {# Visualizar comprovante não fiscal completo #}
               <button class="hv-ab hv-ab-eye"
@@ -613,7 +567,7 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
                 <button class="hv-ab hv-ab-blue"
                         onclick="hvApp_instance.prepararEmissao('nfe', {{ venda.pk }})"
                         title="Emitir NF-e"
-                        style="font-size:9px;">
+                        style="font-size:8px;width:32px;min-width:32px;flex-basis:32px;">
                   <span class="hv-ab-tip">5 – Emitir NF-e</span>
                   NF-e
                 </button>
@@ -627,7 +581,7 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
                 <button class="hv-ab hv-ab-blue"
                         onclick="hvApp_instance.prepararEmissao('nfe', {{ venda.pk }})"
                         title="Emitir NF-e"
-                        style="font-size:9px;">
+                        style="font-size:8px;width:32px;min-width:32px;flex-basis:32px;">
                   <span class="hv-ab-tip">Emitir NF-e</span>
                   NF-e
                 </button>
@@ -642,7 +596,7 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
                 <button class="hv-ab hv-ab-blue"
                         onclick="hvApp_instance.prepararEmissao('nfe', {{ venda.pk }})"
                         title="Re-emitir NF-e"
-                        style="font-size:9px;">
+                        style="font-size:8px;width:32px;min-width:32px;flex-basis:32px;">
                   <span class="hv-ab-tip">5 – Re-emitir NF-e</span>
                   NF-e
                 </button>
@@ -657,10 +611,7 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
                 6
               </button>
 
-                  </div>
-                </section>
-              </div>
-            </template>
+            </div>
           </td>
 
         </tr>

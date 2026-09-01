@@ -121,7 +121,7 @@
       <th>Cliente</th>
       <th>CPF/CNPJ</th>
       <th>Pagamento</th>
-      <th>Situação financeira</th>
+      <th>Status</th>
       <th class="num">Valor restante</th>
       <th>Situação</th>
       <th class="num">Total</th>
@@ -141,7 +141,7 @@
       <td>
         {% if v.status == 'cancelada' %}<span class="cancelada">Cancelada</span>
         {% elif v.saldo_restante > 0 %}Em aberto
-        {% else %}Pago completamente{% endif %}
+        {% else %}Pago{% endif %}
       </td>
       <td class="num">R$ {{ v.saldo_restante|floatformat:2 }}</td>
       <td>

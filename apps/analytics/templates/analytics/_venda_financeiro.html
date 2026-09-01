@@ -35,7 +35,7 @@
             {% if conta.valor_saldo > 0 %}
               <span class="rounded-full bg-amber-500/15 px-2 py-1 text-[11px] font-bold text-amber-500">Em aberto</span>
             {% else %}
-              <span class="rounded-full bg-emerald-500/15 px-2 py-1 text-[11px] font-bold text-emerald-500">Pago completamente</span>
+              <span class="rounded-full bg-emerald-500/15 px-2 py-1 text-[11px] font-bold text-emerald-500">Pago</span>
             {% endif %}
           </div>
           <p class="mt-1 text-xs opacity-60">{{ conta.forma_pagamento.descricao_com_conta|default:"Forma não definida" }} · vencimento {{ conta.data_vencimento|date:"d/m/Y" }}</p>
