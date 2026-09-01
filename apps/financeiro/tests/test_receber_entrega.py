@@ -52,8 +52,8 @@ class ReceberEntregaTests(TestCase):
             status_entrega='prevista', previsao_entrega_complemento='Outubro/2026',
         )
 
-    def request(self, method='get', data=None, filial=None):
-        request = getattr(RequestFactory(), method)('/financeiro/receber/', data or {})
+    def request(self, method='get', data=None, filial=None, path='/financeiro/receber/'):
+        request = getattr(RequestFactory(), method)(path, data or {})
         request.user = self.usuario
         request.filial_ativa = filial or self.filial
         request.session = {}
@@ -248,6 +248,51 @@ class ReceberEntregaTests(TestCase):
             'forma_pagamento', 'plano_contas', 'observacao', 'status_entrega',
         ):
             self.assertContains(response, f'name="{campo}"')
+
+        response = ContaReceberListView.as_view()(self.request())
+        self.assertContains(response, 'abrirEdicaoTitulo')
+        self.assertContains(response, 'enviarEdicaoTitulo')
+
+    def test_edicao_modal_carrega_valida_e_salva_sem_navegar(self):
+        path = f'/financeiro/receber/{self.conta.pk}/editar/?modal=1'
+        response = ContaReceberEditView.as_view()(
+            self.request(path=path), pk=self.conta.pk,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '@submit.prevent="enviarEdicaoTitulo($event)"')
+        self.assertContains(response, f'action="/financeiro/receber/{self.conta.pk}/editar/?modal=1"')
+        self.assertNotContains(response, '<html')
+
+        dados = {
+            'cliente': self.cliente.pk,
+            'documento_numero': 'MODAL-CORRIGIDO',
+            'status_entrega': 'prevista',
+            'previsao_entrega_complemento': 'Segunda quinzena',
+            'parcela': '1', 'total_parcelas': '1',
+            'valor_original': '1350.75',
+            'data_emissao': '2026-09-01',
+            'data_vencimento': '2026-10-01',
+            'competencia': '2026-09-01',
+            'observacao': 'Atualizada na sobreposição.',
+        }
+        response = ContaReceberEditView.as_view()(
+            self.request('post', dados, path=path), pk=self.conta.pk,
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        self.assertTrue(payload['ok'])
+        self.assertEqual(payload['conta_id'], self.conta.pk)
+        self.conta.refresh_from_db()
+        self.assertEqual(self.conta.documento_numero, 'MODAL-CORRIGIDO')
+        self.assertEqual(self.conta.valor_original, Decimal('1350.75'))
+
+        dados['valor_original'] = ''
+        response = ContaReceberEditView.as_view()(
+            self.request('post', dados, path=path), pk=self.conta.pk,
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, 'Este campo é obrigatório', status_code=400)
+        self.assertContains(response, '@submit.prevent="enviarEdicaoTitulo($event)"', status_code=400)
 
     def test_listagem_relatorio_detalhe_e_modal_respeitam_configuracao(self):
         for habilitada in (True, False):

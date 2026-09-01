@@ -434,12 +434,17 @@ class ContaReceberEditView(PermissaoRequiredMixin, View):
         return ContaReceberEditForm(**kwargs)
 
     def _render(self, request, conta, form):
-        return render(request, 'financeiro/receber/edit_form.html', {
+        modal_mode = request.GET.get('modal') == '1'
+        return render(request, (
+            'financeiro/receber/_edit_form_modal.html'
+            if modal_mode else 'financeiro/receber/edit_form.html'
+        ), {
             'title': f'Editar Conta a Receber #{conta.pk}',
             'conta': conta,
             'form': form,
             'tem_recebimentos': form.tem_recebimentos,
-        })
+            'modal_mode': modal_mode,
+        }, status=400 if modal_mode and request.method == 'POST' else 200)
 
     def get(self, request, pk):
         conta = self._conta(request, pk)
@@ -460,6 +465,12 @@ class ContaReceberEditView(PermissaoRequiredMixin, View):
                 form.add_error(None, str(exc))
             else:
                 messages.success(request, f'Conta a receber #{conta.pk} atualizada com sucesso.')
+                if request.GET.get('modal') == '1':
+                    return JsonResponse({
+                        'ok': True,
+                        'mensagem': f'Conta a receber #{conta.pk} atualizada com sucesso.',
+                        'conta_id': conta.pk,
+                    })
                 return redirect('financeiro:receber_detail', pk=conta.pk)
         return self._render(request, conta, form)
 

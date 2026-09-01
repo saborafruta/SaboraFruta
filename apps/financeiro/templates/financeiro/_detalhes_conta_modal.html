@@ -12,7 +12,7 @@
       {% if tipo_conta == 'receber' and entrega_habilitada %}<p class="mt-2">Entrega: {% include "financeiro/receber/_entrega_resumo.html" %}</p>{% endif %}
     </div>
     <div class="flex flex-wrap gap-2">
-    {% if tipo_conta == 'receber' and pode_editar_titulo %}<a href="{% url 'financeiro:receber_editar' conta.pk %}" class="btn-secondary">Editar informações</a>{% endif %}
+    {% if tipo_conta == 'receber' and pode_editar_titulo %}<a href="{% url 'financeiro:receber_editar' conta.pk %}" class="btn-secondary" @click.prevent="abrirEdicaoTitulo($el.href)">Editar informações</a>{% endif %}
     {% if tipo_conta == 'pagar' and pode_editar_lancamento %}
       <button type="button" class="btn-primary inline-flex items-center gap-2" onclick="toggleEditarLancamento(this)" aria-label="Editar lançamento">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 11l6-6 4 4-6 6H9v-4zM5 19h14"/></svg>
