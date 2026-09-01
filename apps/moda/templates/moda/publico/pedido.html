@@ -1,4 +1,5 @@
 {% extends "_base.html" %}
+{% load static %}
 {% block title %}{% if modo_orcamento %}Orçamento{% else %}Pedido{% endif %} #{{ pedido.numero|stringformat:"06d" }}{% endblock %}
 
 {% comment %}
@@ -12,55 +13,49 @@
   não pode ser seguido.
 {% endcomment %}
 {% block full_content %}
-<div class="min-h-screen py-8 px-4" style="background:#f1f5f9;">
-  <div class="max-w-3xl mx-auto space-y-4">
+<style>
+  :root { --orc-marinho:#052344; --orc-texto:#172033; --orc-cinza:#667085; --orc-fundo:#f4f5f7; --orc-borda:#d9dde3; }
+  .orc-online { color:var(--orc-texto); font-family:Arial,Helvetica,sans-serif; }
+  .orc-online .orc-documento { max-width:920px; }
+  .orc-online .bg-white { border:1px solid var(--orc-borda); border-radius:8px !important; box-shadow:none !important; }
+  .orc-online .orc-cabecalho { border-top:5px solid var(--orc-marinho); }
+  .orc-online .orc-logo { width:150px; height:76px; object-fit:contain; object-position:left center; }
+  .orc-online .orc-titulo { color:var(--orc-marinho); font-size:2rem; letter-spacing:.035em; }
+  .orc-online .orc-regua { height:2px; background:var(--orc-marinho); }
+  .orc-online .orc-dados { background:var(--orc-fundo); border-radius:6px; }
+  .orc-online .orc-rotulo { color:var(--orc-cinza); font-size:.68rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+  .orc-online .orc-cabecalho-produtos { display:grid; grid-template-columns:minmax(0,1fr) 82px 118px 118px; background:var(--orc-marinho); color:white; }
+  .orc-online .orc-produto { border-top:0; border-radius:0 !important; }
+  .orc-online .orc-fechamento { border-top:5px solid var(--orc-marinho); }
+  .orc-online .orc-total { background:var(--orc-marinho); color:white; }
+  .orc-online input:focus,.orc-online textarea:focus { outline:3px solid rgba(5,35,68,.18); border-color:var(--orc-marinho) !important; }
+  @media (max-width:640px) {
+    .orc-online .orc-logo { width:112px; height:56px; }
+    .orc-online .orc-titulo { font-size:1.55rem; }
+    .orc-online .orc-cabecalho-produtos { grid-template-columns:1fr 55px; }
+    .orc-online .orc-cabecalho-produtos span:nth-child(n+3) { display:none; }
+  }
+</style>
+<div class="orc-online min-h-screen py-6 px-3 sm:py-8 sm:px-4" style="background:#eef1f4;">
+  <div class="orc-documento mx-auto space-y-4">
 
     {# ── Cabeçalho ────────────────────────────────────────────────────── #}
-    <div class="bg-white rounded-2xl p-6" style="box-shadow:0 4px 16px rgba(15,23,42,.06);">
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div class="min-w-0">
-          <p class="text-xs font-bold uppercase tracking-widest" style="color:#2563eb;">
-            {{ empresa }}
-          </p>
-          {% if empresa.cnpj %}<p class="text-xs mt-0.5" style="color:#64748b;">CNPJ {{ empresa.cnpj }}</p>{% endif %}
-          <h1 class="text-2xl font-bold mt-1" style="color:#0f172a;">
-            {% if modo_orcamento %}Orçamento{% else %}Pedido{% endif %} #{{ pedido.numero|stringformat:"06d" }}
-          </h1>
-          <p class="text-xs font-bold uppercase tracking-wider mt-3" style="color:#64748b;">
-            Cliente{{ clientes|pluralize }}
-          </p>
-          <div class="mt-1 space-y-1">
-            {% for cliente in clientes %}
-              <p class="text-sm" style="color:#334155;">
-                <strong>{{ cliente.razao_social }}</strong>
-                {% if cliente.cpf_cnpj %}<span style="color:#64748b;"> · {{ cliente.cpf_cnpj }}</span>{% endif %}
-              </p>
-            {% endfor %}
-          </div>
-          {% if pedido.contato_nome or pedido.contato_telefone %}
-            <p class="text-sm mt-2" style="color:#64748b;">
-              Responsável: {{ pedido.contato_nome|default:"Não informado" }}
-              {% if pedido.contato_telefone %} · {{ pedido.contato_telefone }}{% endif %}
-            </p>
-          {% endif %}
+    <div class="orc-cabecalho bg-white p-5 sm:p-7">
+      <div class="grid gap-5 sm:grid-cols-[.42fr_.58fr] sm:items-center">
+        <img class="orc-logo" src="{% static 'moda/img/logo_erk_preta.png' %}" alt="{{ empresa }}">
+        <div class="sm:text-right">
+          <h1 class="orc-titulo font-bold">{% if modo_orcamento %}ORÇAMENTO{% else %}PEDIDO{% endif %}</h1>
+          <div class="orc-regua my-2"></div>
+          <p class="text-sm font-bold">{{ pedido.filial.nome_fantasia|default:pedido.filial.razao_social }}</p>
+          {% if pedido.filial.cnpj %}<p class="text-xs mt-1" style="color:var(--orc-cinza);">CNPJ: {{ pedido.filial.cnpj }}</p>{% endif %}
+          <p class="text-xs mt-1" style="color:var(--orc-cinza);">Nº {{ pedido.numero|stringformat:"06d" }}</p>
         </div>
-        <div class="text-right">
-          <p class="text-xs uppercase tracking-wider" style="color:#64748b;">Data de emissão</p>
-          <p class="text-sm font-semibold mb-3" style="color:#0f172a;">{{ pedido.data_pedido|date:"d/m/Y" }}</p>
-          <p class="text-xs uppercase tracking-wider" style="color:#64748b;">Entrega prevista</p>
-          <p class="text-xl font-bold" style="color:#0f172a;">
-            {% if pedido.data_prevista_entrega %}
-              {{ pedido.data_prevista_entrega|date:"d/m/Y" }}
-            {% else %}
-              a combinar
-            {% endif %}
-          </p>
-          {% if prazo %}
-            <p class="text-xs" style="color:{% if pedido.atrasado %}#dc2626{% else %}#64748b{% endif %};">
-              {{ prazo }}
-            </p>
-          {% endif %}
-        </div>
+      </div>
+      <div class="orc-dados grid gap-4 mt-5 p-4 sm:grid-cols-4">
+        <div><p class="orc-rotulo">Cliente{{ clientes|pluralize }}</p>{% for cliente in clientes %}<p class="text-sm font-semibold mt-1">{{ cliente.razao_social }}</p>{% endfor %}</div>
+        <div><p class="orc-rotulo">Responsável</p><p class="text-sm font-semibold mt-1">{{ pedido.contato_nome|default:"Não informado" }}</p>{% if pedido.contato_telefone %}<p class="text-xs mt-1" style="color:var(--orc-cinza);">{{ pedido.contato_telefone }}</p>{% endif %}</div>
+        <div><p class="orc-rotulo">CNPJ/CPF</p>{% for cliente in clientes %}<p class="text-sm mt-1">{{ cliente.cpf_cnpj|default:"Não informado" }}</p>{% endfor %}</div>
+        <div><p class="orc-rotulo">Data de emissão</p><p class="text-sm font-semibold mt-1">{{ pedido.data_pedido|date:"d/m/Y" }}</p></div>
       </div>
     </div>
 
@@ -136,8 +131,16 @@
         </div>
       </div>
     {% endif %}
+    {% if itens %}
+      <div class="orc-cabecalho-produtos px-4 py-3 text-xs font-bold uppercase tracking-wider">
+        <span>Produto / especificações</span>
+        <span class="text-center">Qtd.</span>
+        <span class="text-right">Valor unitário</span>
+        <span class="text-right">Subtotal</span>
+      </div>
+    {% endif %}
     {% for item in itens %}
-      <div class="bg-white rounded-2xl p-6 space-y-4" style="box-shadow:0 4px 16px rgba(15,23,42,.06);">
+      <div class="orc-produto bg-white p-6 space-y-4">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div class="min-w-0">
             <h2 class="text-lg font-bold" style="color:#0f172a;">{{ item.nome_exibicao }}</h2>
@@ -360,15 +363,15 @@
     {% endfor %}
 
     {% if modo_orcamento %}
-      <div class="bg-white rounded-2xl p-6 space-y-5" style="box-shadow:0 4px 16px rgba(15,23,42,.06);">
+      <div class="orc-fechamento bg-white p-6 space-y-5">
         <div>
-          <p class="text-xs font-bold uppercase tracking-wider mb-3" style="color:#64748b;">Valores do orçamento</p>
+          <p class="orc-rotulo mb-3">Fechamento do orçamento</p>
           <div class="space-y-2 text-sm">
             <div class="flex justify-between gap-4"><span style="color:#64748b;">Subtotal</span><strong style="color:#0f172a;">R$ {{ pedido.subtotal|floatformat:2 }}</strong></div>
             {% if pedido.desconto %}<div class="flex justify-between gap-4"><span style="color:#64748b;">Desconto</span><strong style="color:#059669;">- R$ {{ pedido.desconto|floatformat:2 }}</strong></div>{% endif %}
             {% if pedido.acrescimo %}<div class="flex justify-between gap-4"><span style="color:#64748b;">Acréscimo</span><strong style="color:#0f172a;">+ R$ {{ pedido.acrescimo|floatformat:2 }}</strong></div>{% endif %}
             {% if pedido.frete %}<div class="flex justify-between gap-4"><span style="color:#64748b;">Frete</span><strong style="color:#0f172a;">+ R$ {{ pedido.frete|floatformat:2 }}</strong></div>{% endif %}
-            <div class="flex justify-between gap-4 border-t pt-3 mt-3" style="border-color:#e2e8f0;"><span class="font-bold" style="color:#0f172a;">Total</span><strong class="text-xl" style="color:#2563eb;">R$ {{ pedido.valor_total|floatformat:2 }}</strong></div>
+            <div class="orc-total flex justify-between gap-4 px-4 py-3 mt-3 rounded"><span class="font-bold">Total</span><strong class="text-xl">R$ {{ pedido.valor_total|floatformat:2 }}</strong></div>
             {% if pedido.entrada %}<div class="flex justify-between gap-4"><span style="color:#64748b;">Entrada</span><strong style="color:#0f172a;">R$ {{ pedido.entrada|floatformat:2 }}</strong></div><div class="flex justify-between gap-4"><span style="color:#64748b;">Saldo</span><strong style="color:#0f172a;">R$ {{ pedido.saldo|floatformat:2 }}</strong></div>{% endif %}
           </div>
         </div>
@@ -390,10 +393,17 @@
         </div>
 
         <div class="border-t pt-5" style="border-color:#e2e8f0;">
+          <p class="orc-rotulo mb-2">Previsão de entrega</p>
+          <p class="text-base font-bold">
+            {% if pedido.data_prevista_entrega %}{{ pedido.data_prevista_entrega|date:"d/m/Y" }}{% else %}A combinar{% endif %}
+          </p>
+        </div>
+
+        <div class="border-t pt-5" style="border-color:#e2e8f0;">
           <p class="text-xs font-bold uppercase tracking-wider mb-3" style="color:#64748b;">Observações e prazos</p>
           <ul class="space-y-2">
-            {% for observacao in observacoes_orcamento %}<li class="text-sm" style="color:#334155;">- {{ observacao }}</li>{% endfor %}
-            <li class="text-sm font-semibold" style="color:#0f172a;">* {{ observacao_pagamento_orcamento }}</li>
+            {% for observacao in observacoes_orcamento %}<li class="flex items-start gap-3 text-sm" style="color:#334155;"><span class="shrink-0 rounded-full text-center font-bold text-white" style="width:22px;height:22px;line-height:22px;background:var(--orc-marinho);">{{ forloop.counter }}</span><span>{{ observacao }}</span></li>{% endfor %}
+            <li class="flex items-start gap-3 text-sm font-semibold" style="color:#0f172a;"><span class="shrink-0 rounded-full text-center font-bold text-white" style="width:22px;height:22px;line-height:22px;background:var(--orc-marinho);">{{ observacoes_orcamento|length|add:"1" }}</span><span>{{ observacao_pagamento_orcamento }}</span></li>
           </ul>
         </div>
       </div>
@@ -410,7 +420,7 @@
         da arte não teria o que clicar, e o pedido ficaria parado sem
         ninguém saber por quê.
       {% endcomment %}
-      <div class="bg-white rounded-2xl p-6" style="box-shadow:0 4px 16px rgba(15,23,42,.06);">
+      <div class="orc-fechamento bg-white p-6">
         {% if aprovacao.aprovado_pelo_cliente %}
           <p class="text-lg font-bold" style="color:#059669;">✓ Pedido aprovado</p>
           <p class="text-sm mt-1" style="color:#64748b;">
@@ -437,10 +447,15 @@
           <form method="post" action="{% url 'moda_publico:pedido-responder' pedido.token_publico %}"
                 x-data="{ ajuste: false }" class="space-y-3">
             {% csrf_token %}
-            <input type="text" name="nome" required maxlength="120"
-                   placeholder="Seu nome"
+            <div>
+              <label for="nome-aprovador" class="block text-sm font-bold mb-1">Nome de quem está aprovando *</label>
+              <p class="text-xs mb-2" style="color:var(--orc-cinza);">O nome ficará registrado junto com a data e a hora da resposta.</p>
+              {% if request.GET.falta == 'nome' %}<p class="text-sm font-semibold mb-2" style="color:#b42318;">Informe o nome da pessoa responsável pela aprovação.</p>{% endif %}
+            <input id="nome-aprovador" type="text" name="nome" required maxlength="120" autocomplete="name"
+                   placeholder="Digite o nome completo da pessoa responsável"
                    class="w-full rounded-xl px-4 py-3"
                    style="border:1px solid #cbd5e1; background:#fff; color:#0f172a;">
+            </div>
 
             <div x-show="ajuste" x-cloak>
               <textarea name="motivo" rows="3" maxlength="2000"
@@ -469,9 +484,9 @@
     <div class="bg-white rounded-2xl p-6 text-center" style="box-shadow:0 4px 16px rgba(15,23,42,.06);">
       <a href="{% url 'moda_publico:pedido-pdf' pedido.token_publico %}" target="_blank" rel="noopener"
          class="inline-block px-6 py-3 rounded-xl font-bold text-white"
-         style="background:#2563eb;">Ver o PDF do {% if modo_orcamento %}orçamento{% else %}pedido{% endif %}</a>
+         style="background:var(--orc-marinho);">Ver o PDF do {% if modo_orcamento %}orçamento{% else %}pedido{% endif %}</a>
       <p class="text-xs mt-3" style="color:#64748b;">
-        O PDF traz também os valores e a personalização pessoa a pessoa.
+        Baixe ou imprima esta mesma proposta em formato PDF.
       </p>
     </div>
 

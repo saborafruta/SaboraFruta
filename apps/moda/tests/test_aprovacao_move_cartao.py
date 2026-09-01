@@ -36,6 +36,7 @@ from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.moda.models import (
     AprovacaoPedido, ItemPedidoProducao, PedidoProducao, ProdutoModa,
 )
+from apps.moda.services.kanban_comercial import KanbanComercialService
 
 S = PedidoProducao.Status
 R = AprovacaoPedido.Resposta
@@ -197,6 +198,36 @@ class AjusteNaoMoveTests(RespostaBase):
         )
 
         self.assertTrue(cartao.pediu_ajuste)
+
+
+class OrdenacaoCartoesTests(RespostaBase):
+    def test_prioridade_maior_fica_acima_e_empate_preserva_o_mais_antigo(self):
+        agora = timezone.now()
+        normal_antigo, _ = self._pedido(numero=10)
+        normal_novo, _ = self._pedido(numero=11)
+        alta, _ = self._pedido(numero=12)
+        urgente, _ = self._pedido(numero=13)
+        PedidoProducao.objects.filter(pk=normal_antigo.pk).update(
+            created_at=agora - timedelta(days=4), updated_at=agora,
+        )
+        PedidoProducao.objects.filter(pk=normal_novo.pk).update(
+            created_at=agora - timedelta(days=2), updated_at=agora - timedelta(days=2),
+        )
+        PedidoProducao.objects.filter(pk=alta.pk).update(
+            prioridade=PedidoProducao.Prioridade.ALTA,
+            created_at=agora - timedelta(days=1),
+        )
+        PedidoProducao.objects.filter(pk=urgente.pk).update(
+            prioridade=PedidoProducao.Prioridade.URGENTE, created_at=agora,
+        )
+
+        quadro = KanbanComercialService.quadro(self.filial)
+        aprovacao = next(r for r in quadro['raias'] if r.coluna.chave == 'aprovacao')
+
+        self.assertEqual(
+            [cartao.pedido.pk for cartao in aprovacao.cartoes],
+            [urgente.pk, alta.pk, normal_antigo.pk, normal_novo.pk],
+        )
 
 
 class NuncaVoltaTests(RespostaBase):

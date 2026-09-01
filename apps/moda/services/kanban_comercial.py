@@ -47,6 +47,11 @@ from apps.moda.services.financeiro import FinanceiroPedidoService
 
 S = PedidoProducao.Status
 ZERO = Decimal('0')
+PRIORIDADE_ORDEM = {
+    PedidoProducao.Prioridade.NORMAL: 0,
+    PedidoProducao.Prioridade.ALTA: 1,
+    PedidoProducao.Prioridade.URGENTE: 2,
+}
 
 
 @dataclass(frozen=True)
@@ -195,13 +200,15 @@ class KanbanComercialService:
                 ),
             ))
 
-        # Dentro da raia: o mais urgente em cima. Pedido sem data vai para o
-        # fim — não é urgente, é indefinido, e misturar os dois faria a
-        # ausência de prazo parecer folga.
+        # Dentro da raia, a prioridade explícita vence. No empate, o pedido
+        # mais antigo permanece em cima. `created_at` é deliberado: mover o
+        # cartão altera status/updated_at, mas não pode furar a fila dos que
+        # já estavam esperando com a mesma prioridade.
         for raia in raias.values():
             raia.cartoes.sort(key=lambda c: (
-                c.dias if c.dias is not None else 10_000,
-                -c.pedido.numero,
+                -PRIORIDADE_ORDEM.get(c.pedido.prioridade, 0),
+                c.pedido.created_at,
+                c.pedido.pk,
             ))
 
         return {

@@ -109,6 +109,29 @@ class AprovacaoPublicaTests(TestCase):
         self.assertContains(resposta, 'Este orçamento é válido por 5 dias')
         self.assertContains(resposta, 'O pagamento de 50% do valor total')
 
+    def test_link_repete_hierarquia_do_pdf_e_identifica_quem_aprova(self):
+        from datetime import date
+
+        from apps.moda.models import ItemPedidoProducao
+
+        ItemPedidoProducao.objects.create(
+            pedido=self.pedido, descricao='Camisa de jogo', quantidade=3,
+            valor_unitario=Decimal('100.00'),
+        )
+        self.pedido.data_prevista_entrega = date(2026, 9, 20)
+        self.pedido.save(update_fields=['data_prevista_entrega'])
+
+        resposta = self.client.get(self._url_pagina())
+
+        self.assertContains(resposta, 'logo_erk_preta.png')
+        self.assertContains(resposta, 'ORÇAMENTO')
+        self.assertContains(resposta, 'Produto / especificações')
+        self.assertContains(resposta, 'Fechamento do orçamento')
+        self.assertContains(resposta, 'Previsão de entrega')
+        self.assertContains(resposta, '20/09/2026')
+        self.assertContains(resposta, 'Nome de quem está aprovando')
+        self.assertContains(resposta, 'id="nome-aprovador"')
+
     def test_link_do_orcamento_mostra_clientes_estrutura_cor_e_observacao_individual(self):
         from apps.moda.models import (
             ItemPedidoProducao, PersonalizacaoIndividual, Tamanho,
