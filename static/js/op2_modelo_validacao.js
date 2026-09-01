@@ -36,8 +36,7 @@ function op2AlternarMultisselecao(valores, opcao, marcada) {
 function op2ResumoMultisselecao(valores) {
   const lista = op2ListaMultisselecao(valores);
   if (!lista.length) return 'Selecione...';
-  if (lista.length === 1) return lista[0];
-  return `${lista.length} opções selecionadas`;
+  return lista.join(', ');
 }
 
 if (typeof module !== 'undefined') module.exports = {

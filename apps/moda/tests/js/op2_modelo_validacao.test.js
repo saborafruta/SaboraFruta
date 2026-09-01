@@ -59,7 +59,7 @@ test('seletor múltiplo mantém N/A exclusivo e resume escolhas', () => {
   let valores = op2AlternarMultisselecao([], 'SILK', true);
   valores = op2AlternarMultisselecao(valores, 'RELEVO', true);
   assert.deepEqual(valores, ['SILK', 'RELEVO']);
-  assert.equal(op2ResumoMultisselecao(valores), '2 opções selecionadas');
+  assert.equal(op2ResumoMultisselecao(valores), 'SILK, RELEVO');
   assert.deepEqual(op2AlternarMultisselecao(valores, 'N/A', true), ['N/A']);
   assert.deepEqual(op2AlternarMultisselecao(['N/A'], 'BORDADO', true), ['BORDADO']);
 });
