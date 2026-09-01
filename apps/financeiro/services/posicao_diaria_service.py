@@ -49,6 +49,7 @@ class MovimentoDiario:
     data_credito: date | None = None
     op_url: str = ""
     venda_pdv_id: int | None = None
+    transferencia: bool = False
 
     @property
     def valor(self):
@@ -134,7 +135,8 @@ class PosicaoDiariaCaixaService:
     ):
         movimentos = self._movimentos_do_dia(incluir_excluidos=incluir_excluidos)
         movimentos_ativos = [mov for mov in movimentos if not mov.excluido]
-        movimentos_exibidos = movimentos_ativos
+        movimentos_operacionais = [mov for mov in movimentos_ativos if not mov.transferencia]
+        movimentos_exibidos = movimentos_operacionais
         if conta_filtro:
             movimentos_exibidos = [
                 mov for mov in movimentos_exibidos
@@ -167,6 +169,7 @@ class PosicaoDiariaCaixaService:
             )
         entradas = [mov for mov in movimentos_exibidos if mov.entrada > ZERO]
         saidas = [mov for mov in movimentos_exibidos if mov.saida > ZERO]
+        entradas_com_taxa = [mov for mov in movimentos_ativos if mov.entrada > ZERO]
         saldo_anterior = self._saldos_antes_do_dia()
         por_conta_dia = defaultdict(lambda: ZERO)
         for mov in movimentos_ativos:
@@ -191,11 +194,16 @@ class PosicaoDiariaCaixaService:
             contas.append(conta)
 
         total_abertura = sum((c.posicao_abertura for c in contas), ZERO)
-        total_taxas_entradas = sum((m.valor_taxa for m in entradas), ZERO)
+        # A transferencia nao aparece como entrada/saida operacional, mas sua
+        # tarifa continua sendo uma despesa real que reduz o saldo consolidado.
+        total_taxas_entradas = sum((m.valor_taxa for m in entradas_com_taxa), ZERO)
+        total_taxas_transferencias = sum(
+            (m.valor_taxa for m in entradas_com_taxa if m.transferencia), ZERO
+        )
         total_entradas = sum((m.entrada for m in entradas), ZERO)
         total_liquido_entradas = total_entradas
         transacoes_taxas = [
-            movimento for movimento in entradas
+            movimento for movimento in entradas_com_taxa
             if movimento.forma_pagamento != "Sem forma vinculada"
         ]
         taxas_pagamentos = [movimento for movimento in saidas if movimento.taxa_em_pagamento]
@@ -250,7 +258,14 @@ class PosicaoDiariaCaixaService:
             "taxas_por_forma": taxas_por_forma,
             # As taxas ja foram abatidas das entradas liquidas. Elas aparecem no
             # total de saidas para classificacao, sem reduzir o caixa novamente.
-            "variacao_dia": total_entradas - total_saidas_bancarias,
+            # Transferencias nao sao exibidas como entradas/saidas operacionais.
+            # A tarifa, porem, reduz de fato o caixa consolidado e precisa aparecer
+            # no resultado do dia para reconciliar com os saldos das contas.
+            "variacao_dia": (
+                total_entradas
+                - total_saidas_bancarias
+                - total_taxas_transferencias
+            ),
             "totais_forma_entrada": self._agrupar(entradas, "forma_pagamento", "entrada"),
             "totais_forma_saida": self._agrupar(saidas, "forma_pagamento", "saida"),
             "totais_conta_entrada": self._agrupar(entradas, "conta", "entrada"),
@@ -367,6 +382,7 @@ class PosicaoDiariaCaixaService:
                 bandeira=item.bandeira,
                 numero_parcelas=item.numero_parcelas,
                 data_credito=item.data_credito,
+                transferencia=item.tipo_lancamento == "transferencia",
             ))
 
         recebimentos = PagamentoContaReceber.objects.filter(

@@ -292,9 +292,10 @@
         body: new FormData(form),
         headers: {'X-Requested-With':'XMLHttpRequest'}
       });
-      this.tituloPagarHtml = await resposta.text();
+      const html = await resposta.text();
+      if (resposta.ok) { window.location.reload(); return; }
+      this.tituloPagarHtml = html;
       this.hidratarTituloPagar();
-      if (resposta.ok) this.atualizarPrevisoes(window.location.href);
     } catch (erro) {
       this.tituloPagarErro = 'Não foi possível registrar o pagamento.';
     }
@@ -308,9 +309,10 @@
         body: new FormData(form),
         headers: {'X-Requested-With':'XMLHttpRequest'}
       });
-      this.tituloPagarHtml = await resposta.text();
+      const html = await resposta.text();
+      if (resposta.ok) { window.location.reload(); return; }
+      this.tituloPagarHtml = html;
       this.hidratarTituloPagar();
-      if (resposta.ok) this.atualizarPrevisoes(window.location.href);
     } catch (erro) {
       this.tituloPagarErro = 'Não foi possível registrar o recebimento.';
     }

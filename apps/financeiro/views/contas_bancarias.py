@@ -399,7 +399,10 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             if busca:
                 qs = qs.filter(historico__icontains=busca)
             for item in qs:
-                valor = item.valor_entrada_liquida if item.valor > 0 else (item.valor or Decimal("0"))
+                # A taxa retida possui sua propria saida contabil. Exibir aqui
+                # o credito bruto permite que a movimentacao bancaria mostre
+                # credito e taxa separadamente sem desconta-la duas vezes.
+                valor = item.valor or Decimal("0")
                 movimentos.append(MovimentoBancario(
                     data=item.data_credito or item.data_lancamento,
                     conta=item.conta_bancaria,
@@ -431,7 +434,9 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                     historico=f"Recebimento - {item.cliente}",
                     origem="Conta a receber",
                     documento=item.documento_numero,
-                    entrada=item.valor_entrada_liquida,
+                    # A taxa aparece como uma saida bancaria separada; por isso
+                    # o credito desta linha precisa ser exibido pelo valor bruto.
+                    entrada=item.valor_pago,
                     saida=Decimal("0"),
                     referencia_url=reverse("financeiro:receber_detail", args=[item.pk]),
                     origem_codigo="receber",
@@ -444,17 +449,22 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 conta_bancaria_id__in=conta_ids,
                 data_pagamento__range=(data_ini, data_fim),
                 conta_pagar__excluido_em__isnull=True,
-            ).exclude(
-                conta_pagar__documento_tipo__startswith="taxa_",
-            ).select_related("conta_bancaria", "conta_pagar__fornecedor", "conta_pagar__funcionario")
+            ).select_related(
+                "conta_bancaria", "conta_pagar__fornecedor",
+                "conta_pagar__funcionario", "conta_pagar__forma_pagamento",
+            )
             if busca:
                 qs = qs.filter(conta_pagar__documento_numero__icontains=busca)
             for item in qs:
+                eh_taxa = (item.conta_pagar.documento_tipo or "").startswith("taxa_")
                 movimentos.append(MovimentoBancario(
                     data=item.data_pagamento,
                     conta=item.conta_bancaria,
-                    historico=f"Pagamento - {item.conta_pagar.beneficiario_nome}",
-                    origem="Conta a pagar",
+                    historico=(
+                        item.conta_pagar.descricao_despesa
+                        if eh_taxa else f"Pagamento - {item.conta_pagar.beneficiario_nome}"
+                    ),
+                    origem="Taxa" if eh_taxa else "Conta a pagar",
                     documento=item.conta_pagar.documento_numero or item.referencia_pagamento,
                     entrada=Decimal("0"),
                     saida=item.valor_liquido,
@@ -488,7 +498,8 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                     conta_destino = item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao
                     if not conta_destino or conta_destino.pk not in conta_ids:
                         continue
-                    valor = item.valor_entrada_liquida
+                    # A taxa da venda possui uma saida bancaria propria.
+                    valor = item.valor
                     if valor <= 0:
                         continue
                     movimentos.append(MovimentoBancario(
@@ -852,6 +863,10 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 status="importado",
                 bandeira=bandeira,
                 numero_parcelas=numero_parcelas,
+                tipo_lancamento=(
+                    MovimentoContaBancariaForm.TIPO_TRANSFERENCIA
+                    if tipo == MovimentoContaBancariaForm.TIPO_TRANSFERENCIA else ""
+                ),
             )
             movimento.recalcular_recebimento()
             movimento.save()

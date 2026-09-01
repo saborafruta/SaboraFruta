@@ -12,6 +12,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
 from django.http import Http404
 from django.test import RequestFactory, TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.cadastros.forms import FornecedorRapidoForm, FuncionarioForm
@@ -743,6 +744,8 @@ class FuncionarioContaPagarTests(TestCase):
         get_response = DespesaPagaCreateView.as_view()(get_request)
         self.assertEqual(get_response.status_code, 200)
         self.assertContains(get_response, 'Registrar despesa paga')
+        self.assertContains(get_response, 'Novo fornecedor')
+        self.assertContains(get_response, reverse('cadastros:fornecedor-ajax-create'))
         self.assertContains(get_response, 'Hoje,')
         self.assertNotContains(get_response, 'Data de vencimento')
         self.assertNotContains(get_response, 'Título recorrente')

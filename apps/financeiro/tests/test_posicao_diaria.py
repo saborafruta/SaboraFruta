@@ -63,10 +63,12 @@ class PosicaoDiariaCaixaTests(TestCase):
         ExtratoBancario.objects.create(
             filial=self.filial, conta_bancaria=self.banco, data_lancamento=date(2026, 8, 21),
             historico="Transferencia para caixa", valor=Decimal("-30.00"), origem="manual",
+            tipo_lancamento="transferencia",
         )
         ExtratoBancario.objects.create(
             filial=self.filial, conta_bancaria=self.caixa, data_lancamento=date(2026, 8, 21),
             historico="Transferencia do banco", valor=Decimal("30.00"), origem="manual",
+            tipo_lancamento="transferencia",
         )
         venda = VendaPDV.objects.create(
             filial=self.filial, numero_venda=1, status="finalizada",
@@ -95,19 +97,27 @@ class PosicaoDiariaCaixaTests(TestCase):
         posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
 
         self.assertEqual(posicao["total_abertura"], Decimal("170.00"))
-        self.assertEqual(posicao["total_entradas"], Decimal("110.00"))
-        self.assertEqual(posicao["total_saidas"], Decimal("70.00"))
+        self.assertEqual(posicao["total_entradas"], Decimal("80.00"))
+        self.assertEqual(posicao["total_saidas"], Decimal("40.00"))
         self.assertEqual(posicao["variacao_dia"], Decimal("40.00"))
         self.assertEqual(posicao["total_fechamento"], Decimal("210.00"))
         saldos = {conta.descricao: conta.posicao_fechamento for conta in posicao["contas"]}
         self.assertEqual(saldos["Banco principal"], Decimal("170.00"))
         self.assertEqual(saldos["Dinheiro em caixa"], Decimal("40.00"))
+        self.assertNotIn(
+            "Transferencia para caixa",
+            {movimento.descricao for movimento in posicao["extrato"]},
+        )
+        self.assertNotIn(
+            "Transferencia do banco",
+            {movimento.descricao for movimento in posicao["extrato"]},
+        )
         self.assertTrue(posicao["possui_caixa_dinheiro"])
-        self.assertIn(
+        self.assertNotIn(
             "Sem forma vinculada",
             {item["nome"] for item in posicao["totais_forma_entrada"]},
         )
-        self.assertIn(
+        self.assertNotIn(
             "Sem forma vinculada",
             {item["nome"] for item in posicao["totais_forma_saida"]},
         )
@@ -135,7 +145,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         response = self.client.get(reverse("financeiro:posicao_diaria"), {
             "data": "2026-08-21", "origem": "manual", "movimento": movimento.pk,
         })
-        self.assertIsNone(response.context["detalhe"].venda_pdv_id)
+        self.assertIsNone(response.context["detalhe"])
         self.assertNotContains(response, "Comprovante da venda")
 
     def test_tela_exibe_entradas_saidas_e_atalhos(self):
@@ -152,6 +162,8 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, reverse("financeiro:pagar_criar") + "?modal=1")
         self.assertContains(response, reverse("financeiro:despesa_paga_criar") + "?modal=1")
         self.assertContains(response, "Transferir entre contas")
+        self.assertNotContains(response, "Transferencia para caixa")
+        self.assertNotContains(response, "Transferencia do banco")
         self.assertEqual(len(response.context["dias_mes"]), 31)
         self.assertContains(response, 'aria-label="Ver dias anteriores"')
         self.assertContains(response, 'aria-label="Ver dias posteriores"')
@@ -160,6 +172,41 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "enviarPagamentoTitulo")
         self.assertContains(response, "pc-reconcile")
         self.assertContains(response, "Agrupar por forma de pagamento")
+        self.assertContains(
+            response,
+            "if (resposta.ok) { window.location.reload(); return; }",
+            count=2,
+        )
+
+    def test_transferencia_com_taxa_fica_fora_do_extrato_e_reduz_saldo(self):
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            filial=self.filial,
+            descricao="TED tarifada",
+            tipo=TipoFormaPagamento.TED,
+            taxa_administrativa=Decimal("2.00"),
+            taxa_fixa=Decimal("0.50"),
+        )
+
+        response = self.client.post(reverse("financeiro:contas_bancarias"), {
+            "acao": "lancar_movimento",
+            "tipo": "transferencia",
+            "conta_origem": self.banco.pk,
+            "conta_destino": self.caixa.pk,
+            "data_lancamento": "2026-08-21",
+            "valor": "100.00",
+            "forma_pagamento": forma.pk,
+        })
+
+        self.assertEqual(response.status_code, 302)
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
+        self.assertEqual(posicao["total_entradas"], Decimal("0.00"))
+        self.assertEqual(posicao["total_saidas_bancarias"], Decimal("0.00"))
+        self.assertEqual(posicao["total_taxas_entradas"], Decimal("2.50"))
+        self.assertEqual(posicao["total_saidas"], Decimal("2.50"))
+        self.assertEqual(posicao["variacao_dia"], Decimal("-2.50"))
+        self.assertEqual(posicao["total_fechamento"], Decimal("147.50"))
+        self.assertFalse(posicao["extrato"])
 
     def test_previsoes_de_receber_e_pagar_abrem_em_hoje_antes_dos_saldos(self):
         hoje = date(2026, 8, 24)
@@ -396,13 +443,13 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(venda.valor_taxa, Decimal("2.10"))
         self.assertEqual(venda.taxa_percentual, Decimal("2.00"))
         self.assertEqual(venda.entrada, Decimal("77.90"))
-        self.assertEqual(posicao["total_entradas"], Decimal("107.90"))
-        self.assertEqual(posicao["total_saidas"], Decimal("72.10"))
-        self.assertEqual(posicao["total_saidas_bancarias"], Decimal("70.00"))
+        self.assertEqual(posicao["total_entradas"], Decimal("77.90"))
+        self.assertEqual(posicao["total_saidas"], Decimal("42.10"))
+        self.assertEqual(posicao["total_saidas_bancarias"], Decimal("40.00"))
         self.assertEqual(posicao["variacao_dia"], Decimal("37.90"))
         self.assertEqual(posicao["total_fechamento"], Decimal("207.90"))
         self.assertEqual(posicao["total_taxas_entradas"], Decimal("2.10"))
-        self.assertEqual(posicao["total_liquido_entradas"], Decimal("107.90"))
+        self.assertEqual(posicao["total_liquido_entradas"], Decimal("77.90"))
         self.assertEqual(posicao["taxas_por_forma"][0]["nome"], self.forma.descricao)
 
         response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
@@ -1089,6 +1136,8 @@ class PosicaoDiariaCaixaTests(TestCase):
 
         self.assertEqual(credito.status_code, 302)
         self.assertEqual(debito.status_code, 302)
+        self.assertEqual(credito.url, url + "?data=2026-08-21")
+        self.assertEqual(debito.url, url + "?data=2026-08-21")
         valores = list(ExtratoBancario.objects.filter(
             filial=self.filial, historico__in=("Credito manual", "Debito manual"),
         ).order_by("historico").values_list("valor", flat=True))

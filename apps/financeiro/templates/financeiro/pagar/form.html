@@ -280,107 +280,7 @@
     </div>
   </div>
 
-  <div x-show="fornecedorModal" x-cloak @keydown.escape.window="fornecedorModal=false"
-       class="fixed inset-0 z-[100] flex items-end justify-center bg-black/65 p-0 sm:items-center sm:p-5"
-       role="dialog" aria-modal="true" aria-labelledby="titulo-fornecedor-rapido">
-    <button type="button" class="absolute inset-0 h-full w-full cursor-default" @click="fornecedorModal=false" aria-label="Fechar"></button>
-    <div class="relative z-10 flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-md border shadow-2xl sm:rounded-md"
-         :style="temaClaro ? 'background:#fff;border-color:#d1d5db;color:#111827' : 'background:#202024;border-color:#3f3f46;color:#f4f4f5'">
-      <div class="flex items-center justify-between border-b px-4 py-3 sm:px-5" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#3f3f46'">
-        <div>
-          <h3 id="titulo-fornecedor-rapido" class="font-semibold">Novo fornecedor</h3>
-          <p class="text-xs opacity-65">Cadastre o essencial sem sair do lançamento.</p>
-        </div>
-        <button type="button" @click="fornecedorModal=false" class="grid h-9 w-9 place-items-center rounded text-2xl opacity-70 hover:bg-black/10" aria-label="Fechar">&times;</button>
-      </div>
-
-      <form class="overflow-y-auto p-4 sm:p-5" @submit.prevent="cadastrarFornecedorRapido($data, $el)" novalidate>
-        {% csrf_token %}
-        <div x-show="fornecedorErro" x-text="fornecedorErro" class="mb-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-500"></div>
-
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label class="mb-1 block text-sm font-medium">Tipo *</label>
-            <select name="tipo_pessoa" class="form-input" x-model="fornecedorTipo"
-                    @change="remascararCpfCnpjFornecedor($refs.documentoFornecedor, fornecedorTipo)" required>
-              <option value="J">Pessoa jurídica</option>
-              <option value="F">Pessoa física</option>
-              <option value="E">Estrangeiro</option>
-            </select>
-          </div>
-          <div>
-            <label class="mb-1 block text-sm font-medium">CPF/CNPJ</label>
-            <input name="cpf_cnpj" x-ref="documentoFornecedor" class="form-input" inputmode="numeric"
-                   maxlength="18" placeholder="Digite ou cole com ou sem máscara"
-                   @input="mascararCpfCnpjFornecedor($event.target, fornecedorTipo)"
-                   @paste="colarCpfCnpjFornecedor($event, $data)">
-          </div>
-          <div class="sm:col-span-2">
-            <label class="mb-1 block text-sm font-medium">Razão social / Nome *</label>
-            <input name="razao_social" class="form-input" maxlength="150" required autocomplete="organization">
-          </div>
-          <div>
-            <label class="mb-1 block text-sm font-medium">Nome fantasia</label>
-            <input name="nome_fantasia" class="form-input" maxlength="100">
-          </div>
-          <div>
-            <label class="mb-1 block text-sm font-medium">Inscrição estadual</label>
-            <input name="inscricao_estadual" class="form-input" maxlength="20">
-          </div>
-          <div>
-            <label class="mb-1 block text-sm font-medium">Telefone</label>
-            <input name="telefone" class="form-input" maxlength="20" inputmode="tel" autocomplete="tel">
-          </div>
-          <div>
-            <label class="mb-1 block text-sm font-medium">E-mail</label>
-            <input name="email" type="email" class="form-input" maxlength="120" autocomplete="email">
-          </div>
-        </div>
-
-        <details class="mt-5 rounded-md border p-4" :style="temaClaro ? 'border-color:#dbe3ee' : 'border-color:#3f3f46'">
-          <summary class="cursor-pointer text-sm font-semibold">Endereço (opcional)</summary>
-          <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-6">
-            <div class="sm:col-span-2">
-              <label class="mb-1 block text-sm font-medium">CEP</label>
-              <input name="cep" class="form-input" maxlength="9" inputmode="numeric"
-                     @blur="consultarCepFornecedor($data, $el.form)" placeholder="00000-000">
-              <p x-show="cepConsultando" class="mt-1 text-xs opacity-60">Consultando CEP...</p>
-            </div>
-            <div class="sm:col-span-4">
-              <label class="mb-1 block text-sm font-medium">Endereço</label>
-              <input name="endereco" class="form-input" maxlength="255" autocomplete="street-address">
-            </div>
-            <div class="sm:col-span-2">
-              <label class="mb-1 block text-sm font-medium">Número</label>
-              <input name="numero" class="form-input" maxlength="10">
-            </div>
-            <div class="sm:col-span-4">
-              <label class="mb-1 block text-sm font-medium">Bairro</label>
-              <input name="bairro" class="form-input" maxlength="80">
-            </div>
-            <div class="sm:col-span-4">
-              <label class="mb-1 block text-sm font-medium">Cidade</label>
-              <input name="cidade" class="form-input" maxlength="80">
-            </div>
-            <div class="sm:col-span-2">
-              <label class="mb-1 block text-sm font-medium">UF</label>
-              <input name="uf" class="form-input uppercase" maxlength="2">
-            </div>
-            <input type="hidden" name="codigo_municipio_ibge">
-          </div>
-        </details>
-
-        <div class="sticky bottom-0 -mx-4 mt-5 flex justify-end gap-3 border-t px-4 pb-1 pt-4 sm:-mx-5 sm:px-5"
-             :style="temaClaro ? 'background:#fff;border-color:#e5e7eb' : 'background:#202024;border-color:#3f3f46'">
-          <button type="button" class="btn-secondary" @click="fornecedorModal=false">Cancelar</button>
-          <button type="submit" class="btn-primary" :disabled="fornecedorSalvando">
-            <span x-show="!fornecedorSalvando">Cadastrar e selecionar</span>
-            <span x-show="fornecedorSalvando" x-cloak>Salvando...</span>
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
+  {% include "financeiro/pagar/_fornecedor_rapido_modal.html" %}
 
   <div x-show="scannerNfeAberto" x-cloak
        class="fixed inset-0 z-[110] flex items-end justify-center bg-black/75 p-0 sm:items-center sm:p-5"
@@ -489,68 +389,7 @@ function financeSearchSelect(root) {
   };
 }
 
-async function cadastrarFornecedorRapido(state, form) {
-  state.fornecedorSalvando=true;
-  state.fornecedorErro='';
-  try {
-    const response=await fetch('{% url "cadastros:fornecedor-ajax-create" %}', {
-      method:'POST',
-      body:new FormData(form),
-      headers:{'X-Requested-With':'XMLHttpRequest'},
-    });
-    const data=await response.json();
-    if(!response.ok){
-      const messages=Object.values(data.errors||{}).flat();
-      throw new Error(messages.join(' ')||data.erro||'Não foi possível cadastrar o fornecedor.');
-    }
-    window.dispatchEvent(new CustomEvent('finance-select-created', {
-      detail:{field:'fornecedor',value:data.id,label:data.label,search:data.search},
-    }));
-    form.reset();
-    state.fornecedorTipo='J';
-    state.fornecedorModal=false;
-  } catch(error) {
-    state.fornecedorErro=error.message||'Não foi possível cadastrar o fornecedor.';
-  } finally {
-    state.fornecedorSalvando=false;
-  }
-}
-
-function formatarCpfCnpjFornecedor(digitos, tipo) {
-  if(tipo==='F'){
-    return digitos
-      .replace(/(\d{3})(\d)/,'$1.$2')
-      .replace(/(\d{3})(\d)/,'$1.$2')
-      .replace(/(\d{3})(\d{1,2})$/,'$1-$2');
-  }
-  return digitos
-    .replace(/(\d{2})(\d)/,'$1.$2')
-    .replace(/(\d{3})(\d)/,'$1.$2')
-    .replace(/(\d{3})(\d)/,'$1/$2')
-    .replace(/(\d{4})(\d{1,2})$/,'$1-$2');
-}
-
-function mascararCpfCnpjFornecedor(input, tipo) {
-  const limite=tipo==='F'?11:14;
-  const digitos=(input.value||'').replace(/\D/g,'');
-  input.value=digitos.length>limite?digitos:formatarCpfCnpjFornecedor(digitos,tipo);
-}
-
-function remascararCpfCnpjFornecedor(input, tipo) {
-  if(!input)return;
-  mascararCpfCnpjFornecedor(input,tipo);
-}
-
-function colarCpfCnpjFornecedor(event, state) {
-  event.preventDefault();
-  const texto=event.clipboardData?.getData('text')||'';
-  const digitos=texto.replace(/\D/g,'');
-  if(digitos.length===11)state.fornecedorTipo='F';
-  else if(digitos.length===14)state.fornecedorTipo='J';
-  event.target.value=(digitos.length===11||digitos.length===14)
-    ?formatarCpfCnpjFornecedor(digitos,state.fornecedorTipo)
-    :digitos.slice(0,18);
-}
+{% include "financeiro/pagar/_fornecedor_rapido_script.html" %}
 
 function extrairChaveNfe(valor) {
   const texto=String(valor||'');
@@ -648,28 +487,6 @@ async function fecharScannerNfe(state) {
   state.scannerNfeAberto=false;
 }
 
-async function consultarCepFornecedor(state, form) {
-  const cep=(form.elements.cep.value||'').replace(/\D/g,'');
-  if(!cep)return;
-  if(cep.length!==8){
-    state.fornecedorErro='CEP deve ter 8 dígitos.';
-    return;
-  }
-  state.cepConsultando=true;
-  state.fornecedorErro='';
-  try {
-    const response=await fetch('{% url "cadastros:consultar-cep" %}?cep='+encodeURIComponent(cep));
-    const data=await response.json();
-    if(!response.ok)throw new Error(data.erro||'CEP não encontrado.');
-    ['cep','endereco','bairro','cidade','uf','codigo_municipio_ibge'].forEach(field=>{
-      if(form.elements[field]&&data[field])form.elements[field].value=data[field];
-    });
-  } catch(error) {
-    state.fornecedorErro=error.message||'Não foi possível consultar o CEP.';
-  } finally {
-    state.cepConsultando=false;
-  }
-}
 
 (function configurarRecorrenciaSemanalIntuitiva(){
   function dataLocalISO(data){return `${data.getFullYear()}-${String(data.getMonth()+1).padStart(2,'0')}-${String(data.getDate()).padStart(2,'0')}`;}

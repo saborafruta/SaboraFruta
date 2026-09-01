@@ -126,6 +126,7 @@ class ContasBancariasViewTests(TestCase):
         self.assertEqual(entrada.valor, Decimal("100.00"))
         self.assertEqual(entrada.valor_taxa, Decimal("0.00"))
         self.assertEqual(entrada.valor_entrada_liquida, Decimal("100.00"))
+        self.assertEqual(entrada.tipo_lancamento, "transferencia")
         origem.refresh_from_db()
         destino.refresh_from_db()
         self.assertEqual(origem.saldo_atual, Decimal("100.00"))
@@ -158,13 +159,25 @@ class ContasBancariasViewTests(TestCase):
         saida = ExtratoBancario.objects.get(conta_bancaria=origem)
         self.assertEqual(saida.valor, Decimal("-100.00"))
         self.assertEqual(saida.valor_taxa, Decimal("0.00"))
+        self.assertEqual(saida.tipo_lancamento, "transferencia")
         self.assertEqual(entrada.valor, Decimal("100.00"))
         self.assertEqual(entrada.valor_taxa, Decimal("2.50"))
         self.assertEqual(entrada.valor_entrada_liquida, Decimal("97.50"))
+        self.assertEqual(entrada.tipo_lancamento, "transferencia")
         origem.refresh_from_db()
         destino.refresh_from_db()
         self.assertEqual(origem.saldo_atual, Decimal("100.00"))
         self.assertEqual(destino.saldo_atual, Decimal("97.50"))
+
+        lista = self.client.get(reverse("financeiro:contas_bancarias"), {
+            "conta": destino.pk,
+            "data_ini": "2026-08-20",
+            "data_fim": "2026-08-20",
+        })
+        self.assertEqual(lista.status_code, 200)
+        self.assertContains(lista, "R$ 100,00")
+        self.assertContains(lista, "Taxa por transacao - Transferencia tarifada")
+        self.assertContains(lista, "R$ 2,50")
 
     def test_lista_venda_pdv_quando_forma_tem_conta_padrao(self):
         conta = ContaBancaria.objects.create(
