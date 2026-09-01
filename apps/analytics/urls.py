@@ -11,4 +11,5 @@ urlpatterns = [
     path("vendas/", dashboards.historico_vendas, name="vendas"),
     path("vendas/relatorio/", dashboards.historico_vendas_relatorio, name="vendas-relatorio"),
     path("vendas/<int:pk>/financeiro/", dashboards.historico_venda_financeiro, name="venda-financeiro"),
+    path("vendas/op/<int:pk>/financeiro/", dashboards.historico_op_financeiro, name="op-financeiro"),
 ]

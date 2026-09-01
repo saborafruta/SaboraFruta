@@ -225,7 +225,7 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
       <div class="hv-total-top" aria-label="Total das vendas filtradas">
         <span class="hv-total-top-label">Total filtrado</span>
         <strong class="hv-total-top-value">R$ {{ valor_totalizador|floatformat:2 }}</strong>
-        <span class="hv-total-top-count">{{ quantidade_totalizador }} venda{{ quantidade_totalizador|pluralize }} considerada{{ quantidade_totalizador|pluralize }}</span>
+        <span class="hv-total-top-count">{{ quantidade_totalizador }} registro{{ quantidade_totalizador|pluralize }} considerado{{ quantidade_totalizador|pluralize }}</span>
       </div>
       {% endif %}
       <a class="hv-action-print" href="{% url 'analytics:vendas-relatorio' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}"
@@ -294,11 +294,12 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
       <input class="hv-input" type="date" name="data_fim" value="{{ filtros.data_fim }}" style="width:140px;">
     </div>
     <div class="hv-filter-group">
-      <label class="hv-filter-label">Tipo de Venda</label>
+      <label class="hv-filter-label">Origem</label>
       <select class="hv-input" name="tipo_venda" style="width:130px;">
         <option value="">Todas</option>
         <option value="balcao"   {% if filtros.tipo_venda == 'balcao'   %}selected{% endif %}>Balcão</option>
         <option value="delivery" {% if filtros.tipo_venda == 'delivery' %}selected{% endif %}>Delivery</option>
+        <option value="op"       {% if filtros.tipo_venda == 'op'       %}selected{% endif %}>OP</option>
       </select>
     </div>
     <div class="hv-filter-group">
@@ -350,12 +351,17 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
         {% for venda in page_obj %}
         {% with doc=venda.documento_fiscal %}
         <tr class="hv-tr {% if venda.status == 'cancelada' %}cancelada{% endif %}"
-            id="row-{{ venda.pk }}">
+            id="row-{{ venda.origem_historico }}-{{ venda.pk }}">
 
           <!-- Pedido -->
           <td class="hv-td">
             <span class="hv-order" style="font-weight:700;">#{{ venda.numero_venda|stringformat:"06d" }}</span>
-            {% if venda.delivery %}
+            {% if venda.origem_historico == 'op' %}
+            <div style="margin-top:2px;">
+              <span title="{% if venda.op_numeros %}{{ venda.op_numeros|join:', ' }}{% else %}Pedido de produção{% endif %}"
+                    style="font-size:10px;font-weight:800;color:#c4b5fd;background:#24144a;border:1px solid #7c3aed;border-radius:4px;padding:1px 5px;">OP</span>
+            </div>
+            {% elif venda.delivery %}
             <div style="margin-top:2px;">
               <span style="font-size:10px;font-weight:700;color:#93c5fd;background:#0c1a2d;border:1px solid #1d4ed8;border-radius:4px;padding:1px 5px;">Delivery</span>
             </div>
@@ -388,7 +394,7 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
 
           <!-- Pagamento -->
           <td class="hv-td hv-muted" style="font-size:12px;color:#9090a0;">
-            {% for pag in venda.pagamentos.all %}
+            {% for pag in venda.pagamentos_historico %}
               <span style="display:block;white-space:nowrap;">{{ pag.forma_pagamento.descricao_com_conta }}</span>
             {% empty %}
               —
@@ -414,7 +420,7 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
           <!-- Valor restante -->
           <td class="hv-td" style="text-align:right;">
             <button type="button" class="hv-balance-button {% if venda.saldo_restante > 0 %}hv-sit-warn{% else %}hv-sit-ok{% endif %}"
-                    @click="abrirFinanceiro('{% url 'analytics:venda-financeiro' venda.pk %}', '{{ venda.numero_venda|stringformat:'06d' }}')"
+                    @click="abrirFinanceiro('{{ venda.financeiro_url }}', '{{ venda.numero_venda|stringformat:'06d' }}')"
                     title="Ver pagamentos e recebimentos desta venda">
               R$ {{ venda.saldo_restante|floatformat:2 }}
             </button>
@@ -422,7 +428,9 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
 
           <!-- Situação NFC-e -->
           <td class="hv-td">
-            {% if doc and doc.tipo_documento == 'nfce' %}
+            {% if venda.origem_historico == 'op' %}
+              <div class="hv-sit hv-sit-gray"><span>Não se aplica à OP.</span></div>
+            {% elif doc and doc.tipo_documento == 'nfce' %}
               {% if doc.status == 'autorizada' %}
                 <div class="hv-sit hv-sit-ok">
                   <span>✓ {{ doc.codigo_status_sefaz|default:"100" }} – Autorizada</span>
@@ -479,6 +487,17 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
           <!-- Ações -->
           <td class="hv-td hv-actions-cell">
             <div class="hv-acts">
+
+              {% if venda.origem_historico == 'op' %}
+              <a class="hv-ab hv-ab-eye" href="{{ venda.detalhe_url }}" target="_blank" rel="noopener"
+                 title="Abrir pedido da OP" aria-label="Abrir pedido da OP {{ venda.numero_venda }}">
+                <span class="hv-ab-tip">Abrir pedido da OP</span>
+                <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.25 12s3.5-6 9.75-6 9.75 6 9.75 6-3.5 6-9.75 6S2.25 12 2.25 12z"/>
+                  <circle cx="12" cy="12" r="2.75" stroke-width="2"/>
+                </svg>
+              </a>
+              {% else %}
 
               {# Visualizar comprovante não fiscal completo #}
               <button class="hv-ab hv-ab-eye"
@@ -610,6 +629,8 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
                 <span class="hv-ab-tip">6 – Consultar venda</span>
                 6
               </button>
+
+              {% endif %}
 
             </div>
           </td>

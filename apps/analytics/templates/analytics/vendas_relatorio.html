@@ -90,7 +90,7 @@
   a
   {% if filtros.data_fim %}{{ filtros.data_fim }}{% else %}hoje{% endif %}
   &nbsp;·&nbsp; <strong>Filtro:</strong> {{ rotulo_tipo }}
-  &nbsp;·&nbsp; <strong>Tipo de venda:</strong> {{ rotulo_tipo_venda }}
+  &nbsp;·&nbsp; <strong>Origem:</strong> {{ rotulo_tipo_venda }}
   {% if filtros.pedido %}&nbsp;·&nbsp; <strong>Pedido:</strong> #{{ filtros.pedido }}{% endif %}
   {% if filtros.cliente %}&nbsp;·&nbsp; <strong>Cliente:</strong> {{ filtros.cliente }}{% endif %}
   {% if filtros.desconsiderar_canceladas %}&nbsp;·&nbsp; canceladas desconsideradas{% endif %}
@@ -99,10 +99,11 @@
 
 <div class="resumo">
   <div>Registros no relatório<span>{{ vendas|length }}</span></div>
-  <div>Vendas consideradas<span>{{ quantidade_considerada }}</span></div>
+  <div>Registros considerados<span>{{ quantidade_considerada }}</span></div>
   <div>Total balcão<span>R$ {{ valor_balcao|floatformat:2 }}</span><small>{{ qtd_balcao }} venda{{ qtd_balcao|pluralize }}</small></div>
   <div>Total delivery<span>R$ {{ valor_delivery|floatformat:2 }}</span><small>{{ qtd_delivery }} venda{{ qtd_delivery|pluralize }}</small></div>
-  <div class="resumo-total">Valor total das vendas<span>R$ {{ valor_total|floatformat:2 }}</span></div>
+  <div>Total OP<span>R$ {{ valor_op|floatformat:2 }}</span><small>{{ qtd_op }} OP{{ qtd_op|pluralize }}</small></div>
+  <div class="resumo-total">Valor total<span>R$ {{ valor_total|floatformat:2 }}</span></div>
 </div>
 
 {% if truncado %}
@@ -131,12 +132,12 @@
     {% for v in vendas %}
     <tr>
       <td>#{{ v.numero_venda|stringformat:"06d" }}</td>
-      <td>{{ v.data_venda|date:"d/m/Y H:i" }}</td>
-      <td>{% if v.delivery %}Delivery{% else %}Balcão{% endif %}</td>
+      <td>{% if v.origem_historico == 'op' %}{{ v.data_venda|date:"d/m/Y" }}{% else %}{{ v.data_venda|date:"d/m/Y H:i" }}{% endif %}</td>
+      <td>{% if v.origem_historico == 'op' %}OP{% elif v.delivery %}Delivery{% else %}Balcão{% endif %}</td>
       <td>{{ v.cliente.nome_display|default:"Consumidor Final" }}</td>
       <td>{{ v.cliente.cpf_cnpj|default:"—" }}</td>
       <td>
-        {% for pg in v.pagamentos.all %}{{ pg.forma_pagamento.descricao_com_conta }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}
+        {% for pg in v.pagamentos_historico %}{{ pg.forma_pagamento.descricao_com_conta }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}
       </td>
       <td>
         {% if v.status == 'cancelada' %}<span class="cancelada">Cancelada</span>
@@ -147,6 +148,8 @@
       <td>
         {% if v.status == 'cancelada' %}
           <span class="cancelada">Cancelada</span>
+        {% elif v.origem_historico == 'op' %}
+          Não se aplica à OP
         {% elif v.documento_fiscal and v.documento_fiscal.status == 'autorizada' %}
           {% firstof v.documento_fiscal.get_tipo_documento_display v.documento_fiscal.tipo_documento '' as tipo_doc %}
           {{ tipo_doc|upper }} autorizada

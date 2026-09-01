@@ -10,6 +10,7 @@ from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.financeiro.models import FormaPagamento
 from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaReceber
+from apps.moda.models import ItemPedidoProducao, OrdemProducao, PedidoProducao
 from apps.pdv.models import PagamentoVendaPDV, VendaPDV
 
 
@@ -73,6 +74,45 @@ class HistoricoVendasFinanceiroTests(TestCase):
         PagamentoVendaPDV.objects.create(
             venda_pdv=cls.venda_paga, forma_pagamento=cls.dinheiro, valor=Decimal('50.00'),
         )
+        cls.pedido_op = PedidoProducao.objects.create(
+            filial=cls.filial, cliente=cls.cliente, numero=30,
+            data_pedido=date(2026, 8, 31), status=PedidoProducao.Status.CONFIRMADO,
+            forma_pagamento=cls.boleto,
+            financeiro_gerado_em=datetime(2026, 8, 31, 12, 0, tzinfo=dt_timezone.utc),
+        )
+        item_op = ItemPedidoProducao.objects.create(
+            pedido=cls.pedido_op, descricao='Uniformes', quantidade=10,
+            valor_unitario=Decimal('50.00'),
+        )
+        for sequencial in (30, 31):
+            OrdemProducao.objects.create(
+                filial=cls.filial, numero='', ano=2026, sequencial=sequencial,
+                pedido=cls.pedido_op, item=item_op, quantidade=5,
+                emitida_por=cls.usuario,
+            )
+        cls.op_conta_paga = ContaReceber.objects.create(
+            filial=cls.filial, cliente=cls.cliente, documento_tipo='pedido_moda',
+            documento_id=cls.pedido_op.pk, documento_numero='30', parcela=1,
+            total_parcelas=2, valor_original=Decimal('200.00'),
+            valor_final=Decimal('200.00'), valor_pago=Decimal('200.00'),
+            valor_saldo=Decimal('0.00'), data_emissao=date(2026, 8, 31),
+            data_vencimento=date(2026, 8, 31), forma_pagamento=cls.boleto,
+            status='pago',
+        )
+        PagamentoContaReceber.objects.create(
+            filial=cls.filial, conta_receber=cls.op_conta_paga,
+            data_pagamento=date(2026, 8, 31), valor_pago=Decimal('200.00'),
+            forma_pagamento=cls.dinheiro, usuario=cls.usuario,
+        )
+        cls.op_conta_aberta = ContaReceber.objects.create(
+            filial=cls.filial, cliente=cls.cliente, documento_tipo='pedido_moda',
+            documento_id=cls.pedido_op.pk, documento_numero='30', parcela=2,
+            total_parcelas=2, valor_original=Decimal('300.00'),
+            valor_final=Decimal('300.00'), valor_pago=Decimal('0.00'),
+            valor_saldo=Decimal('300.00'), data_emissao=date(2026, 8, 31),
+            data_vencimento=date(2026, 9, 20), forma_pagamento=cls.boleto,
+            status='aberto',
+        )
 
     def request(self, path='/analytics/vendas/', **params):
         request = RequestFactory().get(path, params)
@@ -98,15 +138,18 @@ class HistoricoVendasFinanceiroTests(TestCase):
         self.assertNotContains(response, self.cliente.cpf_cnpj)
         self.assertContains(response, 'Ver pagamentos e recebimentos desta venda')
         self.assertEqual(response.content.count(b'class="hv-sort"'), 9)
-        vendas = {v.pk: v for v in contexto['page_obj']}
-        self.assertEqual(vendas[self.venda_aberta.pk].saldo_restante, Decimal('40.00'))
-        self.assertEqual(vendas[self.venda_paga.pk].saldo_restante, Decimal('0.00'))
+        vendas = {(v.origem_historico, v.pk): v for v in contexto['page_obj']}
+        self.assertEqual(vendas[('pdv', self.venda_aberta.pk)].saldo_restante, Decimal('40.00'))
+        self.assertEqual(vendas[('pdv', self.venda_paga.pk)].saldo_restante, Decimal('0.00'))
+        self.assertEqual(vendas[('op', self.pedido_op.pk)].saldo_restante, Decimal('300.00'))
+        self.assertContains(response, '>OP<')
 
     def test_ordenacao_por_saldo_alterna_crescente_e_decrescente(self):
         _, contexto = self.contexto_lista(ordem='saldo')
         self.assertEqual(contexto['page_obj'][0].pk, self.venda_paga.pk)
         _, contexto = self.contexto_lista(ordem='-saldo')
-        self.assertEqual(contexto['page_obj'][0].pk, self.venda_aberta.pk)
+        self.assertEqual(contexto['page_obj'][0].origem_historico, 'op')
+        self.assertEqual(contexto['page_obj'][0].pk, self.pedido_op.pk)
 
     def test_todas_as_colunas_de_dados_aceitam_ordenacao_nos_dois_sentidos(self):
         for chave in dashboards.ORDENACAO_HISTORICO_VENDAS:
@@ -114,7 +157,28 @@ class HistoricoVendasFinanceiroTests(TestCase):
                 with self.subTest(ordem=ordem):
                     _, contexto = self.contexto_lista(ordem=ordem)
                     self.assertEqual(contexto['ordem'], ordem)
-                    self.assertEqual(len(contexto['page_obj']), 2)
+                    self.assertEqual(len(contexto['page_obj']), 3)
+
+    def test_filtro_op_exibe_pedido_e_total_financeiro_sem_duplicar(self):
+        response, contexto = self.contexto_lista(tipo_venda='op')
+        self.assertEqual(len(contexto['page_obj']), 1)
+        registro = contexto['page_obj'][0]
+        self.assertEqual(registro.origem_historico, 'op')
+        self.assertEqual(registro.valor_total, Decimal('500.00'))
+        self.assertEqual(registro.saldo_restante, Decimal('300.00'))
+        self.assertEqual(registro.op_numeros, ['OP-2026-000031', 'OP-2026-000030'])
+        self.assertEqual(contexto['valor_totalizador'], Decimal('500.00'))
+        self.assertContains(response, 'Não se aplica à OP')
+
+    def test_sobreposicao_financeira_da_op_mostra_recebido_saldo_e_quitacao(self):
+        response = dashboards.historico_op_financeiro(
+            self.request(f'/analytics/vendas/op/{self.pedido_op.pk}/financeiro/'),
+            self.pedido_op.pk,
+        )
+        self.assertContains(response, 'OP #000030')
+        self.assertContains(response, 'R$ 200,00')
+        self.assertContains(response, 'R$ 300,00')
+        self.assertContains(response, 'Quitar / receber')
 
     def test_sobreposicao_mostra_pago_pendente_historico_e_opcao_de_quitar(self):
         response = dashboards.historico_venda_financeiro(
@@ -135,3 +199,5 @@ class HistoricoVendasFinanceiroTests(TestCase):
         self.assertContains(response, 'Valor restante')
         self.assertContains(response, 'Pago')
         self.assertContains(response, 'Em aberto')
+        self.assertContains(response, 'Total OP')
+        self.assertContains(response, '>OP<')

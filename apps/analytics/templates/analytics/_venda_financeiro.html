@@ -1,14 +1,14 @@
 <div class="space-y-5">
   <div>
-    <p class="text-xs font-bold uppercase text-blue-500">Venda #{{ venda.numero_venda|stringformat:"06d" }}</p>
+    <p class="text-xs font-bold uppercase text-blue-500">{{ registro.rotulo }} #{{ registro.numero }}</p>
     <h2 class="mt-1 text-xl font-semibold">Situação do recebimento</h2>
-    <p class="mt-1 text-xs opacity-65">{{ venda.cliente.razao_social|default:"Consumidor Final" }} · {{ venda.data_venda|date:"d/m/Y H:i" }}</p>
+    <p class="mt-1 text-xs opacity-65">{{ registro.cliente_nome }} · {{ registro.data|date:"d/m/Y H:i" }}</p>
   </div>
 
   <section class="grid gap-3 sm:grid-cols-3">
     <div class="rounded-lg border p-4" style="border-color:rgba(148,163,184,.25)">
       <span class="block text-xs opacity-60">Total da venda</span>
-      <strong class="mt-1 block text-lg">R$ {{ venda.valor_total|floatformat:2 }}</strong>
+      <strong class="mt-1 block text-lg">R$ {{ registro.valor_total|floatformat:2 }}</strong>
     </div>
     <div class="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
       <span class="block text-xs opacity-60">Já recebido</span>
