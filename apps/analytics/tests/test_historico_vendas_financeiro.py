@@ -170,6 +170,29 @@ class HistoricoVendasFinanceiroTests(TestCase):
         self.assertEqual(contexto['valor_totalizador'], Decimal('500.00'))
         self.assertContains(response, 'Não se aplica à OP')
 
+    def test_op_so_aparece_depois_do_clique_em_gerar_financeiro(self):
+        self.pedido_op.financeiro_gerado_em = None
+        self.pedido_op.save(update_fields=['financeiro_gerado_em'])
+
+        _, contexto = self.contexto_lista(tipo_venda='op')
+
+        self.assertEqual(len(contexto['page_obj']), 0)
+        self.assertEqual(contexto['valor_totalizador'], Decimal('0.00'))
+
+    def test_op_totalmente_paga_continua_no_historico(self):
+        self.op_conta_aberta.valor_pago = Decimal('300.00')
+        self.op_conta_aberta.valor_saldo = Decimal('0.00')
+        self.op_conta_aberta.status = 'pago'
+        self.op_conta_aberta.save(update_fields=['valor_pago', 'valor_saldo', 'status'])
+
+        response, contexto = self.contexto_lista(tipo_venda='op')
+
+        self.assertEqual(len(contexto['page_obj']), 1)
+        registro = contexto['page_obj'][0]
+        self.assertEqual(registro.saldo_restante, Decimal('0.00'))
+        self.assertEqual(registro.status_financeiro_ordem, 0)
+        self.assertContains(response, '>Pago<')
+
     def test_sobreposicao_financeira_da_op_mostra_recebido_saldo_e_quitacao(self):
         response = dashboards.historico_op_financeiro(
             self.request(f'/analytics/vendas/op/{self.pedido_op.pk}/financeiro/'),

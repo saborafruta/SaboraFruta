@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 from django.shortcuts import get_object_or_404, render
 from django.db.models import (
     Sum, Count, Avg, F, Q, Case, DecimalField, IntegerField, OuterRef,
-    Subquery, Value, When, Exists,
+    Subquery, Value, When,
 )
 from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
@@ -235,7 +235,7 @@ def _queryset_ops_historico(request, f):
     )
     qs = (
         PedidoProducao.objects.for_filial(request.filial_ativa)
-        .filter(Exists(titulos))
+        .filter(financeiro_gerado_em__isnull=False)
         .select_related('cliente', 'forma_pagamento')
         .prefetch_related('ordens')
         .annotate(
