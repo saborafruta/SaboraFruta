@@ -1,0 +1,74 @@
+<div class="space-y-5">
+  <div>
+    <p class="text-xs font-bold uppercase text-blue-500">Venda #{{ venda.numero_venda|stringformat:"06d" }}</p>
+    <h2 class="mt-1 text-xl font-semibold">Situação do recebimento</h2>
+    <p class="mt-1 text-xs opacity-65">{{ venda.cliente.razao_social|default:"Consumidor Final" }} · {{ venda.data_venda|date:"d/m/Y H:i" }}</p>
+  </div>
+
+  <section class="grid gap-3 sm:grid-cols-3">
+    <div class="rounded-lg border p-4" style="border-color:rgba(148,163,184,.25)">
+      <span class="block text-xs opacity-60">Total da venda</span>
+      <strong class="mt-1 block text-lg">R$ {{ venda.valor_total|floatformat:2 }}</strong>
+    </div>
+    <div class="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
+      <span class="block text-xs opacity-60">Já recebido</span>
+      <strong class="mt-1 block text-lg text-emerald-500">R$ {{ recebido_total|floatformat:2 }}</strong>
+    </div>
+    <div class="rounded-lg border {% if saldo_restante > 0 %}border-amber-500/40 bg-amber-500/5{% else %}border-emerald-500/30 bg-emerald-500/5{% endif %} p-4">
+      <span class="block text-xs opacity-60">Valor restante</span>
+      <strong class="mt-1 block text-lg {% if saldo_restante > 0 %}text-amber-500{% else %}text-emerald-500{% endif %}">R$ {{ saldo_restante|floatformat:2 }}</strong>
+    </div>
+  </section>
+
+  {% if contas %}
+  <section class="space-y-3">
+    <div>
+      <h3 class="font-semibold">Títulos de contas a receber</h3>
+      <p class="mt-1 text-xs opacity-60">Recebido no ato: R$ {{ recebido_imediato|floatformat:2 }} · Recebido depois: R$ {{ recebido_titulos|floatformat:2 }}</p>
+    </div>
+    {% for conta in contas %}
+    <article class="rounded-lg border p-4" style="border-color:rgba(148,163,184,.25)">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <strong>Título #{{ conta.pk }}</strong>
+            {% if conta.valor_saldo > 0 %}
+              <span class="rounded-full bg-amber-500/15 px-2 py-1 text-[11px] font-bold text-amber-500">Em aberto</span>
+            {% else %}
+              <span class="rounded-full bg-emerald-500/15 px-2 py-1 text-[11px] font-bold text-emerald-500">Pago completamente</span>
+            {% endif %}
+          </div>
+          <p class="mt-1 text-xs opacity-60">{{ conta.forma_pagamento.descricao_com_conta|default:"Forma não definida" }} · vencimento {{ conta.data_vencimento|date:"d/m/Y" }}</p>
+        </div>
+        {% if pode_editar_financeiro and conta.valor_saldo > 0 %}
+        <button type="button" class="btn-primary justify-center"
+                @click="abrirRecebimentoTitulo('{% url 'financeiro:receber_baixar' conta.pk %}')">
+          Quitar / receber
+        </button>
+        {% endif %}
+      </div>
+      <div class="mt-4 grid grid-cols-3 gap-3 border-t pt-3 text-sm" style="border-color:rgba(148,163,184,.18)">
+        <div><span class="block text-xs opacity-55">Valor</span><strong>R$ {{ conta.valor_final|floatformat:2 }}</strong></div>
+        <div><span class="block text-xs opacity-55">Já pago</span><strong class="text-emerald-500">R$ {{ conta.valor_pago|floatformat:2 }}</strong></div>
+        <div class="text-right"><span class="block text-xs opacity-55">Restante</span><strong class="{% if conta.valor_saldo > 0 %}text-amber-500{% else %}text-emerald-500{% endif %}">R$ {{ conta.valor_saldo|floatformat:2 }}</strong></div>
+      </div>
+      {% if conta.pagamentos.all %}
+      <div class="mt-3 space-y-2">
+        {% for pagamento in conta.pagamentos.all %}
+        <div class="flex justify-between gap-3 rounded-md bg-slate-500/5 px-3 py-2 text-xs">
+          <span>{{ pagamento.data_pagamento|date:"d/m/Y" }} · {{ pagamento.forma_pagamento.descricao_com_conta|default:"Forma não informada" }}</span>
+          <strong class="whitespace-nowrap text-emerald-500">R$ {{ pagamento.valor_pago|floatformat:2 }}</strong>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </section>
+  {% else %}
+  <section class="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
+    <strong class="text-emerald-500">Pagamento concluído na venda</strong>
+    <p class="mt-1 text-sm opacity-70">Esta venda não possui títulos pendentes em Contas a Receber.</p>
+  </section>
+  {% endif %}
+</div>

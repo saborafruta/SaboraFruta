@@ -1,9 +1,14 @@
 """Dashboards: operacional, comercial, produção, DRE."""
 from datetime import timedelta
+from decimal import Decimal
 from urllib.parse import urlencode
 
-from django.shortcuts import render
-from django.db.models import Sum, Count, Avg, F, Q
+from django.shortcuts import get_object_or_404, render
+from django.db.models import (
+    Sum, Count, Avg, F, Q, Case, DecimalField, IntegerField, OuterRef,
+    Subquery, Value, When,
+)
+from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
 from django.urls import reverse
 from django.utils import timezone
@@ -15,8 +20,23 @@ from apps.producao.models import OrdemProducao
 from apps.producao.constants.enums import StatusOP
 from apps.producao.services.rendimento_service import RendimentoService
 from apps.produtos.models import LinhaProducao, Produto
+from apps.financeiro.constants.enums import StatusContaReceber
 from apps.financeiro.models import DREConsolidado
-from apps.pdv.models import VendaPDV
+from apps.financeiro.models.receber_pagar import ContaReceber
+from apps.pdv.models import PagamentoVendaPDV, VendaPDV
+
+
+ORDENACAO_HISTORICO_VENDAS = {
+    'pedido': 'numero_venda',
+    'data': 'data_venda',
+    'cliente': 'cliente__razao_social',
+    'pagamento': 'pagamento_ordenacao',
+    'total': 'valor_total',
+    'financeiro': 'status_financeiro_ordem',
+    'saldo': 'saldo_restante',
+    'fiscal': 'documento_fiscal__status',
+    'nnf': 'documento_fiscal__numero',
+}
 
 
 @requer_permissao('relatorios', 'ver')
@@ -80,6 +100,7 @@ def _filtros_historico_vendas(request):
         # '' (todas) | balcao | delivery
         'tipo_venda': request.GET.get('tipo_venda', ''),
         'desconsiderar_canceladas': request.GET.get('desconsiderar_canceladas', '1') != '0',
+        'ordem': request.GET.get('ordem', '-data'),
     }
     if f['tipo_venda'] not in ('balcao', 'delivery'):
         f['tipo_venda'] = ''
@@ -90,6 +111,62 @@ def _filtros_historico_vendas(request):
     return f
 
 
+def _anotar_financeiro_vendas(qs, filial):
+    """Resume os títulos originados no PDV usando o vínculo técnico pelo ID da venda."""
+    campo_monetario = DecimalField(max_digits=14, decimal_places=2)
+    saldos = (
+        ContaReceber.objects.for_filial(filial)
+        .filter(documento_tipo='venda_pdv', documento_id=OuterRef('pk'))
+        .exclude(status=StatusContaReceber.CANCELADO)
+        .values('documento_id')
+        .annotate(total=Sum('valor_saldo'))
+        .values('total')
+    )
+    primeiro_pagamento = (
+        PagamentoVendaPDV.objects
+        .filter(venda_pdv_id=OuterRef('pk'))
+        .order_by('forma_pagamento__descricao', 'pk')
+        .values('forma_pagamento__descricao')
+    )
+    return qs.annotate(
+        saldo_restante=Coalesce(
+            Subquery(saldos[:1], output_field=campo_monetario),
+            Value(Decimal('0.00'), output_field=campo_monetario),
+        ),
+        pagamento_ordenacao=Coalesce(Subquery(primeiro_pagamento[:1]), Value('')),
+    ).annotate(
+        status_financeiro_ordem=Case(
+            When(status='cancelada', then=Value(2)),
+            When(saldo_restante__gt=0, then=Value(1)),
+            default=Value(0),
+            output_field=IntegerField(),
+        ),
+    )
+
+
+def _aplicar_ordenacao_vendas(qs, ordem):
+    descendente = ordem.startswith('-')
+    chave = ordem[1:] if descendente else ordem
+    campo = ORDENACAO_HISTORICO_VENDAS.get(chave)
+    if not campo:
+        ordem, campo, descendente = '-data', 'data_venda', True
+    prefixo = '-' if descendente else ''
+    return qs.order_by(f'{prefixo}{campo}', '-pk'), ordem
+
+
+def _urls_ordenacao_vendas(request, ordem_atual):
+    atual_desc = ordem_atual.startswith('-')
+    atual_chave = ordem_atual[1:] if atual_desc else ordem_atual
+    urls = {}
+    for chave in ORDENACAO_HISTORICO_VENDAS:
+        proxima = f'-{chave}' if atual_chave == chave and not atual_desc else chave
+        params = request.GET.copy()
+        params.pop('page', None)
+        params['ordem'] = proxima
+        urls[chave] = params.urlencode()
+    return urls
+
+
 def _queryset_historico_vendas(request, f):
     """Vendas da filial já filtradas por pedido/cliente/período (sem tipo fiscal)."""
     qs = (
@@ -98,7 +175,6 @@ def _queryset_historico_vendas(request, f):
         .filter(status__in=['finalizada', 'cancelada'])
         .select_related('cliente', 'documento_fiscal', 'filial')
         .prefetch_related('pagamentos__forma_pagamento')
-        .order_by('-data_venda')
     )
 
     if f['pedido']:
@@ -123,6 +199,8 @@ def _queryset_historico_vendas(request, f):
     elif f.get('tipo_venda') == 'balcao':
         qs = qs.filter(delivery=False)
 
+    qs = _anotar_financeiro_vendas(qs, request.filial_ativa)
+    qs, f['ordem'] = _aplicar_ordenacao_vendas(qs, f.get('ordem', '-data'))
     return qs
 
 
@@ -253,6 +331,9 @@ def historico_vendas(request):
         'valor_totalizador': valor_totalizador,
         'quantidade_totalizador': quantidade_totalizador,
         'exportar_xml_vendas_url': exportar_xml_vendas_url,
+        'ordem': f['ordem'],
+        'sort_urls': _urls_ordenacao_vendas(request, f['ordem']),
+        'pode_editar_financeiro': request.user.tem_permissao('financeiro', 'editar'),
         'filtros': {
             'pedido': pedido_q,
             'cliente': cliente_q,
@@ -262,6 +343,36 @@ def historico_vendas(request):
             'tipo_venda': f['tipo_venda'],
             'desconsiderar_canceladas': desconsiderar_canceladas,
         },
+    })
+
+
+@requer_permissao('relatorios', 'ver')
+def historico_venda_financeiro(request, pk):
+    venda = get_object_or_404(
+        VendaPDV.objects.for_filial(request.filial_ativa).select_related('cliente'),
+        pk=pk,
+    )
+    contas = list(
+        ContaReceber.objects.for_filial(request.filial_ativa)
+        .filter(documento_tipo='venda_pdv', documento_id=venda.pk)
+        .exclude(status=StatusContaReceber.CANCELADO)
+        .select_related('forma_pagamento', 'conta_bancaria')
+        .prefetch_related('pagamentos__forma_pagamento', 'pagamentos__conta_bancaria')
+        .order_by('data_vencimento', 'pk')
+    )
+    saldo_restante = sum((conta.valor_saldo for conta in contas), Decimal('0.00'))
+    valor_titulos = sum((conta.valor_original for conta in contas), Decimal('0.00'))
+    recebido_titulos = sum((conta.valor_pago for conta in contas), Decimal('0.00'))
+    recebido_imediato = max((venda.valor_total or Decimal('0.00')) - valor_titulos, Decimal('0.00'))
+    recebido_total = recebido_imediato + recebido_titulos
+    return render(request, 'analytics/_venda_financeiro.html', {
+        'venda': venda,
+        'contas': contas,
+        'saldo_restante': saldo_restante,
+        'recebido_total': recebido_total,
+        'recebido_imediato': recebido_imediato,
+        'recebido_titulos': recebido_titulos,
+        'pode_editar_financeiro': request.user.tem_permissao('financeiro', 'editar'),
     })
 
 

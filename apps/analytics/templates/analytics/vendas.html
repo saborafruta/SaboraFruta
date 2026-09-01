@@ -196,6 +196,14 @@ html.tema-claro .hv-header-actions .hv-action-print { background:#eff6ff !import
 html.tema-claro .hv-header-actions .hv-action-xml { background:#edf8f0 !important;color:#166534 !important;border-color:#86b69a !important; }
 html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !important;color:#92400e !important;border-color:#d5b779 !important; }
 .hv-header-actions :is(a,button):focus-visible { outline:2px solid var(--hv-link);outline-offset:3px; }
+.hv-sort { display:inline-flex;align-items:center;gap:5px;color:inherit;text-decoration:none; }
+.hv-sort:hover,.hv-sort:focus-visible { color:var(--hv-link);text-decoration:underline; }
+.hv-finance-status { display:inline-flex;border-radius:999px;padding:4px 8px;font-size:10.5px;font-weight:800;white-space:nowrap; }
+.hv-finance-open { color:#fbbf24;background:rgba(245,158,11,.12); }
+.hv-finance-paid { color:var(--hv-success);background:rgba(34,197,94,.12); }
+.hv-finance-cancel { color:var(--hv-danger);background:rgba(239,68,68,.12); }
+.hv-balance-button { border:0;background:transparent;color:inherit;font:inherit;font-weight:800;cursor:pointer;padding:5px 7px;border-radius:6px;white-space:nowrap; }
+.hv-balance-button:hover,.hv-balance-button:focus-visible { background:rgba(59,130,246,.13);outline:1px solid rgba(96,165,250,.45); }
 </style>
 {% endblock %}
 
@@ -267,6 +275,7 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
 
   <!-- Filtros -->
   <form method="get" class="hv-filter-bar">
+    <input type="hidden" name="ordem" value="{{ ordem }}">
     <div class="hv-filter-group">
       <label class="hv-filter-label">Pedido</label>
       <input class="hv-input" name="pedido" value="{{ filtros.pedido }}" placeholder="Nº" style="width:90px;">
@@ -324,13 +333,15 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
     <table class="hv-table">
       <thead>
         <tr>
-          <th class="hv-th">Pedido</th>
-          <th class="hv-th">Data/Hora</th>
-          <th class="hv-th">Cliente / CPF</th>
-          <th class="hv-th">Pagamento</th>
-          <th class="hv-th" style="text-align:right;">Total</th>
-          <th class="hv-th">Situação NFC-e</th>
-          <th class="hv-th" style="text-align:center;">nNF</th>
+          <th class="hv-th"><a class="hv-sort" href="?{{ sort_urls.pedido }}">Pedido <span>{% if ordem == 'pedido' %}↑{% elif ordem == '-pedido' %}↓{% endif %}</span></a></th>
+          <th class="hv-th"><a class="hv-sort" href="?{{ sort_urls.data }}">Data/Hora <span>{% if ordem == 'data' %}↑{% elif ordem == '-data' %}↓{% endif %}</span></a></th>
+          <th class="hv-th"><a class="hv-sort" href="?{{ sort_urls.cliente }}">Cliente / CPF <span>{% if ordem == 'cliente' %}↑{% elif ordem == '-cliente' %}↓{% endif %}</span></a></th>
+          <th class="hv-th"><a class="hv-sort" href="?{{ sort_urls.pagamento }}">Pagamento <span>{% if ordem == 'pagamento' %}↑{% elif ordem == '-pagamento' %}↓{% endif %}</span></a></th>
+          <th class="hv-th" style="text-align:right;"><a class="hv-sort" href="?{{ sort_urls.total }}">Total <span>{% if ordem == 'total' %}↑{% elif ordem == '-total' %}↓{% endif %}</span></a></th>
+          <th class="hv-th"><a class="hv-sort" href="?{{ sort_urls.financeiro }}">Situação financeira <span>{% if ordem == 'financeiro' %}↑{% elif ordem == '-financeiro' %}↓{% endif %}</span></a></th>
+          <th class="hv-th" style="text-align:right;"><a class="hv-sort" href="?{{ sort_urls.saldo }}">Valor restante <span>{% if ordem == 'saldo' %}↑{% elif ordem == '-saldo' %}↓{% endif %}</span></a></th>
+          <th class="hv-th"><a class="hv-sort" href="?{{ sort_urls.fiscal }}">Situação NFC-e <span>{% if ordem == 'fiscal' %}↑{% elif ordem == '-fiscal' %}↓{% endif %}</span></a></th>
+          <th class="hv-th" style="text-align:center;"><a class="hv-sort" href="?{{ sort_urls.nnf }}">nNF <span>{% if ordem == 'nnf' %}↑{% elif ordem == '-nnf' %}↓{% endif %}</span></a></th>
           <th class="hv-th" style="text-align:center;">Ações</th>
         </tr>
       </thead>
@@ -387,6 +398,26 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
           <!-- Total -->
           <td class="hv-td hv-money" style="text-align:right;font-weight:700;color:#4ade80;white-space:nowrap;">
             R$ {{ venda.valor_total|floatformat:2 }}
+          </td>
+
+          <!-- Situação financeira -->
+          <td class="hv-td">
+            {% if venda.status == 'cancelada' %}
+              <span class="hv-finance-status hv-finance-cancel">Cancelada</span>
+            {% elif venda.saldo_restante > 0 %}
+              <span class="hv-finance-status hv-finance-open">Em aberto</span>
+            {% else %}
+              <span class="hv-finance-status hv-finance-paid">Pago completamente</span>
+            {% endif %}
+          </td>
+
+          <!-- Valor restante -->
+          <td class="hv-td" style="text-align:right;">
+            <button type="button" class="hv-balance-button {% if venda.saldo_restante > 0 %}hv-sit-warn{% else %}hv-sit-ok{% endif %}"
+                    @click="abrirFinanceiro('{% url 'analytics:venda-financeiro' venda.pk %}', '{{ venda.numero_venda|stringformat:'06d' }}')"
+                    title="Ver pagamentos e recebimentos desta venda">
+              R$ {{ venda.saldo_restante|floatformat:2 }}
+            </button>
           </td>
 
           <!-- Situação NFC-e -->
@@ -587,7 +618,7 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
         {% endwith %}
         {% empty %}
         <tr>
-          <td colspan="8" class="hv-empty" style="padding:48px;text-align:center;color:#3a3a52;font-size:14px;background:#0d0d16;">
+          <td colspan="10" class="hv-empty" style="padding:48px;text-align:center;color:#3a3a52;font-size:14px;background:#0d0d16;">
             <svg width="40" height="40" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin:0 auto 12px;display:block;opacity:.3;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
             Nenhuma venda encontrada com os filtros aplicados.
           </td>
@@ -618,6 +649,26 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
   </nav>
   {% endif %}
   {% endif %}
+
+  <template x-teleport="body">
+    <div x-show="financeiroAberto" x-cloak class="fixed inset-0 flex items-center justify-center p-0 sm:p-5"
+         style="z-index:185;background:rgba(15,23,42,.82);backdrop-filter:blur(11px)"
+         @keydown.escape.window="fecharFinanceiro()" @click.self="fecharFinanceiro()"
+         role="dialog" aria-modal="true" aria-label="Financeiro da venda">
+      <section class="flex h-full w-full max-w-5xl flex-col overflow-hidden shadow-2xl sm:h-auto sm:max-h-[calc(100vh-3rem)] sm:rounded-lg"
+               :style="temaClaro ? 'background:#fff;color:#172033' : 'background:#202024;color:#f8fafc'">
+        <div class="flex items-center justify-between gap-4 border-b px-4 py-3 text-white sm:px-6" style="border-color:#334155;background:#172033">
+          <div><strong>Financeiro da venda <span x-text="financeiroNumero ? '#' + financeiroNumero : ''"></span></strong><p class="text-xs opacity-60">Valores recebidos, pendências e quitação</p></div>
+          <button type="button" @click="fecharFinanceiro()" class="flex h-9 w-9 items-center justify-center rounded-md border border-white/30 text-xl text-white" aria-label="Fechar">&times;</button>
+        </div>
+        <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          <div x-show="financeiroCarregando" class="flex min-h-52 items-center justify-center text-sm opacity-65">Carregando financeiro...</div>
+          <div x-show="financeiroErro" class="rounded-md border border-rose-400/40 bg-rose-500/10 p-4 text-sm text-rose-500" x-text="financeiroErro"></div>
+          <div data-hv-financeiro-content x-show="!financeiroCarregando && !financeiroErro" x-html="financeiroHtml"></div>
+        </div>
+      </section>
+    </div>
+  </template>
 
   <!-- Modal de emissao fiscal -->
   <div class="hv-overlay" x-show="modalFiscal.show" x-cloak @keydown.escape.window="modalFiscal.show=false" style="display:none;">
@@ -803,9 +854,58 @@ function hvApp() {
     modalEmail:   { show:false, vendaId:null, numero:'', emails:'', loading:false },
     modalCancelV: { show:false, vendaId:null, numero:'', justificativa:'', loading:false, admin_email:'', admin_senha:'' },
     modalFiscal:  { show:false, tipo:'nfce', vendaId:null, informacoes:'', pendencias:[], loading:false },
+    financeiroAberto:false, financeiroCarregando:false, financeiroHtml:'', financeiroErro:'', financeiroNumero:'', financeiroAlterado:false,
 
     init() {
       window.hvApp_instance = this;
+    },
+
+    hidratarFinanceiro() {
+      this.$nextTick(() => {
+        const alvo = document.querySelector('[data-hv-financeiro-content]');
+        if (!window.Alpine || !alvo) return;
+        Array.from(alvo.children).forEach((filho) => Alpine.initTree(filho));
+      });
+    },
+
+    async carregarFinanceiro(url, modal=false) {
+      this.financeiroCarregando = true; this.financeiroErro = ''; this.financeiroHtml = '';
+      try {
+        const destino = modal ? url + (url.includes('?') ? '&' : '?') + 'modal=1' : url;
+        const response = await fetch(destino, {headers:{'X-Requested-With':'XMLHttpRequest'}});
+        if (!response.ok) throw new Error('Não foi possível carregar as informações financeiras.');
+        this.financeiroHtml = await response.text();
+        this.hidratarFinanceiro();
+      } catch (error) { this.financeiroErro = error.message; }
+      finally { this.financeiroCarregando = false; }
+    },
+
+    abrirFinanceiro(url, numero='') {
+      this.financeiroAberto = true; this.financeiroNumero = numero; this.financeiroAlterado = false;
+      document.body.style.overflow = 'hidden';
+      return this.carregarFinanceiro(url);
+    },
+
+    abrirTituloPagar(url) { return this.carregarFinanceiro(url, true); },
+    abrirRecebimentoTitulo(url) { return this.carregarFinanceiro(url, true); },
+
+    async enviarRecebimentoTitulo(event) {
+      const form = event.target;
+      this.financeiroCarregando = true; this.financeiroErro = '';
+      try {
+        const response = await fetch(form.action, {
+          method:'POST', body:new FormData(form), headers:{'X-Requested-With':'XMLHttpRequest'}
+        });
+        this.financeiroHtml = await response.text();
+        if (response.ok) this.financeiroAlterado = true;
+        this.hidratarFinanceiro();
+      } catch (error) { this.financeiroErro = 'Não foi possível registrar o recebimento.'; }
+      finally { this.financeiroCarregando = false; }
+    },
+
+    fecharFinanceiro() {
+      this.financeiroAberto = false; document.body.style.overflow = '';
+      if (this.financeiroAlterado) window.location.reload();
     },
 
     toast(msg, tipo='ok') {
