@@ -132,6 +132,7 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
     telefone = models.CharField(max_length=20, blank=True)
     foto = models.ImageField(upload_to='usuarios/fotos/', blank=True, null=True)
     menu_favoritos = models.JSONField(default=list, blank=True)
+    preferencias_tabelas = models.JSONField(default=dict, blank=True)
 
     comissao_percentual = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 

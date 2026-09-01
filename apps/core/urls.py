@@ -11,6 +11,7 @@ from apps.core.views.notificacoes import (
     NotificacaoAbrirView, NotificacaoMarcarTodasView, NotificacaoStatusView,
 )
 from apps.core.views.menu_favoritos import MenuFavoritosView
+from apps.core.views.preferencias_tabelas import TabelaPreferenciasView
 
 app_name = 'core'
 
@@ -28,6 +29,7 @@ urlpatterns = [
     path('notificacoes/marcar-todas/', NotificacaoMarcarTodasView.as_view(), name='notificacoes-marcar-todas'),
     path('notificacoes/status/', NotificacaoStatusView.as_view(), name='notificacoes-status'),
     path('auth/menu-favoritos/', MenuFavoritosView.as_view(), name='menu-favoritos'),
+    path('auth/preferencias-tabelas/', TabelaPreferenciasView.as_view(), name='preferencias-tabelas'),
 
     path('gestao/central/', admin_area.central_administrativa, name='admin_central'),
     path('gestao/parametros/', parametros_views.parametros_sistema, name='admin_parametros'),

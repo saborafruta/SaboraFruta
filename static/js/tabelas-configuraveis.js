@@ -6,6 +6,17 @@
   const DEFAULT_WIDTH = 140;
   const instances = new WeakMap();
   let openInstance = null;
+  const serverPreferencesNode = document.getElementById('erp-table-preferences');
+  const preferencesEndpoint = document.querySelector('meta[name="erp-table-preferences-url"]')?.content || '';
+  const csrfToken = document.querySelector('meta[name="erp-csrf-token"]')?.content || '';
+  const tableUserId = document.querySelector('meta[name="erp-table-user-id"]')?.content || 'anonymous';
+  let serverPreferences = {};
+
+  try {
+    serverPreferences = JSON.parse(serverPreferencesNode?.textContent || '{}');
+  } catch (error) {
+    serverPreferences = {};
+  }
 
   function slug(value) {
     return String(value || '')
@@ -39,19 +50,26 @@
     return directHeaderCells(table).length > 1;
   }
 
-  function readPreferences(key, columns) {
+  function normalizePreferences(raw, columns) {
+    const valid = new Set(columns.map(column => column.key));
+    const hidden = Array.isArray(raw?.hidden) ? raw.hidden.filter(item => valid.has(item)) : [];
+    const widths = {};
+    if (raw?.widths && typeof raw.widths === 'object') {
+      columns.forEach(column => {
+        const width = Number(raw.widths[column.key]);
+        if (Number.isFinite(width)) widths[column.key] = Math.max(MIN_WIDTH, Math.round(width));
+      });
+    }
+    return { hidden, widths };
+  }
+
+  function readPreferences(storageKey, legacyStorageKey, preferenceKey, columns) {
     try {
-      const raw = JSON.parse(localStorage.getItem(key) || '{}');
-      const valid = new Set(columns.map(column => column.key));
-      const hidden = Array.isArray(raw.hidden) ? raw.hidden.filter(item => valid.has(item)) : [];
-      const widths = {};
-      if (raw.widths && typeof raw.widths === 'object') {
-        columns.forEach(column => {
-          const width = Number(raw.widths[column.key]);
-          if (Number.isFinite(width)) widths[column.key] = Math.max(MIN_WIDTH, Math.round(width));
-        });
+      if (Object.prototype.hasOwnProperty.call(serverPreferences, preferenceKey)) {
+        return normalizePreferences(serverPreferences[preferenceKey], columns);
       }
-      return { hidden, widths };
+      const saved = localStorage.getItem(storageKey) || localStorage.getItem(legacyStorageKey) || '{}';
+      return normalizePreferences(JSON.parse(saved), columns);
     } catch (error) {
       return { hidden: [], widths: {} };
     }
@@ -59,6 +77,24 @@
 
   function save(instance) {
     try { localStorage.setItem(instance.storageKey, JSON.stringify(instance.preferences)); } catch (error) { /* modo privado */ }
+    serverPreferences[instance.preferenceKey] = instance.preferences;
+    if (!preferencesEndpoint || !csrfToken || csrfToken === 'NOTPROVIDED') return;
+    clearTimeout(instance.saveTimer);
+    instance.saveTimer = setTimeout(() => {
+      fetch(preferencesEndpoint, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({
+          table: instance.preferenceKey,
+          preferences: instance.preferences,
+        }),
+      }).catch(() => { /* a copia local continua disponivel */ });
+    }, 180);
   }
 
   function cellAt(row, index, columnCount) {
@@ -252,7 +288,9 @@
     const signature = columns.map(column => column.key).join('|');
     const documentIndex = Array.from(document.querySelectorAll('table')).indexOf(table);
     const identity = table.id || table.dataset.tableKey || `${Math.max(0, documentIndex)}-${shortHash(signature)}`;
-    const storageKey = `${STORAGE_PREFIX}${location.pathname}.${identity}`;
+    const preferenceKey = `${location.pathname}.${identity}`;
+    const legacyStorageKey = `${STORAGE_PREFIX}${location.pathname}.${identity}`;
+    const storageKey = `${STORAGE_PREFIX}user-${tableUserId}.${location.pathname}.${identity}`;
 
     let colgroup = table.querySelector(':scope > colgroup[data-erp-columns]');
     if (!colgroup) {
@@ -263,13 +301,30 @@
     colgroup.replaceChildren(...columns.map(() => document.createElement('col')));
     columns.forEach((column, index) => { column.col = colgroup.children[index]; });
 
-    const instance = { table, columns, storageKey, preferences: readPreferences(storageKey, columns) };
+    const instance = {
+      table,
+      columns,
+      storageKey,
+      legacyStorageKey,
+      preferenceKey,
+      preferences: readPreferences(storageKey, legacyStorageKey, preferenceKey, columns),
+    };
+    let shouldMigrate = false;
+    try {
+      shouldMigrate = !Object.prototype.hasOwnProperty.call(serverPreferences, preferenceKey)
+        && !localStorage.getItem(storageKey)
+        && Boolean(localStorage.getItem(legacyStorageKey));
+    } catch (error) { /* modo privado */ }
     table.dataset.erpTableColumnsReady = '1';
     table.classList.add('erp-configurable-table');
     instances.set(table, instance);
     createControls(instance);
     addResizers(instance);
     apply(instance);
+    if (shouldMigrate) {
+      save(instance);
+      try { localStorage.removeItem(legacyStorageKey); } catch (error) { /* modo privado */ }
+    }
   }
 
   function setupAll(root) {
