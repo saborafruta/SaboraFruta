@@ -17,4 +17,30 @@ function validarModeloOp2(draft, grupos) {
   return '';
 }
 
-if (typeof module !== 'undefined') module.exports = { validarModeloOp2 };
+function op2ListaMultisselecao(valores) {
+  return Array.isArray(valores) ? valores.filter(Boolean) : (valores ? [String(valores)] : []);
+}
+
+function op2MultisselecaoContem(valores, opcao) {
+  return op2ListaMultisselecao(valores).includes(opcao);
+}
+
+function op2AlternarMultisselecao(valores, opcao, marcada) {
+  let lista = op2ListaMultisselecao(valores).filter(valor => valor !== opcao);
+  if (marcada) {
+    lista = opcao === 'N/A' ? ['N/A'] : [...lista.filter(valor => valor !== 'N/A'), opcao];
+  }
+  return lista;
+}
+
+function op2ResumoMultisselecao(valores) {
+  const lista = op2ListaMultisselecao(valores);
+  if (!lista.length) return 'Selecione...';
+  if (lista.length === 1) return lista[0];
+  return `${lista.length} opções selecionadas`;
+}
+
+if (typeof module !== 'undefined') module.exports = {
+  validarModeloOp2, op2AlternarMultisselecao, op2ListaMultisselecao,
+  op2MultisselecaoContem, op2ResumoMultisselecao,
+};

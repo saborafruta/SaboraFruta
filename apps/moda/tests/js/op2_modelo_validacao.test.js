@@ -1,6 +1,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { validarModeloOp2 } = require('../../../../static/js/op2_modelo_validacao.js');
+const {
+  validarModeloOp2, op2AlternarMultisselecao, op2ResumoMultisselecao,
+} = require('../../../../static/js/op2_modelo_validacao.js');
 
 const grupos = {
   camisa: { label: 'Camisa', campos: { tipo_impressao: ['SILK', 'N/A'], malha: ['PP', 'N/A'], gola: ['POLO', 'N/A'] } },
@@ -51,4 +53,13 @@ test('impressão e acabamento aceitam múltiplas opções válidas', () => {
     tipo_impressao: ['SILK', 'RELEVO'], estrutura: {acabamentos: ['RECORTE', 'FORRO']},
   }, gruposMultiplos);
   assert.equal(erro, '');
+});
+
+test('seletor múltiplo mantém N/A exclusivo e resume escolhas', () => {
+  let valores = op2AlternarMultisselecao([], 'SILK', true);
+  valores = op2AlternarMultisselecao(valores, 'RELEVO', true);
+  assert.deepEqual(valores, ['SILK', 'RELEVO']);
+  assert.equal(op2ResumoMultisselecao(valores), '2 opções selecionadas');
+  assert.deepEqual(op2AlternarMultisselecao(valores, 'N/A', true), ['N/A']);
+  assert.deepEqual(op2AlternarMultisselecao(['N/A'], 'BORDADO', true), ['BORDADO']);
 });

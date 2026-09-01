@@ -1,0 +1,17 @@
+<div class="op2-multi" x-data="{ aberto: false }" @click.outside="aberto=false" @keydown.escape.window="aberto=false">
+  <button type="button" class="op2-multi-trigger" @click="aberto=!aberto" :aria-expanded="aberto" aria-haspopup="listbox">
+    <span class="op2-multi-summary" x-text="op2ResumoMultisselecao({% if campo == 'tipo_impressao' %}draft.tipo_impressao{% else %}draft.estrutura['{{ campo }}']{% endif %})"></span>
+    <svg class="op2-multi-chevron" :class="aberto?'is-open':''" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" aria-hidden="true"><path d="m6 8 4 4 4-4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+  <div x-show="aberto" x-cloak class="op2-multi-menu" role="listbox" aria-multiselectable="true">
+    {% for opcao in opcoes %}
+      <label class="op2-multi-option">
+        <input type="checkbox" {% if submit_names %}name="estrutura_{{ campo }}" value="{{ opcao }}"{% endif %}
+               :checked="op2MultisselecaoContem({% if campo == 'tipo_impressao' %}draft.tipo_impressao{% else %}draft.estrutura['{{ campo }}']{% endif %}, '{{ opcao|escapejs }}')"
+               @change="{% if campo == 'tipo_impressao' %}draft.tipo_impressao{% else %}draft.estrutura['{{ campo }}']{% endif %}=op2AlternarMultisselecao({% if campo == 'tipo_impressao' %}draft.tipo_impressao{% else %}draft.estrutura['{{ campo }}']{% endif %}, '{{ opcao|escapejs }}', $event.target.checked)">
+        <span>{{ opcao }}</span>
+      </label>
+    {% endfor %}
+  </div>
+  <small class="op2-multi-help">Você pode escolher mais de uma opção.</small>
+</div>
