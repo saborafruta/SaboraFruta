@@ -104,6 +104,68 @@ class ContasBancariasViewTests(TestCase):
         self.assertEqual(conta.saldo_atual, Decimal("75.00"))
         self.assertTrue(ExtratoBancario.objects.filter(conta_bancaria=conta, valor=Decimal("25.00")).exists())
 
+    def test_transferencia_sem_forma_move_valor_integral_sem_taxa(self):
+        origem = ContaBancaria.objects.create(
+            filial=self.filial, descricao="Origem", saldo_inicial=Decimal("200.00"),
+            saldo_atual=Decimal("200.00"),
+        )
+        destino = ContaBancaria.objects.create(
+            filial=self.filial, descricao="Destino", saldo_inicial=Decimal("0.00"),
+            saldo_atual=Decimal("0.00"),
+        )
+
+        response = self.client.post(reverse("financeiro:contas_bancarias"), {
+            "acao": "lancar_movimento", "tipo": "transferencia",
+            "conta_origem": origem.pk, "conta_destino": destino.pk,
+            "data_lancamento": "2026-08-20", "valor": "100.00",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        entrada = ExtratoBancario.objects.get(conta_bancaria=destino)
+        self.assertIsNone(entrada.forma_pagamento)
+        self.assertEqual(entrada.valor, Decimal("100.00"))
+        self.assertEqual(entrada.valor_taxa, Decimal("0.00"))
+        self.assertEqual(entrada.valor_entrada_liquida, Decimal("100.00"))
+        origem.refresh_from_db()
+        destino.refresh_from_db()
+        self.assertEqual(origem.saldo_atual, Decimal("100.00"))
+        self.assertEqual(destino.saldo_atual, Decimal("100.00"))
+
+    def test_transferencia_com_forma_desconta_taxa_automaticamente_no_destino(self):
+        origem = ContaBancaria.objects.create(
+            filial=self.filial, descricao="Origem com taxa", saldo_inicial=Decimal("200.00"),
+            saldo_atual=Decimal("200.00"),
+        )
+        destino = ContaBancaria.objects.create(
+            filial=self.filial, descricao="Destino com taxa", saldo_inicial=Decimal("0.00"),
+            saldo_atual=Decimal("0.00"),
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="Transferencia tarifada",
+            tipo=TipoFormaPagamento.TED, taxa_administrativa=Decimal("2.00"),
+            taxa_fixa=Decimal("0.50"),
+        )
+
+        response = self.client.post(reverse("financeiro:contas_bancarias"), {
+            "acao": "lancar_movimento", "tipo": "transferencia",
+            "conta_origem": origem.pk, "conta_destino": destino.pk,
+            "data_lancamento": "2026-08-20", "valor": "100.00",
+            "forma_pagamento": forma.pk,
+        })
+
+        self.assertEqual(response.status_code, 302)
+        entrada = ExtratoBancario.objects.get(conta_bancaria=destino)
+        saida = ExtratoBancario.objects.get(conta_bancaria=origem)
+        self.assertEqual(saida.valor, Decimal("-100.00"))
+        self.assertEqual(saida.valor_taxa, Decimal("0.00"))
+        self.assertEqual(entrada.valor, Decimal("100.00"))
+        self.assertEqual(entrada.valor_taxa, Decimal("2.50"))
+        self.assertEqual(entrada.valor_entrada_liquida, Decimal("97.50"))
+        origem.refresh_from_db()
+        destino.refresh_from_db()
+        self.assertEqual(origem.saldo_atual, Decimal("100.00"))
+        self.assertEqual(destino.saldo_atual, Decimal("97.50"))
+
     def test_lista_venda_pdv_quando_forma_tem_conta_padrao(self):
         conta = ContaBancaria.objects.create(
             filial=self.filial,

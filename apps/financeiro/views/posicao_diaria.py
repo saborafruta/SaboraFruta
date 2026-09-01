@@ -50,8 +50,18 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 dados = form.cleaned_data.copy()
                 data_referencia = dados["data_lancamento"]
                 destino = reverse("financeiro:posicao_diaria") + f"?data={data_referencia.isoformat()}"
-                auxiliar._salvar_movimento_manual(request, filial, dados)
-                messages.success(request, "Movimento registrado na posicao diaria.")
+                resultado = auxiliar._salvar_movimento_manual(request, filial, dados)
+                if resultado["tipo"] == MovimentoContaBancariaForm.TIPO_TRANSFERENCIA:
+                    if resultado["taxa"] > 0:
+                        messages.success(
+                            request,
+                            f"Transferencia registrada. Taxa de R$ {resultado['taxa']:.2f} "
+                            f"descontada; a conta de destino recebeu R$ {resultado['liquido']:.2f}.",
+                        )
+                    else:
+                        messages.success(request, "Transferencia registrada sem taxa.")
+                else:
+                    messages.success(request, "Movimento registrado na posicao diaria.")
                 return redirect(destino)
             return self._render(
                 request, movimento_form=form, movimento_modal=True,

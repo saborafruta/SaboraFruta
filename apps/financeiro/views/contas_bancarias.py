@@ -150,8 +150,18 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
         if acao == "lancar_movimento":
             form = MovimentoContaBancariaForm(request.POST, filial=filial)
             if form.is_valid():
-                self._salvar_movimento_manual(request, filial, form.cleaned_data)
-                messages.success(request, "Movimento bancario registrado.")
+                resultado = self._salvar_movimento_manual(request, filial, form.cleaned_data)
+                if resultado["tipo"] == MovimentoContaBancariaForm.TIPO_TRANSFERENCIA:
+                    if resultado["taxa"] > 0:
+                        messages.success(
+                            request,
+                            f"Transferencia registrada. Taxa de R$ {resultado['taxa']:.2f} "
+                            f"descontada; a conta de destino recebeu R$ {resultado['liquido']:.2f}.",
+                        )
+                    else:
+                        messages.success(request, "Transferencia registrada sem taxa.")
+                else:
+                    messages.success(request, "Movimento bancario registrado.")
                 return redirect(reverse("financeiro:contas_bancarias"))
             return self._render(request, movimento_form=form, movimento_modal_aberto=True)
 
@@ -434,6 +444,8 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 conta_bancaria_id__in=conta_ids,
                 data_pagamento__range=(data_ini, data_fim),
                 conta_pagar__excluido_em__isnull=True,
+            ).exclude(
+                conta_pagar__documento_tipo__startswith="taxa_",
             ).select_related("conta_bancaria", "conta_pagar__fornecedor", "conta_pagar__funcionario")
             if busca:
                 qs = qs.filter(conta_pagar__documento_numero__icontains=busca)
@@ -865,12 +877,20 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             )
             return movimento
 
+        movimentos = []
         if tipo == MovimentoContaBancariaForm.TIPO_CREDITO:
-            criar(dados["conta_destino"], valor, historico)
+            movimentos.append(criar(dados["conta_destino"], valor, historico))
         elif tipo == MovimentoContaBancariaForm.TIPO_DEBITO:
-            criar(dados["conta_origem"], -valor, historico)
+            movimentos.append(criar(dados["conta_origem"], -valor, historico))
         else:
             origem = dados["conta_origem"]
             destino = dados["conta_destino"]
-            criar(origem, -valor, f"Transferencia para {destino.descricao or destino.banco_nome}. {historico}".strip())
-            criar(destino, valor, f"Transferencia de {origem.descricao or origem.banco_nome}. {historico}".strip())
+            movimentos.append(criar(origem, -valor, f"Transferencia para {destino.descricao or destino.banco_nome}. {historico}".strip()))
+            movimentos.append(criar(destino, valor, f"Transferencia de {origem.descricao or origem.banco_nome}. {historico}".strip()))
+        recebimento = movimentos[-1]
+        return {
+            "tipo": tipo,
+            "taxa": recebimento.valor_taxa,
+            "liquido": recebimento.valor_entrada_liquida,
+            "movimentos": movimentos,
+        }

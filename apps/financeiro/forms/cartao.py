@@ -1,3 +1,5 @@
+import json
+
 from django import forms
 
 from apps.financeiro.constants.enums import TipoFormaPagamento
@@ -25,6 +27,12 @@ class FormaPagamentoCartaoSelect(forms.Select):
         option["attrs"]["data-max-parcelas"] = str(
             maximo if forma.tipo == TipoFormaPagamento.CARTAO_CREDITO else 1
         )
+        option["attrs"]["data-taxa-percentual"] = str(forma.taxa_administrativa or 0)
+        option["attrs"]["data-taxa-fixa"] = str(forma.taxa_fixa or 0)
+        option["attrs"]["data-taxas-parcelamento"] = json.dumps({
+            f"{taxa.parcelas}|{taxa.bandeira}": str(taxa.taxa)
+            for taxa in forma.taxas_parcelamento.all()
+        })
         return option
 
 
