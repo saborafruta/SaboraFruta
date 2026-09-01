@@ -3,6 +3,7 @@
 
 {% block title %}Contas a Receber{% endblock %}
 {% block page_title %}Contas a Receber{% endblock %}
+{% block largura_conteudo %}erp-list-content w-full max-w-none{% endblock %}
 {% block extra_head %}
 <style>
   .entrega-inline-trigger { border:1px solid transparent; }
@@ -19,7 +20,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="space-y-5"
+<div class="space-y-5 erp-list-page"
      x-data="{
        detalheAberto:false, detalheCarregando:false, detalheHtml:'', detalheErro:'', criarAberto:false,
        entregaAberta:false, entregaSalvando:false, entregaErro:'',

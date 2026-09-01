@@ -72,6 +72,15 @@ class ReceberVendaTests(TestCase):
                 self.assertContains(response, '27/08/2026')
                 self.assertNotContains(response, '19/08/2026')
 
+    def test_listagem_ocupa_toda_a_largura_disponivel(self):
+        response, _ = self._get(ContaReceberListView)
+
+        self.assertContains(
+            response,
+            'class="app-content-frame erp-list-content w-full max-w-none mx-auto',
+        )
+        self.assertContains(response, 'class="space-y-5 erp-list-page"')
+
     def test_sem_vinculo_nao_inventa_venda_por_documento_ou_emissao(self):
         ContaReceber.objects.filter(pk=self.conta.pk).update(
             documento_tipo='', documento_id=None, documento_numero='1014',
