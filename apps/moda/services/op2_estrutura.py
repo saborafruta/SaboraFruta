@@ -5,8 +5,10 @@ Esses campos ainda não têm colunas próprias no banco; por enquanto entram
 como resumo textual nas observações do item para não perder a informação.
 """
 
+from copy import deepcopy
+
 TIPOS_IMPRESSAO_PADRAO = [
-    'SUBLIMAÇÃO', 'SILK', 'BORDADO', 'DTF', 'DTG', 'TRANSFER', 'PATCH',
+    'SUBLIMAÇÃO', 'SILK', 'BORDADO', 'DTF', 'DTG', 'TRANSFER', 'PATCH', 'RELEVO',
     'SEM IMPRESSÃO', 'OUTRO',
 ]
 
@@ -73,7 +75,7 @@ OP2_ESTRUTURA_OPCOES = {
         },
     },
     'calcao': {
-        'label': 'Calções',
+        'label': 'Calção',
         'campos': {
             'malha': ['HELANQUINHA', 'POLISTER 100 SUBLIMADO', 'DRY', 'DRY TEXTURIZADO'],
             'acabamentos': ['RECORTE', 'APLICACAO DE GALAO', 'CADARÇO', 'FRIZOS', 'FORRO', 'SUBLIMAÇÃO', 'PET APLICADO'],
@@ -105,6 +107,69 @@ OP2_ESTRUTURA_OPCOES = {
     'ecobag': {'label': 'Ecobag', 'campos': {'malha': ['ALGODAO CRU', 'ALGODAO CRU SINTETICO', 'OXFORD', 'GABARDINE', 'TACTEL', 'TNT'], 'acabamentos': ['SILK', 'SUBLIMADO', 'ALÇA PERSONALIZADA', 'ALÇA FAB.']}},
 }
 
+
+# Novos tipos comerciais. As variações de camisa e colete mantêm a mesma
+# ficha-base; calça e bermuda substituem o tipo composto antigo.
+_camisa = OP2_ESTRUTURA_OPCOES['camisa']['campos']
+_calca_bermuda = OP2_ESTRUTURA_OPCOES['calca_bermuda']['campos']
+_colete = OP2_ESTRUTURA_OPCOES['colete']['campos']
+for _slug, _label in (
+    ('camisa_polo', 'Camisa Polo'),
+    ('camisa_regata', 'Camisa Regata'),
+    ('camisa_manga_longa', 'Camisa Manga Longa'),
+):
+    OP2_ESTRUTURA_OPCOES[_slug] = {'label': _label, 'campos': deepcopy(_camisa)}
+OP2_ESTRUTURA_OPCOES['conjunto'] = {
+    'label': 'Conjunto',
+    'campos': deepcopy(_camisa) | {
+        'acabamentos': deepcopy(OP2_ESTRUTURA_OPCOES['calcao']['campos']['acabamentos']),
+    },
+}
+OP2_ESTRUTURA_OPCOES['bermuda'] = {
+    'label': 'Bermuda', 'campos': deepcopy(_calca_bermuda),
+}
+OP2_ESTRUTURA_OPCOES['calca'] = {
+    'label': 'Calça', 'campos': deepcopy(_calca_bermuda),
+}
+OP2_ESTRUTURA_OPCOES['colete_dupla_face'] = {
+    'label': 'Colete Dupla Face', 'campos': deepcopy(_colete),
+}
+OP2_ESTRUTURA_OPCOES['avental'] = {
+    'label': 'Avental',
+    'campos': {
+        'malha': deepcopy(_calca_bermuda['malha']),
+        'acabamentos': [
+            'BOLSO FRENTE', 'BOLSO LATERAL', 'ALÇA', 'TIRA DE AMARRAÇÃO',
+            'REGULADOR', 'DEBRUM',
+        ],
+    },
+}
+for _tipo_removido in ('short', 'calca_bermuda'):
+    OP2_ESTRUTURA_OPCOES.pop(_tipo_removido, None)
+
+TIPOS_PECA_REMOVIDOS = ('short', 'calca_bermuda')
+
+
+def campo_multisselecao(campo: str) -> bool:
+    """Impressão e acabamento aceitam uma ou várias escolhas."""
+    return campo == 'tipo_impressao' or campo.startswith('acabamento')
+
+
+def valores_estrutura_campo(post, campo: str):
+    """Lê escolhas repetidas e também o formato legado separado por vírgula."""
+    chave = f'estrutura_{campo}'
+    brutos = post.getlist(chave) if hasattr(post, 'getlist') else post.get(chave, [])
+    if not isinstance(brutos, (list, tuple)):
+        brutos = [brutos]
+    valores = []
+    for bruto in brutos:
+        partes = str(bruto or '').replace(' + ', ',').split(',')
+        for parte in partes:
+            valor = parte.strip()
+            if valor and valor not in valores:
+                valores.append(valor)
+    return valores
+
 # O tipo de impressão pertence à estrutura de qualquer peça e deve aparecer
 # antes das características físicas. Mantê-lo no padrão também faz com que a
 # tela de gestão permita editar/inativar suas opções por tipo de peça.
@@ -127,6 +192,10 @@ def sincronizar_opcoes_padrao(filial):
     if filial is None:
         return
     from apps.moda.models import OpcaoEstruturaOP2
+
+    OpcaoEstruturaOP2.objects.for_filial(filial).filter(
+        tipo_peca='calcao', tipo_label='Calções',
+    ).update(tipo_label='Calção')
 
     # Versões antigas chegaram a criar linhas compostas apenas por espaços.
     # Repara a própria linha quando a posição ainda corresponde ao padrão,
@@ -199,12 +268,17 @@ def validar_estrutura_item(post, grupos):
     if not grupo:
         raise ValueError('Selecione um tipo de peça válido.')
     for campo, opcoes in grupo['campos'].items():
-        valor = (post.get(f'estrutura_{campo}') or '').strip()
+        valores = valores_estrutura_campo(post, campo)
         rotulo = campo.replace('_', ' ').capitalize()
-        if not valor:
+        if not valores:
             raise ValueError(f'{rotulo}: preenchimento obrigatório. Se não se aplica, selecione N/A.')
-        if valor not in opcoes:
+        if not campo_multisselecao(campo) and len(valores) > 1:
+            raise ValueError(f'{rotulo}: selecione somente uma opção para {grupo["label"]}.')
+        if any(valor not in opcoes for valor in valores):
             raise ValueError(f'{rotulo}: selecione uma opção válida para {grupo["label"]}.')
+        if len(valores) > 1 and 'N/A' in valores:
+            raise ValueError(f'{rotulo}: N/A não pode ser combinado com outra opção.')
+        valor = valores[0]
         if campo == 'cor' and valor == 'COR PERSONALIZADA':
             personalizada = (post.get('estrutura_cor_personalizada') or '').strip()
             if not personalizada:
@@ -235,7 +309,9 @@ def opcoes_estrutura_filial(filial, incluir_inativas=False):
     from apps.moda.models import OpcaoEstruturaOP2
 
     sincronizar_opcoes_padrao(filial)
-    todas = OpcaoEstruturaOP2.objects.for_filial(filial)
+    todas = OpcaoEstruturaOP2.objects.for_filial(filial).exclude(
+        tipo_peca__in=TIPOS_PECA_REMOVIDOS,
+    )
     if not todas.exists():
         return OP2_ESTRUTURA_OPCOES
     qs = todas
@@ -268,11 +344,12 @@ def estrutura_resumo(post, grupos=None) -> str:
         return ''
     linhas = [f"Tipo de peça: {grupo['label']}"]
     for chave in grupo['campos']:
-        valor = (post.get(f'estrutura_{chave}') or '').strip()
-        if valor:
+        valores = valores_estrutura_campo(post, chave)
+        if valores:
             rotulo = chave.replace('_', ' ').capitalize()
-            if chave == 'cor' and valor == 'COR PERSONALIZADA':
-                valor = (post.get('estrutura_cor_personalizada') or '').strip()
+            if chave == 'cor' and valores[0] == 'COR PERSONALIZADA':
+                valores = [(post.get('estrutura_cor_personalizada') or '').strip()]
+            valor = ' + '.join(valores)
             linhas.append(f'{rotulo}: {valor}')
     return '\n'.join(linhas) if len(linhas) > 1 else ''
 

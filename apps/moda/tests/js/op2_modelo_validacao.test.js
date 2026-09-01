@@ -41,3 +41,14 @@ test('campos de outro tipo não bloqueiam o tipo atual', () => {
 test('tipo de peça desconhecido é recusado', () => {
   assert.match(validarModeloOp2({ ...completo(), estrutura_tipo: '' }, grupos), /tipo de peça válido/);
 });
+
+test('impressão e acabamento aceitam múltiplas opções válidas', () => {
+  const gruposMultiplos = {
+    calcao: {label: 'Calção', campos: {tipo_impressao: ['SILK', 'RELEVO'], acabamentos: ['RECORTE', 'FORRO']}},
+  };
+  const erro = validarModeloOp2({
+    valor_unitario: '10', estrutura_tipo: 'calcao',
+    tipo_impressao: ['SILK', 'RELEVO'], estrutura: {acabamentos: ['RECORTE', 'FORRO']},
+  }, gruposMultiplos);
+  assert.equal(erro, '');
+});

@@ -97,6 +97,31 @@ class Op2Tests(TestCase):
                     with self.assertRaisesMessage(ValueError, 'opção válida'):
                         validar_estrutura_item(invalidos, grupos)
 
+    def test_tipos_de_peca_solicitados_substituem_os_antigos(self):
+        labels = {grupo['label'] for grupo in OP2_ESTRUTURA_OPCOES.values()}
+        self.assertTrue({
+            'Camisa Polo', 'Camisa Regata', 'Conjunto', 'Camisa Manga Longa',
+            'Calção', 'Bermuda', 'Calça', 'Colete Dupla Face', 'Avental',
+        }.issubset(labels))
+        self.assertNotIn('Short', labels)
+        self.assertNotIn('Calça / bermudas', labels)
+        self.assertIn('RELEVO', OP2_ESTRUTURA_OPCOES['camisa']['campos']['tipo_impressao'])
+
+    def test_impressao_e_acabamento_aceitam_multiplas_opcoes(self):
+        from apps.moda.services.op2_estrutura import validar_estrutura_item
+
+        grupos = opcoes_estrutura_filial(self.filial)
+        dados = QueryDict('', mutable=True)
+        dados.update({'estrutura_tipo': 'calcao', 'estrutura_malha': 'DRY'})
+        dados.setlist('estrutura_tipo_impressao', ['SILK', 'RELEVO'])
+        dados.setlist('estrutura_acabamentos', ['RECORTE', 'FORRO'])
+        dados.update({'estrutura_cor': 'PRETO', 'estrutura_etiquetas': 'N/A'})
+
+        validar_estrutura_item(dados, grupos)
+        resumo = juntar_observacoes_item('', dados, grupos)
+        self.assertIn('Tipo impressao: SILK + RELEVO', resumo)
+        self.assertIn('Acabamentos: RECORTE + FORRO', resumo)
+
     def test_valor_unitario_obrigatorio_positivo_e_decimal_valido(self):
         from apps.moda.services.op2_estrutura import validar_valor_unitario
 

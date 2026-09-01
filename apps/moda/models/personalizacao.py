@@ -35,6 +35,7 @@ class Personalizacao(models.Model):
         DTG = 'dtg', 'DTG'
         TRANSFER = 'transfer', 'Transfer'
         PATCH = 'patch', 'Patch'
+        RELEVO = 'relevo', 'Relevo'
         SEM_IMPRESSAO = 'sem_impressao', 'Sem impressão'
         OUTRO = 'outro', 'Outro'
 

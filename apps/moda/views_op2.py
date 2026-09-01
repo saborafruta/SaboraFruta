@@ -35,8 +35,9 @@ from .services.individual import IndividualService
 from .services.item_groups import GRADE_CORES, agrupar_itens_op
 from .services.kanban_comercial import status_choices_kanban, status_destino_kanban
 from .services.op2_estrutura import (
-    OP2_ESTRUTURA_OPCOES, juntar_observacoes_item, opcoes_estrutura_filial,
-    sincronizar_opcoes_padrao, validar_estrutura_item, validar_valor_unitario,
+    OP2_ESTRUTURA_OPCOES, campo_multisselecao, juntar_observacoes_item,
+    opcoes_estrutura_filial, sincronizar_opcoes_padrao, validar_estrutura_item,
+    validar_valor_unitario, valores_estrutura_campo,
 )
 from .services.pedido_pdf import whatsapp_numero
 from .views import ModaBaseView
@@ -229,7 +230,10 @@ def _dados_modal_item(item, estrutura_opcoes):
                 estrutura_tipo = rotulos.get(valor.casefold(), estrutura_tipo)
                 continue
             campo = '_'.join(chave.casefold().split())
-            estrutura[campo] = valor
+            estrutura[campo] = (
+                [parte.strip() for parte in valor.split(' + ') if parte.strip()]
+                if campo_multisselecao(campo) else valor
+            )
 
         cores = estrutura_opcoes.get(estrutura_tipo, {}).get('campos', {}).get('cor', [])
         cor = estrutura.get('cor', '')
@@ -254,12 +258,10 @@ def _dados_modal_item(item, estrutura_opcoes):
         ])),
         'quantidade': item.quantidade,
         'valor_unitario': str(item.valor_unitario) if item.valor_unitario else '',
-        'tipo_impressao': (
-            (
-                arte.get_tecnica_display() if arte else
-                getattr(item.produto, 'get_tipo_impressao_display', lambda: '')()
-            ).upper()
-        ),
+        'tipo_impressao': estrutura.pop('tipo_impressao', None) or [(
+            arte.get_tecnica_display() if arte else
+            getattr(item.produto, 'get_tipo_impressao_display', lambda: '')()
+        ).upper()],
         'estrutura_tipo': estrutura_tipo,
         'estrutura': estrutura,
         'cor_personalizada': cor_personalizada,
@@ -427,7 +429,10 @@ class Op2CreateView(ModaBaseView):
                         or getattr(item.produto, 'tipo_impressao', '')
                     )
                 )
-                tipo_impressao = request.POST.get(f'item_{indice}_estrutura_tipo_impressao') or tipo_impressao
+                tipos_estrutura = valores_estrutura_campo(
+                    self._post_item(request, indice), 'tipo_impressao',
+                )
+                tipo_impressao = ' + '.join(tipos_estrutura) or tipo_impressao
                 if tipo_impressao and tipo_impressao != 'N/A':
                     Personalizacao.objects.create(
                         item=item,
@@ -568,9 +573,9 @@ class Op2CreateView(ModaBaseView):
     def _post_item(request, indice):
         dados = request.POST.copy()
         prefixo = f'item_{indice}_'
-        for chave, valor in request.POST.items():
+        for chave, valores in request.POST.lists():
             if chave.startswith(prefixo):
-                dados[chave.removeprefix(prefixo)] = valor
+                dados.setlist(chave.removeprefix(prefixo), valores)
         return dados
 
     @classmethod
@@ -1380,7 +1385,8 @@ class Op2ActionView(ModaBaseView):
                 or getattr(item.produto, 'tipo_impressao', '')
             )
         )
-        tipo_impressao = request.POST.get('estrutura_tipo_impressao') or tipo_impressao
+        tipos_estrutura = valores_estrutura_campo(request.POST, 'tipo_impressao')
+        tipo_impressao = ' + '.join(tipos_estrutura) or tipo_impressao
         if tipo_impressao == 'N/A':
             # Uma escolha de tipo não deve apagar arte ou observações já anexadas.
             if arte:

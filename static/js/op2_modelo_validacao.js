@@ -8,9 +8,11 @@ function validarModeloOp2(draft, grupos) {
   if (!grupo) return 'Selecione um tipo de peça válido.';
   for (const [campo, opcoes] of Object.entries(grupo.campos)) {
     const valorCampo = campo === 'tipo_impressao' ? draft.tipo_impressao : draft.estrutura?.[campo];
+    const valores = Array.isArray(valorCampo) ? valorCampo.filter(Boolean) : (valorCampo ? [valorCampo] : []);
     const rotulo = campo.replaceAll('_', ' ');
-    if (!valorCampo) return `${rotulo}: preenchimento obrigatório. Se não se aplica, selecione N/A.`;
-    if (!opcoes.includes(valorCampo)) return `${rotulo}: selecione uma opção válida para ${grupo.label}.`;
+    if (!valores.length) return `${rotulo}: preenchimento obrigatório. Se não se aplica, selecione N/A.`;
+    if (valores.some(valor => !opcoes.includes(valor))) return `${rotulo}: selecione uma opção válida para ${grupo.label}.`;
+    if (valores.length > 1 && valores.includes('N/A')) return `${rotulo}: N/A não pode ser combinado com outra opção.`;
   }
   return '';
 }
