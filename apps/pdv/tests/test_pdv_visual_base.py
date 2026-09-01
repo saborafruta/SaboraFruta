@@ -165,9 +165,9 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn('sidebar-favorites-data', template)
         self.assertIn('data-full-favorites="true"', template)
         self.assertIn('outline:2px solid var(--pdv-accent)', template)
-        self.assertIn('linear-gradient(90deg,#f15a24 0%,#e8824a 55%,#c2410c 100%)', template)
+        self.assertIn('linear-gradient(90deg,#f15a24 0%,#e8824a 55%,#ea580c 100%)', template)
         self.assertIn('background:#c2410c !important;border-radius:0;', template)
-        self.assertIn('border-radius:0 0 18px 0;', template)
+        self.assertIn('border-radius:0 0 24px 0;', template)
         self.assertNotIn('#f97316', template)
         self.assertIn("static 'core/js/sidebar_favorites.js'", template)
         self.assertIn("core:trocar-filial", template)
@@ -198,11 +198,11 @@ class PDVVisualBaseTests(SimpleTestCase):
         )
 
         self.assertIn(
-            'linear-gradient(90deg, #f15a24 0%, #e8824a 55%, #c2410c 100%)',
+            'linear-gradient(90deg, #f15a24 0%, #e8824a 55%, #ea580c 100%)',
             base,
         )
         self.assertIn('background: #c2410c !important;', base)
-        self.assertIn('border-radius: 0 0 18px 0;', base)
+        self.assertIn('border-radius: 0 0 24px 0;', base)
         self.assertIn('body.tema-claro .app-topbar > * { position: relative; z-index: 1; }', base)
         self.assertNotIn('#542412', base)
         self.assertNotIn('border-radius:0 0 16px 0', base)
