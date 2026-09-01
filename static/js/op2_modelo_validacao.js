@@ -54,8 +54,71 @@ function op2EstruturaPadraoNaoMultipla(grupos, tipo, estrutura) {
   return resultado;
 }
 
+function op2NovoComponenteConjunto(grupos, tipo) {
+  return {
+    estrutura: op2EstruturaPadraoNaoMultipla(grupos, tipo, {}),
+    cor_personalizada: '', grades: [], gradePorGrade: {}, observacoes: '',
+  };
+}
+
+function op2NovaConfiguracaoConjunto(grupos) {
+  return {
+    camisa: op2NovoComponenteConjunto(grupos, 'camisa'),
+    calcao: op2NovoComponenteConjunto(grupos, 'calcao'),
+  };
+}
+
+function op2CopiarCamisaParaCalcao(grupos, configuracao) {
+  const origem = configuracao?.camisa || {};
+  const destino = op2NovoComponenteConjunto(grupos, 'calcao');
+  const camposCalcao = grupos?.calcao?.campos || {};
+  Object.keys(camposCalcao).forEach(campo => {
+    if (origem.estrutura?.[campo]) {
+      destino.estrutura[campo] = JSON.parse(JSON.stringify(origem.estrutura[campo]));
+    }
+  });
+  destino.cor_personalizada = origem.cor_personalizada || '';
+  destino.grades = [...(origem.grades || [])];
+  destino.gradePorGrade = JSON.parse(JSON.stringify(origem.gradePorGrade || {}));
+  destino.observacoes = origem.observacoes || '';
+  return { ...(configuracao || {}), calcao: destino };
+}
+
+function op2TotalComponenteConjunto(configuracao, componente) {
+  const dados = configuracao?.[componente] || {};
+  return Object.values(dados.gradePorGrade || {}).reduce(
+    (total, mapa) => total + Object.values(mapa || {}).reduce(
+      (soma, quantidade) => soma + Number(quantidade || 0), 0,
+    ), 0,
+  );
+}
+
+function validarConjuntoOp2(configuracao, grupos) {
+  for (const [componente, label] of [['camisa', 'Camisa'], ['calcao', 'Calção']]) {
+    const dados = configuracao?.[componente] || {};
+    const campos = grupos?.[componente]?.campos || {};
+    for (const [campo, opcoes] of Object.entries(campos)) {
+      const valores = op2ListaMultisselecao(dados.estrutura?.[campo]);
+      if (!valores.length) return `${label} · ${campo.replaceAll('_', ' ')}: selecione uma opção ou N/A.`;
+      if (valores.some(valor => !opcoes.includes(valor))) return `${label}: existe uma opção inválida em ${campo}.`;
+    }
+    if (dados.estrutura?.cor === 'COR PERSONALIZADA' && !String(dados.cor_personalizada || '').trim()) {
+      return `${label}: informe a cor personalizada.`;
+    }
+    if (!(dados.grades || []).length || op2TotalComponenteConjunto(configuracao, componente) < 1) {
+      return `${label}: selecione uma grade e informe as quantidades.`;
+    }
+  }
+  const camisas = op2TotalComponenteConjunto(configuracao, 'camisa');
+  const calcoes = op2TotalComponenteConjunto(configuracao, 'calcao');
+  if (camisas !== calcoes) return `Camisa e calção precisam ter o mesmo total (${camisas} e ${calcoes}).`;
+  return '';
+}
+
 if (typeof module !== 'undefined') module.exports = {
   validarModeloOp2, op2AlternarMultisselecao, op2ListaMultisselecao,
   op2MultisselecaoContem, op2ResumoMultisselecao,
   op2CampoMultisselecao, op2EstruturaPadraoNaoMultipla,
+  op2NovoComponenteConjunto, op2NovaConfiguracaoConjunto,
+  op2CopiarCamisaParaCalcao, op2TotalComponenteConjunto, validarConjuntoOp2,
 };

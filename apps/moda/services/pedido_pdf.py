@@ -865,13 +865,16 @@ class PedidoPdfService:
             padding_vertical=e.get('padding_tabela', 3),
         ))
 
+        if item.eh_conjunto:
+            blocos += cls._componentes_conjunto(item, e, largura_util)
+
         if observacao:
             blocos += cls._quadro_observacoes(
                 'OBSERVAÇÕES DO PRODUTO', observacao, e, largura_util,
                 estilo_texto=e['observacao_produto'],
             )
 
-        if incluir_grade:
+        if incluir_grade and not item.eh_conjunto:
             blocos += cls._grade(
                 item, e, largura_util, cor=cor, cor_clara=cor_clara,
             )
@@ -879,6 +882,36 @@ class PedidoPdfService:
         # restante da página. O KeepTogether empurrava o produto inteiro
         # para outra folha mesmo quando ainda havia bastante espaço.
         return blocos
+
+    @staticmethod
+    def _componentes_conjunto(item, e, largura_util):
+        blocos = []
+        for componente in item.componentes_conjunto:
+            linhas_grade = []
+            for grade in componente['grades']:
+                resumo = ' | '.join(
+                    f'{tamanho["sigla"]} {tamanho["quantidade"]}'
+                    for tamanho in grade['tamanhos']
+                )
+                linhas_grade.append(f'{grade["nome"]}: {resumo}')
+            especificacoes = ' · '.join(
+                f'{rotulo}: {valor}' for rotulo, valor in componente['estrutura']
+            ) or 'Sem especificações adicionais'
+            dados = [[
+                Paragraph(f'<b>{esc(componente["label"])}</b>', e['celula']),
+                Paragraph(esc(especificacoes), e['celula']),
+                Paragraph(esc(' / '.join(linhas_grade)), e['celula']),
+                Paragraph(f'<b>{componente["total"]}</b>', e['celula']),
+            ]]
+            tabela = _tabela(
+                dados,
+                [largura_util * .16, largura_util * .42, largura_util * .32, largura_util * .10],
+                cabecalho=False,
+            )
+            blocos += [Spacer(1, 3), tabela]
+        return [Spacer(1, 3), _barra_secao(
+            3, 'COMPONENTES E GRADES DO CONJUNTO', e, largura_util,
+        ), *blocos]
 
     @staticmethod
     def _arte(
@@ -1044,6 +1077,34 @@ class PedidoPdfService:
         pessoas = list(item.individuais.all()) if pessoas is None else pessoas
         if not pessoas:
             return []
+        if item.eh_conjunto:
+            dados = [['#', 'Nome camisa', 'Nº', 'Tam.', 'Nome calção', 'Nº', 'Tam.']]
+            for indice, pessoa in enumerate(pessoas, start=inicio + 1):
+                dados.append([
+                    str(indice), Paragraph(esc(pessoa.nome) or '—', e['celula']),
+                    pessoa.numero or '—', pessoa.tamanho.sigla,
+                    Paragraph(esc(pessoa.nome_calcao) or '—', e['celula']),
+                    pessoa.numero_calcao or '—',
+                    pessoa.tamanho_calcao.sigla if pessoa.tamanho_calcao_id else '—',
+                ])
+            fixas = 8 * mm + 11 * mm + 13 * mm + 11 * mm + 13 * mm
+            largura_nome = (largura_util - fixas) / 2
+            tabela = _tabela(
+                dados,
+                [8 * mm, largura_nome, 11 * mm, 13 * mm,
+                 largura_nome, 11 * mm, 13 * mm],
+                cor_cabecalho=cor, fundo_linha=cor_clara,
+                arredondada=arredondada,
+            )
+            return [
+                Spacer(1, 5),
+                _barra_secao(
+                    None, f'PERSONALIZAÇÃO DO CONJUNTO - {len(pessoas)} ATLETA(S)',
+                    e, largura_util, cor=cor, cor_clara=cor_clara,
+                    arredondada=arredondada,
+                ),
+                Spacer(1, 3), tabela,
+            ]
         grade = item.grade_tamanho.nome if item.grade_tamanho_id else 'Sem grade'
         titulo = f'PERSONALIZAÇÃO POR PESSOA - {len(pessoas)} | GRADE: {grade}'
         if colunas > 1:

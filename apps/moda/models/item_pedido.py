@@ -109,6 +109,14 @@ class ItemPedidoProducao(models.Model):
 
     observacoes = models.TextField(blank=True)
 
+    configuracao_conjunto = models.JSONField(
+        default=dict, blank=True,
+        help_text=(
+            'Ficha interna do conjunto esportivo: estrutura e grades '
+            'independentes da camisa e do calção.'
+        ),
+    )
+
     ordem = models.PositiveIntegerField(
         default=0, help_text='Posição do item na ficha.',
     )
@@ -170,3 +178,14 @@ class ItemPedidoProducao(models.Model):
         if self.produto_id and self.produto.tecido_id:
             return str(self.produto.tecido)
         return ''
+
+    @property
+    def eh_conjunto(self) -> bool:
+        return bool(self.configuracao_conjunto)
+
+    @property
+    def componentes_conjunto(self):
+        if not self.eh_conjunto:
+            return []
+        from ..services.conjunto import componentes_conjunto_exibicao
+        return componentes_conjunto_exibicao(self)

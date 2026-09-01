@@ -27,8 +27,15 @@ class PersonalizacaoIndividual(models.Model):
         'moda.Tamanho', on_delete=models.PROTECT, related_name='individuais',
     )
 
+    tamanho_calcao = models.ForeignKey(
+        'moda.Tamanho', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='individuais_calcao', verbose_name='Tamanho do calção',
+    )
+
     nome = models.CharField(max_length=80, blank=True)
     numero = models.CharField(max_length=10, blank=True)
+    nome_calcao = models.CharField(max_length=80, blank=True)
+    numero_calcao = models.CharField(max_length=10, blank=True)
     observacoes = models.CharField(max_length=160, blank=True)
 
     ordem = models.PositiveIntegerField(default=0)

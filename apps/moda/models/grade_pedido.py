@@ -1,7 +1,8 @@
 """
 Grade do pedido: quantidade por tamanho, item a item.
 
-É a tabela da ficha — CONJUNTO com 1 em G e 1 em GG, total 2.
+É a tabela principal da ficha. Em conjuntos, ela representa a camisa; a grade
+do calção fica na configuração estruturada do mesmo item comercial.
 
 Regra que define o desenho: "nunca permitir divergência entre a grade e a
 quantidade total". Validar não bastaria — o usuário salvaria a divergência e

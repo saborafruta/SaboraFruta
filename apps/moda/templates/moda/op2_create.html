@@ -5,7 +5,7 @@
 {% block largura_conteudo %}max-w-none{% endblock %}
 {% block content %}
 {{ estrutura_opcoes|json_script:"op2-estrutura-opcoes" }}
-<script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260901-3"></script>
+<script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260901-4"></script>
 <script src="{% static 'js/op2_clientes.js' %}"></script>
 {{ modelos_grade|json_script:"op2-modelos-grade" }}
 {{ grades_json|json_script:"op2-grades" }}
@@ -20,8 +20,11 @@
 .op2-grade-tag{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid currentColor}.op2-grade-dot{width:8px;height:8px;border-radius:50%;background:currentColor}
 .op2-payment-row{display:grid;grid-template-columns:minmax(190px,1fr) minmax(150px,.7fr) auto;gap:8px;align-items:start}.op2-payment-row label{min-width:0}.op2-payment-row .form-input{height:42px}.op2-payment-remove{margin-top:19px}
 .op2-multi{position:relative;min-width:0}.op2-multi-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;height:40px;padding:0 11px;border:1px solid #2a2a2e;border-radius:8px;background:#18181a;color:#e5e5e5;text-align:left}.op2-multi-trigger:hover,.op2-multi-trigger:focus-visible{border-color:#3b82f6}.op2-multi-summary{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}.op2-multi-chevron{flex:0 0 auto;transition:transform .15s}.op2-multi-chevron.is-open{transform:rotate(180deg)}.op2-multi-menu{position:absolute;z-index:70;top:calc(100% + 4px);left:0;right:0;max-height:240px;overflow:auto;padding:6px;border:1px solid #2a2a2e;border-radius:9px;background:#242426;color:#e5e5e5;box-shadow:0 14px 35px rgba(0,0,0,.35)}.op2-multi-option{display:flex;align-items:center;gap:9px;padding:8px;border-radius:6px;font-size:13px;line-height:1.25;cursor:pointer}.op2-multi-option:hover{background:rgba(59,130,246,.10)}.op2-multi-option input{width:16px;height:16px;flex:0 0 auto;accent-color:#2563eb}.op2-multi-help{display:block;margin-top:4px;font-size:11px;line-height:1.25;color:#64748b}body.tema-claro .op2-multi-trigger{border-color:#d1d5db;background:#fff;color:#111827;box-shadow:0 1px 2px rgba(0,0,0,.04)}body.tema-claro .op2-multi-menu{border-color:#d1d5db;background:#fff;color:#111827;box-shadow:0 14px 35px rgba(15,23,42,.18)}
+.op2-conjunto-shell{border:1px solid rgba(37,99,235,.35);border-radius:14px;padding:12px;background:linear-gradient(135deg,rgba(37,99,235,.07),rgba(14,165,233,.025))}.op2-conjunto-intro{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.op2-conjunto-kicker{display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:#2563eb}.op2-conjunto-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.op2-conjunto-tabs button{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;padding:10px;border:1px solid rgba(148,163,184,.28);border-radius:10px;text-align:left}.op2-conjunto-tabs button>span{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:rgba(148,163,184,.12);font-size:11px;font-weight:900}.op2-conjunto-tabs button small{opacity:.65}.op2-conjunto-tabs button.is-on{border-color:#2563eb;background:rgba(37,99,235,.12);box-shadow:inset 3px 0 #2563eb}.op2-conjunto-component{padding:12px;border:1px solid rgba(148,163,184,.22);border-radius:11px;background:var(--card-bg,#18181b)}.op2-conjunto-total{padding:5px 9px;border-radius:999px;background:rgba(37,99,235,.12);color:#2563eb;font-size:12px;font-weight:900}.op2-conjunto-grade{margin-top:12px;padding-top:12px;border-top:1px solid rgba(148,163,184,.2)}.op2-conjunto-multi{position:relative}.op2-conjunto-multi summary{display:flex;justify-content:space-between;align-items:center;height:40px;padding:0 11px;border:1px solid rgba(148,163,184,.35);border-radius:8px;cursor:pointer;list-style:none}.op2-conjunto-multi>div{position:absolute;z-index:80;left:0;right:0;max-height:230px;overflow:auto;padding:6px;background:var(--card-bg,#242426);border:1px solid rgba(148,163,184,.35);border-radius:8px;box-shadow:0 15px 35px rgba(0,0,0,.25)}.op2-conjunto-multi label{display:flex;gap:8px;align-items:center;padding:7px;border-radius:6px;font-size:12px}.op2-conjunto-multi input{width:16px;height:16px}.op2-conjunto-balance{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:10px;padding:9px;border-radius:9px;font-size:13px}.op2-conjunto-balance small{margin-left:8px}.op2-conjunto-balance.is-ok{background:rgba(22,163,74,.1);color:#16a34a}.op2-conjunto-balance.is-warn{background:rgba(245,158,11,.12);color:#d97706}.op2-personalizacao-conjunto-grid{display:grid;grid-template-columns:minmax(90px,.55fr) minmax(125px,.8fr) minmax(80px,.45fr) 34px minmax(90px,.55fr) minmax(125px,.8fr) minmax(80px,.45fr) auto;gap:7px;align-items:end}.op2-copy-mini{height:40px;width:34px;border-radius:8px;background:rgba(37,99,235,.12);color:#2563eb;font-weight:900}
+.tema-claro .op2-conjunto-component{background:#fff;color:#111827}.tema-claro .op2-conjunto-multi>div{background:#fff;color:#111827}
+.is-conjunto .op2-conjunto-shell+.op2-card+.op2-card{display:none}
 @media(max-width:767px){.op2-payment-row{grid-template-columns:1fr}.op2-payment-remove{margin-top:0}}
-@media(max-width:767px){.op2-personalizacao-grid{grid-template-columns:1fr}.op2-personalizacao-grid button{width:100%}}
+@media(max-width:900px){.op2-personalizacao-conjunto-grid{grid-template-columns:1fr 1fr}.op2-copy-mini{width:100%}}@media(max-width:767px){.op2-personalizacao-grid,.op2-personalizacao-conjunto-grid{grid-template-columns:1fr}.op2-personalizacao-grid button{width:100%}.op2-conjunto-intro{align-items:stretch;flex-direction:column}.op2-conjunto-tabs{grid-template-columns:1fr}}
 @media(max-width:1023px){.op2-work{grid-template-columns:minmax(0,1fr)}.op2-aside{display:grid;grid-template-columns:1fr 1fr;gap:12px}.op2-modal-grid{grid-template-columns:1fr}input,select,textarea{font-size:16px!important}}
 @media(max-width:767px){.op2-aside{display:block}.op2-grid-compact{grid-template-columns:1fr!important}.op2-model-list{max-height:240px}}
 </style>
@@ -38,6 +41,7 @@
         <input type="hidden" :name="`item_${idx}_tipo_impressao`" :value="item.tipo_impressao">
         <input type="hidden" :name="`item_${idx}_item_observacoes`" :value="item.item_observacoes">
         <input type="hidden" :name="`item_${idx}_estrutura_tipo`" :value="item.estrutura_tipo">
+        <input type="hidden" :name="`item_${idx}_configuracao_conjunto`" :value="item.estrutura_tipo==='conjunto'?JSON.stringify(item.configuracao_conjunto):''">
         <template x-for="estrutura in item.estruturaCampos" :key="estrutura.campo">
           <span><input type="hidden" :name="`item_${idx}_estrutura_${estrutura.campo}`" :value="estrutura.valor"><input x-show="estrutura.campo==='cor' && estrutura.valor==='COR PERSONALIZADA'" type="hidden" :name="`item_${idx}_estrutura_cor_personalizada`" :value="item.cor_personalizada"></span>
         </template>
@@ -47,7 +51,7 @@
       </div>
     </template>
     <template x-for="(pessoa,idx) in personalizacoesPreenchidas()" :key="pessoa.uid">
-      <div><input type="hidden" :name="`individual_${idx}_item_idx`" :value="indiceItem(pessoa.itemUid)"><input type="hidden" :name="`individual_${idx}_tamanho_id`" :value="pessoa.tamanhoId"><input type="hidden" :name="`individual_${idx}_nome`" :value="pessoa.nome"><input type="hidden" :name="`individual_${idx}_numero`" :value="pessoa.numero"></div>
+      <div><input type="hidden" :name="`individual_${idx}_item_idx`" :value="indiceItem(pessoa.itemUid)"><input type="hidden" :name="`individual_${idx}_tamanho_id`" :value="pessoa.tamanhoId"><input type="hidden" :name="`individual_${idx}_nome`" :value="pessoa.nome"><input type="hidden" :name="`individual_${idx}_numero`" :value="pessoa.numero"><input type="hidden" :name="`individual_${idx}_tamanho_calcao_id`" :value="pessoa.tamanhoCalcaoId||''"><input type="hidden" :name="`individual_${idx}_nome_calcao`" :value="pessoa.nomeCalcao||''"><input type="hidden" :name="`individual_${idx}_numero_calcao`" :value="pessoa.numeroCalcao||''"></div>
     </template>
     <template x-for="(pagamento,idx) in pagamentos" :key="pagamento.uid">
       <div><input type="hidden" :name="`pagamento_${idx}_forma`" :value="pagamento.forma"><input type="hidden" :name="`pagamento_${idx}_valor`" :value="pagamento.valor"></div>
@@ -84,10 +88,14 @@
                   <div class="flex items-start justify-between gap-2 mb-3"><div><h3 class="font-bold">Personalizações deste produto</h3><p class="text-xs opacity-70">Preencha os nomes, números e tamanhos. Tudo será salvo junto com o orçamento.</p></div><button type="button" class="text-xs font-bold" @click="personalizar=false">Fechar</button></div>
                   <p x-show="!item.gradeQuantidades.length" class="text-sm mb-2" style="color:#d97706">Use “Editar” para definir a grade deste produto antes de personalizar.</p>
                   <div class="space-y-2"><template x-for="pessoa in personalizacoesDoItem(item.uid)" :key="pessoa.uid">
-                    <div class="op2-personalizacao-grid">
+                    <div :class="item.estrutura_tipo==='conjunto'?'op2-personalizacao-conjunto-grid':'op2-personalizacao-grid'">
                       <label><span class="op2-label">Tamanho</span><select x-model="pessoa.tamanhoId" class="form-input w-full"><option value="">Selecione</option><template x-for="vaga in vagasOrcamento(item.uid,pessoa.uid)" :key="vaga.id"><option :value="vaga.id" :disabled="vaga.restam<=0 && String(pessoa.tamanhoId)!==vaga.id" x-text="`${vaga.sigla} · ${vaga.restam} livre(s)`"></option></template></select></label>
                       <label><span class="op2-label">Nome</span><input x-model="pessoa.nome" maxlength="80" class="form-input w-full" placeholder="Ex.: SILVA"></label>
                       <label><span class="op2-label">Número</span><input x-model="pessoa.numero" maxlength="10" class="form-input w-full" placeholder="Ex.: 10"></label>
+                      <button x-show="item.estrutura_tipo==='conjunto'" type="button" class="op2-copy-mini" title="Copiar dados da camisa" @click="copiarPersonalizacaoCamisa(pessoa)">→</button>
+                      <label x-show="item.estrutura_tipo==='conjunto'"><span class="op2-label">Tam. calção</span><select x-model="pessoa.tamanhoCalcaoId" class="form-input w-full"><option value="">Selecione</option><template x-for="vaga in vagasConjunto(item.uid,'calcao',pessoa.uid)" :key="vaga.id"><option :value="vaga.id" :disabled="vaga.restam<=0&&String(pessoa.tamanhoCalcaoId)!==vaga.id" x-text="`${vaga.sigla} · ${vaga.restam} livre(s)`"></option></template></select></label>
+                      <label x-show="item.estrutura_tipo==='conjunto'"><span class="op2-label">Nome no calção</span><input x-model="pessoa.nomeCalcao" maxlength="80" class="form-input w-full" placeholder="Pode ser diferente"></label>
+                      <label x-show="item.estrutura_tipo==='conjunto'"><span class="op2-label">Número no calção</span><input x-model="pessoa.numeroCalcao" maxlength="10" class="form-input w-full" placeholder="Pode ser diferente"></label>
                       <button type="button" class="btn-secondary" style="color:#ef4444" @click="removerPersonalizacao(pessoa.uid)">Remover</button>
                     </div>
                   </template></div>
@@ -128,9 +136,13 @@
       <div class="flex justify-between gap-2 mb-3"><div><h2 class="text-xl font-bold" x-text="editandoIdx===null?'Adicionar modelo à OP':'Editar modelo da OP'"></h2><p class="text-xs opacity-70">Escolha o modelo e complete a estrutura, impressão e grades ainda nesta sobreposição.</p></div><button type="button" class="text-2xl" @click="modalProduto=false">×</button></div>
       <div class="op2-modal-grid">
         <aside><input type="search" x-model="buscaProduto" class="form-input w-full mb-2" placeholder="Buscar modelo, código, referência, tecido ou grade"><div class="op2-model-list space-y-2"><template x-for="modelo in modelosRapidos" :key="modelo.id"><button type="button" class="op2-card text-left w-full" :class="draft.produto_id===modelo.id?'ring-2 ring-blue-500':''" x-show="combina(buscaProduto, modelo.nome+' '+modelo.codigo)" @click="escolherProduto(modelo.id,modelo.nome,modelo.codigo,modelo.info)"><strong x-text="modelo.nome"></strong><small class="block mt-1 opacity-70" x-text="modelo.codigo"></small></button></template>{% for modelo in modelos %}<button type="button" class="op2-card text-left w-full" :class="draft.produto_id==='{{ modelo.pk }}'?'ring-2 ring-blue-500':''" x-show="combina(buscaProduto, '{{ modelo.nome|escapejs }} {{ modelo.codigo|escapejs }} {{ modelo.referencia|escapejs }} {{ modelo.modelo|escapejs }} {{ modelo.tecido|escapejs }} {% if modelo.grade %}{{ modelo.grade.nome|escapejs }} {{ modelo.grade.resumo|escapejs }}{% endif %}')" @click="escolherProduto('{{ modelo.pk }}','{{ modelo.nome|escapejs }}','{{ modelo.codigo|escapejs }}','{{ modelo.codigo|escapejs }}{% if modelo.referencia %} · {{ modelo.referencia|escapejs }}{% endif %}{% if modelo.tecido %} · {{ modelo.tecido|escapejs }}{% endif %}')"><strong>{{ modelo.nome }}</strong><small class="block mt-1 opacity-70">{{ modelo.codigo }}{% if modelo.referencia %} · {{ modelo.referencia }}{% endif %}{% if modelo.grade %} · {{ modelo.grade.nome }}{% endif %}</small></button>{% endfor %}</div></aside>
-        <main class="space-y-3">
+        <main class="space-y-3" :class="draft.estrutura_tipo==='conjunto'?'is-conjunto':''">
           <section class="op2-card"><div class="grid md:grid-cols-4 gap-2 op2-grid-compact"><div class="md:col-span-2"><span class="op2-label">Modelo escolhido</span><strong x-text="draft.nome || 'Nenhum modelo selecionado'"></strong><p class="text-xs opacity-70" x-text="draft.info || 'Selecione um modelo à esquerda ou cadastre somente o nome abaixo.'"></p><div class="flex gap-2 mt-2"><input x-model="novoModeloNome" class="form-input flex-1" placeholder="Nome do novo modelo" @keydown.enter.prevent="salvarModeloRapido()"><button type="button" class="btn-secondary" :disabled="criandoModelo" @click="salvarModeloRapido()" x-text="criandoModelo?'Salvando...':'+ Novo modelo'"></button></div><small class="block mt-1" style="color:#ef4444" x-text="erroModelo"></small></div><label><span class="op2-label">Quantidade total</span><input type="number" min="1" x-model.number="draft.quantidade" :readonly="draft.grades.length>0" class="form-input w-full"></label><label><span class="op2-label">Valor unitário</span><input type="number" min="0.01" step=".01" required placeholder="Informe o valor" x-model.number="draft.valor_unitario" class="form-input w-full"></label></div></section>
-          <section class="op2-card"><div class="flex flex-wrap items-center justify-between gap-2 mb-2"><div><h3 class="font-bold text-sm">Estrutura da peça</h3><p class="text-xs opacity-70">Todos os campos são obrigatórios. Se não se aplica, selecione N/A.</p></div><label class="w-full sm:w-60"><span class="op2-label">Tipo de peça</span><select required x-model="draft.estrutura_tipo" class="form-input w-full">{% for tipo, grupo in estrutura_opcoes.items %}<option value="{{ tipo }}">{{ grupo.label }}</option>{% endfor %}</select></label></div>{% for tipo, grupo in estrutura_opcoes.items %}<div x-cloak class="grid sm:grid-cols-2 lg:grid-cols-4 gap-2" x-show="draft.estrutura_tipo === '{{ tipo }}'">{% for campo, opcoes in grupo.campos.items %}<div><span class="op2-label">{{ campo|campo_op2_label }}</span>{% if campo == 'tipo_impressao' or campo|slice:":10" == 'acabamento' %}{% include "moda/_op2_multiselect.html" with submit_names=False %}{% else %}<select required :disabled="draft.estrutura_tipo!=='{{ tipo }}'" class="form-input w-full" x-model="draft.estrutura['{{ campo }}']"><option value="">Selecione...</option>{% for opcao in opcoes %}<option value="{{ opcao }}">{{ opcao }}</option>{% endfor %}</select>{% endif %}{% if campo == 'cor' %}<input x-show="draft.estrutura.cor==='COR PERSONALIZADA'" x-cloak x-model="draft.cor_personalizada" :required="draft.estrutura_tipo==='{{ tipo }}' && draft.estrutura.cor==='COR PERSONALIZADA'" class="form-input w-full mt-2" placeholder="Digite a cor personalizada">{% endif %}</div>{% endfor %}</div>{% endfor %}</section>
+          <section class="op2-card">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-2"><div><h3 class="font-bold text-sm">Estrutura da peça</h3><p class="text-xs opacity-70">Todos os campos são obrigatórios. Se não se aplica, selecione N/A.</p></div><label class="w-full sm:w-60"><span class="op2-label">Tipo de peça</span><select required x-model="draft.estrutura_tipo" class="form-input w-full">{% for tipo, grupo in estrutura_opcoes.items %}<option value="{{ tipo }}">{{ grupo.label }}</option>{% endfor %}</select></label></div>
+            <div x-show="draft.estrutura_tipo!=='conjunto'">{% for tipo, grupo in estrutura_opcoes.items %}<div x-cloak class="grid sm:grid-cols-2 lg:grid-cols-4 gap-2" x-show="draft.estrutura_tipo === '{{ tipo }}'">{% for campo, opcoes in grupo.campos.items %}<div><span class="op2-label">{{ campo|campo_op2_label }}</span>{% if campo == 'tipo_impressao' or campo|slice:":10" == 'acabamento' %}{% include "moda/_op2_multiselect.html" with submit_names=False %}{% else %}<select required :disabled="draft.estrutura_tipo!=='{{ tipo }}'" class="form-input w-full" x-model="draft.estrutura['{{ campo }}']"><option value="">Selecione...</option>{% for opcao in opcoes %}<option value="{{ opcao }}">{{ opcao }}</option>{% endfor %}</select>{% endif %}{% if campo == 'cor' %}<input x-show="draft.estrutura.cor==='COR PERSONALIZADA'" x-cloak x-model="draft.cor_personalizada" :required="draft.estrutura_tipo==='{{ tipo }}' && draft.estrutura.cor==='COR PERSONALIZADA'" class="form-input w-full mt-2" placeholder="Digite a cor personalizada">{% endif %}</div>{% endfor %}</div>{% endfor %}</div>
+          </section>
+          {% include "moda/_op2_conjunto_editor.html" %}
           <section class="op2-card"><label><span class="op2-label">Observações do produto</span><textarea x-model="draft.item_observacoes" rows="3" class="form-input w-full" placeholder="Informe aqui qualquer detalhe adicional para a produção."></textarea></label></section>
           <section class="op2-card">
             <div class="flex flex-wrap items-start justify-between gap-2 mb-3"><div><h3 class="font-bold text-sm">Grade do item</h3><p class="text-xs opacity-70 mt-1">Cada grade selecionada possui suas próprias quantidades e gera um item separado na OP.</p></div><strong class="text-sm" style="color:#3b82f6" x-text="`${totalTodasGrades()} peça(s)`"></strong></div>
@@ -176,6 +188,7 @@ function op2NovaMelhorada(){
     const draft=criarDraft();
     draft.gradePorGrade={};
     draft.cor_personalizada='';
+    draft.configuracao_conjunto=op2NovaConfiguracaoConjunto(estado.estruturaOpcoes);
     draft.estrutura=op2EstruturaPadraoNaoMultipla(
       estado.estruturaOpcoes,draft.estrutura_tipo,draft.estrutura,
     );
@@ -186,8 +199,40 @@ function op2NovaMelhorada(){
       this.estruturaOpcoes,this.draft.estrutura_tipo,this.draft.estrutura,
     );
   };
+  estado.componenteConjuntoAtivo='camisa';
+  estado.componenteConjunto=function(componente){return this.draft.configuracao_conjunto[componente]};
+  estado.inicializarConjunto=function(){
+    if(!this.draft.configuracao_conjunto?.camisa||!this.draft.configuracao_conjunto?.calcao){
+      this.draft.configuracao_conjunto=op2NovaConfiguracaoConjunto(this.estruturaOpcoes);
+    }
+  };
+  estado.copiarCamisaParaCalcao=function(){
+    this.draft.configuracao_conjunto=op2CopiarCamisaParaCalcao(
+      this.estruturaOpcoes,this.draft.configuracao_conjunto,
+    );
+    this.componenteConjuntoAtivo='calcao';
+  };
+  estado.gradesComponenteConjunto=function(componente){
+    return this.componenteConjunto(componente).grades.map(id=>this.grades.find(g=>g.id===String(id))).filter(Boolean);
+  };
+  estado.garantirGradeConjunto=function(componente,gradeId){
+    gradeId=String(gradeId);const dados=this.componenteConjunto(componente);
+    if(dados.gradePorGrade[gradeId])return;
+    const grade=this.grades.find(g=>g.id===gradeId);
+    dados.gradePorGrade={...dados.gradePorGrade,[gradeId]:Object.fromEntries((grade?.tamanhos||[]).map(id=>[String(id),0]))};
+  };
+  estado.alternarGradeConjunto=function(componente,gradeId){
+    gradeId=String(gradeId);const dados=this.componenteConjunto(componente);
+    if(dados.grades.includes(gradeId)){dados.grades=dados.grades.filter(id=>id!==gradeId);const mapas={...dados.gradePorGrade};delete mapas[gradeId];dados.gradePorGrade=mapas}
+    else{dados.grades=[...dados.grades,gradeId];this.garantirGradeConjunto(componente,gradeId)}
+  };
+  estado.quantidadeConjunto=function(componente,gradeId,tamanhoId){return Number(this.componenteConjunto(componente).gradePorGrade?.[String(gradeId)]?.[String(tamanhoId)]||0)};
+  estado.definirQuantidadeConjunto=function(componente,gradeId,tamanhoId,valor){this.garantirGradeConjunto(componente,gradeId);this.componenteConjunto(componente).gradePorGrade[String(gradeId)][String(tamanhoId)]=Math.max(0,parseInt(valor,10)||0)};
+  estado.alterarQuantidadeConjunto=function(componente,gradeId,tamanhoId,delta){this.definirQuantidadeConjunto(componente,gradeId,tamanhoId,this.quantidadeConjunto(componente,gradeId,tamanhoId)+Number(delta||0))};
+  estado.totalGradeConjunto=function(componente,gradeId){return Object.values(this.componenteConjunto(componente).gradePorGrade?.[String(gradeId)]||{}).reduce((s,q)=>s+Number(q||0),0)};
+  estado.totalComponenteConjunto=function(componente){return op2TotalComponenteConjunto(this.draft.configuracao_conjunto,componente)};
   estado.init=function(){
-    this.$watch('draft.estrutura_tipo',()=>this.aplicarPadroesEstrutura());
+    this.$watch('draft.estrutura_tipo',tipo=>{this.aplicarPadroesEstrutura();if(tipo==='conjunto')this.inicializarConjunto()});
   };
   estado.draft=estado.novoDraft();
   estado.garantirGrade=function(gradeId){
@@ -213,6 +258,11 @@ function op2NovaMelhorada(){
       this.draft.grades=[String(grade.grade_id)];
     }
     this.draft.grades.forEach(gradeId=>this.garantirGrade(gradeId));
+    if(this.draft.estrutura_tipo==='conjunto'&&grade.grade_id){
+      const camisa=this.componenteConjunto('camisa');
+      camisa.grades=[String(grade.grade_id)];
+      this.garantirGradeConjunto('camisa',String(grade.grade_id));
+    }
     this.somarDraftGrade();
   };
   estado.alternarGrade=function(id){
@@ -283,6 +333,17 @@ function op2NovaMelhorada(){
     item.tipo_impressao_label=item.tipo_impressao||'';
     item.imagensNomes=[];
     item.gradeResumo=this.gradeLinhaResumo(item);
+    if(item.estrutura_tipo==='conjunto'){
+      item.configuracao_conjunto=JSON.parse(JSON.stringify(this.draft.configuracao_conjunto));
+      const camisa=item.configuracao_conjunto.camisa;
+      const agregado={};Object.values(camisa.gradePorGrade||{}).forEach(mapa=>Object.entries(mapa).forEach(([id,q])=>agregado[id]=(agregado[id]||0)+Number(q||0)));
+      item.grade_id=String(camisa.grades?.[0]||'');
+      item.grade_nome='Conjunto · Camisa + Calção';
+      item.grades=item.grade_id?[item.grade_id]:[];
+      item.gradeQuantidades=Object.entries(agregado).filter(([,q])=>q>0).map(([tamanho_id,quantidade])=>({tamanho_id,quantidade}));
+      item.quantidade=op2TotalComponenteConjunto(item.configuracao_conjunto,'camisa');
+      item.estruturaCampos=[];
+    }
     return item;
   };
   estado.editarItem=function(idx){
@@ -298,6 +359,14 @@ function op2NovaMelhorada(){
     this.somarDraftGrade();
   };
   estado.salvarDraft=function(){
+    if(this.draft.estrutura_tipo==='conjunto'){
+      const erroConjunto=validarConjuntoOp2(this.draft.configuracao_conjunto,this.estruturaOpcoes);
+      if(erroConjunto){alert(erroConjunto);return}
+      this.draft.quantidade=this.totalComponenteConjunto('camisa');
+      const novo=this.montarItemParaGrade('');
+      if(this.editandoIdx===null)this.itens.push(novo);else{novo.uid=this.itens[this.editandoIdx].uid;this.itens.splice(this.editandoIdx,1,novo)}
+      this.modalProduto=false;return;
+    }
     if(this.draft.estrutura?.cor==='COR PERSONALIZADA'&&!String(this.draft.cor_personalizada||'').trim()){
       alert('Informe a cor personalizada.');
       return;
@@ -336,7 +405,13 @@ function op2NovaMelhorada(){
   estado.personalizacoesDoItem=function(uid){return this.personalizacoes.filter(p=>String(p.itemUid)===String(uid))};
   estado.personalizacoesPreenchidas=function(){return this.personalizacoes.filter(p=>p.tamanhoId||p.nome.trim()||p.numero.trim())};
   estado.adicionarLinhaPersonalizacao=function(uid){
-    this.personalizacoes.push({uid:Date.now()+Math.random(),itemUid:String(uid),tamanhoId:'',nome:'',numero:''});
+    this.personalizacoes.push({uid:Date.now()+Math.random(),itemUid:String(uid),tamanhoId:'',nome:'',numero:'',tamanhoCalcaoId:'',nomeCalcao:'',numeroCalcao:''});
+  };
+  estado.copiarPersonalizacaoCamisa=function(pessoa){pessoa.tamanhoCalcaoId=pessoa.tamanhoId;pessoa.nomeCalcao=pessoa.nome;pessoa.numeroCalcao=pessoa.numero};
+  estado.vagasConjunto=function(uid,componente,pessoaUid=null){
+    const item=this.itens.find(linha=>String(linha.uid)===String(uid));if(!item?.configuracao_conjunto)return[];
+    const agregado={};Object.values(item.configuracao_conjunto[componente]?.gradePorGrade||{}).forEach(mapa=>Object.entries(mapa).forEach(([id,q])=>agregado[id]=(agregado[id]||0)+Number(q||0)));
+    return Object.entries(agregado).filter(([,q])=>q>0).map(([id,q])=>{const usadas=this.personalizacoesDoItem(uid).filter(p=>p.uid!==pessoaUid&&String(componente==='camisa'?p.tamanhoId:p.tamanhoCalcaoId)===String(id)).length;return{id:String(id),sigla:this.tamanhoLabels[String(id)]||String(id),restam:Math.max(q-usadas,0)}});
   };
   estado.removerPersonalizacao=function(uid){this.personalizacoes=this.personalizacoes.filter(p=>p.uid!==uid)};
   estado.vagasOrcamento=function(uid,pessoaUid=null){
@@ -368,6 +443,12 @@ function op2NovaMelhorada(){
       const vaga=this.vagasOrcamento(pessoa.itemUid,pessoa.uid).find(v=>v.id===String(pessoa.tamanhoId));
       if(!vaga||vaga.restam<=0){
         event.preventDefault();alert(`As personalizações de ${produto} ultrapassam a quantidade disponível na grade.`);return;
+      }
+      const item=this.itens.find(linha=>String(linha.uid)===String(pessoa.itemUid));
+      if(item?.estrutura_tipo==='conjunto'){
+        if(!pessoa.tamanhoCalcaoId){event.preventDefault();alert(`Selecione o tamanho do calção de ${pessoa.nome||pessoa.numero||produto}.`);return}
+        const vagaCalcao=this.vagasConjunto(pessoa.itemUid,'calcao',pessoa.uid).find(v=>v.id===String(pessoa.tamanhoCalcaoId));
+        if(!vagaCalcao||vagaCalcao.restam<=0){event.preventDefault();alert(`As personalizações do calção de ${produto} ultrapassam a grade.`);return}
       }
     }
     const preenchidas=this.pagamentos.filter(p=>p.forma||Number(p.valor||0)>0);

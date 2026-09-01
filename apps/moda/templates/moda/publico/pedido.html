@@ -185,8 +185,20 @@
           </div>
         {% endif %}
 
+        {% if item.eh_conjunto %}
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {% for componente in item.componentes_conjunto %}
+              <section class="rounded-2xl p-3" style="background:#f8fafc;border:1px solid #dbeafe;">
+                <div class="flex justify-between gap-2 mb-2"><strong style="color:#0f172a;">{{ componente.label }}</strong><span class="text-xs font-bold" style="color:#2563eb;">{{ componente.total }} peças</span></div>
+                <div class="space-y-1">{% for rotulo, valor in componente.estrutura %}<p class="text-xs" style="color:#475569;"><b>{{ rotulo }}:</b> {{ valor }}</p>{% endfor %}</div>
+                <div class="flex flex-wrap gap-1 mt-2">{% for grade in componente.grades %}<span class="text-xs font-semibold px-2 py-1 rounded-lg" style="background:#fff;border:1px solid #e2e8f0;">{{ grade.nome }}{% for tamanho in grade.tamanhos %} · {{ tamanho.sigla }} {{ tamanho.quantidade }}{% endfor %}</span>{% endfor %}</div>
+              </section>
+            {% endfor %}
+          </div>
+        {% endif %}
+
         {# ── Grade ──────────────────────────────────────────────────── #}
-        {% if item.grade.all %}
+        {% if item.grade.all and not item.eh_conjunto %}
           <div>
             <p class="text-xs font-bold uppercase tracking-wider mb-2" style="color:#64748b;">Grade</p>
             <div class="flex flex-wrap gap-2">
@@ -244,9 +256,8 @@
                     <span class="block text-sm font-semibold truncate" style="color:#0f172a;">
                       {{ pessoa.nome|default:"Sem nome" }}
                     </span>
-                    <span class="block text-xs" style="color:#64748b;">
-                      Tamanho {{ pessoa.tamanho.sigla }}
-                    </span>
+                    <span class="block text-xs" style="color:#64748b;">{% if item.eh_conjunto %}Camisa {{ pessoa.tamanho.sigla }} · Calção {{ pessoa.tamanho_calcao.sigla|default:'—' }}{% else %}Tamanho {{ pessoa.tamanho.sigla }}{% endif %}</span>
+                    {% if item.eh_conjunto %}{% if pessoa.nome_calcao or pessoa.numero_calcao %}<span class="block text-xs" style="color:#475569;">No calção: {{ pessoa.nome_calcao }}{% if pessoa.numero_calcao %} #{{ pessoa.numero_calcao }}{% endif %}</span>{% endif %}{% endif %}
                     {% if pessoa.observacoes %}
                       <span class="block text-xs mt-1" style="color:#475569;">
                         {{ pessoa.observacoes }}

@@ -3,6 +3,7 @@ from copy import copy
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
+import json
 from urllib.parse import quote
 from uuid import uuid4
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -33,6 +34,10 @@ from .services.financeiro import FinanceiroPedidoService
 from .services.grade_pedido import GradePedidoService
 from .services.individual import IndividualService
 from .services.item_groups import GRADE_CORES, agrupar_itens_op
+from .services.conjunto import (
+    COMPONENTES_CONJUNTO, quantidades_agregadas, resumo_conjunto, total_componente,
+    validar_configuracao_conjunto,
+)
 from .services.kanban_comercial import status_choices_kanban, status_destino_kanban
 from .services.op2_estrutura import (
     OP2_ESTRUTURA_OPCOES, campo_multisselecao, juntar_observacoes_item,
@@ -268,6 +273,7 @@ def _dados_modal_item(item, estrutura_opcoes):
         'item_observacoes': observacoes,
         'grades': [grade_id] if grade_id else [],
         'gradePorGrade': {grade_id: quantidades} if grade_id else {},
+        'configuracao_conjunto': item.configuracao_conjunto or {},
     }
 
 
@@ -330,10 +336,23 @@ class Op2CreateView(ModaBaseView):
         estrutura_opcoes = opcoes_estrutura_filial(_filial(request))
         for indice in indices:
             dados = self._dados_item(request, indice)
+            configuracao_conjunto = {}
             try:
-                validar_estrutura_item(dados, estrutura_opcoes)
+                if dados.get('estrutura_tipo') == 'conjunto':
+                    configuracao_conjunto = validar_configuracao_conjunto(
+                        dados.get('configuracao_conjunto'), estrutura_opcoes,
+                        _filial(request),
+                    )
+                    dados['quantidade'] = str(total_componente(
+                        configuracao_conjunto, 'camisa',
+                    ))
+                else:
+                    validar_estrutura_item(dados, estrutura_opcoes)
                 dados['valor_unitario'] = str(validar_valor_unitario(dados.get('valor_unitario')))
-                grade_total = self._total_grade(request, indice)
+                grade_total = (
+                    total_componente(configuracao_conjunto, 'camisa')
+                    if configuracao_conjunto else self._total_grade(request, indice)
+                )
             except ValueError as erro:
                 messages.error(request, str(erro))
                 return render(request, 'moda/op2_create.html', self._context(request))
@@ -349,7 +368,7 @@ class Op2CreateView(ModaBaseView):
                     erro for erros in form.errors.values() for erro in erros
                 ))
                 return render(request, 'moda/op2_create.html', self._context(request))
-            formularios.append((indice, form))
+            formularios.append((indice, form, configuracao_conjunto))
         try:
             data_prevista_entrega = self._data_entrega(request)
             data_pedido = self._data_pedido(request)
@@ -366,7 +385,7 @@ class Op2CreateView(ModaBaseView):
                 form.cleaned_data['quantidade']
                 * (form.cleaned_data.get('valor_unitario') or Decimal('0'))
             )
-            for _, form in formularios
+            for _, form, _ in formularios
         )
         try:
             previsao_pagamento = _previsao_pagamento(
@@ -399,25 +418,44 @@ class Op2CreateView(ModaBaseView):
             pedido.clientes_adicionais.set(clientes_adicionais)
             primeiro_item = None
             itens_por_indice = {}
-            for ordem, (indice, form) in enumerate(formularios, start=1):
+            for ordem, (indice, form, configuracao_conjunto) in enumerate(formularios, start=1):
                 item = form.save(commit=False)
                 item.pedido = pedido
                 item.ordem = ordem * 10
                 item.status_fluxo = ItemPedidoProducao.StatusFluxo.ORCAMENTO
-                item.grade_tamanho_id = request.POST.get(f'item_{indice}_grade_id') or None
-                item.observacoes = juntar_observacoes_item(
-                    request.POST.get(f'item_{indice}_item_observacoes') or '',
-                    self._post_item(request, indice),
-                    opcoes_estrutura_filial(_filial(request)),
+                item.configuracao_conjunto = configuracao_conjunto
+                item.grade_tamanho_id = (
+                    (configuracao_conjunto.get('camisa', {}).get('grades') or [None])[0]
+                    if configuracao_conjunto else
+                    (request.POST.get(f'item_{indice}_grade_id') or None)
                 )
+                observacoes_item = request.POST.get(f'item_{indice}_item_observacoes') or ''
+                if configuracao_conjunto:
+                    item.observacoes = '\n\n'.join(filter(None, [
+                        observacoes_item.strip(),
+                        'Estrutura da peça:\n' + resumo_conjunto(configuracao_conjunto),
+                    ]))
+                else:
+                    item.observacoes = juntar_observacoes_item(
+                        observacoes_item, self._post_item(request, indice),
+                        opcoes_estrutura_filial(_filial(request)),
+                    )
                 item.save()
                 primeiro_item = primeiro_item or item
                 itens_por_indice[indice] = item
 
-                self._copiar_grade_do_modelo(item)
-                quantidades = self._quantidades_grade(
-                    request, item, prefixos=(f'item_{indice}_grade_',),
-                )
+                if configuracao_conjunto:
+                    quantidades = {
+                        (item.pk, tamanho_id): quantidade
+                        for tamanho_id, quantidade in quantidades_agregadas(
+                            configuracao_conjunto, 'camisa',
+                        ).items()
+                    }
+                else:
+                    self._copiar_grade_do_modelo(item)
+                    quantidades = self._quantidades_grade(
+                        request, item, prefixos=(f'item_{indice}_grade_',),
+                    )
                 if quantidades:
                     GradePedidoService.salvar_quantidades(pedido, quantidades)
 
@@ -452,6 +490,9 @@ class Op2CreateView(ModaBaseView):
                     tamanho_id=pessoa['tamanho_id'],
                     nome=pessoa['nome'],
                     numero=pessoa['numero'],
+                    tamanho_calcao_id=pessoa.get('tamanho_calcao_id'),
+                    nome_calcao=pessoa.get('nome_calcao', ''),
+                    numero_calcao=pessoa.get('numero_calcao', ''),
                     ordem=ordem * 10,
                 )
 
@@ -547,6 +588,7 @@ class Op2CreateView(ModaBaseView):
                 ).prefetch_related('itens__tamanho').order_by('tipo', 'nome')
             ],
             'estrutura_opcoes': opcoes_estrutura_filial(_filial(request)),
+            'componentes_conjunto': COMPONENTES_CONJUNTO,
             'tamanhos': tamanhos,
             'tamanhos_labels': {
                 str(tamanho.pk): tamanho.sigla for tamanho in tamanhos
@@ -609,6 +651,14 @@ class Op2CreateView(ModaBaseView):
         """Valida a lista de nomes/números ainda no orçamento."""
         linhas = []
         ocupadas = {}
+        configuracoes = {}
+        for item_idx in indices:
+            bruto = request.POST.get(f'item_{item_idx}_configuracao_conjunto')
+            if bruto:
+                try:
+                    configuracoes[item_idx] = json.loads(bruto)
+                except (TypeError, ValueError):
+                    configuracoes[item_idx] = {}
         indice = 0
         permitidos = set(indices)
         while f'individual_{indice}_item_idx' in request.POST:
@@ -616,6 +666,15 @@ class Op2CreateView(ModaBaseView):
             tamanho_texto = request.POST.get(f'individual_{indice}_tamanho_id') or ''
             nome = (request.POST.get(f'individual_{indice}_nome') or '').strip()
             numero = (request.POST.get(f'individual_{indice}_numero') or '').strip()
+            tamanho_calcao_texto = (
+                request.POST.get(f'individual_{indice}_tamanho_calcao_id') or ''
+            )
+            nome_calcao = (
+                request.POST.get(f'individual_{indice}_nome_calcao') or ''
+            ).strip()
+            numero_calcao = (
+                request.POST.get(f'individual_{indice}_numero_calcao') or ''
+            ).strip()
             if not item_idx_texto.isdigit() or int(item_idx_texto) not in permitidos:
                 raise ValueError('Personalização: selecione um produto válido.')
             if not tamanho_texto.isdigit():
@@ -636,9 +695,34 @@ class Op2CreateView(ModaBaseView):
                 raise ValueError(
                     'Personalização: esse tamanho já atingiu a quantidade da grade.'
                 )
+            tamanho_calcao_id = None
+            configuracao = configuracoes.get(item_idx) or {}
+            if configuracao:
+                if not tamanho_calcao_texto.isdigit():
+                    raise ValueError(
+                        'Personalização do conjunto: selecione o tamanho do calção.'
+                    )
+                tamanho_calcao_id = int(tamanho_calcao_texto)
+                limites_calcao = {
+                    int(tamanho): int(quantidade or 0)
+                    for mapa in (
+                        configuracao.get('calcao', {}).get('gradePorGrade') or {}
+                    ).values()
+                    for tamanho, quantidade in mapa.items()
+                }
+                chave_calcao = (item_idx, 'calcao', tamanho_calcao_id)
+                ocupadas[chave_calcao] = ocupadas.get(chave_calcao, 0) + 1
+                if limites_calcao.get(tamanho_calcao_id, 0) < ocupadas[chave_calcao]:
+                    raise ValueError(
+                        'Personalização do conjunto: o tamanho do calção já '
+                        'atingiu a quantidade da grade.'
+                    )
             linhas.append({
                 'item_idx': item_idx, 'tamanho_id': tamanho_id,
                 'nome': nome[:80], 'numero': numero[:10],
+                'tamanho_calcao_id': tamanho_calcao_id,
+                'nome_calcao': nome_calcao[:80],
+                'numero_calcao': numero_calcao[:10],
             })
             indice += 1
         return linhas
@@ -763,7 +847,7 @@ class Op2DetailView(ModaBaseView):
             'produto', 'modelo', 'cor', 'tecido', 'grade_tamanho',
         ).prefetch_related(
             'grade__tamanho', 'personalizacoes', 'visuais__mockup',
-            'individuais__tamanho', 'ordens',
+            'individuais__tamanho', 'individuais__tamanho_calcao', 'ordens',
         ))
         grupos_itens = agrupar_itens_op(itens)
         modelos = list(
@@ -884,6 +968,7 @@ class Op2DetailView(ModaBaseView):
                 for item in itens
             },
             'estrutura_opcoes': estrutura_opcoes,
+            'componentes_conjunto': COMPONENTES_CONJUNTO,
             'estrutura_tipo_padrao': next(iter(estrutura_opcoes), 'camisa'),
             'status_choices': status_choices_kanban(),
             'status_atual': status_destino_kanban(pedido.status),
@@ -1134,16 +1219,37 @@ class Op2ActionView(ModaBaseView):
         )
 
     def _acao_adicionar_item(self, request, pedido):
-        validar_estrutura_item(request.POST, opcoes_estrutura_filial(_filial(request)))
+        estrutura_opcoes = opcoes_estrutura_filial(_filial(request))
+        configuracao_conjunto = {}
+        if request.POST.get('estrutura_tipo') == 'conjunto':
+            configuracao_conjunto = validar_configuracao_conjunto(
+                request.POST.get('configuracao_conjunto'), estrutura_opcoes,
+                _filial(request),
+            )
+        else:
+            validar_estrutura_item(request.POST, estrutura_opcoes)
         valor_unitario = validar_valor_unitario(request.POST.get('valor_unitario'))
-        grades = self._grades_selecionadas(request)
+        grades = (
+            list(Grade.objects.filter(pk__in=(
+                configuracao_conjunto.get('camisa', {}).get('grades') or []
+            )[:1]))
+            if configuracao_conjunto else self._grades_selecionadas(request)
+        )
         quantidades_por_grade = {
-            grade.pk: self._quantidades_grade_modal(request, grade)
+            grade.pk: (
+                quantidades_agregadas(configuracao_conjunto, 'camisa')
+                if configuracao_conjunto else
+                self._quantidades_grade_modal(request, grade)
+            )
             for grade in grades
         }
         total_geral = sum(
             sum(quantidades.values()) for quantidades in quantidades_por_grade.values()
         )
+        if configuracao_conjunto:
+            request.POST._mutable = True
+            request.POST['quantidade'] = str(total_geral)
+            request.POST._mutable = False
         if grades and request.POST.get('quantidade') and int(request.POST['quantidade']) != total_geral:
             raise ValueError(
                 f'A quantidade total deve ser igual à soma das grades ({total_geral}).'
@@ -1174,8 +1280,14 @@ class Op2ActionView(ModaBaseView):
                 else ItemPedidoProducao.StatusFluxo.APROVADO
             )
             item.grade_tamanho = grade
-            item.observacoes = juntar_observacoes_item(
-                item.observacoes, request.POST, opcoes_estrutura_filial(_filial(request)),
+            item.configuracao_conjunto = configuracao_conjunto
+            item.observacoes = (
+                '\n\n'.join(filter(None, [
+                    item.observacoes.strip(),
+                    'Estrutura da peça:\n' + resumo_conjunto(configuracao_conjunto),
+                ])) if configuracao_conjunto else juntar_observacoes_item(
+                    item.observacoes, request.POST, estrutura_opcoes,
+                )
             )
             item.save()
             if grade:
@@ -1232,6 +1344,11 @@ class Op2ActionView(ModaBaseView):
 
     def _acao_grade_item(self, request, pedido):
         item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
+        if item.eh_conjunto:
+            raise ValueError(
+                'Edite o conjunto pelo botão Editar para manter as grades da '
+                'camisa e do calção sincronizadas.'
+            )
         quantidades = Op2CreateView._quantidades_grade(request, item, incluir_zeros=True)
         if not quantidades:
             Op2CreateView._copiar_grade_do_modelo(item)
@@ -1261,7 +1378,15 @@ class Op2ActionView(ModaBaseView):
         messages.success(request, 'Produto removido.')
 
     def _acao_editar_item(self, request, pedido):
-        validar_estrutura_item(request.POST, opcoes_estrutura_filial(_filial(request)))
+        estrutura_opcoes = opcoes_estrutura_filial(_filial(request))
+        configuracao_conjunto = {}
+        if request.POST.get('estrutura_tipo') == 'conjunto':
+            configuracao_conjunto = validar_configuracao_conjunto(
+                request.POST.get('configuracao_conjunto'), estrutura_opcoes,
+                _filial(request),
+            )
+        else:
+            validar_estrutura_item(request.POST, estrutura_opcoes)
         valor_unitario = validar_valor_unitario(request.POST.get('valor_unitario'))
         item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
         produto_original_id = item.produto_id
@@ -1272,9 +1397,18 @@ class Op2ActionView(ModaBaseView):
                 ProdutoModa.objects.for_filial(_filial(request)).filter(ativo=True),
                 pk=produto_id,
             )
-        grades = self._grades_selecionadas(request)
+        grades = (
+            list(Grade.objects.filter(pk__in=(
+                configuracao_conjunto.get('camisa', {}).get('grades') or []
+            )[:1]))
+            if configuracao_conjunto else self._grades_selecionadas(request)
+        )
         quantidades_por_grade = {
-            grade.pk: self._quantidades_grade_modal(request, grade)
+            grade.pk: (
+                quantidades_agregadas(configuracao_conjunto, 'camisa')
+                if configuracao_conjunto else
+                self._quantidades_grade_modal(request, grade)
+            )
             for grade in grades
         }
         total_geral = sum(
@@ -1304,13 +1438,20 @@ class Op2ActionView(ModaBaseView):
         if 'acabamento' in request.POST:
             item.acabamento = (request.POST.get('acabamento') or '').strip()
         item.grade_tamanho = grade
-        item.observacoes = juntar_observacoes_item(
-            request.POST.get('item_observacoes') or '', request.POST,
-            opcoes_estrutura_filial(_filial(request)),
+        item.configuracao_conjunto = configuracao_conjunto
+        observacoes_item = request.POST.get('item_observacoes') or ''
+        item.observacoes = (
+            '\n\n'.join(filter(None, [
+                observacoes_item.strip(),
+                'Estrutura da peça:\n' + resumo_conjunto(configuracao_conjunto),
+            ])) if configuracao_conjunto else juntar_observacoes_item(
+                observacoes_item, request.POST, estrutura_opcoes,
+            )
         )
         item.save(update_fields=[
             'produto', 'grade_tamanho', 'quantidade', 'quantidade_entregue',
             'valor_unitario', 'referencia', 'acabamento', 'observacoes',
+            'configuracao_conjunto',
         ])
         self._sincronizar_dados_compartilhados(
             pedido, item, produto_original_id, descricao_original,
@@ -1566,6 +1707,18 @@ class Op2ActionView(ModaBaseView):
                     erro for erros in form.errors.values() for erro in erros
                 ))
             individual = form.save(commit=False)
+            if item.eh_conjunto:
+                tamanho_calcao = request.POST.get(
+                    f'individual_{indice}_tamanho_calcao'
+                )
+                self._validar_tamanho_calcao(item, tamanho_calcao)
+                individual.tamanho_calcao_id = tamanho_calcao
+                individual.nome_calcao = (
+                    request.POST.get(f'individual_{indice}_nome_calcao') or ''
+                ).strip()[:80]
+                individual.numero_calcao = (
+                    request.POST.get(f'individual_{indice}_numero_calcao') or ''
+                ).strip()[:10]
             individual.pedido = pedido
             proxima_ordem += 10
             individual.ordem = proxima_ordem
@@ -1592,8 +1745,38 @@ class Op2ActionView(ModaBaseView):
             raise ValueError('Personalização: ' + '; '.join(
                 erro for erros in form.errors.values() for erro in erros
             ))
-        form.save()
+        individual = form.save(commit=False)
+        if individual.item.eh_conjunto:
+            tamanho_calcao = request.POST.get('tamanho_calcao')
+            self._validar_tamanho_calcao(
+                individual.item, tamanho_calcao, ignorar=individual.pk,
+            )
+            individual.tamanho_calcao_id = tamanho_calcao
+            individual.nome_calcao = (
+                request.POST.get('nome_calcao') or ''
+            ).strip()[:80]
+            individual.numero_calcao = (
+                request.POST.get('numero_calcao') or ''
+            ).strip()[:10]
+        individual.save()
         messages.success(request, 'Nome, número e tamanho atualizados.')
+
+    @staticmethod
+    def _validar_tamanho_calcao(item, tamanho_id, ignorar=None):
+        if not str(tamanho_id or '').isdigit():
+            raise ValueError('Personalização do conjunto: selecione o tamanho do calção.')
+        tamanho_id = int(tamanho_id)
+        limite = quantidades_agregadas(item.configuracao_conjunto, 'calcao').get(
+            tamanho_id, 0,
+        )
+        ocupadas = item.individuais.filter(tamanho_calcao_id=tamanho_id)
+        if ignorar:
+            ocupadas = ocupadas.exclude(pk=ignorar)
+        if ocupadas.count() >= limite:
+            raise ValueError(
+                'Personalização do conjunto: esse tamanho do calção já '
+                'atingiu a quantidade da grade.'
+            )
 
     def _acao_previsao_pagamento(self, request, pedido):
         pedido.previsao_pagamento = _previsao_pagamento(

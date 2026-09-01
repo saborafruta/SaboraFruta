@@ -116,7 +116,7 @@ def _buscar(token: str) -> PedidoProducao:
             # NOME E NUMERO DE CADA PESSOA. E' o que o cliente mais confere
             # antes de aprovar -- um nome errado vira peca refeita, e ele e'
             # o unico que sabe se "Joao" e' com ou sem H.
-            'itens__individuais__tamanho',
+            'itens__individuais__tamanho', 'itens__individuais__tamanho_calcao',
             'arquivos',
             'itens__visuais__mockup',
         )

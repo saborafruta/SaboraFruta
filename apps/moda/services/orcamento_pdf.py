@@ -407,6 +407,37 @@ class OrcamentoPdfService:
         pessoas = list(item.individuais.all())
         if not pessoas:
             return []
+        if item.eh_conjunto:
+            dados = [[Paragraph(f'<b>{titulo}</b>', e['celula']) for titulo in (
+                'NOME CAMISA', 'Nº', 'TAM.', 'NOME CALÇÃO', 'Nº', 'TAM.',
+            )]]
+            for pessoa in pessoas:
+                dados.append([
+                    Paragraph(_texto(pessoa.nome) or '-', e['celula']),
+                    Paragraph(_texto(pessoa.numero) or '-', e['celula']),
+                    Paragraph(_texto(pessoa.tamanho.sigla), e['celula']),
+                    Paragraph(_texto(pessoa.nome_calcao) or '-', e['celula']),
+                    Paragraph(_texto(pessoa.numero_calcao) or '-', e['celula']),
+                    Paragraph(
+                        _texto(pessoa.tamanho_calcao.sigla)
+                        if pessoa.tamanho_calcao_id else '-', e['celula'],
+                    ),
+                ])
+            tabela = Table(
+                dados,
+                colWidths=[largura * .29, largura * .09, largura * .12] * 2,
+                repeatRows=1, cornerRadii=[4] * 4,
+            )
+            tabela.setStyle(TableStyle(_estilo_tabela(2) + [
+                ('GRID', (0, 0), (-1, -1), .4, BORDA),
+                ('BACKGROUND', (0, 0), (-1, 0), FUNDO),
+            ]))
+            return [
+                Spacer(1, 3), HRFlowable(width='100%', thickness=.5, color=BORDA),
+                Spacer(1, 3),
+                Paragraph(f'<b>Personalização do conjunto - {len(pessoas)} atleta(s):</b>', e['celula']),
+                Spacer(1, 3), tabela,
+            ]
         metade = (len(pessoas) + 1) // 2
         dados = [[Paragraph(f'<b>{titulo}</b>', e['celula']) for titulo in (
             'NOME / NÚMERO', 'TAM.', 'NOME / NÚMERO', 'TAM.',
@@ -475,7 +506,9 @@ class OrcamentoPdfService:
             ]))
             conteudo.append(tabela_especificacoes)
         grade = [g for g in item.grade.all() if g.quantidade]
-        if grade:
+        if item.eh_conjunto:
+            conteudo += cls._componentes_conjunto(item, e, largura)
+        elif grade:
             resumo = ' | '.join(f'{g.tamanho.sigla} {g.quantidade}' for g in grade)
             conteudo += [
                 Spacer(1, 3),
@@ -493,6 +526,29 @@ class OrcamentoPdfService:
             Paragraph(brl(item.valor_unitario), e['td_dir']),
             Paragraph(brl(item.subtotal), e['td_dir']),
         ]
+
+    @staticmethod
+    def _componentes_conjunto(item, e, largura):
+        blocos = [Spacer(1, 3), HRFlowable(width='100%', thickness=.5, color=BORDA)]
+        for componente in item.componentes_conjunto:
+            especificacoes = ' · '.join(
+                f'{rotulo}: {valor}' for rotulo, valor in componente['estrutura']
+            ) or 'Sem especificações adicionais'
+            grades = ' | '.join(
+                f'{grade["nome"]}: ' + ', '.join(
+                    f'{tamanho["sigla"]} {tamanho["quantidade"]}'
+                    for tamanho in grade['tamanhos']
+                ) for grade in componente['grades']
+            )
+            blocos += [
+                Spacer(1, 3),
+                Paragraph(
+                    f'<b>{_texto(componente["label"])} ({componente["total"]}):</b> '
+                    f'{_texto(especificacoes)}<br/><b>Grade:</b> {_texto(grades)}',
+                    e['celula'],
+                ),
+            ]
+        return blocos
 
     @classmethod
     def _produto_grupo(cls, grupo, e):

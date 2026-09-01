@@ -25,6 +25,7 @@ from apps.moda.forms_cliente import ClienteRapidoForm
 from apps.moda.services.op2_estrutura import (
     OP2_ESTRUTURA_OPCOES, juntar_observacoes_item, opcoes_estrutura_filial,
 )
+from apps.moda.services.conjunto import validar_configuracao_conjunto
 from apps.moda.services.kanban_comercial import COLUNAS
 from apps.moda.views_op2 import Op2CreateView, _sincronizar_status
 
@@ -224,6 +225,105 @@ class Op2Tests(TestCase):
             valor_unitario=Decimal('50'), status_fluxo=status,
             quantidade_entregue=entregue,
         )
+
+    def _configuracao_conjunto(self, grade, tamanho_p, tamanho_m):
+        grupos = opcoes_estrutura_filial(self.filial)
+
+        def componente(slug, quantidades, observacoes):
+            estrutura = {
+                campo: (['N/A'] if campo in {'tipo_impressao', 'acabamentos'} else 'N/A')
+                for campo in grupos[slug]['campos']
+            }
+            estrutura['tipo_impressao'] = ['SILK', 'RELEVO']
+            return {
+                'estrutura': estrutura,
+                'cor_personalizada': '',
+                'grades': [str(grade.pk)],
+                'gradePorGrade': {str(grade.pk): {
+                    str(tamanho_p.pk): quantidades[0],
+                    str(tamanho_m.pk): quantidades[1],
+                }},
+                'observacoes': observacoes,
+            }
+
+        return {
+            'camisa': componente('camisa', (1, 1), 'Escudo no peito.'),
+            'calcao': componente('calcao', (0, 2), 'Número na perna direita.'),
+        }
+
+    def test_conjunto_e_um_item_com_duas_fichas_grades_e_personalizacoes(self):
+        tamanho_p = Tamanho.objects.create(filial=self.filial, sigla='PC', ordem=10)
+        tamanho_m = Tamanho.objects.create(filial=self.filial, sigla='MC', ordem=20)
+        grade = Grade.objects.create(filial=self.filial, nome='Conjunto Adulto')
+        ItemGrade.objects.create(grade=grade, tamanho=tamanho_p, ordem=10)
+        ItemGrade.objects.create(grade=grade, tamanho=tamanho_m, ordem=20)
+        configuracao = self._configuracao_conjunto(grade, tamanho_p, tamanho_m)
+        self._login_op2()
+
+        resposta = self.client.post(reverse('moda:op2-create'), {
+            'cliente': str(self.cliente.pk),
+            'item_0_produto_id': str(self.produto.pk),
+            'item_0_estrutura_tipo': 'conjunto',
+            'item_0_configuracao_conjunto': json.dumps(configuracao),
+            'item_0_quantidade': '2',
+            'item_0_valor_unitario': '125.50',
+            f'item_0_grade_{tamanho_p.pk}': '1',
+            f'item_0_grade_{tamanho_m.pk}': '1',
+            'individual_0_item_idx': '0',
+            'individual_0_tamanho_id': str(tamanho_p.pk),
+            'individual_0_nome': 'ANA',
+            'individual_0_numero': '10',
+            'individual_0_tamanho_calcao_id': str(tamanho_m.pk),
+            'individual_0_nome_calcao': 'A. SILVA',
+            'individual_0_numero_calcao': '7',
+            'pagamento_0_forma': 'nao_informado',
+            'pagamento_0_valor': '251.00',
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        item = criado.itens.get()
+        self.assertEqual(item.quantidade, 2)
+        self.assertEqual(item.valor_unitario, Decimal('125.50'))
+        self.assertEqual(item.quantidade * item.valor_unitario, Decimal('251.00'))
+        self.assertTrue(item.eh_conjunto)
+        self.assertEqual(item.configuracao_conjunto['calcao']['observacoes'], 'Número na perna direita.')
+        self.assertEqual(
+            {linha.tamanho_id: linha.quantidade for linha in item.grade.all()},
+            {tamanho_p.pk: 1, tamanho_m.pk: 1},
+        )
+        pessoa = item.individuais.get()
+        self.assertEqual((pessoa.tamanho_id, pessoa.nome, pessoa.numero), (tamanho_p.pk, 'ANA', '10'))
+        self.assertEqual(
+            (pessoa.tamanho_calcao_id, pessoa.nome_calcao, pessoa.numero_calcao),
+            (tamanho_m.pk, 'A. SILVA', '7'),
+        )
+
+        detalhe = self.client.get(reverse('moda:op2-detail', args=[criado.pk]))
+        self.assertContains(detalhe, 'Copiar camisa para o calção')
+        self.assertContains(detalhe, 'Número na perna direita.')
+        for nome_url in ('pedido-orcamento-pdf', 'pedido-pdf'):
+            pdf = self.client.get(reverse(f'moda:{nome_url}', args=[criado.pk]))
+            self.assertEqual(pdf.status_code, 200)
+            self.assertEqual(pdf['Content-Type'], 'application/pdf')
+            self.assertTrue(pdf.content.startswith(b'%PDF-'))
+
+    def test_conjunto_exige_mesmo_total_e_tamanhos_da_grade(self):
+        tamanho_p = Tamanho.objects.create(filial=self.filial, sigla='PX', ordem=10)
+        tamanho_fora = Tamanho.objects.create(filial=self.filial, sigla='FX', ordem=20)
+        grade = Grade.objects.create(filial=self.filial, nome='Grade validada')
+        ItemGrade.objects.create(grade=grade, tamanho=tamanho_p, ordem=10)
+        configuracao = self._configuracao_conjunto(grade, tamanho_p, tamanho_fora)
+
+        with self.assertRaisesMessage(ValueError, 'não pertence à grade'):
+            validar_configuracao_conjunto(
+                configuracao, opcoes_estrutura_filial(self.filial), self.filial,
+            )
+        configuracao['calcao']['gradePorGrade'][str(grade.pk)][str(tamanho_fora.pk)] = 1
+        with self.assertRaisesMessage(ValueError, 'mesma quantidade total'):
+            validar_configuracao_conjunto(
+                configuracao, opcoes_estrutura_filial(self.filial), self.filial,
+            )
 
     def test_entrega_parcial_mantem_op_na_etapa_do_item_pendente(self):
         self._item(status=ItemPedidoProducao.StatusFluxo.ENTREGUE, entregue=10)

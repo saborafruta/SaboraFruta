@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const {
   validarModeloOp2, op2AlternarMultisselecao, op2ResumoMultisselecao,
   op2EstruturaPadraoNaoMultipla,
+  op2NovaConfiguracaoConjunto, op2CopiarCamisaParaCalcao,
+  op2TotalComponenteConjunto, validarConjuntoOp2,
 } = require('../../../../static/js/op2_modelo_validacao.js');
 
 const grupos = {
@@ -13,6 +15,36 @@ const completo = () => ({ valor_unitario: '59.90', estrutura_tipo: 'camisa', tip
 
 test('N/A é uma escolha válida, não um campo vazio', () => {
   assert.equal(validarModeloOp2(completo(), grupos), '');
+});
+
+test('conjunto copia campos compatíveis e a grade da camisa para o calção', () => {
+  const opcoes = {
+    camisa: { campos: { cor: ['AZUL', 'N/A'], manga: ['CURTA', 'N/A'] } },
+    calcao: { campos: { cor: ['AZUL', 'N/A'], acabamentos: ['CADARÇO', 'N/A'] } },
+  };
+  let configuracao = op2NovaConfiguracaoConjunto(opcoes);
+  configuracao.camisa.estrutura.cor = 'AZUL';
+  configuracao.camisa.grades = ['1'];
+  configuracao.camisa.gradePorGrade = { 1: { 9: 3 } };
+  configuracao = op2CopiarCamisaParaCalcao(opcoes, configuracao);
+  assert.equal(configuracao.calcao.estrutura.cor, 'AZUL');
+  assert.deepEqual(configuracao.calcao.gradePorGrade, { 1: { 9: 3 } });
+  assert.equal(op2TotalComponenteConjunto(configuracao, 'calcao'), 3);
+});
+
+test('conjunto exige duas fichas completas com totais iguais', () => {
+  const opcoes = {
+    camisa: { campos: { cor: ['AZUL', 'N/A'] } },
+    calcao: { campos: { cor: ['AZUL', 'N/A'] } },
+  };
+  const configuracao = op2NovaConfiguracaoConjunto(opcoes);
+  for (const componente of ['camisa', 'calcao']) {
+    configuracao[componente].grades = ['1'];
+    configuracao[componente].gradePorGrade = { 1: { 9: 2 } };
+  }
+  assert.equal(validarConjuntoOp2(configuracao, opcoes), '');
+  configuracao.calcao.gradePorGrade[1][9] = 1;
+  assert.match(validarConjuntoOp2(configuracao, opcoes), /mesmo total/);
 });
 test('valor vazio, zero, negativo e inválido são recusados', () => {
   for (const valor of ['', null, 0, '0', '-1', 'NaN', 'Infinity', 'abc', '1.001', '10000000000']) {
