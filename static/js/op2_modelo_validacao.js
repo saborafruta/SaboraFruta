@@ -39,7 +39,23 @@ function op2ResumoMultisselecao(valores) {
   return lista.join(', ');
 }
 
+function op2CampoMultisselecao(campo) {
+  return campo === 'tipo_impressao' || String(campo || '').startsWith('acabamento');
+}
+
+function op2EstruturaPadraoNaoMultipla(grupos, tipo, estrutura) {
+  const resultado = { ...(estrutura || {}) };
+  const campos = grupos?.[tipo]?.campos || {};
+  Object.entries(campos).forEach(([campo, opcoes]) => {
+    if (!op2CampoMultisselecao(campo) && !resultado[campo] && opcoes.includes('N/A')) {
+      resultado[campo] = 'N/A';
+    }
+  });
+  return resultado;
+}
+
 if (typeof module !== 'undefined') module.exports = {
   validarModeloOp2, op2AlternarMultisselecao, op2ListaMultisselecao,
   op2MultisselecaoContem, op2ResumoMultisselecao,
+  op2CampoMultisselecao, op2EstruturaPadraoNaoMultipla,
 };

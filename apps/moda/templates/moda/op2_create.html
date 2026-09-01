@@ -5,7 +5,7 @@
 {% block largura_conteudo %}max-w-none{% endblock %}
 {% block content %}
 {{ estrutura_opcoes|json_script:"op2-estrutura-opcoes" }}
-<script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260901-2"></script>
+<script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260901-3"></script>
 <script src="{% static 'js/op2_clientes.js' %}"></script>
 {{ modelos_grade|json_script:"op2-modelos-grade" }}
 {{ grades_json|json_script:"op2-grades" }}
@@ -151,7 +151,8 @@ function op2Nova(){return{clientes:JSON.parse(document.getElementById('op2-clien
 
 function op2NovaMelhorada(){
   const estado=op2Nova();
-  estado.gradeCores=JSON.parse(document.getElementById('op2-grade-cores').textContent);
+  estado.estruturaOpcoes=JSON.parse(document.getElementById('op2-estrutura-opcoes')?.textContent||'{}');
+  estado.gradeCores=JSON.parse(document.getElementById('op2-grade-cores')?.textContent||'[["#2563eb","rgba(37,99,235,.12)"]]');
   estado.coresGrade=function(item){
     const variantes=this.itens.filter(linha=>String(linha.produto_id)===String(item.produto_id));
     const indice=Math.max(0,variantes.findIndex(linha=>linha.uid===item.uid));
@@ -175,7 +176,18 @@ function op2NovaMelhorada(){
     const draft=criarDraft();
     draft.gradePorGrade={};
     draft.cor_personalizada='';
+    draft.estrutura=op2EstruturaPadraoNaoMultipla(
+      estado.estruturaOpcoes,draft.estrutura_tipo,draft.estrutura,
+    );
     return draft;
+  };
+  estado.aplicarPadroesEstrutura=function(){
+    this.draft.estrutura=op2EstruturaPadraoNaoMultipla(
+      this.estruturaOpcoes,this.draft.estrutura_tipo,this.draft.estrutura,
+    );
+  };
+  estado.init=function(){
+    this.$watch('draft.estrutura_tipo',()=>this.aplicarPadroesEstrutura());
   };
   estado.draft=estado.novoDraft();
   estado.garantirGrade=function(gradeId){

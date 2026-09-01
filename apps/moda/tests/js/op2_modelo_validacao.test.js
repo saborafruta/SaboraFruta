@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   validarModeloOp2, op2AlternarMultisselecao, op2ResumoMultisselecao,
+  op2EstruturaPadraoNaoMultipla,
 } = require('../../../../static/js/op2_modelo_validacao.js');
 
 const grupos = {
@@ -62,4 +63,21 @@ test('seletor múltiplo mantém N/A exclusivo e resume escolhas', () => {
   assert.equal(op2ResumoMultisselecao(valores), 'SILK, RELEVO');
   assert.deepEqual(op2AlternarMultisselecao(valores, 'N/A', true), ['N/A']);
   assert.deepEqual(op2AlternarMultisselecao(['N/A'], 'BORDADO', true), ['BORDADO']);
+});
+
+test('estrutura inicia N/A somente nos campos de escolha simples', () => {
+  const estrutura = op2EstruturaPadraoNaoMultipla({
+    camisa: { campos: {
+      tipo_impressao: ['SILK', 'N/A'], cor: ['PRETO', 'N/A'],
+      acabamentos: ['VIES', 'N/A'], manga: ['CURTA', 'N/A'],
+    } },
+  }, 'camisa', {});
+  assert.deepEqual(estrutura, { cor: 'N/A', manga: 'N/A' });
+});
+
+test('estrutura mantém escolhas existentes ao preencher os padrões', () => {
+  const estrutura = op2EstruturaPadraoNaoMultipla({
+    camisa: { campos: { cor: ['PRETO', 'N/A'], manga: ['CURTA', 'N/A'] } },
+  }, 'camisa', { cor: 'PRETO' });
+  assert.deepEqual(estrutura, { cor: 'PRETO', manga: 'N/A' });
 });

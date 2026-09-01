@@ -5,7 +5,7 @@
 {% block largura_conteudo %}max-w-none{% endblock %}
 {% block content %}
 {{ estrutura_opcoes|json_script:"op2-estrutura-opcoes" }}
-<script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260901-2"></script>
+<script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260901-3"></script>
 <script src="{% static 'js/op2_clientes.js' %}"></script>
 <script src="{% static 'js/op2_legenda.js' %}"></script>
 {{ mensagem_whatsapp|json_script:"op2-wa-message" }}
@@ -286,7 +286,20 @@ function op2WorkspaceCompleto(){
   estado.tamanhoLabels=JSON.parse(document.getElementById('op2-detail-tamanhos').textContent);
   estado.itensModal=JSON.parse(document.getElementById('op2-detail-itens').textContent);
   estado.vagasIndividuais=JSON.parse(document.getElementById('op2-vagas-individuais').textContent);
-  estado.novoDraftItem=function(){return{item_id:'',produto_id:'',nome:'',codigo:'',info:'',quantidade:1,valor_unitario:'',tipo_impressao:[],estrutura_tipo:'{{ estrutura_tipo_padrao|escapejs }}',estrutura:{},cor_personalizada:'',item_observacoes:'',grades:[],gradePorGrade:{}}};
+  estado.estruturaOpcoes=JSON.parse(document.getElementById('op2-estrutura-opcoes')?.textContent||'{}');
+  estado.novoDraftItem=function(){
+    const draft={item_id:'',produto_id:'',nome:'',codigo:'',info:'',quantidade:1,valor_unitario:'',tipo_impressao:[],estrutura_tipo:'{{ estrutura_tipo_padrao|escapejs }}',estrutura:{},cor_personalizada:'',item_observacoes:'',grades:[],gradePorGrade:{}};
+    draft.estrutura=op2EstruturaPadraoNaoMultipla(estado.estruturaOpcoes,draft.estrutura_tipo,draft.estrutura);
+    return draft;
+  };
+  estado.aplicarPadroesEstrutura=function(){
+    this.draft.estrutura=op2EstruturaPadraoNaoMultipla(
+      this.estruturaOpcoes,this.draft.estrutura_tipo,this.draft.estrutura,
+    );
+  };
+  estado.init=function(){
+    this.$watch('draft.estrutura_tipo',()=>this.aplicarPadroesEstrutura());
+  };
   estado.draft=estado.novoDraftItem();
   estado.salvarModeloRapido=async function(){const nome=(this.novoModeloNome||'').trim();if(!nome){this.erroModelo='Informe o nome do modelo.';return}this.criandoModelo=true;this.erroModelo='';const body=new FormData();body.append('nome',nome);body.append('csrfmiddlewaretoken',(document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)||[])[1]||'');try{const resposta=await fetch('{% url "moda:op2-modelo-rapido" %}',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body});const dados=await resposta.json();if(!resposta.ok||!dados.ok){this.erroModelo=dados.erro||'Não foi possível cadastrar.';return}this.modelosRapidos.unshift(dados.modelo);this.gradeMap[dados.modelo.id]={};this.selecionarModelo(dados.modelo.id,dados.modelo.nome,dados.modelo.codigo,dados.modelo.info);this.novoModeloNome=''}catch(e){this.erroModelo='Não foi possível cadastrar agora.'}finally{this.criandoModelo=false}};
   estado.abrirNovoProduto=function(){this.modoItem='novo';this.draft=this.novoDraftItem();this.buscaProduto='';this.modalItem=true};

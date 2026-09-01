@@ -8,6 +8,9 @@ const script = template.match(/<script>([\s\S]*?)<\/script>/)[1];
 const modeloValidation = readFileSync(
   new URL('../../../static/js/op2_modelo_validacao.js', import.meta.url), 'utf8',
 );
+const clientesScript = readFileSync(
+  new URL('../../../static/js/op2_clientes.js', import.meta.url), 'utf8',
+);
 
 function workspace() {
   const alerts = [];
@@ -19,7 +22,7 @@ function workspace() {
       camisa: { label: 'Camisa', campos: { tipo_impressao: ['N/A'], malha: ['N/A'] } },
     },
   };
-  const state = vm.runInNewContext(`${modeloValidation};${script};op2NovaMelhorada()`, {
+  const state = vm.runInNewContext(`${modeloValidation};${clientesScript};${script};op2NovaMelhorada()`, {
     document: { getElementById: id => ({ textContent: JSON.stringify(json[id]) }) },
     alert: message => alerts.push(message),
   });
@@ -57,7 +60,7 @@ function pagamento(state) {
 test('o rascunho já tem estrutura e grades ao iniciar a tela', () => {
   const { state } = workspace();
   assert.equal(state.draft.grades.length, 0);
-  assert.equal(Object.keys(state.draft.estrutura).length, 0);
+  assert.deepEqual({ ...state.draft.estrutura }, { malha: 'N/A' });
   assert.equal(state.totalTodasGrades(), 0);
 });
 

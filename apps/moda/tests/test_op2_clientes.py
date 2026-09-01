@@ -96,7 +96,7 @@ class Op2ClientesTests(TestCase):
 const fs = require('node:fs'), vm = require('node:vm'), assert = require('node:assert/strict');
 const payload = JSON.parse(fs.readFileSync(0, 'utf8'));
 const context = vm.createContext({document: {getElementById: id => ({textContent: payload.nodes[id]}), addEventListener() {}}, clearTimeout() {}});
-vm.runInContext(fs.readFileSync(payload.source, 'utf8'), context);
+for (const source of payload.sources) vm.runInContext(fs.readFileSync(source, 'utf8'), context);
 vm.runInContext(payload.script, context);
 const state = context[payload.funcao]();
 if (payload.funcao === 'op2NovaMelhorada') {
@@ -112,7 +112,15 @@ const proxy = new Proxy(state, {set(target, key, value) { writes.push(key); retu
 proxy.selecionarCliente({id: 999, nome: 'Cliente selecionado', contato: 'Contato', telefone: '123'});
 assert.equal(proxy.clienteId, '999');
 for (const key of ['clienteId', 'buscaCliente', 'contatoNome', 'contatoTelefone']) assert.ok(writes.includes(key), key);
-'''], input=json.dumps({'nodes': nodes, 'script': script, 'funcao': funcao, 'source': str(settings.BASE_DIR / 'static/js/op2_clientes.js')}), text=True, capture_output=True, timeout=20)
+'''], input=json.dumps({
+                    'nodes': nodes,
+                    'script': script,
+                    'funcao': funcao,
+                    'sources': [
+                        str(settings.BASE_DIR / 'static/js/op2_clientes.js'),
+                        str(settings.BASE_DIR / 'static/js/op2_modelo_validacao.js'),
+                    ],
+                }), text=True, capture_output=True, timeout=20)
                 self.assertEqual(resultado.returncode, 0, resultado.stderr)
 
     def test_edicao_preserva_campos_fora_do_cadastro_rapido_e_vinculo_da_op(self):
