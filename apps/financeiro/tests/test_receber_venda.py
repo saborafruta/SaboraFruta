@@ -115,7 +115,40 @@ class ReceberVendaTests(TestCase):
                 _, context = self._get(ContaReceberRelatorioView, status=status)
                 self.assertEqual(context['total_titulos'], total)
                 if status == 'pago':
-                    self.assertEqual(context['clientes'][0]['titulos'][0]['titulo'], paga)
+                    self.assertEqual(context['titulos'][0], paga)
+
+    def test_relatorio_repete_a_tabela_da_listagem_e_os_totais_filtrados(self):
+        ContaReceber.objects.create(
+            filial=self.filial, cliente=self.cliente, documento_numero='QUITADA',
+            valor_original=10, valor_final=10, valor_saldo=0, valor_pago=10,
+            data_emissao=date(2026, 8, 17), data_vencimento=date(2026, 8, 28),
+            data_pagamento=date(2026, 8, 28), status='pago',
+        )
+
+        response, context = self._get(ContaReceberRelatorioView, status='todos')
+
+        for coluna in (
+            'Nº da conta', 'Cliente', 'Documento', 'Nº da venda',
+            'Data da venda', 'Parcela', 'Vencimento', 'Valor',
+            'Valor restante', 'Status',
+        ):
+            self.assertContains(response, coluna)
+        self.assertNotContains(response, 'cli-card')
+        self.assertNotContains(response, 'Ações')
+        self.assertContains(response, 'Imprimir / Salvar PDF')
+        self.assertEqual(context['total_geral_valor'], Decimal('51'))
+        self.assertEqual(context['total_geral_pago'], Decimal('10'))
+        self.assertEqual(context['total_geral_saldo'], Decimal('41'))
+
+    def test_listagem_mantem_impressao_quando_todas_as_contas_estao_pagas(self):
+        ContaReceber.objects.filter(pk=self.conta.pk).update(
+            status='pago', valor_pago=Decimal('41'), valor_saldo=Decimal('0'),
+            data_pagamento=date(2026, 8, 27),
+        )
+
+        response, _ = self._get(ContaReceberListView, status='pago')
+
+        self.assertContains(response, 'Imprimir relatório')
 
     def test_periodo_filtra_vencimento_e_nao_data_da_venda(self):
         for view in (ContaReceberListView, ContaReceberRelatorioView):

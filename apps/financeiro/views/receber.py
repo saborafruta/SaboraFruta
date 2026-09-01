@@ -50,6 +50,7 @@ def _contexto_entrega(request, filial):
     return {
         'entrega_habilitada': habilitada,
         'entrega_filtro': filtro,
+        'entrega_label': dict(ContaReceber.StatusEntrega.choices).get(filtro, ''),
         'entrega_choices': ContaReceber.StatusEntrega.choices,
     }
 
@@ -161,6 +162,7 @@ class ContaReceberListView(PermissaoRequiredMixin, View):
         if entrega['entrega_filtro']:
             qs = qs.filter(status_entrega=entrega['entrega_filtro'])
         totais_filtro = qs.aggregate(
+            qtd=Count('id'),
             total_valor=Sum('valor_final'),
             total_saldo=Sum('valor_saldo'),
             total_pago=Sum('valor_pago'),
@@ -201,14 +203,14 @@ class ContaReceberListView(PermissaoRequiredMixin, View):
 
 
 class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
-    """Relatório imprimível: agrupa os títulos (por padrão em aberto) por
-    cliente, com a venda vinculada de cada título."""
+    """Impressão tabular da mesma seleção exibida em Contas a Receber."""
 
     permissao_modulo = 'financeiro'
     permissao_acao = 'ver'
 
     def get(self, request):
         filial = _filial(request)
+        ContaReceberService.atualizar_status_vencidos(filial)
 
         status = request.GET.get('status', 'pendentes')
         q = request.GET.get('q', '').strip()
@@ -217,8 +219,8 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
 
         qs = (
             ContaReceber.objects.for_filial(filial)
-            .select_related('cliente')
-            .order_by('cliente__razao_social', 'data_vencimento')
+            .select_related('cliente', 'forma_pagamento', 'conta_bancaria', 'plano_contas')
+            .order_by('data_vencimento', 'cliente__razao_social')
         )
         if not status or status == 'pendentes':
             # Sem status escolhido, o relatório foca nos títulos em aberto.
@@ -243,32 +245,16 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
         entrega = _contexto_entrega(request, filial)
         if entrega['entrega_filtro']:
             qs = qs.filter(status_entrega=entrega['entrega_filtro'])
-        titulos = list(qs)
-        _vincular_vendas(titulos, filial)
 
-        grupos: dict = {}
-        for t in titulos:
-            g = grupos.get(t.cliente_id)
-            if g is None:
-                g = {
-                    'cliente': t.cliente,
-                    'titulos': [],
-                    'total_saldo': Decimal('0'),
-                    'total_valor': Decimal('0'),
-                }
-                grupos[t.cliente_id] = g
-
-            g['titulos'].append({'titulo': t, 'venda': t.venda_vinculada})
-            g['total_saldo'] += t.valor_saldo or Decimal('0')
-            g['total_valor'] += t.valor_final or Decimal('0')
-
-        clientes = sorted(
-            grupos.values(),
-            key=lambda x: (x['cliente'].razao_social or '').lower(),
+        totais = qs.aggregate(
+            total_valor=Sum('valor_final'),
+            total_saldo=Sum('valor_saldo'),
+            total_pago=Sum('valor_pago'),
         )
-
-        total_geral_saldo = sum((g['total_saldo'] for g in clientes), Decimal('0'))
-        total_geral_valor = sum((g['total_valor'] for g in clientes), Decimal('0'))
+        limite = 2000
+        total_encontrado = qs.count()
+        titulos = list(qs[:limite])
+        _vincular_vendas(titulos, filial)
 
         status_label = {
             **dict(STATUS_CHOICES),
@@ -280,16 +266,20 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
         return render(request, 'financeiro/receber/relatorio.html', {
             'title': 'Relatório de Contas a Receber',
             **entrega,
-            'clientes': clientes,
+            'titulos': titulos,
             'filial': filial,
             'q': q,
             'status_filtro': status,
             'status_label': status_label,
             'data_ini': data_ini,
             'data_fim': data_fim,
-            'total_geral_saldo': total_geral_saldo,
-            'total_geral_valor': total_geral_valor,
-            'total_titulos': len(titulos),
+            'total_geral_saldo': totais['total_saldo'] or Decimal('0'),
+            'total_geral_valor': totais['total_valor'] or Decimal('0'),
+            'total_geral_pago': totais['total_pago'] or Decimal('0'),
+            'total_titulos': total_encontrado,
+            'truncado': total_encontrado > limite,
+            'limite': limite,
+            'querystring': request.GET.urlencode(),
             'gerado_em': timezone.localtime(),
         })
 
