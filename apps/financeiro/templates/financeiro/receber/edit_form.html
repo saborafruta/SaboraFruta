@@ -1,0 +1,116 @@
+{% extends "_base.html" %}
+{% load widget_tweaks %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl space-y-4">
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <a href="{% url 'financeiro:receber_detail' conta.pk %}" class="text-sm text-blue-500">← Conta a Receber #{{ conta.pk }}</a>
+      <h2 class="mt-1 text-xl font-semibold">Editar título</h2>
+      <p class="mt-1 text-sm opacity-65">Altere os dados cadastrais e financeiros do título. Recebimentos já registrados continuam no histórico.</p>
+    </div>
+    <p class="text-sm opacity-65">Os campos com * são obrigatórios.</p>
+  </div>
+
+  <form method="post" class="card overflow-hidden" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="m-5 border border-red-300 bg-red-50 p-3 text-sm text-red-700">{{ form.non_field_errors }}</div>{% endif %}
+
+    <section class="p-5 sm:p-6">
+      <div class="mb-4"><h3 class="text-sm font-semibold">Cliente e referência</h3><p class="text-xs opacity-65">Identificação usada na cobrança e nas pesquisas.</p></div>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div class="sm:col-span-2">
+          <label class="mb-1 block text-sm font-medium">Cliente <span class="text-rose-500">*</span></label>
+          {{ form.cliente|add_class:"form-input" }}
+          {% if form.cliente.errors %}<p class="mt-1 text-xs text-red-500">{{ form.cliente.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div class="sm:col-span-2">
+          <label class="mb-1 block text-sm font-medium">{{ form.documento_numero.label }}</label>
+          {{ form.documento_numero|add_class:"form-input" }}
+          {% if form.documento_numero.help_text %}<p class="mt-1 text-xs opacity-60">{{ form.documento_numero.help_text }}</p>{% endif %}
+          {% if form.documento_numero.errors %}<p class="mt-1 text-xs text-red-500">{{ form.documento_numero.errors|join:", " }}</p>{% endif %}
+        </div>
+      </div>
+    </section>
+
+    {% if form.entrega_habilitada %}<div class="border-t px-5 py-5 sm:px-6" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">{% include "financeiro/receber/_entrega_campos.html" %}</div>{% endif %}
+
+    <section class="border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
+      <div class="mb-4"><h3 class="text-sm font-semibold">Valor, parcela e datas</h3><p class="text-xs opacity-65">O saldo será recalculado sem apagar valores já recebidos.</p></div>
+      {% if conta.valor_pago > 0 %}
+      <div class="mb-4 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+        Já recebido: <strong>R$ {{ conta.valor_pago|floatformat:2 }}</strong>. O novo valor total não poderá ser menor que esse montante.
+      </div>
+      {% endif %}
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="lg:col-span-2">
+          <label class="mb-1 block text-sm font-medium">Valor original (R$) <span class="text-rose-500">*</span></label>
+          {{ form.valor_original|add_class:"form-input" }}
+          {% if form.valor_original.errors %}<p class="mt-1 text-xs text-red-500">{{ form.valor_original.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="mb-1 block text-sm font-medium">Parcela <span class="text-rose-500">*</span></label>
+          {{ form.parcela|add_class:"form-input" }}
+          {% if form.parcela.errors %}<p class="mt-1 text-xs text-red-500">{{ form.parcela.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="mb-1 block text-sm font-medium">Total de parcelas <span class="text-rose-500">*</span></label>
+          {{ form.total_parcelas|add_class:"form-input" }}
+          {% if form.total_parcelas.errors %}<p class="mt-1 text-xs text-red-500">{{ form.total_parcelas.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="mb-1 block text-sm font-medium">Emissão <span class="text-rose-500">*</span></label>
+          {{ form.data_emissao|add_class:"form-input" }}
+          {% if form.data_emissao.errors %}<p class="mt-1 text-xs text-red-500">{{ form.data_emissao.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="mb-1 block text-sm font-medium">Vencimento <span class="text-rose-500">*</span></label>
+          {{ form.data_vencimento|add_class:"form-input" }}
+          {% if form.data_vencimento.errors %}<p class="mt-1 text-xs text-red-500">{{ form.data_vencimento.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div class="sm:col-span-2">
+          <label class="mb-1 block text-sm font-medium">Competência</label>
+          {{ form.competencia|add_class:"form-input" }}
+          <p class="mt-1 text-xs opacity-60">{{ form.competencia.help_text }}</p>
+          {% if form.competencia.errors %}<p class="mt-1 text-xs text-red-500">{{ form.competencia.errors|join:", " }}</p>{% endif %}
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t p-5 sm:p-6" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
+      <div class="mb-4"><h3 class="text-sm font-semibold">Classificação e acompanhamento</h3><p class="text-xs opacity-65">Informações usadas nos relatórios e na posição financeira.</p></div>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {% if form.forma_pagamento %}
+        <div>
+          <label class="mb-1 block text-sm font-medium">{{ form.forma_pagamento.label }}</label>
+          {{ form.forma_pagamento|add_class:"form-input" }}
+          {% if form.forma_pagamento.errors %}<p class="mt-1 text-xs text-red-500">{{ form.forma_pagamento.errors|join:", " }}</p>{% endif %}
+        </div>
+        {% else %}
+        <div class="border p-3 text-sm opacity-75">
+          A forma efetiva é alterada em cada recebimento já registrado, preservando o histórico e a movimentação bancária.
+        </div>
+        {% endif %}
+        <div>
+          <label class="mb-1 block text-sm font-medium">Categoria financeira {% if form.plano_contas.field.required %}<span class="text-rose-500">*</span>{% endif %}</label>
+          {{ form.plano_contas|add_class:"form-input" }}
+          {% if form.plano_contas.errors %}<p class="mt-1 text-xs text-red-500">{{ form.plano_contas.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div class="sm:col-span-2">
+          <label class="mb-1 block text-sm font-medium">Observação</label>
+          {{ form.observacao|add_class:"form-input w-full" }}
+          {% if form.observacao.errors %}<p class="mt-1 text-xs text-red-500">{{ form.observacao.errors|join:", " }}</p>{% endif %}
+        </div>
+      </div>
+    </section>
+
+    <div class="flex justify-end gap-3 border-t px-5 py-4" :style="temaClaro ? 'border-color:#e5e7eb;background:#f8fafc' : 'border-color:#303038;background:#1c1c20'">
+      <a href="{% url 'financeiro:receber_detail' conta.pk %}" class="btn-secondary">Cancelar</a>
+      <button type="submit" class="btn-primary">Salvar alterações</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

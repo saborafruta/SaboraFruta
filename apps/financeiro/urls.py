@@ -35,6 +35,7 @@ urlpatterns = [
     path("receber/relatorio/",         receber_views.ContaReceberRelatorioView.as_view(), name="receber_relatorio"),
     path("receber/novo/",              receber_views.ContaReceberCreateView.as_view(),   name="receber_criar"),
     path("receber/<int:pk>/",          receber_views.ContaReceberDetailView.as_view(),   name="receber_detail"),
+    path("receber/<int:pk>/editar/",   receber_views.ContaReceberEditView.as_view(),     name="receber_editar"),
     path("receber/<int:pk>/baixar/",   receber_views.ContaReceberBaixaView.as_view(),    name="receber_baixar"),
     path("receber/<int:pk>/recebimentos/<int:pagamento_pk>/editar/", receber_views.ContaReceberPagamentoEditView.as_view(), name="receber_pagamento_editar"),
     path("receber/<int:pk>/recebimentos/<int:pagamento_pk>/excluir/", receber_views.ContaReceberPagamentoExcluirView.as_view(), name="receber_pagamento_excluir"),

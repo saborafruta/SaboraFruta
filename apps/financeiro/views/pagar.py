@@ -246,7 +246,7 @@ def _filtrar_contas_pagar_abertas(request, manager=None, params=None):
         finally:
             request.GET = original_get
 
-    if status == 'pendentes':
+    if not status or status == 'pendentes':
         qs = qs.filter(status__in=(
             StatusContaPagar.ABERTO,
             StatusContaPagar.PAGO_PARCIAL,
@@ -753,107 +753,60 @@ class ContaPagaRelatorioView(PermissaoRequiredMixin, View):
 
 
 class ContaPagarRelatorioView(PermissaoRequiredMixin, View):
-    """Relatório imprimível: agrupa os títulos (por padrão em aberto) por
-    fornecedor, com a nota de entrada vinculada de cada título."""
+    """Impressão tabular da mesma seleção exibida em Contas a Pagar."""
 
     permissao_modulo = 'financeiro'
     permissao_acao = 'ver'
 
     def get(self, request):
-        from apps.compras.models import EntradaNF
-
         filial = _filial(request)
-
-        status = request.GET.get('status', '')
-        q = request.GET.get('q', '').strip()
-        data_ini = request.GET.get('data_ini', '')
-        data_fim = request.GET.get('data_fim', '')
-        categoria_contexto = _categorias_financeiras_filtro(request)
-
-        qs = (
-            ContaPagar.objects.for_filial(filial)
-            .select_related('fornecedor', 'funcionario')
-            .order_by('data_vencimento')
+        ContaPagarService.atualizar_status_vencidos(filial)
+        qs, categoria_contexto, filtros = _filtrar_contas_pagar_abertas(request)
+        totais = qs.aggregate(
+            total_valor=Sum('valor_final'),
+            total_pago=Sum('valor_pago'),
+            total_saldo=Sum('valor_saldo'),
         )
-        if status:
-            qs = qs.filter(status=status)
-        else:
-            # Sem status escolhido, o relatório foca nos títulos em aberto.
-            qs = qs.filter(status__in=[
-                StatusContaPagar.ABERTO,
-                StatusContaPagar.PAGO_PARCIAL,
-                StatusContaPagar.VENCIDO,
-                StatusContaPagar.AGENDADO,
-            ])
-        if q:
-            qs = qs.filter(
-                Q(descricao_despesa__icontains=q)
-                | Q(fornecedor__razao_social__icontains=q)
-                | Q(funcionario__nome__icontains=q)
-                | Q(documento_numero__icontains=q)
-                | Q(nota_fiscal_fornecedor__icontains=q)
-            )
-        if data_ini:
-            qs = qs.filter(data_vencimento__gte=data_ini)
-        if data_fim:
-            qs = qs.filter(data_vencimento__lte=data_fim)
-        qs = _aplicar_filtro_categoria_financeira(qs, categoria_contexto)
-
-        titulos = list(qs)
-
-        # Carrega as notas de entrada vinculadas (documento_tipo="entrada_nf")
-        # só para exibir número/data da compra no cabeçalho de cada título.
-        entrada_ids = [
-            t.documento_id for t in titulos
-            if t.documento_tipo == 'entrada_nf' and t.documento_id
-        ]
-        entradas = {}
-        if entrada_ids:
-            entradas = {
-                e.pk: e for e in EntradaNF.objects.filter(pk__in=entrada_ids)
-            }
-
-        grupos: dict = {}
-        for t in titulos:
-            chave = (t.tipo_lancamento, t.funcionario_id or t.fornecedor_id or 0)
-            g = grupos.get(chave)
-            if g is None:
-                g = {
-                    'fornecedor': t.fornecedor,
-                    'beneficiario_nome': t.beneficiario_nome,
-                    'beneficiario_documento': t.beneficiario_documento,
-                    'titulos': [],
-                    'total_saldo': Decimal('0'),
-                    'total_valor': Decimal('0'),
-                }
-                grupos[chave] = g
-
-            entrada = entradas.get(t.documento_id) if t.documento_tipo == 'entrada_nf' else None
-            g['titulos'].append({'titulo': t, 'entrada': entrada})
-            g['total_saldo'] += t.valor_saldo or Decimal('0')
-            g['total_valor'] += t.valor_final or Decimal('0')
-
-        fornecedores = sorted(
-            grupos.values(),
-            key=lambda x: x['beneficiario_nome'].lower(),
-        )
-
-        total_geral_saldo = sum((g['total_saldo'] for g in fornecedores), Decimal('0'))
-        total_geral_valor = sum((g['total_valor'] for g in fornecedores), Decimal('0'))
-
-        status_label = dict(STATUS_CHOICES).get(status) if status else 'Em aberto'
+        limite = 2000
+        total_encontrado = qs.count()
+        titulos = list(qs[:limite])
+        status_label = {
+            **dict(STATUS_CHOICES),
+            'todos': 'Todos os status',
+            'pendentes': 'Somente pendentes',
+            '': 'Somente pendentes',
+        }.get(filtros['status'], filtros['status'])
+        categoria_label = ''
+        if categoria_contexto['categoria_financeira_selecionada']:
+            categoria_label = categoria_contexto['categoria_financeira_selecionada'].descricao
+        elif categoria_contexto['categoria_subgrupo_filtro']:
+            categoria_label = next((
+                item.descricao for item in categoria_contexto['categoria_subgrupos']
+                if str(item.pk) == categoria_contexto['categoria_subgrupo_filtro']
+            ), '')
+        elif categoria_contexto['categoria_grupo_filtro']:
+            categoria_label = next((
+                item.descricao for item in categoria_contexto['categoria_grupos']
+                if str(item.pk) == categoria_contexto['categoria_grupo_filtro']
+            ), '')
 
         return render(request, 'financeiro/pagar/relatorio.html', {
             'title': 'Relatório de Contas a Pagar',
-            'fornecedores': fornecedores,
+            'titulos': titulos,
             'filial': filial,
-            'q': q,
+            'q': filtros['q'],
+            'beneficiario_filtro': filtros['beneficiario'],
+            'categoria_label': categoria_label,
             'status_label': status_label,
-            'data_ini': data_ini,
-            'data_fim': data_fim,
-            'total_geral_saldo': total_geral_saldo,
-            'total_geral_valor': total_geral_valor,
-            'total_titulos': len(titulos),
+            'data_ini': filtros['data_ini'],
+            'data_fim': filtros['data_fim'],
+            'total_geral_saldo': totais['total_saldo'] or Decimal('0'),
+            'total_geral_valor': totais['total_valor'] or Decimal('0'),
+            'total_geral_pago': totais['total_pago'] or Decimal('0'),
+            'total_titulos': total_encontrado,
+            'truncado': total_encontrado > limite,
+            'limite': limite,
+            'querystring': request.GET.urlencode(),
             'gerado_em': timezone.localtime(),
             **categoria_contexto,
         })

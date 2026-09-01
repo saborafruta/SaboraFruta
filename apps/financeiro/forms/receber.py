@@ -2,6 +2,7 @@
 from decimal import Decimal
 
 from django import forms
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.cadastros.models import Cliente
@@ -225,6 +226,105 @@ class ContaReceberForm(ReferenciaContaReceberForm):
                 self.add_error('valor_pago_inicial', 'Informe o valor recebido.')
             elif valor_original and valor_pago > valor_original:
                 self.add_error('valor_pago_inicial', 'O valor recebido não pode ser maior que o valor do título.')
+        return cleaned
+
+
+class ContaReceberEditForm(ReferenciaContaReceberForm):
+    """Edição dos dados do título, sem alterar o histórico de recebimentos."""
+
+    cliente = forms.ModelChoiceField(queryset=Cliente.objects.none(), label='Cliente')
+    parcela = forms.IntegerField(
+        min_value=1, label='Parcela', widget=forms.NumberInput(attrs={'min': '1'}),
+    )
+    total_parcelas = forms.IntegerField(
+        min_value=1, label='Total de parcelas', widget=forms.NumberInput(attrs={'min': '1'}),
+    )
+    valor_original = forms.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal('0.01'),
+        label='Valor original (R$)', widget=VALOR_WIDGET,
+    )
+    data_emissao = forms.DateField(
+        label='Data de emissão',
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+    )
+    data_vencimento = forms.DateField(
+        label='Data de vencimento',
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+    )
+    competencia = forms.DateField(
+        required=False, label='Competência',
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+        help_text='Data de referência contábil/financeira do título.',
+    )
+    forma_pagamento = forms.ModelChoiceField(
+        queryset=FormaPagamento.objects.none(), required=False,
+        label='Forma de recebimento prevista',
+    )
+    plano_contas = CategoriaFinanceiraChoiceField(
+        queryset=PlanoContas.objects.none(), required=False,
+        label='Categoria financeira',
+        help_text='Grupo > Subgrupo > Categoria. A conta contábil será atualizada automaticamente.',
+    )
+    observacao = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 4}), required=False, label='Observação',
+    )
+
+    def __init__(self, *args, filial=None, conta=None, **kwargs):
+        super().__init__(*args, filial=filial, **kwargs)
+        self.conta = conta
+        self.tem_recebimentos = bool(conta and conta.pagamentos.exists())
+        if filial:
+            self.fields['cliente'].queryset = (
+                Cliente.objects.for_filial(filial)
+                .filter(Q(ativo=True) | Q(pk=getattr(conta, 'cliente_id', None)))
+                .order_by('razao_social')
+            )
+            self.fields['forma_pagamento'].queryset = (
+                FormaPagamento.objects
+                .filter(empresa=filial.empresa)
+                .filter(Q(ativo=True) | Q(pk=getattr(conta, 'forma_pagamento_id', None)))
+                .order_by('descricao')
+            )
+            categorias = (
+                PlanoContas.objects
+                .filter(
+                    empresa=filial.empresa, tipo='R',
+                    aceita_lancamento=True, nivel=3, conta_contabil__isnull=False,
+                )
+                .filter(Q(ativo=True) | Q(pk=getattr(conta, 'plano_contas_id', None)))
+                .select_related('conta_pai__conta_pai', 'conta_contabil')
+                .order_by('codigo')
+            )
+            self.fields['plano_contas'].queryset = categorias
+            self.fields['plano_contas'].required = categorias.exists()
+        if self.tem_recebimentos:
+            # Depois de uma baixa, a forma do título espelha o último
+            # recebimento. Ela deve ser alterada no próprio recebimento.
+            self.fields.pop('forma_pagamento')
+
+    def clean(self):
+        cleaned = super().clean()
+        emissao = cleaned.get('data_emissao')
+        vencimento = cleaned.get('data_vencimento')
+        parcela = cleaned.get('parcela')
+        total = cleaned.get('total_parcelas')
+        valor_original = cleaned.get('valor_original')
+        if emissao and vencimento and vencimento < emissao:
+            self.add_error('data_vencimento', 'Vencimento não pode ser anterior à emissão.')
+        if parcela and total and parcela > total:
+            self.add_error('parcela', 'Parcela não pode ser maior que o total de parcelas.')
+        if self.conta and valor_original is not None:
+            valor_final = (
+                valor_original
+                + (self.conta.valor_juros or Decimal('0'))
+                + (self.conta.valor_multa or Decimal('0'))
+                - (self.conta.valor_desconto or Decimal('0'))
+            )
+            if valor_final < (self.conta.valor_pago or Decimal('0')):
+                self.add_error(
+                    'valor_original',
+                    'O novo valor não pode deixar o total do título menor que o valor já recebido.',
+                )
         return cleaned
 
 

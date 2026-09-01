@@ -11,11 +11,14 @@ from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario, RegistroAuditoria
 from apps.core.models.parametros import ParametrosSistema
 from apps.core.services.exceptions import DomainError
-from apps.financeiro.forms.receber import ContaReceberForm, ReferenciaContaReceberForm
+from apps.financeiro.forms.receber import (
+    ContaReceberEditForm, ContaReceberForm, ReferenciaContaReceberForm,
+)
 from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaReceber
 from apps.financeiro.services.receber_service import ContaReceberService
 from apps.financeiro.views.receber import (
-    ContaReceberCreateView, ContaReceberDetailView, ContaReceberListView,
+    ContaReceberCreateView, ContaReceberDetailView, ContaReceberEditView,
+    ContaReceberListView,
     ContaReceberEntregaView, ContaReceberReferenciaView, ContaReceberRelatorioView,
 )
 
@@ -171,6 +174,80 @@ class ReceberEntregaTests(TestCase):
             ContaReceberService.editar_referencia(
                 conta=self.conta, dados={'documento_numero': 'alterado'}, usuario=self.usuario,
             )
+
+    def test_edicao_completa_atualiza_titulo_recalcula_saldo_e_audita(self):
+        outro_cliente = Cliente.objects.create(
+            filial=self.filial, razao_social='Cliente corrigido',
+        )
+        response = ContaReceberEditView.as_view()(self.request('post', {
+            'cliente': outro_cliente.pk,
+            'documento_numero': 'PEDIDO-CORRIGIDO',
+            'status_entrega': 'prevista',
+            'data_entrega_prevista': '2026-09-25',
+            'previsao_entrega_complemento': 'Período da tarde',
+            'parcela': '2', 'total_parcelas': '3',
+            'valor_original': '1250.50',
+            'data_emissao': '2026-09-01',
+            'data_vencimento': '2026-09-30',
+            'competencia': '2026-09-01',
+            'observacao': 'Título conferido com o cliente.',
+        }), pk=self.conta.pk)
+
+        self.assertEqual(response.status_code, 302)
+        self.conta.refresh_from_db()
+        self.assertEqual(self.conta.cliente, outro_cliente)
+        self.assertEqual(self.conta.documento_numero, 'PEDIDO-CORRIGIDO')
+        self.assertEqual(self.conta.valor_original, Decimal('1250.50'))
+        self.assertEqual(self.conta.valor_final, Decimal('1250.50'))
+        self.assertEqual(self.conta.valor_saldo, Decimal('1250.50'))
+        self.assertEqual(self.conta.parcela, 2)
+        self.assertEqual(self.conta.total_parcelas, 3)
+        self.assertEqual(self.conta.competencia, date(2026, 9, 1))
+        self.assertEqual(self.conta.observacao, 'Título conferido com o cliente.')
+        audit = RegistroAuditoria.objects.filter(
+            objeto_id=self.conta.pk, acao='editar',
+        ).latest('criado_em')
+        self.assertIn('Edição completa', audit.objeto_descricao)
+        self.assertEqual(audit.dados_anteriores['cliente'], self.cliente.pk)
+        self.assertEqual(audit.dados_novos['cliente'], outro_cliente.pk)
+
+    def test_edicao_nao_permite_valor_menor_que_o_ja_recebido(self):
+        PagamentoContaReceber.objects.create(
+            filial=self.filial, conta_receber=self.conta,
+            data_pagamento=date(2026, 9, 1), valor_pago=Decimal('800.00'),
+        )
+        self.conta.valor_pago = Decimal('800.00')
+        self.conta.valor_saldo = Decimal('300.00')
+        self.conta.status = 'pago_parcial'
+        self.conta.save()
+        form = ContaReceberEditForm({
+            'cliente': self.cliente.pk,
+            'documento_numero': self.conta.documento_numero,
+            'status_entrega': 'prevista',
+            'previsao_entrega_complemento': 'Outubro/2026',
+            'parcela': 1, 'total_parcelas': 1,
+            'valor_original': '700.00',
+            'data_emissao': '2026-08-31',
+            'data_vencimento': '2026-09-20',
+        }, filial=self.filial, conta=self.conta)
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('valor_original', form.errors)
+        self.assertNotIn('forma_pagamento', form.fields)
+
+    def test_detalhe_oferece_edicao_completa(self):
+        response = ContaReceberDetailView.as_view()(self.request(), pk=self.conta.pk)
+
+        self.assertContains(response, 'Editar informações do título')
+        self.assertContains(response, f'/financeiro/receber/{self.conta.pk}/editar/')
+
+        response = ContaReceberEditView.as_view()(self.request(), pk=self.conta.pk)
+        for campo in (
+            'cliente', 'documento_numero', 'valor_original', 'parcela',
+            'total_parcelas', 'data_emissao', 'data_vencimento', 'competencia',
+            'forma_pagamento', 'plano_contas', 'observacao', 'status_entrega',
+        ):
+            self.assertContains(response, f'name="{campo}"')
 
     def test_listagem_relatorio_detalhe_e_modal_respeitam_configuracao(self):
         for habilitada in (True, False):

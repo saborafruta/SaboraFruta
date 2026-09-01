@@ -116,7 +116,7 @@
     </div>
 
     {% if entrega_habilitada %}<div>Entrega: {% include "financeiro/receber/_entrega_resumo.html" %}</div>{% endif %}
-    {% if pode_editar_referencia %}<a href="{% url 'financeiro:receber_editar_referencia' conta.pk %}" class="btn-secondary inline-flex">Editar documento{% if entrega_habilitada %} e entrega{% endif %}</a>{% endif %}
+    {% if pode_editar_titulo %}<a href="{% url 'financeiro:receber_editar' conta.pk %}" class="btn-secondary inline-flex">Editar informações do título</a>{% endif %}
 
     {% if conta.observacao %}
     <div class="pt-3 border-t" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">

@@ -39,6 +39,7 @@ from apps.financeiro.views.pagar import (
     ContaPagaListView,
     ContaPagaRelatorioView,
     ContaPagarCreateView,
+    ContaPagarRelatorioView,
     DespesaPagaCreateView,
     ContaPagarEditarValorView,
     ContaPagarExcluirView,
@@ -1327,6 +1328,35 @@ class FuncionarioContaPagarTests(TestCase):
 
         self.assertEqual(list(contas.values_list("funcionario__nome", flat=True)), ["Joana Souza"])
         self.assertEqual(filtros["beneficiario"], "Joana Souza")
+
+    def test_relatorio_contas_pagar_usa_impressao_tabular_e_os_mesmos_filtros(self):
+        conta = ContaPagarService.criar(
+            filial=self.filial, funcionario=self.funcionario,
+            tipo_lancamento='funcionario', descricao_despesa='DIÁRIA DE PRODUÇÃO',
+            documento_numero='FOLHA-09/2026', valor_original=Decimal('180.50'),
+            data_emissao=date(2026, 9, 1), data_vencimento=date(2026, 9, 10),
+            plano_contas=self.categoria, forma_pagamento_prevista=self.forma_prevista,
+        )
+        request = RequestFactory().get('/financeiro/pagar/relatorio/', {
+            'status': 'todos', 'beneficiario': 'Maria Silva',
+            'data_ini': '2026-09-01', 'data_fim': '2026-09-30',
+        })
+        request.user = SimpleNamespace(
+            is_authenticated=True,
+            tem_permissao=lambda modulo, acao: True,
+        )
+        request.filial_ativa = self.filial
+
+        response = ContaPagarRelatorioView.as_view()(request)
+
+        self.assertContains(response, 'Imprimir / Salvar PDF')
+        self.assertContains(response, 'DIÁRIA DE PRODUÇÃO')
+        self.assertContains(response, 'Maria Silva')
+        self.assertContains(response, 'FOLHA-09/2026')
+        self.assertContains(response, 'R$ 180,50')
+        self.assertContains(response, f'#{conta.pk}')
+        self.assertNotContains(response, 'html2pdf')
+        self.assertNotContains(response, 'forn-card')
 
     def test_admin_escolhe_editar_somente_um_ou_todos_os_restantes(self):
         perfil = PerfilAcesso.objects.create(

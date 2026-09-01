@@ -19,7 +19,10 @@ from django.views.decorators.clickjacking import xframe_options_sameorigin
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.financeiro.constants.enums import StatusContaReceber
-from apps.financeiro.forms.receber import BaixaContaReceberForm, ContaReceberForm, ReferenciaContaReceberForm
+from apps.financeiro.forms.receber import (
+    BaixaContaReceberForm, ContaReceberEditForm, ContaReceberForm,
+    ReferenciaContaReceberForm,
+)
 from apps.financeiro.services.entrega_receber import entrega_receber_habilitada
 from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaReceber
 from apps.financeiro.services.receber_service import ContaReceberService
@@ -393,6 +396,10 @@ class ContaReceberDetailView(PermissaoRequiredMixin, View):
             'pode_editar_prazo': pode_editar_prazo,
             'pode_gerenciar_recebimentos': pode_gerenciar_recebimentos,
             'pode_editar_referencia': pode_gerenciar_recebimentos,
+            'pode_editar_titulo': (
+                request.user.tem_permissao('financeiro', 'editar')
+                and conta.status != StatusContaReceber.CANCELADO
+            ),
             'entrega_habilitada': entrega_receber_habilitada(filial),
             'pill': pill,
             'tipo_conta': 'receber',
@@ -401,6 +408,60 @@ class ContaReceberDetailView(PermissaoRequiredMixin, View):
         if request.GET.get('modal') == '1':
             return render(request, 'financeiro/_detalhes_conta_modal.html', context)
         return render(request, 'financeiro/receber/detail.html', context)
+
+
+class ContaReceberEditView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'editar'
+
+    def _conta(self, request, pk):
+        return get_object_or_404(
+            ContaReceber.objects.for_filial(_filial(request)).select_related(
+                'cliente', 'forma_pagamento', 'plano_contas',
+            ),
+            pk=pk,
+        )
+
+    def _form(self, request, conta, data=None):
+        kwargs = {'filial': _filial(request), 'conta': conta}
+        if data is None:
+            kwargs['initial'] = {
+                nome: getattr(conta, nome)
+                for nome in ContaReceberService.CAMPOS_EDICAO
+            }
+        else:
+            kwargs['data'] = data
+        return ContaReceberEditForm(**kwargs)
+
+    def _render(self, request, conta, form):
+        return render(request, 'financeiro/receber/edit_form.html', {
+            'title': f'Editar Conta a Receber #{conta.pk}',
+            'conta': conta,
+            'form': form,
+            'tem_recebimentos': form.tem_recebimentos,
+        })
+
+    def get(self, request, pk):
+        conta = self._conta(request, pk)
+        if conta.status == StatusContaReceber.CANCELADO:
+            messages.error(request, 'Não é possível editar uma conta cancelada.')
+            return redirect('financeiro:receber_detail', pk=conta.pk)
+        return self._render(request, conta, self._form(request, conta))
+
+    def post(self, request, pk):
+        conta = self._conta(request, pk)
+        form = self._form(request, conta, request.POST)
+        if form.is_valid():
+            try:
+                ContaReceberService.editar(
+                    conta=conta, dados=form.cleaned_data, usuario=request.user,
+                )
+            except DomainError as exc:
+                form.add_error(None, str(exc))
+            else:
+                messages.success(request, f'Conta a receber #{conta.pk} atualizada com sucesso.')
+                return redirect('financeiro:receber_detail', pk=conta.pk)
+        return self._render(request, conta, form)
 
 
 class ContaReceberReferenciaView(PermissaoRequiredMixin, View):

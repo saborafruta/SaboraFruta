@@ -22,6 +22,13 @@ class ContaReceberService:
         'documento_numero', 'status_entrega', 'data_entrega_prevista',
         'previsao_entrega_complemento',
     )
+    CAMPOS_EDICAO = (
+        'cliente', 'documento_numero', 'status_entrega',
+        'data_entrega_prevista', 'previsao_entrega_complemento',
+        'parcela', 'total_parcelas', 'valor_original', 'data_emissao',
+        'data_vencimento', 'competencia', 'forma_pagamento',
+        'plano_contas', 'observacao',
+    )
 
     @staticmethod
     def _validar_referencia(conta):
@@ -53,6 +60,83 @@ class ContaReceberService:
             usuario=usuario, filial=conta.filial, modulo='financeiro', acao='editar',
             objeto=conta, descricao='Documento e entrega da conta a receber',
             antes=antes, depois=snapshot_modelo(conta, campos=campos),
+        )
+        return conta
+
+    @staticmethod
+    @transaction.atomic
+    def editar(*, conta, dados, usuario):
+        """Atualiza o título e recalcula os valores derivados com segurança."""
+        conta = (
+            ContaReceber.objects.select_for_update()
+            .select_related('filial__empresa')
+            .get(pk=conta.pk)
+        )
+        if conta.status == StatusContaReceber.CANCELADO:
+            raise DomainError('Não é possível editar uma conta cancelada.')
+
+        campos = list(ContaReceberService.CAMPOS_EDICAO)
+        campos_auditoria = [
+            *campos, 'conta_contabil', 'valor_final', 'valor_saldo', 'status',
+        ]
+        antes = snapshot_modelo(conta, campos=campos_auditoria)
+
+        tem_recebimentos = conta.pagamentos.exists()
+        for nome in campos:
+            if nome not in dados:
+                continue
+            if nome == 'forma_pagamento' and tem_recebimentos:
+                continue
+            setattr(conta, nome, dados[nome])
+
+        if conta.cliente.filial_id != conta.filial_id:
+            raise DomainError('O cliente não pertence à filial desta conta.')
+        if conta.plano_contas_id:
+            if conta.plano_contas.empresa_id != conta.filial.empresa_id:
+                raise DomainError('A categoria financeira não pertence à empresa desta conta.')
+            if not conta.plano_contas.conta_contabil_id:
+                raise DomainError('A categoria financeira não possui conta contábil vinculada.')
+            conta.conta_contabil = conta.plano_contas.conta_contabil
+        else:
+            conta.conta_contabil = None
+
+        ContaReceberService._validar_referencia(conta)
+        if conta.data_vencimento < conta.data_emissao:
+            raise DomainError('Vencimento não pode ser anterior à emissão.')
+        if conta.parcela > conta.total_parcelas:
+            raise DomainError('Parcela não pode ser maior que o total de parcelas.')
+
+        conta.valor_final = max(
+            conta.valor_original + conta.valor_juros + conta.valor_multa - conta.valor_desconto,
+            Decimal('0'),
+        )
+        if conta.valor_final < conta.valor_pago:
+            raise DomainError(
+                'O novo valor não pode deixar o total do título menor que o valor já recebido.'
+            )
+        conta.valor_saldo = conta.valor_final - conta.valor_pago
+        if conta.valor_saldo <= Decimal('0'):
+            conta.valor_saldo = Decimal('0')
+            conta.status = StatusContaReceber.PAGO
+        elif conta.valor_pago > Decimal('0'):
+            conta.status = StatusContaReceber.PAGO_PARCIAL
+        elif conta.status not in (StatusContaReceber.NEGOCIADO, StatusContaReceber.DEVOLVIDO):
+            conta.status = (
+                StatusContaReceber.VENCIDO
+                if conta.data_vencimento < timezone.localdate()
+                else StatusContaReceber.ABERTO
+            )
+
+        conta.save(update_fields=[
+            *[nome for nome in campos if nome in dados and not (
+                nome == 'forma_pagamento' and tem_recebimentos
+            )],
+            'conta_contabil', 'valor_final', 'valor_saldo', 'status', 'updated_at',
+        ])
+        registrar_auditoria(
+            usuario=usuario, filial=conta.filial, modulo='financeiro', acao='editar',
+            objeto=conta, descricao='Edição completa da conta a receber',
+            antes=antes, depois=snapshot_modelo(conta, campos=campos_auditoria),
         )
         return conta
 
