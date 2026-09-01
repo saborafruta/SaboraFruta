@@ -165,7 +165,8 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn('sidebar-favorites-data', template)
         self.assertIn('data-full-favorites="true"', template)
         self.assertIn('outline:2px solid var(--pdv-accent)', template)
-        self.assertIn('linear-gradient(90deg,#f15a24 0%,#e8824a 50%,#c75a22 76%,#542412 100%)', template)
+        self.assertIn('linear-gradient(90deg,#f15a24 0%,#e8824a 55%,#c2410c 100%)', template)
+        self.assertIn('html.tema-claro #pdv-app > .pdv-topbar { border-radius:0;', template)
         self.assertNotIn('#f97316', template)
         self.assertIn("static 'core/js/sidebar_favorites.js'", template)
         self.assertIn("core:trocar-filial", template)
@@ -188,3 +189,17 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn('erp-prehydrate tema-escuro', base)
         self.assertIn('window.__erpApplyPdvTheme', base)
         self.assertIn('Space+Grotesk', base)
+
+    def test_cabecalho_global_claro_e_reto_com_gradiente_apenas_laranja(self):
+        get_template('_base.html')
+        base = (Path(__file__).resolve().parents[3] / 'templates' / '_base.html').read_text(
+            encoding='utf-8'
+        )
+
+        self.assertIn(
+            'linear-gradient(90deg, #f15a24 0%, #e8824a 55%, #c2410c 100%)',
+            base,
+        )
+        self.assertIn('border-radius:0;', base)
+        self.assertNotIn('#542412', base)
+        self.assertNotIn('border-radius:0 0 16px 0', base)
