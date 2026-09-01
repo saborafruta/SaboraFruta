@@ -4,6 +4,55 @@
   margin: 0 0 .55rem;
 }
 
+.erp-table-columns-toolbar .btn-secondary { overflow: visible; }
+.erp-table-columns-warning {
+  position: relative;
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  flex: 0 0 18px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, .14);
+}
+.erp-table-columns-warning[hidden] { display: none !important; }
+.erp-table-columns-warning::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  z-index: 210;
+  right: -8px;
+  bottom: calc(100% + 10px);
+  width: max-content;
+  max-width: min(280px, calc(100vw - 32px));
+  padding: .55rem .7rem;
+  border: 1px solid #fecaca;
+  border-radius: 9px;
+  background: #fff;
+  color: #991b1b;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, .18);
+  font-size: .74rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(3px);
+  transition: opacity .15s, transform .15s, visibility .15s;
+}
+.erp-table-columns-toolbar .btn-secondary:hover .erp-table-columns-warning::after,
+.erp-table-columns-toolbar .btn-secondary:focus-visible .erp-table-columns-warning::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
 /*
  * Listagens precisam usar a area que sobra ao lado da barra lateral. O quadro
  * global continua limitado nos formularios; somente paginas reconhecidas como

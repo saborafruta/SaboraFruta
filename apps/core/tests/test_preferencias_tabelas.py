@@ -108,3 +108,6 @@ class TabelaPreferenciasFrontendTests(SimpleTestCase):
         self.assertIn("localStorage.removeItem(legacyStorageKey)", script)
         self.assertIn("'X-CSRFToken': csrfToken", script)
         self.assertIn("localStorage.setItem(instance.storageKey", script)
+        self.assertIn("class=\"erp-table-columns-warning\"", script)
+        self.assertIn("Existem ${hiddenCount} colunas ocultas nesta listagem.", script)
+        self.assertIn("instance.warning.hidden = hiddenCount === 0", script)

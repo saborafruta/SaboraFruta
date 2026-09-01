@@ -135,6 +135,17 @@
     instance.panel.querySelectorAll('[data-column-key]').forEach(checkbox => {
       checkbox.disabled = checkbox.checked && visibleCount === 1;
     });
+    const hiddenCount = hidden.size;
+    const hiddenMessage = hiddenCount === 1
+      ? 'Existe 1 coluna oculta nesta listagem.'
+      : `Existem ${hiddenCount} colunas ocultas nesta listagem.`;
+    instance.warning.hidden = hiddenCount === 0;
+    instance.warning.dataset.tooltip = hiddenMessage;
+    instance.trigger.classList.toggle('has-hidden-columns', hiddenCount > 0);
+    instance.trigger.setAttribute(
+      'aria-label',
+      hiddenCount > 0 ? `Colunas. ${hiddenMessage}` : 'Colunas',
+    );
     instance.table.style.setProperty('--erp-table-visible-width', `${visibleWidth}px`);
     instance.table.dispatchEvent(new CustomEvent('erp:table-columns-applied', { bubbles: true }));
   }
@@ -172,7 +183,7 @@
     trigger.type = 'button';
     trigger.className = 'btn-secondary';
     trigger.setAttribute('aria-expanded', 'false');
-    trigger.innerHTML = '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16M8 4v4m8 2v4M10 16v4"/></svg><span>Colunas</span>';
+    trigger.innerHTML = '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16M8 4v4m8 2v4M10 16v4"/></svg><span>Colunas</span><span class="erp-table-columns-warning" aria-hidden="true" hidden>!</span>';
     toolbar.appendChild(trigger);
 
     const panel = document.createElement('div');
@@ -204,6 +215,7 @@
     document.body.appendChild(panel);
     instance.toolbar = toolbar;
     instance.trigger = trigger;
+    instance.warning = trigger.querySelector('.erp-table-columns-warning');
     instance.panel = panel;
 
     trigger.addEventListener('click', event => {
