@@ -5244,7 +5244,14 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
 
     _telefoneWhatsAppCliente(vendaCupom = null) {
       const c = (vendaCupom || this.venda).cliente || {};
-      return c.whatsapp || c.celular || c.telefone || '';
+      return [c.whatsapp, c.celular, c.telefone]
+        .map(valor => String(valor || '').trim()).find(Boolean) || '';
+    },
+
+    _telefoneWhatsAppHistorico(vendaHistorico = null) {
+      const venda = vendaHistorico || {};
+      return [venda.cliente_celular, venda.cliente_telefone]
+        .map(valor => String(valor || '').trim()).find(Boolean) || '';
     },
 
     _normalizarWhatsApp(valor) {
@@ -5281,7 +5288,9 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       let janela = null;
       let telefone = '';
       {
-        const sugerido = origem ? (origem.cliente_celular || origem.cliente_telefone || '') : this._telefoneWhatsAppCliente();
+        const sugerido = origem
+          ? this._telefoneWhatsAppHistorico(origem)
+          : this._telefoneWhatsAppCliente();
         const digitado = window.prompt('WhatsApp do cliente (opcional, com DDD):', sugerido);
         if (digitado === null) return;
         telefone = this._normalizarWhatsApp(digitado);

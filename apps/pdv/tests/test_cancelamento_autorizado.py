@@ -4,6 +4,7 @@ from unittest.mock import patch
 from django.test import Client, TestCase
 from django.urls import reverse
 
+from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario, UsuarioFilialAcesso
 from apps.estoque.models import Estoque
 from apps.pdv.models import VendaPDV
@@ -72,6 +73,22 @@ class CancelamentoAutorizadoTests(TestCase):
         self.assertNotIn('senha-teste',json.dumps(registro))
         self.assertEqual(self.post().status_code,404)
         self.assertEqual(Estoque.objects.get(produto=self.produto,filial=self.filial).quantidade_atual,5)
+
+    def test_historico_envia_os_dois_telefones_do_cliente_para_whatsapp(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial,
+            razao_social="Cliente com WhatsApp",
+            celular="(84) 99999-1234",
+            telefone="(84) 3222-5678",
+        )
+        self.venda.cliente = cliente
+        self.venda.save(update_fields=["cliente", "updated_at"])
+
+        historico = self.client.get(reverse("pdv:api_historico")).json()["vendas"]
+        registro = next(venda for venda in historico if venda["id"] == self.venda.pk)
+
+        self.assertEqual(registro["cliente_celular"], "(84) 99999-1234")
+        self.assertEqual(registro["cliente_telefone"], "(84) 3222-5678")
 
     def test_senha_errada_bloqueia_apos_cinco_tentativas(self):
         for _ in range(5):

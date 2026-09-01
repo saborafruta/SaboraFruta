@@ -1481,6 +1481,8 @@ def api_historico(request):
             "id": v.id,
             "numero_venda": v.numero_venda,
             "cliente": v.cliente.razao_social if v.cliente else "Consumidor Final",
+            "cliente_celular": v.cliente.celular if v.cliente else "",
+            "cliente_telefone": v.cliente.telefone if v.cliente else "",
             "valor_total": float(v.valor_total),
             "data_venda": v.data_venda.isoformat(),
             "status": v.status,

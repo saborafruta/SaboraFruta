@@ -391,24 +391,32 @@ const respond = (payload, ok = true) => {
   const share=create();
   let nativeShare=0, downloaded=0, opened=0, popupClosed=0, url='';
   context.navigator={userAgent:'Windows',canShare:()=>true,share:async()=>{nativeShare++;}};
-  context.window.prompt=()=>'(55) 99999-1234';
+  let telefoneSugerido='';
+  context.window.prompt=(_mensagem,sugerido)=>{telefoneSugerido=sugerido;return sugerido;};
   context.window.open=()=>{opened++;return {opener:{},location:{replace(value){url=value;}},close(){popupClosed++;}};};
   share._dadosCupomVenda=async()=>({numero:1,total:100});
   share._gerarCupomPdfBlob=async()=>({});
   share._baixarBlob=()=>{downloaded++;};
   context.csrf=()=> 'test-token';
   respond({ok:true,url:'https://ited.app.br/comprovante/token-secreto/'});
-  await share.compartilharCupomWhatsApp({id:1});
+  await share.compartilharCupomWhatsApp({
+    id:1,cliente_celular:'(84) 99999-1234',cliente_telefone:'(84) 3222-5678'
+  });
+  assert.equal(telefoneSugerido,'(84) 99999-1234','History must prefer the registered mobile number');
   assert.equal(nativeShare,0,'Desktop must not open the Windows share dialog');
   assert.equal(downloaded,0,'Link sharing must not download an attachment');
   assert.equal(opened,1);
   const wa=new URL(url);
   assert.equal(wa.origin,'https://web.whatsapp.com');
-  assert.equal(wa.searchParams.get('phone'),'5555999991234');
+  assert.equal(wa.searchParams.get('phone'),'5584999991234');
   assert.match(wa.searchParams.get('text'),/100,00/);
   assert.match(wa.searchParams.get('text'),/https:\/\/ited.app.br\/comprovante\/token-secreto\//);
   context.navigator.userAgent='iPhone';
-  await share.compartilharCupomWhatsApp({id:1});
+  await share.compartilharCupomWhatsApp({
+    id:1,cliente_celular:'  ',cliente_telefone:'(84) 3222-5678'
+  });
+  assert.equal(telefoneSugerido,'(84) 3222-5678','History must fall back to the registered phone');
+  assert.equal(new URL(url).pathname,'/558432225678');
   assert.equal(new URL(url).origin,'https://wa.me');
   assert.equal(nativeShare,0);
   assert.equal(downloaded,0);
