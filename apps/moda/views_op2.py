@@ -450,7 +450,10 @@ class Op2CreateView(ModaBaseView):
                     if configuracao_conjunto else
                     (request.POST.get(f'item_{indice}_grade_id') or None)
                 )
-                observacoes_item = request.POST.get(f'item_{indice}_item_observacoes') or ''
+                observacoes_item = (
+                    '' if configuracao_conjunto else
+                    request.POST.get(f'item_{indice}_item_observacoes') or ''
+                )
                 if configuracao_conjunto:
                     item.observacoes = '\n\n'.join(filter(None, [
                         observacoes_item.strip(),
@@ -1282,7 +1285,10 @@ class Op2ActionView(ModaBaseView):
             dados['valor_unitario'] = str(valor_unitario)
             produto_id = dados.get('produto_id')
             dados['produto'] = f'moda:{produto_id}' if produto_id else ''
-            dados['observacoes'] = request.POST.get('item_observacoes') or ''
+            dados['observacoes'] = (
+                '' if configuracao_conjunto else
+                request.POST.get('item_observacoes') or ''
+            )
             quantidades = quantidades_por_grade.get(grade.pk, {}) if grade else {}
             if grade:
                 total_grade = sum(quantidades.values())
@@ -1460,7 +1466,10 @@ class Op2ActionView(ModaBaseView):
             item.acabamento = (request.POST.get('acabamento') or '').strip()
         item.grade_tamanho = grade
         item.configuracao_conjunto = configuracao_conjunto
-        observacoes_item = request.POST.get('item_observacoes') or ''
+        observacoes_item = (
+            '' if configuracao_conjunto else
+            request.POST.get('item_observacoes') or ''
+        )
         item.observacoes = (
             '\n\n'.join(filter(None, [
                 observacoes_item.strip(),

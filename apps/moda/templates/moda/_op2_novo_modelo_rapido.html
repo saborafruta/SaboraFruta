@@ -1,0 +1,16 @@
+<div class="mt-2">
+  <button x-show="!novoModeloAberto" type="button" class="btn-secondary"
+          @click="novoModeloAberto=true; erroModelo=''; $nextTick(()=>$refs.novoModeloNome?.focus())">
+    + Criar novo modelo
+  </button>
+  <div x-show="novoModeloAberto" x-cloak class="flex flex-wrap gap-2">
+    <input x-ref="novoModeloNome" x-model="novoModeloNome" class="form-input flex-1 min-w-[190px]"
+           placeholder="Nome do novo modelo" @keydown.enter.prevent="salvarModeloRapido()"
+           @keydown.escape.prevent="novoModeloAberto=false; novoModeloNome=''; erroModelo=''">
+    <button type="button" class="btn-secondary" :disabled="criandoModelo"
+            @click="salvarModeloRapido()" x-text="criandoModelo?'Salvando...':'Salvar modelo'"></button>
+    <button type="button" class="btn-secondary" :disabled="criandoModelo"
+            @click="novoModeloAberto=false; novoModeloNome=''; erroModelo=''">Cancelar</button>
+  </div>
+  <small x-show="novoModeloAberto" class="block mt-1" style="color:#ef4444" x-text="erroModelo"></small>
+</div>

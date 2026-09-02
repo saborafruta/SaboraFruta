@@ -6,7 +6,6 @@
       <h3 class="font-bold">Conjunto esportivo</h3>
       <p class="text-xs opacity-70">1 conjunto = 1 camisa + 1 calção. O preço informado vale pelo conjunto completo; as duas peças têm estrutura, grade e personalização próprias.</p>
     </div>
-    <button type="button" class="btn-secondary text-sm" @click="copiarCamisaParaCalcao()">Copiar camisa para o calção</button>
   </div>
   <div class="op2-conjunto-tabs">
     <button type="button" :class="componenteConjuntoAtivo==='camisa'?'is-on':''" @click="componenteConjuntoAtivo='camisa'"><span>01</span><strong>Camisa</strong><small x-text="`${totalComponenteConjunto('camisa')} peça(s)`"></small></button>
@@ -30,7 +29,7 @@
                  @focusin.window="if (!$el.contains($event.target)) $el.removeAttribute('open')"
                  @op2-abrir-multisselecao.window="if ($event.detail.origem !== $el) $el.removeAttribute('open')"
                  @keydown.escape.window="$el.removeAttribute('open')">
-          <summary @click="window.dispatchEvent(new CustomEvent('op2-abrir-multisselecao', {detail:{origem:$el.parentElement}}))"><span x-text="op2ResumoMultisselecao(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'])"></span><span>⌄</span></summary>
+          <summary @click="window.dispatchEvent(new CustomEvent('op2-abrir-multisselecao', {detail:{origem:$el.parentElement}}))"><span class="op2-conjunto-multi-summary" :class="op2ListaMultisselecao(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}']).length>1?'is-multipla':''" :title="op2ResumoMultisselecao(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'])" x-text="op2ResumoMultisselecao(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'])"></span><span>⌄</span></summary>
           <div>{% for opcao in opcoes %}<label><input type="checkbox" :checked="op2MultisselecaoContem(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'],'{{ opcao|escapejs }}')" @change="draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}']=op2AlternarMultisselecao(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'],'{{ opcao|escapejs }}',$event.target.checked)"><span>{{ opcao }}</span></label>{% endfor %}</div>
         </details>
         {% else %}
@@ -43,6 +42,11 @@
       {% endfor %}
       {% endwith %}
     </div>
+    {% if componente == 'camisa' %}
+    <div class="flex justify-end mt-3">
+      <button type="button" class="btn-secondary text-sm" @click="copiarCamisaParaCalcao()">Copiar camisa para o calção</button>
+    </div>
+    {% endif %}
     <label class="block mt-3"><span class="op2-label block">Observações {% if componente == 'calcao' %}do{% else %}da{% endif %} {{ label|lower }}</span><textarea rows="2" class="form-input w-full" x-model="draft.configuracao_conjunto.{{ componente }}.observacoes" placeholder="Detalhes exclusivos desta peça"></textarea></label>
 
     <div class="op2-conjunto-grade">

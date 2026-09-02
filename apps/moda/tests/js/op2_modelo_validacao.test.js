@@ -36,6 +36,22 @@ test('conjunto copia campos compatíveis e a grade da camisa para o calção', (
   assert.equal(op2TotalComponenteConjunto(configuracao, 'calcao'), 3);
 });
 
+test('conjunto preserva como Outro uma gola da camisa ausente no catálogo do calção', () => {
+  const opcoes = {
+    camisa: { campos: { gola: ['CARECA', 'OUTRO', 'N/A'], tipo_impressao: ['SILK', 'N/A'] } },
+    calcao: { campos: { gola: ['POLO', 'OUTRO', 'N/A'], tipo_impressao: ['SILK', 'N/A'] } },
+  };
+  let configuracao = op2NovaConfiguracaoConjunto(opcoes);
+  configuracao.camisa.estrutura.gola = 'CARECA';
+  configuracao.camisa.estrutura.tipo_impressao = ['SILK'];
+
+  configuracao = op2CopiarCamisaParaCalcao(opcoes, configuracao);
+
+  assert.equal(configuracao.calcao.estrutura.gola, 'OUTRO');
+  assert.equal(configuracao.calcao.outros.gola, 'CARECA');
+  assert.deepEqual(configuracao.calcao.estrutura.tipo_impressao, ['SILK']);
+});
+
 test('conjunto exige duas fichas completas com totais iguais', () => {
   const opcoes = {
     camisa: { campos: { cor: ['AZUL', 'N/A'] } },

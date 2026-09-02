@@ -100,11 +100,20 @@ function op2CopiarCamisaParaCalcao(grupos, configuracao) {
   const camposCalcao = grupos?.calcao?.campos || {};
   Object.keys(camposCalcao).forEach(campo => {
     if (origem.estrutura?.[campo]) {
-      destino.estrutura[campo] = JSON.parse(JSON.stringify(origem.estrutura[campo]));
+      const valores = op2ListaMultisselecao(origem.estrutura[campo]);
+      const validos = valores.every(valor => (camposCalcao[campo] || []).includes(valor));
+      if (validos) {
+        destino.estrutura[campo] = JSON.parse(JSON.stringify(origem.estrutura[campo]));
+      } else {
+        // Uma opção criada só para a camisa continua visível no calção como
+        // "Outro", em vez de virar um select aparentemente em branco.
+        destino.estrutura[campo] = op2CampoMultisselecao(campo) ? ['OUTRO'] : 'OUTRO';
+        destino.outros[campo] = valores.join(', ');
+      }
     }
   });
   destino.cor_personalizada = origem.cor_personalizada || '';
-  destino.outros = JSON.parse(JSON.stringify(origem.outros || {}));
+  destino.outros = { ...destino.outros, ...JSON.parse(JSON.stringify(origem.outros || {})) };
   destino.observacoes_campos = JSON.parse(JSON.stringify(origem.observacoes_campos || {}));
   destino.grades = [...(origem.grades || [])];
   destino.gradePorGrade = JSON.parse(JSON.stringify(origem.gradePorGrade || {}));

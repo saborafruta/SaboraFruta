@@ -342,6 +342,7 @@ class Op2Tests(TestCase):
             'item_0_configuracao_conjunto': json.dumps(configuracao),
             'item_0_quantidade': '2',
             'item_0_valor_unitario': '125.50',
+            'item_0_item_observacoes': 'Não deve duplicar a observação da camisa.',
             f'item_0_grade_{tamanho_p.pk}': '1',
             f'item_0_grade_{tamanho_m.pk}': '1',
             'individual_0_item_idx': '0',
@@ -362,6 +363,9 @@ class Op2Tests(TestCase):
         self.assertEqual(item.valor_unitario, Decimal('125.50'))
         self.assertEqual(item.quantidade * item.valor_unitario, Decimal('251.00'))
         self.assertTrue(item.eh_conjunto)
+        self.assertNotIn('Não deve duplicar', item.observacoes)
+        self.assertEqual(item.observacoes.count('Escudo no peito.'), 1)
+        self.assertEqual(item.configuracao_conjunto['camisa']['observacoes'], 'Escudo no peito.')
         self.assertEqual(item.configuracao_conjunto['calcao']['observacoes'], 'Número na perna direita.')
         self.assertEqual(
             {linha.tamanho_id: linha.quantidade for linha in item.grade.all()},
@@ -376,6 +380,7 @@ class Op2Tests(TestCase):
 
         detalhe = self.client.get(reverse('moda:op2-detail', args=[criado.pk]))
         self.assertContains(detalhe, 'Copiar camisa para o calção')
+        self.assertContains(detalhe, 'Tamanho camisa')
         self.assertContains(detalhe, 'Número na perna direita.')
         for nome_url in ('pedido-orcamento-pdf', 'pedido-pdf'):
             pdf = self.client.get(reverse(f'moda:{nome_url}', args=[criado.pk]))
@@ -623,6 +628,26 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'quantidadeDraftGrade')
         self.assertContains(resposta, '.op2-qty-btn')
         self.assertContains(resposta, 'op2NovaMelhorada()')
+
+    def test_editor_da_op_exibe_cadastro_rapido_e_controles_do_conjunto_organizados(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+        html = resposta.content.decode()
+
+        self.assertContains(resposta, '+ Criar novo modelo')
+        self.assertContains(resposta, 'x-show="novoModeloAberto"')
+        self.assertNotContains(resposta, '+ Novo modelo')
+        self.assertContains(resposta, 'op2-conjunto-multi-summary')
+        self.assertContains(resposta, 'Tamanho camisa')
+        self.assertContains(resposta, "draft.estrutura_tipo!=='conjunto'")
+        self.assertLess(
+            html.index('Etiquetas'),
+            html.index('Copiar camisa para o calção'),
+        )
 
     def test_cada_grade_da_nova_op_tem_quantidades_independentes(self):
         self.client.force_login(self._usuario())
