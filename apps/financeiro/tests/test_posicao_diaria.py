@@ -154,6 +154,8 @@ class PosicaoDiariaCaixaTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Posição Diária de Caixa")
+        self.assertContains(response, "Imprimir relatório")
+        self.assertContains(response, reverse("financeiro:posicao_diaria_relatorio"))
         self.assertContains(response, "Venda #1")
         self.assertContains(response, "Compra de material de limpeza")
         self.assertContains(response, "Contas a receber")
@@ -177,6 +179,27 @@ class PosicaoDiariaCaixaTests(TestCase):
             "if (resposta.ok) { window.location.reload(); return; }",
             count=2,
         )
+
+    def test_relatorio_imprimivel_reune_movimentos_resumo_e_saldos(self):
+        self._criar_cenario()
+
+        response = self.client.get(
+            reverse("financeiro:posicao_diaria_relatorio"),
+            {"data": "2026-08-21", "periodo": "hoje"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "financeiro/posicao_diaria_relatorio.html")
+        for texto in (
+            "Relatório da Posição de Caixa", "21/08/2026", "Entradas", "Saídas",
+            "Venda #1", "Compra de material de limpeza", "Forma / conta", "Taxas",
+            "Saldo inicial", "Resultado do dia", "Saldo final", "Saldos das contas bancárias",
+            "Banco principal", "Dinheiro em caixa", "Exportar PDF",
+        ):
+            self.assertContains(response, texto)
+        self.assertNotContains(response, "Transferencia para caixa")
+        self.assertEqual(response.context["posicao"]["total_abertura"], Decimal("170.00"))
+        self.assertEqual(response.context["posicao"]["total_fechamento"], Decimal("210.00"))
 
     def test_transferencia_com_taxa_fica_fora_do_extrato_e_reduz_saldo(self):
         forma = FormaPagamento.objects.create(

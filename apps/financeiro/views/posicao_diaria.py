@@ -534,3 +534,48 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
              "url": "?" + urlencode({"data": referencia.isoformat(), campo: valor})}
             for valor, rotulo in opcoes
         ]
+
+
+class PosicaoDiariaCaixaRelatorioView(PermissaoRequiredMixin, View):
+    """Versao compacta e imprimivel da posicao operacional selecionada."""
+
+    permissao_modulo = "financeiro"
+    permissao_acao = "ver"
+    template_name = "financeiro/posicao_diaria_relatorio.html"
+
+    def get(self, request):
+        data_referencia = parse_date(request.GET.get("data", "")) or timezone.localdate()
+        periodo = request.GET.get("periodo", "hoje")
+        data_inicio, data_fim = PosicaoDiariaCaixaView._resolver_periodo(
+            periodo,
+            data_referencia,
+            request.GET.get("data_inicio"),
+            request.GET.get("data_fim"),
+        )
+        conta_texto = request.GET.get("conta", "").strip()
+        conta_filtro = int(conta_texto) if conta_texto.isdigit() else None
+        ordem = request.GET.get("ordem", "horario")
+        if ordem not in {"horario", "conta", "forma"}:
+            ordem = "horario"
+        posicao = PosicaoDiariaCaixaService(
+            request.filial_ativa, data_fim, data_inicio=data_inicio,
+        ).gerar(conta_filtro=conta_filtro, ordem=ordem)
+        retorno = reverse("financeiro:posicao_diaria") + "?" + urlencode({
+            "data": data_referencia.isoformat(),
+            "periodo": periodo,
+            "data_inicio": data_inicio.isoformat(),
+            "data_fim": data_fim.isoformat(),
+            **({"conta": conta_filtro} if conta_filtro else {}),
+            "ordem": ordem,
+        })
+        return render(request, self.template_name, {
+            "title": "Relatorio da Posicao de Caixa",
+            "filial": request.filial_ativa,
+            "posicao": posicao,
+            "data_referencia": data_referencia,
+            "data_inicio": data_inicio,
+            "data_fim": data_fim,
+            "periodo_unico": data_inicio == data_fim,
+            "gerado_em": timezone.localtime(),
+            "retorno_url": retorno,
+        })
