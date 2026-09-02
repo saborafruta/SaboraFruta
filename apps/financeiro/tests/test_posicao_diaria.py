@@ -265,6 +265,8 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "Atrasada")
         self.assertContains(response, "Pesquisar por descrição ou nome", count=2)
         self.assertContains(response, "posicionarDiaSelecionado")
+        self.assertContains(response, ".normalize('NFD')")
+        self.assertContains(response, ".replace(/[\\u0300-\\u036f]/g, '')")
         self.assertContains(response, f"abrirTituloPagar('{reverse('financeiro:pagar_detail', args=[conta_hoje.pk])}')")
         self.assertContains(response, "atualizarPrevisoes($el.href)")
         self.assertContains(response, "pc-payables-forecast mt-5")

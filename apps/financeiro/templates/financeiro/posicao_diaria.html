@@ -240,8 +240,17 @@
   tituloPagarHtml: '',
   tituloPagarErro: '',
   previsoesCarregando: false,
+  normalizarBusca(valor) {
+    return String(valor || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase('pt-BR')
+      .replace(/\s+/g, ' ')
+      .trim();
+  },
   correspondePrevisao(texto, busca) {
-    return !busca.trim() || String(texto || '').toLocaleLowerCase().includes(busca.trim().toLocaleLowerCase());
+    const termo = this.normalizarBusca(busca);
+    return !termo || this.normalizarBusca(texto).includes(termo);
   },
   detalheModal: {% if editar_entrada_form.errors %}false{% else %}{{ detalhe|yesno:'true,false' }}{% endif %},
   entradaEdicao: {% if editar_entrada_form.errors %}true{% else %}false{% endif %},
