@@ -8,14 +8,22 @@
   a ficha vai herdar dele. O texto sozinho ("a ficha lê do produto") não
   ajuda: sem ver O QUE ela lê, ninguém sabe se o produto está completo.
 {% endcomment %}
-<div class="space-y-5 max-w-4xl"
+{% comment %}
+  A TELA OCUPA A LARGURA QUE TEM, e a divide em duas colunas.
+
+  Num container estreito, ficha técnica vira uma fila de campos altos: quem
+  preenche rola para achar o que já respondeu, e o que o produto ENTREGA para
+  a ficha — modelo, coleção, tecido, grade — sai de vista justamente enquanto
+  se decide a versão. Com a coluna de apoio fixa ao lado, o que veio do
+  cadastro fica visível o tempo todo, que é quando a falta de tecido ainda dá
+  para corrigir.
+{% endcomment %}
+<div class="w-full space-y-4"
      x-data="{ produto: null }"
      @produto-escolhido.window="produto = $event.detail">
 
-
-
   {# ── Cabeçalho ────────────────────────────────────────────────────── #}
-  <div class="card p-5">
+  <div>
     <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       <a href="{% url 'moda:ficha-list' %}"
          :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Ficha Técnica</a>
@@ -24,7 +32,7 @@
     <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
       {{ title }}
     </h2>
-    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    <p class="text-sm mt-1 max-w-3xl" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       Modelo, coleção, tecido e grade vêm do cadastro do produto — a ficha lê
       de lá para não existirem duas versões da mesma informação. Os materiais
       entram na tela seguinte.
@@ -89,8 +97,11 @@
     </div>
 
   {% else %}
-    <form method="post" enctype="multipart/form-data" class="space-y-5">
+    <form method="post" enctype="multipart/form-data"
+          class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
       {% csrf_token %}
+
+      <div class="space-y-4 min-w-0">
 
       {# ── 1. Produto ────────────────────────────────────────────────── #}
       <div class="card p-5 space-y-4">
@@ -140,33 +151,6 @@
           {% endfor %}
         </div>
 
-        {# ── O que a ficha herda ─────────────────────────────────────── #}
-        <template x-if="produto">
-          <div class="rounded-xl p-4"
-               :style="temaClaro ? 'background:#f8fafc;' : 'background:#27272a;'">
-            <p class="text-xs uppercase tracking-wider mb-2"
-               :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-              O que vem do cadastro deste produto
-            </p>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-              <template x-for="campo in ['modelo', 'colecao', 'tecido', 'grade']" :key="campo">
-                <div>
-                  <p class="text-xs capitalize"
-                     :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'"
-                     x-text="campo === 'colecao' ? 'coleção' : campo"></p>
-                  {% comment %}
-                    Campo vazio aparece como "não informado" em laranja, e não
-                    some: é isso que faz alguém voltar ao cadastro do produto
-                    ANTES de a ficha descer para a fábrica sem tecido.
-                  {% endcomment %}
-                  <p class="font-semibold"
-                     :style="produto[campo] ? (temaClaro ? 'color:#111827;' : 'color:#f8fafc;') : 'color:#d97706;'"
-                     x-text="produto[campo] || 'não informado'"></p>
-                </div>
-              </template>
-            </div>
-          </div>
-        </template>
       </div>
 
       {# ── 2. Versão e situação ──────────────────────────────────────── #}
@@ -197,20 +181,71 @@
         {% endfor %}
       </div>
 
-      {# ── Ações ─────────────────────────────────────────────────────── #}
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <p class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
-          Depois de salvar, a próxima tela é a dos materiais — é lá que o
-          custo da peça é calculado.
-        </p>
-        <div class="flex gap-2">
-          <a href="{% if ficha %}{% url 'moda:ficha-detail' ficha.pk %}{% else %}{% url 'moda:ficha-list' %}{% endif %}"
-             class="btn-secondary text-sm">Cancelar</a>
-          <button type="submit" class="btn-primary text-sm">
-            {% if ficha %}SALVAR ALTERAÇÕES{% else %}SALVAR E IR PARA OS MATERIAIS{% endif %}
-          </button>
-        </div>
       </div>
+
+      {# ── A coluna de apoio ─────────────────────────────────────────── #}
+      <aside class="space-y-4 xl:sticky xl:top-4">
+
+        {% comment %}
+          O QUE O PRODUTO ENTREGA PARA A FICHA, ao lado e sempre visível.
+          Dentro da seção 1 ele sumia da tela assim que a pessoa descia para
+          a especificação — e é justamente ali, escrevendo como a peça é
+          feita, que falta de tecido ou de grade importa.
+        {% endcomment %}
+        <div class="card p-4">
+          <p class="text-xs uppercase tracking-wider mb-3"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            O que vem do cadastro do produto
+          </p>
+
+          <template x-if="produto">
+            <div class="space-y-2.5">
+              <template x-for="campo in ['modelo', 'colecao', 'tecido', 'grade']" :key="campo">
+                <div class="flex items-baseline justify-between gap-3">
+                  <span class="text-xs capitalize"
+                        :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'"
+                        x-text="campo === 'colecao' ? 'coleção' : campo"></span>
+                  {% comment %}
+                    Campo vazio aparece como "não informado" em laranja, e não
+                    some: é isso que faz alguém voltar ao cadastro do produto
+                    ANTES de a ficha descer para a fábrica sem tecido.
+                  {% endcomment %}
+                  <span class="text-sm font-semibold text-right"
+                        :style="produto[campo] ? (temaClaro ? 'color:#111827;' : 'color:#f8fafc;') : 'color:#d97706;'"
+                        x-text="produto[campo] || 'não informado'"></span>
+                </div>
+              </template>
+            </div>
+          </template>
+
+          <p x-show="!produto" x-cloak class="text-xs"
+             :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            Escolha o produto para ver modelo, coleção, tecido e grade — a
+            ficha lê tudo isso de lá.
+          </p>
+        </div>
+
+        {# ── O que vem depois ──────────────────────────────────────── #}
+        <div class="card p-4">
+          <p class="text-xs uppercase tracking-wider mb-2"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Depois de salvar
+          </p>
+          <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+            A próxima tela é a dos <strong>materiais</strong> — é lá que o
+            custo da peça é calculado.
+          </p>
+        </div>
+
+        {# ── As ações ──────────────────────────────────────────────── #}
+        <div class="card p-4 flex flex-col gap-2">
+          <button type="submit" class="btn-primary text-sm w-full justify-center">
+            {% if ficha %}Salvar alterações{% else %}Salvar e ir para os materiais{% endif %}
+          </button>
+          <a href="{% if ficha %}{% url 'moda:ficha-detail' ficha.pk %}{% else %}{% url 'moda:ficha-list' %}{% endif %}"
+             class="btn-secondary text-sm w-full justify-center">Cancelar</a>
+        </div>
+      </aside>
     </form>
   {% endif %}
 
