@@ -56,6 +56,22 @@ def validar_configuracao_conjunto(valor, grupos, filial=None):
         cor_personalizada = str(origem.get('cor_personalizada') or '').strip()
         if estrutura.get('cor') == 'COR PERSONALIZADA' and not cor_personalizada:
             raise ValueError(f'{label}: informe a cor personalizada.')
+        outros = {
+            str(campo): str(texto or '').strip()[:500]
+            for campo, texto in (origem.get('outros') or {}).items()
+            if str(texto or '').strip()
+        }
+        observacoes_campos = {
+            str(campo): str(texto or '').strip()[:500]
+            for campo, texto in (origem.get('observacoes_campos') or {}).items()
+            if str(texto or '').strip()
+        }
+        for campo, escolha in estrutura.items():
+            if 'OUTRO' in _lista(escolha) and not outros.get(campo):
+                raise ValueError(
+                    f'{label} · {campo.replace("_", " ").capitalize()}: '
+                    'descreva a opção “Outro”.'
+                )
 
         grades = []
         grade_por_grade = {}
@@ -86,6 +102,8 @@ def validar_configuracao_conjunto(valor, grupos, filial=None):
         resultado[componente] = {
             'estrutura': estrutura,
             'cor_personalizada': cor_personalizada,
+            'outros': outros,
+            'observacoes_campos': observacoes_campos,
             'grades': grades,
             'gradePorGrade': grade_por_grade,
             'observacoes': str(origem.get('observacoes') or '').strip()[:2000],
@@ -159,7 +177,13 @@ def componentes_conjunto_exibicao(item):
                 continue
             if campo == 'cor' and valores == ['COR PERSONALIZADA']:
                 valores = [dados.get('cor_personalizada') or valores[0]]
+            if 'OUTRO' in valores:
+                outro = (dados.get('outros') or {}).get(campo) or 'OUTRO'
+                valores = [outro if item == 'OUTRO' else item for item in valores]
             estrutura.append((campo.replace('_', ' ').title(), ' + '.join(valores)))
+            observacao = (dados.get('observacoes_campos') or {}).get(campo)
+            if observacao:
+                estrutura.append((f'Observação de {campo.replace("_", " ").title()}', observacao))
         matrizes = []
         for grade_id in dados.get('grades') or []:
             mapa = (dados.get('gradePorGrade') or {}).get(str(grade_id), {})

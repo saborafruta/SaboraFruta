@@ -485,6 +485,12 @@ class OrcamentoPdfService:
         conteudo = [
             Paragraph(_texto(item.nome_exibicao), e['nome']), Spacer(1, 3),
         ]
+        if item.eh_conjunto:
+            conteudo += [Paragraph(
+                f'<b>{item.quantidade} conjunto(s)</b> · '
+                f'{brl(item.valor_unitario)} por conjunto completo '
+                '(1 camisa + 1 calção)', e['celula'],
+            ), Spacer(1, 3)]
         especificacoes = cls._especificacoes(item)
         if especificacoes:
             celulas = [

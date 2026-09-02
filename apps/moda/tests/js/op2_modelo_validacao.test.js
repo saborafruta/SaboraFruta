@@ -24,10 +24,14 @@ test('conjunto copia campos compatíveis e a grade da camisa para o calção', (
   };
   let configuracao = op2NovaConfiguracaoConjunto(opcoes);
   configuracao.camisa.estrutura.cor = 'AZUL';
+  configuracao.camisa.outros.manga = 'Manga especial';
+  configuracao.camisa.observacoes_campos.cor = 'Tom aprovado';
   configuracao.camisa.grades = ['1'];
   configuracao.camisa.gradePorGrade = { 1: { 9: 3 } };
   configuracao = op2CopiarCamisaParaCalcao(opcoes, configuracao);
   assert.equal(configuracao.calcao.estrutura.cor, 'AZUL');
+  assert.equal(configuracao.calcao.outros.manga, 'Manga especial');
+  assert.equal(configuracao.calcao.observacoes_campos.cor, 'Tom aprovado');
   assert.deepEqual(configuracao.calcao.gradePorGrade, { 1: { 9: 3 } });
   assert.equal(op2TotalComponenteConjunto(configuracao, 'calcao'), 3);
 });
@@ -86,6 +90,18 @@ test('impressão e acabamento aceitam múltiplas opções válidas', () => {
     tipo_impressao: ['SILK', 'RELEVO'], estrutura: {acabamentos: ['RECORTE', 'FORRO']},
   }, gruposMultiplos);
   assert.equal(erro, '');
+  assert.equal(validarModeloOp2({
+    valor_unitario: '10', estrutura_tipo: 'calcao',
+    tipo_impressao: 'SILK, RELEVO', estrutura: {acabamentos: 'RECORTE + FORRO'},
+  }, gruposMultiplos), '');
+});
+
+test('Outro exige descrição e observações não interferem na validação', () => {
+  const opcoes = {camisa: {label: 'Camisa', campos: {tipo_impressao: ['OUTRO', 'N/A'], malha: ['OUTRO', 'N/A']}}};
+  const draft = {valor_unitario: '10', estrutura_tipo: 'camisa', tipo_impressao: ['N/A'], estrutura: {malha: 'OUTRO'}, estrutura_outros: {}, estrutura_observacoes: {malha: 'Detalhe'}};
+  assert.match(validarModeloOp2(draft, opcoes), /descreva/);
+  draft.estrutura_outros.malha = 'Neoprene';
+  assert.equal(validarModeloOp2(draft, opcoes), '');
 });
 
 test('seletor múltiplo mantém N/A exclusivo e resume escolhas', () => {

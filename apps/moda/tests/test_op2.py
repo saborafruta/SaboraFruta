@@ -108,15 +108,80 @@ class Op2Tests(TestCase):
         self.assertNotIn('Calça / bermudas', labels)
         self.assertIn('RELEVO', OP2_ESTRUTURA_OPCOES['camisa']['campos']['tipo_impressao'])
 
+    def test_ficha_completa_e_novas_opcoes_estao_em_todos_os_modelos(self):
+        campos_camisa = set(OP2_ESTRUTURA_OPCOES['camisa']['campos'])
+        for tipo, grupo in OP2_ESTRUTURA_OPCOES.items():
+            with self.subTest(tipo=tipo):
+                self.assertEqual(set(grupo['campos']), campos_camisa)
+                for opcoes in grupo['campos'].values():
+                    self.assertIn('OUTRO', opcoes)
+                self.assertIn('PLASTISOL', grupo['campos']['tipo_impressao'])
+                self.assertIn('PERSONALIZADA CLIENTE', grupo['campos']['etiquetas'])
+
+    def test_outro_exige_texto_e_observacao_do_campo_e_preservada(self):
+        from apps.moda.services.op2_estrutura import validar_estrutura_item
+
+        grupos = opcoes_estrutura_filial(self.filial)
+        dados = QueryDict('', mutable=True)
+        dados.update({
+            'estrutura_tipo': 'camisa',
+            **{f'estrutura_{campo}': 'N/A' for campo in grupos['camisa']['campos']},
+        })
+        dados['estrutura_malha'] = 'OUTRO'
+        with self.assertRaisesMessage(ValueError, 'descreva a opção'):
+            validar_estrutura_item(dados, grupos)
+        dados['estrutura_outro_malha'] = 'Neoprene leve'
+        dados['estrutura_observacao_malha'] = 'Usar somente no painel frontal'
+        validar_estrutura_item(dados, grupos)
+        resumo = juntar_observacoes_item('', dados, grupos)
+        self.assertIn('Malha: Neoprene leve', resumo)
+        self.assertIn('Observação de Malha: Usar somente no painel frontal', resumo)
+
+    def test_rascunho_salva_acabamento_e_reabre_outro_com_observacao(self):
+        from apps.moda.views_op2 import _dados_modal_item
+
+        self._login_op2()
+        grupos = opcoes_estrutura_filial(self.filial)
+        dados = {
+            'cliente': str(self.cliente.pk),
+            'item_0_produto_id': str(self.produto.pk),
+            'item_0_estrutura_tipo': 'calcao',
+            'item_0_quantidade': '1',
+            'item_0_valor_unitario': '85.00',
+            **{
+                f'item_0_estrutura_{campo}': 'N/A'
+                for campo in grupos['calcao']['campos']
+            },
+            'item_0_estrutura_malha': 'OUTRO',
+            'item_0_estrutura_outro_malha': 'Neoprene leve',
+            'item_0_estrutura_observacao_malha': 'Painel frontal',
+            'item_0_estrutura_acabamentos': 'RECORTE,FORRO',
+            'pagamento_0_forma': 'nao_informado',
+            'pagamento_0_valor': '85.00',
+        }
+        resposta = self.client.post(reverse('moda:op2-create'), dados)
+        self.assertEqual(resposta.status_code, 302)
+        item = PedidoProducao.objects.exclude(pk=self.pedido.pk).get().itens.get()
+        self.assertIn('Acabamentos: RECORTE + FORRO', item.observacoes)
+        modal = _dados_modal_item(item, grupos)
+        self.assertEqual(modal['estrutura']['malha'], 'OUTRO')
+        self.assertEqual(modal['estrutura_outros']['malha'], 'Neoprene leve')
+        self.assertEqual(modal['estrutura_observacoes']['malha'], 'Painel frontal')
+
     def test_impressao_e_acabamento_aceitam_multiplas_opcoes(self):
         from apps.moda.services.op2_estrutura import validar_estrutura_item
 
         grupos = opcoes_estrutura_filial(self.filial)
         dados = QueryDict('', mutable=True)
-        dados.update({'estrutura_tipo': 'calcao', 'estrutura_malha': 'DRY'})
+        dados.update({
+            'estrutura_tipo': 'calcao',
+            **{f'estrutura_{campo}': 'N/A' for campo in grupos['calcao']['campos']},
+            'estrutura_malha': 'DRY',
+        })
         dados.setlist('estrutura_tipo_impressao', ['SILK', 'RELEVO'])
         dados.setlist('estrutura_acabamentos', ['RECORTE', 'FORRO'])
-        dados.update({'estrutura_cor': 'PRETO', 'estrutura_etiquetas': 'N/A'})
+        dados['estrutura_cor'] = 'PRETO'
+        dados['estrutura_etiquetas'] = 'N/A'
 
         validar_estrutura_item(dados, grupos)
         resumo = juntar_observacoes_item('', dados, grupos)

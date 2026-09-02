@@ -8,17 +8,23 @@ function validarModeloOp2(draft, grupos) {
   if (!grupo) return 'Selecione um tipo de peça válido.';
   for (const [campo, opcoes] of Object.entries(grupo.campos)) {
     const valorCampo = campo === 'tipo_impressao' ? draft.tipo_impressao : draft.estrutura?.[campo];
-    const valores = Array.isArray(valorCampo) ? valorCampo.filter(Boolean) : (valorCampo ? [valorCampo] : []);
+    const valores = op2ListaMultisselecao(valorCampo);
     const rotulo = campo.replaceAll('_', ' ');
     if (!valores.length) return `${rotulo}: preenchimento obrigatório. Se não se aplica, selecione N/A.`;
+    if (!op2CampoMultisselecao(campo) && valores.length > 1) return `${rotulo}: selecione somente uma opção.`;
     if (valores.some(valor => !opcoes.includes(valor))) return `${rotulo}: selecione uma opção válida para ${grupo.label}.`;
     if (valores.length > 1 && valores.includes('N/A')) return `${rotulo}: N/A não pode ser combinado com outra opção.`;
+    if (valores.includes('OUTRO') && !String(draft.estrutura_outros?.[campo] || '').trim()) {
+      return `${rotulo}: descreva a opção Outro.`;
+    }
   }
   return '';
 }
 
 function op2ListaMultisselecao(valores) {
-  return Array.isArray(valores) ? valores.filter(Boolean) : (valores ? [String(valores)] : []);
+  const brutos = Array.isArray(valores) ? valores : (valores ? [String(valores)] : []);
+  return brutos.flatMap(valor => String(valor).replaceAll(' + ', ',').split(','))
+    .map(valor => valor.trim()).filter(Boolean);
 }
 
 function op2MultisselecaoContem(valores, opcao) {
@@ -57,7 +63,8 @@ function op2EstruturaPadraoNaoMultipla(grupos, tipo, estrutura) {
 function op2NovoComponenteConjunto(grupos, tipo) {
   return {
     estrutura: op2EstruturaPadraoNaoMultipla(grupos, tipo, {}),
-    cor_personalizada: '', grades: [], gradePorGrade: {}, observacoes: '',
+    cor_personalizada: '', outros: {}, observacoes_campos: {},
+    grades: [], gradePorGrade: {}, observacoes: '',
   };
 }
 
@@ -66,6 +73,25 @@ function op2NovaConfiguracaoConjunto(grupos) {
     camisa: op2NovoComponenteConjunto(grupos, 'camisa'),
     calcao: op2NovoComponenteConjunto(grupos, 'calcao'),
   };
+}
+
+function op2PrepararConfiguracaoConjunto(grupos, configuracao) {
+  const resultado = {};
+  for (const componente of ['camisa', 'calcao']) {
+    const padrao = op2NovoComponenteConjunto(grupos, componente);
+    const origem = configuracao?.[componente] || {};
+    resultado[componente] = {
+      ...padrao, ...origem,
+      estrutura: op2EstruturaPadraoNaoMultipla(
+        grupos, componente, { ...padrao.estrutura, ...(origem.estrutura || {}) },
+      ),
+      outros: { ...(origem.outros || {}) },
+      observacoes_campos: { ...(origem.observacoes_campos || {}) },
+      grades: [...(origem.grades || [])].map(String),
+      gradePorGrade: JSON.parse(JSON.stringify(origem.gradePorGrade || {})),
+    };
+  }
+  return resultado;
 }
 
 function op2CopiarCamisaParaCalcao(grupos, configuracao) {
@@ -78,6 +104,8 @@ function op2CopiarCamisaParaCalcao(grupos, configuracao) {
     }
   });
   destino.cor_personalizada = origem.cor_personalizada || '';
+  destino.outros = JSON.parse(JSON.stringify(origem.outros || {}));
+  destino.observacoes_campos = JSON.parse(JSON.stringify(origem.observacoes_campos || {}));
   destino.grades = [...(origem.grades || [])];
   destino.gradePorGrade = JSON.parse(JSON.stringify(origem.gradePorGrade || {}));
   destino.observacoes = origem.observacoes || '';
@@ -101,6 +129,9 @@ function validarConjuntoOp2(configuracao, grupos) {
       const valores = op2ListaMultisselecao(dados.estrutura?.[campo]);
       if (!valores.length) return `${label} · ${campo.replaceAll('_', ' ')}: selecione uma opção ou N/A.`;
       if (valores.some(valor => !opcoes.includes(valor))) return `${label}: existe uma opção inválida em ${campo}.`;
+      if (valores.includes('OUTRO') && !String(dados.outros?.[campo] || '').trim()) {
+        return `${label} · ${campo.replaceAll('_', ' ')}: descreva a opção Outro.`;
+      }
     }
     if (dados.estrutura?.cor === 'COR PERSONALIZADA' && !String(dados.cor_personalizada || '').trim()) {
       return `${label}: informe a cor personalizada.`;
@@ -120,5 +151,6 @@ if (typeof module !== 'undefined') module.exports = {
   op2MultisselecaoContem, op2ResumoMultisselecao,
   op2CampoMultisselecao, op2EstruturaPadraoNaoMultipla,
   op2NovoComponenteConjunto, op2NovaConfiguracaoConjunto,
+  op2PrepararConfiguracaoConjunto,
   op2CopiarCamisaParaCalcao, op2TotalComponenteConjunto, validarConjuntoOp2,
 };

@@ -14,4 +14,8 @@
     {% endfor %}
   </div>
   <small class="op2-multi-help">Você pode escolher mais de uma opção.</small>
+  <input x-show="op2MultisselecaoContem({% if campo == 'tipo_impressao' %}draft.tipo_impressao{% else %}draft.estrutura['{{ campo }}']{% endif %}, 'OUTRO')" x-cloak
+         {% if submit_names %}name="estrutura_outro_{{ campo }}"{% endif %}
+         x-model="draft.estrutura_outros['{{ campo }}']" class="form-input w-full mt-1"
+         placeholder="Descreva a outra opção">
 </div>

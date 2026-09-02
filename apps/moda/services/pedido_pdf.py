@@ -1248,8 +1248,8 @@ class PedidoPdfService:
             return f'R$ {valor:,.2f}'.replace(',', '_').replace('.', ',').replace('_', '.')
 
         linhas = [
-            ('Peças', f'{item.quantidade if item else pedido.quantidade_total}'),
-            ('Unitário', brl(item.valor_unitario or Decimal('0')) if item else brl(pedido.valor_unitario_medio)),
+            ('Conjuntos' if item and item.eh_conjunto else 'Peças', f'{item.quantidade if item else pedido.quantidade_total}'),
+            ('Por conjunto' if item and item.eh_conjunto else 'Unitário', brl(item.valor_unitario or Decimal('0')) if item else brl(pedido.valor_unitario_medio)),
             ('Produto', brl(item.subtotal) if item else brl(pedido.subtotal)),
             ('TOTAL OP', brl(pedido.valor_total)),
         ]

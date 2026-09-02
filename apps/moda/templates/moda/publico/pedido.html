@@ -152,14 +152,14 @@
           </div>
           <div class="text-right shrink-0">
             <p class="text-2xl font-bold" style="color:#0f172a;">{{ item.quantidade }}</p>
-            <p class="text-xs uppercase tracking-wider" style="color:#64748b;">peças</p>
+            <p class="text-xs uppercase tracking-wider" style="color:#64748b;">{% if item.eh_conjunto %}conjuntos{% else %}peças{% endif %}</p>
           </div>
         </div>
 
         {% if modo_orcamento %}
           <div class="grid grid-cols-2 gap-3 rounded-xl p-3" style="background:#f8fafc; border:1px solid #eef2f7;">
             <div>
-              <p class="text-xs uppercase tracking-wider" style="color:#64748b;">Valor unitário</p>
+              <p class="text-xs uppercase tracking-wider" style="color:#64748b;">{% if item.eh_conjunto %}Valor por conjunto{% else %}Valor unitário{% endif %}</p>
               <p class="text-base font-bold" style="color:#0f172a;">R$ {{ item.valor_unitario|floatformat:2 }}</p>
             </div>
             <div class="text-right">

@@ -8,7 +8,7 @@ como resumo textual nas observações do item para não perder a informação.
 from copy import deepcopy
 
 TIPOS_IMPRESSAO_PADRAO = [
-    'SUBLIMAÇÃO', 'SILK', 'BORDADO', 'DTF', 'DTG', 'TRANSFER', 'PATCH', 'RELEVO',
+    'SUBLIMAÇÃO', 'SILK', 'PLASTISOL', 'BORDADO', 'DTF', 'DTG', 'TRANSFER', 'PATCH', 'RELEVO',
     'SEM IMPRESSÃO', 'OUTRO',
 ]
 
@@ -170,17 +170,43 @@ def valores_estrutura_campo(post, campo: str):
                 valores.append(valor)
     return valores
 
-# O tipo de impressão pertence à estrutura de qualquer peça e deve aparecer
-# antes das características físicas. Mantê-lo no padrão também faz com que a
-# tela de gestão permita editar/inativar suas opções por tipo de peça.
+# Todo tipo de peça usa a mesma ficha completa. As opções especializadas de
+# cada modelo são preservadas e os campos ausentes recebem o catálogo geral.
+_catalogo_campos = {}
 for _grupo in OP2_ESTRUTURA_OPCOES.values():
-    _grupo['campos'] = {
-        'tipo_impressao': list(TIPOS_IMPRESSAO_PADRAO),
-        'cor': list(CORES_PRINCIPAIS),
-        **_grupo.get('campos', {}),
-    }
-    for _valores in _grupo['campos'].values():
-        _valores.append('N/A')
+    for _campo, _valores in _grupo.get('campos', {}).items():
+        _lista = _catalogo_campos.setdefault(_campo, [])
+        for _valor in _valores:
+            if _valor not in _lista:
+                _lista.append(_valor)
+
+_ordem_campos = [
+    'tipo_impressao', 'cor', 'malha', 'gola', 'manga', 'punho', 'frisos',
+    'galoes', 'recortes', 'vies', 'abertura', 'regatas',
+    'acabamentos_abertura_lateral', 'acabamentos_de_cavas',
+    'acabamentos_de_golas', 'ombros', 'barra', 'gorro', 'acabamentos',
+    'acabamento', 'tamanho', 'etiquetas',
+]
+_catalogo_campos['tipo_impressao'] = list(TIPOS_IMPRESSAO_PADRAO)
+_catalogo_campos['cor'] = list(CORES_PRINCIPAIS)
+_catalogo_campos.setdefault('etiquetas', []).append('PERSONALIZADA CLIENTE')
+
+for _grupo in OP2_ESTRUTURA_OPCOES.values():
+    _originais = _grupo.get('campos', {})
+    _completos = {}
+    for _campo in _ordem_campos:
+        if _campo not in _catalogo_campos:
+            continue
+        _valores = list(_originais.get(_campo) or _catalogo_campos[_campo])
+        if _campo == 'tipo_impressao':
+            _valores = list(TIPOS_IMPRESSAO_PADRAO)
+        if _campo == 'etiquetas' and 'PERSONALIZADA CLIENTE' not in _valores:
+            _valores.append('PERSONALIZADA CLIENTE')
+        for _obrigatoria in ('OUTRO', 'N/A'):
+            if _obrigatoria not in _valores:
+                _valores.append(_obrigatoria)
+        _completos[_campo] = _valores
+    _grupo['campos'] = _completos
 
 
 def _normalizar_slug(texto: str) -> str:
@@ -244,21 +270,49 @@ def sincronizar_opcoes_padrao(filial):
     if novas:
         OpcaoEstruturaOP2.objects.bulk_create(novas, ignore_conflicts=True)
 
-    # Campos criados pela gestão também precisam de uma escolha explícita
-    # para quando a característica não se aplica ao produto.
+    # Tipos criados pela gestão também recebem a ficha técnica completa.
+    tipos_cadastrados = {
+        linha['tipo_peca']: linha['tipo_label']
+        for linha in OpcaoEstruturaOP2.objects.for_filial(filial).values(
+            'tipo_peca', 'tipo_label',
+        ).distinct()
+        if linha['tipo_peca'] not in TIPOS_PECA_REMOVIDOS
+    }
+    campos_novos = []
+    campos_existentes = {(tipo, campo) for tipo, campo, _ in existentes}
+    for tipo_peca, tipo_label in tipos_cadastrados.items():
+        for campo, valores in OP2_ESTRUTURA_OPCOES['camisa']['campos'].items():
+            if (tipo_peca, campo) in campos_existentes:
+                continue
+            for ordem, valor in enumerate(valores, start=1):
+                chave = (tipo_peca, campo, valor)
+                if chave in existentes:
+                    continue
+                existentes.add(chave)
+                campos_novos.append(OpcaoEstruturaOP2(
+                    filial=filial, tipo_peca=tipo_peca,
+                    tipo_label=tipo_label or tipo_peca.title(), campo=campo,
+                    valor=valor, ordem=ordem, ativo=True,
+                ))
+            campos_existentes.add((tipo_peca, campo))
+    if campos_novos:
+        OpcaoEstruturaOP2.objects.bulk_create(campos_novos, ignore_conflicts=True)
+
+    # Campos criados pela gestão também precisam das escolhas especiais.
     campos = OpcaoEstruturaOP2.objects.for_filial(filial).values(
         'tipo_peca', 'tipo_label', 'campo',
     ).distinct()
-    sem_aplicacao = []
+    especiais = []
     for campo in campos:
-        chave = (campo['tipo_peca'], campo['campo'], 'N/A')
-        if chave not in existentes:
-            existentes.add(chave)
-            sem_aplicacao.append(OpcaoEstruturaOP2(
-                filial=filial, **campo, valor='N/A', ordem=999, ativo=True,
-            ))
-    if sem_aplicacao:
-        OpcaoEstruturaOP2.objects.bulk_create(sem_aplicacao, ignore_conflicts=True)
+        for valor, ordem in (('OUTRO', 998), ('N/A', 999)):
+            chave = (campo['tipo_peca'], campo['campo'], valor)
+            if chave not in existentes:
+                existentes.add(chave)
+                especiais.append(OpcaoEstruturaOP2(
+                    filial=filial, **campo, valor=valor, ordem=ordem, ativo=True,
+                ))
+    if especiais:
+        OpcaoEstruturaOP2.objects.bulk_create(especiais, ignore_conflicts=True)
 
 
 def validar_estrutura_item(post, grupos):
@@ -278,6 +332,8 @@ def validar_estrutura_item(post, grupos):
             raise ValueError(f'{rotulo}: selecione uma opção válida para {grupo["label"]}.')
         if len(valores) > 1 and 'N/A' in valores:
             raise ValueError(f'{rotulo}: N/A não pode ser combinado com outra opção.')
+        if 'OUTRO' in valores and not (post.get(f'estrutura_outro_{campo}') or '').strip():
+            raise ValueError(f'{rotulo}: descreva a opção “Outro”.')
         valor = valores[0]
         if campo == 'cor' and valor == 'COR PERSONALIZADA':
             personalizada = (post.get('estrutura_cor_personalizada') or '').strip()
@@ -328,10 +384,16 @@ def opcoes_estrutura_filial(filial, incluir_inativas=False):
         })
         grupo['campos'].setdefault(opcao.campo, []).append(opcao.valor)
     for grupo in grupos.values():
-        campos = grupo['campos']
-        if 'tipo_impressao' in campos:
-            tipo_impressao = campos.pop('tipo_impressao')
-            grupo['campos'] = {'tipo_impressao': tipo_impressao, **campos}
+        campos_atuais = grupo['campos']
+        completos = {}
+        for campo, padrao in OP2_ESTRUTURA_OPCOES['camisa']['campos'].items():
+            valores = list(campos_atuais.pop(campo, []) or padrao)
+            for obrigatoria in ('OUTRO', 'N/A'):
+                if obrigatoria not in valores:
+                    valores.append(obrigatoria)
+            completos[campo] = valores
+        completos.update(campos_atuais)
+        grupo['campos'] = completos
     return grupos
 
 
@@ -349,8 +411,14 @@ def estrutura_resumo(post, grupos=None) -> str:
             rotulo = chave.replace('_', ' ').capitalize()
             if chave == 'cor' and valores[0] == 'COR PERSONALIZADA':
                 valores = [(post.get('estrutura_cor_personalizada') or '').strip()]
+            if 'OUTRO' in valores:
+                outro = (post.get(f'estrutura_outro_{chave}') or '').strip()
+                valores = [outro if valor == 'OUTRO' else valor for valor in valores]
             valor = ' + '.join(valores)
             linhas.append(f'{rotulo}: {valor}')
+            observacao = (post.get(f'estrutura_observacao_{chave}') or '').strip()
+            if observacao:
+                linhas.append(f'Observação de {rotulo}: {observacao}')
     return '\n'.join(linhas) if len(linhas) > 1 else ''
 
 

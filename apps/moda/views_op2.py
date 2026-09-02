@@ -219,6 +219,8 @@ def _dados_modal_item(item, estrutura_opcoes):
     estrutura_tipo = next(iter(estrutura_opcoes), 'camisa')
     estrutura = {}
     cor_personalizada = ''
+    estrutura_outros = {}
+    estrutura_observacoes = {}
     if marcador in texto:
         observacoes, bloco = texto.split(marcador, 1)
         observacoes = observacoes.strip()
@@ -234,6 +236,10 @@ def _dados_modal_item(item, estrutura_opcoes):
             if chave.casefold() == 'tipo de peça':
                 estrutura_tipo = rotulos.get(valor.casefold(), estrutura_tipo)
                 continue
+            if chave.casefold().startswith('observação de '):
+                campo_observado = '_'.join(chave[14:].casefold().split())
+                estrutura_observacoes[campo_observado] = valor
+                continue
             campo = '_'.join(chave.casefold().split())
             estrutura[campo] = (
                 [parte.strip() for parte in valor.split(' + ') if parte.strip()]
@@ -245,6 +251,19 @@ def _dados_modal_item(item, estrutura_opcoes):
         if cor and cor not in cores:
             cor_personalizada = cor
             estrutura['cor'] = 'COR PERSONALIZADA'
+        campos_tipo = estrutura_opcoes.get(estrutura_tipo, {}).get('campos', {})
+        for campo, valor in list(estrutura.items()):
+            if campo == 'cor':
+                continue
+            valores = valor if isinstance(valor, list) else [valor]
+            opcoes = campos_tipo.get(campo, [])
+            desconhecidos = [item for item in valores if item not in opcoes]
+            if desconhecidos and 'OUTRO' in opcoes:
+                estrutura_outros[campo] = ' + '.join(desconhecidos)
+                estrutura[campo] = (
+                    [('OUTRO' if item in desconhecidos else item) for item in valores]
+                    if campo_multisselecao(campo) else 'OUTRO'
+                )
 
     arte = item.personalizacoes.first()
     grade_id = str(item.grade_tamanho_id or '')
@@ -270,6 +289,8 @@ def _dados_modal_item(item, estrutura_opcoes):
         'estrutura_tipo': estrutura_tipo,
         'estrutura': estrutura,
         'cor_personalizada': cor_personalizada,
+        'estrutura_outros': estrutura_outros,
+        'estrutura_observacoes': estrutura_observacoes,
         'item_observacoes': observacoes,
         'grades': [grade_id] if grade_id else [],
         'gradePorGrade': {grade_id: quantidades} if grade_id else {},
