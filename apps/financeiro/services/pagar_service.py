@@ -461,6 +461,7 @@ class ContaPagarService:
         comprovante_url: str = '',
         referencia_pagamento: str = '',
         observacao: str = '',
+        tarifa_bancaria: Decimal | None = None,
     ) -> ContaPagar:
         """Registra o pagamento (total ou parcial) de uma conta a pagar."""
         if conta.status == StatusContaPagar.CANCELADO:
@@ -473,6 +474,8 @@ class ContaPagarService:
             raise DomainError('A data do pagamento não pode ser anterior à emissão.')
         if valor_pago <= Decimal('0'):
             raise DomainError('O valor pago deve ser maior que zero.')
+        if tarifa_bancaria is not None and tarifa_bancaria < Decimal('0'):
+            raise DomainError('A tarifa bancária não pode ser negativa.')
 
         saldo_atualizado = (
             conta.valor_saldo
@@ -527,6 +530,11 @@ class ContaPagarService:
             valor_juros=valor_juros or Decimal('0'),
             valor_multa=valor_multa or Decimal('0'),
             valor_desconto=valor_desconto or Decimal('0'),
+            tarifa_bancaria=(
+                tarifa_bancaria
+                if tarifa_bancaria is not None
+                else (forma_pagamento.tarifa_pagamento_fixa or Decimal('0'))
+            ),
             forma_pagamento=forma_pagamento,
             conta_bancaria=conta_bancaria,
             referencia_pagamento=referencia_pagamento,

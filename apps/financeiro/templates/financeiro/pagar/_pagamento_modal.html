@@ -7,6 +7,19 @@
        modo:'integral',
        saldo:'{{ conta.valor_saldo|floatformat:2|escapejs }}',
        valor:'{{ form.valor_pago.value|default:conta.valor_saldo|escapejs }}',
+       tarifa:'{{ form.tarifa_bancaria.value|default:0|escapejs }}',
+       tarifasPorForma:{
+         {% for forma in form.fields.forma_pagamento.queryset %}'{{ forma.pk }}':'{{ forma.tarifa_pagamento_fixa|default:0|escapejs }}',{% endfor %}
+       },
+       init() {
+         this.$nextTick(() => {
+           const forma = document.getElementById('{{ form.forma_pagamento.id_for_label }}');
+           if (!forma) return;
+           forma.addEventListener('change', () => {
+             this.tarifa = this.tarifasPorForma[String(forma.value)] || '0';
+           });
+         });
+       },
        num(valor) {
          const raw = String(valor ?? '').trim();
          if (!raw) return 0;
@@ -101,7 +114,12 @@
               {{ form.conta_bancaria|add_class:"form-input mt-1 w-full" }}
               {% if form.conta_bancaria.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.conta_bancaria.errors|join:", " }}</span>{% endif %}
             </label>
-            <label class="block text-sm font-medium sm:col-span-2">Referência da transação
+            <label class="block text-sm font-medium">Tarifa cobrada pelo banco (R$)
+              {{ form.tarifa_bancaria|add_class:"form-input mt-1 w-full"|attr:"x-model:tarifa" }}
+              <span class="mt-1 block text-xs text-gray-500">Use 0,00 quando o extrato não mostrar cobrança.</span>
+              {% if form.tarifa_bancaria.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.tarifa_bancaria.errors|join:", " }}</span>{% endif %}
+            </label>
+            <label class="block text-sm font-medium">Referência da transação
               {{ form.referencia_pagamento|add_class:"form-input mt-1 w-full"|attr:"placeholder:ID do PIX, autenticação ou NSU" }}
               {% if form.referencia_pagamento.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.referencia_pagamento.errors|join:", " }}</span>{% endif %}
             </label>
@@ -130,6 +148,7 @@
           <div class="flex justify-between gap-3"><span class="text-gray-500">Saldo atual</span><strong>R$ {{ conta.valor_saldo|floatformat:2 }}</strong></div>
           <div class="flex justify-between gap-3"><span class="text-gray-500">Forma prevista</span><strong class="text-right">{{ conta.forma_pagamento_prevista.descricao|default:"Não definida" }}</strong></div>
           <div class="flex justify-between gap-3"><span class="text-gray-500">Conta prevista</span><strong class="text-right">{{ conta.conta_bancaria.descricao|default:"Não definida" }}</strong></div>
+          <div class="flex justify-between gap-3"><span class="text-gray-500">Tarifa bancária</span><strong class="text-red-600" x-text="'R$ ' + num(tarifa).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})"></strong></div>
         </div>
         <button type="submit" class="btn-primary mt-5 min-h-11 w-full justify-center" :disabled="enviando">
           <span x-show="!enviando">Confirmar pagamento</span>

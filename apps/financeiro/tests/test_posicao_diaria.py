@@ -493,7 +493,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(movimento.saida, Decimal("92.00"))
         self.assertEqual(posicao["total_saidas_bancarias"], Decimal("92.00"))
 
-    def test_tarifa_de_pagamento_aparece_no_detalhamento_sem_duplicar_saida(self):
+    def test_tarifa_de_pagamento_reduz_caixa_sem_duplicar_lancamento(self):
         self.forma.tarifa_pagamento_fixa = Decimal("0.50")
         self.forma.save(update_fields=["tarifa_pagamento_fixa"])
         conta = ContaPagar.objects.create(
@@ -531,7 +531,9 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(posicao["total_saidas_bancarias"], Decimal("100.00"))
         self.assertEqual(posicao["total_taxas_pagamentos"], Decimal("0.50"))
         self.assertEqual(posicao["total_taxas_transacoes"], Decimal("0.50"))
-        self.assertEqual(posicao["total_saidas"], Decimal("100.00"))
+        self.assertEqual(posicao["total_saidas"], Decimal("100.50"))
+        self.assertEqual(posicao["variacao_dia"], Decimal("-100.50"))
+        self.assertEqual(posicao["total_fechamento"], Decimal("49.50"))
 
         conta.refresh_from_db()
         self.assertEqual(conta.valor_pago, Decimal("100.00"))
@@ -557,12 +559,48 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "Pago")
         self.assertContains(response, "Fornecedor teste")
         self.assertContains(response, "Taxa: R$ 0,50")
-        self.assertNotContains(response, "R$ 100,50")
+        self.assertContains(response, "R$ 100,50")
         self.assertNotContains(response, "Tarifa bancaria")
 
         dia_seguinte = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 25)).gerar()
         saldo_banco = next(item for item in dia_seguinte["contas"] if item.pk == self.banco.pk)
-        self.assertEqual(saldo_banco.posicao_abertura, Decimal("0.00"))
+        self.assertEqual(saldo_banco.posicao_abertura, Decimal("-0.50"))
+
+    def test_tarifa_informada_como_zero_nao_e_cobrada(self):
+        self.forma.tarifa_pagamento_fixa = Decimal("0.50")
+        self.forma.save(update_fields=["tarifa_pagamento_fixa"])
+        conta = ContaPagar.objects.create(
+            filial=self.filial,
+            valor_original=Decimal("100.00"),
+            valor_final=Decimal("100.00"),
+            valor_pago=Decimal("100.00"),
+            valor_saldo=Decimal("0.00"),
+            descricao_despesa="Pagamento sem tarifa",
+            data_emissao=date(2026, 8, 24),
+            data_vencimento=date(2026, 8, 24),
+            data_pagamento=date(2026, 8, 24),
+            status=StatusContaPagar.PAGO,
+            usuario=self.usuario,
+        )
+        pagamento = PagamentoContaPagar.objects.create(
+            filial=self.filial,
+            conta_pagar=conta,
+            data_pagamento=date(2026, 8, 24),
+            valor_pago=Decimal("100.00"),
+            tarifa_bancaria=Decimal("0.00"),
+            forma_pagamento=self.forma,
+            conta_bancaria=self.banco,
+            usuario=self.usuario,
+        )
+
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
+
+        self.assertEqual(posicao["total_taxas_pagamentos"], Decimal("0.00"))
+        self.assertEqual(posicao["total_saidas"], Decimal("100.00"))
+        self.assertEqual(posicao["total_fechamento"], Decimal("50.00"))
+        self.assertFalse(ContaPagar.all_objects.filter(
+            documento_tipo="taxa_pagamento", documento_id=pagamento.pk,
+        ).exists())
 
     def test_entrada_manual_exibe_percentual_configurado_sem_descontar_saldo(self):
         self.forma.taxa_administrativa = Decimal("2.50")

@@ -1517,6 +1517,7 @@ class ContaPagarPagamentoView(PermissaoRequiredMixin, View):
                 referencia_pagamento=d.get('referencia_pagamento', ''),
                 comprovante=d.get('comprovante'),
                 observacao=d.get('observacao', ''),
+                tarifa_bancaria=d.get('tarifa_bancaria'),
             )
             if conta.status == StatusContaPagar.PAGO:
                 messages.success(request, f'Conta #{pk} paga integralmente. ✓')

@@ -174,7 +174,9 @@ class PosicaoDiariaCaixaService:
         por_conta_dia = defaultdict(lambda: ZERO)
         for mov in movimentos_ativos:
             if mov.conta:
-                por_conta_dia[mov.conta.pk] += mov.valor
+                por_conta_dia[mov.conta.pk] += (
+                    mov.valor - mov.valor_taxa if mov.taxa_em_pagamento else mov.valor
+                )
 
         contas = []
         for indice, conta in enumerate(self.contas):
@@ -213,7 +215,11 @@ class PosicaoDiariaCaixaService:
         total_bruto_transacoes_taxas = sum((m.entrada_bruta for m in transacoes_taxas), ZERO)
         total_liquido_transacoes_taxas = sum((m.entrada for m in transacoes_taxas), ZERO)
         total_saidas_bancarias = sum((m.saida for m in saidas), ZERO)
-        total_saidas = total_saidas_bancarias + total_taxas_entradas
+        total_saidas = (
+            total_saidas_bancarias
+            + total_taxas_entradas
+            + total_taxas_pagamentos
+        )
         total_fechamento = sum((c.posicao_fechamento for c in contas), ZERO)
         total_despesas_pessoais = sum((m.saida for m in saidas if m.despesa_pessoal), ZERO)
         taxas_por_forma = self._agrupar_taxas(entradas)
@@ -256,14 +262,15 @@ class PosicaoDiariaCaixaService:
             "taxas_pagamentos": taxas_pagamentos,
             "detalhes_taxas": detalhes_taxas,
             "taxas_por_forma": taxas_por_forma,
-            # As taxas ja foram abatidas das entradas liquidas. Elas aparecem no
-            # total de saidas para classificacao, sem reduzir o caixa novamente.
+            # Taxas de recebimentos ja foram abatidas das entradas liquidas.
+            # Tarifas de pagamentos sao cobrancas adicionais e reduzem o caixa.
             # Transferencias nao sao exibidas como entradas/saidas operacionais.
             # A tarifa, porem, reduz de fato o caixa consolidado e precisa aparecer
             # no resultado do dia para reconciliar com os saldos das contas.
             "variacao_dia": (
                 total_entradas
                 - total_saidas_bancarias
+                - total_taxas_pagamentos
                 - total_taxas_transferencias
             ),
             "totais_forma_entrada": self._agrupar(entradas, "forma_pagamento", "entrada"),
@@ -458,7 +465,9 @@ class PosicaoDiariaCaixaService:
             )
         }
         for item in pagamentos:
-            tarifa_pagamento = tarifas_legadas.get(item.pk)
+            tarifa_pagamento = item.tarifa_bancaria
+            if tarifa_pagamento is None:
+                tarifa_pagamento = tarifas_legadas.get(item.pk)
             if tarifa_pagamento is None:
                 tarifa_pagamento = (
                     item.forma_pagamento.tarifa_pagamento_fixa
@@ -559,11 +568,33 @@ class PosicaoDiariaCaixaService:
         pagamentos = PagamentoContaPagar.objects.filter(
             filial=self.filial, conta_bancaria_id__in=self.conta_ids,
             data_pagamento__lt=self.data_inicio, conta_pagar__excluido_em__isnull=True,
-        ).exclude(conta_pagar__documento_tipo__startswith="taxa_").values_list(
-            "conta_bancaria_id", "valor_pago",
+        ).exclude(conta_pagar__documento_tipo__startswith="taxa_").select_related(
+            "forma_pagamento",
         )
-        for conta_id, pago in pagamentos.iterator():
-            _somar(saldos, conta_id, -(pago or ZERO))
+        pagamentos_ids = list(pagamentos.values_list("pk", flat=True))
+        tarifas_legadas = {
+            conta.documento_id: conta.valor_pago or conta.valor_final or ZERO
+            for conta in ContaPagar.all_objects.filter(
+                filial=self.filial,
+                documento_tipo="taxa_pagamento",
+                documento_id__in=pagamentos_ids,
+                excluido_em__isnull=True,
+            )
+        }
+        for pagamento in pagamentos.iterator():
+            tarifa = pagamento.tarifa_bancaria
+            if tarifa is None:
+                tarifa = tarifas_legadas.get(pagamento.pk)
+            if tarifa is None:
+                tarifa = (
+                    pagamento.forma_pagamento.tarifa_pagamento_fixa
+                    if pagamento.forma_pagamento_id else ZERO
+                )
+            _somar(
+                saldos,
+                pagamento.conta_bancaria_id,
+                -((pagamento.valor_pago or ZERO) + (tarifa or ZERO)),
+            )
         try:
             from apps.pdv.models import PagamentoVendaPDV
             vendas = PagamentoVendaPDV.objects.filter(

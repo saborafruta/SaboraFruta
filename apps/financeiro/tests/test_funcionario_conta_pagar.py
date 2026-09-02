@@ -1052,6 +1052,7 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertContains(response, "Resumo da baixa")
         self.assertContains(response, "Pagamento parcial")
         self.assertContains(response, "Referência da transação")
+        self.assertContains(response, "Tarifa cobrada pelo banco")
         self.assertContains(
             response,
             f'value="{timezone.localdate().isoformat()}"',
@@ -1079,6 +1080,36 @@ class FuncionarioContaPagarTests(TestCase):
         form = PagamentoContaPagarForm(filial=self.filial, conta=conta)
 
         self.assertEqual(form.fields["conta_bancaria"].initial, conta_bancaria.pk)
+
+    def test_baixa_sugere_tarifa_da_forma_mas_aceita_zero(self):
+        self.forma_prevista.tarifa_pagamento_fixa = Decimal("0.50")
+        self.forma_prevista.save(update_fields=["tarifa_pagamento_fixa"])
+        conta = ContaPagarService.criar(
+            filial=self.filial,
+            funcionario=self.funcionario,
+            tipo_lancamento="funcionario",
+            valor_original=Decimal("100.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+            plano_contas=self.categoria,
+            forma_pagamento_prevista=self.forma_prevista,
+        )
+
+        form_inicial = PagamentoContaPagarForm(filial=self.filial, conta=conta)
+        self.assertEqual(form_inicial.fields["tarifa_bancaria"].initial, Decimal("0.50"))
+
+        form = PagamentoContaPagarForm(
+            {
+                "data_pagamento": "2026-08-20",
+                "valor_pago": "100.00",
+                "forma_pagamento": self.forma_prevista.pk,
+                "tarifa_bancaria": "0.00",
+            },
+            filial=self.filial,
+            conta=conta,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["tarifa_bancaria"], Decimal("0.00"))
 
     def test_baixa_aplica_conta_vinculada_quando_nao_informada(self):
         conta_bancaria = ContaBancaria.objects.create(

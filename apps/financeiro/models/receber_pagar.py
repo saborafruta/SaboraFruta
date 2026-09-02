@@ -362,6 +362,13 @@ class PagamentoContaPagar(TimestampedModel):
     valor_juros = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     valor_multa = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     valor_desconto = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    tarifa_bancaria = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Tarifa efetivamente cobrada pelo banco neste pagamento.',
+    )
     forma_pagamento = models.ForeignKey(
         FormaPagamento, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
     )

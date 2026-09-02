@@ -824,6 +824,15 @@ class PagamentoContaPagarForm(forms.Form):
         label='Conta bancária',
         help_text='Conta debitada no pagamento.',
     )
+    tarifa_bancaria = forms.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        min_value=Decimal('0'),
+        required=False,
+        label='Tarifa cobrada pelo banco (R$)',
+        help_text='Confirme pelo comprovante ou extrato. Informe zero quando o banco não cobrar.',
+        widget=VALOR_WIDGET,
+    )
     referencia_pagamento = forms.CharField(
         max_length=100,
         required=False,
@@ -861,6 +870,10 @@ class PagamentoContaPagarForm(forms.Form):
             self.fields['valor_pago'].initial = conta.valor_saldo
             forma_inicial = conta.forma_pagamento_prevista or conta.forma_pagamento
             self.fields['forma_pagamento'].initial = forma_inicial
+            if not self.is_bound:
+                self.fields['tarifa_bancaria'].initial = (
+                    forma_inicial.tarifa_pagamento_fixa if forma_inicial else Decimal('0')
+                )
             if conta.conta_bancaria_id:
                 self.fields['conta_bancaria'].initial = conta.conta_bancaria_id
             elif forma_inicial and forma_inicial.conta_bancaria_padrao_id:
@@ -872,6 +885,10 @@ class PagamentoContaPagarForm(forms.Form):
         cleaned.setdefault('valor_multa', Decimal('0'))
         cleaned.setdefault('valor_desconto', Decimal('0'))
         forma = cleaned.get('forma_pagamento')
+        if cleaned.get('tarifa_bancaria') is None:
+            cleaned['tarifa_bancaria'] = (
+                forma.tarifa_pagamento_fixa if forma else Decimal('0')
+            )
         if forma and not cleaned.get('conta_bancaria'):
             cleaned['conta_bancaria'] = forma.conta_bancaria_padrao
         data_pagamento = cleaned.get('data_pagamento')

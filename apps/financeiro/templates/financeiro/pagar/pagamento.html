@@ -12,8 +12,12 @@
        juros: '{{ form.valor_juros.value|default:0|escapejs }}',
        multa: '{{ form.valor_multa.value|default:0|escapejs }}',
        desconto: '{{ form.valor_desconto.value|default:0|escapejs }}',
+       tarifa: '{{ form.tarifa_bancaria.value|default:0|escapejs }}',
        contasPorForma: {
          {% for forma in form.fields.forma_pagamento.queryset %}'{{ forma.pk }}': '{{ forma.conta_bancaria_padrao_id|default_if_none:"" }}',{% endfor %}
+       },
+       tarifasPorForma: {
+         {% for forma in form.fields.forma_pagamento.queryset %}'{{ forma.pk }}': '{{ forma.tarifa_pagamento_fixa|default:0|escapejs }}',{% endfor %}
        }
      })">
 
@@ -163,7 +167,13 @@
               <p class="mt-1 text-xs opacity-60">Selecione para refletir corretamente no fluxo e na conciliação.</p>
               {% if form.conta_bancaria.errors %}<p class="mt-1 text-xs text-red-500">{{ form.conta_bancaria.errors|join:", " }}</p>{% endif %}
             </div>
-            <div class="sm:col-span-2">
+            <div>
+              <label for="{{ form.tarifa_bancaria.id_for_label }}" class="mb-1 block text-sm font-medium">Tarifa cobrada pelo banco (R$)</label>
+              {{ form.tarifa_bancaria|add_class:"form-input"|attr:"x-model:tarifa" }}
+              <p class="mt-1 text-xs opacity-60">Confirme no extrato. Use 0,00 quando não houver cobrança.</p>
+              {% if form.tarifa_bancaria.errors %}<p class="mt-1 text-xs text-red-500">{{ form.tarifa_bancaria.errors|join:", " }}</p>{% endif %}
+            </div>
+            <div>
               <label for="{{ form.referencia_pagamento.id_for_label }}" class="mb-1 block text-sm font-medium">Referência da transação <span class="text-xs font-normal opacity-55">(opcional)</span></label>
               {{ form.referencia_pagamento|add_class:"form-input"|attr:"placeholder:ID do PIX, autenticação, nosso número ou NSU" }}
               {% if form.referencia_pagamento.errors %}<p class="mt-1 text-xs text-red-500">{{ form.referencia_pagamento.errors|join:", " }}</p>{% endif %}
@@ -209,6 +219,10 @@
             <span class="font-medium">Saldo atualizado</span><strong x-text="money(totalAtualizado())"></strong>
           </div>
           <div class="flex justify-between gap-3"><span class="opacity-65">Pagamento agora</span><strong class="text-blue-500" x-text="money(valor)"></strong></div>
+          <div class="flex justify-between gap-3"><span class="opacity-65">Tarifa bancária</span><strong class="text-red-500" x-text="'+ '+money(tarifa)"></strong></div>
+          <div class="flex justify-between gap-3 border-t pt-3" :style="temaClaro ? 'border-color:#e5e7eb' : 'border-color:#303038'">
+            <span class="font-medium">Débito total na conta</span><strong x-text="money(num(valor) + num(tarifa))"></strong>
+          </div>
         </div>
         <div class="border-t px-5 py-4" :style="temaClaro ? 'border-color:#e5e7eb;background:#f8fafc' : 'border-color:#303038;background:#18181b'">
           <span class="block text-xs opacity-60">Saldo após esta baixa</span>
@@ -239,7 +253,9 @@ function paymentForm(initial) {
     juros: initial.juros || '0',
     multa: initial.multa || '0',
     desconto: initial.desconto || '0',
+    tarifa: initial.tarifa || '0',
     contasPorForma: initial.contasPorForma || {},
+    tarifasPorForma: initial.tarifasPorForma || {},
     arquivoNome: '',
     init() {
       if (this.num(this.valor) + 0.009 < this.totalAtualizado()) this.modo = 'parcial';
@@ -247,7 +263,10 @@ function paymentForm(initial) {
       this.$nextTick(() => {
         const forma = document.getElementById('{{ form.forma_pagamento.id_for_label }}');
         if (!forma) return;
-        forma.addEventListener('change', () => this.preencherContaVinculada(forma.value));
+        forma.addEventListener('change', () => {
+          this.preencherContaVinculada(forma.value);
+          this.tarifa = this.tarifasPorForma[String(forma.value)] || '0';
+        });
         this.preencherContaVinculada(forma.value, false);
       });
     },
