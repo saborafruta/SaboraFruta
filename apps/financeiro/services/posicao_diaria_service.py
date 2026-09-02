@@ -665,7 +665,9 @@ class PosicaoDiariaCaixaService:
 
     def _recebimentos_previstos(self, data_inicio, data_fim):
         """Mostra creditos futuros sem mistura-los ao saldo realizado."""
-        hoje = timezone.localdate()
+        # A condição de atraso acompanha o dia que está sendo conferido, não o
+        # relógio do servidor. Isso mantém a posição histórica coerente.
+        hoje = self.data_fim
         try:
             from apps.pdv.models import PagamentoVendaPDV
         except Exception:

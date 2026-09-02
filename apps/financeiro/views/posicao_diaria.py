@@ -169,7 +169,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                     "data_inicio": data_inicio.isoformat(), "data_fim": data_fim.isoformat(),
                 }),
             })
-        previsao_periodo = request.GET.get("previsao", "hoje")
+        previsao_periodo = request.GET.get("previsao", "30")
         previsao_inicio, previsao_fim = self._resolver_previsao(
             previsao_periodo, data_referencia,
             request.GET.get("previsao_inicio"), request.GET.get("previsao_fim"),
@@ -196,8 +196,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             conta_filtro=conta_filtro,
             ordem=ordem_movimentos,
         )
-        contas_pagar_previstas = list(
-            ContaPagar.objects.filter(
+        contas_pagar_filtro = ContaPagar.objects.filter(
                 filial=request.filial_ativa,
                 status__in=[
                     StatusContaPagar.ABERTO,
@@ -205,16 +204,27 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                     StatusContaPagar.VENCIDO,
                     StatusContaPagar.AGENDADO,
                 ],
-                data_vencimento__range=(pagar_previsao_inicio, pagar_previsao_fim),
                 valor_saldo__gt=0,
             )
+        if pagar_previsao_periodo == "personalizado":
+            contas_pagar_filtro = contas_pagar_filtro.filter(
+                data_vencimento__range=(pagar_previsao_inicio, pagar_previsao_fim),
+            )
+        else:
+            # Os atalhos sempre incluem tudo que venceu antes do fim escolhido.
+            # Assim, a abertura em "Hoje" não esconde títulos atrasados.
+            contas_pagar_filtro = contas_pagar_filtro.filter(
+                data_vencimento__lte=pagar_previsao_fim,
+            )
+        contas_pagar_previstas = list(
+            contas_pagar_filtro
             .select_related(
                 "fornecedor", "funcionario", "forma_pagamento_prevista",
                 "conta_bancaria", "forma_pagamento_prevista__conta_bancaria_padrao",
             )
             .order_by("data_vencimento", "pk")
         )
-        hoje = timezone.localdate()
+        hoje = data_referencia
         for conta in contas_pagar_previstas:
             conta.previsao_conta = conta.conta_bancaria or (
                 conta.forma_pagamento_prevista.conta_bancaria_padrao

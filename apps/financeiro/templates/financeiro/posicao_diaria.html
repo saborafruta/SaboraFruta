@@ -225,6 +225,8 @@
   ocultarValores:false,
   previsoesAbertas:false,
   pagamentosPrevistosAbertos:false,
+  buscaRecebimentos:'',
+  buscaPagamentos:'',
   contasAbertas: window.innerWidth >= 640,
   entradasExpandidas:false,
   saidasExpandidas:false,
@@ -238,6 +240,9 @@
   tituloPagarHtml: '',
   tituloPagarErro: '',
   previsoesCarregando: false,
+  correspondePrevisao(texto, busca) {
+    return !busca.trim() || String(texto || '').toLocaleLowerCase().includes(busca.trim().toLocaleLowerCase());
+  },
   detalheModal: {% if editar_entrada_form.errors %}false{% else %}{{ detalhe|yesno:'true,false' }}{% endif %},
   entradaEdicao: {% if editar_entrada_form.errors %}true{% else %}false{% endif %},
   editarModal: {{ editar_movimento|yesno:'true,false' }},
@@ -491,7 +496,6 @@
             <div class="text-right"><span class="block text-xs text-gray-500">Fechamento</span><strong class="{% if conta.posicao_fechamento < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">R$ {{ conta.posicao_fechamento|floatformat:2 }}</strong></div>
           </div>
           <div class="mt-3 flex justify-between border-t pt-3 text-xs text-gray-500 dark:border-slate-700"><span class="text-emerald-600">+ R$ {{ conta.posicao_entradas|floatformat:2 }}</span><span class="text-rose-600">- R$ {{ conta.posicao_saidas|floatformat:2 }}</span></div>
-          {% if conta.posicao_prevista_entrada > 0 %}<div class="pc-account-forecast mt-3 grid grid-cols-2 rounded-md"><div class="px-2.5 py-2"><span class="block text-[10px] font-bold uppercase">A receber</span><strong class="pc-sensitive mt-0.5 block text-sm">+ R$ {{ conta.posicao_prevista_entrada|floatformat:2 }}</strong></div><div class="px-2.5 py-2 text-right"><span class="block text-[10px] font-bold uppercase">Saldo projetado</span><strong class="pc-sensitive mt-0.5 block text-sm">R$ {{ conta.posicao_saldo_projetado|floatformat:2 }}</strong></div></div>{% endif %}
         </a>
       {% empty %}
         <div class="col-span-full rounded-lg border border-dashed p-8 text-center text-sm text-gray-500">Nenhuma conta ativa. Cadastre ao menos uma conta para iniciar a conferência.</div>
@@ -575,7 +579,6 @@
             <div class="text-right"><span class="block text-xs text-gray-500">Fechamento</span><strong class="{% if conta.posicao_fechamento < 0 %}text-rose-600{% else %}text-emerald-600{% endif %}">R$ {{ conta.posicao_fechamento|floatformat:2 }}</strong></div>
           </div>
           <div class="mt-3 flex justify-between border-t pt-3 text-xs text-gray-500 dark:border-slate-700"><span class="text-emerald-600">+ R$ {{ conta.posicao_entradas|floatformat:2 }}</span><span class="text-rose-600">- R$ {{ conta.posicao_saidas|floatformat:2 }}</span></div>
-          {% if conta.posicao_prevista_entrada > 0 %}<div class="pc-account-forecast mt-3 grid grid-cols-2 rounded-md"><div class="px-2.5 py-2"><span class="block text-[10px] font-bold uppercase">A receber</span><strong class="pc-sensitive mt-0.5 block text-sm">+ R$ {{ conta.posicao_prevista_entrada|floatformat:2 }}</strong></div><div class="px-2.5 py-2 text-right"><span class="block text-[10px] font-bold uppercase">Saldo projetado</span><strong class="pc-sensitive mt-0.5 block text-sm">R$ {{ conta.posicao_saldo_projetado|floatformat:2 }}</strong></div></div>{% endif %}
         </a>
       {% empty %}
         <div class="col-span-full rounded-lg border border-dashed p-8 text-center text-sm text-gray-500">Nenhuma conta ativa. Cadastre ao menos uma conta para iniciar a conferência.</div>
@@ -858,9 +861,20 @@ function comprovantePosicaoDiaria() {
         caixa.appendChild(dataManual);
       }
     }
-    const faixa = document.getElementById('dias-do-mes');
-    const selecionado = faixa && faixa.querySelector('[data-dia-selecionado="1"]');
-    if (faixa && selecionado) faixa.scrollLeft = selecionado.offsetLeft - faixa.clientWidth / 2 + selecionado.clientWidth / 2;
+    const posicionarDiaSelecionado = function () {
+      const faixa = document.getElementById('dias-do-mes');
+      const selecionado = faixa && faixa.querySelector('[data-dia-selecionado="1"]');
+      if (!faixa || !selecionado) return;
+      const faixaRect = faixa.getBoundingClientRect();
+      const selecionadoRect = selecionado.getBoundingClientRect();
+      const destino = faixa.scrollLeft + selecionadoRect.left - faixaRect.left
+        - (faixa.clientWidth - selecionado.clientWidth) / 2;
+      faixa.scrollTo({left: Math.max(0, destino), behavior: 'auto'});
+    };
+    requestAnimationFrame(function () {
+      posicionarDiaSelecionado();
+      setTimeout(posicionarDiaSelecionado, 120);
+    });
 
     const tipoManual = document.getElementById('id_tipo');
     const classificacaoManual = document.querySelector('[data-classificacao-manual]');

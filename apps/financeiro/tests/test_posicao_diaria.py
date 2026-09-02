@@ -210,6 +210,20 @@ class PosicaoDiariaCaixaTests(TestCase):
 
     def test_previsoes_de_receber_e_pagar_abrem_em_hoje_antes_dos_saldos(self):
         hoje = date(2026, 8, 24)
+        conta_atrasada = ContaPagar.objects.create(
+            filial=self.filial,
+            descricao_despesa="Conta atrasada",
+            valor_original=Decimal("60.00"),
+            valor_final=Decimal("60.00"),
+            valor_pago=Decimal("0.00"),
+            valor_saldo=Decimal("60.00"),
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 23),
+            status=StatusContaPagar.VENCIDO,
+            forma_pagamento_prevista=self.forma,
+            conta_bancaria=self.banco,
+            usuario=self.usuario,
+        )
         conta_hoje = ContaPagar.objects.create(
             filial=self.filial,
             descricao_despesa="Conta prevista hoje",
@@ -242,12 +256,15 @@ class PosicaoDiariaCaixaTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["previsao_periodo"], "hoje")
+        self.assertEqual(response.context["previsao_periodo"], "30")
         self.assertEqual(response.context["pagar_previsao_periodo"], "hoje")
         self.assertEqual(
             [conta.pk for conta in response.context["contas_pagar_previstas"]],
-            [conta_hoje.pk],
+            [conta_atrasada.pk, conta_hoje.pk],
         )
+        self.assertContains(response, "Atrasada")
+        self.assertContains(response, "Pesquisar por descrição ou nome", count=2)
+        self.assertContains(response, "posicionarDiaSelecionado")
         self.assertContains(response, f"abrirTituloPagar('{reverse('financeiro:pagar_detail', args=[conta_hoje.pk])}')")
         self.assertContains(response, "atualizarPrevisoes($el.href)")
         self.assertContains(response, "pc-payables-forecast mt-5")
@@ -261,7 +278,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         )
         self.assertEqual(
             {conta.pk for conta in response.context["contas_pagar_previstas"]},
-            {conta_hoje.pk, conta_amanha.pk},
+            {conta_atrasada.pk, conta_hoje.pk, conta_amanha.pk},
         )
 
         parcial = self.client.get(
@@ -272,7 +289,46 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(parcial.status_code, 200)
         self.assertContains(parcial, "Conta prevista hoje")
         self.assertContains(parcial, "Conta prevista amanhã")
+        self.assertContains(parcial, "Conta atrasada")
         self.assertNotContains(parcial, "Saldos por conta")
+
+    def test_recebimentos_padrao_incluem_atrasados_e_proximos_trinta_dias(self):
+        referencia = date(2026, 8, 24)
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente previsões", tipo_pessoa="F",
+            cpf_cnpj="12345678933",
+        )
+        atrasada = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente,
+            valor_original=Decimal("90.00"), valor_final=Decimal("90.00"),
+            valor_saldo=Decimal("90.00"), data_emissao=date(2026, 8, 1),
+            data_vencimento=date(2026, 8, 20), status=StatusContaReceber.VENCIDO,
+        )
+        futura = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente,
+            valor_original=Decimal("110.00"), valor_final=Decimal("110.00"),
+            valor_saldo=Decimal("110.00"), data_emissao=referencia,
+            data_vencimento=date(2026, 9, 10), status=StatusContaReceber.ABERTO,
+        )
+        fora_periodo = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente,
+            valor_original=Decimal("130.00"), valor_final=Decimal("130.00"),
+            valor_saldo=Decimal("130.00"), data_emissao=referencia,
+            data_vencimento=date(2026, 9, 30), status=StatusContaReceber.ABERTO,
+        )
+
+        response = self.client.get(
+            reverse("financeiro:posicao_diaria"), {"data": referencia.isoformat()},
+        )
+
+        ids = {
+            item["registro_id"] for item in response.context["posicao"]["previsoes"]
+            if item["origem_codigo"] == "receber"
+        }
+        self.assertIn(atrasada.pk, ids)
+        self.assertIn(futura.pk, ids)
+        self.assertNotIn(fora_periodo.pk, ids)
+        self.assertContains(response, "Atrasado")
 
     def test_pagamento_de_titulo_abre_e_valida_no_modal(self):
         conta = ContaPagar.objects.create(

@@ -66,6 +66,18 @@ class ContasBancariasViewTests(TestCase):
         self.assertEqual(conta.filial, self.filial)
         self.assertEqual(conta.saldo_atual, Decimal("100.00"))
 
+    def test_cards_nao_exibem_saldo_projetado(self):
+        ContaBancaria.objects.create(
+            filial=self.filial, descricao="Conta sem projeção", banco_codigo="260",
+            banco_nome="Nubank", saldo_inicial=Decimal("100.00"), saldo_atual=Decimal("100.00"),
+        )
+
+        response = self.client.get(reverse("financeiro:contas_bancarias"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Saldo projetado")
+        self.assertNotContains(response, "A receber em 30 dias")
+
     def test_cria_conta_bancaria_apenas_com_apelido(self):
         response = self.client.post(reverse("financeiro:contas_bancarias"), {
             "acao": "salvar_conta",
