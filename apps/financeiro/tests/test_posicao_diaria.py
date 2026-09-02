@@ -502,7 +502,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertIn("querySelector(`[name='${nome}']`)", conteudo)
         self.assertNotIn('querySelector(`[name="${nome}"]`)', conteudo)
 
-    def test_posicao_mostra_so_dez_movimentos_e_botao_ver_mais(self):
+    def test_posicao_mostra_dez_entradas_cinco_saidas_e_botao_ver_mais(self):
         for indice in range(11):
             ExtratoBancario.objects.create(
                 filial=self.filial,
@@ -526,7 +526,8 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "Ver mais entradas (")
         self.assertContains(response, "Ver mais saídas (")
         self.assertContains(response, 'x-show="entradasExpandidas"', count=1)
-        self.assertContains(response, 'x-show="saidasExpandidas"', count=1)
+        self.assertContains(response, 'x-show="saidasExpandidas"', count=6)
+        self.assertContains(response, "Mostrar somente as 5 mais recentes")
 
     def test_saida_exibe_fornecedor_sem_abrir_o_card(self):
         fornecedor = Fornecedor.objects.create(
