@@ -441,6 +441,8 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertIn("async enviarEdicaoTitulo(event)", conteudo)
         self.assertIn("async enviarPagamentoTitulo(event)", conteudo)
         self.assertIn("async enviarRecebimentoTitulo(event)", conteudo)
+        self.assertIn("querySelector(`[name='${nome}']`)", conteudo)
+        self.assertNotIn('querySelector(`[name="${nome}"]`)', conteudo)
 
     def test_posicao_mostra_so_dez_movimentos_e_botao_ver_mais(self):
         for indice in range(11):

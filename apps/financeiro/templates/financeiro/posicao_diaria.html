@@ -388,7 +388,7 @@
     const opcao = forma.options[forma.selectedIndex];
     const contaId = opcao && opcao.dataset.conta;
     const nome = this.movimentoTipo === 'debito' ? 'conta_origem' : 'conta_destino';
-    const conta = forma.closest('form')?.querySelector(`[name="${nome}"]`);
+    const conta = forma.closest('form')?.querySelector(`[name='${nome}']`);
     if (!conta || !contaId || !Array.from(conta.options).some(item => String(item.value) === String(contaId))) return;
     conta.value = String(contaId);
     conta.dispatchEvent(new Event('change', {bubbles:true}));
