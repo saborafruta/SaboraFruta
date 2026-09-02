@@ -749,6 +749,12 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertContains(get_response, reverse('cadastros:fornecedor-ajax-create'))
         self.assertContains(get_response, 'name="data_pagamento"')
         self.assertContains(get_response, f'value="{timezone.localdate():%Y-%m-%d}"')
+        html = get_response.content.decode()
+        formulario_inicio = html.index('<form method="post" enctype="multipart/form-data"')
+        campo_data = html.index('name="data_pagamento"')
+        formulario_fim = html.index('</form>', campo_data)
+        self.assertLess(formulario_inicio, campo_data)
+        self.assertLess(campo_data, formulario_fim)
         self.assertNotContains(get_response, 'Data de vencimento')
         self.assertNotContains(get_response, 'Título recorrente')
 

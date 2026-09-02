@@ -11,6 +11,8 @@
 {{ contas_contabeis_json|json_script:"despesa-contas-data" }}
 
 <div class="mx-auto max-w-4xl space-y-4" x-data="despesaPagaPage()" x-init="init()">
+  <form method="post" enctype="multipart/form-data" @submit="loading=true" novalidate>
+    {% csrf_token %}
   <div class="flex flex-wrap items-end justify-between gap-3">
     <div>
       {% if not modal_mode %}<a href="{% url 'financeiro:pagar_pagas' %}" class="text-sm text-blue-500">Contas pagas /</a>{% endif %}
@@ -24,8 +26,7 @@
     </div>
   </div>
 
-  <form method="post" enctype="multipart/form-data" class="card overflow-visible" @submit="loading=true" novalidate>
-    {% csrf_token %}
+  <div class="card overflow-visible">
     <input type="hidden" name="tipo_lancamento" :value="tipoLancamento">
     <input type="hidden" name="plano_contas" :value="categoriaId">
 
@@ -146,6 +147,7 @@
       {% if modal_mode %}<button type="button" class="btn-secondary" onclick="window.parent.postMessage({type:'fechar-conta-pagar'}, window.location.origin)">Cancelar</button>{% else %}<a href="{{ cancel_url }}" class="btn-secondary text-center">Cancelar</a>{% endif %}
       <button type="submit" class="btn-primary" :disabled="loading" x-text="loading ? 'Registrando...' : 'Registrar despesa paga'"></button>
     </div>
+  </div>
   </form>
 
   <div x-show="categoriaModal" x-cloak class="fixed inset-0 z-[140] flex items-end justify-center bg-slate-950/65 p-0 backdrop-blur-sm sm:items-center sm:p-5" role="dialog" aria-modal="true">
