@@ -67,6 +67,7 @@ CAMPOS_EDICAO_LANCAMENTO = {
     'valor_final': 'Valor final',
     'valor_pago': 'Valor pago',
     'valor_saldo': 'Saldo',
+    'data_emissao': 'Emissão',
     'data_vencimento': 'Vencimento',
     'data_competencia': 'Competencia',
     'forma_pagamento_prevista': 'Forma prevista',
@@ -100,6 +101,7 @@ def _snapshot_edicao_lancamento(conta, pagamento=None):
         'valor_final': str(conta.valor_final),
         'valor_pago': str(conta.valor_pago),
         'valor_saldo': str(conta.valor_saldo),
+        'data_emissao': conta.data_emissao.isoformat(),
         'data_vencimento': conta.data_vencimento.isoformat(),
         'data_competencia': conta.data_competencia.isoformat() if conta.data_competencia else 'Nao informado',
         'forma_pagamento_prevista': _nome_objeto(conta.forma_pagamento_prevista),
@@ -929,7 +931,6 @@ class DespesaPagaCreateView(PermissaoRequiredMixin, View):
         return {
             'title': 'Nova despesa paga',
             'form': form,
-            'data_pagamento': timezone.localdate(),
             'modal_mode': request.GET.get('modal') == '1',
             'cancel_url': reverse('financeiro:pagar_pagas'),
             'pode_criar_fornecedor': request.user.tem_permissao('cadastros', 'criar'),
@@ -975,7 +976,7 @@ class DespesaPagaCreateView(PermissaoRequiredMixin, View):
             )
 
         d = form.cleaned_data
-        hoje = timezone.localdate()
+        data_pagamento = d['data_pagamento']
         try:
             conta = ContaPagarService.criar_e_quitar(
                 filial=filial,
@@ -984,16 +985,16 @@ class DespesaPagaCreateView(PermissaoRequiredMixin, View):
                 funcionario=d.get('funcionario'),
                 tipo_lancamento=d['tipo_lancamento'],
                 valor_original=d['valor_original'],
-                data_emissao=hoje,
-                data_vencimento=hoje,
-                data_competencia=hoje,
+                data_emissao=data_pagamento,
+                data_vencimento=data_pagamento,
+                data_competencia=data_pagamento,
                 parcela=1,
                 total_parcelas=1,
                 forma_pagamento_prevista=d['forma_pagamento_utilizada'],
                 plano_contas=d['plano_contas'],
                 observacao=d.get('observacao', ''),
                 ajustar_vencimento_dia_util=False,
-                data_pagamento=hoje,
+                data_pagamento=data_pagamento,
                 forma_pagamento_utilizada=d['forma_pagamento_utilizada'],
                 conta_bancaria_pagamento=d.get('conta_bancaria_pagamento'),
                 comprovante_pagamento=d.get('comprovante_pagamento'),
@@ -1366,6 +1367,8 @@ class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
             conta.data_pagamento = ultima_baixa.data_pagamento
             conta.forma_pagamento = ultima_baixa.forma_pagamento
             conta.conta_bancaria = ultima_baixa.conta_bancaria
+            if pagamento.data_pagamento < conta.data_emissao:
+                conta.data_emissao = pagamento.data_pagamento
             if pagamento.conta_bancaria_id:
                 contas_envolvidas.add(pagamento.conta_bancaria_id)
 

@@ -17,9 +17,10 @@
       <h2 class="mt-1 text-xl font-semibold">Registrar despesa paga</h2>
       <p class="mt-1 text-sm opacity-65">Um lançamento direto, já quitado e incluído no caixa.</p>
     </div>
-    <div class="rounded-md border px-3 py-2 text-right">
-      <span class="block text-[11px] font-semibold uppercase opacity-55">Data do pagamento</span>
-      <strong class="text-sm">Hoje, {{ data_pagamento|date:"d/m/Y" }}</strong>
+    <div class="min-w-48 rounded-md border px-3 py-2">
+      <label for="{{ form.data_pagamento.id_for_label }}" class="block text-[11px] font-semibold uppercase opacity-55">Data do pagamento</label>
+      {{ form.data_pagamento|add_class:"form-input mt-1 w-full" }}
+      {% if form.data_pagamento.errors %}<p class="mt-1 text-xs text-red-500">{{ form.data_pagamento.errors|join:", " }}</p>{% endif %}
     </div>
   </div>
 

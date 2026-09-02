@@ -389,6 +389,11 @@ class ContaPagarForm(forms.Form):
 class DespesaPagaForm(forms.Form):
     """Registro direto de uma despesa que ja foi paga."""
 
+    data_pagamento = forms.DateField(
+        label='Data do pagamento',
+        initial=date.today,
+        widget=forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+    )
     descricao_despesa = forms.CharField(
         max_length=180,
         label='Descrição da despesa',
@@ -763,13 +768,6 @@ class ContaPagarEdicaoAdminForm(forms.Form):
                 self.add_error('dia_vencimento_mensal', 'Informe o dia do mês.')
         if self.pagamento and not cleaned.get('data_pagamento'):
             self.add_error('data_pagamento', 'Informe a data em que o pagamento ocorreu.')
-        if (
-            self.pagamento
-            and cleaned.get('data_pagamento')
-            and self.conta
-            and cleaned['data_pagamento'] < self.conta.data_emissao
-        ):
-            self.add_error('data_pagamento', 'A data do pagamento nao pode ser anterior a emissao.')
         return cleaned
 
 

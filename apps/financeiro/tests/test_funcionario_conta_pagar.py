@@ -720,6 +720,7 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertNotIn('recorrente', form.fields)
         self.assertIn('valor_original', form.fields)
         self.assertIn('forma_pagamento_utilizada', form.fields)
+        self.assertIn('data_pagamento', form.fields)
 
         invalido = DespesaPagaForm({
             'tipo_lancamento': 'funcionario',
@@ -730,7 +731,7 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertFalse(invalido.is_valid())
         self.assertIn('funcionario', invalido.errors)
 
-    def test_despesa_paga_nasce_quitada_com_data_de_hoje(self):
+    def test_despesa_paga_permite_escolher_data_anterior(self):
         perfil = PerfilAcesso.objects.create(
             empresa=self.empresa, nome='Admin despesa paga', is_admin=True,
         )
@@ -746,12 +747,14 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertContains(get_response, 'Registrar despesa paga')
         self.assertContains(get_response, 'Novo fornecedor')
         self.assertContains(get_response, reverse('cadastros:fornecedor-ajax-create'))
-        self.assertContains(get_response, 'Hoje,')
+        self.assertContains(get_response, 'name="data_pagamento"')
+        self.assertContains(get_response, f'value="{timezone.localdate():%Y-%m-%d}"')
         self.assertNotContains(get_response, 'Data de vencimento')
         self.assertNotContains(get_response, 'Título recorrente')
 
         request = RequestFactory().post('/financeiro/pagar/despesa-paga/nova/?modal=1', {
             'descricao_despesa': 'Adiantamento salarial',
+            'data_pagamento': '2026-08-19',
             'tipo_lancamento': 'funcionario',
             'funcionario': self.funcionario.pk,
             'valor_original': '75.50',
@@ -768,9 +771,11 @@ class FuncionarioContaPagarTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(conta.status, 'pago')
-        self.assertEqual(conta.data_emissao, timezone.localdate())
-        self.assertEqual(conta.data_vencimento, timezone.localdate())
-        self.assertEqual(conta.data_pagamento, timezone.localdate())
+        self.assertEqual(conta.data_emissao, date(2026, 8, 19))
+        self.assertEqual(conta.data_vencimento, date(2026, 8, 19))
+        self.assertEqual(conta.data_competencia, date(2026, 8, 19))
+        self.assertEqual(conta.data_pagamento, date(2026, 8, 19))
+        self.assertEqual(conta.pagamentos.get().data_pagamento, date(2026, 8, 19))
         self.assertEqual(conta.total_parcelas, 1)
         self.assertEqual(conta.pagamentos.count(), 1)
 
@@ -1228,6 +1233,8 @@ class FuncionarioContaPagarTests(TestCase):
                 )
 
     def test_admin_edita_lancamento_pago_e_registra_log_completo(self):
+        from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaService
+
         perfil = PerfilAcesso.objects.create(
             empresa=self.empresa, nome="Administrador financeiro", is_admin=True,
         )
@@ -1288,7 +1295,7 @@ class FuncionarioContaPagarTests(TestCase):
                 "data_competencia": "2026-09-01",
                 "forma_pagamento_prevista": self.forma_pix.pk,
                 "plano_contas": categoria_nova.pk,
-                "data_pagamento": "2026-08-21",
+                "data_pagamento": "2026-08-19",
                 "forma_pagamento": self.forma_prevista.pk,
                 "conta_bancaria": conta_nova.pk,
                 "observacao": "Valor e dados conferidos com o fornecedor.",
@@ -1314,13 +1321,27 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertEqual(conta.conta_contabil, conta_contabil_nova)
         self.assertEqual(conta.observacao, "Valor e dados conferidos com o fornecedor.")
         self.assertEqual(pagamento.valor_pago, Decimal("125.50"))
-        self.assertEqual(pagamento.data_pagamento, date(2026, 8, 21))
+        self.assertEqual(pagamento.data_pagamento, date(2026, 8, 19))
+        self.assertEqual(conta.data_emissao, date(2026, 8, 19))
         self.assertEqual(pagamento.forma_pagamento, self.forma_prevista)
         self.assertEqual(pagamento.conta_bancaria, conta_nova)
         conta_anterior.refresh_from_db()
         conta_nova.refresh_from_db()
         self.assertEqual(conta_anterior.saldo_atual, Decimal("0.00"))
         self.assertEqual(conta_nova.saldo_atual, Decimal("-125.50"))
+        saidas_nova_data = PosicaoDiariaCaixaService(
+            self.filial, date(2026, 8, 19),
+        ).gerar()["saidas"]
+        self.assertTrue(any(
+            movimento.origem_codigo == "pagar" and movimento.registro_id == pagamento.pk
+            for movimento in saidas_nova_data
+        ))
+        self.assertFalse(any(
+            movimento.origem_codigo == "pagar" and movimento.registro_id == pagamento.pk
+            for movimento in PosicaoDiariaCaixaService(
+                self.filial, date(2026, 8, 20),
+            ).gerar()["saidas"]
+        ))
         log = RegistroAuditoria.objects.get(
             objeto_tipo=conta._meta.label_lower,
             objeto_id=conta.pk,
