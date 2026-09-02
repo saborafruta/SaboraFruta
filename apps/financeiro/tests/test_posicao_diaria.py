@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, RegistroAuditoria, Usuario
-from apps.cadastros.models import Cliente
+from apps.cadastros.models import Cliente, Fornecedor
 from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber, TipoFormaPagamento
 from apps.financeiro.models import ContaBancaria, FormaPagamento, PlanoContabil, PlanoContas
 from apps.financeiro.models.extrato import ExtratoBancario
@@ -430,6 +430,78 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, 'class="pc-personal-badge"')
         self.assertContains(response, 'class="pc-personal-summary')
         self.assertContains(response, '<template x-teleport="body"><div x-show="tituloPagarModal"')
+
+    def test_posicao_organiza_blocos_e_oferece_edicao_em_sobreposicao(self):
+        response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
+        conteudo = response.content.decode()
+
+        self.assertLess(conteudo.index('id="previsoes-posicao-diaria"'), conteudo.index("Saldos por conta"))
+        self.assertLess(conteudo.index("Saldos por conta"), conteudo.index("Conferência e somatórios"))
+        self.assertIn("async abrirEdicaoTitulo(url)", conteudo)
+        self.assertIn("async enviarEdicaoTitulo(event)", conteudo)
+        self.assertIn("async enviarPagamentoTitulo(event)", conteudo)
+        self.assertIn("async enviarRecebimentoTitulo(event)", conteudo)
+
+    def test_posicao_mostra_so_dez_movimentos_e_botao_ver_mais(self):
+        for indice in range(11):
+            ExtratoBancario.objects.create(
+                filial=self.filial,
+                conta_bancaria=self.banco,
+                data_lancamento=date(2026, 8, 21),
+                historico=f"Entrada recente {indice}",
+                valor=Decimal("10.00"),
+                origem="manual",
+            )
+            ExtratoBancario.objects.create(
+                filial=self.filial,
+                conta_bancaria=self.banco,
+                data_lancamento=date(2026, 8, 21),
+                historico=f"Saída recente {indice}",
+                valor=Decimal("-5.00"),
+                origem="manual",
+            )
+
+        response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
+
+        self.assertContains(response, "Ver mais entradas (")
+        self.assertContains(response, "Ver mais saídas (")
+        self.assertContains(response, 'x-show="entradasExpandidas"', count=1)
+        self.assertContains(response, 'x-show="saidasExpandidas"', count=1)
+
+    def test_saida_exibe_fornecedor_sem_abrir_o_card(self):
+        fornecedor = Fornecedor.objects.create(
+            filial=self.filial,
+            tipo_pessoa="J",
+            razao_social="Fornecedor visível no card",
+            cpf_cnpj="11222333000181",
+        )
+        conta = ContaPagar.objects.create(
+            filial=self.filial,
+            fornecedor=fornecedor,
+            descricao_despesa="Compra com beneficiário",
+            valor_original=Decimal("25.00"),
+            valor_final=Decimal("25.00"),
+            valor_pago=Decimal("25.00"),
+            valor_saldo=Decimal("0.00"),
+            data_emissao=date(2026, 8, 21),
+            data_vencimento=date(2026, 8, 21),
+            data_pagamento=date(2026, 8, 21),
+            status=StatusContaPagar.PAGO,
+            usuario=self.usuario,
+        )
+        PagamentoContaPagar.objects.create(
+            filial=self.filial,
+            conta_pagar=conta,
+            data_pagamento=date(2026, 8, 21),
+            valor_pago=Decimal("25.00"),
+            forma_pagamento=self.forma,
+            conta_bancaria=self.banco,
+            usuario=self.usuario,
+        )
+
+        response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
+
+        self.assertContains(response, "Fornecedor/funcionário: Fornecedor visível no card")
 
     def test_taxa_de_recebimento_reduz_entrada_e_exibe_bruto(self):
         self.forma.taxa_administrativa = Decimal("2.00")

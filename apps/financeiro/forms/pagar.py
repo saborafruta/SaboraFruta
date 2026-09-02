@@ -7,6 +7,7 @@ from django import forms
 
 from apps.cadastros.models import Fornecedor, Funcionario
 from apps.financeiro.forms.cadastros import ContaBancariaChoiceField
+from apps.financeiro.forms.cartao import configurar_forma_pagamento
 from apps.financeiro.models.conta_bancaria import ContaBancaria, PlanoContas
 from apps.financeiro.models.formas_pagamento import FormaPagamento
 from apps.financeiro.forms.plano_contas import CategoriaFinanceiraChoiceField
@@ -238,8 +239,8 @@ class ContaPagarForm(forms.Form):
                 .select_related('conta_bancaria_padrao')
                 .order_by('descricao')
             )
-            self.fields['forma_pagamento_prevista'].queryset = formas_pagamento
-            self.fields['forma_pagamento_utilizada'].queryset = formas_pagamento
+            configurar_forma_pagamento(self, formas_pagamento, 'forma_pagamento_prevista')
+            configurar_forma_pagamento(self, formas_pagamento, 'forma_pagamento_utilizada')
             self.fields['conta_bancaria_pagamento'].queryset = (
                 ContaBancaria.objects.for_filial(filial)
                 .filter(ativo=True)
@@ -446,10 +447,10 @@ class DespesaPagaForm(forms.Form):
         self.fields['funcionario'].queryset = (
             Funcionario.objects.for_filial(filial).filter(ativo=True).order_by('nome')
         )
-        self.fields['forma_pagamento_utilizada'].queryset = (
+        configurar_forma_pagamento(self, (
             FormaPagamento.objects.filter(empresa=filial.empresa, ativo=True)
             .select_related('conta_bancaria_padrao').order_by('descricao')
-        )
+        ), 'forma_pagamento_utilizada')
         self.fields['conta_bancaria_pagamento'].queryset = (
             ContaBancaria.objects.for_filial(filial).filter(ativo=True).order_by('descricao')
         )
@@ -681,8 +682,8 @@ class ContaPagarEdicaoAdminForm(forms.Form):
             formas = FormaPagamento.objects.filter(
                 empresa=filial.empresa, ativo=True,
             ).select_related('conta_bancaria_padrao').order_by('descricao')
-            self.fields['forma_pagamento_prevista'].queryset = formas
-            self.fields['forma_pagamento'].queryset = formas
+            configurar_forma_pagamento(self, formas, 'forma_pagamento_prevista')
+            configurar_forma_pagamento(self, formas, 'forma_pagamento')
             self.fields['plano_contas'].queryset = (
                 PlanoContas.objects.filter(
                     empresa=filial.empresa, tipo='D', nivel=3, ativo=True,
@@ -855,12 +856,12 @@ class PagamentoContaPagarForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.conta = conta
         if filial:
-            self.fields['forma_pagamento'].queryset = (
+            configurar_forma_pagamento(self, (
                 FormaPagamento.objects
                 .filter(empresa=filial.empresa, ativo=True)
                 .select_related('conta_bancaria_padrao')
                 .order_by('descricao')
-            )
+            ))
             self.fields['conta_bancaria'].queryset = (
                 ContaBancaria.objects.for_filial(filial)
                 .filter(ativo=True)
@@ -950,10 +951,10 @@ class ContaPagarBulkEditForm(forms.Form):
             aceita_lancamento=True,
             conta_contabil__isnull=False,
         ).select_related('conta_pai__conta_pai', 'conta_contabil').order_by('codigo')
-        self.fields['forma_pagamento_prevista'].queryset = FormaPagamento.objects.filter(
+        configurar_forma_pagamento(self, FormaPagamento.objects.filter(
             empresa=filial.empresa,
             ativo=True,
-        ).order_by('descricao')
+        ).order_by('descricao'), 'forma_pagamento_prevista')
 
     def clean(self):
         cleaned = super().clean()
@@ -987,10 +988,10 @@ class ContaPagarBulkPagamentoForm(forms.Form):
         super().__init__(*args, **kwargs)
         if not filial:
             return
-        self.fields['forma_pagamento'].queryset = FormaPagamento.objects.filter(
+        configurar_forma_pagamento(self, FormaPagamento.objects.filter(
             empresa=filial.empresa,
             ativo=True,
-        ).select_related('conta_bancaria_padrao').order_by('descricao')
+        ).select_related('conta_bancaria_padrao').order_by('descricao'))
         self.fields['conta_bancaria'].queryset = ContaBancaria.objects.for_filial(filial).filter(
             ativo=True,
         ).order_by('descricao')

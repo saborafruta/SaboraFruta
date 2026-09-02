@@ -52,6 +52,18 @@ def campo_parcelas():
 def configurar_forma_pagamento(form, queryset, field_name="forma_pagamento"):
     campo = form.fields[field_name]
     campo.widget = FormaPagamentoCartaoSelect()
+    alvos_por_campo = {
+        "forma_pagamento": ("conta_bancaria",),
+        "forma_pagamento_utilizada": (
+            "conta_bancaria_pagamento",
+            "conta_bancaria_recebimento",
+            "conta_bancaria",
+        ),
+    }
+    for alvo in alvos_por_campo.get(field_name, ()):
+        if alvo in form.fields:
+            campo.widget.attrs["data-conta-alvo"] = alvo
+            break
     # ModelChoiceField repassa as opcoes ao widget quando o queryset e atribuido.
     # A ordem importa: trocar o widget depois disso cria um <select> vazio.
     campo.queryset = queryset.select_related("conta_bancaria_padrao").prefetch_related("taxas_parcelamento")

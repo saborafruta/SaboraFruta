@@ -104,7 +104,7 @@
         {% if pagamento_selecionado %}<p class="mb-3 text-xs opacity-60">Pagamento de {{ pagamento_selecionado.data_pagamento|date:"d/m/Y" }} no valor de R$ {{ pagamento_selecionado.valor_pago|floatformat:2 }}.</p>{% endif %}
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <label class="text-xs font-medium">Data do pagamento{{ edicao_lancamento_form.data_pagamento|add_class:"form-input mt-1 w-full" }}</label>
-          <label class="text-xs font-medium">Forma utilizada{{ edicao_lancamento_form.forma_pagamento|add_class:"form-input mt-1 w-full" }}</label>
+          <label class="text-xs font-medium">Forma utilizada{{ edicao_lancamento_form.forma_pagamento|add_class:"form-input mt-1 w-full"|attr:"data-conta-alvo:conta_bancaria" }}</label>
           <label class="text-xs font-medium">Conta bancária{{ edicao_lancamento_form.conta_bancaria|add_class:"form-input mt-1 w-full" }}</label>
         </div>
       </div>

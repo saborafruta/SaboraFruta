@@ -107,7 +107,7 @@
           <h3 class="font-semibold">Como foi pago</h3>
           <div class="mt-4 grid gap-4 sm:grid-cols-2">
             <label class="block text-sm font-medium">Forma utilizada *
-              {{ form.forma_pagamento|add_class:"form-input mt-1 w-full" }}
+              {{ form.forma_pagamento|add_class:"form-input mt-1 w-full"|attr:"data-conta-alvo:conta_bancaria" }}
               {% if form.forma_pagamento.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.forma_pagamento.errors|join:", " }}</span>{% endif %}
             </label>
             <label class="block text-sm font-medium">Conta debitada

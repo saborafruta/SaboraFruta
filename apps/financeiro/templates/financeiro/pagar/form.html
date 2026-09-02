@@ -231,7 +231,7 @@
           <p class="mb-4 text-sm">O pagamento será registrado pelo valor integral do título. Confirme os dados utilizados:</p>
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {% include "financeiro/pagar/_field.html" with field=form.data_pagamento_imediato %}
-            {% include "financeiro/pagar/_field.html" with field=form.forma_pagamento_utilizada %}
+            <div><label class="mb-1 block text-sm font-medium">{{ form.forma_pagamento_utilizada.label }}</label>{{ form.forma_pagamento_utilizada|add_class:"form-input"|attr:"data-conta-alvo:conta_bancaria_pagamento" }}{{ form.forma_pagamento_utilizada.errors }}</div>
             {% include "financeiro/pagar/_field.html" with field=form.conta_bancaria_pagamento %}
             {% include "financeiro/pagar/_comprovante_upload.html" with field=form.comprovante_pagamento %}
           </div>
@@ -370,12 +370,27 @@ function financeSearchSelect(root) {
     init(){
       const selected=this.options().find(option=>option.dataset.value===this.value);
       if(selected)this.query=selected.dataset.label;
-      window.addEventListener('finance-select-created', event=>{
-        if(event.detail.field!==root.dataset.field)return;
-        this.value=String(event.detail.value);
-        this.query=event.detail.label;
-        this.open=false;
-      });
+    },
+    created(event){
+      if(event.detail.field!==root.dataset.field)return;
+      const value=String(event.detail.value);
+      let option=this.options().find(item=>item.dataset.value===value);
+      if(!option){
+        option=document.createElement('button');
+        option.type='button';
+        option.dataset.financeOption='';
+        option.dataset.value=value;
+        option.dataset.label=event.detail.label;
+        option.dataset.search=event.detail.search||event.detail.label;
+        option.textContent=event.detail.label;
+        option.className='block w-full rounded px-3 py-2 text-left text-sm leading-5';
+        option.addEventListener('mousedown', e=>{e.preventDefault();this.select(option);});
+        root.querySelector('[role="listbox"]')?.prepend(option);
+      }
+      this.value=value;
+      this.query=event.detail.label;
+      this.open=false;
+      this.$nextTick(()=>root.querySelector('[data-finance-selected-value]')?.dispatchEvent(new Event('change',{bubbles:true})));
     },
     options(){return Array.from(root.querySelectorAll('[data-finance-option]'));},
     normalize(text){return(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();},

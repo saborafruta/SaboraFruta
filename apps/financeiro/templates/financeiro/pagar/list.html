@@ -560,7 +560,7 @@
 
           <div x-show="loteAcao === 'quitar'" x-cloak class="grid gap-4 sm:grid-cols-2">
             <div><label class="mb-1 block text-sm font-medium">{{ bulk_pagamento_form.data_pagamento.label }}</label>{{ bulk_pagamento_form.data_pagamento|add_class:"form-input" }}</div>
-            <div><label class="mb-1 block text-sm font-medium">{{ bulk_pagamento_form.forma_pagamento.label }}</label>{{ bulk_pagamento_form.forma_pagamento|add_class:"form-input" }}</div>
+            <div><label class="mb-1 block text-sm font-medium">{{ bulk_pagamento_form.forma_pagamento.label }}</label>{{ bulk_pagamento_form.forma_pagamento|add_class:"form-input"|attr:"data-conta-alvo:conta_bancaria" }}</div>
             <div class="sm:col-span-2"><label class="mb-1 block text-sm font-medium">{{ bulk_pagamento_form.conta_bancaria.label }}</label>{{ bulk_pagamento_form.conta_bancaria|add_class:"form-input" }}</div>
             <div class="sm:col-span-2"><label class="mb-1 block text-sm font-medium">{{ bulk_pagamento_form.observacao.label }}</label>{{ bulk_pagamento_form.observacao|add_class:"form-input" }}</div>
           </div>

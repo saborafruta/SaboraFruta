@@ -1,6 +1,7 @@
 <div class="relative" x-data="financeSearchSelect($el)" x-init="init()"
+     @finance-select-created.window="created($event)"
      data-initial="{{ field.value|default_if_none:'' }}" data-field="{{ field.html_name }}">
-  <input type="hidden" name="{{ field.html_name }}" :value="value">
+  <input type="hidden" name="{{ field.html_name }}" :value="value" data-finance-selected-value>
   <div class="relative">
     <input type="search"
            class="form-input pr-20"

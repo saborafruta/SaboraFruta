@@ -847,6 +847,20 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Nova Conta Paga")
         self.assertContains(response, "quitarAgora:true")
+        self.assertContains(response, '@finance-select-created.window="created($event)"')
+        self.assertContains(response, "created(event)")
+        self.assertContains(response, "data-finance-selected-value")
+
+    def test_forma_de_pagamento_informa_a_conta_alvo_no_widget(self):
+        form = DespesaPagaForm(filial=self.filial)
+
+        self.assertEqual(
+            form.fields["forma_pagamento_utilizada"].widget.attrs["data-conta-alvo"],
+            "conta_bancaria_pagamento",
+        )
+        html = str(form["forma_pagamento_utilizada"])
+        self.assertIn('data-conta-alvo="conta_bancaria_pagamento"', html)
+        self.assertIn('data-conta=""', html)
 
     def test_contas_a_pagar_filtra_pelos_tres_niveis_da_categoria(self):
         grupo = PlanoContas.objects.create(
