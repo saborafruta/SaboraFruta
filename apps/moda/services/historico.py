@@ -89,6 +89,12 @@ class Mudanca:
 
 
 @dataclass
+class Detalhe:
+    campo: str
+    valor: str
+
+
+@dataclass
 class Evento:
     quando: datetime
     usuario: str
@@ -96,10 +102,22 @@ class Evento:
     entidade: str
     acao: str
     mudancas: list[Mudanca] = field(default_factory=list)
+    detalhes: list[Detalhe] = field(default_factory=list)
     # Marco = etapa vencida ("Corte concluído"), não ajuste de campo. A tela
     # destaca os marcos: é essa distinção que faz a linha do tempo ser lida
     # em cinco segundos em vez de percorrida inteira.
     marco: bool = False
+
+    @property
+    def explicacao(self) -> str:
+        if self.acao == LogSistema.Acao.CRIAR:
+            return 'Este registro foi incluído na OP com os dados abaixo.'
+        if self.acao == LogSistema.Acao.EXCLUIR:
+            return 'Este registro foi removido da OP. Abaixo estão os dados que ele possuía.'
+        quantidade = len(self.mudancas)
+        if quantidade == 1:
+            return 'Um campo foi alterado. Veja o valor anterior e o novo valor.'
+        return f'{quantidade} campos foram alterados. Veja os valores anteriores e os novos valores.'
 
 
 # ── Tradução ─────────────────────────────────────────────────────────────
@@ -191,6 +209,33 @@ FRASES_EXCLUSAO = {
     Volume._meta.db_table: 'Volume removido',
     MaterialFicha._meta.db_table: 'Material removido',
     ImagemFicha._meta.db_table: 'Imagem removida',
+}
+
+# Campos que explicam uma inclusão ou remoção sem despejar ids, JSON técnico
+# ou carimbos internos no card. Os valores de chaves estrangeiras já chegam
+# ao log como texto legível (produto, tamanho, cliente etc.).
+DETALHES_SNAPSHOT = {
+    PedidoProducao._meta.db_table: (
+        'cliente', 'contato_nome', 'contato_telefone', 'data_pedido',
+        'data_prevista_entrega', 'prioridade', 'status', 'desconto',
+        'acrescimo', 'frete',
+    ),
+    ItemPedidoProducao._meta.db_table: (
+        'produto', 'descricao', 'referencia', 'modelo', 'cor', 'tecido',
+        'grade_tamanho', 'quantidade', 'valor_unitario', 'status_fluxo',
+    ),
+    ItemGradePedido._meta.db_table: ('item', 'tamanho', 'quantidade'),
+    Personalizacao._meta.db_table: (
+        'item', 'tipo', 'tecnica', 'local', 'nome_personalizado',
+        'numero_personalizado', 'patrocinios', 'arquivo', 'observacoes',
+    ),
+    VisualItemPedido._meta.db_table: (
+        'item', 'posicao', 'imagem', 'mockup', 'nome', 'numero', 'observacoes',
+    ),
+    PersonalizacaoIndividual._meta.db_table: (
+        'item', 'tamanho', 'nome', 'numero', 'tamanho_calcao',
+        'nome_calcao', 'numero_calcao', 'observacoes',
+    ),
 }
 
 
@@ -401,8 +446,27 @@ class HistoricoService:
             entidade=rotulo,
             acao=log.acao,
             mudancas=mudancas,
+            detalhes=cls._detalhes(modelo, log),
             marco=e_marco,
         )
+
+    @staticmethod
+    def _detalhes(modelo, log) -> list[Detalhe]:
+        if log.acao == LogSistema.Acao.CRIAR:
+            dados = log.dados_novos or {}
+        elif log.acao == LogSistema.Acao.EXCLUIR:
+            dados = log.dados_anteriores or {}
+        else:
+            return []
+        rotulos = _rotulos(modelo)
+        return [
+            Detalhe(
+                campo=rotulos.get(campo, campo.replace('_', ' ').capitalize()),
+                valor=_texto(dados.get(campo)),
+            )
+            for campo in DETALHES_SNAPSHOT.get(log.tabela_afetada, ())
+            if dados.get(campo) not in (None, '')
+        ]
 
     @staticmethod
     def _titulo(log, rotulo, mudancas) -> tuple[str, bool]:
@@ -494,6 +558,15 @@ ROTULOS = {
     'data_inicio': 'Data de início',
     'data_prevista': 'Data prevista',
     'data_prevista_entrega': 'Entrega prevista',
+    'contato_nome': 'Nome do contato',
+    'contato_telefone': 'Telefone do contato',
+    'grade_tamanho': 'Grade',
+    'status_fluxo': 'Etapa do produto',
+    'nome_personalizado': 'Nome personalizado',
+    'numero_personalizado': 'Número personalizado',
+    'tamanho_calcao': 'Tamanho do calção',
+    'nome_calcao': 'Nome no calção',
+    'numero_calcao': 'Número no calção',
     'tempo_minutos': 'Tempo (minutos)',
     'valor_unitario': 'Valor unitário',
     'condicao_pagamento': 'Condição de pagamento',

@@ -16,7 +16,7 @@ O QUE IMPEDE CHEGAR A OUTRO PEDIDO, concretamente:
      resposta não distingue "não existe" de "existe e você não pode".
 
 O que a página mostra é o combinado com o cliente: pedido, clientes, produtos,
-estrutura da peça, quantidade, grade, arte, prazo e status. Enquanto orçamento,
+quantidade, grade, personalizações, arte e prazo. Enquanto orçamento,
 mostra também preços, pagamentos e as mesmas observações comerciais do PDF.
 """
 from decimal import Decimal, InvalidOperation
@@ -30,13 +30,12 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from apps.core.middleware.audit import get_client_ip
 
-from .models import AprovacaoPedido, ArquivoPedido, PedidoProducao
+from .models import AprovacaoPedido, PedidoProducao
 from .services.alertas import AlertaService
 from .services.kanban_comercial import avancar_por_resposta
 from .services.pedido_pdf import PedidoPdfService
 from .services.orcamento_pdf import (
     OBSERVACAO_PAGAMENTO_ORCAMENTO,
-    especificacoes_orcamento_item,
     observacoes_orcamento,
 )
 
@@ -57,11 +56,6 @@ def _pode_abrir(pedido) -> bool:
         return True
     aprovacao = getattr(pedido, 'aprovacao', None)
     return bool(aprovacao and aprovacao.liberado)
-
-# A regra de o que sai do escritório mora no MODEL: a página do link e o PDF
-# são dois leitores do mesmo acervo, e duas listas divergiriam.
-from .models.arquivo import TIPOS_VISIVEIS_AO_CLIENTE  # noqa: E402
-
 
 def _blindar(resposta) -> None:
     """
@@ -177,25 +171,12 @@ class PedidoOnlineView(View):
     def get(self, request, token):
         pedido = _buscar(token)
         itens = list(pedido.itens.all())
-        for item in itens:
-            item.especificacoes_orcamento = especificacoes_orcamento_item(item)
-
-        etapas = [
-            (valor, rotulo) for valor, rotulo in PedidoProducao.Status.choices
-            if valor not in STATUS_OCULTOS and valor != 'cancelado'
-        ]
-        valores = [v for v, _r in etapas]
-        atual = valores.index(pedido.status) if pedido.status in valores else -1
 
         resposta = render(request, 'moda/publico/pedido.html', {
             'pedido': pedido,
             'itens': itens,
             'clientes': [pedido.cliente, *pedido.clientes_adicionais.all()],
             'empresa': pedido.filial.empresa,
-            'etapas': [
-                {'label': rotulo, 'passou': i <= atual, 'atual': i == atual}
-                for i, (_v, rotulo) in enumerate(etapas)
-            ],
             'cancelado': pedido.status == 'cancelado',
             'prazo': _prazo(pedido),
             'modo_orcamento': pedido.status == PedidoProducao.Status.ORCAMENTO,
@@ -206,13 +187,6 @@ class PedidoOnlineView(View):
             # lá o cliente estaria aprovando um documento que ainda pode
             # mudar de preço.
             'aprovacao': getattr(pedido, 'aprovacao', None),
-            # ARTE DO PEDIDO. Só os tipos que o cliente deve ver: a arte e
-            # a referência que ele mesmo mandou. Documento e 'outro' ficam
-            # de fora -- contrato e recado interno não são para este lado.
-            'artes': [
-                a for a in pedido.arquivos.all()
-                if a.tipo in TIPOS_VISIVEIS_AO_CLIENTE
-            ],
         })
         _blindar(resposta)
         return resposta

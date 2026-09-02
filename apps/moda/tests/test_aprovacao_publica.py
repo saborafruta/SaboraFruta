@@ -125,12 +125,14 @@ class AprovacaoPublicaTests(TestCase):
 
         self.assertContains(resposta, 'logo_erk_preta.png')
         self.assertContains(resposta, 'ORÇAMENTO')
-        self.assertContains(resposta, 'Produto / especificações')
+        self.assertContains(resposta, 'Produto / grade e personalizações')
         self.assertContains(resposta, 'Fechamento do orçamento')
         self.assertContains(resposta, 'Previsão de entrega')
         self.assertContains(resposta, '20/09/2026')
         self.assertContains(resposta, 'Nome de quem está aprovando')
         self.assertContains(resposta, 'id="nome-aprovador"')
+        self.assertNotContains(resposta, 'Situação do pedido')
+        self.assertNotContains(resposta, 'Arte do pedido')
 
     def test_link_do_orcamento_mostra_clientes_estrutura_cor_e_observacao_individual(self):
         from apps.moda.models import (
@@ -163,10 +165,28 @@ class AprovacaoPublicaTests(TestCase):
         self.assertContains(resposta, 'Diego Macedo')
         self.assertContains(resposta, 'Maria Parceira')
         self.assertContains(resposta, '98765432100')
-        self.assertContains(resposta, 'Estrutura e especificações')
-        self.assertContains(resposta, 'Bordô personalizado')
-        self.assertContains(resposta, 'DRYTECH')
+        self.assertNotContains(resposta, 'Estrutura e especificações')
+        self.assertNotContains(resposta, 'Bordô personalizado')
+        self.assertNotContains(resposta, 'DRYTECH')
+        self.assertContains(resposta, 'Nomes e números')
+        self.assertContains(resposta, 'Ana')
         self.assertContains(resposta, 'Nome com acento no peito')
+
+    def test_contatos_extras_ficam_na_mesma_linha_no_orcamento(self):
+        from apps.moda.services.orcamento_pdf import observacoes_orcamento
+
+        self.pedido.observacoes = (
+            'Conferir nomes.\n\nContatos extras:\n'
+            '- Diego Allyson: 456456456456\n- Maria: 84999990000'
+        )
+
+        observacoes = observacoes_orcamento(self.pedido)
+
+        self.assertIn(
+            'Contatos extras: Diego Allyson: 456456456456 | Maria: 84999990000',
+            observacoes,
+        )
+        self.assertNotIn('Contatos extras:', observacoes)
 
     # ── A aprovação em si ────────────────────────────────────────────────
 

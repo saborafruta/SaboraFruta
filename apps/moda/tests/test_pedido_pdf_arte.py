@@ -216,11 +216,11 @@ class ArteNoPdfTests(TestCase):
         self.assertIn('Adulto: 2 peça(s) · R$70,00 por peça', texto)
         self.assertIn('Oversized: 3 peça(s) · R$75,00 por peça', texto)
         self.assertIn('Por grade', texto)
-        self.assertIn('DRY-0', texto)
+        self.assertNotIn('DRY-0', texto)
         self.assertNotIn('DRY-1', texto)
         self.assertNotIn('Tipo impressao', texto)
-        self.assertIn('Sublimação', texto)
-        self.assertIn('Silk', texto)
+        self.assertNotIn('Sublimação', texto)
+        self.assertNotIn('Silk', texto)
 
     def test_anexos_complementares_nao_entram_no_pdf_da_op(self):
         pedido = self._pedido()
@@ -504,7 +504,7 @@ class ArteNoPdfTests(TestCase):
             for servico in (PedidoPdfService, OrcamentoPdfService):
                 self.assertTrue(servico.gerar(pedido).startswith(b'%PDF'))
 
-    def test_orcamento_reune_foto_estrutura_grade_e_nomes_por_produto(self):
+    def test_orcamento_reune_foto_grade_e_nomes_sem_estrutura_tecnica(self):
         from apps.moda.models import ItemGradePedido, PersonalizacaoIndividual, Tamanho
         from apps.moda.services.orcamento_pdf import _estilos
 
@@ -531,7 +531,7 @@ class ArteNoPdfTests(TestCase):
         self.assertEqual(len(tabela._cellvalues), 3)
         for indice, linha in enumerate(tabela._cellvalues[1:]):
             texto = self._texto_layout(linha)
-            self.assertIn(f'TECIDO-{indice}', texto)
+            self.assertNotIn(f'TECIDO-{indice}', texto)
             self.assertIn(f'PESSOA-{indice}', texto)
             self.assertNotIn(f'PESSOA-{1 - indice}', texto)
             self.assertIn('Grade:', texto)
@@ -539,7 +539,44 @@ class ArteNoPdfTests(TestCase):
             self.assertTrue(linha[0])
         self.assertLessEqual(_paginas(OrcamentoPdfService.gerar(pedido)), 2)
 
-    def test_orcamento_nao_trunca_estrutura_e_escapa_textos(self):
+    def test_orcamento_do_conjunto_mostra_duas_grades_e_personalizacao_sem_ficha_tecnica(self):
+        from apps.moda.services.orcamento_pdf import _estilos
+
+        pedido = self._pedido()
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='P', ordem=10)
+        grade = Grade.objects.create(filial=self.filial, nome='Adulto')
+        configuracao = {
+            componente: {
+                'estrutura': {
+                    'tipo_impressao': ['SILK'],
+                    'gola': 'CARECA',
+                    'acabamentos': ['CADARÇO'],
+                },
+                'grades': [str(grade.pk)],
+                'gradePorGrade': {str(grade.pk): {str(tamanho.pk): 2}},
+                'observacoes': f'Observação técnica da {componente}',
+            }
+            for componente in ('camisa', 'calcao')
+        }
+        item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Conjunto esportivo', quantidade=2,
+            valor_unitario=Decimal('85'), configuracao_conjunto=configuracao,
+        )
+        PersonalizacaoIndividual.objects.create(
+            pedido=pedido, item=item, tamanho=tamanho, tamanho_calcao=tamanho,
+            nome='ANA', numero='10', nome_calcao='ANA', numero_calcao='10',
+        )
+
+        texto = self._texto_layout(OrcamentoPdfService._produto(item, _estilos()))
+
+        self.assertIn('Camisa (2): Grade: Adulto: P 2', texto)
+        self.assertIn('Calção (2): Grade: Adulto: P 2', texto)
+        self.assertIn('Personalização do conjunto', texto)
+        self.assertIn('ANA', texto)
+        for tecnico in ('SILK', 'CARECA', 'CADARÇO', 'Observação técnica'):
+            self.assertNotIn(tecnico, texto)
+
+    def test_orcamento_oculta_estrutura_tecnica_e_escapa_nome_do_produto(self):
         from apps.moda.services.orcamento_pdf import _estilos
 
         pedido = self._pedido()
@@ -550,12 +587,11 @@ class ArteNoPdfTests(TestCase):
             ),
         )
         texto = self._texto_layout(OrcamentoPdfService._produto(item, _estilos()))
-        self.assertIn('VALOR-24 & detalhe', texto)
+        self.assertNotIn('VALOR-24 & detalhe', texto)
         self.assertIn('Camisa <A> & B', texto)
         self.assertTrue(OrcamentoPdfService.gerar(pedido).startswith(b'%PDF'))
 
-    def test_orcamento_organiza_especificacoes_em_tres_colunas_com_imagem_compacta(self):
-        from reportlab.platypus import Table
+    def test_orcamento_identifica_grade_e_personalizacao_no_cabecalho(self):
         from apps.moda.services.orcamento_pdf import _estilos
 
         pedido = self._pedido()
@@ -566,11 +602,9 @@ class ArteNoPdfTests(TestCase):
             ),
         )
 
-        linha = OrcamentoPdfService._produto(item, _estilos())
-        conteudo = linha[1]
-        tabela = next(bloco for bloco in conteudo if isinstance(bloco, Table))
-        self.assertEqual(len(tabela._cellvalues), 4)
-        self.assertEqual(len(tabela._cellvalues[0]), 3)
+        texto = self._texto_layout(OrcamentoPdfService._itens(pedido, _estilos()))
+        self.assertIn('PRODUTO / GRADE E PERSONALIZAÇÕES', texto)
+        self.assertNotIn('VALOR-0', texto)
         self.assertAlmostEqual(OrcamentoPdfService.LARGURAS[0], 27 * 72 / 25.4)
         self.assertAlmostEqual(OrcamentoPdfService.LARGURAS[1], 76 * 72 / 25.4)
 
@@ -1273,16 +1307,10 @@ class ArteNoPdfTests(TestCase):
             if hasattr(celula, 'text')
         )
 
-    def test_a_regra_de_visibilidade_e_uma_so(self):
-        """
-        A página do link e o PDF leem a MESMA lista. Se alguém acrescentar um
-        tipo novo em um lugar e esquecer o outro, isto quebra antes de virar
-        vazamento em produção.
-        """
-        from apps.moda.models.arquivo import TIPOS_VISIVEIS_AO_CLIENTE
-        from apps.moda.views_publico import (
-            TIPOS_VISIVEIS_AO_CLIENTE as DA_PAGINA,
-        )
+    def test_link_publico_nao_repete_galeria_geral_antes_dos_produtos(self):
+        from django.template.loader import get_template
 
-        self.assertIs(TIPOS_VISIVEIS_AO_CLIENTE, DA_PAGINA)
-        self.assertNotIn(ArquivoPedido.Tipo.DOCUMENTO, TIPOS_VISIVEIS_AO_CLIENTE)
+        fonte = get_template('moda/publico/pedido.html').template.source
+
+        self.assertNotIn('{% for a in artes %}', fonte)
+        self.assertNotIn('Arte do pedido', fonte)

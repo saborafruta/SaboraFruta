@@ -1,4 +1,4 @@
-"""Proposta comercial com foto, especificações, grade e nomes por produto.
+"""Proposta comercial com foto, grade e personalizações por produto.
 
 Layout exclusivo do orçamento. A ficha de produção mantém seu desenho.
 Dados e imagens vêm do pedido e da filial, nunca da imagem de referência.
@@ -35,44 +35,6 @@ OBSERVACAO_PAGAMENTO_ORCAMENTO = (
 TOPO_CONTINUACAO = 21 * mm
 MARGEM_INFERIOR = 22 * mm
 ALTURA_CONTINUACAO = A4[1] - TOPO_CONTINUACAO - MARGEM_INFERIOR - 12
-
-
-def especificacoes_orcamento_item(item):
-    """Dados comerciais da peça, compartilhados pelo PDF e pelo link público."""
-    pares = []
-    for rotulo, valor in (
-        ('Referência', item.referencia), ('Tecido / Malha', item.tecido),
-        ('Cor', item.cor), ('Gola', item.get_gola_display() if item.gola else ''),
-        ('Manga', item.get_manga_display() if item.manga else ''),
-        ('Acabamento', item.acabamento),
-    ):
-        if valor:
-            pares.append((rotulo, str(valor)))
-    texto = (item.observacoes or '').replace('Estrutura da peça:', '').strip()
-    for linha in texto.splitlines():
-        if not linha.strip():
-            continue
-        rotulo, sep, valor = linha.partition(':')
-        par = (
-            (rotulo.strip(), valor.strip()) if sep
-            else ('Observação', linha.strip())
-        )
-        chave = par[0].casefold()
-        pares = [existente for existente in pares if existente[0].casefold() != chave]
-        pares.append(par)
-    for personalizacao in item.personalizacoes.all():
-        valores = [
-            str(personalizacao), personalizacao.nome_personalizado,
-            personalizacao.numero_personalizado, personalizacao.patrocinios,
-            personalizacao.observacoes,
-        ]
-        if personalizacao.arquivo and personalizacao.extensao not in DESENHAVEIS:
-            valores.append(personalizacao.nome_arquivo)
-        pares.append((
-            'Impressão / arte',
-            ' - '.join(str(valor) for valor in valores if valor),
-        ))
-    return list(dict.fromkeys(pares))
 
 
 class _TabelaProdutos(Table):
@@ -134,10 +96,26 @@ def observacoes_orcamento(pedido):
     ]
     if pedido.condicao_pagamento_id:
         textos.append(f'Condição: {pedido.condicao_pagamento}')
-    textos += [
-        linha.strip() for linha in (pedido.observacoes or '').splitlines()
-        if linha.strip()
-    ]
+    linhas = [linha.strip() for linha in (pedido.observacoes or '').splitlines()]
+    indice = 0
+    while indice < len(linhas):
+        linha = linhas[indice]
+        if not linha:
+            indice += 1
+            continue
+        if linha.casefold().rstrip(':') == 'contatos extras':
+            contatos = []
+            indice += 1
+            while indice < len(linhas) and linhas[indice].lstrip().startswith(('-', '•')):
+                contatos.append(linhas[indice].lstrip('-• ').strip())
+                indice += 1
+            textos.append(
+                f'Contatos extras: {" | ".join(contatos)}'
+                if contatos else 'Contatos extras:'
+            )
+            continue
+        textos.append(linha)
+        indice += 1
     return textos
 
 
@@ -370,11 +348,6 @@ class OrcamentoPdfService:
         return [tabela, Spacer(1, 6)]
 
     @staticmethod
-    def _especificacoes(item):
-        """Não trunca a estrutura: cada opção comercial aparece em sua linha."""
-        return especificacoes_orcamento_item(item)
-
-    @staticmethod
     def _fotos(item, e, altura=22 * mm):
         fotos = []
         estilo_descricao = ParagraphStyle(
@@ -491,29 +464,9 @@ class OrcamentoPdfService:
                 f'{brl(item.valor_unitario)} por conjunto completo '
                 '(1 camisa + 1 calção)', e['celula'],
             ), Spacer(1, 3)]
-        especificacoes = cls._especificacoes(item)
-        if especificacoes:
-            celulas = [
-                Paragraph(f'<b>{_texto(rotulo)}:</b> {_texto(valor)}', e['celula'])
-                for rotulo, valor in especificacoes
-            ]
-            linhas = [celulas[indice:indice + 3] for indice in range(0, len(celulas), 3)]
-            while len(linhas[-1]) < 3:
-                linhas[-1].append('')
-            tabela_especificacoes = Table(
-                linhas, colWidths=[largura / 3] * 3, hAlign='LEFT',
-            )
-            tabela_especificacoes.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 3),
-                ('TOPPADDING', (0, 0), (-1, -1), 0),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-            ]))
-            conteudo.append(tabela_especificacoes)
         grade = [g for g in item.grade.all() if g.quantidade]
         if item.eh_conjunto:
-            conteudo += cls._componentes_conjunto(item, e, largura)
+            conteudo += cls._componentes_conjunto(item, e)
         elif grade:
             resumo = ' | '.join(f'{g.tamanho.sigla} {g.quantidade}' for g in grade)
             conteudo += [
@@ -527,19 +480,16 @@ class OrcamentoPdfService:
             ]
         conteudo += cls._pessoas(item, e, largura)
         return [
-            cls._fotos(item, e, (22 if especificacoes or grade else 12) * mm), conteudo,
+            cls._fotos(item, e, (22 if grade else 12) * mm), conteudo,
             Paragraph(str(item.quantidade), e['centro']),
             Paragraph(brl(item.valor_unitario), e['td_dir']),
             Paragraph(brl(item.subtotal), e['td_dir']),
         ]
 
     @staticmethod
-    def _componentes_conjunto(item, e, largura):
+    def _componentes_conjunto(item, e):
         blocos = [Spacer(1, 3), HRFlowable(width='100%', thickness=.5, color=BORDA)]
         for componente in item.componentes_conjunto:
-            especificacoes = ' · '.join(
-                f'{rotulo}: {valor}' for rotulo, valor in componente['estrutura']
-            ) or 'Sem especificações adicionais'
             grades = ' | '.join(
                 f'{grade["nome"]}: ' + ', '.join(
                     f'{tamanho["sigla"]} {tamanho["quantidade"]}'
@@ -550,7 +500,7 @@ class OrcamentoPdfService:
                 Spacer(1, 3),
                 Paragraph(
                     f'<b>{_texto(componente["label"])} ({componente["total"]}):</b> '
-                    f'{_texto(especificacoes)}<br/><b>Grade:</b> {_texto(grades)}',
+                    f'<b>Grade:</b> {_texto(grades) or "Não informada"}',
                     e['celula'],
                 ),
             ]
@@ -561,35 +511,8 @@ class OrcamentoPdfService:
         if len(grupo.itens) == 1:
             return cls._produto(grupo.itens[0], e)
 
-        largura = cls.LARGURAS[1] - 12
         fotos = []
         conteudo = [Paragraph(_texto(grupo.nome), e['nome']), Spacer(1, 4)]
-        compartilhadas = [
-            par for par in cls._especificacoes(grupo.itens[0])
-            if par[0].casefold() not in (
-                'impressão / arte', 'tipo impressão', 'tipo impressao',
-                'tipo de impressão',
-            )
-        ]
-        if compartilhadas:
-            celulas = [
-                Paragraph(f'<b>{_texto(rotulo)}:</b> {_texto(valor)}', e['celula'])
-                for rotulo, valor in compartilhadas
-            ]
-            linhas = [celulas[indice:indice + 3] for indice in range(0, len(celulas), 3)]
-            while len(linhas[-1]) < 3:
-                linhas[-1].append('')
-            especificacoes = Table(
-                linhas, colWidths=[largura / 3] * 3, hAlign='LEFT',
-            )
-            especificacoes.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 3),
-                ('TOPPADDING', (0, 0), (-1, -1), 0),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-            ]))
-            conteudo += [especificacoes, Spacer(1, 3)]
         detalhes = cls._quadro_grades_grupo(
             grupo, e, sum(cls.LARGURAS[1:]) - 12,
         )
@@ -653,16 +576,8 @@ class OrcamentoPdfService:
         resumo_valores = []
         for linha, item in enumerate(grupo.itens, start=1):
             quantidades = {celula.tamanho_id: celula.quantidade for celula in item.grade.all()}
-            personalizacoes = [
-                valor for rotulo, valor in cls._especificacoes(item)
-                if rotulo == 'Impressão / arte'
-            ]
-            complemento = (
-                f'<br/><font size="5">{_texto(" / ".join(personalizacoes))}</font>'
-                if personalizacoes else ''
-            )
             dados.append([
-                Paragraph(f'<b>{_texto(item.grade_rotulo)}</b>{complemento}', estilo_nome),
+                Paragraph(f'<b>{_texto(item.grade_rotulo)}</b>', estilo_nome),
                 *[str(quantidades.get(tamanho.pk, 0)) for tamanho in tamanhos],
                 str(sum(quantidades.values())),
             ])
@@ -691,7 +606,7 @@ class OrcamentoPdfService:
     @classmethod
     def _itens(cls, pedido, e):
         cabecalho = [Paragraph(t, e['th']) for t in (
-            'PRODUTO / ESPECIFICAÇÕES', '', 'QUANTIDADE', 'VALOR UNITÁRIO', 'SUBTOTAL',
+            'PRODUTO / GRADE E PERSONALIZAÇÕES', '', 'QUANTIDADE', 'VALOR UNITÁRIO', 'SUBTOTAL',
         )]
         cabecalho[2] = Paragraph('QUANTIDADE', ParagraphStyle(
             'orc_th_quantidade', parent=e['th'], fontSize=5.3,

@@ -258,7 +258,28 @@
     </form>
   </div>
 
-  <div x-show="historico" x-cloak class="fixed inset-0 z-50 flex justify-end" style="background:rgba(0,0,0,.65)" @click.self="historico=false"><div class="card w-full max-w-lg h-full p-4 overflow-y-auto"><div class="flex justify-between"><h2 class="text-xl font-bold">Histórico da OP</h2><button class="text-2xl" @click="historico=false">×</button></div><div class="mt-4 space-y-3">{% for evento in eventos %}<article class="op2-item"><div class="flex justify-between gap-2"><strong>{{ evento.titulo }}</strong><time class="text-xs">{{ evento.quando|date:'d/m/Y H:i' }}</time></div><p class="text-xs mt-1">{{ evento.usuario }} · {{ evento.entidade }}</p>{% for m in evento.mudancas %}<p class="text-xs">{{ m.campo }}: {{ m.antes }} → {{ m.depois }}</p>{% endfor %}</article>{% empty %}<p class="opacity-60">Ainda não há eventos registrados.</p>{% endfor %}</div></div></div>
+  <div x-show="historico" x-cloak class="fixed inset-0 z-50 flex justify-end" style="background:rgba(0,0,0,.65)" @click.self="historico=false">
+    <div class="card w-full max-w-lg h-full p-4 overflow-y-auto">
+      <div class="flex justify-between"><h2 class="text-xl font-bold">Histórico da OP</h2><button class="text-2xl" @click="historico=false">×</button></div>
+      <p class="text-xs opacity-60 mt-1">Clique em um registro para ver exatamente o que foi incluído, alterado ou removido.</p>
+      <div class="mt-4 space-y-3">
+        {% for evento in eventos %}
+          <details class="op2-item group">
+            <summary class="cursor-pointer list-none">
+              <div class="flex justify-between gap-2"><strong>{{ evento.titulo }}</strong><time class="text-xs shrink-0">{{ evento.quando|date:'d/m/Y H:i' }}</time></div>
+              <div class="flex items-center justify-between gap-2 mt-1"><p class="text-xs">{{ evento.usuario }} · {{ evento.entidade }}</p><span class="text-xs opacity-60">Ver detalhes ▾</span></div>
+            </summary>
+            <div class="mt-3 pt-3 space-y-2" style="border-top:1px solid rgba(148,163,184,.25)">
+              <p class="text-sm">{{ evento.explicacao }}</p>
+              {% for detalhe in evento.detalhes %}<p class="text-xs"><strong>{{ detalhe.campo }}:</strong> {{ detalhe.valor }}</p>{% endfor %}
+              {% for m in evento.mudancas %}<p class="text-xs"><strong>{{ m.campo }}:</strong> {{ m.antes }} → {{ m.depois }}</p>{% endfor %}
+              {% if not evento.detalhes and not evento.mudancas %}<p class="text-xs opacity-60">O registro foi realizado sem informações adicionais disponíveis no histórico.</p>{% endif %}
+            </div>
+          </details>
+        {% empty %}<p class="opacity-60">Ainda não há eventos registrados.</p>{% endfor %}
+      </div>
+    </div>
+  </div>
 
   <div x-show="whatsapp" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-3" style="background:rgba(0,0,0,.72)" @click.self="whatsapp=false"><div class="card p-5 w-full max-w-lg"><div class="flex justify-between"><h2 class="text-xl font-bold">Enviar pelo WhatsApp</h2><button class="text-2xl" @click="whatsapp=false">×</button></div><form method="post" action="{% url 'moda:op2-action' pedido.pk %}" class="mt-3">{% csrf_token %}<input type="hidden" name="acao" value="telefone"><label class="op2-label">Número</label><input name="telefone" x-model="numero" class="form-input w-full" placeholder="55 84 99999-0000"><label class="flex gap-2 items-center text-sm my-2"><input type="checkbox" name="salvar_cliente" value="1"> Salvar também no cadastro do cliente</label><button class="btn-secondary text-sm">Salvar número</button></form><label class="op2-label block mt-4">Mensagem padrão</label><textarea x-model="mensagem" class="form-input w-full" rows="8"></textarea><p class="text-xs my-2" style="color:#f59e0b">{% if pedido.status == 'orcamento' %}Será enviado o orçamento comercial. A ficha da OP ainda não é exposta.{% else %}Será enviado o link de aprovação e o PDF atualizado da OP.{% endif %}</p><div class="flex justify-end gap-2"><button class="btn-secondary" @click="whatsapp=false">Cancelar</button><button class="btn-primary" style="background:#16a34a" @click="abrirWhatsapp">Abrir WhatsApp</button></div></div></div>
   {% include "moda/_op2_cliente_modal.html" %}

@@ -649,6 +649,35 @@ class Op2Tests(TestCase):
             html.index('Copiar camisa para o calção'),
         )
 
+    def test_historico_abre_card_com_detalhes_do_que_foi_registrado(self):
+        from apps.core.models import LogSistema
+
+        item = self._item(quantidade=3)
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='P', ordem=10)
+        linha = ItemGradePedido.objects.create(
+            item=item, tamanho=tamanho, quantidade=3,
+        )
+        LogSistema.objects.create(
+            filial=self.filial,
+            usuario=self._usuario(),
+            modulo='moda',
+            acao=LogSistema.Acao.CRIAR,
+            tabela_afetada=ItemGradePedido._meta.db_table,
+            registro_id=linha.pk,
+            dados_novos={
+                'item': str(item), 'tamanho': str(tamanho), 'quantidade': 3,
+            },
+        )
+        self._login_op2()
+
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+
+        self.assertContains(resposta, 'Clique em um registro para ver exatamente')
+        self.assertContains(resposta, '<details class="op2-item group">')
+        self.assertContains(resposta, 'Este registro foi incluído na OP')
+        self.assertContains(resposta, '<strong>Tamanho:</strong> P')
+        self.assertContains(resposta, '<strong>Quantidade:</strong> 3')
+
     def test_cada_grade_da_nova_op_tem_quantidades_independentes(self):
         self.client.force_login(self._usuario())
         session = self.client.session
