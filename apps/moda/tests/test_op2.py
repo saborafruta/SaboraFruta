@@ -276,6 +276,16 @@ class Op2Tests(TestCase):
             self.assertContains(resposta, 'required placeholder="Informe o valor"')
             self.assertContains(resposta, '<option value="N/A">N/A</option>')
 
+    def test_multisseletores_retraem_ao_clicar_ou_focar_fora(self):
+        self._login_op2()
+
+        for url in (reverse('moda:op2-create'), reverse('moda:op2-detail', args=[self.pedido.pk])):
+            resposta = self.client.get(url)
+            self.assertContains(resposta, '@pointerdown.outside="aberto=false"')
+            self.assertContains(resposta, '@focusin.window="if (!$root.contains($event.target)) aberto=false"')
+            self.assertContains(resposta, 'op2-abrir-multisselecao')
+            self.assertContains(resposta, "@pointerdown.outside=\"$el.removeAttribute('open')\"")
+
     def setUp(self):
         self.pedido = PedidoProducao.objects.create(
             filial=self.filial, cliente=self.cliente,

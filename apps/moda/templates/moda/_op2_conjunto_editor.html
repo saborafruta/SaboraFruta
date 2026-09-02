@@ -25,8 +25,12 @@
       <div>
         <span class="op2-label block">{{ campo|campo_op2_label }}</span>
         {% if campo == 'tipo_impressao' or campo|slice:':10' == 'acabamento' %}
-        <details class="op2-conjunto-multi">
-          <summary><span x-text="op2ResumoMultisselecao(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'])"></span><span>⌄</span></summary>
+        <details class="op2-conjunto-multi"
+                 @pointerdown.outside="$el.removeAttribute('open')"
+                 @focusin.window="if (!$el.contains($event.target)) $el.removeAttribute('open')"
+                 @op2-abrir-multisselecao.window="if ($event.detail.origem !== $el) $el.removeAttribute('open')"
+                 @keydown.escape.window="$el.removeAttribute('open')">
+          <summary @click="window.dispatchEvent(new CustomEvent('op2-abrir-multisselecao', {detail:{origem:$el.parentElement}}))"><span x-text="op2ResumoMultisselecao(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'])"></span><span>⌄</span></summary>
           <div>{% for opcao in opcoes %}<label><input type="checkbox" :checked="op2MultisselecaoContem(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'],'{{ opcao|escapejs }}')" @change="draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}']=op2AlternarMultisselecao(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'],'{{ opcao|escapejs }}',$event.target.checked)"><span>{{ opcao }}</span></label>{% endfor %}</div>
         </details>
         {% else %}

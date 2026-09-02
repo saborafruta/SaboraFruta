@@ -1,5 +1,11 @@
-<div class="op2-multi" x-data="{ aberto: false }" @click.outside="aberto=false" @keydown.escape.window="aberto=false">
-  <button type="button" class="op2-multi-trigger" @click="aberto=!aberto" :aria-expanded="aberto" aria-haspopup="listbox">
+<div class="op2-multi" x-data="{ aberto: false }"
+     @pointerdown.outside="aberto=false"
+     @focusin.window="if (!$root.contains($event.target)) aberto=false"
+     @op2-abrir-multisselecao.window="if ($event.detail.origem !== $root) aberto=false"
+     @keydown.escape.window="aberto=false">
+  <button type="button" class="op2-multi-trigger"
+          @click="window.dispatchEvent(new CustomEvent('op2-abrir-multisselecao', {detail:{origem:$root}})); aberto=!aberto"
+          :aria-expanded="aberto" aria-haspopup="listbox">
     <span class="op2-multi-summary" x-text="op2ResumoMultisselecao({% if campo == 'tipo_impressao' %}draft.tipo_impressao{% else %}draft.estrutura['{{ campo }}']{% endif %})"></span>
     <svg class="op2-multi-chevron" :class="aberto?'is-open':''" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" aria-hidden="true"><path d="m6 8 4 4 4-4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
   </button>

@@ -371,15 +371,24 @@ class AlertaNaTelaTests(RespostaBase):
         for coluna in ('orcamento', 'aprovacao', 'confirmado', 'producao', 'pronto', 'entregue'):
             self.assertContains(resposta, f'.kc-raia[data-coluna="{coluna}"]')
 
-    def test_colunas_igualam_altura_e_vazia_expande_para_receber_cartao(self):
+    def test_colunas_igualam_altura_e_largura_inclusive_quando_vazias(self):
         resposta = self._quadro()
 
-        self.assertContains(resposta, '.kc-board { align-items: stretch; }')
+        self.assertContains(resposta, '.kc-board {')
+        self.assertContains(resposta, 'align-items: stretch;')
         self.assertContains(resposta, 'align-self: stretch;')
         self.assertContains(resposta, 'class="kc-board flex gap-3 items-stretch"')
+        self.assertContains(resposta, 'flex: 0 0 var(--kc-largura-coluna);')
+        self.assertContains(resposta, 'min-width: var(--kc-largura-coluna);')
+        self.assertContains(resposta, 'max-width: var(--kc-largura-coluna);')
         self.assertContains(resposta, "content: 'Sem pedidos'")
-        self.assertContains(
-            resposta, '.kc-raia.vazia .kc-contador { display: none; }',
-        )
-        self.assertContains(resposta, '.kc-raia.vazia.recebendo')
+        self.assertNotContains(resposta, 'flex: 0 0 126px;')
         self.assertContains(resposta, "content: 'Solte o pedido aqui'")
+
+    def test_usuario_escolhe_largura_do_kanban_e_preferencia_e_memorizada(self):
+        resposta = self._quadro()
+
+        self.assertContains(resposta, 'id="kc-largura"')
+        self.assertContains(resposta, '<option value="padrao" selected>Padrão</option>')
+        self.assertContains(resposta, "compacta: '260px', padrao: '320px', ampla: '400px'")
+        self.assertContains(resposta, 'moda-kanban-comercial-largura')

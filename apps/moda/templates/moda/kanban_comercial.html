@@ -162,35 +162,22 @@
     background: var(--kc-accent);
   }
 
-  /* RAIA VAZIA ENCOLHE SÓ NA LARGURA. São nove colunas, e numa confecção
-     metade delas costuma estar vazia a qualquer momento. Mantê-las estreitas
-     deixa o fluxo visível, mas todas acompanham a altura da maior raia: assim
-     a coluna inteira continua sendo um alvo de arraste, inclusive para um
-     cartão que esteja no fim de uma coluna longa. */
-  .kc-board { align-items: stretch; }
+  /* Todas as raias usam exatamente a mesma largura, inclusive quando vazias.
+     A preferência pode ser trocada no filtro; a rolagem horizontal preserva
+     o tamanho escolhido sem deformar as etapas com poucos pedidos. */
+  .kc-board {
+    --kc-largura-coluna: 320px;
+    align-items: stretch;
+  }
   .kc-raia {
-    flex: 1 1 214px;
-    min-width: 214px;
+    flex: 0 0 var(--kc-largura-coluna);
+    width: var(--kc-largura-coluna);
+    min-width: var(--kc-largura-coluna);
+    max-width: var(--kc-largura-coluna);
     align-self: stretch;
     display: flex;
     flex-direction: column;
-    transition: flex-basis .18s ease, min-width .18s ease;
-  }
-  .kc-raia.vazia {
-    flex: 0 0 126px;
-    min-width: 126px;
-    padding-bottom: 9px;
-  }
-  .kc-raia.vazia .kc-cabecalho {
-    align-items: flex-start;
-    gap: 0;
-  }
-  .kc-raia.vazia .kc-contador { display: none; }
-  .kc-raia.vazia .kc-titulo {
-    writing-mode: horizontal-tb;
-    transform: none;
-    white-space: normal;
-    line-height: 1.25;
+    transition: width .18s ease, min-width .18s ease, max-width .18s ease;
   }
   .kc-raia.vazia .kc-resumo { display: none; }
   .kc-raia.vazia .kc-lista {
@@ -207,16 +194,8 @@
     letter-spacing: .025em;
   }
 
-  /* Ela ABRE para receber o cartão: um alvo de 54 px é difícil de acertar
-     com o mouse, e errar o alvo num quadro que muda status de pedido é o
-     tipo de erro que ninguém consegue explicar depois. */
-  .kc-raia.vazia.recebendo { flex: 0 0 214px; min-width: 214px; }
-  .kc-raia.vazia.recebendo .kc-cabecalho {
-    flex-direction: row;
-    align-items: baseline;
-    gap: 6px;
-  }
-  .kc-raia.vazia.recebendo .kc-titulo { writing-mode: horizontal-tb; transform: none; }
+  /* A largura não muda durante o arrasto; apenas a área de soltura cresce
+     verticalmente para deixar claro onde o pedido será colocado. */
   .kc-raia.vazia.recebendo .kc-lista { min-height: 140px; }
   .kc-raia.vazia.recebendo .kc-lista::after { content: 'Solte o pedido aqui'; color:var(--kc-accent); }
 
@@ -332,6 +311,14 @@
         {% endfor %}
       </select>
     </div>
+    <div>
+      <label for="kc-largura" class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Largura das colunas</label>
+      <select id="kc-largura" class="form-input w-40" aria-label="Largura das colunas do Kanban">
+        <option value="compacta">Compacta</option>
+        <option value="padrao" selected>Padrão</option>
+        <option value="ampla">Ampla</option>
+      </select>
+    </div>
     <label class="flex items-center gap-2 text-sm pb-2" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
       <input type="checkbox" name="atrasados" value="1" {% if filtros.atrasados %}checked{% endif %}>
       Só atrasados
@@ -363,11 +350,7 @@
   {% endif %}
 
   {# ── Quadro ───────────────────────────────────────────────────────── #}
-  {% comment %}
-    Sem `min-width` fixa no quadro. Ela obrigava a rolar SEMPRE, mesmo em
-    tela larga e com metade das colunas vazias — e o que ficava escondido à
-    direita era justamente Produção e Pronto, o fim do fluxo.
-  {% endcomment %}
+  {% comment %}A rolagem horizontal mantém todas as etapas na largura escolhida.{% endcomment %}
   <div class="overflow-x-auto pb-3">
     <div class="kc-board flex gap-3 items-stretch">
       {% for r in raias %}
@@ -540,8 +523,30 @@
     || document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
   const aviso = document.getElementById('kc-aviso');
   const avisoTexto = document.getElementById('kc-aviso-texto');
+  const quadro = document.querySelector('.kc-board');
+  const seletorLargura = document.getElementById('kc-largura');
   let arrastando = null;
   let origem = null;
+
+  // A largura é uma preferência visual local, como a configuração das
+  // colunas das listagens. "Padrão" é sempre o primeiro uso e todas as
+  // raias compartilham a mesma variável, mesmo quando estão vazias.
+  const LARGURAS = { compacta: '260px', padrao: '320px', ampla: '400px' };
+  const CHAVE_LARGURA = 'moda-kanban-comercial-largura';
+
+  function aplicarLargura(valor, salvar) {
+    const escolha = LARGURAS[valor] ? valor : 'padrao';
+    if (quadro) quadro.style.setProperty('--kc-largura-coluna', LARGURAS[escolha]);
+    if (seletorLargura) seletorLargura.value = escolha;
+    if (salvar) {
+      try { localStorage.setItem(CHAVE_LARGURA, escolha); } catch (erro) { /* modo privado */ }
+    }
+  }
+
+  let larguraInicial = 'padrao';
+  try { larguraInicial = localStorage.getItem(CHAVE_LARGURA) || 'padrao'; } catch (erro) { /* modo privado */ }
+  aplicarLargura(larguraInicial, false);
+  seletorLargura?.addEventListener('change', () => aplicarLargura(seletorLargura.value, true));
 
   // TRÊS DESFECHOS, TRÊS CORES. "moveu" e "moveu com pendência" pintados
   // igual fariam a lista do que falta parecer o texto de confirmação de
