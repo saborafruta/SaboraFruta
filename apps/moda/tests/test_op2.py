@@ -1046,6 +1046,28 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'O valor atual da OP já vem preenchido e pode ser editado.')
         self.assertContains(resposta, 'name="valor_total"')
 
+    def test_saldo_pendente_gera_conta_mesmo_sem_forma_informada(self):
+        from apps.financeiro.models import ContaReceber
+
+        item = self._item(quantidade=1)
+        item.valor_unitario = Decimal('100.00')
+        item.save(update_fields=['valor_unitario'])
+        self._login_op2()
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'financeiro', 'valor_total': '100.00', 'entrada': '0',
+            'forma_pagamento': 'nao_informado',
+            'responsavel_entrada': str(self.cliente.pk),
+            'responsavel_saldo': str(self.cliente.pk),
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        conta = ContaReceber.objects.get(
+            documento_tipo='pedido_moda', documento_id=self.pedido.pk,
+        )
+        self.assertEqual(conta.valor_saldo, Decimal('100.00'))
+        self.assertIsNone(conta.forma_pagamento)
+
     def test_op_mostra_extrato_e_atalho_para_quitar_titulo(self):
         from datetime import date
 

@@ -1421,18 +1421,44 @@ class Op2ActionView(ModaBaseView):
             raise ValueError('O valor total não pode ser negativo.')
         if entrada < 0 or entrada > valor_total:
             raise ValueError('O adiantamento deve ficar entre zero e o valor total.')
-        forma = get_object_or_404(
-            FormaPagamento.objects.filter(
-                Q(filial=_filial(request)) | Q(filial__isnull=True),
-                empresa=_filial(request).empresa, ativo=True,
-            ), pk=request.POST.get('forma_pagamento'),
-        )
-        conta = get_object_or_404(
-            ContaBancaria.objects.for_filial(_filial(request)).filter(ativo=True),
-            pk=request.POST.get('conta_bancaria'),
-        )
+        if valor_total == 0:
+            # Uma OP cortesia/amostra pode encerrar a etapa financeira sem
+            # título a receber. Registramos a opção comercial explicitamente
+            # para não deixá-la parecendo uma cobrança pendente.
+            pedido.entrada = Decimal('0')
+            pedido.forma_pagamento = None
+            pedido.conta_bancaria_entrada = None
+            pedido.previsao_pagamento = [{
+                'forma': PedidoProducao.FormaPagamentoPrevista.NAO_INFORMADO,
+                'valor': '0.00',
+            }]
+            pedido.financeiro_gerado_em = timezone.now()
+            pedido.save(update_fields=[
+                'entrada', 'forma_pagamento', 'conta_bancaria_entrada',
+                'previsao_pagamento', 'financeiro_gerado_em', 'updated_at',
+            ])
+            messages.success(
+                request,
+                'Financeiro concluído sem lançamentos: OP de valor zerado.',
+            )
+            return
+        forma_nao_informada = request.POST.get('forma_pagamento') == 'nao_informado'
+        if forma_nao_informada:
+            forma = None
+            conta = None
+        else:
+            forma = get_object_or_404(
+                FormaPagamento.objects.filter(
+                    Q(filial=_filial(request)) | Q(filial__isnull=True),
+                    empresa=_filial(request).empresa, ativo=True,
+                ), pk=request.POST.get('forma_pagamento'),
+            )
+            conta = get_object_or_404(
+                ContaBancaria.objects.for_filial(_filial(request)).filter(ativo=True),
+                pk=request.POST.get('conta_bancaria'),
+            )
         vencimento_texto = request.POST.get('data_vencimento') or ''
-        vencimento = date.fromisoformat(vencimento_texto)
+        vencimento = date.fromisoformat(vencimento_texto) if vencimento_texto else None
         parcelas = int(request.POST.get('parcelas') or 1)
         if parcelas < 1 or parcelas > 120:
             raise ValueError('A quantidade de parcelas deve ficar entre 1 e 120.')
