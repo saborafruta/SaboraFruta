@@ -1,6 +1,6 @@
-<section class="op2-gallery-product">
-  <header class="flex items-center justify-between gap-3 mb-3">
-    <div class="min-w-0"><span class="op2-label block">Imagens do produto</span><h3 class="font-bold truncate">{{ item.nome_base_op|default:item.nome_exibicao }}</h3>{% if item.grade_rotulo %}<span class="op2-grade-tag mt-1" style="color:{{ item.grade_cor }};background:{{ item.grade_fundo }}">{{ item.grade_rotulo }}</span>{% endif %}</div>
+<section class="op2-item-gallery" @click.stop>
+  <header class="op2-item-gallery-head">
+    <strong class="text-sm">Fotos e mockups</strong>
     <span class="op2-chip">{{ item.visuais.all|length }} imagem(ns)</span>
   </header>
   <div class="op2-gallery-grid">

@@ -1237,7 +1237,7 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'this.draft.nome=nome')
         self.assertNotContains(resposta, 'const escolherProduto=estado.escolherProduto.bind')
 
-    def test_nova_op_mostra_previa_de_anexos_e_imagens_por_produto(self):
+    def test_nova_op_mostra_imagens_dentro_do_card_do_produto(self):
         self.client.force_login(self._usuario())
         session = self.client.session
         session['filial_id'] = self.filial.pk
@@ -1248,12 +1248,17 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'previewAnexos($event)')
         self.assertContains(resposta, 'anexosPreview')
         self.assertContains(resposta, 'Fotos e mockups')
-        self.assertContains(resposta, 'Separados por produto')
-        self.assertContains(resposta, 'itensGaleria()')
-        self.assertContains(resposta, 'selecionarImagensItem(entrada.item,$event)')
+        self.assertContains(resposta, 'class="op2-item-gallery"')
+        self.assertContains(resposta, 'selecionarImagensItem(item,$event)')
+        self.assertContains(resposta, 'selecionarImagensItem(itemRascunho,$event)')
+        self.assertContains(resposta, ':name="`item_${idx}_imagens`"')
+        self.assertContains(resposta, ':data-op2-imagens-uid="String(item.uid)"')
+        self.assertContains(resposta, 'this.aplicarArquivosImagens()')
+        self.assertContains(resposta, 'new DataTransfer()')
         self.assertContains(resposta, '>+</strong>')
         self.assertContains(resposta, 'Observação das imagens')
-        self.assertContains(resposta, 'entrada.rascunho')
+        self.assertNotContains(resposta, 'itensGaleria()')
+        self.assertNotContains(resposta, 'Separados por produto')
         self.assertNotContains(resposta, 'As imagens ficarão ligadas somente a este produto.')
         self.assertNotContains(resposta, '+ Frente')
         self.assertNotContains(resposta, '+ Costas')
@@ -1391,8 +1396,14 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'abrirNovoProduto()')
         self.assertContains(resposta, 'rel="noopener"')
         self.assertContains(resposta, 'op2-order-header')
-        self.assertContains(resposta, '<h2 class="font-bold">Fotos e mockups</h2>')
-        self.assertContains(resposta, 'op2-aside .op2-gallery-grid')
+        self.assertContains(resposta, '<strong class="text-sm">Fotos e mockups</strong>')
+        self.assertContains(resposta, 'class="op2-item-gallery"')
+        self.assertNotContains(resposta, 'op2-aside .op2-gallery-grid')
+        html = resposta.content.decode()
+        self.assertLess(
+            html.index('class="op2-item-gallery"'),
+            html.index('class="op2-item-tools"'),
+        )
         self.assertContains(resposta, 'Todos os produtos acompanham o status geral da OP.')
         self.assertContains(resposta, '>Responsável</span>')
         self.assertContains(resposta, 'name="cliente" :value="clienteId"')
@@ -2185,7 +2196,6 @@ class Op2Tests(TestCase):
         html = detalhe.content.decode()
         self.assertLess(html.index('Informação mais recente'),
                         html.index('Conferir cores'))
-        self.assertLess(html.index('Fotos e mockups'), html.rindex('Criação de artes'))
         self.assertLess(html.rindex('Criação de artes'), html.index('Resumo de conferência'))
         self.assertEqual(recente, self.pedido.historico_criacao.first())
 
@@ -2361,7 +2371,8 @@ class Op2Tests(TestCase):
         visual = VisualItemPedido.objects.get(item=item)
 
         detalhe = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
-        self.assertContains(detalhe, 'Imagens separadas por produto')
+        self.assertContains(detalhe, 'Fotos e mockups')
+        self.assertContains(detalhe, 'class="op2-item-gallery"', count=1)
         self.assertContains(detalhe, 'name="imagens"')
         self.assertContains(detalhe, 'value="remover_visual"')
         self.assertContains(detalhe, 'op2LegendaAutomatica()')

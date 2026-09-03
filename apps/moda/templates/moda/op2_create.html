@@ -15,7 +15,7 @@
 {{ rascunho_op|json_script:"op2-rascunho-servidor" }}
 <style>
 .op2-shell{margin:-.75rem}.op2-work{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px}.op2-band{border:1px solid rgba(148,163,184,.22);border-radius:10px;padding:12px}.op2-label{display:block;margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;font-weight:800}.op2-card{border:1px solid rgba(148,163,184,.22);border-radius:10px;padding:10px}.op2-results{position:absolute;left:0;right:0;top:100%;z-index:40;max-height:240px;overflow:auto;border:1px solid rgba(148,163,184,.35);border-radius:10px;margin-top:4px;background:var(--card-bg,#18181b)}.op2-plus{min-height:78px;border:1px dashed rgba(148,163,184,.45);border-radius:10px;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;overflow:hidden}.op2-plus img{width:100%;height:110px;object-fit:cover}.op2-modal-grid{display:grid;grid-template-columns:330px minmax(0,1fr);gap:12px}.op2-model-list{max-height:58vh;overflow:auto}.op2-grade-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}.op2-grade-chip{border:1px solid rgba(148,163,184,.28);border-radius:10px;padding:10px;text-align:left;min-height:60px}.op2-grade-chip.is-on{border-color:#3b82f6;background:rgba(59,130,246,.13);box-shadow:inset 3px 0 #3b82f6}.op2-grade-panel{border:1px solid rgba(59,130,246,.38);border-radius:12px;padding:11px;background:rgba(59,130,246,.06)}.op2-size-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:8px}.op2-size-card{border:1px solid rgba(148,163,184,.24);border-radius:10px;padding:9px;background:rgba(148,163,184,.05)}.op2-size-name{display:block;text-align:center;font-size:12px;font-weight:900;margin-bottom:7px}.op2-stepper{display:grid;grid-template-columns:40px minmax(56px,1fr) 40px;gap:5px;align-items:center}.op2-qty-btn{height:40px;border:1px solid rgba(148,163,184,.3);border-radius:8px;font-size:20px;font-weight:800}.op2-qty-input{height:40px;min-width:0;text-align:center;font-size:18px;font-weight:800}.op2-qty-input::-webkit-inner-spin-button,.op2-qty-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.op2-file-previews{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}.op2-file-preview{border:1px solid rgba(148,163,184,.22);border-radius:9px;padding:7px;min-width:0}.op2-file-preview img{width:100%;height:90px;object-fit:cover;border-radius:6px;margin-bottom:5px}
-.op2-gallery-product{padding:9px;border:1px solid rgba(148,163,184,.22);border-radius:10px}.op2-gallery-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:8px}.op2-gallery-image{min-width:0;border:1px solid rgba(148,163,184,.18);border-radius:8px;overflow:hidden}.op2-gallery-image img{width:100%;height:105px;object-fit:cover}.op2-gallery-image figcaption{padding:5px 6px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.op2-gallery-add{min-height:105px;border:1px dashed rgba(59,130,246,.65);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px;text-align:center;color:#3b82f6;cursor:pointer}.op2-gallery-add:hover{background:rgba(59,130,246,.08)}
+.op2-item-gallery{margin-top:10px;padding-top:10px;border-top:1px solid rgba(148,163,184,.14)}.op2-item-gallery-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}.op2-gallery-grid{display:flex;flex-wrap:wrap;gap:7px}.op2-gallery-image{width:112px;min-width:0;border:1px solid rgba(148,163,184,.18);border-radius:8px;overflow:hidden}.op2-gallery-image img{width:100%;height:76px;object-fit:cover}.op2-gallery-image figcaption{padding:4px 6px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.op2-gallery-add{width:112px;min-height:76px;border:1px dashed rgba(59,130,246,.65);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px;text-align:center;color:#3b82f6;cursor:pointer}.op2-gallery-add:hover{background:rgba(59,130,246,.08)}
 .op2-results{background:#18181b!important;color:#f8fafc!important}.op2-results button,.op2-results strong,.op2-results small{color:inherit!important}.op2-qty-error{border-color:#ef4444!important;box-shadow:0 0 0 2px rgba(239,68,68,.18)}
 .op2-required-highlight .op2-label{color:#16a34a}.op2-required-highlight .form-input{border-color:rgba(22,163,74,.68);box-shadow:0 0 0 1px rgba(22,163,74,.10)}
 .op2-item-personalizacao{margin-top:10px;padding:12px;border:1px solid rgba(59,130,246,.28);border-radius:10px;background:rgba(59,130,246,.055)}.op2-personalizacao-grid{display:grid;grid-template-columns:minmax(115px,.7fr) minmax(150px,1fr) minmax(110px,.65fr) auto;gap:8px;align-items:end}.op2-chip{display:inline-flex;padding:3px 7px;border-radius:999px;font-size:11px;background:rgba(59,130,246,.12)}
@@ -91,6 +91,15 @@
                 <div class="text-sm"><span class="op2-label">Não entra no orçamento</span><strong class="block">Não soma no total nem aparece no PDF</strong></div>
                 <div class="flex flex-wrap gap-2 justify-end"><button type="button" class="btn-primary text-sm" @click="retomarItemRascunho()">Continuar preenchimento</button><button type="button" class="btn-secondary text-sm" style="color:#ef4444" @click="descartarItemRascunho()">Descartar</button></div>
               </div>
+              <section class="op2-item-gallery">
+                <div class="op2-item-gallery-head"><strong class="text-sm">Fotos e mockups</strong><small class="opacity-60">Este item</small></div>
+                <div class="op2-gallery-grid">
+                  <template x-for="imagem in (itemRascunho?.imagensPreview||[])" :key="imagem.chave"><figure class="op2-gallery-image"><img :src="imagem.url" :alt="imagem.nome"><figcaption x-text="imagem.nome"></figcaption></figure></template>
+                  <label class="op2-gallery-add"><input type="file" accept="image/*" multiple class="hidden" @change="selecionarImagensItem(itemRascunho,$event)"><strong aria-hidden="true" style="font-size:26px;line-height:1">+</strong><small x-text="itemRascunho?.imagensNomes?.length?'Trocar imagens':'Adicionar imagens'"></small></label>
+                </div>
+                <label x-show="itemRascunho?.imagensNomes?.length" x-cloak class="block mt-2"><span class="op2-label">Observação das imagens</span><textarea x-model="itemRascunho.imagensObservacoes" rows="2" maxlength="160" class="form-input w-full" placeholder="Ex.: usar esta arte na frente"></textarea></label>
+                <p class="text-xs mt-2" style="color:#d97706">As imagens serão ligadas ao produto quando o preenchimento for concluído.</p>
+              </section>
             </article>
             <template x-for="(item,idx) in itens" :key="item.uid">
               <article class="op2-card" :style="`border-color:${coresGrade(item)[0]}`" x-data="{personalizar:false}">
@@ -98,6 +107,14 @@
                 <div class="min-w-0"><strong class="block truncate" x-text="item.nome"></strong><div class="flex flex-wrap items-center gap-1 mt-1"><span class="op2-grade-tag" :style="estiloGrade(item)"><span class="op2-grade-dot"></span><span x-text="item.grade_nome || 'Sem grade'"></span></span><template x-for="linha in item.gradeQuantidades" :key="linha.tamanho_id"><span class="op2-chip" :style="estiloGrade(item)" x-text="`${tamanhoLabels[linha.tamanho_id] || linha.tamanho_id}: ${linha.quantidade}`"></span></template></div><p class="text-xs opacity-70 mt-1" x-text="item.codigo"></p></div>
                 <div class="grid grid-cols-3 gap-2 text-sm"><div><span class="op2-label" x-text="item.estrutura_tipo==='conjunto'?'Conjuntos':'Peças'"></span><strong x-text="item.quantidade"></strong></div><div><span class="op2-label" x-text="item.estrutura_tipo==='conjunto'?'Por conjunto':'Unitário'"></span><strong x-text="moeda(item.valor_unitario)"></strong></div><div><span class="op2-label">Total</span><strong x-text="moeda(item.quantidade * item.valor_unitario)"></strong></div></div>
                 <div class="flex flex-wrap gap-2 justify-end"><button type="button" class="btn-secondary text-sm" @click="editarItem(idx)">Editar</button><button type="button" class="btn-secondary text-sm" @click="duplicarItem(idx)">Duplicar</button><button type="button" class="btn-secondary text-sm" style="color:#ef4444" @click="removerItem(idx)">Excluir</button></div></div>
+                <section class="op2-item-gallery">
+                  <div class="op2-item-gallery-head"><strong class="text-sm">Fotos e mockups</strong><small class="opacity-60" x-text="`${item.imagensNomes?.length||0} selecionada(s)`"></small></div>
+                  <div class="op2-gallery-grid">
+                    <template x-for="imagem in (item.imagensPreview||[])" :key="imagem.chave"><figure class="op2-gallery-image"><img :src="imagem.url" :alt="imagem.nome"><figcaption x-text="imagem.nome"></figcaption></figure></template>
+                    <label class="op2-gallery-add"><input type="file" :name="`item_${idx}_imagens`" :data-op2-imagens-uid="String(item.uid)" accept="image/*" multiple class="hidden" @change="selecionarImagensItem(item,$event)"><strong aria-hidden="true" style="font-size:26px;line-height:1">+</strong><small x-text="item.imagensNomes?.length?'Trocar imagens':'Adicionar imagens'"></small></label>
+                  </div>
+                  <label x-show="item.imagensNomes?.length" x-cloak class="block mt-2"><span class="op2-label">Observação das imagens</span><textarea :name="`item_${idx}_imagens_observacoes`" x-model="item.imagensObservacoes" rows="2" maxlength="160" class="form-input w-full" placeholder="Ex.: usar esta arte na frente"></textarea></label>
+                </section>
                 <div class="flex flex-wrap items-center gap-2 pt-2 mt-2" style="border-top:1px solid rgba(148,163,184,.14)"><button type="button" class="btn-secondary text-sm" :aria-expanded="personalizar" @click="personalizar=!personalizar; if(personalizar && !personalizacoesDoItem(item.uid).length) adicionarLinhaPersonalizacao(item.uid)">Adicionar nomes / números</button></div>
                 <div class="flex flex-wrap items-center gap-1 mt-2" x-show="personalizacoesDoItem(item.uid).some(p=>p.nome || p.numero)">
                   <span class="op2-label mb-0">Nomes / números</span><template x-for="pessoa in personalizacoesDoItem(item.uid).filter(p=>p.nome || p.numero)" :key="pessoa.uid"><span class="op2-chip" x-text="[tamanhoLabels[pessoa.tamanhoId],pessoa.nome,pessoa.numero?'#'+pessoa.numero:''].filter(Boolean).join(' · ')"></span></template>
@@ -145,23 +162,6 @@
         </section>
       </main>
       <aside class="op2-aside space-y-3">
-        <section class="card p-3">
-          <div class="mb-3"><h2 class="font-bold">Fotos e mockups</h2><p class="text-xs opacity-60">Separados por produto</p></div>
-          <div class="space-y-2">
-            <template x-for="entrada in itensGaleria()" :key="`imagens-${entrada.item.uid}`">
-              <article class="op2-gallery-product">
-                <div class="min-w-0"><div class="flex items-center gap-2"><strong class="block truncate text-sm" x-text="entrada.item.nome"></strong><span x-show="entrada.rascunho" class="op2-draft-badge">Rascunho</span></div><small class="block truncate opacity-60" x-text="entrada.item.grade_nome || entrada.item.codigo"></small></div>
-                <div class="op2-gallery-grid">
-                  <template x-for="imagem in (entrada.item.imagensPreview||[])" :key="imagem.chave"><figure class="op2-gallery-image"><img :src="imagem.url" :alt="imagem.nome"><figcaption x-text="imagem.nome"></figcaption></figure></template>
-                  <label class="op2-gallery-add"><input type="file" :name="entrada.rascunho?'':`item_${entrada.idx}_imagens`" accept="image/*" multiple class="hidden" @change="selecionarImagensItem(entrada.item,$event)"><strong aria-hidden="true" style="font-size:32px;line-height:1">+</strong><small x-text="entrada.item.imagensNomes?.length?'Trocar imagens':'Adicionar imagens'"></small><small x-show="entrada.item.imagensNomes?.length" x-text="`${entrada.item.imagensNomes.length} selecionada(s)`"></small></label>
-                </div>
-                <label class="block mt-2"><span class="op2-label">Observação das imagens</span><textarea :name="entrada.rascunho?'':`item_${entrada.idx}_imagens_observacoes`" x-model="entrada.item.imagensObservacoes" rows="2" maxlength="160" class="form-input w-full" placeholder="Ex.: usar esta arte na frente"></textarea></label>
-                <p x-show="entrada.rascunho" class="text-xs mt-2" style="color:#d97706">As imagens ficarão ligadas ao produto quando o preenchimento for concluído.</p>
-              </article>
-            </template>
-            <p x-show="!itens.length&&!temItemRascunho()" class="text-sm opacity-60">Adicione um produto para vincular imagens.</p>
-          </div>
-        </section>
         <section class="card p-3 sticky top-24"><h2 class="font-bold mb-2">Resumo de conferência</h2><dl class="space-y-2 text-sm"><div class="flex justify-between"><dt>Status</dt><dd class="font-bold" style="color:#d97706">Orçamento</dd></div><div class="flex justify-between"><dt>Produtos</dt><dd class="font-bold" x-text="itens.length"></dd></div><div x-show="temItemRascunho()" class="flex justify-between" style="color:#d97706"><dt>Itens em rascunho</dt><dd class="font-bold">1</dd></div><div class="flex justify-between"><dt>Unidades comerciais</dt><dd class="font-bold" x-text="totalPecas()"></dd></div><div class="flex justify-between"><dt>Total</dt><dd class="font-bold" x-text="moeda(totalValor())"></dd></div></dl></section>
       </aside>
     </div>
@@ -294,7 +294,7 @@ function op2NovaMelhorada(){
   estado.limparItemRascunho=function(){if(this.origemEditor==='rascunho')this.itemRascunho=null;this.modalProduto=false;this.editandoIdx=null;this.origemEditor='novo';this.draft=this.novoDraft();this.buscaProduto='';this.agendarAutosave()};
   estado.descartarItemRascunho=function(){
     if(!confirm('Descartar este item em rascunho? As demais informações da OP serão mantidas.'))return;
-    this.itemRascunho=null;if(this.origemEditor==='rascunho')this.modalProduto=false;this.origemEditor='novo';this.draft=this.novoDraft();this.buscaProduto='';this.agendarAutosave();
+    delete this.arquivosImagensItem[String(this.itemRascunho?.uid)];this.itemRascunho=null;if(this.origemEditor==='rascunho')this.modalProduto=false;this.origemEditor='novo';this.draft=this.novoDraft();this.buscaProduto='';this.agendarAutosave();
   };
   estado.abrirModalItem=function(){
     this.editandoIdx=null;this.draft=this.novoDraft();this.buscaProduto='';this.novoModeloAberto=false;this.modalProduto=true;this.origemEditor='novo';this.agendarAutosave();
@@ -546,6 +546,7 @@ function op2NovaMelhorada(){
   estado.removerItem=function(idx){
     const uid=this.itens[idx]?.uid;
     (this.itens[idx]?.imagensPreview||[]).forEach(imagem=>{if(imagem.url)URL.revokeObjectURL(imagem.url)});
+    delete this.arquivosImagensItem[String(uid)];
     this.itens.splice(idx,1);
     this.personalizacoes=this.personalizacoes.filter(p=>String(p.itemUid)!==String(uid));
   };
@@ -594,6 +595,7 @@ function op2NovaMelhorada(){
     this.enviandoFormulario=true;
   };
   estado.anexosPreview=[];
+  estado.arquivosImagensItem={};
   estado.arquivoPreview=function(arquivo){
     const imagem=(arquivo.type||'').startsWith('image/');
     return{chave:`${arquivo.name}-${arquivo.size}-${arquivo.lastModified}`,nome:arquivo.name,tamanho:arquivo.size<1048576?`${Math.max(1,Math.round(arquivo.size/1024))} KB`:`${(arquivo.size/1048576).toFixed(1)} MB`,imagem,url:imagem?URL.createObjectURL(arquivo):''};
@@ -602,17 +604,24 @@ function op2NovaMelhorada(){
     this.anexosPreview.forEach(item=>{if(item.url)URL.revokeObjectURL(item.url)});
     this.anexosPreview=Array.from(event.target.files||[]).map(arquivo=>this.arquivoPreview(arquivo));
   };
-  estado.itensGaleria=function(){
-    const entradas=this.itens.map((item,idx)=>({item,idx,rascunho:false}));
-    if(this.temItemRascunho())entradas.push({item:this.itemRascunho,idx:null,rascunho:true});
-    return entradas;
-  };
   estado.selecionarImagensItem=function(item,event){
     (item.imagensPreview||[]).forEach(imagem=>{if(imagem.url)URL.revokeObjectURL(imagem.url)});
     const arquivos=Array.from(event.target.files||[]);
+    this.arquivosImagensItem[String(item.uid)]=arquivos;
     item.imagensNomes=arquivos.map(arquivo=>arquivo.name);
     item.imagensPreview=arquivos.map(arquivo=>this.arquivoPreview(arquivo));
     this.agendarAutosave();
+  };
+  estado.aplicarArquivosImagens=function(){
+    const entradas=Array.from(this.$root.querySelectorAll('[data-op2-imagens-uid]'));
+    this.itens.forEach(item=>{
+      const arquivos=this.arquivosImagensItem[String(item.uid)]||[];
+      const input=entradas.find(campo=>campo.dataset.op2ImagensUid===String(item.uid));
+      if(!arquivos.length||!input||input.files.length)return;
+      const transferencia=new DataTransfer();
+      arquivos.forEach(arquivo=>transferencia.items.add(arquivo));
+      input.files=transferencia.files;
+    });
   };
   estado.rascunhoChave='{{ rascunho_chave }}';
   estado.chaveRascunho='op2-rascunho:{{ request.user.pk }}:{{ request.filial_ativa.pk }}:{{ rascunho_chave }}';
@@ -681,6 +690,7 @@ function op2NovaMelhorada(){
   const validarComAutosave=estado.validarAntesDeSalvar.bind(estado);
   estado.validarAntesDeSalvar=function(event){
     validarComAutosave(event);if(event.defaultPrevented)return;
+    this.aplicarArquivosImagens();
     this.salvarLocal();sessionStorage.setItem('op2-rascunho-concluindo',this.chaveRascunho);this.autosavePausado=true;clearTimeout(this.autosaveTimer);
     if(event.submitter?.value==='enviar')setTimeout(()=>{this.autosavePausado=false},5000);
   };
