@@ -293,6 +293,15 @@ class Op2Tests(TestCase):
         self.assertEqual(criado.valor_total, Decimal('0.00'))
         self.assertEqual(criado.previsao_pagamento[0]['valor'], '0.00')
 
+    def test_telas_da_op_permitem_previsao_de_pagamento_zerada(self):
+        self._login_op2()
+        resposta = self.client.get(reverse('moda:op2-create'))
+        self.assertContains(resposta, "Number(p.valor||0)<0")
+        self.assertNotContains(resposta, "Number(p.valor||0)<=0")
+
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+        self.assertContains(resposta, 'type="number" min="0" step=".01" x-model.number="linha.valor"')
+
     def test_nova_op_cria_primeiro_registro_da_linha_do_tempo(self):
         self._login_op2()
         usuario = self._usuario()

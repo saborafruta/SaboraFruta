@@ -614,8 +614,8 @@ function op2NovaMelhorada(){
     if(preenchidas.some(p=>!p.forma)){
       event.preventDefault();alert('Selecione a forma de pagamento do orçamento.');return;
     }
-    if(preenchidas.some(p=>Number(p.valor||0)<=0)){
-      event.preventDefault();alert('Complete a forma e o valor de cada pagamento previsto.');return;
+    if(preenchidas.some(p=>Number(p.valor||0)<0)){
+      event.preventDefault();alert('O valor de cada pagamento previsto não pode ser negativo.');return;
     }
     if(preenchidas.length&&Math.abs(this.totalPagamentos()-this.totalValor())>=0.01){
       event.preventDefault();alert('A soma das formas de pagamento deve ser igual ao total do orçamento.');return;
