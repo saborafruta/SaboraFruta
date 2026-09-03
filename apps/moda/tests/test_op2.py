@@ -722,7 +722,11 @@ class Op2Tests(TestCase):
         )
         self.assertContains(resposta, 'id="op2-loading"')
         self.assertContains(resposta, 'Carregando a OP…')
-        self.assertContains(resposta, 'x-init="recolherSidebar(); document.getElementById(\'op2-loading\')?.remove()" x-cloak')
+        self.assertContains(
+            resposta,
+            'x-init="recolherSidebar(); sincronizarPagamentoSemValor(); '
+            'document.getElementById(\'op2-loading\')?.remove()" x-cloak',
+        )
 
         detalhe = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
         html_detalhe = detalhe.content.decode()
@@ -1670,7 +1674,11 @@ class Op2Tests(TestCase):
             HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
 
-        self.assertEqual(resposta.status_code, 302)
+        # `Op2ActionView.post` responde toda ação via XHR com JSON -- o
+        # JavaScript (`liberarLinkWhatsapp`) só confere `resposta.ok`, e
+        # não segue redirect nenhum.
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.json(), {'ok': True, 'acao': 'enviar_whatsapp'})
         aprovacao = AprovacaoPedido.objects.get(pedido=self.pedido)
         self.assertTrue(aprovacao.liberado)
         link = reverse('moda_publico:pedido', args=[self.pedido.token_publico])
