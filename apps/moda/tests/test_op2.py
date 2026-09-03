@@ -1898,8 +1898,10 @@ class Op2Tests(TestCase):
         self._login_op2()
         resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
 
-        self.assertContains(resposta, 'Salvamento automático ativo')
-        self.assertContains(resposta, "['cabecalho','grade_item','editar_individual','previsao_pagamento','criacao','editar_criacao','editar_anexo','descricao_visual']")
+        self.assertContains(resposta, 'O preenchimento será salvo automaticamente')
+        self.assertContains(resposta, 'op2-autosave-dot')
+        self.assertContains(resposta, "['cabecalho','grade_item','editar_individual','previsao_pagamento','editar_anexo','descricao_visual']")
+        self.assertNotContains(resposta, "'criacao','editar_criacao','editar_anexo'")
         self.assertContains(resposta, "'X-Requested-With':'XMLHttpRequest'")
 
     def test_editor_completo_atualiza_estrutura_impressao_e_grade(self):
