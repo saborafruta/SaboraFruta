@@ -38,7 +38,10 @@ class Op2ClientesTests(TestCase):
                 self.assertEqual(resposta.status_code, 200)
                 for trecho in ('op2_clientes.js', 'digitarCliente()', 'abrirCadastroCliente()', 'abrirCadastroCliente(clienteId)', 'name="razao_social"', 'aria-label="Cadastro de cliente"', 'style="background:#16a34a;justify-content:center"', '>Cadastrar cliente</button>', 'aria-label="Adicionar cliente"', '>+</button>'):
                     self.assertContains(resposta, trecho)
-                self.assertContains(resposta, 'class="hidden md:block" style="height:12px" aria-hidden="true" data-op2-contact-alignment')
+                self.assertContains(resposta, 'style="height:32px" data-op2-client-heading')
+                self.assertContains(resposta, 'style="height:32px;display:flex;align-items:center;margin-bottom:4px" data-op2-contact-heading', count=2)
+                self.assertContains(resposta, 'name="contato_nome" x-model="contatoNome" class="form-input w-full" style="height:40px"')
+                self.assertContains(resposta, 'name="contato_telefone" x-model="contatoTelefone" class="form-input w-full" style="height:40px"')
                 self.assertNotContains(resposta, '>+ Adicionar cliente</button>')
                 self.assertNotContains(resposta, '>+ Cadastrar cliente</button>')
 

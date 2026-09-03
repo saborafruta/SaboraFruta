@@ -1,8 +1,7 @@
 <div class="md:col-span-2 min-w-0">
-  <div class="hidden md:block" style="height:12px" aria-hidden="true" data-op2-contact-alignment></div>
   <div class="grid grid-cols-2 gap-3">
-    <label class="min-w-0"><span class="op2-label block">Responsável</span><input name="contato_nome" x-model="contatoNome" class="form-input w-full" placeholder="Nome do responsável"></label>
-    <label class="min-w-0"><span class="op2-label block">WhatsApp</span><input name="contato_telefone" x-model="contatoTelefone" class="form-input w-full" placeholder="WhatsApp / telefone"></label>
+    <label class="min-w-0"><span class="op2-label" style="height:32px;display:flex;align-items:center;margin-bottom:4px" data-op2-contact-heading>Responsável</span><input name="contato_nome" x-model="contatoNome" class="form-input w-full" style="height:40px" placeholder="Nome do responsável"></label>
+    <label class="min-w-0"><span class="op2-label" style="height:32px;display:flex;align-items:center;margin-bottom:4px" data-op2-contact-heading>WhatsApp</span><input name="contato_telefone" x-model="contatoTelefone" class="form-input w-full" style="height:40px" placeholder="WhatsApp / telefone"></label>
   </div>
   <template x-for="(contato,idx) in contatos" :key="idx">
     <div class="mt-3">
