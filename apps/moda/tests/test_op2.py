@@ -1046,24 +1046,6 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'O valor atual da OP já vem preenchido e pode ser editado.')
         self.assertContains(resposta, 'name="valor_total"')
 
-    def test_forma_nao_informada_nao_gera_financeiro(self):
-        from apps.financeiro.models import ContaReceber
-
-        self._login_op2()
-        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
-            'acao': 'financeiro',
-            'forma_pagamento': 'nao_informado',
-        })
-
-        self.assertEqual(resposta.status_code, 302)
-        self.assertFalse(ContaReceber.objects.filter(
-            documento_tipo='pedido_moda', documento_id=self.pedido.pk,
-        ).exists())
-        self.pedido.refresh_from_db()
-        self.assertEqual(self.pedido.previsao_pagamento, [
-            {'forma': 'nao_informado', 'valor': '0.00'},
-        ])
-
     def test_op_mostra_extrato_e_atalho_para_quitar_titulo(self):
         from datetime import date
 

@@ -1406,18 +1406,6 @@ class Op2ActionView(ModaBaseView):
             messages.success(request, 'Rascunho salvo.')
 
     def _acao_financeiro(self, request, pedido):
-        if request.POST.get('forma_pagamento') == 'nao_informado':
-            pedido.previsao_pagamento = [{
-                'forma': PedidoProducao.FormaPagamentoPrevista.NAO_INFORMADO,
-                'valor': f'{pedido.valor_total:.2f}',
-            }]
-            pedido.save(update_fields=['previsao_pagamento', 'updated_at'])
-            messages.success(
-                request,
-                'Forma de pagamento marcada como não informada. Nenhum financeiro foi gerado.',
-            )
-            return
-
         def dinheiro(nome):
             texto = (request.POST.get(nome) or '0').strip().replace(' ', '')
             if ',' in texto:
