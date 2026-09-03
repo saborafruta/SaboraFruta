@@ -683,11 +683,11 @@ function op2NovaMelhorada(){
     this.camposRascunho.forEach(nome=>{const campo=this.$root.querySelector(`[name="${nome}"]`);if(campo)campos[nome]=campo.value});
     const semPreview=item=>{if(!item)return item;const {imagensPreview,...dados}=item;return dados};
     const itens=this.itens.map(semPreview);
-    return{versao:4,rascunhoChave:this.rascunhoChave,salvoEm:Date.now(),campos,clienteId:this.clienteId,contatoNome:this.contatoNome,contatoTelefone:this.contatoTelefone,contatos:this.contatos,clientesAdicionais:this.clientesAdicionais,itens,itemRascunho:semPreview(this.itemRascunho),draft:semPreview(this.draft),origemEditor:this.origemEditor,editandoIdx:this.editandoIdx,modalProduto:this.modalProduto,personalizacoes:this.personalizacoes,pagamentos:this.pagamentos,anexosNomes:[...this.anexosParaReanexar,...this.anexosPreview.map(a=>a.nome)]};
+    return{versao:4,rascunhoChave:this.rascunhoChave,salvoEm:Date.now(),campos,buscaCliente:this.buscaCliente,clienteId:this.clienteId,contatoNome:this.contatoNome,contatoTelefone:this.contatoTelefone,contatos:this.contatos,clientesAdicionais:this.clientesAdicionais,itens,itemRascunho:semPreview(this.itemRascunho),draft:semPreview(this.draft),origemEditor:this.origemEditor,editandoIdx:this.editandoIdx,modalProduto:this.modalProduto,personalizacoes:this.personalizacoes,pagamentos:this.pagamentos,anexosNomes:[...this.anexosParaReanexar,...this.anexosPreview.map(a=>a.nome)]};
   };
   estado.temConteudoRascunho=function(dados){
     const c=dados.campos||{};
-    return Boolean(dados.clienteId||dados.contatoNome||dados.contatoTelefone||(dados.clientesAdicionais||[]).length||(dados.itens||[]).length||dados.itemRascunho?.produto_id||dados.draft?.produto_id||(dados.personalizacoes||[]).some(p=>p.nome||p.numero||p.tamanhoId)||(dados.pagamentos||[]).some(p=>p.forma||Number(p.valor||0)>0)||c.data_pedido!=='{{ hoje|date:"Y-m-d" }}'||c.data_prevista_entrega||c.descricao_arquivo||c.observacoes||c.informacoes_criacao);
+    return Boolean(dados.buscaCliente||dados.clienteId||dados.contatoNome||dados.contatoTelefone||(dados.clientesAdicionais||[]).length||(dados.itens||[]).length||dados.itemRascunho?.produto_id||dados.draft?.produto_id||(dados.personalizacoes||[]).some(p=>p.nome||p.numero||p.tamanhoId)||(dados.pagamentos||[]).some(p=>p.forma||Number(p.valor||0)>0)||c.data_pedido!=='{{ hoje|date:"Y-m-d" }}'||c.data_prevista_entrega||c.descricao_arquivo||c.observacoes||c.informacoes_criacao);
   };
   estado.salvarLocal=function(){
     if(this.autosavePausado)return null;
@@ -714,7 +714,7 @@ function op2NovaMelhorada(){
   };
   estado.aplicarRascunho=function(dados){
     if(!dados||!this.temConteudoRascunho(dados))return;
-    this.clienteId=String(dados.clienteId||'');this.contatoNome=dados.contatoNome||'';this.contatoTelefone=dados.contatoTelefone||'';
+    this.buscaCliente=dados.buscaCliente||'';this.clienteId=String(dados.clienteId||'');this.contatoNome=dados.contatoNome||'';this.contatoTelefone=dados.contatoTelefone||'';
     this.contatos=Array.isArray(dados.contatos)?dados.contatos:[];this.clientesAdicionais=Array.isArray(dados.clientesAdicionais)?dados.clientesAdicionais:[];
     const itensOriginais=Array.isArray(dados.itens)?dados.itens:[];
     const itensNormalizados=this.normalizarUidsItens(itensOriginais);
@@ -747,7 +747,7 @@ function op2NovaMelhorada(){
     const escolhido=servidorTemItens&&!localTemItens?servidor:
       (Number(local?.salvoEm||0)>=Number(servidor?.salvoEm||0)?local:servidor);
     if(escolhido)this.aplicarRascunho(escolhido);
-    ['itens','itemRascunho','draft','personalizacoes','pagamentos','clienteId','contatoNome','contatoTelefone','clientesAdicionais'].forEach(chave=>this.$watch(chave,()=>this.agendarAutosave()));
+    ['itens','itemRascunho','draft','personalizacoes','pagamentos','buscaCliente','clienteId','contatoNome','contatoTelefone','clientesAdicionais'].forEach(chave=>this.$watch(chave,()=>this.agendarAutosave()));
     this.$root.addEventListener('input',()=>this.agendarAutosave());this.$root.addEventListener('change',()=>this.agendarAutosave());
     if(this.rascunhoNormalizado)this.agendarAutosave();
     window.addEventListener('pagehide',()=>this.salvarLocal());

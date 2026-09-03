@@ -582,6 +582,28 @@ class Op2Tests(TestCase):
             RascunhoOP.objects.get(chave=segunda).dados['clienteId'], '20',
         )
 
+    def test_autosave_da_op_preserva_nome_digitado_na_busca_do_cliente(self):
+        self._login_op2()
+        chave = str(uuid4())
+        resposta = self.client.post(
+            reverse('moda:op2-rascunho'),
+            data=json.dumps({
+                'rascunhoChave': chave,
+                'buscaCliente': 'Eduardo Palheta',
+                'salvoEm': 100,
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(
+            RascunhoOP.objects.get(chave=chave).dados['buscaCliente'],
+            'Eduardo Palheta',
+        )
+        pagina = self.client.get(reverse('moda:op2-create') + f'?rascunho={chave}')
+        self.assertContains(pagina, 'buscaCliente:this.buscaCliente')
+        self.assertContains(pagina, "this.buscaCliente=dados.buscaCliente||''")
+
     def test_tela_da_op_entrega_rascunho_do_servidor_e_permite_descartar(self):
         self._login_op2()
         usuario = self._usuario()
