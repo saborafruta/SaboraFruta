@@ -59,20 +59,6 @@ class FichaTecnica(ComCodigoQr, FilialScopedModel):
         help_text='PNG, JPG, PDF, CDR ou AI. Em branco, usa o desenho do produto.',
     )
 
-    # PESO DA PECA PRONTA, em gramas.
-    #
-    # Fica na ficha e nao no produto porque e' resultado de engenharia: muda
-    # quando muda o tecido ou o consumo, e a ficha e' onde isso e' decidido.
-    #
-    # Nulo, e nao zero: peca sem pesagem e peca de 0 g sao coisas diferentes,
-    # e um zero gravado passaria por peso real na hora de cotar frete.
-    peso_peca_g = models.DecimalField(
-        max_digits=8, decimal_places=1, null=True, blank=True,
-        verbose_name='Peso da peça pronta (g)',
-        help_text='Quanto pesa UMA peça acabada, em gramas. Ex.: 240,5. Serve para frete, expedição e para conferir o rendimento do tecido.',
-        validators=[MinValueValidator(Decimal('0'))],
-    )
-
     observacoes = models.TextField(blank=True)
 
     objects = FilialManager()
@@ -140,12 +126,28 @@ class FichaTecnica(ComCodigoQr, FilialScopedModel):
             return self.custo_estimado
         return (self.custo_estimado + roteiro.custo_total).quantize(Decimal('0.01'))
 
+    # ── Peso por tamanho ─────────────────────────────────────────────────
+
     @property
-    def peso_peca_kg(self):
-        """O mesmo peso em quilos — nulo continua nulo, nunca vira 0."""
-        if self.peso_peca_g is None:
-            return None
-        return (self.peso_peca_g / Decimal('1000')).quantize(Decimal('0.001'))
+    def pesos_por_grade(self) -> list[dict]:
+        """
+        O peso de cada tamanho, agrupado por grade — Adulto, Oversized, Baby
+        Look, o que a peça for cortada.
+
+        O peso não é um número só: a mesma camisa pesa 145 g no P e 230 g no
+        XG, e uma peça pode ser cortada em mais de uma grade (a versão solta
+        e a oversized do mesmo modelo). Um campo único não tinha como dizer
+        nenhuma das duas coisas.
+        """
+        grupos: dict[int, dict] = {}
+        for linha in self.pesos_tamanho.select_related('grade', 'tamanho'):
+            grupo = grupos.setdefault(linha.grade_id, {
+                'grade_id': linha.grade_id,
+                'grade_nome': linha.grade.nome,
+                'linhas': [],
+            })
+            grupo['linhas'].append(linha)
+        return sorted(grupos.values(), key=lambda g: g['grade_nome'])
 
     @property
     def desenho(self):
@@ -287,3 +289,48 @@ class MaterialFicha(models.Model):
     def custo_total(self) -> Decimal:
         """Custo deste material em uma peça, já com a perda."""
         return (self.consumo_bruto * (self.custo_unitario or Decimal('0'))).quantize(Decimal('0.01'))
+
+
+class PesoTamanhoFicha(models.Model):
+    """
+    O peso de UM tamanho, de UMA grade, nesta ficha.
+
+    Ex.: Ficha da camisa X, grade Adulto, tamanho G → 193 g. A mesma ficha
+    pode ter uma segunda grade (Oversized) com pesos próprios, porque a
+    camisa oversized não é a mesma peça escalada — é cortada diferente e
+    pesa diferente tamanho a tamanho.
+
+    `grade` e `tamanho` apontam para os cadastros normais de grade — este
+    modelo não duplica sigla nem ordem, só acrescenta o peso que falta
+    neles. Peso nulo (e não zero) é "ainda não pesado": a linha existe desde
+    que a grade foi acrescentada à ficha, mas número nenhum foi digitado.
+    """
+
+    ficha = models.ForeignKey(
+        FichaTecnica, on_delete=models.CASCADE, related_name='pesos_tamanho',
+    )
+    grade = models.ForeignKey(
+        'moda.Grade', on_delete=models.PROTECT, related_name='+',
+    )
+    tamanho = models.ForeignKey(
+        'moda.Tamanho', on_delete=models.PROTECT, related_name='+',
+    )
+    peso_g = models.DecimalField(
+        max_digits=8, decimal_places=1, null=True, blank=True,
+        verbose_name='Peso (g)',
+        validators=[MinValueValidator(Decimal('0'))],
+    )
+    # Copiada do `ItemGrade.ordem` no momento em que a grade é acrescentada
+    # à ficha -- assim a tabela mantém a ordem PP, P, M... mesmo que a
+    # grade original seja reordenada depois.
+    ordem = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = 'moda_fichas_pesos_tamanho'
+        ordering = ['grade__nome', 'ordem', 'id']
+        unique_together = [('ficha', 'grade', 'tamanho')]
+        verbose_name = 'Peso por tamanho'
+        verbose_name_plural = 'Pesos por tamanho'
+
+    def __str__(self):
+        return f'{self.grade.nome} {self.tamanho.sigla}: {self.peso_g if self.peso_g is not None else "—"} g'

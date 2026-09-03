@@ -47,29 +47,6 @@
           </p>
           <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">por peça, com perdas</p>
         </div>
-        {% comment %}
-          O PESO ANDA COM O CUSTO. As duas perguntas que se faz olhando uma
-          ficha pronta são quanto custa e quanto pesa — a segunda é o que o
-          comercial precisa para cotar frete. Sem peso a ficha DIZ que
-          ninguém pesou, em laranja, em vez de deixar o campo em branco e
-          passar por peça leve.
-        {% endcomment %}
-        <div class="text-right">
-          <p class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-            Peso da peça
-          </p>
-          {% if ficha.peso_peca_g is not None %}
-            <p class="text-2xl font-bold tabular-nums" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-              {{ ficha.peso_peca_g|floatformat:1 }} g
-            </p>
-            <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-              {{ ficha.peso_peca_kg|floatformat:3 }} kg · pronta
-            </p>
-          {% else %}
-            <p class="text-2xl font-bold" style="color:#d97706;">—</p>
-            <p class="text-xs" style="color:#d97706;">ninguém pesou ainda</p>
-          {% endif %}
-        </div>
         <a href="{% url 'moda:ficha-update' ficha.pk %}" class="btn-secondary text-sm">Editar</a>
         <a href="{% url 'moda:ficha-historico' ficha.pk %}" class="btn-secondary text-sm">Histórico</a>
         <a href="{% url 'moda:qr-etiqueta' ficha.codigo_qr %}" class="btn-secondary text-sm">QR Code</a>
@@ -176,6 +153,88 @@
         <p class="text-xs uppercase tracking-wider mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Descrição técnica</p>
         <p class="text-sm whitespace-pre-line" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ ficha.descricao }}</p>
       </div>
+    {% endif %}
+  </div>
+
+  {# ── Peso por tamanho ─────────────────────────────────────────────── #}
+  <div class="card p-5 space-y-4">
+    {% comment %}
+      O PESO NÃO É UM NÚMERO SÓ. A mesma camisa pesa 145 g no P e 230 g no
+      XG, e a mesma ficha pode ser cortada em mais de uma grade — a versão
+      solta e a oversized do mesmo modelo, cada uma com peso próprio tamanho
+      a tamanho. Por isso a tabela é por grade, e a ficha aceita quantas
+      grades forem necessárias (Adulto, Oversized, Baby Look...).
+    {% endcomment %}
+    <div>
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Peso por tamanho</h3>
+      <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Quanto pesa a peça pronta, tamanho a tamanho — o que o comercial usa para cotar frete.
+      </p>
+    </div>
+
+    {% for grupo in ficha.pesos_por_grade %}
+      <div class="rounded-xl p-4" :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+        <div class="flex items-center justify-between gap-2 mb-3">
+          <strong class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ grupo.grade_nome }}</strong>
+          <form method="post" action="{% url 'moda:ficha-peso-grade-remover' ficha.pk grupo.grade_id %}">
+            {% csrf_token %}
+            <button type="submit" class="text-xs font-semibold" style="color:#dc2626;">Remover grade</button>
+          </form>
+        </div>
+        <form method="post" action="{% url 'moda:ficha-peso-salvar' ficha.pk %}">
+          {% csrf_token %}
+          <table class="w-full text-sm mb-2">
+            <thead>
+              <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                <th class="text-left font-semibold pb-2">Tamanho</th>
+                <th class="text-right font-semibold pb-2">Peso da peça (g)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for linha in grupo.linhas %}
+                <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                  <td class="py-2 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+                    {{ linha.tamanho.sigla }}
+                  </td>
+                  <td class="py-2 pl-2 w-32">
+                    <input type="number" step="0.1" min="0" name="peso_{{ linha.pk }}"
+                           value="{% if linha.peso_g is not None %}{{ linha.peso_g|stringformat:'s' }}{% endif %}"
+                           placeholder="não pesado" class="form-input text-right w-full">
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <button type="submit" class="btn-primary text-sm">Salvar pesos</button>
+        </form>
+      </div>
+    {% empty %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Nenhuma grade pesada ainda. Acrescente uma abaixo.
+      </p>
+    {% endfor %}
+
+    {% if grades_sem_peso %}
+      <div>
+        <p class="text-xs uppercase tracking-wider mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Acrescentar grade
+        </p>
+        <div class="ficha-grade-grid">
+          {% for g in grades_sem_peso %}
+            <form method="post" action="{% url 'moda:ficha-peso-grade-add' ficha.pk %}">
+              {% csrf_token %}
+              <button type="submit" name="grade" value="{{ g.id }}" class="ficha-grade-chip" title="{{ g.tipo }}">
+                <strong class="block text-sm">{{ g.nome }}</strong>
+                <small class="block mt-1 opacity-70">{% firstof g.resumo 'sem tamanhos' %}</small>
+              </button>
+            </form>
+          {% endfor %}
+        </div>
+      </div>
+    {% elif not grades %}
+      <p class="text-xs" style="color:#d97706;">
+        Cadastre uma grade primeiro — sem tamanhos não há o que pesar.
+      </p>
     {% endif %}
   </div>
 

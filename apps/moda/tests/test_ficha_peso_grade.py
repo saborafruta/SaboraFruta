@@ -1,20 +1,23 @@
 """
-O peso da peça pronta e a grade, na ficha técnica.
+O peso por tamanho e a grade da peça, na ficha técnica.
 
 DUAS PERGUNTAS QUE A FICHA NÃO RESPONDIA
 
-  · QUANTO PESA. O custo estava no cabeçalho, o peso não existia. Quem cota
-    frete pesava por cima, ou ia à balança e o número morria num papel.
-    Peso é da FICHA e não do produto porque é resultado de engenharia: muda
-    quando muda o tecido ou o consumo.
+  · QUANTO PESA CADA TAMANHO. A mesma camisa pesa 145 g no P e 230 g no XG
+    — um número único não dizia nada disso. E a mesma ficha pode ser
+    cortada em mais de uma grade (a versão solta e a oversized do mesmo
+    modelo), cada uma com peso próprio tamanho a tamanho. Por isso a
+    tabela é por grade, e a ficha aceita quantas forem necessárias
+    (Adulto, Oversized, Baby Look...).
 
-  · QUAIS TAMANHOS. A ficha mostrava "Adulto" — que não diz se a peça vai
-    até GG ou até XGG — e um traço quando o produto não tinha grade. Um
-    traço não separa "falta cadastrar a grade" de "falta ligá-la ao
-    produto", e são telas diferentes.
+  · QUAIS TAMANHOS A PEÇA CORTA. A ficha mostrava "Adulto" — que não diz
+    se a peça vai até GG ou até XGG — e um traço quando o produto não
+    tinha grade. Um traço não separa "falta cadastrar a grade" de "falta
+    ligá-la ao produto", e são telas diferentes.
 
-AUSÊNCIA APARECE. Peso em branco é dito em laranja, não deixado vazio: um
-campo vazio passa por peça leve, um aviso manda alguém à balança.
+AUSÊNCIA APARECE. Peso em branco continua em branco (placeholder "não
+pesado"), nunca vira zero — zero gravado passaria por peça real na hora de
+cotar frete.
 """
 from decimal import Decimal
 
@@ -23,7 +26,9 @@ from django.urls import reverse
 
 from apps.core.constants.segmentos import MODA_CONFECCAO
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
-from apps.moda.models import FichaTecnica, Grade, ItemGrade, ProdutoModa, Tamanho
+from apps.moda.models import (
+    FichaTecnica, Grade, ItemGrade, PesoTamanhoFicha, ProdutoModa, Tamanho,
+)
 
 
 class FichaPesoGradeTests(TestCase):
@@ -71,50 +76,136 @@ class FichaPesoGradeTests(TestCase):
             )
         return grade
 
-    # ── Peso ─────────────────────────────────────────────────────────────
+    # ── Peso por tamanho ─────────────────────────────────────────────────
 
-    def test_a_ficha_mostra_o_peso_em_gramas_e_em_quilos(self):
+    def test_acrescentar_a_grade_cria_uma_linha_por_tamanho_em_branco(self):
         """
-        Gramas é como a balança da confecção pesa; quilos é como o frete é
-        cotado. Obrigar quem cota a dividir por mil de cabeça é convidar ao
-        erro de casa decimal.
+        A tabela aparece vazia, esperando ser preenchida — e não some até
+        alguém digitar o primeiro peso.
         """
-        self.ficha.peso_peca_g = Decimal('312.4')
-        self.ficha.save(update_fields=['peso_peca_g'])
+        grade = self._grade('Adulto', ['P', 'M', 'G'])
 
-        html = self.client.get(self.url).content.decode()
-
-        self.assertIn('312,4 g', html)
-        # Quilo com tres casas e' precisao de grama: o decimo de grama que a
-        # balanca da confeccao le fica na leitura em gramas, ao lado.
-        self.assertIn('0,312 kg', html)
-
-    def test_sem_peso_a_ficha_diz_que_ninguem_pesou(self):
-        html = self.client.get(self.url).content.decode()
-
-        self.assertIn('ninguém pesou ainda', html)
-
-    def test_peso_ausente_e_none_e_nao_zero(self):
-        """
-        Zero gravado passaria por peso real na hora de cotar frete.
-        """
-        self.assertIsNone(self.ficha.peso_peca_g)
-        self.assertIsNone(self.ficha.peso_peca_kg)
-
-    def test_o_peso_e_gravado_pela_tela_de_edicao(self):
-        resposta = self.client.post(
-            reverse('moda:ficha-update', args=[self.ficha.pk]),
-            {
-                'produto': self.produto.pk, 'versao': 1, 'status': 'rascunho',
-                'peso_peca_g': '312.4', 'descricao': '', 'observacoes': '',
-            },
+        self.client.post(
+            reverse('moda:ficha-peso-grade-add', args=[self.ficha.pk]),
+            {'grade': grade.pk},
         )
 
-        self.assertEqual(resposta.status_code, 302, resposta.content[:400])
-        self.ficha.refresh_from_db()
-        self.assertEqual(self.ficha.peso_peca_g, Decimal('312.4'))
+        linhas = PesoTamanhoFicha.objects.filter(ficha=self.ficha, grade=grade)
+        self.assertEqual(linhas.count(), 3)
+        self.assertTrue(all(l.peso_g is None for l in linhas))
 
-    # ── Grade ────────────────────────────────────────────────────────────
+    def test_a_tela_mostra_o_tamanho_e_o_peso_da_grade_acrescentada(self):
+        grade = self._grade('Adulto', ['P', 'M', 'G'])
+        self.client.post(
+            reverse('moda:ficha-peso-grade-add', args=[self.ficha.pk]),
+            {'grade': grade.pk},
+        )
+        linha = PesoTamanhoFicha.objects.get(
+            ficha=self.ficha, grade=grade, tamanho__sigla='M',
+        )
+        linha.peso_g = Decimal('176.0')
+        linha.save(update_fields=['peso_g'])
+
+        html = self.client.get(self.url).content.decode()
+
+        self.assertIn('Adulto', html)
+        self.assertIn('Peso por tamanho', html)
+
+    def test_salvar_grava_os_pesos_digitados(self):
+        grade = self._grade('Adulto', ['P', 'M', 'G'])
+        self.client.post(
+            reverse('moda:ficha-peso-grade-add', args=[self.ficha.pk]),
+            {'grade': grade.pk},
+        )
+        linhas = list(PesoTamanhoFicha.objects.filter(ficha=self.ficha, grade=grade).order_by('ordem'))
+
+        self.client.post(
+            reverse('moda:ficha-peso-salvar', args=[self.ficha.pk]),
+            {f'peso_{linhas[0].pk}': '145', f'peso_{linhas[1].pk}': '176,0', f'peso_{linhas[2].pk}': '193.5'},
+        )
+
+        pesos = {l.tamanho.sigla: l.peso_g for l in PesoTamanhoFicha.objects.filter(ficha=self.ficha)}
+        self.assertEqual(pesos['P'], Decimal('145'))
+        self.assertEqual(pesos['M'], Decimal('176.0'))
+        self.assertEqual(pesos['G'], Decimal('193.5'))
+
+    def test_salvar_com_campo_vazio_mantem_o_peso_ausente_e_nao_zero(self):
+        """
+        Zero gravado passaria por peça real na hora de cotar frete — o
+        campo vazio precisa continuar `None`, não virar `0`.
+        """
+        grade = self._grade('Adulto', ['P'])
+        self.client.post(
+            reverse('moda:ficha-peso-grade-add', args=[self.ficha.pk]),
+            {'grade': grade.pk},
+        )
+        linha = PesoTamanhoFicha.objects.get(ficha=self.ficha, grade=grade)
+
+        self.client.post(
+            reverse('moda:ficha-peso-salvar', args=[self.ficha.pk]),
+            {f'peso_{linha.pk}': ''},
+        )
+
+        linha.refresh_from_db()
+        self.assertIsNone(linha.peso_g)
+
+    def test_duas_grades_pesadas_ao_mesmo_tempo_ficam_separadas(self):
+        """
+        A camisa oversized não é a versão escalada da solta — pesa
+        diferente tamanho a tamanho, e a ficha precisa das duas tabelas
+        lado a lado.
+        """
+        adulto = self._grade('Adulto', ['P', 'M', 'G'])
+        oversized = self._grade('Oversized', ['UNICO'], ordem_base=10)
+
+        self.client.post(
+            reverse('moda:ficha-peso-grade-add', args=[self.ficha.pk]),
+            {'grade': adulto.pk},
+        )
+        self.client.post(
+            reverse('moda:ficha-peso-grade-add', args=[self.ficha.pk]),
+            {'grade': oversized.pk},
+        )
+
+        grupos = self.ficha.pesos_por_grade
+        nomes = {g['grade_nome'] for g in grupos}
+        self.assertEqual(nomes, {'Adulto', 'Oversized'})
+        adulto_grupo = next(g for g in grupos if g['grade_nome'] == 'Adulto')
+        self.assertEqual(len(adulto_grupo['linhas']), 3)
+
+    def test_remover_a_grade_apaga_a_tabela_inteira(self):
+        grade = self._grade('Adulto', ['P', 'M'])
+        self.client.post(
+            reverse('moda:ficha-peso-grade-add', args=[self.ficha.pk]),
+            {'grade': grade.pk},
+        )
+
+        self.client.post(
+            reverse('moda:ficha-peso-grade-remover', args=[self.ficha.pk, grade.pk]),
+        )
+
+        self.assertEqual(
+            PesoTamanhoFicha.objects.filter(ficha=self.ficha, grade=grade).count(), 0,
+        )
+
+    def test_acrescentar_a_mesma_grade_duas_vezes_nao_duplica(self):
+        grade = self._grade('Adulto', ['P', 'M'])
+        for _ in range(2):
+            self.client.post(
+                reverse('moda:ficha-peso-grade-add', args=[self.ficha.pk]),
+                {'grade': grade.pk},
+            )
+
+        self.assertEqual(
+            PesoTamanhoFicha.objects.filter(ficha=self.ficha, grade=grade).count(), 2,
+        )
+
+    def test_sem_nenhuma_grade_pesada_a_tela_diz_para_acrescentar(self):
+        html = self.client.get(self.url).content.decode()
+
+        self.assertIn('Nenhuma grade pesada ainda', html)
+
+    # ── Grade da peça (produto) ─────────────────────────────────────────
 
     def test_a_ficha_lista_todas_as_grades_da_casa_com_os_tamanhos(self):
         """

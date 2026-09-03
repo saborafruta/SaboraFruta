@@ -6,7 +6,7 @@ from .criacao_arte import RegistroCriacaoArte
 from .encaixe import Encaixe
 from .estrutura import EstruturaProduto
 from .expedicao import ConferenciaPessoa, Expedicao, ItemConferencia, Volume
-from .ficha import FichaTecnica, ImagemFicha, MaterialFicha
+from .ficha import FichaTecnica, ImagemFicha, MaterialFicha, PesoTamanhoFicha
 from .fluxo import EtapaOrdem
 from .grade import Grade, ItemGrade, Tamanho
 from .grade_pedido import ItemGradePedido

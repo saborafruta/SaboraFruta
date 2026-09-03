@@ -697,7 +697,7 @@ class FichaTecnicaForm(forms.ModelForm):
     class Meta:
         model = FichaTecnica
         fields = [
-            'produto', 'versao', 'status', 'peso_peca_g', 'descricao',
+            'produto', 'versao', 'status', 'descricao',
             'desenho_tecnico', 'observacoes',
         ]
         # O `verbose_name` automático do Django tira o acento ("Versao",
@@ -707,7 +707,6 @@ class FichaTecnicaForm(forms.ModelForm):
             'produto': 'Produto',
             'versao': 'Versão',
             'status': 'Situação da ficha',
-            'peso_peca_g': 'Peso da peça pronta (g)',
             'descricao': 'Especificação técnica',
             'desenho_tecnico': 'Desenho técnico',
             'observacoes': 'Observações',
@@ -715,7 +714,6 @@ class FichaTecnicaForm(forms.ModelForm):
         help_texts = {
             'versao': 'Suba a versão quando mudar consumo ou material — o custo muda junto.',
             'status': 'Só a ficha aprovada deveria descer para a fábrica.',
-            'peso_peca_g': 'Quanto pesa UMA peça acabada, em gramas. Em branco, a ficha diz que ninguém pesou — é o que faz alguém ir à balança antes de cotar frete.',
             'descricao': 'Modelagem, costura, acabamentos, tolerâncias.',
             'desenho_tecnico': 'PNG, JPG, PDF, CDR ou AI. Em branco, usa o desenho do produto.',
             'observacoes': 'Recado para quem for produzir.',
@@ -727,11 +725,6 @@ class FichaTecnicaForm(forms.ModelForm):
             }),
             'observacoes': forms.Textarea(attrs={'rows': 2}),
             'versao': forms.NumberInput(attrs={'min': 1}),
-            # Uma casa decimal: balanca de confeccao pesa em decimo de grama,
-            # e mais casas so convidariam a digitar precisao que nao existe.
-            'peso_peca_g': forms.NumberInput(attrs={
-                'step': '0.1', 'min': '0', 'placeholder': 'Ex.: 240,5',
-            }),
         }
 
     def __init__(self, *args, filial=None, **kwargs):

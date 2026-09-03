@@ -12,7 +12,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from .forms import FichaTecnicaForm, ImagemFichaForm, MaterialFichaForm
-from .models import FichaTecnica, Grade, ImagemFicha, ItemGrade, MaterialFicha
+from .models import (
+    FichaTecnica, Grade, ImagemFicha, ItemGrade, MaterialFicha, PesoTamanhoFicha,
+)
 from .views import ModaBaseView
 
 
@@ -89,6 +91,23 @@ def _grades_da_filial(filial, escolhida_id=None) -> list[dict]:
             'tamanhos': [t.sigla for t in grade.tamanhos_ordenados()],
             'escolhida': grade.pk == escolhida_id,
         }
+        for grade in grades
+    ]
+
+
+def _grades_sem_peso(filial, ficha) -> list[dict]:
+    """
+    Grades da filial que a ficha ainda não pesou — o que aparece no
+    "acrescentar grade" da tabela de peso.
+
+    Não reaproveita `_grades_da_filial` porque ali "escolhida" é a grade do
+    produto (uma só); aqui o corte é outro: quais grades já têm uma tabela
+    de peso nesta ficha, que pode ter várias ao mesmo tempo.
+    """
+    ja_pesadas = set(ficha.pesos_tamanho.values_list('grade_id', flat=True))
+    grades = Grade.objects.for_filial(filial).filter(ativo=True).exclude(pk__in=ja_pesadas)
+    return [
+        {'id': grade.pk, 'nome': grade.nome, 'tipo': grade.get_tipo_display(), 'resumo': grade.resumo}
         for grade in grades
     ]
 
@@ -267,6 +286,7 @@ class FichaDetailView(ModaBaseView):
             'grades': _grades_da_filial(
                 _filial(request), ficha.produto.grade_id,
             ),
+            'grades_sem_peso': _grades_sem_peso(_filial(request), ficha),
         }
 
 
@@ -302,6 +322,112 @@ class FichaGradeView(ModaBaseView):
             request,
             f'Grade {grade.nome} ({grade.resumo}) aplicada ao produto {produto.codigo}.',
         )
+        return redirect(reverse('moda:ficha-detail', args=[ficha.pk]))
+
+
+class FichaPesoGradeAddView(ModaBaseView):
+    """
+    Acrescenta a tabela de peso de uma grade à ficha.
+
+    Cria uma linha por tamanho da grade, com peso em branco -- é o que faz
+    a tabela aparecer vazia, esperando ser preenchida, em vez de a grade
+    simplesmente não estar lá até alguém digitar o primeiro peso.
+    """
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        ficha = _ficha_da_filial(request, pk)
+        grade_pk = (request.POST.get('grade') or '').strip()
+        if not grade_pk:
+            messages.error(request, 'Escolha uma grade.')
+            return redirect(reverse('moda:ficha-detail', args=[ficha.pk]))
+
+        grade = get_object_or_404(
+            Grade.objects.for_filial(_filial(request)).prefetch_related(
+                Prefetch('itens', queryset=ItemGrade.objects.select_related('tamanho')),
+            ),
+            pk=grade_pk,
+        )
+        criadas = 0
+        for item in grade.itens.all():
+            _, criou = PesoTamanhoFicha.objects.get_or_create(
+                ficha=ficha, grade=grade, tamanho=item.tamanho,
+                defaults={'ordem': item.ordem},
+            )
+            criadas += criou
+
+        if criadas:
+            messages.success(request, f'Grade {grade.nome} acrescentada — {criadas} tamanho(s) para pesar.')
+        else:
+            messages.info(request, f'Grade {grade.nome} já estava na tabela de peso.')
+        return redirect(reverse('moda:ficha-detail', args=[ficha.pk]))
+
+
+class FichaPesoGradeRemoverView(ModaBaseView):
+    """Tira uma grade inteira da tabela de peso."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, grade_pk):
+        ficha = _ficha_da_filial(request, pk)
+        linhas = PesoTamanhoFicha.objects.filter(ficha=ficha, grade_id=grade_pk)
+        nome = linhas.first().grade.nome if linhas.exists() else None
+        apagadas, _ = linhas.delete()
+
+        if nome:
+            messages.success(request, f'Grade {nome} removida da tabela de peso.')
+        else:
+            messages.info(request, 'Essa grade não estava na tabela de peso.')
+        return redirect(reverse('moda:ficha-detail', args=[ficha.pk]))
+
+
+class FichaPesoSalvarView(ModaBaseView):
+    """
+    Grava os pesos digitados na tabela, linha a linha.
+
+    Mesmo padrão do `MaterialUpdateView`: um campo por linha (`peso_<id>`),
+    e só o que mudou entra no `bulk_update`.
+    """
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        from decimal import Decimal, InvalidOperation
+
+        ficha = _ficha_da_filial(request, pk)
+        linhas = {l.pk: l for l in ficha.pesos_tamanho.all()}
+        alteradas = []
+
+        for chave, bruto in request.POST.items():
+            if not chave.startswith('peso_'):
+                continue
+            try:
+                linha = linhas[int(chave[len('peso_'):])]
+            except (ValueError, KeyError):
+                continue
+
+            bruto = (bruto or '').strip()
+            if not bruto:
+                valor = None
+            else:
+                try:
+                    valor = Decimal(bruto.replace(',', '.'))
+                except InvalidOperation:
+                    continue
+                if valor < 0:
+                    continue
+
+            if linha.peso_g != valor:
+                linha.peso_g = valor
+                alteradas.append(linha)
+
+        if alteradas:
+            PesoTamanhoFicha.objects.bulk_update(alteradas, ['peso_g'])
+            messages.success(request, f'{len(alteradas)} peso(s) atualizado(s).')
+        else:
+            messages.info(request, 'Nada mudou.')
+
         return redirect(reverse('moda:ficha-detail', args=[ficha.pk]))
 
 
