@@ -36,8 +36,10 @@ class Op2ClientesTests(TestCase):
             with self.subTest(url=url):
                 resposta = self.client.get(url)
                 self.assertEqual(resposta.status_code, 200)
-                for trecho in ('op2_clientes.js', 'digitarCliente()', 'abrirCadastroCliente()', 'abrirCadastroCliente(clienteId)', 'name="razao_social"', 'aria-label="Cadastro de cliente"'):
+                for trecho in ('op2_clientes.js', 'digitarCliente()', 'abrirCadastroCliente()', 'abrirCadastroCliente(clienteId)', 'name="razao_social"', 'aria-label="Cadastro de cliente"', 'style="background:#16a34a;justify-content:center"', '>Cadastrar cliente</button>', 'aria-label="Adicionar cliente"', '>+</button>'):
                     self.assertContains(resposta, trecho)
+                self.assertNotContains(resposta, '>+ Adicionar cliente</button>')
+                self.assertNotContains(resposta, '>+ Cadastrar cliente</button>')
 
     def test_edicao_carrega_os_dados_do_cliente_escolhido(self):
         resposta = self.client.get(self.url, HTTP_ACCEPT='application/json')
