@@ -54,7 +54,7 @@
     overflow: visible;
     border: 1px solid rgba(var(--kc-rgb), .26);
     border-top: 3px solid var(--kc-accent);
-    border-radius: 13px;
+    border-radius: 10px;
     background: linear-gradient(180deg, rgba(var(--kc-rgb), .075), rgba(var(--kc-rgb), .025));
     box-shadow: 0 5px 16px rgba(15, 23, 42, .045);
   }
@@ -85,19 +85,19 @@
   .kc-meta-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
-    margin-top: 9px;
+    gap: 4px;
+    margin-top: 6px;
   }
   .kc-meta-item {
     min-width: 0;
-    padding: 6px 7px;
-    border-radius: 8px;
+    padding: 4px 6px;
+    border-radius: 6px;
     background: rgba(var(--kc-rgb), .065);
   }
   .kc-meta-label {
     display: block;
     color: #64748b;
-    font-size: 9px;
+    font-size: 8px;
     font-weight: 700;
     line-height: 1.1;
     text-transform: uppercase;
@@ -108,7 +108,7 @@
     margin-top: 2px;
     overflow: hidden;
     color: #111827;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 750;
     line-height: 1.25;
     text-overflow: ellipsis;
@@ -120,12 +120,12 @@
   .kc-prazo {
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin-top: 7px;
-    padding-top: 7px;
+    gap: 5px;
+    margin-top: 5px;
+    padding-top: 5px;
     border-top: 1px solid rgba(var(--kc-rgb), .16);
     color: #64748b;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 650;
   }
   .kc-prazo svg { width: 13px; height: 13px; flex: 0 0 auto; }
@@ -166,7 +166,7 @@
      A preferência pode ser trocada no filtro; a rolagem horizontal preserva
      o tamanho escolhido sem deformar as etapas com poucos pedidos. */
   .kc-board {
-    --kc-largura-coluna: 320px;
+    --kc-largura-coluna: 280px;
     align-items: stretch;
   }
   .kc-raia {
@@ -366,7 +366,7 @@
   <div class="overflow-x-auto pb-3">
     <div class="kc-board flex gap-3 items-stretch">
       {% for r in raias %}
-        <div class="kc-raia p-3 space-y-2 {% if not r.total %}{% if not forloop.first or not rascunhos_op %}vazia{% endif %}{% endif %}"
+        <div class="kc-raia p-2 space-y-1.5 {% if not r.total %}{% if not forloop.first or not rascunhos_op %}vazia{% endif %}{% endif %}"
              data-coluna="{{ r.coluna.chave }}">
           <div class="kc-cabecalho flex items-baseline justify-between gap-2 pb-2 border-b"
                :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
@@ -394,7 +394,7 @@
 
           <div class="kc-lista space-y-2 min-h-[60px]" data-lista>
             {% if forloop.first %}{% for rascunho in rascunhos_op %}
-              <div class="kc-card rounded-xl p-3" style="border:1px dashed #f59e0b;border-left:4px solid #f59e0b;background:rgba(245,158,11,.08)"
+              <div class="kc-card rounded-lg p-2" style="border:1px dashed #f59e0b;border-left:4px solid #f59e0b;background:rgba(245,158,11,.08)"
                    data-url="{% url 'moda:op2-create' %}?rascunho={{ rascunho.chave }}" tabindex="0" role="link"
                    data-pecas="0" data-valor="0" data-atrasado="0"
                    data-busca="rascunho {{ rascunho.cliente_nome }} {{ rascunho.modelo_nome }}">
@@ -410,7 +410,7 @@
                 até alguém recarregar — um quadro que mente logo depois de
                 obedecer é pior que um quadro sem contador.
               {% endcomment %}
-              <div class="kc-card rounded-xl p-3{% if c.pediu_ajuste %} kc-alerta{% endif %}" data-pedido="{{ c.pedido.pk }}"
+              <div class="kc-card rounded-lg p-2{% if c.pediu_ajuste %} kc-alerta{% endif %}" data-pedido="{{ c.pedido.pk }}"
                    data-url="{% url 'moda:op2-detail' c.pedido.pk %}" tabindex="0" role="link"
                    data-pecas="{{ c.pedido.quantidade_total }}"
                    data-valor="{{ c.pedido.valor_total|stringformat:'.2f' }}"
@@ -553,7 +553,7 @@
   // A largura é uma preferência visual local, como a configuração das
   // colunas das listagens. "Padrão" é sempre o primeiro uso e todas as
   // raias compartilham a mesma variável, mesmo quando estão vazias.
-  const LARGURAS = { compacta: '260px', padrao: '320px', ampla: '400px' };
+  const LARGURAS = { compacta: '230px', padrao: '280px', ampla: '350px' };
   const CHAVE_LARGURA = 'moda-kanban-comercial-largura';
 
   function aplicarLargura(valor, salvar) {
