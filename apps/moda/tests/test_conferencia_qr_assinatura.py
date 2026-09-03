@@ -123,28 +123,18 @@ class ConferenciaBase(TestCase):
         return ExpedicaoService.criar(self.filial, ordem, self.usuario, forcar=True)
 
 
-class BotaoAbreOQrTests(ConferenciaBase):
-    """"Conferir para entrega" abre o crachá da conferência, não a lista."""
+class FluxoConferenciaEQrTests(ConferenciaBase):
+    """A conferência abre direto; o QR fica em ação própria da OP."""
 
-    def test_o_botao_mostra_o_qr_em_vez_de_redirecionar(self):
+    def test_o_botao_abre_direto_a_conferencia(self):
         pedido = self._pedido_com_grade()
         expedicao = self._expedicao(pedido)
 
-        resposta = self.client.get(
-            reverse('moda:pedido-conferencia', args=[pedido.pk])
-        )
+        resposta = self.client.get(reverse('moda:pedido-conferencia', args=[pedido.pk]))
 
-        self.assertEqual(resposta.status_code, 200)
-        self.assertContains(resposta, expedicao.codigo)
-        self.assertContains(
-            resposta, reverse('moda:conferencia-qr', args=[expedicao.pk])
-        )
-        self.assertContains(resposta, 'DIEGO MACEDO')
-        self.assertContains(resposta, '<strong>Contato:</strong>', html=True)
-        self.assertContains(resposta, 'Produto desta caixa')
-        self.assertContains(resposta, 'Camisa')
+        self.assertRedirects(resposta, reverse('moda:conferencia-pessoas', args=[expedicao.pk]))
 
-    def test_o_qr_traz_o_caminho_para_conferir_na_propria_tela(self):
+    def test_qr_e_impresso_em_tela_separada(self):
         """
         Quem já está no computador certo não pode ficar sem saída: o QR é
         para o celular, e o botão é para quem confere ali mesmo.
@@ -153,7 +143,7 @@ class BotaoAbreOQrTests(ConferenciaBase):
         expedicao = self._expedicao(pedido)
 
         resposta = self.client.get(
-            reverse('moda:pedido-conferencia', args=[pedido.pk])
+            reverse('moda:pedido-conferencia-qr', args=[pedido.pk])
         )
 
         self.assertContains(
@@ -179,9 +169,7 @@ class BotaoAbreOQrTests(ConferenciaBase):
             self.filial, self.segunda_ordem, self.usuario, forcar=True,
         )
 
-        resposta = self.client.get(
-            reverse('moda:pedido-conferencia', args=[pedido.pk])
-        )
+        resposta = self.client.get(reverse('moda:pedido-conferencia-qr', args=[pedido.pk]))
 
         self.assertContains(resposta, primeira.codigo)
         self.assertContains(resposta, segunda.codigo)

@@ -412,16 +412,8 @@ class PedidoConferenciaView(ModaBaseView):
     """
     O atalho do PEDIDO para a conferência — o botão que aparece em "Pronto".
 
-    ABRE O QR, NÃO A LISTA. Quem está no pedido está no computador; quem
-    confere está de pé ao lado da caixa. Mandar direto para a lista abria a
-    conferência no aparelho errado, e a pessoa acabava digitando o endereço
-    no celular à mão ou conferindo de memória para marcar depois -- que é o
-    mesmo que não conferir. A tela do QR serve os dois: aponta a câmera, ou
-    clica em "conferir nesta tela".
-
-    Mais de uma expedição -- pedido com vários produtos, cada um com sua
-    ordem -- mostra um QR por caixa, em vez de escolher por conta própria e
-    mandar conferir a errada.
+    Abre diretamente a conferência. O QR e as opções de impressão são um
+    recurso separado da OP, para não interromper quem já está com o cliente.
     """
 
     area = 'comercial'
@@ -450,21 +442,16 @@ class PedidoConferenciaView(ModaBaseView):
             # que está travando e decide — o sistema informa, não impede.
             return self._perguntar(request, pedido)
 
-        return render(request, 'moda/conferencia_qr.html', {
-            'title': f'Conferir pedido #{pedido.numero:06d}',
-            'pedido': pedido,
-            'expedicoes': expedicoes,
-        })
+        if len(expedicoes) == 1:
+            return redirect(reverse('moda:conferencia-pessoas', args=[expedicoes[0].pk]))
+
+        # Cada produto tem a sua expedição. Sem escolher uma caixa ao acaso,
+        # a fila já abre as conferências disponíveis diretamente.
+        return redirect(reverse('moda:conferencia-fila'))
 
     @staticmethod
     def _perguntar(request, pedido):
-        """
-        Mostra o que falta e pergunta se quer abrir mesmo assim.
-
-        Os alertas vêm da MESMA validação que trava a emissão da ordem
-        (`ValidacaoProducao`), e não de uma lista escrita à parte: duas
-        listas divergem, e aí a tela pede uma coisa e o botão cobra outra.
-        """
+        """Explica as pendências quando ainda não existe expedição."""
         from .services.validacao import OK, ValidacaoProducao
 
         checagens = ValidacaoProducao.checar(pedido)
@@ -472,15 +459,40 @@ class PedidoConferenciaView(ModaBaseView):
             'title': f'Conferir pedido #{pedido.numero:06d}',
             'pedido': pedido,
             'bloqueios': [c for c in checagens if c.bloqueia],
-            'avisos': [
-                c for c in checagens
-                if not c.bloqueia and c.situacao != OK
-            ],
-            # Forçar cria ordem e expedição de peça que a fábrica não fez.
-            # Não é decisão de quem só consulta.
+            'avisos': [c for c in checagens if not c.bloqueia and c.situacao != OK],
             'pode_forcar': request.user.tem_permissao('moda', 'aprovar'),
         })
 
+
+class PedidoConferenciaQrView(ModaBaseView):
+    """QR e impressão das caixas: aberto só pelo botão próprio da OP."""
+
+    area = 'comercial'
+
+    def get(self, request, pk):
+        from .models import PedidoProducao
+
+        pedido = get_object_or_404(
+            PedidoProducao.objects.for_filial(_filial(request))
+            .select_related('cliente'),
+            pk=pk,
+        )
+        expedicoes = list(
+            Expedicao.objects.for_filial(_filial(request))
+            .filter(ordem__pedido=pedido)
+            .exclude(status=Expedicao.Status.CANCELADA)
+            .select_related('ordem__item__produto', 'ordem__item__grade_tamanho')
+            .order_by('numero')
+        )
+        if not expedicoes:
+            messages.error(request, 'Ainda não há uma expedição para imprimir o QR Code.')
+            return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+
+        return render(request, 'moda/conferencia_qr.html', {
+            'title': f'Conferir pedido #{pedido.numero:06d}',
+            'pedido': pedido,
+            'expedicoes': expedicoes,
+        })
 
 class PedidoConferenciaForcarView(ModaBaseView):
     """

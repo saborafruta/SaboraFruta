@@ -102,10 +102,10 @@
                :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
             <div>
               <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-                Quantidade por tamanho
+                {% if linhas %}Conferência por tamanho, nome e número{% else %}Quantidade por tamanho{% endif %}
               </h3>
               <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                Conte as peças da caixa e lance o que encontrou.
+                {% if linhas %}Confira cada peça pelo tamanho, nome e número; a contagem por tamanho fica nesta mesma conferência.{% else %}Conte as peças da caixa e lance o que encontrou.{% endif %}
               </p>
             </div>
             {% if quantidades and not travada and pode_agir %}
@@ -216,20 +216,17 @@
               </p>
             </div>
           {% endif %}
-        </div>
+        {% if not linhas %}</div>{% endif %}
 
         {# ── 2. Por pessoa ───────────────────────────────────────── #}
         {% if linhas %}
-          <div class="card overflow-hidden">
+          <div class="border-t" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
             <div class="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2"
                  :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
               <div>
-                <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-                  Peça a peça, por pessoa
-                </h3>
+                <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Personalizações desta mesma conferência</h3>
                 <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                  A contagem por tamanho pode fechar e ainda faltar a camisa
-                  de alguém — peça com nome não é trocável por outra.
+                  Marque a peça conferida logo depois de validar tamanho, nome e número.
                 </p>
               </div>
               {% if not travada and pode_agir %}
@@ -321,7 +318,7 @@
                 </tbody>
               </table>
             </div>
-          </div>
+          </div></div>
         {% endif %}
 
         {# ── 3. A assinatura do cliente ──────────────────────────── #}

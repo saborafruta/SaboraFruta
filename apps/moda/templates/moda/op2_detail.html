@@ -70,7 +70,7 @@
         <a class="btn-secondary" href="{% url 'moda:pedido-orcamento-pdf' pedido.pk %}" target="_blank" rel="noopener">Abrir PDF do orçamento</a>
         {% if pedido.status != 'orcamento' %}<a class="btn-secondary" href="{% url 'moda:pedido-pdf' pedido.pk %}" target="_blank" rel="noopener">Abrir PDF da OP</a>{% endif %}
         <button class="btn-secondary" style="color:#16a34a" @click="prepararWhatsapp" :disabled="preparandoWhatsapp" x-text="preparandoWhatsapp?'Preparando…':'◉ WhatsApp'"></button>
-        {% if pedido.status == 'pronto' %}<a class="btn-primary" style="background:#059669" href="{% url 'moda:pedido-conferencia' pedido.pk %}">Conferir com o cliente</a>{% endif %}
+        {% if pedido.status == 'pronto' %}<a class="btn-primary" style="background:#059669" href="{% url 'moda:pedido-conferencia' pedido.pk %}">Conferir com o cliente</a><a class="btn-secondary" href="{% url 'moda:pedido-conferencia-qr' pedido.pk %}">Imprimir QR Code</a>{% endif %}
         {% if pedido.status == 'orcamento' %}<button type="button" class="btn-secondary" @click="pagamentoPrevisto=true">Pagamento previsto</button>{% endif %}
         {% if not pedido.financeiro_gerado and pedido.status != 'cancelado' %}<button type="button" class="btn-primary" @click="financeiro=true">Gerar financeiro</button>{% else %}{% if status_pagamento %}{% include 'moda/_pagamento_tag.html' %}{% endif %}{% if pode_ver_financeiro %}<button type="button" class="btn-secondary" @click="extratoFinanceiro=true" aria-controls="op2-extrato" :aria-expanded="extratoFinanceiro">Extrato de pagamentos</button>{% endif %}{% endif %}
         <button class="btn-secondary md:hidden" type="button" @click="historico=true">Histórico</button>
