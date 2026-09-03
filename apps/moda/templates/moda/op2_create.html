@@ -26,6 +26,7 @@
 .tema-claro .op2-conjunto-component{background:#fff;color:#111827}.tema-claro .op2-conjunto-multi>div{background:#fff;color:#111827}
 .op2-field-note summary{cursor:pointer;list-style:none;font-size:10px;color:#64748b;text-align:right}.op2-field-note summary:hover,.op2-field-note[open] summary{color:#2563eb}
 .op2-autosave{display:flex;align-items:center;gap:6px;font-size:11px;color:#64748b}.op2-autosave-dot{width:8px;height:8px;border-radius:50%;background:#16a34a}.op2-autosave.is-saving .op2-autosave-dot{background:#f59e0b}.op2-autosave.is-offline .op2-autosave-dot{background:#3b82f6}.op2-recovered{padding:8px 12px;border:1px solid rgba(37,99,235,.35);border-radius:9px;background:rgba(37,99,235,.09);color:#2563eb;font-size:12px}
+.op2-draft-card{border:1px dashed rgba(245,158,11,.78);border-left:4px solid #f59e0b;border-radius:10px;padding:12px;background:rgba(245,158,11,.07)}.op2-draft-badge{display:inline-flex;padding:3px 8px;border-radius:999px;background:rgba(245,158,11,.16);color:#d97706;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em}
 @media(max-width:767px){.op2-payment-row{grid-template-columns:1fr}.op2-payment-remove{margin-top:0}}
 @media(max-width:900px){.op2-personalizacao-conjunto-grid{grid-template-columns:1fr 1fr}.op2-copy-mini{width:100%}}@media(max-width:767px){.op2-personalizacao-grid,.op2-personalizacao-conjunto-grid{grid-template-columns:1fr}.op2-personalizacao-grid button{width:100%}.op2-conjunto-intro{align-items:stretch;flex-direction:column}.op2-conjunto-tabs{grid-template-columns:1fr}}
 @media(max-width:1023px){.op2-work{grid-template-columns:minmax(0,1fr)}.op2-aside{display:grid;grid-template-columns:1fr 1fr;gap:12px}.op2-modal-grid{grid-template-columns:1fr}input,select,textarea{font-size:16px!important}}
@@ -81,6 +82,13 @@
         <section class="op2-band">
           <div class="flex items-center justify-between gap-2 mb-2"><div><h2 class="font-bold">2 e 3. Modelos, personalização e impressão</h2><p class="text-xs opacity-70">A estrutura da peça e os detalhes aparecem só na sobreposição de adicionar modelo.</p></div><button type="button" class="btn-primary" @click="abrirModalItem()">+ Adicionar modelo</button></div>
           <div class="space-y-2">
+            <article x-show="temItemRascunho()&&!modalProduto" x-cloak class="op2-draft-card">
+              <div class="grid md:grid-cols-[minmax(0,1fr)_minmax(180px,.45fr)_auto] gap-3 items-center">
+                <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><span class="op2-draft-badge">Rascunho</span><strong class="truncate" x-text="draft.nome || 'Modelo ainda não selecionado'"></strong></div><p class="text-xs opacity-70 mt-1" x-text="editandoIdx===null?'Item ainda não concluído':'Alterações deste item ainda não aplicadas'"></p><p class="text-xs opacity-60 mt-1" x-text="draft.codigo || 'Continue para completar modelo, estrutura e grade.'"></p></div>
+                <div class="text-sm"><span class="op2-label">Não entra no orçamento</span><strong class="block">Não soma no total nem aparece no PDF</strong></div>
+                <div class="flex flex-wrap gap-2 justify-end"><button type="button" class="btn-primary text-sm" @click="retomarItemRascunho()">Continuar preenchimento</button><button type="button" class="btn-secondary text-sm" style="color:#ef4444" @click="descartarItemRascunho()">Descartar</button></div>
+              </div>
+            </article>
             <template x-for="(item,idx) in itens" :key="item.uid">
               <article class="op2-card" :style="`border-color:${coresGrade(item)[0]}`" x-data="{personalizar:false}">
                 <div class="grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,.9fr)_auto] gap-3 items-center">
@@ -110,7 +118,7 @@
                 </div>
               </article>
             </template>
-            <div x-show="!itens.length" class="text-center p-8 rounded-lg" style="border:1px dashed #64748b"><p class="font-bold">Nenhum modelo ainda</p><p class="text-sm opacity-70 mt-1">Clique em “Adicionar modelo” para escolher o modelo, estrutura, impressão e grade.</p><button type="button" class="btn-primary mt-3" @click="abrirModalItem()">Adicionar modelo</button></div>
+            <div x-show="!itens.length&&!temItemRascunho()" class="text-center p-8 rounded-lg" style="border:1px dashed #64748b"><p class="font-bold">Nenhum modelo ainda</p><p class="text-sm opacity-70 mt-1">Clique em “Adicionar modelo” para escolher o modelo, estrutura, impressão e grade.</p><button type="button" class="btn-primary mt-3" @click="abrirModalItem()">Adicionar modelo</button></div>
           </div>
         </section>
         <section class="op2-band op2-payment-required">
@@ -134,13 +142,13 @@
         </section>
       </main>
       <aside class="op2-aside space-y-3">
-        <section class="card p-3 sticky top-24"><h2 class="font-bold mb-2">Resumo de conferência</h2><dl class="space-y-2 text-sm"><div class="flex justify-between"><dt>Status</dt><dd class="font-bold" style="color:#d97706">Orçamento</dd></div><div class="flex justify-between"><dt>Produtos</dt><dd class="font-bold" x-text="itens.length"></dd></div><div class="flex justify-between"><dt>Unidades comerciais</dt><dd class="font-bold" x-text="totalPecas()"></dd></div><div class="flex justify-between"><dt>Total</dt><dd class="font-bold" x-text="moeda(totalValor())"></dd></div></dl></section>
+        <section class="card p-3 sticky top-24"><h2 class="font-bold mb-2">Resumo de conferência</h2><dl class="space-y-2 text-sm"><div class="flex justify-between"><dt>Status</dt><dd class="font-bold" style="color:#d97706">Orçamento</dd></div><div class="flex justify-between"><dt>Produtos</dt><dd class="font-bold" x-text="itens.length"></dd></div><div x-show="temItemRascunho()" class="flex justify-between" style="color:#d97706"><dt>Itens em rascunho</dt><dd class="font-bold">1</dd></div><div class="flex justify-between"><dt>Unidades comerciais</dt><dd class="font-bold" x-text="totalPecas()"></dd></div><div class="flex justify-between"><dt>Total</dt><dd class="font-bold" x-text="moeda(totalValor())"></dd></div></dl></section>
       </aside>
     </div>
   </form>
-  <div x-show="modalProduto" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-3" style="background:rgba(0,0,0,.72)" @click.self="modalProduto=false">
+  <div x-show="modalProduto" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-3" style="background:rgba(0,0,0,.72)" @click.self="fecharModalItem()" @keydown.escape.window="if(modalProduto)fecharModalItem()">
     <div class="card p-4 w-full max-w-7xl overflow-y-auto" style="max-height:94vh">
-      <div class="flex justify-between gap-2 mb-3"><div><h2 class="text-xl font-bold" x-text="editandoIdx===null?'Adicionar modelo à OP':'Editar modelo da OP'"></h2><p class="text-xs opacity-70">Escolha o modelo e complete a estrutura, impressão e grades ainda nesta sobreposição.</p></div><button type="button" class="text-2xl" @click="modalProduto=false">×</button></div>
+      <div class="flex justify-between gap-2 mb-3"><div><h2 class="text-xl font-bold" x-text="editandoIdx===null?'Adicionar modelo à OP':'Editar modelo da OP'"></h2><p class="text-xs opacity-70">Escolha o modelo e complete a estrutura, impressão e grades ainda nesta sobreposição.</p><div class="op2-autosave mt-1" :class="{'is-saving':estadoRascunho==='salvando','is-offline':estadoRascunho==='local'}"><span class="op2-autosave-dot"></span><span x-text="mensagemRascunho"></span></div></div><button type="button" class="text-2xl" @click="fecharModalItem()">×</button></div>
       <div class="op2-modal-grid">
         <aside><input type="search" x-model="buscaProduto" class="form-input w-full mb-2" placeholder="Buscar modelo, código, referência, tecido ou grade"><div class="op2-model-list space-y-2"><template x-for="modelo in modelosRapidos" :key="modelo.id"><button type="button" class="op2-card text-left w-full" :class="draft.produto_id===modelo.id?'ring-2 ring-blue-500':''" x-show="combina(buscaProduto, modelo.nome+' '+modelo.codigo)" @click="escolherProduto(modelo.id,modelo.nome,modelo.codigo,modelo.info)"><strong x-text="modelo.nome"></strong><small class="block mt-1 opacity-70" x-text="modelo.codigo"></small></button></template>{% for modelo in modelos %}<button type="button" class="op2-card text-left w-full" :class="draft.produto_id==='{{ modelo.pk }}'?'ring-2 ring-blue-500':''" x-show="combina(buscaProduto, '{{ modelo.nome|escapejs }} {{ modelo.codigo|escapejs }} {{ modelo.referencia|escapejs }} {{ modelo.modelo|escapejs }} {{ modelo.tecido|escapejs }} {% if modelo.grade %}{{ modelo.grade.nome|escapejs }} {{ modelo.grade.resumo|escapejs }}{% endif %}')" @click="escolherProduto('{{ modelo.pk }}','{{ modelo.nome|escapejs }}','{{ modelo.codigo|escapejs }}','{{ modelo.codigo|escapejs }}{% if modelo.referencia %} · {{ modelo.referencia|escapejs }}{% endif %}{% if modelo.tecido %} · {{ modelo.tecido|escapejs }}{% endif %}')"><strong>{{ modelo.nome }}</strong><small class="block mt-1 opacity-70">{{ modelo.codigo }}{% if modelo.referencia %} · {{ modelo.referencia }}{% endif %}{% if modelo.grade %} · {{ modelo.grade.nome }}{% endif %}</small></button>{% endfor %}</div></aside>
         <main class="space-y-3" :class="draft.estrutura_tipo==='conjunto'?'is-conjunto':''">
@@ -156,7 +164,7 @@
             <div class="op2-grade-grid mb-3"><template x-for="grade in grades" :key="grade.id"><button type="button" class="op2-grade-chip" :class="draft.grades.includes(grade.id)?'is-on':''" @click.prevent="alternarGrade(grade.id)"><strong class="block" x-text="grade.nome"></strong><small class="block opacity-70 mt-1" x-text="grade.resumo"></small></button></template></div>
             <div class="space-y-3"><template x-for="grade in gradesSelecionadas()" :key="grade.id"><section class="op2-grade-panel"><div class="flex items-center justify-between gap-2 mb-3"><div><strong x-text="grade.nome"></strong><small class="block opacity-60" x-text="grade.tipo"></small></div><strong class="text-sm" style="color:#3b82f6" x-text="`${totalGrade(grade.id)} peça(s)`"></strong></div><div class="op2-size-grid"><template x-for="tamanhoId in grade.tamanhos" :key="`${grade.id}-${tamanhoId}`"><div class="op2-size-card"><span class="op2-size-name" x-text="tamanhoLabels[tamanhoId] || tamanhoId"></span><div class="op2-stepper"><button type="button" class="op2-qty-btn" @click.prevent="alterarDraftGrade(grade.id,tamanhoId,-1)" :aria-label="`Diminuir ${tamanhoLabels[tamanhoId] || tamanhoId} da grade ${grade.nome}`">−</button><input type="number" min="0" inputmode="numeric" :value="quantidadeDraftGrade(grade.id,tamanhoId)" @input="definirDraftGrade(grade.id,tamanhoId,$event.target.value)" @focus="$event.target.select()" class="form-input op2-qty-input" :aria-label="`Quantidade ${tamanhoLabels[tamanhoId] || tamanhoId} da grade ${grade.nome}`"><button type="button" class="op2-qty-btn" @click.prevent="alterarDraftGrade(grade.id,tamanhoId,1)" :aria-label="`Aumentar ${tamanhoLabels[tamanhoId] || tamanhoId} da grade ${grade.nome}`">+</button></div></div></template></div></section></template><p x-show="!draft.grades.length" class="text-sm opacity-60 text-center py-3">Selecione uma grade para informar os tamanhos.</p></div>
           </section>
-          <div class="flex justify-end gap-2 sticky bottom-0 p-2" :style="temaClaro?'background:#fff':'background:#1f1f21'"><button type="button" class="btn-secondary" @click="modalProduto=false">Cancelar</button><button type="button" class="btn-primary" @click="salvarDraft()" x-text="editandoIdx===null?'Adicionar à OP':'Salvar alterações'"></button></div>
+          <div class="flex justify-end gap-2 sticky bottom-0 p-2" :style="temaClaro?'background:#fff':'background:#1f1f21'"><button type="button" class="btn-secondary" @click="fecharModalItem()">Salvar como rascunho</button><button type="button" class="btn-primary" @click="salvarDraft()" x-text="editandoIdx===null?'Adicionar à OP':'Salvar alterações'"></button></div>
         </main>
       </div>
     </div>
@@ -254,6 +262,19 @@ function op2NovaMelhorada(){
     this.iniciarAutosave();
   };
   estado.draft=estado.novoDraft();
+  estado.temItemRascunho=function(){return Boolean(this.draft?.produto_id)};
+  estado.fecharModalItem=function(){this.modalProduto=false;this.agendarAutosave()};
+  estado.retomarItemRascunho=function(){if(!this.temItemRascunho())return;this.modalProduto=true;this.agendarAutosave()};
+  estado.limparItemRascunho=function(){this.modalProduto=false;this.editandoIdx=null;this.draft=this.novoDraft();this.buscaProduto='';this.agendarAutosave()};
+  estado.descartarItemRascunho=function(){
+    if(!confirm('Descartar este item em rascunho? As demais informações da OP serão mantidas.'))return;
+    this.limparItemRascunho();
+  };
+  const abrirModalNovo=estado.abrirModalItem.bind(estado);
+  estado.abrirModalItem=function(){
+    if(this.temItemRascunho()){this.retomarItemRascunho();return}
+    abrirModalNovo();this.agendarAutosave();
+  };
   estado.garantirGrade=function(gradeId){
     gradeId=String(gradeId);
     if(this.draft.gradePorGrade[gradeId])return;
@@ -386,6 +407,10 @@ function op2NovaMelhorada(){
     return item;
   };
   estado.editarItem=function(idx){
+    if(this.temItemRascunho()){
+      if(this.editandoIdx===idx){this.retomarItemRascunho();return}
+      alert('Conclua ou descarte o item que já está em rascunho antes de editar outro produto.');return;
+    }
     this.editandoIdx=idx;
     this.draft=JSON.parse(JSON.stringify(this.itens[idx]));
     this.draft.estrutura_outros=this.draft.estrutura_outros||{};
@@ -408,7 +433,7 @@ function op2NovaMelhorada(){
       this.draft.quantidade=this.totalComponenteConjunto('camisa');
       const novo=this.montarItemParaGrade('');
       if(this.editandoIdx===null)this.itens.push(novo);else{novo.uid=this.itens[this.editandoIdx].uid;this.itens.splice(this.editandoIdx,1,novo)}
-      this.modalProduto=false;return;
+      this.limparItemRascunho();return;
     }
     if(this.draft.estrutura?.cor==='COR PERSONALIZADA'&&!String(this.draft.cor_personalizada||'').trim()){
       alert('Informe a cor personalizada.');
@@ -441,7 +466,7 @@ function op2NovaMelhorada(){
       }
       this.itens.splice(this.editandoIdx,1,...novos);
     }
-    this.modalProduto=false;
+    this.limparItemRascunho();
   };
   estado.indiceItem=function(uid){return this.itens.findIndex(item=>String(item.uid)===String(uid))};
   estado.nomeItem=function(uid){return this.itens.find(item=>String(item.uid)===String(uid))?.nome||'Produto removido'};
@@ -562,7 +587,7 @@ function op2NovaMelhorada(){
     this.clienteId=String(dados.clienteId||'');this.contatoNome=dados.contatoNome||'';this.contatoTelefone=dados.contatoTelefone||'';
     this.contatos=Array.isArray(dados.contatos)?dados.contatos:[];this.clientesAdicionais=Array.isArray(dados.clientesAdicionais)?dados.clientesAdicionais:[];
     this.itens=(Array.isArray(dados.itens)?dados.itens:[]).map(item=>({...item,imagensNomes:[]}));this.personalizacoes=Array.isArray(dados.personalizacoes)?dados.personalizacoes:[];this.pagamentos=Array.isArray(dados.pagamentos)&&dados.pagamentos.length?dados.pagamentos:this.pagamentos;
-    this.draft={...this.novoDraft(),...(dados.draft||{})};this.editandoIdx=Number.isInteger(dados.editandoIdx)?dados.editandoIdx:null;this.modalProduto=Boolean(dados.modalProduto&&dados.draft?.produto_id);
+    this.draft={...this.novoDraft(),...(dados.draft||{})};this.editandoIdx=Number.isInteger(dados.editandoIdx)?dados.editandoIdx:null;this.modalProduto=false;
     this.anexosParaReanexar=Array.from(new Set(dados.anexosNomes||[]));
     this.$nextTick(()=>Object.entries(dados.campos||{}).forEach(([nome,valor])=>{const campo=this.$root.querySelector(`[name="${nome}"]`);if(campo)campo.value=valor||''}));
     this.rascunhoRecuperado=true;
@@ -584,6 +609,7 @@ function op2NovaMelhorada(){
   };
   const validarComAutosave=estado.validarAntesDeSalvar.bind(estado);
   estado.validarAntesDeSalvar=function(event){
+    if(this.temItemRascunho()){event.preventDefault();alert('Existe um item em rascunho. Continue o preenchimento ou descarte esse item antes de salvar a OP.');return}
     validarComAutosave(event);if(event.defaultPrevented)return;
     this.salvarLocal();sessionStorage.setItem('op2-rascunho-concluindo',this.chaveRascunho);this.autosavePausado=true;clearTimeout(this.autosaveTimer);
     if(event.submitter?.value==='enviar')setTimeout(()=>{this.autosavePausado=false},5000);
