@@ -14,13 +14,14 @@
       <label class="op2-multi-option">
         <input type="checkbox" {% if submit_names %}name="estrutura_{{ campo }}" value="{{ opcao }}"{% endif %}
                :checked="op2MultisselecaoContem({% if campo == 'tipo_impressao' %}draft.tipo_impressao{% else %}draft.estrutura['{{ campo }}']{% endif %}, '{{ opcao|escapejs }}')"
-               @change="{% if campo == 'tipo_impressao' %}draft.tipo_impressao{% else %}draft.estrutura['{{ campo }}']{% endif %}=op2AlternarMultisselecao({% if campo == 'tipo_impressao' %}draft.tipo_impressao{% else %}draft.estrutura['{{ campo }}']{% endif %}, '{{ opcao|escapejs }}', $event.target.checked)">
+               @change="{% if campo == 'tipo_impressao' %}draft.tipo_impressao{% else %}draft.estrutura['{{ campo }}']{% endif %}=op2AlternarMultisselecao({% if campo == 'tipo_impressao' %}draft.tipo_impressao{% else %}draft.estrutura['{{ campo }}']{% endif %}, '{{ opcao|escapejs }}', $event.target.checked); if ('{{ opcao|escapejs }}'==='OUTRO' && $event.target.checked) { aberto=false; $nextTick(()=>$root.querySelector('[data-op2-outro]')?.focus()) }">
         <span>{{ opcao }}</span>
       </label>
     {% endfor %}
   </div>
   <small class="op2-multi-help">Você pode escolher mais de uma opção.</small>
   <input x-show="op2MultisselecaoContem({% if campo == 'tipo_impressao' %}draft.tipo_impressao{% else %}draft.estrutura['{{ campo }}']{% endif %}, 'OUTRO')" x-cloak
+         data-op2-outro
          {% if submit_names %}name="estrutura_outro_{{ campo }}"{% endif %}
          x-model="draft.estrutura_outros['{{ campo }}']" class="form-input w-full mt-1"
          placeholder="Descreva a outra opção">

@@ -21,7 +21,7 @@
     <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
       {% with grupo=estrutura_opcoes|dict_get:componente %}
       {% for campo, opcoes in grupo.campos.items %}
-      <div>
+      <div class="op2-estrutura-campo">
         <span class="op2-label block">{{ campo|campo_op2_label }}</span>
         {% if campo == 'tipo_impressao' or campo|slice:':10' == 'acabamento' %}
         <details class="op2-conjunto-multi"
@@ -30,13 +30,13 @@
                  @op2-abrir-multisselecao.window="if ($event.detail.origem !== $el) $el.removeAttribute('open')"
                  @keydown.escape.window="$el.removeAttribute('open')">
           <summary @click="window.dispatchEvent(new CustomEvent('op2-abrir-multisselecao', {detail:{origem:$el.parentElement}}))"><span class="op2-conjunto-multi-summary" :class="op2ListaMultisselecao(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}']).length>1?'is-multipla':''" :title="op2ResumoMultisselecao(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'])" x-text="op2ResumoMultisselecao(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'])"></span><span>⌄</span></summary>
-          <div>{% for opcao in opcoes %}<label><input type="checkbox" :checked="op2MultisselecaoContem(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'],'{{ opcao|escapejs }}')" @change="draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}']=op2AlternarMultisselecao(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'],'{{ opcao|escapejs }}',$event.target.checked)"><span>{{ opcao }}</span></label>{% endfor %}</div>
+          <div>{% for opcao in opcoes %}<label><input type="checkbox" :checked="op2MultisselecaoContem(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'],'{{ opcao|escapejs }}')" @change="draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}']=op2AlternarMultisselecao(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'],'{{ opcao|escapejs }}',$event.target.checked); if ('{{ opcao|escapejs }}'==='OUTRO' && $event.target.checked) { $event.target.closest('details').removeAttribute('open'); $nextTick(()=>$event.target.closest('.op2-estrutura-campo').querySelector('[data-op2-outro]')?.focus()) }"><span>{{ opcao }}</span></label>{% endfor %}</div>
         </details>
         {% else %}
-        <select class="form-input w-full" x-model="draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}']">{% for opcao in opcoes %}<option value="{{ opcao }}">{{ opcao }}</option>{% endfor %}</select>
+        <select class="form-input w-full" x-model="draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}']" @change="if ($event.target.value==='OUTRO') $nextTick(()=>$event.target.closest('.op2-estrutura-campo').querySelector('[data-op2-outro]')?.focus())">{% for opcao in opcoes %}<option value="{{ opcao }}">{{ opcao }}</option>{% endfor %}</select>
         {% if campo == 'cor' %}<input x-show="draft.configuracao_conjunto.{{ componente }}.estrutura.cor==='COR PERSONALIZADA'" x-cloak x-model="draft.configuracao_conjunto.{{ componente }}.cor_personalizada" class="form-input w-full mt-2" placeholder="Digite a cor personalizada">{% endif %}
         {% endif %}
-        <input x-show="op2MultisselecaoContem(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'],'OUTRO')" x-cloak x-model="draft.configuracao_conjunto.{{ componente }}.outros['{{ campo }}']" class="form-input w-full mt-1" placeholder="Descreva a outra opção">
+        <input x-show="op2MultisselecaoContem(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'],'OUTRO')" x-cloak data-op2-outro x-model="draft.configuracao_conjunto.{{ componente }}.outros['{{ campo }}']" class="form-input w-full mt-1" placeholder="Descreva a outra opção">
         <details class="op2-field-note mt-1"><summary>+ observação</summary><input x-model="draft.configuracao_conjunto.{{ componente }}.observacoes_campos['{{ campo }}']" maxlength="500" class="form-input w-full mt-1" placeholder="Observação deste campo"></details>
       </div>
       {% endfor %}

@@ -1,5 +1,6 @@
 {% if campo != 'tipo_impressao' and campo|slice:':10' != 'acabamento' %}
 <input x-show="draft.estrutura['{{ campo }}']==='OUTRO'" x-cloak
+       data-op2-outro
        {% if submit_names %}name="estrutura_outro_{{ campo }}"{% endif %}
        x-model="draft.estrutura_outros['{{ campo }}']" class="form-input w-full mt-1"
        placeholder="Descreva a outra opção">
