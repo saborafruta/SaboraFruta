@@ -1,19 +1,16 @@
 """
-O peso por tamanho e a grade da peça, na ficha técnica.
+O peso por tamanho, por grade, na ficha técnica.
 
-DUAS PERGUNTAS QUE A FICHA NÃO RESPONDIA
+O QUE A FICHA NÃO RESPONDIA
 
-  · QUANTO PESA CADA TAMANHO. A mesma camisa pesa 145 g no P e 230 g no XG
-    — um número único não dizia nada disso. E a mesma ficha pode ser
-    cortada em mais de uma grade (a versão solta e a oversized do mesmo
-    modelo), cada uma com peso próprio tamanho a tamanho. Por isso a
-    tabela é por grade, e a ficha aceita quantas forem necessárias
-    (Adulto, Oversized, Baby Look...).
+A mesma camisa pesa 145 g no P e 230 g no XG — um número único não dizia
+nada disso. E a mesma ficha pode ser cortada em mais de uma grade (a
+versão solta e a oversized do mesmo modelo), cada uma com peso próprio
+tamanho a tamanho. Por isso a tabela é por grade, e a ficha aceita quantas
+forem necessárias (Adulto, Oversized, Baby Look...).
 
-  · QUAIS TAMANHOS A PEÇA CORTA. A ficha mostrava "Adulto" — que não diz
-    se a peça vai até GG ou até XGG — e um traço quando o produto não
-    tinha grade. Um traço não separa "falta cadastrar a grade" de "falta
-    ligá-la ao produto", e são telas diferentes.
+A escolha de qual grade a peça corta continua no comercial — a ficha não
+duplica esse controle, só pesa o que já está lá.
 
 AUSÊNCIA APARECE. Peso em branco continua em branco (placeholder "não
 pesado"), nunca vira zero — zero gravado passaria por peça real na hora de
@@ -75,8 +72,6 @@ class FichaPesoGradeTests(TestCase):
                 grade=grade, tamanho=tamanho, ordem=posicao * 10,
             )
         return grade
-
-    # ── Peso por tamanho ─────────────────────────────────────────────────
 
     def test_acrescentar_a_grade_cria_uma_linha_por_tamanho_em_branco(self):
         """
@@ -205,74 +200,11 @@ class FichaPesoGradeTests(TestCase):
 
         self.assertIn('Nenhuma grade pesada ainda', html)
 
-    # ── Grade da peça (produto) ─────────────────────────────────────────
-
-    def test_a_ficha_lista_todas_as_grades_da_casa_com_os_tamanhos(self):
-        """
-        Como no comercial: o nome da grade não diz até que tamanho a peça
-        vai — a lista de siglas diz.
-        """
-        self._grade('Adulto', ['PP', 'P', 'M', 'G', 'GG', 'XGG'])
-        self._grade('Baby Look', ['P', 'M', 'G'], ordem_base=10)
-
+    def test_sem_nenhuma_grade_cadastrada_a_tela_manda_cadastrar(self):
         html = self.client.get(self.url).content.decode()
 
-        self.assertIn('Adulto', html)
-        self.assertIn('Baby Look', html)
-        self.assertIn('PP | P | M | G | GG | XGG', html)
-
-    def test_sem_grade_a_ficha_avisa_que_a_op_nao_sabe_o_que_cortar(self):
-        self._grade('Adulto', ['P', 'M', 'G'])
-
-        html = self.client.get(self.url).content.decode()
-
-        self.assertIn('ainda não tem grade', html)
-
-    def test_sem_nenhuma_grade_cadastrada_a_ficha_manda_cadastrar(self):
-        """
-        "Falta cadastrar a grade" e "falta ligá-la ao produto" resolvem-se
-        em telas diferentes — a ficha precisa dizer qual dos dois é.
-        """
-        html = self.client.get(self.url).content.decode()
-
-        self.assertIn('Nenhuma grade cadastrada', html)
+        self.assertIn('Cadastre uma grade primeiro', html)
         self.assertIn(reverse('moda:grade-create'), html)
-
-    def test_escolher_a_grade_grava_no_produto(self):
-        """
-        A grade continua sendo campo do produto — a ficha não guarda cópia.
-        """
-        grade = self._grade('Adulto', ['P', 'M', 'G'])
-
-        self.client.post(
-            reverse('moda:ficha-grade', args=[self.ficha.pk]),
-            {'grade': grade.pk},
-        )
-
-        self.produto.refresh_from_db()
-        self.assertEqual(self.produto.grade_id, grade.pk)
-
-    def test_a_grade_escolhida_aparece_marcada(self):
-        grade = self._grade('Adulto', ['P', 'M', 'G'])
-        self.produto.grade = grade
-        self.produto.save(update_fields=['grade'])
-
-        html = self.client.get(self.url).content.decode()
-
-        self.assertIn('grade desta peça', html)
-        self.assertIn('Adulto · P | M | G', html)
-
-    def test_da_para_retirar_a_grade(self):
-        grade = self._grade('Adulto', ['P', 'M', 'G'])
-        self.produto.grade = grade
-        self.produto.save(update_fields=['grade'])
-
-        self.client.post(
-            reverse('moda:ficha-grade', args=[self.ficha.pk]), {'grade': ''},
-        )
-
-        self.produto.refresh_from_db()
-        self.assertIsNone(self.produto.grade_id)
 
     def test_grade_de_outra_filial_nao_entra(self):
         outra = Filial.objects.create(
@@ -282,10 +214,9 @@ class FichaPesoGradeTests(TestCase):
         alheia = Grade.objects.create(filial=outra, nome='Grade de fora')
 
         resposta = self.client.post(
-            reverse('moda:ficha-grade', args=[self.ficha.pk]),
+            reverse('moda:ficha-peso-grade-add', args=[self.ficha.pk]),
             {'grade': alheia.pk},
         )
 
         self.assertEqual(resposta.status_code, 404)
-        self.produto.refresh_from_db()
-        self.assertIsNone(self.produto.grade_id)
+        self.assertEqual(PesoTamanhoFicha.objects.filter(ficha=self.ficha).count(), 0)

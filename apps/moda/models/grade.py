@@ -92,18 +92,6 @@ class Grade(FilialScopedModel, ActiveModel):
         """Ex.: 'PP | P | M | G | GG | XGG', para listar sem abrir a grade."""
         return ' | '.join(t.sigla for t in self.tamanhos_ordenados())
 
-    @property
-    def resumo_com_nome(self) -> str:
-        """
-        Ex.: 'Adulto · PP | P | M | G | GG | XGG'.
-
-        O nome sozinho não diz se a peça vai até GG ou até XGG, e é isso
-        que a fábrica precisa saber. Grade sem tamanho nenhum sai só com o
-        nome, e não com um separador solto no fim.
-        """
-        tamanhos = self.resumo
-        return f'{self.nome} · {tamanhos}' if tamanhos else self.nome
-
 
 class ItemGrade(models.Model):
     """
