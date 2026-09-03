@@ -67,7 +67,8 @@
     <div class="op2-header-bottom op2-actions">
       <div class="flex flex-wrap gap-2">
         {% if pedido.status != 'confirmado' and pedido.status != 'entregue' %}<form method="post" action="{% url 'moda:op2-action' pedido.pk %}">{% csrf_token %}<input type="hidden" name="acao" value="aprovar"><button class="btn-secondary">Aprovar no sistema</button></form>{% endif %}
-        <a class="btn-secondary" href="{{ pdf_url }}" target="_blank" rel="noopener">{% if pedido.status == 'orcamento' %}Abrir orçamento{% else %}Abrir PDF da OP{% endif %}</a>
+        <a class="btn-secondary" href="{% url 'moda:pedido-orcamento-pdf' pedido.pk %}" target="_blank" rel="noopener">Abrir PDF do orçamento</a>
+        {% if pedido.status != 'orcamento' %}<a class="btn-secondary" href="{% url 'moda:pedido-pdf' pedido.pk %}" target="_blank" rel="noopener">Abrir PDF da OP</a>{% endif %}
         <button class="btn-secondary" style="color:#16a34a" @click="prepararWhatsapp" :disabled="preparandoWhatsapp" x-text="preparandoWhatsapp?'Preparando…':'◉ WhatsApp'"></button>
         {% if pedido.status == 'pronto' %}<a class="btn-primary" style="background:#059669" href="{% url 'moda:pedido-conferencia' pedido.pk %}">Conferir com o cliente</a>{% endif %}
         {% if pedido.status == 'orcamento' %}<button type="button" class="btn-secondary" @click="pagamentoPrevisto=true">Pagamento previsto</button>{% endif %}
@@ -117,7 +118,7 @@
                 <div class="op2-product-group-total"><span class="op2-label block">Total do produto</span><strong>{{ grupo.quantidade }} {% if grupo.itens.0.eh_conjunto %}conjuntos{% else %}peças{% endif %}</strong></div>
               </header>
               {% for item in grupo.itens %}
-            <article class="op2-item op2-item-variant" style="border-color:{{ item.grade_cor }}" x-data="{detalhes:false,gradeEdit:false,personalizar:false,pessoas:[{uid:Date.now()+Math.random(),tamanhoId:'',nome:'',numero:''}]}" @click="if(!$event.target.closest('button,a,input,select,textarea,form')) abrirEditarProduto('{{ item.pk }}')" role="button" tabindex="0" @keydown.enter="abrirEditarProduto('{{ item.pk }}')">
+            <article class="op2-item op2-item-variant" style="border-color:{{ item.grade_cor }}" x-data="{detalhes:false,gradeEdit:false,personalizar:false,pessoas:[{uid:Date.now()+Math.random(),tamanhoId:'',nome:'',numero:''}]}">
               <header class="op2-item-head">
                 <div class="min-w-0">
                   <div class="flex flex-wrap items-center gap-2"><span class="op2-grade-tag" style="color:{{ item.grade_cor }};background:{{ item.grade_fundo }}">{{ item.grade_rotulo }}</span></div>
@@ -127,7 +128,7 @@
                   <div class="op2-item-metric"><span class="op2-label block">{% if item.eh_conjunto %}Conjuntos{% else %}Peças{% endif %}</span><strong>{{ item.quantidade }}</strong></div>
                   <div class="op2-item-metric"><span class="op2-label block">{% if item.eh_conjunto %}Por conjunto{% else %}Unitário{% endif %}</span><strong>R$ {{ item.valor_unitario }}</strong></div>
                 </div>
-                <div class="flex flex-wrap gap-2 justify-end"><button type="button" class="btn-secondary text-sm" @click="abrirEditarProduto('{{ item.pk }}')">Editar</button><button type="button" class="btn-secondary text-sm" @click="abrirDuplicarProduto('{{ item.pk }}')">Duplicar</button>{% if item.ordens.all %}<button type="button" class="btn-secondary text-sm opacity-55 cursor-not-allowed" disabled title="Este produto já possui ordem de produção e precisa permanecer no histórico.">Vinculado à produção</button>{% else %}<form method="post" action="{% url 'moda:op2-action' pedido.pk %}" onsubmit="return confirm('Remover este produto da OP?')">{% csrf_token %}<input type="hidden" name="acao" value="remover_item"><input type="hidden" name="item_id" value="{{ item.pk }}"><button class="btn-secondary text-sm" style="color:#ef4444">Excluir</button></form>{% endif %}</div>
+                <div class="flex flex-wrap gap-2 justify-end"><button type="button" class="btn-primary text-sm" style="background:#16a34a" @click="abrirEditarProduto('{{ item.pk }}')">Editar</button><button type="button" class="btn-secondary text-sm" @click="abrirDuplicarProduto('{{ item.pk }}')">Duplicar</button>{% if item.ordens.all %}<button type="button" class="btn-secondary text-sm opacity-55 cursor-not-allowed" disabled title="Este produto já possui ordem de produção e precisa permanecer no histórico.">Vinculado à produção</button>{% else %}<form method="post" action="{% url 'moda:op2-action' pedido.pk %}" onsubmit="return confirm('Remover este produto da OP?')">{% csrf_token %}<input type="hidden" name="acao" value="remover_item"><input type="hidden" name="item_id" value="{{ item.pk }}"><button class="btn-secondary text-sm" style="color:#ef4444">Excluir</button></form>{% endif %}</div>
               </header>
 
               <div class="op2-item-summary">

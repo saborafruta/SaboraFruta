@@ -1441,6 +1441,11 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'class="op2-item-gallery"')
         self.assertNotContains(resposta, 'op2-aside .op2-gallery-grid')
         html = resposta.content.decode()
+        cartao = re.search(r'<article class="op2-item op2-item-variant".*?</article>', html, re.S).group()
+        self.assertNotIn("@click=\"if(!$event.target.closest", cartao)
+        self.assertNotIn('role="button"', cartao)
+        self.assertNotIn('@keydown.enter=', cartao)
+        self.assertIn('class="btn-primary text-sm" style="background:#16a34a"', cartao)
         self.assertLess(
             html.index('class="op2-item-gallery"'),
             html.index('class="op2-item-tools"'),
@@ -2229,7 +2234,7 @@ class Op2Tests(TestCase):
             pedido=self.pedido, texto='Informação mais recente', criado_por=usuario,
         )
         detalhe = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
-        self.assertContains(detalhe, 'Criação de artes', count=2)
+        self.assertContains(detalhe, 'Informações importantes da OP e Artes', count=2)
         self.assertContains(detalhe, 'Usuario OP 2')
         self.assertContains(detalhe, 'Ver mais (1)', count=2)
         self.assertContains(detalhe, 'value="editar_criacao"')
@@ -2237,8 +2242,27 @@ class Op2Tests(TestCase):
         html = detalhe.content.decode()
         self.assertLess(html.index('Informação mais recente'),
                         html.index('Conferir cores'))
-        self.assertLess(html.rindex('Criação de artes'), html.index('Resumo de conferência'))
+        self.assertLess(html.rindex('Informações importantes da OP e Artes'), html.index('Resumo de conferência'))
         self.assertEqual(recente, self.pedido.historico_criacao.first())
+
+    def test_pdf_do_orcamento_continua_disponivel_depois_de_virar_op(self):
+        self._login_op2()
+        detalhe_url = reverse('moda:op2-detail', args=[self.pedido.pk])
+        orcamento_url = reverse('moda:pedido-orcamento-pdf', args=[self.pedido.pk])
+        op_url = reverse('moda:pedido-pdf', args=[self.pedido.pk])
+
+        detalhe = self.client.get(detalhe_url)
+        self.assertContains(detalhe, f'href="{orcamento_url}"')
+        self.assertContains(detalhe, 'Abrir PDF do orçamento')
+        self.assertNotContains(detalhe, f'href="{op_url}"')
+
+        self.pedido.status = PedidoProducao.Status.AGUARDANDO_APROVACAO
+        self.pedido.save(update_fields=['status'])
+        detalhe = self.client.get(detalhe_url)
+        self.assertContains(detalhe, f'href="{orcamento_url}"')
+        self.assertContains(detalhe, 'Abrir PDF do orçamento')
+        self.assertContains(detalhe, f'href="{op_url}"')
+        self.assertContains(detalhe, 'Abrir PDF da OP')
 
     def test_criacao_permite_editar_apagar_e_isola_outro_pedido(self):
         self._login_op2()

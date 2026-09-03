@@ -1,6 +1,6 @@
 <section class="card p-3 op2-art-card" x-data="{aberto:false,editando:null}">
   <div class="flex items-start justify-between gap-2">
-    <div><h2 class="font-bold text-sm">Criação de artes</h2><p class="text-xs opacity-60">Informações combinadas com o cliente.</p></div>
+    <div><h2 class="font-bold text-sm">Informações importantes da OP e Artes</h2><p class="text-xs opacity-60">Informações combinadas com o cliente.</p></div>
     {% if historico_criacao|length %}<span class="op2-chip">{{ historico_criacao|length }}</span>{% endif %}
   </div>
   <form method="post" action="{% url 'moda:op2-action' pedido.pk %}" class="mt-2">{% csrf_token %}<input type="hidden" name="acao" value="criacao"><textarea name="informacoes_criacao" rows="2" class="form-input w-full text-xs" required placeholder="Escreva uma nova informação..."></textarea><div class="text-right mt-1"><button class="btn-primary text-xs">Registrar</button></div></form>
