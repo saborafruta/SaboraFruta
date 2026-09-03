@@ -2,32 +2,104 @@
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="max-w-3xl mx-auto space-y-5">
+{% comment %}
+  A TELA ERA UMA COLUNA SÓ, com 14 campos empilhados em largura estreita —
+  "Ordem" e "Observação" pesavam visualmente o mesmo, e campos que andam
+  juntos no enfesto real (largura × comprimento do risco, planejado ×
+  real) ficavam longe um do outro na rolagem. Agora os campos se agrupam
+  como quem preenche pensa: de onde vem o corte, quando e quem fez, o
+  risco em si, e o consumo de tecido — cada grupo com os números que se
+  comparam lado a lado.
+{% endcomment %}
+<div class="w-full space-y-4">
   <div>
     <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       <a href="{% url 'moda:corte-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Corte</a>
       <span class="mx-1">›</span> {{ title }}
     </p>
     <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
-    {% comment %}
-      Produto e modelo não estão no formulário: vêm da ordem escolhida. Tecido
-      e cor estão, porque o corte é feito com um rolo específico — a mesma OP
-      em três cores rende três cortes, cada um com o seu.
-    {% endcomment %}
-    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+    <p class="text-sm mt-1 max-w-3xl" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       Produto e modelo vêm da ordem. Tecido e cor, em branco, herdam do item —
       preencha só quando este enfesto usar outro rolo. A grade por tamanho é
       lançada na tela seguinte.
     </p>
   </div>
 
-  <form method="post" novalidate class="space-y-5">
+  <form method="post" novalidate class="grid gap-4 xl:grid-cols-2 xl:items-start">
     {% csrf_token %}
-    <div class="card p-6 space-y-4">
-      {% include "moda/_form_campos.html" %}
+
+    {# ── 1. Ordem e material ─────────────────────────────────────────── #}
+    <div class="card p-5 space-y-4">
+      <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        1. Ordem e material
+      </h3>
+      <div>
+        {% with campo=form.ordem %}{% include "moda/_campo.html" %}{% endwith %}
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {% with campo=form.tecido %}{% include "moda/_campo.html" %}{% endwith %}
+        {% with campo=form.cor %}{% include "moda/_campo.html" %}{% endwith %}
+      </div>
+      <div>
+        {% with campo=form.lote %}{% include "moda/_campo.html" %}{% endwith %}
+      </div>
     </div>
 
-    <div class="flex justify-end gap-2">
+    {# ── 2. Quando e quem ────────────────────────────────────────────── #}
+    <div class="card p-5 space-y-4">
+      <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        2. Quando e quem
+      </h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {% with campo=form.data %}{% include "moda/_campo.html" %}{% endwith %}
+        {% with campo=form.status %}{% include "moda/_campo.html" %}{% endwith %}
+      </div>
+      <div>
+        {% with campo=form.responsavel %}{% include "moda/_campo.html" %}{% endwith %}
+      </div>
+    </div>
+
+    {# ── 3. O risco ───────────────────────────────────────────────────── #}
+    <div class="card p-5 space-y-4">
+      <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        3. O risco
+      </h3>
+      <div>
+        {% with campo=form.encaixe %}{% include "moda/_campo.html" %}{% endwith %}
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {% with campo=form.largura_tecido %}{% include "moda/_campo.html" %}{% endwith %}
+        {% with campo=form.comprimento_encaixe %}{% include "moda/_campo.html" %}{% endwith %}
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {% with campo=form.folhas %}{% include "moda/_campo.html" %}{% endwith %}
+        {% with campo=form.aproveitamento %}{% include "moda/_campo.html" %}{% endwith %}
+      </div>
+    </div>
+
+    {# ── 4. Consumo de tecido ────────────────────────────────────────── #}
+    <div class="card p-5 space-y-4">
+      <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        4. Consumo de tecido
+      </h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {% with campo=form.consumo_planejado %}{% include "moda/_campo.html" %}{% endwith %}
+        {% with campo=form.consumo_real %}{% include "moda/_campo.html" %}{% endwith %}
+      </div>
+    </div>
+
+    {# ── 5. Observação — largura total, sem competir com os números ──── #}
+    <div class="card p-5 space-y-4 xl:col-span-2">
+      <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+        5. Observação
+      </h3>
+      <div>
+        {% with campo=form.observacao %}{% include "moda/_campo.html" %}{% endwith %}
+      </div>
+    </div>
+
+    {# ── Ações ────────────────────────────────────────────────────────── #}
+    <div class="flex justify-end gap-2 xl:col-span-2">
       <a href="{% if corte %}{% url 'moda:corte-detail' corte.pk %}{% else %}{% url 'moda:corte-list' %}{% endif %}"
          class="btn-secondary">Cancelar</a>
       <button type="submit" class="btn-primary">Salvar corte</button>
