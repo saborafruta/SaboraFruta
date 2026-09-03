@@ -49,6 +49,20 @@ function op2CampoMultisselecao(campo) {
   return campo === 'tipo_impressao' || String(campo || '').startsWith('acabamento');
 }
 
+function op2NormalizarUidsItens(itens, gerarUid) {
+  const usados = new Set();
+  return (Array.isArray(itens) ? itens : []).map((item, indice) => {
+    let uid = item?.uid;
+    let chave = String(uid ?? '').trim();
+    while (!chave || usados.has(chave)) {
+      uid = gerarUid ? gerarUid() : `op2-${Date.now()}-${indice}-${Math.random()}`;
+      chave = String(uid ?? '').trim();
+    }
+    usados.add(chave);
+    return { ...item, uid };
+  });
+}
+
 function op2EstruturaPadraoNaoMultipla(grupos, tipo, estrutura) {
   const resultado = { ...(estrutura || {}) };
   const campos = grupos?.[tipo]?.campos || {};
@@ -158,7 +172,8 @@ function validarConjuntoOp2(configuracao, grupos) {
 if (typeof module !== 'undefined') module.exports = {
   validarModeloOp2, op2AlternarMultisselecao, op2ListaMultisselecao,
   op2MultisselecaoContem, op2ResumoMultisselecao,
-  op2CampoMultisselecao, op2EstruturaPadraoNaoMultipla,
+  op2CampoMultisselecao, op2NormalizarUidsItens,
+  op2EstruturaPadraoNaoMultipla,
   op2NovoComponenteConjunto, op2NovaConfiguracaoConjunto,
   op2PrepararConfiguracaoConjunto,
   op2CopiarCamisaParaCalcao, op2TotalComponenteConjunto, validarConjuntoOp2,

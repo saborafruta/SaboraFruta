@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   validarModeloOp2, op2AlternarMultisselecao, op2ResumoMultisselecao,
-  op2EstruturaPadraoNaoMultipla,
+  op2EstruturaPadraoNaoMultipla, op2NormalizarUidsItens,
   op2NovaConfiguracaoConjunto, op2CopiarCamisaParaCalcao,
   op2TotalComponenteConjunto, validarConjuntoOp2,
 } = require('../../../../static/js/op2_modelo_validacao.js');
@@ -146,4 +146,17 @@ test('estrutura mantém escolhas existentes ao preencher os padrões', () => {
     camisa: { campos: { cor: ['PRETO', 'N/A'], manga: ['CURTA', 'N/A'] } },
   }, 'camisa', { cor: 'PRETO' });
   assert.deepEqual(estrutura, { cor: 'PRETO', manga: 'N/A' });
+});
+
+test('rascunho recuperado troca somente identificadores de itens duplicados', () => {
+  const gerados = ['novo-2', 'novo-3'];
+  const itens = op2NormalizarUidsItens([
+    { uid: 'mesmo', nome: 'Primeiro', quantidade: 13 },
+    { uid: 'mesmo', nome: 'Segundo', quantidade: 13 },
+    { nome: 'Terceiro', quantidade: 2 },
+  ], () => gerados.shift());
+
+  assert.deepEqual(itens.map(item => item.uid), ['mesmo', 'novo-2', 'novo-3']);
+  assert.deepEqual(itens.map(item => item.nome), ['Primeiro', 'Segundo', 'Terceiro']);
+  assert.deepEqual(itens.map(item => item.quantidade), [13, 13, 2]);
 });

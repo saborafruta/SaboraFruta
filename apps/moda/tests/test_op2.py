@@ -1302,13 +1302,24 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, "origemEditor==='duplicar'?'Duplicar modelo da OP'")
         self.assertContains(resposta, "origemEditor==='duplicar'?'Adicionar cópia'")
         self.assertContains(resposta, 'this.draft=JSON.parse(JSON.stringify(item))')
-        self.assertContains(resposta, 'this.draft.uid=Date.now()+Math.random()')
+        self.assertContains(resposta, 'this.draft.uid=this.gerarUidItem()')
         self.assertContains(resposta, 'this.draft.imagensNomes=[]')
         self.assertContains(resposta, 'this.draft.imagensObservacoes=\'\'')
         self.assertContains(resposta, 'produtoAnterior!==String(id)')
         self.assertContains(resposta, 'gradeAtualCompativel')
         self.assertContains(resposta, 'gradeCamisaCompativel')
         self.assertContains(resposta, 'this.draft.gradePorGrade={}')
+
+    def test_nova_op_repara_identificadores_duplicados_do_rascunho(self):
+        self._login_op2()
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+
+        self.assertContains(resposta, 'op2NormalizarUidsItens(itensOriginais')
+        self.assertContains(resposta, 'this.rascunhoNormalizado=true')
+        self.assertContains(resposta, 'if(this.rascunhoNormalizado)this.agendarAutosave()')
+        self.assertContains(resposta, "globalThis.crypto?.randomUUID?.()")
+        self.assertContains(resposta, "!this.itens.some(")
 
     def test_nova_op_salva_anexo_e_mockup_e_exibe_na_op(self):
         self.client.force_login(self._usuario())
