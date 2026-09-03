@@ -459,7 +459,7 @@ function op2NovaMelhorada(){
       item.grade_nome='Conjunto · Camisa + Calção';
       item.grades=item.grade_id?[item.grade_id]:[];
       item.gradeQuantidades=Object.entries(agregado).filter(([,q])=>q>0).map(([tamanho_id,quantidade])=>({tamanho_id,quantidade}));
-      item.quantidade=op2TotalComponenteConjunto(item.configuracao_conjunto,'camisa');
+      if(camisa.grades?.length)item.quantidade=op2TotalComponenteConjunto(item.configuracao_conjunto,'camisa');
       item.estruturaCampos=[];
       item.estruturaExtras=[];
     }
@@ -509,7 +509,7 @@ function op2NovaMelhorada(){
     if(this.draft.estrutura_tipo==='conjunto'){
       const erroConjunto=validarConjuntoOp2(this.draft.configuracao_conjunto,this.estruturaOpcoes);
       if(erroConjunto){alert(erroConjunto);return}
-      this.draft.quantidade=this.totalComponenteConjunto('camisa');
+      if(this.draft.configuracao_conjunto.camisa.grades?.length)this.draft.quantidade=this.totalComponenteConjunto('camisa');
       const novo=this.montarItemParaGrade('');
       if(uidRascunho)novo.uid=uidRascunho;
       if(this.editandoIdx===null)this.itens.push(novo);else{novo.uid=this.itens[this.editandoIdx].uid;this.itens.splice(this.editandoIdx,1,novo)}

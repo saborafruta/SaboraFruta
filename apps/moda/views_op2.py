@@ -1527,7 +1527,7 @@ class Op2ActionView(ModaBaseView):
         total_geral = sum(
             sum(quantidades.values()) for quantidades in quantidades_por_grade.values()
         )
-        if configuracao_conjunto:
+        if configuracao_conjunto and grades:
             request.POST._mutable = True
             request.POST['quantidade'] = str(total_geral)
             request.POST._mutable = False

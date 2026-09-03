@@ -96,8 +96,6 @@ def validar_configuracao_conjunto(valor, grupos, filial=None):
                 ids_tamanhos.add(int(tamanho_id))
             grade_por_grade[grade_id] = quantidades
         total = sum(sum(mapa.values()) for mapa in grade_por_grade.values())
-        if not grades or total < 1:
-            raise ValueError(f'{label}: selecione uma grade e informe as quantidades.')
         totais[componente] = total
         resultado[componente] = {
             'estrutura': estrutura,
@@ -109,6 +107,18 @@ def validar_configuracao_conjunto(valor, grupos, filial=None):
             'observacoes': str(origem.get('observacoes') or '').strip()[:2000],
         }
 
+    possui_alguma_grade = any(
+        resultado[componente]['grades'] for componente, _ in COMPONENTES_CONJUNTO
+    )
+    if possui_alguma_grade and (
+        not resultado['camisa']['grades']
+        or not resultado['calcao']['grades']
+        or totais['camisa'] < 1
+        or totais['calcao'] < 1
+    ):
+        raise ValueError(
+            'Conjunto: selecione uma grade e informe as quantidades para camisa e calção.'
+        )
     if totais['camisa'] != totais['calcao']:
         raise ValueError(
             'Conjunto: camisa e calção precisam ter a mesma quantidade total '

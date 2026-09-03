@@ -159,12 +159,18 @@ function validarConjuntoOp2(configuracao, grupos) {
     if (dados.estrutura?.cor === 'COR PERSONALIZADA' && !String(dados.cor_personalizada || '').trim()) {
       return `${label}: informe a cor personalizada.`;
     }
-    if (!(dados.grades || []).length || op2TotalComponenteConjunto(configuracao, componente) < 1) {
-      return `${label}: selecione uma grade e informe as quantidades.`;
-    }
   }
   const camisas = op2TotalComponenteConjunto(configuracao, 'camisa');
   const calcoes = op2TotalComponenteConjunto(configuracao, 'calcao');
+  const possuiAlgumaGrade = ['camisa', 'calcao'].some(
+    componente => (configuracao?.[componente]?.grades || []).length,
+  );
+  if (possuiAlgumaGrade && (
+    !(configuracao?.camisa?.grades || []).length
+    || !(configuracao?.calcao?.grades || []).length
+    || camisas < 1
+    || calcoes < 1
+  )) return 'Selecione uma grade e informe as quantidades para camisa e calção.';
   if (camisas !== calcoes) return `Camisa e calção precisam ter o mesmo total (${camisas} e ${calcoes}).`;
   return '';
 }

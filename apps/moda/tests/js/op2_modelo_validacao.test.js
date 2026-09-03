@@ -66,6 +66,15 @@ test('conjunto exige duas fichas completas com totais iguais', () => {
   configuracao.calcao.gradePorGrade[1][9] = 1;
   assert.match(validarConjuntoOp2(configuracao, opcoes), /mesmo total/);
 });
+
+test('conjunto pode ser incluído antes de definir a grade', () => {
+  const opcoes = {
+    camisa: { campos: { cor: ['AZUL', 'N/A'] } },
+    calcao: { campos: { cor: ['AZUL', 'N/A'] } },
+  };
+  const configuracao = op2NovaConfiguracaoConjunto(opcoes);
+  assert.equal(validarConjuntoOp2(configuracao, opcoes), '');
+});
 test('valor vazio, negativo e inválido são recusados', () => {
   for (const valor of ['', null, '-1', 'NaN', 'Infinity', 'abc', '1.001', '10000000000']) {
     assert.match(validarModeloOp2({ ...completo(), valor_unitario: valor }, grupos), /Valor unitário/);

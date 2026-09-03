@@ -480,6 +480,27 @@ class Op2Tests(TestCase):
                 configuracao, opcoes_estrutura_filial(self.filial), self.filial,
             )
 
+    def test_conjunto_pode_ser_salvo_sem_grade_ate_definir_quantidades(self):
+        grupos = opcoes_estrutura_filial(self.filial)
+
+        def componente(slug):
+            return {
+                'estrutura': {
+                    campo: (['N/A'] if campo in {'tipo_impressao', 'acabamentos'} else 'N/A')
+                    for campo in grupos[slug]['campos']
+                },
+                'grades': [],
+                'gradePorGrade': {},
+            }
+
+        configuracao = validar_configuracao_conjunto({
+            'camisa': componente('camisa'),
+            'calcao': componente('calcao'),
+        }, grupos, self.filial)
+
+        self.assertEqual(configuracao['camisa']['grades'], [])
+        self.assertEqual(configuracao['calcao']['grades'], [])
+
     def test_entrega_parcial_mantem_op_na_etapa_do_item_pendente(self):
         self._item(status=ItemPedidoProducao.StatusFluxo.ENTREGUE, entregue=10)
         pendente = self._item(status=ItemPedidoProducao.StatusFluxo.PRODUCAO)
