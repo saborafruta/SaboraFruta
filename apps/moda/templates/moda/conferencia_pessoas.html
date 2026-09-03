@@ -2,7 +2,7 @@
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}Conferência de Produtos para Entrega{% endblock %}
 {% block content %}
-<style>@media (min-width:1000px){.conferencia-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(290px,1fr);gap:16px}.conferencia-trabalho{grid-column:1}.conferencia-consulta{grid-column:2;grid-row:1;position:sticky;top:16px;align-self:start}}</style>
+<style>@media (min-width:1000px){.conferencia-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(290px,1fr);gap:16px}.conferencia-trabalho{grid-column:1 / span 1!important}.conferencia-consulta{grid-column:2 / span 1!important;grid-row:1;position:sticky;top:16px;align-self:start}}</style>
 
 {% comment %}
   A TELA É PARA O CELULAR, e ocupa a página toda no computador. Quem confere
