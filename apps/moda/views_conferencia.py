@@ -67,6 +67,8 @@ def _linhas_de_quantidade(expedicao) -> list[dict]:
     conferido = {i.tamanho_id: i.quantidade for i in expedicao.conferencia.all()}
     linhas = []
     for celula in expedicao.grade_esperada:
+        if not celula.quantidade:
+            continue
         linhas.append({
             'tamanho': celula.tamanho,
             'esperado': celula.quantidade,
@@ -160,13 +162,17 @@ class ConferenciaPessoasView(ModaBaseView):
         pessoas = list(_pessoas(expedicao))
 
         quantidades = _linhas_de_quantidade(expedicao)
+        linhas = [{'pessoa': p, 'conferido': p.pk in conferidas} for p in pessoas]
+        pessoas_por_tamanho = {}
+        for linha in linhas:
+            pessoas_por_tamanho.setdefault(linha['pessoa'].tamanho_id, []).append(linha)
+        for quantidade in quantidades:
+            quantidade['pessoas'] = pessoas_por_tamanho.get(quantidade['tamanho'].pk, [])
 
         return render(request, 'moda/conferencia_pessoas.html', {
             'title': f'Conferência — Expedição #{expedicao.numero:04d}',
             'expedicao': expedicao,
-            'linhas': [
-                {'pessoa': p, 'conferido': p.pk in conferidas} for p in pessoas
-            ],
+            'linhas': linhas,
             'total': len(pessoas),
             'conferidas': sum(1 for p in pessoas if p.pk in conferidas),
             'quantidades': quantidades,

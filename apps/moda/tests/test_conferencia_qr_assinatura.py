@@ -233,6 +233,16 @@ class ConferirPorQuantidadeTests(ConferenciaBase):
             self.assertContains(resposta, f'qtd_{tamanho.pk}')
         self.assertContains(resposta, 'Quantidade por tamanho')
 
+    def test_nao_lista_tamanho_sem_peca_pedida(self):
+        pedido = self._pedido_com_grade()
+        sem_peca = Tamanho.objects.create(filial=self.filial, sigla='XG', ordem=9)
+        ItemGradePedido.objects.create(item=self.item, tamanho=sem_peca, quantidade=0)
+        expedicao = self._expedicao(pedido)
+
+        resposta = self.client.get(reverse('moda:conferencia-pessoas', args=[expedicao.pk]))
+
+        self.assertNotContains(resposta, f'qtd_{sem_peca.pk}')
+
     def test_pedido_sem_pessoas_nao_cai_mais_em_tela_vazia(self):
         pedido = self._pedido_com_grade()
         expedicao = self._expedicao(pedido)
@@ -358,7 +368,7 @@ class PersonalizacaoDaCaixaTests(ConferenciaBase):
         tamanhos = [linha['pessoa'].tamanho.sigla for linha in resposta.context['linhas']]
         self.assertEqual(tamanhos, ['PP', 'P', 'G', 'XGG'])
 
-    def test_tabela_usa_as_mesmas_colunas_no_cabecalho_e_no_corpo(self):
+    def test_personalizacao_fica_na_mesma_linha_do_tamanho(self):
         pedido = self._pedido_com_grade()
         PersonalizacaoIndividual.objects.create(
             pedido=pedido, item=self.item, tamanho=self.tamanhos['M'], nome='ALINHADA',
@@ -369,8 +379,8 @@ class PersonalizacaoDaCaixaTests(ConferenciaBase):
             reverse('moda:conferencia-pessoas', args=[expedicao.pk])
         )
 
-        self.assertContains(resposta, '<colgroup>')
-        self.assertNotContains(resposta, '<td colspan="5" class="p-0">')
+        self.assertContains(resposta, 'Nome, número e peça')
+        self.assertContains(resposta, 'ALINHADA')
         self.assertContains(resposta, f'id="pessoa-{pedido.individuais.get().pk}"')
 
 

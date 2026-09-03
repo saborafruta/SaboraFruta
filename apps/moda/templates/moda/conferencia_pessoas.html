@@ -133,6 +133,8 @@
                         :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Conferido</th>
                     <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
                         :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
+                    {% if linhas %}<th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nome, número e peça</th>{% endif %}
                   </tr>
                 </thead>
                 <tbody>
@@ -177,6 +179,18 @@
                       {% endcomment %}
                       <td class="px-4 py-2.5 text-right text-xs font-semibold"
                           x-html="rotulo('{{ l.tamanho.pk }}')"></td>
+                      {% if linhas %}<td class="px-4 py-2.5">
+                        {% for pessoa in l.pessoas %}
+                          <label for="pessoa-{{ pessoa.pessoa.pk }}" class="flex items-center justify-between gap-3 py-1 cursor-pointer">
+                            <span class="min-w-0"><strong>{{ pessoa.pessoa.nome|default:"—" }}</strong>
+                              <span class="ml-2 font-mono">#{{ pessoa.pessoa.numero|default:"—" }}</span></span>
+                            <input id="pessoa-{{ pessoa.pessoa.pk }}" type="checkbox" name="pessoa" value="{{ pessoa.pessoa.pk }}"
+                                   class="w-6 h-6 pessoa-check shrink-0" {% if pessoa.conferido %}checked{% endif %}
+                                   {% if travada or not pode_agir %}disabled{% endif %}
+                                   @change="pessoas += $event.target.checked ? 1 : -1">
+                          </label>
+                        {% empty %}<span class="text-xs opacity-60">Sem personalização neste tamanho</span>{% endfor %}
+                      </td>{% endif %}
                     </tr>
                   {% endfor %}
                 </tbody>
@@ -189,18 +203,18 @@
                     <td class="px-4 py-3 text-center font-bold"
                         :style="contadas == {{ esperado_total }} ? 'color:#059669;' : 'color:#d97706;'"
                         x-text="contadas"></td>
-                    <td></td>
+                    <td></td>{% if linhas %}<td></td>{% endif %}
                   </tr>
                 </tfoot>
               </table>
             </div>
 
-            {% comment %}
+            <!--
               A divergência aparece na hora, e não depois de salvar: quem
               está com a caixa aberta ainda pode recontar. Depois de
               fechada, a mesma informação vira ocorrência para alguém
               resolver por e-mail.
-            {% endcomment %}
+            -->
             <div class="px-4 py-3" x-show="contadas != {{ esperado_total }}" x-cloak
                  style="background:rgba(217,119,6,.12);">
               <p class="text-xs font-semibold" style="color:#d97706;"
@@ -218,7 +232,8 @@
           {% endif %}
         {% if not linhas %}</div>{% endif %}
 
-        {# ── 2. Por pessoa ───────────────────────────────────────── #}
+        {% comment %}A personalização já é marcada na linha do respectivo tamanho acima.{% endcomment %}
+        {% comment %}
         {% if linhas %}
           <div class="border-t" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
             <div class="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2"
@@ -236,11 +251,10 @@
               {% endif %}
             </div>
 
-            {% comment %}
-              A BUSCA aparece porque time de 60 pessoas não se acha rolando:
+            <!-- A BUSCA aparece porque time de 60 pessoas não se acha rolando:
               quem confere pega a peça, lê o nome bordado e precisa achar
               aquela linha -- e é aí que se marca a linha errada.
-            {% endcomment %}
+            -->
             {% if linhas|length > 8 %}
               <div class="px-4 py-3 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
                 <input type="text" class="form-input w-full" x-model="filtro"
@@ -274,11 +288,11 @@
                 </thead>
                 <tbody>
                   {% for l in linhas %}
-                    {% comment %}
+                    <!--
                       A LINHA INTEIRA é o alvo do toque, não a caixinha de
                       16px: quem confere está de pé, com o telefone numa mão
                       e a peça na outra, e errar o alvo remarca item errado.
-                    {% endcomment %}
+                    -->
                     <tr class="border-b"
                         x-show="mostra('{{ l.pessoa.nome|escapejs }} {{ l.pessoa.numero|escapejs }}')"
                         :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
@@ -320,6 +334,7 @@
             </div>
           </div></div>
         {% endif %}
+        {% endcomment %}
 
         {# ── 3. A assinatura do cliente ──────────────────────────── #}
         {% if not travada and pode_agir %}
