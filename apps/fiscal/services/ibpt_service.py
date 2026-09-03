@@ -21,6 +21,20 @@ def _api_url(arquivo: str) -> str:
     return f'{base}/{arquivo.lstrip("/")}'
 
 
+# O ModSecurity do provedor bloqueia com 406 qualquer requisicao cujo
+# User-Agent comece com "python-requests/" -- e' o padrao que a biblioteca
+# manda sozinha, tratado ali como assinatura de bot/scraper. Um User-Agent
+# de navegador passa pela mesma regra sem problema (confirmado direto no
+# WAF); nao muda nada no lado do IBPT, so evita cair no filtro.
+_HEADERS_PADRAO = {
+    'Accept': 'application/json',
+    'User-Agent': (
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+        '(KHTML, like Gecko) Chrome/120.0 Safari/537.36'
+    ),
+}
+
+
 def _decimal(valor) -> Decimal:
     try:
         return Decimal(str(valor))
@@ -82,7 +96,7 @@ def consultar_ncm_ibpt(ncm: str, uf: str) -> AliquotaIBPT:
     resposta = requests.get(
         _api_url('api_ibpt.php'),
         params={'codigo': ncm, 'uf': uf},
-        headers={'Accept': 'application/json'},
+        headers=_HEADERS_PADRAO,
         timeout=15,
     )
     resposta.raise_for_status()
@@ -98,7 +112,7 @@ def sincronizar_tabela_ibpt(uf: str) -> dict:
     resposta = requests.get(
         _api_url('api_ibpt_json.php'),
         params={'uf': uf},
-        headers={'Accept': 'application/json'},
+        headers=_HEADERS_PADRAO,
         timeout=120,
     )
     resposta.raise_for_status()

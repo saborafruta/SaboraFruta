@@ -5,7 +5,9 @@ from unittest.mock import Mock, patch
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from apps.fiscal.services.ibpt_service import obter_aliquota_ibpt
+from apps.fiscal.services.ibpt_service import (
+    consultar_ncm_ibpt, obter_aliquota_ibpt, sincronizar_tabela_ibpt,
+)
 from apps.fiscal.services.ibpt_scheduler import proxima_execucao
 
 
@@ -43,3 +45,43 @@ class IBPTServiceTests(TestCase):
         self.assertEqual(aliquota.federal_nacional, Decimal('13.45'))
         self.assertEqual(aliquota.estadual, Decimal('20'))
         resposta.raise_for_status.assert_called_once()
+
+    @patch('apps.fiscal.services.ibpt_service.requests.get')
+    def test_a_consulta_por_ncm_nao_usa_o_user_agent_padrao_do_requests(self, get):
+        """
+        O WAF do provedor (ModSecurity) bloqueia com 406 qualquer requisicao
+        cujo User-Agent comece com "python-requests/" -- o padrao que a
+        biblioteca manda sozinha, tratado la como assinatura de bot.
+        """
+        resposta = Mock()
+        resposta.json.return_value = {
+            'codigo': '20089900', 'descricao': 'x', 'nacionalfederal': '1',
+            'importadosfederal': '1', 'estadual': '1', 'municipal': '0',
+            'vigenciainicio': '2026-01-01', 'vigenciafim': '2026-12-31',
+            'versao': '26.1.L', 'fonte': 'IBPT', 'uf': 'RN',
+        }
+        get.return_value = resposta
+
+        consultar_ncm_ibpt('20089900', 'RN')
+
+        headers = get.call_args.kwargs['headers']
+        self.assertNotIn('python-requests', headers.get('User-Agent', ''))
+
+    @patch('apps.fiscal.services.ibpt_service.requests.get')
+    def test_a_sincronizacao_da_tabela_tambem_nao_usa_o_user_agent_padrao(self, get):
+        resposta = Mock()
+        resposta.json.return_value = {
+            'uf': 'RN', 'versao': '26.1.L',
+            'ncm': [{
+                'codigo': '20089900', 'descricao': 'x', 'nacionalfederal': '1',
+                'importadosfederal': '1', 'estadual': '1', 'municipal': '0',
+                'vigenciainicio': '2026-01-01', 'vigenciafim': '2026-12-31',
+                'versao': '26.1.L', 'fonte': 'IBPT',
+            }] * 10000,
+        }
+        get.return_value = resposta
+
+        sincronizar_tabela_ibpt('RN')
+
+        headers = get.call_args.kwargs['headers']
+        self.assertNotIn('python-requests', headers.get('User-Agent', ''))
