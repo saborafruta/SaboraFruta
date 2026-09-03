@@ -1313,16 +1313,20 @@ class Op2ActionView(ModaBaseView):
         acao = request.POST.get('acao') or ''
         handler = getattr(self, f'_acao_{acao}', None)
         if handler is None:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'ok': False, 'erro': 'Ação inválida.'}, status=400)
             messages.error(request, 'Ação inválida.')
             return _voltar(pedido)
         try:
             with transaction.atomic():
                 resposta = handler(request, pedido)
         except (TypeError, ValueError, DomainError) as erro:
-            if acao in {'descricao_visual', 'salvar_rascunho_item'} and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({'ok': False, 'erro': str(erro)}, status=400)
             messages.error(request, str(erro) or 'Confira os valores informados.')
             return _voltar(pedido)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return resposta or JsonResponse({'ok': True, 'acao': acao})
         return resposta or _voltar(pedido)
 
     def _acao_criacao(self, request, pedido):

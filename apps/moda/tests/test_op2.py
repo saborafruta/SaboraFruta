@@ -1857,6 +1857,34 @@ class Op2Tests(TestCase):
         self.assertEqual(len(self.pedido.previsao_pagamento), 2)
         self.assertIsNone(self.pedido.financeiro_gerado_em)
 
+    def test_autosave_da_op_grava_campos_em_json_sem_redirecionar(self):
+        self._login_op2()
+        resposta = self.client.post(
+            reverse('moda:op2-action', args=[self.pedido.pk]),
+            {
+                'acao': 'cabecalho',
+                'cliente': str(self.cliente.pk),
+                'data_pedido': self.pedido.data_pedido.isoformat(),
+                'data_prevista_entrega': '',
+                'prioridade': PedidoProducao.Prioridade.NORMAL,
+                'observacoes': 'Salvo automaticamente.',
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.json(), {'ok': True, 'acao': 'cabecalho'})
+        self.pedido.refresh_from_db()
+        self.assertIn('Salvo automaticamente.', self.pedido.observacoes)
+
+    def test_tela_da_op_configura_autosave_para_campos_editaveis(self):
+        self._login_op2()
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+
+        self.assertContains(resposta, 'Salvamento automático ativo')
+        self.assertContains(resposta, "['cabecalho','grade_item','editar_individual','previsao_pagamento','criacao','editar_criacao','editar_anexo','descricao_visual']")
+        self.assertContains(resposta, "'X-Requested-With':'XMLHttpRequest'")
+
     def test_editor_completo_atualiza_estrutura_impressao_e_grade(self):
         tamanho_p = Tamanho.objects.create(filial=self.filial, sigla='P', ordem=10)
         tamanho_m = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=20)

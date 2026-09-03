@@ -91,7 +91,7 @@
     <main class="card p-3 op2-desktop-all">
       <section class="op2-section mb-3" data-pane="dados" :class="pane==='dados'?'is-active':''">
         <h2 class="font-bold mb-3">1. Clientes e informações</h2>
-        <form method="post" action="{% url 'moda:op2-action' pedido.pk %}" class="grid md:grid-cols-4 gap-3">{% csrf_token %}<input type="hidden" name="acao" value="cabecalho">
+        <form method="post" action="{% url 'moda:op2-action' pedido.pk %}" class="grid md:grid-cols-4 gap-3" data-op2-autosave>{% csrf_token %}<input type="hidden" name="acao" value="cabecalho">
           <div class="md:col-span-2">{% include "moda/_op2_cliente_campo.html" %}</div>
             {% include "moda/_op2_contatos.html" %}
           <label><span class="op2-label">Data do pedido</span><input type="date" name="data_pedido" class="form-input w-full" value="{{ pedido.data_pedido|date:'Y-m-d' }}" required></label>
@@ -392,6 +392,35 @@ function op2WorkspaceCompleto(){
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
+  const formulariosAutosave=Array.from(document.querySelectorAll('form')).filter(formulario=>{
+    const acao=formulario.querySelector('input[name="acao"]')?.value;
+    return ['cabecalho','grade_item','editar_individual','previsao_pagamento','criacao','editar_criacao','editar_anexo','descricao_visual'].includes(acao);
+  });
+  const statusAutosave=document.createElement('span');
+  statusAutosave.className='text-xs opacity-60 ml-2';
+  statusAutosave.textContent='Salvamento automático ativo';
+  document.querySelector('.op2-order-header .op2-header-main')?.append(statusAutosave);
+  const csrf=()=>((document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)||[])[1]||'');
+  const salvarAutomaticamente=async formulario=>{
+    if(!formulario.checkValidity())return;
+    const acao=formulario.querySelector('input[name="acao"]')?.value;
+    if(acao==='criacao'&&!String(formulario.querySelector('[name="informacoes_criacao"]')?.value||'').trim())return;
+    clearTimeout(formulario._op2AutosaveTimer);
+    statusAutosave.textContent='Salvando automaticamente…';
+    try{
+      const resposta=await fetch(formulario.action,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest','X-CSRFToken':decodeURIComponent(csrf())},body:new FormData(formulario)});
+      const dados=await resposta.json();
+      if(!resposta.ok||!dados.ok)throw new Error(dados.erro||'Não foi possível salvar agora.');
+      if(acao==='criacao')formulario.reset();
+      statusAutosave.textContent='Salvo automaticamente';
+    }catch(erro){statusAutosave.textContent=erro.message||'Não foi possível salvar automaticamente';}
+  };
+  formulariosAutosave.forEach(formulario=>{
+    const agendar=()=>{clearTimeout(formulario._op2AutosaveTimer);formulario._op2AutosaveTimer=setTimeout(()=>salvarAutomaticamente(formulario),800)};
+    formulario.addEventListener('input',agendar);
+    formulario.addEventListener('change',agendar);
+    formulario.addEventListener('submit',evento=>{evento.preventDefault();salvarAutomaticamente(formulario)});
+  });
   const acao=document.querySelector('input[name="acao"][value="financeiro"]');
   if(!acao)return;
   const form=acao.closest('form');
