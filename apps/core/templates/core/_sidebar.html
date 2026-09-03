@@ -443,10 +443,10 @@
   >
     <!-- Logo / Toggle -->
     <div class="flex items-center h-14 px-4 flex-shrink-0" :style="temaClaro ? 'border-bottom:1px solid #e5e5e5;' : 'border-bottom:1px solid #2a2a2e;'">
-      <a href="{% url 'core:dashboard' %}" class="flex items-center flex-1 min-w-0" x-show="!collapsed">
+      <a href="{% url 'core:dashboard' %}" class="flex items-center flex-1 min-w-0" x-show="!collapsed" x-cloak>
         <span class="font-bold truncate" style="font-family:Space Grotesk, sans-serif; letter-spacing:-1px; font-size:20px;"><span :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">iNoova</span><span :style="temaClaro ? 'color:#e8824a;' : 'color:#3b82f6;'">Ted</span></span>
       </a>
-      <a href="{% url 'core:dashboard' %}" x-show="collapsed" class="flex items-center justify-center w-full">
+      <a href="{% url 'core:dashboard' %}" x-show="collapsed" x-cloak class="flex items-center justify-center w-full">
         <span class="font-bold" style="font-family:Space Grotesk, sans-serif; font-size:15px; letter-spacing:-0.5px;"><span :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">i</span><span :style="temaClaro ? 'color:#e8824a;' : 'color:#3b82f6;'">T</span></span>
       </a>
       <button @click="collapsed = !collapsed; localStorage.setItem('sidebar-collapsed', collapsed); document.body.classList.toggle('sidebar-collapsed', collapsed)"
@@ -479,7 +479,7 @@
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
         </svg>
-        <span x-show="!collapsed">Sair</span>
+        <span x-show="!collapsed" x-cloak>Sair</span>
       </a>
     </div>
   </aside>
@@ -1198,11 +1198,11 @@
         apps/moda/menu.py, então acrescentar um grupo é uma linha lá, e não
         mais um bloco de HTML aqui.
       {% endcomment %}
-      <button type="button" @click="!collapsed && toggleSecao('moda')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
+      <button type="button" @click="!collapsed && toggleSecao('moda')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" x-cloak style="background:none;border:none;cursor:pointer;">
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Moda e Confecção</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.moda ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
-      <div class="my-2 mx-3" x-show="collapsed" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
+      <div class="my-2 mx-3" x-show="collapsed" x-cloak :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
       <div x-show="collapsed || secoes.moda">
       {% for grupo in moda_grupos %}
       <a href="{% url 'moda:grupo' grupo.slug %}"
@@ -1223,11 +1223,11 @@
         apps/polpa/menu.py, então acrescentar um grupo é uma linha lá, e não
         mais um bloco de HTML aqui.
       {% endcomment %}
-      <button type="button" @click="!collapsed && toggleSecao('polpa')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
+      <button type="button" @click="!collapsed && toggleSecao('polpa')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" x-cloak style="background:none;border:none;cursor:pointer;">
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Polpa de Frutas</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.polpa ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
-      <div class="my-2 mx-3" x-show="collapsed" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
+      <div class="my-2 mx-3" x-show="collapsed" x-cloak :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
       <div x-show="collapsed || secoes.polpa">
       {% for grupo in polpa_grupos %}
       <a href="{% url 'polpa:grupo' grupo.slug %}"

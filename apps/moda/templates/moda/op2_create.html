@@ -3,6 +3,7 @@
 {% block title %}Nova OP 2.0{% endblock %}
 {% block page_title %}Nova OP 2.0{% endblock %}
 {% block largura_conteudo %}max-w-none{% endblock %}
+{% block extra_head %}<script>localStorage.setItem('sidebar-collapsed','true');</script>{% endblock %}
 {% block content %}
 {{ estrutura_opcoes|json_script:"op2-estrutura-opcoes" }}
 <script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260903-1"></script>
@@ -33,7 +34,8 @@
 @media(max-width:1023px){.op2-work{grid-template-columns:minmax(0,1fr)}.op2-aside{display:grid;grid-template-columns:1fr 1fr;gap:12px}.op2-modal-grid{grid-template-columns:1fr}input,select,textarea{font-size:16px!important}}
 @media(max-width:767px){.op2-aside{display:block}.op2-grid-compact{grid-template-columns:1fr!important}.op2-model-list{max-height:240px}}
 </style>
-<div class="op2-shell" x-data="op2NovaMelhorada()" x-init="recolherSidebar()">
+<div id="op2-loading" class="card p-5 text-sm" role="status">Carregando a OP…</div>
+<div class="op2-shell" x-data="op2NovaMelhorada()" x-init="recolherSidebar(); document.getElementById('op2-loading')?.remove()" x-cloak>
   <form method="post" enctype="multipart/form-data" class="space-y-3" @submit="validarAntesDeSalvar">
     {% csrf_token %}
     <input type="hidden" name="rascunho_chave" value="{{ rascunho_chave }}">

@@ -604,10 +604,14 @@
       image-rendering: auto;
     }
     @media (min-width: 1024px) {
+      .sidebar-desktop { width: 16rem; }
+      html.sidebar-collapsed-initial .sidebar-desktop,
+      body.sidebar-collapsed .sidebar-desktop { width: 4rem !important; }
       .app-shell-content {
         margin-left: 16rem;
         transition: margin-left 0.2s ease;
       }
+      html.sidebar-collapsed-initial .app-shell-content,
       body.sidebar-collapsed .app-shell-content {
         margin-left: 4rem;
       }
@@ -622,7 +626,10 @@
           document.body.classList.add('tema-claro');
         });
       }
-      document.body.classList.toggle('sidebar-collapsed', localStorage.getItem('sidebar-collapsed') === 'true');
+      window.__erpSidebarCollapsedInitial = localStorage.getItem('sidebar-collapsed') === 'true';
+      document.documentElement.classList.toggle(
+        'sidebar-collapsed-initial', window.__erpSidebarCollapsedInitial
+      );
     })();
   </script>
 </head>
@@ -630,6 +637,12 @@
       x-data="temaApp()"
       x-init="initTema()"
       :class="temaClaro ? 'tema-claro' : ''">
+  <script>
+    document.body.classList.toggle(
+      'sidebar-collapsed', Boolean(window.__erpSidebarCollapsedInitial)
+    );
+    document.documentElement.classList.remove('sidebar-collapsed-initial');
+  </script>
 
   {% if user.is_authenticated and request.resolver_match.url_name != 'selecionar-filial' %}
     <div class="flex min-h-screen h-full" style="min-height:100vh;">

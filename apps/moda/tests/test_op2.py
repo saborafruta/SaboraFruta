@@ -606,6 +606,33 @@ class Op2Tests(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertFalse(RascunhoOP.objects.exists())
 
+    def test_nova_op_nasce_com_sidebar_recolhida_sem_exibir_formulario_incompleto(self):
+        self._login_op2()
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+        html = resposta.content.decode()
+
+        self.assertLess(
+            html.index("localStorage.setItem('sidebar-collapsed','true')"),
+            html.index('<body'),
+        )
+        self.assertLess(
+            html.index("document.body.classList.toggle("),
+            html.index('id="sidebar-root"'),
+        )
+        self.assertContains(resposta, 'id="op2-loading"')
+        self.assertContains(resposta, 'Carregando a OP…')
+        self.assertContains(resposta, 'x-init="recolherSidebar(); document.getElementById(\'op2-loading\')?.remove()" x-cloak')
+
+        detalhe = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+        html_detalhe = detalhe.content.decode()
+        self.assertLess(
+            html_detalhe.index("localStorage.setItem('sidebar-collapsed','true')"),
+            html_detalhe.index('<body'),
+        )
+        self.assertContains(detalhe, 'id="op2-detail-loading"')
+        self.assertContains(detalhe, 'x-init="recolherMenu(); document.getElementById(\'op2-detail-loading\')?.remove()" x-cloak')
+
     def test_kanban_exibe_rascunho_e_nova_op_abre_outra_sessao(self):
         self._login_op2()
         rascunho = RascunhoOP.objects.create(

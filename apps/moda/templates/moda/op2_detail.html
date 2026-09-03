@@ -3,6 +3,7 @@
 {% block title %}OP 2.0 #{{ pedido.numero|stringformat:"06d" }}{% endblock %}
 {% block page_title %}OP 2.0 #{{ pedido.numero|stringformat:"06d" }}{% endblock %}
 {% block largura_conteudo %}max-w-none{% endblock %}
+{% block extra_head %}<script>localStorage.setItem('sidebar-collapsed','true');</script>{% endblock %}
 {% block content %}
 <script>const op2RascunhoConcluido=sessionStorage.getItem('op2-rascunho-concluindo');if(op2RascunhoConcluido){localStorage.removeItem(op2RascunhoConcluido);sessionStorage.removeItem('op2-rascunho-concluindo')}</script>
 {{ estrutura_opcoes|json_script:"op2-estrutura-opcoes" }}
@@ -50,7 +51,8 @@
 .op2-draft-card{border:1px dashed rgba(245,158,11,.78);border-left:4px solid #f59e0b;border-radius:12px;padding:12px;background:rgba(245,158,11,.07)}.op2-draft-badge{display:inline-flex;padding:3px 8px;border-radius:999px;background:rgba(245,158,11,.16);color:#d97706;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em}
 @media(max-width:767px){.op2-personalizacao-grid,.op2-personalizacao-conjunto-grid{grid-template-columns:1fr}}
 </style>
-<div class="op2-shell" x-data="op2WorkspaceCompleto()" x-init="recolherMenu()">
+<div id="op2-detail-loading" class="card p-5 text-sm" role="status">Carregando a OP…</div>
+<div class="op2-shell" x-data="op2WorkspaceCompleto()" x-init="recolherMenu(); document.getElementById('op2-detail-loading')?.remove()" x-cloak>
   <header class="card p-3 mb-3 sticky top-0 z-30 op2-order-header">
     <div class="op2-header-main">
       <div class="flex items-center gap-3 min-w-0"><a href="{% url 'moda:comercial' %}" class="btn-secondary">←</a><div class="min-w-0"><h1 class="text-lg md:text-xl font-bold truncate">OP #{{ pedido.numero|stringformat:"06d" }} · {{ pedido.cliente }}</h1><p class="text-xs" :style="temaClaro?'color:#64748b':'color:#94a3b8'">Rascunho automático · {{ grupos_itens|length }} produto{{ grupos_itens|pluralize }} · {{ pedido.quantidade_total }} unidades comerciais</p></div></div>
