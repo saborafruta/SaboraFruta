@@ -6,7 +6,7 @@
 {% block extra_head %}<script>localStorage.setItem('sidebar-collapsed','true');</script>{% endblock %}
 {% block content %}
 {{ estrutura_opcoes|json_script:"op2-estrutura-opcoes" }}
-<script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260903-1"></script>
+<script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260903-2"></script>
 <script src="{% static 'js/op2_clientes.js' %}"></script>
 {{ modelos_grade|json_script:"op2-modelos-grade" }}
 {{ grades_json|json_script:"op2-grades" }}
@@ -227,6 +227,18 @@ function op2NovaMelhorada(){
   estado.salvandoNomeModelo=false;
   estado.gerarUidItem=function(){
     return globalThis.crypto?.randomUUID?.()||`op2-${Date.now()}-${Math.random()}`;
+  };
+  estado.normalizarUidsItens=function(itens){
+    if(typeof op2NormalizarUidsItens==='function'){
+      return op2NormalizarUidsItens(itens,()=>this.gerarUidItem());
+    }
+    const usados=new Set();
+    return(Array.isArray(itens)?itens:[]).map(item=>{
+      let uid=item?.uid;
+      while(!String(uid??'').trim()||usados.has(String(uid)))uid=this.gerarUidItem();
+      usados.add(String(uid));
+      return{...item,uid};
+    });
   };
   estado.adicionarPagamento=function(){this.pagamentos.push({uid:Date.now()+Math.random(),forma:'',valor:'',valorEditado:true})};
   estado.totalPagamentos=function(){return this.pagamentos.reduce((s,p)=>s+Number(p.valor||0),0)};
@@ -675,15 +687,15 @@ function op2NovaMelhorada(){
     this.clienteId=String(dados.clienteId||'');this.contatoNome=dados.contatoNome||'';this.contatoTelefone=dados.contatoTelefone||'';
     this.contatos=Array.isArray(dados.contatos)?dados.contatos:[];this.clientesAdicionais=Array.isArray(dados.clientesAdicionais)?dados.clientesAdicionais:[];
     const itensOriginais=Array.isArray(dados.itens)?dados.itens:[];
-    const itensNormalizados=op2NormalizarUidsItens(itensOriginais,()=>this.gerarUidItem());
+    const itensNormalizados=this.normalizarUidsItens(itensOriginais);
     this.rascunhoNormalizado=itensNormalizados.some(
       (item,indice)=>String(item.uid)!==String(itensOriginais[indice]?.uid),
     );
     this.itens=itensNormalizados.map(item=>({...item,imagensNomes:[],imagensPreview:[]}));this.personalizacoes=Array.isArray(dados.personalizacoes)?dados.personalizacoes:[];this.pagamentos=Array.isArray(dados.pagamentos)&&dados.pagamentos.length?dados.pagamentos:this.pagamentos;
     const rascunhoLegado=!dados.itemRascunho&&dados.draft?.produto_id&&dados.modalProduto===false?dados.draft:null;
     const itemRascunho=dados.itemRascunho||rascunhoLegado||null;
-    const rascunhoNormalizado=itemRascunho?op2NormalizarUidsItens(
-      [...this.itens,itemRascunho],()=>this.gerarUidItem(),
+    const rascunhoNormalizado=itemRascunho?this.normalizarUidsItens(
+      [...this.itens,itemRascunho],
     ).at(-1):null;
     if(itemRascunho&&String(rascunhoNormalizado.uid)!==String(itemRascunho.uid))this.rascunhoNormalizado=true;
     this.itemRascunho=rascunhoNormalizado?{...rascunhoNormalizado,imagensNomes:[],imagensPreview:[]}:null;this.draft=this.novoDraft();this.origemEditor='novo';this.editandoIdx=null;this.modalProduto=false;
@@ -695,7 +707,10 @@ function op2NovaMelhorada(){
     sessionStorage.removeItem('op2-rascunho-concluindo');
     let local=null;try{local=JSON.parse(localStorage.getItem(this.chaveRascunho)||'null')}catch(e){}
     const servidor=JSON.parse(document.getElementById('op2-rascunho-servidor')?.textContent||'null')?.dados||null;
-    const escolhido=Number(local?.salvoEm||0)>=Number(servidor?.salvoEm||0)?local:servidor;
+    const servidorTemItens=(servidor?.itens||[]).length>0||Boolean(servidor?.itemRascunho?.produto_id);
+    const localTemItens=(local?.itens||[]).length>0||Boolean(local?.itemRascunho?.produto_id);
+    const escolhido=servidorTemItens&&!localTemItens?servidor:
+      (Number(local?.salvoEm||0)>=Number(servidor?.salvoEm||0)?local:servidor);
     if(escolhido)this.aplicarRascunho(escolhido);
     ['itens','itemRascunho','draft','personalizacoes','pagamentos','clienteId','contatoNome','contatoTelefone','clientesAdicionais'].forEach(chave=>this.$watch(chave,()=>this.agendarAutosave()));
     this.$root.addEventListener('input',()=>this.agendarAutosave());this.$root.addEventListener('change',()=>this.agendarAutosave());

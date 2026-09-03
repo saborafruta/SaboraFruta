@@ -1315,11 +1315,14 @@ class Op2Tests(TestCase):
 
         resposta = self.client.get(reverse('moda:op2-create'))
 
-        self.assertContains(resposta, 'op2NormalizarUidsItens(itensOriginais')
+        self.assertContains(resposta, "typeof op2NormalizarUidsItens==='function'")
+        self.assertContains(resposta, 'this.normalizarUidsItens(itensOriginais)')
         self.assertContains(resposta, 'this.rascunhoNormalizado=true')
         self.assertContains(resposta, 'if(this.rascunhoNormalizado)this.agendarAutosave()')
         self.assertContains(resposta, "globalThis.crypto?.randomUUID?.()")
         self.assertContains(resposta, "!this.itens.some(")
+        self.assertContains(resposta, '?v=20260903-2')
+        self.assertContains(resposta, 'servidorTemItens&&!localTemItens?servidor')
 
     def test_nova_op_salva_anexo_e_mockup_e_exibe_na_op(self):
         self.client.force_login(self._usuario())
