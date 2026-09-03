@@ -1,8 +1,8 @@
 // Regra compartilhada pelos editores de criação e edição da OP/orçamento.
 function validarModeloOp2(draft, grupos) {
   const valor = String(draft.valor_unitario ?? '').trim();
-  if (!/^(?:\d+|\d*\.\d{1,2})$/.test(valor) || Number(valor) <= 0 || Number(valor) > 9999999999.99) {
-    return 'Valor unitário: informe um valor maior que zero, com até duas casas decimais.';
+  if (!/^(?:\d+|\d*\.\d{1,2})$/.test(valor) || Number(valor) < 0 || Number(valor) > 9999999999.99) {
+    return 'Valor unitário: informe zero ou um valor positivo, com até duas casas decimais.';
   }
   const grupo = grupos[draft.estrutura_tipo];
   if (!grupo) return 'Selecione um tipo de peça válido.';
@@ -53,8 +53,8 @@ function op2EstruturaPadraoNaoMultipla(grupos, tipo, estrutura) {
   const resultado = { ...(estrutura || {}) };
   const campos = grupos?.[tipo]?.campos || {};
   Object.entries(campos).forEach(([campo, opcoes]) => {
-    if (!op2CampoMultisselecao(campo) && !resultado[campo] && opcoes.includes('N/A')) {
-      resultado[campo] = 'N/A';
+    if (!resultado[campo] && opcoes.includes('N/A')) {
+      resultado[campo] = op2CampoMultisselecao(campo) ? ['N/A'] : 'N/A';
     }
   });
   return resultado;

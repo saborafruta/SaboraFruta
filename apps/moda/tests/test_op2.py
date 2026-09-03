@@ -113,10 +113,26 @@ class Op2Tests(TestCase):
         for tipo, grupo in OP2_ESTRUTURA_OPCOES.items():
             with self.subTest(tipo=tipo):
                 self.assertEqual(set(grupo['campos']), campos_camisa)
-                for opcoes in grupo['campos'].values():
+                for campo, opcoes in grupo['campos'].items():
+                    self.assertEqual(
+                        opcoes, OP2_ESTRUTURA_OPCOES['camisa']['campos'][campo],
+                    )
+                    self.assertEqual(opcoes[0], 'N/A')
                     self.assertIn('OUTRO', opcoes)
                 self.assertIn('PLASTISOL', grupo['campos']['tipo_impressao'])
                 self.assertIn('PERSONALIZADA CLIENTE', grupo['campos']['etiquetas'])
+
+    def test_tipos_comecam_por_conjunto_camisa_e_depois_seguem_alfabeticos(self):
+        grupos = opcoes_estrutura_filial(self.filial)
+        tipos = list(grupos)
+        self.assertEqual(tipos[:2], ['conjunto', 'camisa'])
+        self.assertEqual(
+            [grupos[tipo]['label'] for tipo in tipos[2:]],
+            sorted(
+                [grupos[tipo]['label'] for tipo in tipos[2:]],
+                key=str.casefold,
+            ),
+        )
 
     def test_outro_exige_texto_e_observacao_do_campo_e_preservada(self):
         from apps.moda.services.op2_estrutura import validar_estrutura_item
@@ -194,12 +210,13 @@ class Op2Tests(TestCase):
         self.assertIn('Tipo impressao: SILK + RELEVO', resumo)
         self.assertIn('Acabamentos: RECORTE + FORRO', resumo)
 
-    def test_valor_unitario_obrigatorio_positivo_e_decimal_valido(self):
+    def test_valor_unitario_obrigatorio_nao_negativo_e_decimal_valido(self):
         from apps.moda.services.op2_estrutura import validar_valor_unitario
 
-        for valor in ('', None, '0', '-1', 'NaN', 'Infinity', '1.001', '10000000000', 'abc'):
+        for valor in ('', None, '-1', 'NaN', 'Infinity', '1.001', '10000000000', 'abc'):
             with self.subTest(valor=valor), self.assertRaises(ValueError):
                 validar_valor_unitario(valor)
+        self.assertEqual(validar_valor_unitario('0'), Decimal('0.00'))
         self.assertEqual(validar_valor_unitario('59,90'), Decimal('59.90'))
         self.assertEqual(validar_valor_unitario('0.01'), Decimal('0.01'))
 
@@ -224,7 +241,7 @@ class Op2Tests(TestCase):
         for acao in ('adicionar_item', 'editar_item'):
             for campo, valor in (
                 ('estrutura_gola', ''), ('estrutura_tipo_impressao', ''),
-                ('valor_unitario', ''), ('valor_unitario', '0'), ('valor_unitario', 'NaN'),
+                ('valor_unitario', ''), ('valor_unitario', '-1'), ('valor_unitario', 'NaN'),
             ):
                 with self.subTest(acao=acao, campo=campo, valor=valor):
                     dados = {**self._modelo_completo(), 'acao': acao, 'item_id': item.pk,
@@ -251,6 +268,24 @@ class Op2Tests(TestCase):
         self.assertIn('Tipo impressao: N/A', novo.observacoes)
         self.assertIn('Malha: N/A', novo.observacoes)
         self.assertFalse(novo.personalizacoes.exists())
+
+    def test_nova_op_aceita_item_e_total_zerados(self):
+        self._login_op2()
+        dados = {
+            **self._modelo_completo('item_0_'), 'cliente': self.cliente.pk,
+            'item_0_produto_id': self.produto.pk, 'item_0_quantidade': 1,
+            'item_0_valor_unitario': '0',
+            'pagamento_0_forma': 'nao_informado',
+            'pagamento_0_valor': '0',
+        }
+
+        resposta = self.client.post(reverse('moda:op2-create'), dados)
+
+        self.assertEqual(resposta.status_code, 302)
+        criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        self.assertEqual(criado.itens.get().valor_unitario, Decimal('0.00'))
+        self.assertEqual(criado.valor_total, Decimal('0.00'))
+        self.assertEqual(criado.previsao_pagamento[0]['valor'], '0.00')
 
     def test_nova_op_cria_primeiro_registro_da_linha_do_tempo(self):
         self._login_op2()
@@ -681,6 +716,7 @@ class Op2Tests(TestCase):
         html = resposta.content.decode()
 
         self.assertContains(resposta, '+ Criar novo modelo')
+        self.assertContains(resposta, 'Salvar nome')
         self.assertContains(resposta, 'x-show="novoModeloAberto"')
         self.assertNotContains(resposta, '+ Novo modelo')
         self.assertContains(resposta, 'op2-conjunto-multi-summary')
@@ -690,6 +726,8 @@ class Op2Tests(TestCase):
             html.index('Etiquetas'),
             html.index('Copiar camisa para o calção'),
         )
+        self.assertLess(html.index('Tipo de peça *'), html.index('Estrutura da peça'))
+        self.assertGreaterEqual(html.count('op2-required-highlight'), 3)
 
     def test_historico_abre_card_com_detalhes_do_que_foi_registrado(self):
         from apps.core.models import LogSistema
@@ -1830,7 +1868,10 @@ class Op2Tests(TestCase):
                 grupos[tipo]['campos']['tipo_impressao'],
                 padrao['campos']['tipo_impressao'],
             )
-        self.assertIn('OPÇÃO PERSONALIZADA', grupos['camisa']['campos']['malha'])
+            self.assertEqual(grupos[tipo]['campos']['malha'][0], 'N/A')
+            self.assertIn(
+                'OPÇÃO PERSONALIZADA', grupos[tipo]['campos']['malha'],
+            )
 
     def test_sincronizacao_remove_opcoes_vazias_e_recria_valores_reais(self):
         OpcaoEstruturaOP2.objects.create(
@@ -2201,6 +2242,30 @@ class Op2Tests(TestCase):
         self.assertEqual(produto.status, ProdutoModa.Status.ATIVO)
         self.assertTrue(produto.ativo)
 
+    def test_cadastro_rapido_permite_renomear_apenas_modelo_criado_na_op(self):
+        self._login_op2()
+        produto = ProdutoModa.objects.create(
+            filial=self.filial, codigo='OP2-EDITAVEL', nome='Teste', ativo=True,
+        )
+
+        resposta = self.client.post(
+            reverse('moda:op2-modelo-rapido'),
+            {'produto_id': produto.pk, 'nome': 'Nome corrigido'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        produto.refresh_from_db()
+        self.assertEqual(produto.nome, 'Nome corrigido')
+        self.assertTrue(resposta.json()['modelo']['nome_editavel'])
+
+        resposta = self.client.post(
+            reverse('moda:op2-modelo-rapido'),
+            {'produto_id': self.produto.pk, 'nome': 'Não pode'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        self.assertEqual(resposta.status_code, 400)
+
     def test_sincronizacao_repara_valor_em_branco_do_tipo_de_peca(self):
         opcao = OpcaoEstruturaOP2.objects.create(
             filial=self.filial, tipo_peca='camisa', tipo_label='Camisa',
@@ -2210,7 +2275,8 @@ class Op2Tests(TestCase):
         grupos = opcoes_estrutura_filial(self.filial)
 
         opcao.refresh_from_db()
-        self.assertEqual(opcao.valor, 'SUBLIMAÇÃO')
+        self.assertEqual(opcao.valor, 'N/A')
+        self.assertEqual(grupos['camisa']['campos']['tipo_impressao'][0], 'N/A')
         self.assertIn('SUBLIMAÇÃO', grupos['camisa']['campos']['tipo_impressao'])
 
     def _usuario(self):

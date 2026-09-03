@@ -192,8 +192,8 @@ def _previsao_pagamento(request, total_esperado=None, *, obrigatoria=False):
             valor = valor.quantize(Decimal('0.01'))
         except (InvalidOperation, ValueError):
             raise ValueError('Pagamento previsto: confira os valores informados.')
-        if valor <= 0:
-            raise ValueError('Pagamento previsto: cada valor deve ser maior que zero.')
+        if valor < 0:
+            raise ValueError('Pagamento previsto: o valor não pode ser negativo.')
         linhas.append({'forma': forma, 'valor': f'{valor:.2f}'})
 
     if obrigatoria and not linhas:
@@ -274,7 +274,10 @@ def _dados_modal_item(item, estrutura_opcoes):
     return {
         'item_id': str(item.pk),
         'produto_id': str(item.produto_id or ''),
-        'nome': item.nome_exibicao,
+        'nome': item.produto.nome if item.produto_id else item.nome_exibicao,
+        'nome_editavel': bool(
+            item.produto_id and item.produto.codigo.startswith('OP2-')
+        ),
         'codigo': item.produto.codigo if item.produto_id else '',
         'info': ' · '.join(filter(None, [
             item.produto.codigo if item.produto_id else '',
@@ -282,7 +285,9 @@ def _dados_modal_item(item, estrutura_opcoes):
             item.grade_tamanho.nome if item.grade_tamanho_id else '',
         ])),
         'quantidade': item.quantidade,
-        'valor_unitario': str(item.valor_unitario) if item.valor_unitario else '',
+        'valor_unitario': (
+            str(item.valor_unitario) if item.valor_unitario is not None else ''
+        ),
         'tipo_impressao': estrutura.pop('tipo_impressao', None) or [(
             arte.get_tecnica_display() if arte else
             getattr(item.produto, 'get_tipo_impressao_display', lambda: '')()
@@ -878,7 +883,7 @@ class Op2RascunhoView(ModaBaseView):
 
 
 class Op2ModeloRapidoView(ModaBaseView):
-    """Cria o modelo mínimo sem tirar o usuário do orçamento em edição."""
+    """Cria ou renomeia o modelo rápido sem sair da OP em edição."""
 
     area = 'comercial'
     permissao_acao = 'criar'
@@ -889,18 +894,32 @@ class Op2ModeloRapidoView(ModaBaseView):
             return JsonResponse(
                 {'ok': False, 'erro': 'Informe o nome do modelo.'}, status=400,
             )
-        produto = ProdutoModa.objects.create(
-            filial=_filial(request),
-            codigo=f'OP2-{uuid4().hex[:10].upper()}',
-            nome=nome,
-            status=ProdutoModa.Status.ATIVO,
-            ativo=True,
-        )
+        produto_id = (request.POST.get('produto_id') or '').strip()
+        if produto_id:
+            produto = get_object_or_404(
+                ProdutoModa.objects.for_filial(_filial(request)), pk=produto_id,
+            )
+            if not produto.codigo.startswith('OP2-'):
+                return JsonResponse({
+                    'ok': False,
+                    'erro': 'Somente modelos criados nesta tela podem ser renomeados aqui.',
+                }, status=400)
+            produto.nome = nome
+            produto.save(update_fields=['nome', 'updated_at'])
+        else:
+            produto = ProdutoModa.objects.create(
+                filial=_filial(request),
+                codigo=f'OP2-{uuid4().hex[:10].upper()}',
+                nome=nome,
+                status=ProdutoModa.Status.ATIVO,
+                ativo=True,
+            )
         return JsonResponse({
             'ok': True,
             'modelo': {
                 'id': str(produto.pk), 'nome': produto.nome,
                 'codigo': produto.codigo, 'info': produto.codigo,
+                'nome_editavel': True,
             },
         })
 
@@ -1230,8 +1249,8 @@ class Op2ActionView(ModaBaseView):
 
         valor_total = dinheiro('valor_total')
         entrada = dinheiro('entrada')
-        if valor_total <= 0:
-            raise ValueError('O valor total precisa ser maior que zero.')
+        if valor_total < 0:
+            raise ValueError('O valor total não pode ser negativo.')
         if entrada < 0 or entrada > valor_total:
             raise ValueError('O adiantamento deve ficar entre zero e o valor total.')
         forma = get_object_or_404(

@@ -1,4 +1,12 @@
 <div class="mt-2">
+  <div x-show="draft.nome_editavel && draft.produto_id" x-cloak class="flex flex-wrap gap-2 mb-2">
+    <input x-model="draft.nome" class="form-input flex-1 min-w-[190px]"
+           maxlength="120" aria-label="Editar nome do modelo"
+           @keydown.enter.prevent="salvarNomeModeloRapido()">
+    <button type="button" class="btn-secondary" :disabled="salvandoNomeModelo"
+            @click="salvarNomeModeloRapido()"
+            x-text="salvandoNomeModelo?'Salvando...':'Salvar nome'"></button>
+  </div>
   <button x-show="!novoModeloAberto" type="button" class="btn-secondary"
           @click="novoModeloAberto=true; erroModelo=''; $nextTick(()=>$refs.novoModeloNome?.focus())">
     + Criar novo modelo
@@ -12,5 +20,5 @@
     <button type="button" class="btn-secondary" :disabled="criandoModelo"
             @click="novoModeloAberto=false; novoModeloNome=''; erroModelo=''">Cancelar</button>
   </div>
-  <small x-show="novoModeloAberto" class="block mt-1" style="color:#ef4444" x-text="erroModelo"></small>
+  <small x-show="novoModeloAberto || (draft.nome_editavel && draft.produto_id)" class="block mt-1" style="color:#ef4444" x-text="erroModelo"></small>
 </div>

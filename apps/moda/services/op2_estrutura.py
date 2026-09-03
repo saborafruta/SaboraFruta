@@ -192,21 +192,47 @@ _catalogo_campos['cor'] = list(CORES_PRINCIPAIS)
 _catalogo_campos.setdefault('etiquetas', []).append('PERSONALIZADA CLIENTE')
 
 for _grupo in OP2_ESTRUTURA_OPCOES.values():
-    _originais = _grupo.get('campos', {})
     _completos = {}
     for _campo in _ordem_campos:
         if _campo not in _catalogo_campos:
             continue
-        _valores = list(_originais.get(_campo) or _catalogo_campos[_campo])
-        if _campo == 'tipo_impressao':
-            _valores = list(TIPOS_IMPRESSAO_PADRAO)
+        # A ficha e o catálogo são únicos para todos os tipos. As listas
+        # especializadas que originaram o cadastro continuam contribuindo
+        # para a união, mas não limitam mais uma peça específica.
+        _valores = list(_catalogo_campos[_campo])
         if _campo == 'etiquetas' and 'PERSONALIZADA CLIENTE' not in _valores:
             _valores.append('PERSONALIZADA CLIENTE')
-        for _obrigatoria in ('OUTRO', 'N/A'):
+        for _obrigatoria in ('OUTRO',):
             if _obrigatoria not in _valores:
                 _valores.append(_obrigatoria)
-        _completos[_campo] = _valores
+        _completos[_campo] = ['N/A', *(
+            valor for valor in _valores if valor != 'N/A'
+        )]
     _grupo['campos'] = _completos
+
+
+def _ordenar_tipos(grupos):
+    """Conjunto e Camisa primeiro; demais tipos em ordem alfabética."""
+    prioridade = {'conjunto': 0, 'camisa': 1}
+    return dict(sorted(
+        grupos.items(),
+        key=lambda item: (
+            prioridade.get(item[0], 2),
+            (item[1].get('label') or item[0]).casefold(),
+        ),
+    ))
+
+
+def _na_primeiro(valores):
+    """Remove duplicatas preservando a ordem, sempre com N/A no topo."""
+    unicos = []
+    for valor in valores:
+        if valor and valor != 'N/A' and valor not in unicos:
+            unicos.append(valor)
+    return ['N/A', *unicos]
+
+
+OP2_ESTRUTURA_OPCOES = _ordenar_tipos(OP2_ESTRUTURA_OPCOES)
 
 
 def _normalizar_slug(texto: str) -> str:
@@ -279,11 +305,8 @@ def sincronizar_opcoes_padrao(filial):
         if linha['tipo_peca'] not in TIPOS_PECA_REMOVIDOS
     }
     campos_novos = []
-    campos_existentes = {(tipo, campo) for tipo, campo, _ in existentes}
     for tipo_peca, tipo_label in tipos_cadastrados.items():
         for campo, valores in OP2_ESTRUTURA_OPCOES['camisa']['campos'].items():
-            if (tipo_peca, campo) in campos_existentes:
-                continue
             for ordem, valor in enumerate(valores, start=1):
                 chave = (tipo_peca, campo, valor)
                 if chave in existentes:
@@ -294,9 +317,31 @@ def sincronizar_opcoes_padrao(filial):
                     tipo_label=tipo_label or tipo_peca.title(), campo=campo,
                     valor=valor, ordem=ordem, ativo=True,
                 ))
-            campos_existentes.add((tipo_peca, campo))
     if campos_novos:
         OpcaoEstruturaOP2.objects.bulk_create(campos_novos, ignore_conflicts=True)
+
+    # Campos e opções criados pela filial são globais para a ficha da OP.
+    # Materializar a união no banco mantém a tela de gestão e o formulário
+    # consistentes em todos os tipos, inclusive após novos deploys.
+    catalogo_global = {}
+    for tipo_peca, campo, valor in existentes:
+        if tipo_peca not in TIPOS_PECA_REMOVIDOS:
+            catalogo_global.setdefault(campo, set()).add(valor)
+    propagadas = []
+    for tipo_peca, tipo_label in tipos_cadastrados.items():
+        for campo, valores in catalogo_global.items():
+            for ordem, valor in enumerate(sorted(valores), start=1):
+                chave = (tipo_peca, campo, valor)
+                if chave in existentes:
+                    continue
+                existentes.add(chave)
+                propagadas.append(OpcaoEstruturaOP2(
+                    filial=filial, tipo_peca=tipo_peca,
+                    tipo_label=tipo_label or tipo_peca.title(), campo=campo,
+                    valor=valor, ordem=ordem, ativo=True,
+                ))
+    if propagadas:
+        OpcaoEstruturaOP2.objects.bulk_create(propagadas, ignore_conflicts=True)
 
     # Campos criados pela gestão também precisam das escolhas especiais.
     campos = OpcaoEstruturaOP2.objects.for_filial(filial).values(
@@ -352,16 +397,16 @@ def validar_valor_unitario(valor):
         texto = texto.replace('.', '').replace(',', '.')
     try:
         return DecimalField(
-            required=True, min_value=Decimal('0.01'), max_digits=12, decimal_places=2,
+            required=True, min_value=Decimal('0'), max_digits=12, decimal_places=2,
         ).clean(texto)
     except ValidationError:
-        raise ValueError('Valor unitário: informe um valor maior que zero, com até duas casas decimais.')
+        raise ValueError('Valor unitário: informe zero ou um valor positivo, com até duas casas decimais.')
 
 
 def opcoes_estrutura_filial(filial, incluir_inativas=False):
     """Devolve as opções editáveis no mesmo formato usado pela OP."""
     if filial is None:
-        return OP2_ESTRUTURA_OPCOES
+        return _ordenar_tipos(OP2_ESTRUTURA_OPCOES)
     from apps.moda.models import OpcaoEstruturaOP2
 
     sincronizar_opcoes_padrao(filial)
@@ -369,7 +414,7 @@ def opcoes_estrutura_filial(filial, incluir_inativas=False):
         tipo_peca__in=TIPOS_PECA_REMOVIDOS,
     )
     if not todas.exists():
-        return OP2_ESTRUTURA_OPCOES
+        return _ordenar_tipos(OP2_ESTRUTURA_OPCOES)
     qs = todas
     if not incluir_inativas:
         qs = qs.filter(ativo=True)
@@ -383,18 +428,25 @@ def opcoes_estrutura_filial(filial, incluir_inativas=False):
             'campos': {},
         })
         grupo['campos'].setdefault(opcao.campo, []).append(opcao.valor)
+    # A união inclui também opções e campos criados pela própria filial.
+    # Assim, uma opção adicionada em Camisa fica imediatamente disponível em
+    # Calção, Conjunto e nos demais tipos, sem catálogos divergentes.
+    catalogo_filial = {
+        campo: list(valores)
+        for campo, valores in OP2_ESTRUTURA_OPCOES['camisa']['campos'].items()
+    }
     for grupo in grupos.values():
-        campos_atuais = grupo['campos']
-        completos = {}
-        for campo, padrao in OP2_ESTRUTURA_OPCOES['camisa']['campos'].items():
-            valores = list(campos_atuais.pop(campo, []) or padrao)
-            for obrigatoria in ('OUTRO', 'N/A'):
-                if obrigatoria not in valores:
-                    valores.append(obrigatoria)
-            completos[campo] = valores
-        completos.update(campos_atuais)
-        grupo['campos'] = completos
-    return grupos
+        for campo, valores in grupo['campos'].items():
+            catalogo_filial.setdefault(campo, []).extend(valores)
+    catalogo_filial = {
+        campo: _na_primeiro(valores)
+        for campo, valores in catalogo_filial.items()
+    }
+    for grupo in grupos.values():
+        grupo['campos'] = {
+            campo: list(valores) for campo, valores in catalogo_filial.items()
+        }
+    return _ordenar_tipos(grupos)
 
 
 def estrutura_resumo(post, grupos=None) -> str:

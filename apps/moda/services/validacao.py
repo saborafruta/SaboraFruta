@@ -436,7 +436,7 @@ class ValidacaoProducao:
 
     @staticmethod
     def _valores(pedido, itens) -> Checagem:
-        sem_preco = [i.nome_exibicao for i in itens if not i.valor_unitario]
+        sem_preco = [i.nome_exibicao for i in itens if i.valor_unitario is None]
         if sem_preco:
             return Checagem(
                 'valores', 'Valores definidos', BLOQUEIO,
@@ -444,10 +444,10 @@ class ValidacaoProducao:
                 f'não há faturamento nem margem.',
                 'Pedido › Valores', sem_preco,
             )
-        if pedido.valor_total <= 0:
+        if pedido.valor_total < 0:
             return Checagem(
                 'valores', 'Valores definidos', BLOQUEIO,
-                'O valor total do pedido está zerado.',
+                'O valor total do pedido não pode ser negativo.',
                 'Pedido › Valores',
             )
         return Checagem('valores', 'Valores definidos', OK)

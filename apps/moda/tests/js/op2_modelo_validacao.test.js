@@ -66,13 +66,13 @@ test('conjunto exige duas fichas completas com totais iguais', () => {
   configuracao.calcao.gradePorGrade[1][9] = 1;
   assert.match(validarConjuntoOp2(configuracao, opcoes), /mesmo total/);
 });
-test('valor vazio, zero, negativo e inválido são recusados', () => {
-  for (const valor of ['', null, 0, '0', '-1', 'NaN', 'Infinity', 'abc', '1.001', '10000000000']) {
+test('valor vazio, negativo e inválido são recusados', () => {
+  for (const valor of ['', null, '-1', 'NaN', 'Infinity', 'abc', '1.001', '10000000000']) {
     assert.match(validarModeloOp2({ ...completo(), valor_unitario: valor }, grupos), /Valor unitário/);
   }
 });
-test('preço positivo e centavos são aceitos', () => {
-  for (const valor of ['0.01', '10', 20.9]) assert.equal(validarModeloOp2({ ...completo(), valor_unitario: valor }, grupos), '');
+test('preço zero, positivo e centavos são aceitos', () => {
+  for (const valor of [0, '0', '0.01', '10', 20.9]) assert.equal(validarModeloOp2({ ...completo(), valor_unitario: valor }, grupos), '');
 });
 test('todos os campos visíveis são obrigatórios', () => {
   for (const campo of ['malha', 'gola']) {
@@ -129,14 +129,16 @@ test('seletor múltiplo mantém N/A exclusivo e resume escolhas', () => {
   assert.deepEqual(op2AlternarMultisselecao(['N/A'], 'BORDADO', true), ['BORDADO']);
 });
 
-test('estrutura inicia N/A somente nos campos de escolha simples', () => {
+test('estrutura inicia N/A em todos os campos, inclusive multisseleção', () => {
   const estrutura = op2EstruturaPadraoNaoMultipla({
     camisa: { campos: {
       tipo_impressao: ['SILK', 'N/A'], cor: ['PRETO', 'N/A'],
       acabamentos: ['VIES', 'N/A'], manga: ['CURTA', 'N/A'],
     } },
   }, 'camisa', {});
-  assert.deepEqual(estrutura, { cor: 'N/A', manga: 'N/A' });
+  assert.deepEqual(estrutura, {
+    tipo_impressao: ['N/A'], cor: 'N/A', acabamentos: ['N/A'], manga: 'N/A',
+  });
 });
 
 test('estrutura mantém escolhas existentes ao preencher os padrões', () => {

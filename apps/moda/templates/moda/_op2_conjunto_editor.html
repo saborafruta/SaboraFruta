@@ -33,7 +33,7 @@
           <div>{% for opcao in opcoes %}<label><input type="checkbox" :checked="op2MultisselecaoContem(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'],'{{ opcao|escapejs }}')" @change="draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}']=op2AlternarMultisselecao(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'],'{{ opcao|escapejs }}',$event.target.checked)"><span>{{ opcao }}</span></label>{% endfor %}</div>
         </details>
         {% else %}
-        <select class="form-input w-full" x-model="draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}']"><option value="">Selecione...</option>{% for opcao in opcoes %}<option value="{{ opcao }}">{{ opcao }}</option>{% endfor %}</select>
+        <select class="form-input w-full" x-model="draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}']">{% for opcao in opcoes %}<option value="{{ opcao }}">{{ opcao }}</option>{% endfor %}</select>
         {% if campo == 'cor' %}<input x-show="draft.configuracao_conjunto.{{ componente }}.estrutura.cor==='COR PERSONALIZADA'" x-cloak x-model="draft.configuracao_conjunto.{{ componente }}.cor_personalizada" class="form-input w-full mt-2" placeholder="Digite a cor personalizada">{% endif %}
         {% endif %}
         <input x-show="op2MultisselecaoContem(draft.configuracao_conjunto.{{ componente }}.estrutura['{{ campo }}'],'OUTRO')" x-cloak x-model="draft.configuracao_conjunto.{{ componente }}.outros['{{ campo }}']" class="form-input w-full mt-1" placeholder="Descreva a outra opção">
