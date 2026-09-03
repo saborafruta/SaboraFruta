@@ -219,7 +219,7 @@ class FinanceiroPedidoService:
                 cliente=cliente,
                 documento_tipo=cls.DOCUMENTO_TIPO,
                 documento_id=pedido.pk,
-                documento_numero=str(pedido.numero),
+                documento_numero=f"OP #{pedido.numero:06d} · {cliente}",
                 parcela=numero,
                 total_parcelas=total,
                 valor_original=valor,

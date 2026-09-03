@@ -395,6 +395,7 @@ class PosicaoDiariaCaixaService:
         recebimentos = PagamentoContaReceber.objects.filter(
             filial=self.filial,
             data_pagamento__lte=self.data_fim,
+            conta_receber__excluido_em__isnull=True,
             conta_receber__status__in=[
                 StatusContaReceber.PAGO,
                 StatusContaReceber.PAGO_PARCIAL,
@@ -550,6 +551,7 @@ class PosicaoDiariaCaixaService:
         recebimentos = PagamentoContaReceber.objects.filter(
             filial=self.filial,
             data_pagamento__lt=self.data_inicio,
+            conta_receber__excluido_em__isnull=True,
         ).select_related("conta_bancaria", "forma_pagamento__conta_bancaria_padrao")
         for item in recebimentos.iterator():
             conta = item.conta_bancaria or (
@@ -621,6 +623,7 @@ class PosicaoDiariaCaixaService:
         for item in PagamentoContaReceber.objects.filter(
             filial=self.filial,
             data_pagamento__lte=self.data_fim,
+            conta_receber__excluido_em__isnull=True,
             conta_bancaria__isnull=True,
             forma_pagamento__conta_bancaria_padrao__isnull=True,
         ).select_related("conta_receber__cliente", "forma_pagamento"):
@@ -708,6 +711,7 @@ class PosicaoDiariaCaixaService:
         compensacoes = PagamentoContaReceber.objects.filter(
             filial=self.filial,
             data_pagamento__lte=data_fim,
+            conta_receber__excluido_em__isnull=True,
             conta_receber__status__in=(StatusContaReceber.PAGO, StatusContaReceber.PAGO_PARCIAL),
         ).select_related(
             "conta_receber__cliente", "conta_receber__plano_contas",
