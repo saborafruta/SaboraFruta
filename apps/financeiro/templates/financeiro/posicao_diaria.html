@@ -256,6 +256,7 @@
   entradaEdicao: {% if editar_entrada_form.errors %}true{% else %}false{% endif %},
   editarModal: {{ editar_movimento|yesno:'true,false' }},
   excluirModal: false,
+  excluirContaReceberModal: false,
   movimentoTipo: '{{ movimento_form.tipo.value|default:"credito"|escapejs }}',
   hidratarTituloPagar() {
     this.$nextTick(() => {
@@ -755,6 +756,7 @@
             {% endif %}
             {% if detalhe.op_url %}<a href="{{ detalhe.op_url }}" target="_blank" rel="noopener noreferrer" class="btn-secondary">Ver mais informações da OP</a>{% endif %}
             {% if detalhe.referencia_url %}<a href="{{ detalhe.referencia_url }}" class="btn-secondary">Abrir lançamento de origem</a>{% endif %}
+            {% if user_is_admin and detalhe.origem_codigo == 'receber' %}<button type="button" class="btn-secondary text-rose-600" @click="excluirContaReceberModal=true">Excluir conta a receber</button>{% endif %}
             {% if user_is_admin and detalhe.entrada and detalhe.editavel and not detalhe.excluido %}<button type="button" class="btn-primary" @click="detalheModal=false; entradaEdicao=true">Editar lançamento</button>{% endif %}
             {% if user_is_admin and detalhe.origem_codigo == 'manual' and not detalhe.excluido %}{% if not detalhe.entrada %}<a href="?data={{ data_referencia|date:'Y-m-d' }}&editar={{ detalhe.registro_id }}" class="btn-primary">Editar lançamento</a>{% endif %}<button type="button" class="btn-secondary text-rose-600" @click="excluirModal=true">Excluir</button>{% endif %}
           </div>
@@ -763,6 +765,7 @@
             <div x-show="historicoAberto" x-cloak class="mt-3 divide-y divide-slate-200 dark:divide-slate-700">{% for log in detalhe.historico_logs %}<article class="py-3 first:pt-0"><div class="flex flex-wrap justify-between gap-2"><strong class="text-sm">{{ log.acao }}</strong><span class="text-xs opacity-55">{{ log.data|date:'d/m/Y H:i' }} · {{ log.usuario }}</span></div>{% if log.justificativa %}<p class="mt-1 text-xs">Motivo: {{ log.justificativa }}</p>{% endif %}{% if log.alteracoes %}<div class="mt-2 grid gap-2 sm:grid-cols-2">{% for alteracao in log.alteracoes %}<div class="rounded border border-slate-200 p-2 text-xs dark:border-slate-700"><strong class="block">{{ alteracao.campo }}</strong><span class="text-rose-600">{{ alteracao.antes }}</span> <span aria-hidden="true">→</span> <span class="text-emerald-600">{{ alteracao.depois }}</span></div>{% endfor %}</div>{% elif log.descricao %}<p class="mt-1 text-xs opacity-65">{{ log.descricao }}</p>{% endif %}</article>{% empty %}<p class="py-3 text-sm opacity-60">Nenhuma alteração registrada para este lançamento.</p>{% endfor %}</div>
           </section>
           <form x-show="excluirModal" x-cloak method="post" class="mt-4 rounded-lg border border-rose-300 bg-rose-50 p-4 dark:border-rose-900 dark:bg-rose-950/20">{% csrf_token %}<input type="hidden" name="acao" value="excluir_movimento"><input type="hidden" name="movimento_id" value="{{ detalhe.registro_id }}"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}"><label class="text-xs font-semibold">Motivo da exclusão <input name="justificativa" required class="form-input mt-1 w-full" placeholder="Explique a correção"></label><div class="mt-3 flex justify-end gap-2"><button type="button" class="btn-secondary" @click="excluirModal=false">Cancelar</button><button class="btn-primary bg-rose-600" type="submit">Confirmar exclusão</button></div></form>
+          {% if user_is_admin and detalhe.origem_codigo == 'receber' %}<form x-show="excluirContaReceberModal" x-cloak method="post" class="mt-4 rounded-lg border border-rose-300 bg-rose-50 p-4 dark:border-rose-900 dark:bg-rose-950/20">{% csrf_token %}<input type="hidden" name="acao" value="excluir_conta_receber"><input type="hidden" name="conta_id" value="{{ detalhe.registro_id }}"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}"><label class="text-xs font-semibold">Motivo da exclusão <input name="motivo" required class="form-input mt-1 w-full" placeholder="Explique a correção"></label><div class="mt-3 flex justify-end gap-2"><button type="button" class="btn-secondary" @click="excluirContaReceberModal=false">Cancelar</button><button class="btn-primary bg-rose-600" type="submit">Excluir conta</button></div></form>{% endif %}
         </div>
       </div>
     </div>

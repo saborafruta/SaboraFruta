@@ -357,11 +357,11 @@
       <div class="grid grid-cols-2 gap-2 text-xs">
         <div>
           <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nº da venda</span>
-          <div class="font-semibold">{% if c.venda_vinculada %}#{{ c.venda_vinculada.numero_venda|stringformat:"06d" }}{% else %}—{% endif %}</div>
+          <div class="font-semibold">{{ c.origem_venda_numero }}</div>
         </div>
         <div>
           <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Data da venda</span>
-          <div class="font-semibold">{{ c.venda_vinculada.data_venda|date:"d/m/Y"|default:"—" }}</div>
+          <div class="font-semibold">{{ c.origem_venda_data|date:"d/m/Y"|default:"—" }}</div>
         </div>
         <div>
           <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vencimento</span>
@@ -438,10 +438,10 @@
             </td>
             {% if entrega_habilitada %}<td class="px-4 py-3" style="min-width:10rem;max-width:16rem">{% include "financeiro/receber/_entrega_acionavel.html" with conta=c %}</td>{% endif %}
             <td class="px-4 py-3 text-xs font-mono whitespace-nowrap">
-              {% if c.venda_vinculada %}#{{ c.venda_vinculada.numero_venda|stringformat:"06d" }}{% else %}—{% endif %}
+              {{ c.origem_venda_numero }}
             </td>
             <td class="px-4 py-3 text-sm whitespace-nowrap">
-              {{ c.venda_vinculada.data_venda|date:"d/m/Y"|default:"—" }}
+              {{ c.origem_venda_data|date:"d/m/Y"|default:"—" }}
             </td>
             <td class="px-4 py-3 text-center text-xs font-mono" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
               {{ c.parcela }}/{{ c.total_parcelas }}

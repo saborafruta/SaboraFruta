@@ -144,6 +144,20 @@ class FinanceiroPedidoEntradaTests(TestCase):
         self.assertEqual(len(contas), 1)
         self.assertEqual(contas[0].valor_original, Decimal("1000.00"))
         self.assertFalse(PagamentoContaReceber.objects.exists())
+        self.assertEqual(contas[0].status_entrega, ContaReceber.StatusEntrega.PREVISTA)
+        self.assertEqual(contas[0].data_entrega_prevista, date(2026, 9, 5))
+
+    def test_alterar_previsao_da_op_sincroniza_titulos_gerados(self):
+        pedido = self._pedido(entrada=Decimal("0.00"))
+        FinanceiroPedidoService.gerar(pedido)
+        pedido.data_prevista_entrega = date(2026, 9, 20)
+        pedido.save(update_fields=['data_prevista_entrega'])
+
+        FinanceiroPedidoService.sincronizar_previsao_entrega(pedido)
+
+        conta = ContaReceber.objects.get()
+        self.assertEqual(conta.data_entrega_prevista, date(2026, 9, 20))
+        self.assertEqual(conta.status_entrega, ContaReceber.StatusEntrega.PREVISTA)
 
     def test_entrada_exige_forma_e_conta_bancaria(self):
         pedido = self._pedido(entrada=Decimal("50.00"))

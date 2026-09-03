@@ -58,6 +58,21 @@ class FinanceiroPedidoService:
             .order_by('parcela')
         )
 
+    @classmethod
+    def sincronizar_previsao_entrega(cls, pedido):
+        """Espelha a previsão comercial nos títulos já gerados da OP."""
+        ContaReceber.objects.filter(
+            documento_tipo=cls.DOCUMENTO_TIPO,
+            documento_id=pedido.pk,
+        ).update(
+            status_entrega=(
+                ContaReceber.StatusEntrega.PREVISTA
+                if pedido.data_prevista_entrega else ContaReceber.StatusEntrega.SEM_PREVISAO
+            ),
+            data_entrega_prevista=pedido.data_prevista_entrega,
+            previsao_entrega_complemento='',
+        )
+
     @staticmethod
     def situacao_pagamento(valor_titulos=0, valor_recebido=0, valor_aberto=0):
         """Situação dos títulos válidos, sem descontar taxas do valor recebido."""
@@ -212,6 +227,11 @@ class FinanceiroPedidoService:
                 valor_saldo=valor,
                 data_emissao=pedido.data_pedido,
                 data_vencimento=p.vencimento,
+                status_entrega=(
+                    ContaReceber.StatusEntrega.PREVISTA
+                    if pedido.data_prevista_entrega else ContaReceber.StatusEntrega.SEM_PREVISAO
+                ),
+                data_entrega_prevista=pedido.data_prevista_entrega,
                 forma_pagamento=pedido.forma_pagamento,
                 conta_bancaria=(
                     pedido.conta_bancaria_entrada

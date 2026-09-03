@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -18,6 +19,8 @@ from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.models import RegistroAuditoria
+from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
 from apps.financeiro.constants.enums import StatusContaReceber
 from apps.financeiro.forms.receber import (
     BaixaContaReceberForm, ContaReceberEditForm, ContaReceberForm,
@@ -59,7 +62,7 @@ def _contexto_entrega(request, filial):
 
 
 def _vincular_vendas(titulos, filial):
-    """Resolve a origem real em lote, sem confundir documento com nº da venda."""
+    """Resolve PDV e OPs em lote para as colunas comerciais do título."""
     from apps.pdv.models import VendaPDV
 
     venda_ids = {
@@ -70,11 +73,27 @@ def _vincular_vendas(titulos, filial):
         v.pk: v for v in VendaPDV.objects.for_filial(filial)
         .filter(pk__in=venda_ids).only('pk', 'numero_venda', 'data_venda')
     } if venda_ids else {}
+    from apps.moda.models import PedidoProducao
+    pedidos_ids = {t.documento_id for t in titulos if t.documento_tipo == 'pedido_moda' and t.documento_id}
+    pedidos = {
+        pedido.pk: pedido for pedido in PedidoProducao.objects.for_filial(filial).filter(pk__in=pedidos_ids)
+        .only('pk', 'numero', 'financeiro_gerado_em')
+    } if pedidos_ids else {}
     for titulo in titulos:
-        titulo.venda_vinculada = (
-            vendas.get(titulo.documento_id)
-            if titulo.documento_tipo == 'venda_pdv' else None
-        )
+        if titulo.documento_tipo == 'venda_pdv':
+            venda = vendas.get(titulo.documento_id)
+            titulo.venda_vinculada = venda
+            titulo.origem_venda_numero = f'#{venda.numero_venda:06d}' if venda else '—'
+            titulo.origem_venda_data = venda.data_venda if venda else None
+        elif titulo.documento_tipo == 'pedido_moda':
+            pedido = pedidos.get(titulo.documento_id)
+            titulo.venda_vinculada = None
+            titulo.origem_venda_numero = f'OP #{pedido.numero:06d}' if pedido else '—'
+            titulo.origem_venda_data = pedido.financeiro_gerado_em if pedido else None
+        else:
+            titulo.venda_vinculada = None
+            titulo.origem_venda_numero = '—'
+            titulo.origem_venda_data = None
 
 
 def _kpis(qs_base):
@@ -400,6 +419,7 @@ class ContaReceberDetailView(PermissaoRequiredMixin, View):
                 request.user.tem_permissao('financeiro', 'editar')
                 and conta.status != StatusContaReceber.CANCELADO
             ),
+            'pode_excluir': request.user.tem_permissao('financeiro', 'editar'),
             'entrega_habilitada': entrega_receber_habilitada(filial),
             'pill': pill,
             'tipo_conta': 'receber',
@@ -775,6 +795,34 @@ class ContaReceberCancelarView(PermissaoRequiredMixin, View):
         except DomainError as exc:
             messages.error(request, str(exc))
         return redirect(reverse('financeiro:receber_detail', args=[pk]))
+
+
+class ContaReceberExcluirView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'editar'
+
+    @transaction.atomic
+    def post(self, request, pk):
+        filial = _filial(request)
+        conta = get_object_or_404(ContaReceber.all_objects.for_filial(filial), pk=pk)
+        motivo = request.POST.get('motivo', '').strip()
+        try:
+            antes = snapshot_modelo(conta, ['excluido_em', 'excluido_por', 'motivo_exclusao'])
+            ContaReceberService.excluir(conta, motivo, request.user)
+            conta.refresh_from_db()
+            registrar_auditoria(
+                request=request, modulo=RegistroAuditoria.Modulo.FINANCEIRO,
+                acao=RegistroAuditoria.Acao.EXCLUIR, objeto=conta,
+                descricao=f'Título a receber #{conta.pk} excluído', justificativa=motivo,
+                antes=antes, depois=snapshot_modelo(conta, ['excluido_em', 'excluido_por', 'motivo_exclusao']),
+            )
+            messages.success(request, f'Conta #{pk} excluída. O histórico foi preservado.')
+        except DomainError as exc:
+            messages.error(request, str(exc))
+        destino = request.POST.get('next') or reverse('financeiro:receber_list')
+        if not url_has_allowed_host_and_scheme(destino, allowed_hosts={request.get_host()}):
+            destino = reverse('financeiro:receber_list')
+        return redirect(destino)
 
 
 class ContaReceberEditarPrazoView(PermissaoRequiredMixin, View):

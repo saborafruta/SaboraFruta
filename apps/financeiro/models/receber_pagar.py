@@ -23,6 +23,13 @@ class ContaPagarManager(FilialAwareManager):
         return super().get_queryset().filter(excluido_em__isnull=True)
 
 
+class ContaReceberManager(FilialAwareManager):
+    """Oculta títulos excluídos, preservando-os para auditoria e restauração."""
+
+    def get_queryset(self):
+        return super().get_queryset().filter(excluido_em__isnull=True)
+
+
 def caminho_comprovante_pagamento(instancia, nome_original):
     """Usa nome imprevisível e separa os comprovantes por filial."""
     extensao = Path(nome_original).suffix.lower()
@@ -102,7 +109,15 @@ class ContaReceber(TimestampedModel):
     usuario_baixa = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True,
                                        related_name="contas_receber_baixadas")
 
-    objects = FilialAwareManager()
+    excluido_em = models.DateTimeField(null=True, blank=True, db_index=True)
+    excluido_por = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="contas_receber_excluidas",
+    )
+    motivo_exclusao = models.CharField(max_length=300, blank=True)
+
+    objects = ContaReceberManager()
+    all_objects = FilialAwareManager()
 
     class Meta:
         db_table = "contas_receber"
@@ -133,6 +148,10 @@ class ContaReceber(TimestampedModel):
         if self.taxa_calculada_em:
             return self.valor_liquido_recebido
         return self.valor_pago
+
+    @property
+    def excluido(self):
+        return self.excluido_em is not None
 
 
 class PagamentoContaReceber(TimestampedModel):

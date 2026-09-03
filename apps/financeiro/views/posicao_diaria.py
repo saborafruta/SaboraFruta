@@ -13,6 +13,7 @@ from django.views import View
 
 from apps.core.models import RegistroAuditoria
 from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
+from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.financeiro.forms import (
     EditarEntradaFinanceiraForm,
@@ -20,11 +21,12 @@ from apps.financeiro.forms import (
     MovimentoContaBancariaForm,
 )
 from apps.financeiro.constants.enums import StatusContaPagar
-from apps.financeiro.models import ContaPagar, PlanoContas
+from apps.financeiro.models import ContaPagar, ContaReceber, PlanoContas
 from apps.financeiro.models.extrato import ExtratoBancario
 from apps.financeiro.models.caixa_historico import DiaCaixaHistorico
 from apps.financeiro.services.caixa_historico_service import consultar_historico
 from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaService
+from apps.financeiro.services.receber_service import ContaReceberService
 from apps.financeiro.views.contas_bancarias import ContaBancariaListView, _usuario_admin
 from apps.financeiro.views.pagar import _contexto_meta_despesa_pessoal
 
@@ -97,6 +99,23 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 detalhe_forcado=(origem, int(registro_id)),
                 data_referencia_forcada=data_referencia,
             )
+        if acao == "excluir_conta_receber":
+            conta = get_object_or_404(ContaReceber.all_objects.for_filial(filial), pk=request.POST.get("conta_id"))
+            motivo = (request.POST.get("motivo") or "").strip()
+            try:
+                antes = snapshot_modelo(conta, ["excluido_em", "excluido_por", "motivo_exclusao"])
+                ContaReceberService.excluir(conta, motivo, request.user)
+                conta.refresh_from_db()
+                registrar_auditoria(
+                    request=request, modulo=RegistroAuditoria.Modulo.FINANCEIRO,
+                    acao=RegistroAuditoria.Acao.EXCLUIR, objeto=conta,
+                    descricao=f"Título a receber #{conta.pk} excluído", justificativa=motivo,
+                    antes=antes, depois=snapshot_modelo(conta, ["excluido_em", "excluido_por", "motivo_exclusao"]),
+                )
+                messages.success(request, "Conta a receber excluída. O histórico foi preservado.")
+            except DomainError as exc:
+                messages.error(request, str(exc))
+            return redirect(destino)
         movimento = get_object_or_404(
             ExtratoBancario.objects.filter(filial=filial, origem="manual"), pk=request.POST.get("movimento_id"),
         )

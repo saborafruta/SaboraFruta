@@ -472,6 +472,21 @@ class ContaReceberService:
 
     @staticmethod
     @transaction.atomic
+    def excluir(conta: ContaReceber, motivo: str, usuario) -> ContaReceber:
+        """Exclusão lógica: remove da operação sem apagar o histórico."""
+        conta = ContaReceber.all_objects.select_for_update().get(pk=conta.pk)
+        if conta.excluido:
+            raise DomainError('Esta conta já está excluída.')
+        if not motivo.strip():
+            raise DomainError('Informe o motivo da exclusão.')
+        conta.excluido_em = timezone.now()
+        conta.excluido_por = usuario
+        conta.motivo_exclusao = motivo.strip()[:300]
+        conta.save(update_fields=['excluido_em', 'excluido_por', 'motivo_exclusao', 'updated_at'])
+        return conta
+
+    @staticmethod
+    @transaction.atomic
     def alterar_prazo(
         conta: ContaReceber,
         nova_data_vencimento: date,

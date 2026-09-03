@@ -13,6 +13,7 @@
     </div>
     <div class="flex flex-wrap gap-2">
     {% if tipo_conta == 'receber' and pode_editar_titulo %}<a href="{% url 'financeiro:receber_editar' conta.pk %}" class="btn-secondary" @click.prevent="abrirEdicaoTitulo($el.href)">Editar informações</a>{% endif %}
+    {% if tipo_conta == 'receber' and pode_excluir and not conta.excluido %}<button type="button" class="btn-secondary text-rose-600" @click="exclusaoAberta=!exclusaoAberta">Excluir</button>{% endif %}
     {% if tipo_conta == 'pagar' and pode_editar_lancamento %}
       <button type="button" class="btn-primary inline-flex items-center gap-2" onclick="toggleEditarLancamento(this)" aria-label="Editar lançamento">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 11l6-6 4 4-6 6H9v-4zM5 19h14"/></svg>
@@ -23,6 +24,14 @@
     {% if tipo_conta == 'pagar' and user_is_admin and conta.excluido %}<form action="{% url 'financeiro:pagar_restaurar' conta.pk %}" onsubmit="return alterarExclusaoLancamento(event,this)">{% csrf_token %}<button type="submit" class="btn-primary">Restaurar título</button></form>{% endif %}
     </div>
   </div>
+
+  {% if tipo_conta == 'receber' and pode_excluir and not conta.excluido %}
+  <form x-show="exclusaoAberta" x-cloak action="{% url 'financeiro:receber_excluir' conta.pk %}" method="post" class="space-y-3 rounded-lg border border-rose-300 bg-rose-50 p-4 text-slate-900 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-slate-100">
+    {% csrf_token %}<input type="hidden" name="next" value="{% url 'financeiro:receber_list' %}">
+    <label class="text-xs font-semibold">Motivo da exclusão <span class="text-rose-500">*</span><input name="motivo" required maxlength="300" class="form-input mt-1" placeholder="Explique a correção para manter a auditoria"></label>
+    <div class="flex justify-end gap-2"><button type="button" class="btn-secondary" @click="exclusaoAberta=false">Cancelar</button><button class="btn-primary bg-rose-600" type="submit">Excluir título</button></div>
+  </form>
+  {% endif %}
 
   {% if tipo_conta == 'pagar' and user_is_admin and not conta.excluido %}
   <form x-show="exclusaoAberta" x-cloak action="{% url 'financeiro:pagar_excluir' conta.pk %}" onsubmit="return alterarExclusaoLancamento(event,this)" class="space-y-3 rounded-lg border border-rose-300 bg-rose-50 p-4 text-slate-900 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-slate-100">

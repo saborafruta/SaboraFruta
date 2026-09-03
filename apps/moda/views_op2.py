@@ -1400,6 +1400,7 @@ class Op2ActionView(ModaBaseView):
         pedido.contato_telefone = (request.POST.get('contato_telefone') or '').strip()
         pedido.save()
         pedido.clientes_adicionais.set(clientes_adicionais)
+        FinanceiroPedidoService.sincronizar_previsao_entrega(pedido)
         if cliente.pk != cliente_anterior_id:
             messages.success(request, f'Cliente alterado para "{cliente.nome_display}".')
         else:
