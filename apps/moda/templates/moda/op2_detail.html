@@ -121,7 +121,8 @@
             <article class="op2-item op2-item-variant" style="border-color:{{ item.grade_cor }}" x-data="{detalhes:false,gradeEdit:false,personalizar:false,pessoas:[{uid:Date.now()+Math.random(),tamanhoId:'',nome:'',numero:''}]}">
               <header class="op2-item-head">
                 <div class="min-w-0">
-                  <div class="flex flex-wrap items-center gap-2"><span class="op2-grade-tag" style="color:{{ item.grade_cor }};background:{{ item.grade_fundo }}">{{ item.grade_rotulo }}</span></div>
+                  <h4 class="op2-item-name font-bold truncate">{{ item.nome_base_op|default:item.nome_exibicao }}</h4>
+                  <div class="flex flex-wrap items-center gap-2 mt-1"><span class="op2-grade-tag" style="color:{{ item.grade_cor }};background:{{ item.grade_fundo }}">{{ item.grade_rotulo }}</span></div>
                   {% if item.tecido_exibicao %}<p class="text-xs opacity-65 mt-1">{{ item.tecido_exibicao }}</p>{% endif %}
                 </div>
                 <div class="op2-item-metrics">

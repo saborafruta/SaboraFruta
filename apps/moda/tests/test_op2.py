@@ -361,6 +361,19 @@ class Op2Tests(TestCase):
             quantidade_entregue=entregue,
         )
 
+    def test_nome_do_produto_se_repete_em_cada_card_da_op(self):
+        self._item(quantidade=13)
+        self._item(quantidade=13)
+        self._login_op2()
+
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+
+        # O nome próprio é repetido em cada um dos dois cards.
+        self.assertContains(
+            resposta, 'class="op2-item-name font-bold truncate">Camisa personalizada',
+            count=2,
+        )
+
     def _configuracao_conjunto(self, grade, tamanho_p, tamanho_m):
         grupos = opcoes_estrutura_filial(self.filial)
 
