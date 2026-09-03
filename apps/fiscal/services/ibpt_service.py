@@ -119,7 +119,14 @@ def sincronizar_tabela_ibpt(uf: str) -> dict:
     dados = resposta.json()
     if str(dados.get('uf') or '').upper() != uf:
         raise DadosInvalidosError('A tabela IBPT retornou uma UF diferente da solicitada.')
-    itens = dados.get('ncm') or []
+    # O payload do IBPT mistura tres coisas na mesma lista, distinguidas
+    # pelo campo `tipo`: 0 = NCM de mercadoria (8 digitos), 1 = NBS de
+    # servico (9 digitos), 2 = codigo de servico LC 116 (4 digitos). Esta
+    # tabela e' so de mercadoria -- e' o que `AliquotaIBPT.ncm` (8 digitos)
+    # e a nota fiscal de produto (NFC-e) usam. Sem filtrar, todo item de
+    # servico batia como "NCM invalido" e derrubava a sincronizacao
+    # inteira por causa de linhas que o sistema nunca ia consultar.
+    itens = [item for item in (dados.get('ncm') or []) if item.get('tipo') == 0]
     if len(itens) < 10000:
         raise DadosInvalidosError('A tabela IBPT recebida esta incompleta.')
     registros = [_normalizar_registro(item, uf) for item in itens]

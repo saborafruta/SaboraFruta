@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from apps.fiscal.models import AliquotaIBPT
 from apps.fiscal.services.ibpt_service import (
     consultar_ncm_ibpt, obter_aliquota_ibpt, sincronizar_tabela_ibpt,
 )
@@ -73,7 +74,7 @@ class IBPTServiceTests(TestCase):
         resposta.json.return_value = {
             'uf': 'RN', 'versao': '26.1.L',
             'ncm': [{
-                'codigo': '20089900', 'descricao': 'x', 'nacionalfederal': '1',
+                'codigo': '20089900', 'tipo': 0, 'descricao': 'x', 'nacionalfederal': '1',
                 'importadosfederal': '1', 'estadual': '1', 'municipal': '0',
                 'vigenciainicio': '2026-01-01', 'vigenciafim': '2026-12-31',
                 'versao': '26.1.L', 'fonte': 'IBPT',
@@ -85,3 +86,38 @@ class IBPTServiceTests(TestCase):
 
         headers = get.call_args.kwargs['headers']
         self.assertNotIn('python-requests', headers.get('User-Agent', ''))
+
+    @patch('apps.fiscal.services.ibpt_service.requests.get')
+    def test_a_sincronizacao_ignora_codigo_de_servico_misturado_na_lista(self, get):
+        """
+        O payload do IBPT mistura NCM de mercadoria (tipo 0, 8 digitos) com
+        NBS de servico (tipo 1, 9 digitos) e codigo LC 116 (tipo 2, 4
+        digitos) na mesma lista. Um item de servico nao e' um "NCM
+        invalido" que deveria derrubar a sincronizacao inteira -- e' um
+        tipo de linha que esta tabela nao usa.
+        """
+        def mercadoria(codigo):
+            return {
+                'codigo': codigo, 'tipo': 0, 'descricao': 'Preparacoes de frutas',
+                'nacionalfederal': '13.45', 'importadosfederal': '21.46',
+                'estadual': '20.00', 'municipal': '0.00',
+                'vigenciainicio': '2026-01-01', 'vigenciafim': '2026-12-31',
+                'versao': '26.2.A', 'fonte': 'IBPT',
+            }
+        servico_nbs = {**mercadoria('20089900'), 'codigo': '101011000', 'tipo': 1}
+        servico_lc116 = {**mercadoria('20089900'), 'codigo': '0101', 'tipo': 2}
+        mercadorias = [mercadoria(f'{20080000 + i:08d}') for i in range(10000)]
+
+        resposta = Mock()
+        resposta.json.return_value = {
+            'uf': 'RN', 'versao': '26.2.A',
+            'ncm': [servico_nbs, servico_lc116] + mercadorias,
+        }
+        get.return_value = resposta
+
+        resultado = sincronizar_tabela_ibpt('RN')
+
+        self.assertEqual(resultado['quantidade'], 10000)
+        self.assertFalse(AliquotaIBPT.objects.filter(ncm='101011000').exists())
+        self.assertFalse(AliquotaIBPT.objects.filter(ncm='0101').exists())
+        self.assertTrue(AliquotaIBPT.objects.filter(ncm='20080000').exists())
