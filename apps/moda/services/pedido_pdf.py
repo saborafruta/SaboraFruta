@@ -52,6 +52,21 @@ LARGURA_UTIL = PAGINA[0] - 2 * MARGEM
 DESENHAVEIS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 
+def _separar_contatos_extras_observacoes(texto):
+    """Tira os contatos extras das observações e os deixa prontos para o PDF."""
+    texto = (texto or '').strip()
+    livre, separador, bloco = texto.rpartition('Contatos extras:\n')
+    if not separador:
+        return texto, []
+    contatos = []
+    for linha in bloco.splitlines():
+        if not linha.startswith('- ') or ':' not in linha:
+            return texto, []
+        nome, _, telefone = linha[2:].partition(':')
+        contatos.append((nome.strip() or 'Contato', telefone.strip()))
+    return livre.rstrip(), contatos
+
+
 def _estilos():
     base = getSampleStyleSheet()
     return {
@@ -680,6 +695,7 @@ class PedidoPdfService:
         whatsapp = getattr(c, 'celular', '') or ''
         responsavel = (pedido.contato_nome or '').strip()
         telefone = pedido.contato_telefone or getattr(c, 'telefone', '') or ''
+        _, contatos_extras = _separar_contatos_extras_observacoes(pedido.observacoes)
 
         if responsavel:
             dados = [[
@@ -704,6 +720,13 @@ class PedidoPdfService:
             dados.append([
                 Paragraph('<b>Telefone</b>', e['celula']),
                 Paragraph(esc(telefone), e['celula']), '', '',
+            ])
+        for nome, telefone_extra in contatos_extras:
+            dados.append([
+                Paragraph('<b>Responsável adicional</b>', e['celula']),
+                Paragraph(esc(nome), e['celula']),
+                Paragraph('<b>Telefone</b>', e['celula']),
+                Paragraph(esc(telefone_extra) or '—', e['celula']),
             ])
         dados.append([Paragraph('<b>WhatsApp</b>', e['celula']),
              Paragraph(esc(whatsapp) or '—', e['celula']),
@@ -1248,8 +1271,9 @@ class PedidoPdfService:
 
     @classmethod
     def _observacoes_op(cls, pedido, e, largura_util=LARGURA_UTIL) -> list:
+        observacoes, _ = _separar_contatos_extras_observacoes(pedido.observacoes)
         return cls._quadro_observacoes(
-            'OBSERVAÇÕES DA OP', pedido.observacoes, e, largura_util,
+            'OBSERVAÇÕES DA OP', observacoes, e, largura_util,
         )
 
     # Mantido apenas como compatibilidade interna para chamadas antigas.

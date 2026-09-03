@@ -462,6 +462,30 @@ class ArteNoPdfTests(TestCase):
         self.assertIn('INFORMAÇÕES DOS CLIENTES', texto_op)
         self.assertIn('Cliente adicional LTDA', texto_op)
 
+    def test_contatos_extras_aparecem_nas_informacoes_do_cliente_da_op(self):
+        from apps.moda.services.pedido_pdf import _estilos as estilos_op
+
+        pedido = self._pedido()
+        pedido.contato_nome = 'Eduardo'
+        pedido.contato_telefone = '84994540426'
+        pedido.observacoes = (
+            'Conferir a arte antes de produzir.\n\nContatos extras:\n'
+            '- Ademir Adriano: 84999990000'
+        )
+        pedido.save(update_fields=['contato_nome', 'contato_telefone', 'observacoes'])
+
+        cliente = PedidoPdfService._cliente(pedido, estilos_op())
+        observacoes = PedidoPdfService._observacoes_op(pedido, estilos_op())
+        texto_cliente = self._texto_layout(cliente)
+        texto_observacoes = self._texto_layout(observacoes)
+
+        self.assertIn('Responsável adicional', texto_cliente)
+        self.assertIn('Ademir Adriano', texto_cliente)
+        self.assertIn('84999990000', texto_cliente)
+        self.assertIn('Conferir a arte antes de produzir.', texto_observacoes)
+        self.assertNotIn('Contatos extras', texto_observacoes)
+        self.assertNotIn('Ademir Adriano', texto_observacoes)
+
     def test_pagamento_nao_informado_nao_repete_valor_ao_lado(self):
         from apps.moda.services.orcamento_pdf import _estilos
 
