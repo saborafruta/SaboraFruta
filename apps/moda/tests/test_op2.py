@@ -692,6 +692,16 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, f'?rascunho={rascunho.chave}')
         self.assertContains(resposta, self.cliente.nome_display)
         self.assertContains(resposta, '+ Nova OP 2.0')
+        self.assertContains(resposta, 'kc-cancelar-rascunho')
+        self.assertContains(resposta, 'Deseja realmente cancelar este rascunho?')
+        self.assertContains(resposta, 'data-ocultar-coluna')
+        self.assertContains(resposta, 'kc-restaurar-coluna')
+
+        resposta = self.client.delete(
+            reverse('moda:op2-rascunho') + f'?chave={rascunho.chave}',
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertFalse(RascunhoOP.objects.filter(pk=rascunho.pk).exists())
 
     def test_finaliza_op_e_vincula_item_incompleto_sem_somar_no_total(self):
         self._login_op2()
