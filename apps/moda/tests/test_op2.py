@@ -727,6 +727,11 @@ class Op2Tests(TestCase):
             html.index('Copiar camisa para o calção'),
         )
         self.assertLess(html.index('Tipo de peça *'), html.index('Estrutura da peça'))
+        self.assertLess(
+            html.index("?'Valor por conjunto':'Valor unitário'"),
+            html.index("?'Quantidade de conjuntos':'Quantidade total'"),
+        )
+        self.assertNotIn('.op2-required-highlight{padding:', html)
         self.assertGreaterEqual(html.count('op2-required-highlight'), 3)
 
     def test_historico_abre_card_com_detalhes_do_que_foi_registrado(self):
