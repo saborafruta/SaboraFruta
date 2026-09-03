@@ -612,6 +612,20 @@ class PedidoPdfService:
                     altura - 8 * mm - a,
                 )
 
+            # A previsão é uma informação de chão de fábrica: fica grande no
+            # canto direito, junto da marca, para continuar visível mesmo
+            # quando a OP estiver impressa em várias páginas. Sem data não
+            # desenhamos rótulo nem espaço reservado.
+            if pedido.data_prevista_entrega:
+                canvas.setFillColor(AZUL_ESCURO)
+                canvas.setFont('Helvetica-Bold', 13)
+                canvas.drawRightString(
+                    largura - MARGEM - 34 * mm,
+                    altura - 12 * mm,
+                    'ENTREGA: '
+                    + pedido.data_prevista_entrega.strftime('%d/%m/%Y'),
+                )
+
             canvas.setStrokeColor(AZUL)
             canvas.setLineWidth(1.1)
             canvas.line(MARGEM, altura - 25 * mm, largura - MARGEM, altura - 25 * mm)

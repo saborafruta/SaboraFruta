@@ -198,6 +198,13 @@ def _previsao_pagamento(request, total_esperado=None, *, obrigatoria=False):
         linhas.append({'forma': forma, 'valor': f'{valor:.2f}'})
 
     if obrigatoria and not linhas:
+        # OP sem preço não tem cobrança a prever. Registramos a escolha
+        # comercial explícita para que ela não seja confundida com um
+        # lançamento financeiro pendente.
+        if total_esperado is not None and Decimal(total_esperado).quantize(
+            Decimal('0.01')
+        ) == 0:
+            return [{'forma': 'nao_informado', 'valor': '0.00'}]
         raise ValueError(
             'Pagamento previsto: selecione a forma de pagamento do orçamento.'
         )

@@ -281,8 +281,6 @@ class Op2Tests(TestCase):
             **self._modelo_completo('item_0_'), 'cliente': self.cliente.pk,
             'item_0_produto_id': self.produto.pk, 'item_0_quantidade': 1,
             'item_0_valor_unitario': '0',
-            'pagamento_0_forma': 'nao_informado',
-            'pagamento_0_valor': '0',
         }
 
         resposta = self.client.post(reverse('moda:op2-create'), dados)
@@ -291,13 +289,17 @@ class Op2Tests(TestCase):
         criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
         self.assertEqual(criado.itens.get().valor_unitario, Decimal('0.00'))
         self.assertEqual(criado.valor_total, Decimal('0.00'))
-        self.assertEqual(criado.previsao_pagamento[0]['valor'], '0.00')
+        self.assertEqual(criado.previsao_pagamento, [
+            {'forma': 'nao_informado', 'valor': '0.00'},
+        ])
 
     def test_telas_da_op_permitem_previsao_de_pagamento_zerada(self):
         self._login_op2()
         resposta = self.client.get(reverse('moda:op2-create'))
         self.assertContains(resposta, "Number(p.valor||0)<0")
         self.assertNotContains(resposta, "Number(p.valor||0)<=0")
+        self.assertContains(resposta, 'sincronizarPagamentoSemValor')
+        self.assertContains(resposta, ':required="totalValor()>0"')
 
         resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
         self.assertContains(resposta, 'type="number" min="0" step=".01" x-model.number="linha.valor"')

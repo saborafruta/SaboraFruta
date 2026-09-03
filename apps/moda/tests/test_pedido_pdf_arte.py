@@ -85,6 +85,37 @@ class ArteNoPdfTests(TestCase):
         self.base = _imagens(pdf)
         self.assertTrue(pdf.startswith(b'%PDF'))
 
+    def test_cabecalho_da_op_destaca_previsao_de_entrega_ao_lado_da_marca(self):
+        from datetime import date
+        from unittest.mock import Mock
+        from reportlab.lib.pagesizes import A4
+
+        pedido = self._pedido()
+        pedido.data_prevista_entrega = date(2026, 8, 31)
+        canvas = Mock()
+        canvas._pagesize = A4
+
+        with patch('apps.moda.services.pedido_pdf.logo', return_value=None):
+            PedidoPdfService._cabecalho_folha(pedido)(canvas, None)
+
+        canvas.setFont.assert_any_call('Helvetica-Bold', 13)
+        self.assertIn(
+            'ENTREGA: 31/08/2026',
+            [call.args[2] for call in canvas.drawRightString.call_args_list],
+        )
+
+    def test_cabecalho_da_op_sem_previsao_nao_desenha_data(self):
+        from unittest.mock import Mock
+        from reportlab.lib.pagesizes import A4
+
+        canvas = Mock()
+        canvas._pagesize = A4
+
+        with patch('apps.moda.services.pedido_pdf.logo', return_value=None):
+            PedidoPdfService._cabecalho_folha(self._pedido())(canvas, None)
+
+        self.assertFalse(canvas.drawRightString.called)
+
     def test_grupo_usa_fonte_de_leitura_quando_ha_espaco(self):
         from reportlab.platypus import Paragraph
         from apps.moda.services.item_groups import agrupar_itens_op
