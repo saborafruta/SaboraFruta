@@ -162,6 +162,16 @@ class ConferenciaPessoasView(ModaBaseView):
         pessoas = list(_pessoas(expedicao))
 
         quantidades = _linhas_de_quantidade(expedicao)
+        demais_expedicoes = []
+        if expedicao.pedido_id:
+            demais_expedicoes = list(
+                Expedicao.objects.for_filial(_filial(request))
+                .filter(ordem__pedido_id=expedicao.pedido_id)
+                .exclude(pk=expedicao.pk)
+                .exclude(status=Expedicao.Status.CANCELADA)
+                .select_related('ordem__item')
+                .order_by('numero')
+            )
         linhas = [{'pessoa': p, 'conferido': p.pk in conferidas} for p in pessoas]
         pessoas_por_tamanho = {}
         for linha in linhas:
@@ -176,6 +186,7 @@ class ConferenciaPessoasView(ModaBaseView):
             'total': len(pessoas),
             'conferidas': sum(1 for p in pessoas if p.pk in conferidas),
             'quantidades': quantidades,
+            'demais_expedicoes': demais_expedicoes,
             'artes': _artes(expedicao),
             'esperado_total': sum(l['esperado'] for l in quantidades),
             'conferido_total': sum(l['conferido'] for l in quantidades),

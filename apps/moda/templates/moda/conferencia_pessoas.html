@@ -68,6 +68,19 @@
     </div>
   </div>
 
+  {% if demais_expedicoes %}
+    <div class="card p-3" style="border-left:3px solid #3b82f6;">
+      <p class="text-sm font-semibold">Outros itens desta OP para conferir</p>
+      <div class="flex flex-wrap gap-2 mt-2">
+        {% for outra in demais_expedicoes %}
+          <a class="btn-secondary text-sm" href="{% url 'moda:conferencia-pessoas' outra.pk %}">
+            {{ outra.ordem.item.nome_exibicao }} · {{ outra.quantidade_esperada }} peça{{ outra.quantidade_esperada|pluralize }}
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
   {% if expedicao.recebido_por %}
     <div class="card p-4" style="border-left:3px solid #059669;">
       <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
