@@ -446,7 +446,7 @@ class PedidoConferenciaView(ModaBaseView):
             # ANTES ISTO ERA UM BECO: a mensagem explicava por que não dava e
             # devolvia a pessoa ao pedido, sem caminho nenhum. Agora ela vê o
             # que está travando e decide — o sistema informa, não impede.
-            return self._perguntar(request, pedido)
+            return PedidoConferenciaForcarView().post(request, pk)
 
         if len(expedicoes) == 1:
             return redirect(reverse('moda:conferencia-pessoas', args=[expedicoes[0].pk]))
