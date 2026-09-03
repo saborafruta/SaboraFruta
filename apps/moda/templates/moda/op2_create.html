@@ -700,7 +700,7 @@ function op2NovaMelhorada(){
     if(this.autosavePausado)return null;
     const dados=this.capturarRascunho();
     if(!this.temConteudoRascunho(dados))return null;
-    try{localStorage.setItem(this.chaveRascunho,JSON.stringify(dados));this.estadoRascunho='local';this.mensagemRascunho=navigator.onLine?'Protegido neste computador':'Sem internet — protegido neste computador'}catch(e){this.mensagemRascunho='Não foi possível gravar a cópia local'}
+    try{localStorage.setItem(this.chaveRascunho,JSON.stringify(dados));this.estadoRascunho=navigator.onLine?'salvando':'local';this.mensagemRascunho=navigator.onLine?'Salvando rascunho automaticamente…':'Sem internet — protegido neste computador'}catch(e){this.mensagemRascunho='Não foi possível gravar a cópia local'}
     return dados;
   };
   estado.salvarServidor=async function(dados){

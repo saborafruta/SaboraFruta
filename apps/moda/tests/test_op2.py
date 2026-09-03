@@ -1334,6 +1334,8 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'this.aplicarArquivosImagens()')
         self.assertContains(resposta, 'new DataTransfer()')
         self.assertContains(resposta, '>+</strong>')
+        self.assertContains(resposta, 'Salvando rascunho automaticamente…')
+        self.assertContains(resposta, 'Salvo automaticamente às')
         self.assertContains(resposta, 'Observação das imagens')
         self.assertNotContains(resposta, 'itensGaleria()')
         self.assertNotContains(resposta, 'Separados por produto')
