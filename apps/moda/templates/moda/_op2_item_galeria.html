@@ -6,7 +6,7 @@
   <div class="op2-gallery-grid">
     {% for visual in item.visuais.all %}{% if visual.tem_imagem %}
       <figure class="op2-gallery-image">
-        <a href="{{ visual.url_imagem }}" target="_blank" rel="noopener"><img src="{{ visual.url_imagem }}" alt="Imagem de {{ item.nome_exibicao }}"></a>
+        <a href="{{ visual.url_imagem }}" target="_blank" rel="noopener"><img src="{{ visual.url_imagem }}" alt="Imagem de {{ item.nome_exibicao }}"></a>{% if visual.observacoes %}<figcaption class="text-xs mt-1">{{ visual.observacoes }}</figcaption>{% endif %}
         <form class="op2-gallery-remove" method="post" action="{% url 'moda:op2-action' pedido.pk %}" onsubmit="return confirm('Remover esta imagem da OP?')">{% csrf_token %}<input type="hidden" name="acao" value="remover_visual"><input type="hidden" name="visual_id" value="{{ visual.pk }}"><button title="Remover imagem" aria-label="Remover imagem">×</button></form>
         <figcaption>
           <form method="post" action="{% url 'moda:op2-action' pedido.pk %}" class="mt-1"

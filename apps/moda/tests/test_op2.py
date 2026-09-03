@@ -1241,8 +1241,11 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'anexosPreview')
         self.assertContains(resposta, 'Fotos e mockups')
         self.assertContains(resposta, 'Separados por produto')
-        self.assertContains(resposta, 'selecionarImagensItem(item,$event)')
-        self.assertContains(resposta, '+ Adicionar imagens')
+        self.assertContains(resposta, 'itensGaleria()')
+        self.assertContains(resposta, 'selecionarImagensItem(entrada.item,$event)')
+        self.assertContains(resposta, '>+</strong>')
+        self.assertContains(resposta, 'Observação das imagens')
+        self.assertContains(resposta, 'entrada.rascunho')
         self.assertNotContains(resposta, 'As imagens ficarão ligadas somente a este produto.')
         self.assertNotContains(resposta, '+ Frente')
         self.assertNotContains(resposta, '+ Costas')
@@ -1263,7 +1266,8 @@ class Op2Tests(TestCase):
             'pagamento_0_forma': 'nao_informado',
             'pagamento_0_valor': '20.00',
             'arquivo': SimpleUploadedFile('arte.png', imagem, content_type='image/png'),
-            'mockup_frente_camisa': SimpleUploadedFile(
+            'item_0_imagens_observacoes': 'Usar esta arte na frente',
+            'item_0_imagens': SimpleUploadedFile(
                 'frente.png', imagem, content_type='image/png',
             ),
         })
@@ -1272,8 +1276,10 @@ class Op2Tests(TestCase):
         self.assertRedirects(resposta, reverse('moda:op2-detail', args=[criado.pk]))
         self.assertEqual(ArquivoPedido.objects.filter(pedido=criado).count(), 2)
         visual = VisualItemPedido.objects.get(item__pedido=criado)
+        self.assertEqual(visual.observacoes, 'Usar esta arte na frente')
         detalhe = self.client.get(reverse('moda:op2-detail', args=[criado.pk]))
         self.assertContains(detalhe, visual.url_imagem)
+        self.assertContains(detalhe, 'Usar esta arte na frente')
 
         for arquivo in ArquivoPedido.objects.filter(pedido=criado):
             arquivo.arquivo.delete(save=False)

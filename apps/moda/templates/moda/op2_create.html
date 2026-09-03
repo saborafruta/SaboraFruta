@@ -148,16 +148,18 @@
         <section class="card p-3">
           <div class="mb-3"><h2 class="font-bold">Fotos e mockups</h2><p class="text-xs opacity-60">Separados por produto</p></div>
           <div class="space-y-2">
-            <template x-for="(item,idx) in itens" :key="`imagens-${item.uid}`">
+            <template x-for="entrada in itensGaleria()" :key="`imagens-${entrada.item.uid}`">
               <article class="op2-gallery-product">
-                <div class="min-w-0"><strong class="block truncate text-sm" x-text="item.nome"></strong><small class="block truncate opacity-60" x-text="item.grade_nome || item.codigo"></small></div>
+                <div class="min-w-0"><div class="flex items-center gap-2"><strong class="block truncate text-sm" x-text="entrada.item.nome"></strong><span x-show="entrada.rascunho" class="op2-draft-badge">Rascunho</span></div><small class="block truncate opacity-60" x-text="entrada.item.grade_nome || entrada.item.codigo"></small></div>
                 <div class="op2-gallery-grid">
-                  <template x-for="imagem in (item.imagensPreview||[])" :key="imagem.chave"><figure class="op2-gallery-image"><img :src="imagem.url" :alt="imagem.nome"><figcaption x-text="imagem.nome"></figcaption></figure></template>
-                  <label class="op2-gallery-add"><input type="file" :name="`item_${idx}_imagens`" accept="image/*" multiple class="hidden" @change="selecionarImagensItem(item,$event)"><strong x-text="item.imagensNomes?.length?'Trocar imagens':'+ Adicionar imagens'"></strong><small x-show="item.imagensNomes?.length" x-text="`${item.imagensNomes.length} selecionada(s)`"></small></label>
+                  <template x-for="imagem in (entrada.item.imagensPreview||[])" :key="imagem.chave"><figure class="op2-gallery-image"><img :src="imagem.url" :alt="imagem.nome"><figcaption x-text="imagem.nome"></figcaption></figure></template>
+                  <label class="op2-gallery-add"><input type="file" :name="entrada.rascunho?'':`item_${entrada.idx}_imagens`" accept="image/*" multiple class="hidden" @change="selecionarImagensItem(entrada.item,$event)"><strong aria-hidden="true" style="font-size:32px;line-height:1">+</strong><small x-text="entrada.item.imagensNomes?.length?'Trocar imagens':'Adicionar imagens'"></small><small x-show="entrada.item.imagensNomes?.length" x-text="`${entrada.item.imagensNomes.length} selecionada(s)`"></small></label>
                 </div>
+                <label class="block mt-2"><span class="op2-label">Observação das imagens</span><textarea :name="entrada.rascunho?'':`item_${entrada.idx}_imagens_observacoes`" x-model="entrada.item.imagensObservacoes" rows="2" maxlength="160" class="form-input w-full" placeholder="Ex.: usar esta arte na frente"></textarea></label>
+                <p x-show="entrada.rascunho" class="text-xs mt-2" style="color:#d97706">As imagens ficarão ligadas ao produto quando o preenchimento for concluído.</p>
               </article>
             </template>
-            <p x-show="!itens.length" class="text-sm opacity-60">Adicione um produto para vincular imagens.</p>
+            <p x-show="!itens.length&&!temItemRascunho()" class="text-sm opacity-60">Adicione um produto para vincular imagens.</p>
           </div>
         </section>
         <section class="card p-3 sticky top-24"><h2 class="font-bold mb-2">Resumo de conferência</h2><dl class="space-y-2 text-sm"><div class="flex justify-between"><dt>Status</dt><dd class="font-bold" style="color:#d97706">Orçamento</dd></div><div class="flex justify-between"><dt>Produtos</dt><dd class="font-bold" x-text="itens.length"></dd></div><div x-show="temItemRascunho()" class="flex justify-between" style="color:#d97706"><dt>Itens em rascunho</dt><dd class="font-bold">1</dd></div><div class="flex justify-between"><dt>Unidades comerciais</dt><dd class="font-bold" x-text="totalPecas()"></dd></div><div class="flex justify-between"><dt>Total</dt><dd class="font-bold" x-text="moeda(totalValor())"></dd></div></dl></section>
@@ -232,6 +234,9 @@ function op2NovaMelhorada(){
     draft.cor_personalizada='';
     draft.estrutura_outros={};
     draft.estrutura_observacoes={};
+    draft.imagensNomes=[];
+    draft.imagensPreview=[];
+    draft.imagensObservacoes='';
     draft.configuracao_conjunto=op2NovaConfiguracaoConjunto(estado.estruturaOpcoes);
     draft.estrutura=op2EstruturaPadraoNaoMultipla(
       estado.estruturaOpcoes,draft.estrutura_tipo,draft.estrutura,
@@ -444,11 +449,13 @@ function op2NovaMelhorada(){
     this.somarDraftGrade();
   };
   estado.salvarDraft=function(){
+    const uidRascunho=this.origemEditor==='rascunho'?this.itemRascunho?.uid:null;
     if(this.draft.estrutura_tipo==='conjunto'){
       const erroConjunto=validarConjuntoOp2(this.draft.configuracao_conjunto,this.estruturaOpcoes);
       if(erroConjunto){alert(erroConjunto);return}
       this.draft.quantidade=this.totalComponenteConjunto('camisa');
       const novo=this.montarItemParaGrade('');
+      if(uidRascunho)novo.uid=uidRascunho;
       if(this.editandoIdx===null)this.itens.push(novo);else{novo.uid=this.itens[this.editandoIdx].uid;this.itens.splice(this.editandoIdx,1,novo)}
       this.limparItemRascunho();return;
     }
@@ -472,6 +479,7 @@ function op2NovaMelhorada(){
       return;
     }
     const novos=grades.map(id=>this.montarItemParaGrade(id));
+    if(uidRascunho&&novos.length)novos[0].uid=uidRascunho;
     if(this.editandoIdx!==null&&novos.length>1){
       novos.slice(1).forEach(item=>{item.imagensNomes=[];item.imagensPreview=[]});
     }
@@ -569,6 +577,11 @@ function op2NovaMelhorada(){
     this.anexosPreview.forEach(item=>{if(item.url)URL.revokeObjectURL(item.url)});
     this.anexosPreview=Array.from(event.target.files||[]).map(arquivo=>this.arquivoPreview(arquivo));
   };
+  estado.itensGaleria=function(){
+    const entradas=this.itens.map((item,idx)=>({item,idx,rascunho:false}));
+    if(this.temItemRascunho())entradas.push({item:this.itemRascunho,idx:null,rascunho:true});
+    return entradas;
+  };
   estado.selecionarImagensItem=function(item,event){
     (item.imagensPreview||[]).forEach(imagem=>{if(imagem.url)URL.revokeObjectURL(imagem.url)});
     const arquivos=Array.from(event.target.files||[]);
@@ -582,8 +595,9 @@ function op2NovaMelhorada(){
   estado.capturarRascunho=function(){
     const campos={};
     this.camposRascunho.forEach(nome=>{const campo=this.$root.querySelector(`[name="${nome}"]`);if(campo)campos[nome]=campo.value});
-    const itens=this.itens.map(({imagensPreview,...item})=>item);
-    return{versao:3,rascunhoChave:this.rascunhoChave,salvoEm:Date.now(),campos,clienteId:this.clienteId,contatoNome:this.contatoNome,contatoTelefone:this.contatoTelefone,contatos:this.contatos,clientesAdicionais:this.clientesAdicionais,itens,itemRascunho:this.itemRascunho,draft:this.draft,origemEditor:this.origemEditor,editandoIdx:this.editandoIdx,modalProduto:this.modalProduto,personalizacoes:this.personalizacoes,pagamentos:this.pagamentos,anexosNomes:[...this.anexosParaReanexar,...this.anexosPreview.map(a=>a.nome),...this.itens.flatMap(i=>i.imagensNomes||[])]};
+    const semPreview=item=>{if(!item)return item;const {imagensPreview,...dados}=item;return dados};
+    const itens=this.itens.map(semPreview);
+    return{versao:3,rascunhoChave:this.rascunhoChave,salvoEm:Date.now(),campos,clienteId:this.clienteId,contatoNome:this.contatoNome,contatoTelefone:this.contatoTelefone,contatos:this.contatos,clientesAdicionais:this.clientesAdicionais,itens,itemRascunho:semPreview(this.itemRascunho),draft:semPreview(this.draft),origemEditor:this.origemEditor,editandoIdx:this.editandoIdx,modalProduto:this.modalProduto,personalizacoes:this.personalizacoes,pagamentos:this.pagamentos,anexosNomes:[...this.anexosParaReanexar,...this.anexosPreview.map(a=>a.nome),...this.itens.flatMap(i=>i.imagensNomes||[]),...(this.itemRascunho?.imagensNomes||[])]};
   };
   estado.temConteudoRascunho=function(dados){
     const c=dados.campos||{};
@@ -618,7 +632,8 @@ function op2NovaMelhorada(){
     this.contatos=Array.isArray(dados.contatos)?dados.contatos:[];this.clientesAdicionais=Array.isArray(dados.clientesAdicionais)?dados.clientesAdicionais:[];
     this.itens=(Array.isArray(dados.itens)?dados.itens:[]).map(item=>({...item,imagensNomes:[],imagensPreview:[]}));this.personalizacoes=Array.isArray(dados.personalizacoes)?dados.personalizacoes:[];this.pagamentos=Array.isArray(dados.pagamentos)&&dados.pagamentos.length?dados.pagamentos:this.pagamentos;
     const rascunhoLegado=!dados.itemRascunho&&dados.draft?.produto_id&&dados.modalProduto===false?dados.draft:null;
-    this.itemRascunho=dados.itemRascunho||rascunhoLegado||null;this.draft=this.novoDraft();this.origemEditor='novo';this.editandoIdx=null;this.modalProduto=false;
+    const itemRascunho=dados.itemRascunho||rascunhoLegado||null;
+    this.itemRascunho=itemRascunho?{...itemRascunho,imagensNomes:[],imagensPreview:[]}:null;this.draft=this.novoDraft();this.origemEditor='novo';this.editandoIdx=null;this.modalProduto=false;
     this.anexosParaReanexar=Array.from(new Set(dados.anexosNomes||[]));
     this.$nextTick(()=>Object.entries(dados.campos||{}).forEach(([nome,valor])=>{const campo=this.$root.querySelector(`[name="${nome}"]`);if(campo)campo.value=valor||''}));
     this.rascunhoRecuperado=true;

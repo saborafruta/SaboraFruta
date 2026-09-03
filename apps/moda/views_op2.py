@@ -516,6 +516,9 @@ class Op2CreateView(ModaBaseView):
 
                 self._salvar_mockups_do_item(
                     request, pedido, item, campo_generico=f'item_{indice}_imagens',
+                    observacoes=(
+                        request.POST.get(f'item_{indice}_imagens_observacoes') or ''
+                    ).strip(),
                     incluir_legado=False,
                 )
 
@@ -871,10 +874,12 @@ class Op2CreateView(ModaBaseView):
     @staticmethod
     def _salvar_mockups_do_item(
         request, pedido, item, campo_generico='imagens', incluir_legado=True,
+        observacoes='',
     ):
         for upload in request.FILES.getlist(campo_generico):
             visual = VisualItemPedido.objects.create(
                 item=item, posicao=Posicao.FRENTE_CAMISA, imagem=upload,
+                observacoes=observacoes[:160],
             )
             ArquivoPedido.objects.create(
                 pedido=pedido, arquivo=visual.imagem, tipo=ArquivoPedido.Tipo.ARTE,
