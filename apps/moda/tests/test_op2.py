@@ -1235,7 +1235,11 @@ class Op2Tests(TestCase):
 
         self.assertContains(resposta, 'previewAnexos($event)')
         self.assertContains(resposta, 'anexosPreview')
+        self.assertContains(resposta, 'Fotos e mockups')
+        self.assertContains(resposta, 'Separados por produto')
+        self.assertContains(resposta, 'selecionarImagensItem(item,$event)')
         self.assertContains(resposta, '+ Adicionar imagens')
+        self.assertNotContains(resposta, 'As imagens ficarão ligadas somente a este produto.')
         self.assertNotContains(resposta, '+ Frente')
         self.assertNotContains(resposta, '+ Costas')
 
