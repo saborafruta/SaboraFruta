@@ -108,6 +108,60 @@ function op2PrepararConfiguracaoConjunto(grupos, configuracao) {
   return resultado;
 }
 
+function op2EstruturaTemInformacao(estrutura) {
+  return Object.values(estrutura || {}).some(valor => op2ListaMultisselecao(valor)
+    .some(opcao => opcao && opcao !== 'N/A'));
+}
+
+function op2MesclarEstruturaPreferindoDestino(destino, origem) {
+  const resultado = { ...(origem || {}), ...(destino || {}) };
+  for (const [campo, valor] of Object.entries(origem || {})) {
+    if (!op2ListaMultisselecao(resultado[campo]).some(opcao => opcao && opcao !== 'N/A')
+        && op2ListaMultisselecao(valor).some(opcao => opcao && opcao !== 'N/A')) {
+      resultado[campo] = JSON.parse(JSON.stringify(valor));
+    }
+  }
+  return resultado;
+}
+
+function op2PreservarEstruturaAoTrocarTipo(grupos, draft, tipoAnterior, tipoNovo, componenteAtivo = 'camisa') {
+  if (!draft || tipoAnterior === tipoNovo) return draft;
+  const conjuntoAnterior = tipoAnterior === 'conjunto';
+  const conjuntoNovo = tipoNovo === 'conjunto';
+  const configuracao = op2PrepararConfiguracaoConjunto(grupos, draft.configuracao_conjunto);
+
+  if (conjuntoNovo && !conjuntoAnterior) {
+    const conjuntoJaPreenchido = ['camisa', 'calcao'].some(componente =>
+      op2EstruturaTemInformacao(configuracao[componente].estrutura)
+      || Object.keys(configuracao[componente].outros || {}).length
+      || Object.keys(configuracao[componente].observacoes_campos || {}).length,
+    );
+    if (!conjuntoJaPreenchido) {
+      for (const componente of ['camisa', 'calcao']) {
+        configuracao[componente].estrutura = op2MesclarEstruturaPreferindoDestino(
+          configuracao[componente].estrutura, draft.estrutura,
+        );
+        configuracao[componente].cor_personalizada = draft.cor_personalizada || '';
+        configuracao[componente].outros = { ...(draft.estrutura_outros || {}) };
+        configuracao[componente].observacoes_campos = { ...(draft.estrutura_observacoes || {}) };
+      }
+    }
+    draft.configuracao_conjunto = configuracao;
+    return draft;
+  }
+
+  if (conjuntoAnterior && !conjuntoNovo) {
+    const origem = configuracao[componenteAtivo] || configuracao.camisa;
+    draft.estrutura = op2MesclarEstruturaPreferindoDestino(draft.estrutura, origem.estrutura);
+    draft.cor_personalizada = draft.cor_personalizada || origem.cor_personalizada || '';
+    draft.estrutura_outros = { ...(origem.outros || {}), ...(draft.estrutura_outros || {}) };
+    draft.estrutura_observacoes = {
+      ...(origem.observacoes_campos || {}), ...(draft.estrutura_observacoes || {}),
+    };
+  }
+  return draft;
+}
+
 function op2CopiarCamisaParaCalcao(grupos, configuracao) {
   const origem = configuracao?.camisa || {};
   const destino = op2NovoComponenteConjunto(grupos, 'calcao');
@@ -182,5 +236,6 @@ if (typeof module !== 'undefined') module.exports = {
   op2EstruturaPadraoNaoMultipla,
   op2NovoComponenteConjunto, op2NovaConfiguracaoConjunto,
   op2PrepararConfiguracaoConjunto,
+  op2PreservarEstruturaAoTrocarTipo,
   op2CopiarCamisaParaCalcao, op2TotalComponenteConjunto, validarConjuntoOp2,
 };

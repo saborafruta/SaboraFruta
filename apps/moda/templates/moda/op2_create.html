@@ -276,6 +276,13 @@ function op2NovaMelhorada(){
       this.estruturaOpcoes,this.draft.estrutura_tipo,this.draft.estrutura,
     );
   };
+  estado.preservarEstruturaAoTrocarTipo=function(anterior,tipo){
+    this.draft=op2PreservarEstruturaAoTrocarTipo(
+      this.estruturaOpcoes,this.draft,anterior,tipo,this.componenteConjuntoAtivo,
+    );
+    this.aplicarPadroesEstrutura();
+    if(tipo==='conjunto')this.inicializarConjunto();
+  };
   estado.componenteConjuntoAtivo='camisa';
   estado.componenteConjunto=function(componente){return this.draft.configuracao_conjunto[componente]};
   estado.inicializarConjunto=function(){
@@ -310,7 +317,7 @@ function op2NovaMelhorada(){
   estado.totalComponenteConjunto=function(componente){return op2TotalComponenteConjunto(this.draft.configuracao_conjunto,componente)};
   estado.init=function(){
     const url=new URL(window.location.href);if(!url.searchParams.has('rascunho')&&!url.searchParams.has('sessao')){url.searchParams.set('sessao','{{ rascunho_chave }}');history.replaceState({},'',url)}
-    this.$watch('draft.estrutura_tipo',tipo=>{this.aplicarPadroesEstrutura();if(tipo==='conjunto')this.inicializarConjunto()});
+    this.$watch('draft.estrutura_tipo',(tipo,anterior)=>this.preservarEstruturaAoTrocarTipo(anterior,tipo));
     this.iniciarAutosave();
   };
   estado.draft=estado.novoDraft();

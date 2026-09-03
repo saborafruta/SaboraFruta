@@ -4,7 +4,7 @@ const {
   validarModeloOp2, op2AlternarMultisselecao, op2ResumoMultisselecao,
   op2EstruturaPadraoNaoMultipla, op2NormalizarUidsItens,
   op2NovaConfiguracaoConjunto, op2CopiarCamisaParaCalcao,
-  op2TotalComponenteConjunto, validarConjuntoOp2,
+  op2TotalComponenteConjunto, op2PreservarEstruturaAoTrocarTipo, validarConjuntoOp2,
 } = require('../../../../static/js/op2_modelo_validacao.js');
 
 const grupos = {
@@ -50,6 +50,27 @@ test('conjunto preserva como Outro uma gola da camisa ausente no catálogo do ca
   assert.equal(configuracao.calcao.estrutura.gola, 'OUTRO');
   assert.equal(configuracao.calcao.outros.gola, 'CARECA');
   assert.deepEqual(configuracao.calcao.estrutura.tipo_impressao, ['SILK']);
+});
+
+test('troca entre conjunto e peça individual preserva a estrutura preenchida', () => {
+  const opcoes = {
+    camisa: { campos: { cor: ['AZUL', 'N/A'], gola: ['POLO', 'N/A'] } },
+    calcao: { campos: { cor: ['AZUL', 'N/A'], bolso: ['LATERAL', 'N/A'] } },
+  };
+  const draft = {
+    estrutura: { cor: 'AZUL', gola: 'POLO' },
+    cor_personalizada: '', estrutura_outros: {}, estrutura_observacoes: {},
+    configuracao_conjunto: op2NovaConfiguracaoConjunto(opcoes),
+  };
+  op2PreservarEstruturaAoTrocarTipo(opcoes, draft, 'camisa', 'conjunto');
+  assert.equal(draft.configuracao_conjunto.camisa.estrutura.cor, 'AZUL');
+  assert.equal(draft.configuracao_conjunto.calcao.estrutura.cor, 'AZUL');
+
+  draft.configuracao_conjunto.camisa.estrutura.gola = 'POLO';
+  draft.estrutura = {};
+  op2PreservarEstruturaAoTrocarTipo(opcoes, draft, 'conjunto', 'camisa');
+  assert.equal(draft.estrutura.cor, 'AZUL');
+  assert.equal(draft.estrutura.gola, 'POLO');
 });
 
 test('conjunto exige duas fichas completas com totais iguais', () => {

@@ -344,6 +344,13 @@ function op2WorkspaceCompleto(){
       this.estruturaOpcoes,this.draft.estrutura_tipo,this.draft.estrutura,
     );
   };
+  estado.preservarEstruturaAoTrocarTipo=function(anterior,tipo){
+    this.draft=op2PreservarEstruturaAoTrocarTipo(
+      this.estruturaOpcoes,this.draft,anterior,tipo,this.componenteConjuntoAtivo,
+    );
+    this.aplicarPadroesEstrutura();
+    if(tipo==='conjunto')this.inicializarConjunto();
+  };
   estado.componenteConjuntoAtivo='camisa';
   estado.componenteConjunto=function(componente){return this.draft.configuracao_conjunto[componente]};
   estado.inicializarConjunto=function(){this.draft.configuracao_conjunto=op2PrepararConfiguracaoConjunto(this.estruturaOpcoes,this.draft.configuracao_conjunto)};
@@ -357,7 +364,7 @@ function op2WorkspaceCompleto(){
   estado.totalGradeConjunto=function(componente,gradeId){return Object.values(this.componenteConjunto(componente).gradePorGrade?.[String(gradeId)]||{}).reduce((s,q)=>s+Number(q||0),0)};
   estado.totalComponenteConjunto=function(componente){return op2TotalComponenteConjunto(this.draft.configuracao_conjunto,componente)};
   estado.init=function(){
-    this.$watch('draft.estrutura_tipo',tipo=>{this.aplicarPadroesEstrutura();if(tipo==='conjunto')this.inicializarConjunto()});
+    this.$watch('draft.estrutura_tipo',(tipo,anterior)=>this.preservarEstruturaAoTrocarTipo(anterior,tipo));
     this.$watch('draft',()=>{if(this.modoItem==='rascunho'&&this.modalItem)this.agendarSalvarRascunhoItem()});
   };
   estado.draft=estado.novoDraftItem();
