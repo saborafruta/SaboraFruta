@@ -123,6 +123,10 @@ class Op2Tests(TestCase):
                     self.assertIn('OUTRO', opcoes)
                 self.assertIn('PLASTISOL', grupo['campos']['tipo_impressao'])
                 self.assertIn('PERSONALIZADA CLIENTE', grupo['campos']['etiquetas'])
+                self.assertEqual(grupo['campos']['punho'][0], 'N/A')
+                self.assertTrue({
+                    'COM BAINHA', 'SEM COMPRESSÃO', 'COM COMPRESSÃO',
+                }.issubset(grupo['campos']['punho']))
 
     def test_tipos_comecam_por_conjunto_camisa_e_depois_seguem_alfabeticos(self):
         grupos = opcoes_estrutura_filial(self.filial)

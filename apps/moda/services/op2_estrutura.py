@@ -35,7 +35,10 @@ OP2_ESTRUTURA_OPCOES = {
                 'PORTUGUESA', 'FRADE', 'V', 'MIAMI', 'VIES',
             ],
             'manga': ['CURTA', 'LONGA', 'HARLAN CURVADA', 'HAGLAN RETA', 'REBATIMENTO'],
-            'punho': ['RETALINEAS', 'DRY', 'REBANA', 'PERSONALIZADOS', 'REBATIMENTO'],
+            'punho': [
+                'RETALINEAS', 'DRY', 'REBANA', 'PERSONALIZADOS', 'REBATIMENTO',
+                'COM BAINHA', 'SEM COMPRESSÃO', 'COM COMPRESSÃO',
+            ],
             'frisos': [
                 'FRIZO ENTRE PUNHOS', 'FRIZO GOLA', 'FRIZO RECORTE',
                 'FRIZO EM CAVAS DE MANGAS', 'FRIZO EM OMBROS',
