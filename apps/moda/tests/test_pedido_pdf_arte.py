@@ -181,7 +181,7 @@ class ArteNoPdfTests(TestCase):
         self.assertNotIn('Sublimação', texto)
         self.assertNotIn('Silk', texto)
 
-    def test_orcamento_unifica_produto_e_discrimina_valores_por_grade(self):
+    def test_orcamento_separa_itens_do_mesmo_produto_por_grade(self):
         from apps.moda.services.orcamento_pdf import _estilos
 
         pedido = self._pedido()
@@ -211,11 +211,14 @@ class ArteNoPdfTests(TestCase):
         tabela = OrcamentoPdfService._itens(pedido, _estilos())[0]
         texto = self._texto_layout(tabela)
 
-        # Cabeçalho + dados comuns + quadro de grades em largura ampliada.
+        # Cabeçalho + um item para cada grade/personalização da OP.
         self.assertEqual(len(tabela._cellvalues), 3)
-        self.assertIn('Adulto: 2 peça(s) · R$70,00 por peça', texto)
-        self.assertIn('Oversized: 3 peça(s) · R$75,00 por peça', texto)
-        self.assertIn('Por grade', texto)
+        self.assertEqual(sum('Camisa Dry Tech' in self._texto_layout(linha)
+                             for linha in tabela._cellvalues[1:]), 2)
+        self.assertIn('Grade: M 2 | Total 2', texto)
+        self.assertIn('Grade: M 3 | Total 3', texto)
+        self.assertIn('R$70,00', texto)
+        self.assertIn('R$75,00', texto)
         self.assertNotIn('DRY-0', texto)
         self.assertNotIn('DRY-1', texto)
         self.assertNotIn('Tipo impressao', texto)

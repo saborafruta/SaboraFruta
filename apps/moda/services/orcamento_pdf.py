@@ -19,7 +19,6 @@ from reportlab.platypus import (
 )
 
 from .pdf_marca import LARGURA_UTIL, MARGEM, cnpj, esc, logo
-from .item_groups import agrupar_itens_op
 from .pedido_pdf import DESENHAVEIS, _imagem
 
 MARINHO = colors.HexColor('#052344')
@@ -611,14 +610,12 @@ class OrcamentoPdfService:
         cabecalho[2] = Paragraph('QUANTIDADE', ParagraphStyle(
             'orc_th_quantidade', parent=e['th'], fontSize=5.3,
         ))
-        grupos = agrupar_itens_op(list(pedido.itens.all()))
         dados = [cabecalho]
-        for grupo in grupos:
-            linhas = cls._produto_grupo(grupo, e)
-            if grupo.multiplas_grades:
-                dados.extend(linhas)
-            else:
-                dados.append(linhas)
+        # Na OP cada grade/personalização é um item de produção próprio.
+        # O orçamento precisa manter essa mesma separação: agrupar pelo
+        # produto escondia fotos, personalizações e valores de cada item.
+        for item in pedido.itens.all():
+            dados.append(cls._produto(item, e))
         if len(dados) == 1:
             return []
         return [cls._tabela_produtos(dados)]
