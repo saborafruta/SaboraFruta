@@ -18,7 +18,8 @@ from apps.moda.models import (
     AprovacaoPedido, ArquivoPedido, Grade, ItemGrade, ItemGradePedido,
     ItemPedidoProducao,
     OpcaoEstruturaOP2, OrdemProducao, PedidoProducao, Personalizacao,
-    PersonalizacaoIndividual, ProdutoModa, RegistroCriacaoArte, RascunhoOP, Tamanho,
+    PersonalizacaoIndividual, ProdutoModa, RegistroCriacaoArte, RascunhoItemOP,
+    RascunhoOP, Tamanho,
     VisualItemPedido,
 )
 from apps.moda.forms_cliente import ClienteRapidoForm
@@ -575,12 +576,86 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'Não soma no total nem aparece no PDF')
         self.assertContains(resposta, 'Continuar preenchimento')
         self.assertContains(resposta, 'Salvar como rascunho')
-        self.assertContains(resposta, 'Existe um item em rascunho')
+        self.assertContains(resposta, 'name="item_rascunho"')
+        self.assertContains(resposta, "abrirModalNovo();this.origemEditor='novo'")
+        self.assertNotContains(resposta, 'Conclua ou descarte o item que já está em rascunho')
         self.assertContains(resposta, 'this.modalProduto=false;')
         self.assertContains(resposta, str(self.cliente.pk))
         resposta = self.client.delete(reverse('moda:op2-rascunho'))
         self.assertEqual(resposta.status_code, 200)
         self.assertFalse(RascunhoOP.objects.exists())
+
+    def test_finaliza_op_e_vincula_item_incompleto_sem_somar_no_total(self):
+        self._login_op2()
+        grupos = opcoes_estrutura_filial(self.filial)
+        draft = {
+            'produto_id': str(self.produto.pk), 'nome': self.produto.nome,
+            'quantidade': 9, 'valor_unitario': '99.00',
+            'estrutura_tipo': 'camisa', 'estrutura': {}, 'grades': [],
+            'gradePorGrade': {},
+        }
+        dados = {
+            'cliente': str(self.cliente.pk),
+            'item_0_produto_id': str(self.produto.pk),
+            'item_0_estrutura_tipo': 'camisa',
+            'item_0_quantidade': '2',
+            'item_0_valor_unitario': '10.00',
+            **{
+                f'item_0_estrutura_{campo}': 'N/A'
+                for campo in grupos['camisa']['campos']
+            },
+            'pagamento_0_forma': 'nao_informado',
+            'pagamento_0_valor': '20.00',
+            'item_rascunho': json.dumps(draft),
+        }
+
+        resposta = self.client.post(reverse('moda:op2-create'), dados)
+
+        self.assertEqual(resposta.status_code, 302)
+        criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        self.assertEqual(criado.itens.count(), 1)
+        self.assertEqual(criado.quantidade_total, 2)
+        self.assertEqual(criado.valor_total, Decimal('20.00'))
+        self.assertEqual(criado.rascunho_item.dados['quantidade'], 9)
+        detalhe = self.client.get(reverse('moda:op2-detail', args=[criado.pk]))
+        self.assertContains(detalhe, 'não soma no total')
+        self.assertContains(detalhe, 'Continuar preenchimento')
+
+    def test_item_da_op_e_salvo_como_rascunho_e_pode_ser_descartado(self):
+        self._login_op2()
+        url = reverse('moda:op2-action', args=[self.pedido.pk])
+        draft = {'produto_id': str(self.produto.pk), 'nome': self.produto.nome}
+
+        resposta = self.client.post(
+            url, {'acao': 'salvar_rascunho_item', 'dados': json.dumps(draft)},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(self.pedido.rascunho_item.dados['nome'], self.produto.nome)
+        resposta = self.client.post(url, {'acao': 'descartar_rascunho_item'})
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
+        self.assertFalse(RascunhoItemOP.objects.filter(pedido=self.pedido).exists())
+
+    def test_concluir_item_remove_apenas_o_rascunho_vinculado(self):
+        self._login_op2()
+        RascunhoItemOP.objects.create(
+            filial=self.filial, pedido=self.pedido, usuario=self._usuario(),
+            dados={'produto_id': str(self.produto.pk), 'nome': self.produto.nome},
+        )
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            **self._modelo_completo(),
+            'acao': 'adicionar_item',
+            'concluir_rascunho': '1',
+            'produto_id': str(self.produto.pk),
+            'quantidade': '2',
+            'valor_unitario': '10.00',
+        })
+
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
+        self.assertEqual(self.pedido.itens.count(), 1)
+        self.assertFalse(RascunhoItemOP.objects.filter(pedido=self.pedido).exists())
 
     def test_busca_da_op_encontra_cliente_antigo_sem_vinculo_novo(self):
         cliente_antigo = Cliente.objects.create(

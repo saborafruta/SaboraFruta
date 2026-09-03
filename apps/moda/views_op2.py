@@ -28,7 +28,7 @@ from .models import (
     AprovacaoPedido, ArquivoPedido, Grade, ItemGradePedido, ItemPedidoProducao,
     OpcaoEstruturaOP2, PedidoProducao, Personalizacao, PersonalizacaoIndividual,
     Posicao, ProdutoModa, RegistroCriacaoArte, Tamanho, VisualItemPedido,
-    RascunhoOP,
+    RascunhoItemOP, RascunhoOP,
 )
 from .services.historico import HistoricoService
 from .services.financeiro import FinanceiroPedidoService
@@ -422,6 +422,12 @@ class Op2CreateView(ModaBaseView):
             messages.error(request, str(erro))
             return render(request, 'moda/op2_create.html', self._context(request))
 
+        try:
+            rascunho_item = self._rascunho_item_enviado(request)
+        except ValueError as erro:
+            messages.error(request, str(erro))
+            return render(request, 'moda/op2_create.html', self._context(request))
+
         with transaction.atomic():
             pedido = PedidoProducao.objects.create(
                 filial=_filial(request), cliente=cliente, vendedor=request.user,
@@ -537,6 +543,12 @@ class Op2CreateView(ModaBaseView):
             if primeiro_item:
                 self._salvar_mockups_do_item(request, pedido, primeiro_item)
 
+            if rascunho_item:
+                RascunhoItemOP.objects.create(
+                    filial=_filial(request), pedido=pedido,
+                    usuario=request.user, dados=rascunho_item,
+                )
+
             destino = request.POST.get('destino') or 'salvar'
             if destino == 'enviar':
                 aprovacao, _ = AprovacaoPedido.objects.get_or_create(pedido=pedido)
@@ -568,6 +580,21 @@ class Op2CreateView(ModaBaseView):
         if destino == 'pdf':
             return redirect('moda:pedido-orcamento-pdf', pk=pedido.pk)
         return _voltar(pedido)
+
+    @staticmethod
+    def _rascunho_item_enviado(request):
+        texto = (request.POST.get('item_rascunho') or '').strip()
+        if not texto:
+            return None
+        if len(texto) > 500_000:
+            raise ValueError('O item em rascunho ficou grande demais para ser salvo.')
+        try:
+            dados = json.loads(texto)
+        except json.JSONDecodeError as erro:
+            raise ValueError('Não foi possível preservar o item em rascunho.') from erro
+        if not isinstance(dados, dict) or not dados.get('produto_id'):
+            return None
+        return dados
 
     @staticmethod
     def _context(request):
@@ -929,6 +956,9 @@ class Op2DetailView(ModaBaseView):
 
     def get(self, request, pk):
         pedido = _pedido(request, pk)
+        rascunho_item = RascunhoItemOP.objects.filter(
+            filial=_filial(request), pedido=pedido,
+        ).first()
         itens = list(pedido.itens.select_related(
             'produto', 'modelo', 'cor', 'tecido', 'grade_tamanho',
         ).prefetch_related(
@@ -1053,6 +1083,7 @@ class Op2DetailView(ModaBaseView):
                 str(item.pk): _dados_modal_item(item, estrutura_opcoes)
                 for item in itens
             },
+            'rascunho_item_json': rascunho_item.dados if rascunho_item else None,
             'estrutura_opcoes': estrutura_opcoes,
             'componentes_conjunto': COMPONENTES_CONJUNTO,
             'estrutura_tipo_padrao': next(iter(estrutura_opcoes), 'camisa'),
@@ -1162,7 +1193,7 @@ class Op2ActionView(ModaBaseView):
             with transaction.atomic():
                 resposta = handler(request, pedido)
         except (TypeError, ValueError, DomainError) as erro:
-            if acao == 'descricao_visual' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            if acao in {'descricao_visual', 'salvar_rascunho_item'} and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({'ok': False, 'erro': str(erro)}, status=400)
             messages.error(request, str(erro) or 'Confira os valores informados.')
             return _voltar(pedido)
@@ -1385,6 +1416,10 @@ class Op2ActionView(ModaBaseView):
             Op2CreateView._salvar_mockups_do_item(request, pedido, item)
             criados.append(item)
         GradePedidoService.recalcular_pedido(pedido)
+        if request.POST.get('concluir_rascunho') == '1':
+            RascunhoItemOP.objects.filter(
+                filial=_filial(request), pedido=pedido,
+            ).delete()
         if len(criados) == 1:
             messages.success(request, f'{criados[0].nome_exibicao} adicionado.')
         else:
@@ -1392,6 +1427,30 @@ class Op2ActionView(ModaBaseView):
                 request,
                 f'Produto adicionado com {len(criados)} grades agrupadas.',
             )
+
+    def _acao_salvar_rascunho_item(self, request, pedido):
+        texto = (request.POST.get('dados') or '').strip()
+        if len(texto) > 500_000:
+            raise ValueError('O item em rascunho ficou grande demais para ser salvo.')
+        try:
+            dados = json.loads(texto)
+        except json.JSONDecodeError as erro:
+            raise ValueError('Não foi possível salvar o item em rascunho.') from erro
+        if not isinstance(dados, dict) or not dados.get('produto_id'):
+            return JsonResponse({'ok': True, 'ignorado': True})
+        rascunho, _ = RascunhoItemOP.objects.update_or_create(
+            filial=_filial(request), pedido=pedido,
+            defaults={'usuario': request.user, 'dados': dados},
+        )
+        return JsonResponse({
+            'ok': True, 'atualizado_em': rascunho.updated_at.isoformat(),
+        })
+
+    def _acao_descartar_rascunho_item(self, request, pedido):
+        RascunhoItemOP.objects.filter(
+            filial=_filial(request), pedido=pedido,
+        ).delete()
+        messages.success(request, 'Item em rascunho descartado.')
 
     def _acao_visual_item(self, request, pedido):
         item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))

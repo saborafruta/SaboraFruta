@@ -35,6 +35,7 @@
 <div class="op2-shell" x-data="op2NovaMelhorada()" x-init="recolherSidebar()">
   <form method="post" enctype="multipart/form-data" class="space-y-3" @submit="validarAntesDeSalvar">
     {% csrf_token %}
+    <input type="hidden" name="item_rascunho" :value="temItemRascunho()?JSON.stringify(itemRascunho):''">
     <template x-for="(item,idx) in itens" :key="item.uid">
       <div>
         <input type="hidden" :name="`item_${idx}_produto_id`" :value="item.produto_id">
@@ -84,7 +85,7 @@
           <div class="space-y-2">
             <article x-show="temItemRascunho()&&!modalProduto" x-cloak class="op2-draft-card">
               <div class="grid md:grid-cols-[minmax(0,1fr)_minmax(180px,.45fr)_auto] gap-3 items-center">
-                <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><span class="op2-draft-badge">Rascunho</span><strong class="truncate" x-text="draft.nome || 'Modelo ainda não selecionado'"></strong></div><p class="text-xs opacity-70 mt-1" x-text="editandoIdx===null?'Item ainda não concluído':'Alterações deste item ainda não aplicadas'"></p><p class="text-xs opacity-60 mt-1" x-text="draft.codigo || 'Continue para completar modelo, estrutura e grade.'"></p></div>
+                <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><span class="op2-draft-badge">Rascunho</span><strong class="truncate" x-text="itemRascunho?.nome || 'Modelo ainda não selecionado'"></strong></div><p class="text-xs opacity-70 mt-1">Item ainda não concluído</p><p class="text-xs opacity-60 mt-1" x-text="itemRascunho?.codigo || 'Continue para completar modelo, estrutura e grade.'"></p></div>
                 <div class="text-sm"><span class="op2-label">Não entra no orçamento</span><strong class="block">Não soma no total nem aparece no PDF</strong></div>
                 <div class="flex flex-wrap gap-2 justify-end"><button type="button" class="btn-primary text-sm" @click="retomarItemRascunho()">Continuar preenchimento</button><button type="button" class="btn-secondary text-sm" style="color:#ef4444" @click="descartarItemRascunho()">Descartar</button></div>
               </div>
@@ -262,18 +263,19 @@ function op2NovaMelhorada(){
     this.iniciarAutosave();
   };
   estado.draft=estado.novoDraft();
-  estado.temItemRascunho=function(){return Boolean(this.draft?.produto_id)};
-  estado.fecharModalItem=function(){this.modalProduto=false;this.agendarAutosave()};
-  estado.retomarItemRascunho=function(){if(!this.temItemRascunho())return;this.modalProduto=true;this.agendarAutosave()};
-  estado.limparItemRascunho=function(){this.modalProduto=false;this.editandoIdx=null;this.draft=this.novoDraft();this.buscaProduto='';this.agendarAutosave()};
+  estado.itemRascunho=null;
+  estado.origemEditor='novo';
+  estado.temItemRascunho=function(){return Boolean(this.itemRascunho?.produto_id)};
+  estado.fecharModalItem=function(){if(this.origemEditor==='rascunho'&&this.draft?.produto_id)this.itemRascunho=JSON.parse(JSON.stringify(this.draft));else if(this.origemEditor==='novo'&&!this.temItemRascunho()&&this.draft?.produto_id)this.itemRascunho=JSON.parse(JSON.stringify(this.draft));this.modalProduto=false;this.agendarAutosave()};
+  estado.retomarItemRascunho=function(){if(!this.temItemRascunho())return;this.origemEditor='rascunho';this.editandoIdx=null;this.draft=JSON.parse(JSON.stringify(this.itemRascunho));this.modalProduto=true;this.agendarAutosave()};
+  estado.limparItemRascunho=function(){if(this.origemEditor==='rascunho')this.itemRascunho=null;this.modalProduto=false;this.editandoIdx=null;this.origemEditor='novo';this.draft=this.novoDraft();this.buscaProduto='';this.agendarAutosave()};
   estado.descartarItemRascunho=function(){
     if(!confirm('Descartar este item em rascunho? As demais informações da OP serão mantidas.'))return;
-    this.limparItemRascunho();
+    this.itemRascunho=null;if(this.origemEditor==='rascunho')this.modalProduto=false;this.origemEditor='novo';this.draft=this.novoDraft();this.buscaProduto='';this.agendarAutosave();
   };
   const abrirModalNovo=estado.abrirModalItem.bind(estado);
   estado.abrirModalItem=function(){
-    if(this.temItemRascunho()){this.retomarItemRascunho();return}
-    abrirModalNovo();this.agendarAutosave();
+    abrirModalNovo();this.origemEditor='novo';this.agendarAutosave();
   };
   estado.garantirGrade=function(gradeId){
     gradeId=String(gradeId);
@@ -407,10 +409,7 @@ function op2NovaMelhorada(){
     return item;
   };
   estado.editarItem=function(idx){
-    if(this.temItemRascunho()){
-      if(this.editandoIdx===idx){this.retomarItemRascunho();return}
-      alert('Conclua ou descarte o item que já está em rascunho antes de editar outro produto.');return;
-    }
+    this.origemEditor='item';
     this.editandoIdx=idx;
     this.draft=JSON.parse(JSON.stringify(this.itens[idx]));
     this.draft.estrutura_outros=this.draft.estrutura_outros||{};
@@ -553,11 +552,11 @@ function op2NovaMelhorada(){
   estado.capturarRascunho=function(){
     const campos={};
     this.camposRascunho.forEach(nome=>{const campo=this.$root.querySelector(`[name="${nome}"]`);if(campo)campos[nome]=campo.value});
-    return{versao:1,salvoEm:Date.now(),campos,clienteId:this.clienteId,contatoNome:this.contatoNome,contatoTelefone:this.contatoTelefone,contatos:this.contatos,clientesAdicionais:this.clientesAdicionais,itens:this.itens,draft:this.draft,editandoIdx:this.editandoIdx,modalProduto:this.modalProduto,personalizacoes:this.personalizacoes,pagamentos:this.pagamentos,anexosNomes:[...this.anexosParaReanexar,...this.anexosPreview.map(a=>a.nome),...this.itens.flatMap(i=>i.imagensNomes||[])]};
+    return{versao:2,salvoEm:Date.now(),campos,clienteId:this.clienteId,contatoNome:this.contatoNome,contatoTelefone:this.contatoTelefone,contatos:this.contatos,clientesAdicionais:this.clientesAdicionais,itens:this.itens,itemRascunho:this.itemRascunho,draft:this.draft,origemEditor:this.origemEditor,editandoIdx:this.editandoIdx,modalProduto:this.modalProduto,personalizacoes:this.personalizacoes,pagamentos:this.pagamentos,anexosNomes:[...this.anexosParaReanexar,...this.anexosPreview.map(a=>a.nome),...this.itens.flatMap(i=>i.imagensNomes||[])]};
   };
   estado.temConteudoRascunho=function(dados){
     const c=dados.campos||{};
-    return Boolean(dados.clienteId||dados.contatoNome||dados.contatoTelefone||(dados.clientesAdicionais||[]).length||(dados.itens||[]).length||dados.draft?.produto_id||(dados.personalizacoes||[]).some(p=>p.nome||p.numero||p.tamanhoId)||(dados.pagamentos||[]).some(p=>p.forma||Number(p.valor||0)>0)||c.data_pedido!=='{{ hoje|date:"Y-m-d" }}'||c.data_prevista_entrega||c.descricao_arquivo||c.observacoes||c.informacoes_criacao);
+    return Boolean(dados.clienteId||dados.contatoNome||dados.contatoTelefone||(dados.clientesAdicionais||[]).length||(dados.itens||[]).length||dados.itemRascunho?.produto_id||dados.draft?.produto_id||(dados.personalizacoes||[]).some(p=>p.nome||p.numero||p.tamanhoId)||(dados.pagamentos||[]).some(p=>p.forma||Number(p.valor||0)>0)||c.data_pedido!=='{{ hoje|date:"Y-m-d" }}'||c.data_prevista_entrega||c.descricao_arquivo||c.observacoes||c.informacoes_criacao);
   };
   estado.salvarLocal=function(){
     if(this.autosavePausado)return null;
@@ -587,7 +586,8 @@ function op2NovaMelhorada(){
     this.clienteId=String(dados.clienteId||'');this.contatoNome=dados.contatoNome||'';this.contatoTelefone=dados.contatoTelefone||'';
     this.contatos=Array.isArray(dados.contatos)?dados.contatos:[];this.clientesAdicionais=Array.isArray(dados.clientesAdicionais)?dados.clientesAdicionais:[];
     this.itens=(Array.isArray(dados.itens)?dados.itens:[]).map(item=>({...item,imagensNomes:[]}));this.personalizacoes=Array.isArray(dados.personalizacoes)?dados.personalizacoes:[];this.pagamentos=Array.isArray(dados.pagamentos)&&dados.pagamentos.length?dados.pagamentos:this.pagamentos;
-    this.draft={...this.novoDraft(),...(dados.draft||{})};this.editandoIdx=Number.isInteger(dados.editandoIdx)?dados.editandoIdx:null;this.modalProduto=false;
+    const rascunhoLegado=!dados.itemRascunho&&dados.draft?.produto_id&&dados.modalProduto===false?dados.draft:null;
+    this.itemRascunho=dados.itemRascunho||rascunhoLegado||null;this.draft=this.novoDraft();this.origemEditor='novo';this.editandoIdx=null;this.modalProduto=false;
     this.anexosParaReanexar=Array.from(new Set(dados.anexosNomes||[]));
     this.$nextTick(()=>Object.entries(dados.campos||{}).forEach(([nome,valor])=>{const campo=this.$root.querySelector(`[name="${nome}"]`);if(campo)campo.value=valor||''}));
     this.rascunhoRecuperado=true;
@@ -598,7 +598,7 @@ function op2NovaMelhorada(){
     const servidor=JSON.parse(document.getElementById('op2-rascunho-servidor')?.textContent||'null')?.dados||null;
     const escolhido=Number(local?.salvoEm||0)>=Number(servidor?.salvoEm||0)?local:servidor;
     if(escolhido)this.aplicarRascunho(escolhido);
-    ['itens','draft','personalizacoes','pagamentos','clienteId','contatoNome','contatoTelefone','clientesAdicionais'].forEach(chave=>this.$watch(chave,()=>this.agendarAutosave()));
+    ['itens','itemRascunho','draft','personalizacoes','pagamentos','clienteId','contatoNome','contatoTelefone','clientesAdicionais'].forEach(chave=>this.$watch(chave,()=>this.agendarAutosave()));
     this.$root.addEventListener('input',()=>this.agendarAutosave());this.$root.addEventListener('change',()=>this.agendarAutosave());
     window.addEventListener('pagehide',()=>this.salvarLocal());
     window.addEventListener('online',()=>this.agendarAutosave());
@@ -609,7 +609,6 @@ function op2NovaMelhorada(){
   };
   const validarComAutosave=estado.validarAntesDeSalvar.bind(estado);
   estado.validarAntesDeSalvar=function(event){
-    if(this.temItemRascunho()){event.preventDefault();alert('Existe um item em rascunho. Continue o preenchimento ou descarte esse item antes de salvar a OP.');return}
     validarComAutosave(event);if(event.defaultPrevented)return;
     this.salvarLocal();sessionStorage.setItem('op2-rascunho-concluindo',this.chaveRascunho);this.autosavePausado=true;clearTimeout(this.autosaveTimer);
     if(event.submitter?.value==='enviar')setTimeout(()=>{this.autosavePausado=false},5000);

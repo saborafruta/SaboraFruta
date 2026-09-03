@@ -23,6 +23,7 @@ from .personalizacao import Personalizacao
 from .produto import ProdutoCor, ProdutoModa, Variante
 from .qualidade import Inspecao, ItemInspecao
 from .rascunho_op import RascunhoOP
+from .rascunho_item_op import RascunhoItemOP
 from .roteiro import Operacao, OperacaoRoteiro, Roteiro, custo_por_peca
 from .visual import MockupVisual, Posicao, VisualItemPedido
 
@@ -68,6 +69,7 @@ __all__ = [
     'RegistroCorte',
     'RegistroCriacaoArte',
     'RascunhoOP',
+    'RascunhoItemOP',
     'RequisicaoMaterial',
     'ReservaMaterial',
     'ConsumoLoteCorte',
