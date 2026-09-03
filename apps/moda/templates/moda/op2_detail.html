@@ -7,7 +7,7 @@
 {% block content %}
 <script>const op2RascunhoConcluido=sessionStorage.getItem('op2-rascunho-concluindo');if(op2RascunhoConcluido){localStorage.removeItem(op2RascunhoConcluido);sessionStorage.removeItem('op2-rascunho-concluindo')}</script>
 {{ estrutura_opcoes|json_script:"op2-estrutura-opcoes" }}
-<script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260903-1"></script>
+<script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260903-3"></script>
 <script src="{% static 'js/op2_clientes.js' %}"></script>
 <script src="{% static 'js/op2_legenda.js' %}"></script>
 {{ mensagem_whatsapp|json_script:"op2-wa-message" }}
