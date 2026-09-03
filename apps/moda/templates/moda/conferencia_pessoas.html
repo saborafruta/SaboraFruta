@@ -2,6 +2,7 @@
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}Conferência de Produtos para Entrega{% endblock %}
 {% block content %}
+<style>@media (min-width:1000px){.conferencia-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(290px,1fr);gap:16px}.conferencia-trabalho{grid-column:1}.conferencia-consulta{grid-column:2;grid-row:1;position:sticky;top:16px;align-self:start}}</style>
 
 {% comment %}
   A TELA É PARA O CELULAR, e ocupa a página toda no computador. Quem confere
@@ -91,10 +92,10 @@
       contagem é digitação: lado a lado, olhar a arte não faz perder o lugar
       na tabela — que é o que acontecia quando ela ficava numa aba.
     {% endcomment %}
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="conferencia-layout grid grid-cols-1 lg:grid-cols-3 gap-4">
 
       {# ══ Coluna do trabalho ═════════════════════════════════════════ #}
-      <div class="lg:col-span-2 space-y-4">
+      <div class="conferencia-trabalho lg:col-span-2 space-y-4">
 
         {# ── 1. Por quantidade ───────────────────────────────────── #}
         <div class="card overflow-hidden">
@@ -389,7 +390,7 @@
       </div>
 
       {# ══ Coluna da consulta ═════════════════════════════════════════ #}
-      <div class="space-y-4 lg:sticky lg:top-4 self-start">
+      <div class="conferencia-consulta space-y-4 lg:sticky lg:top-4 self-start">
 
         {# ── A arte do pedido ────────────────────────────────────── #}
         <div class="card overflow-hidden">
