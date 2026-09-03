@@ -318,7 +318,7 @@ class AlertaNaTelaTests(RespostaBase):
 
         resposta = self._quadro()
 
-        self.assertContains(resposta, 'kc-card rounded-xl p-3 kc-alerta')
+        self.assertContains(resposta, 'kc-card rounded-lg p-2 kc-alerta')
 
     def test_cartao_sem_ajuste_nao_pisca(self):
         """
@@ -327,7 +327,7 @@ class AlertaNaTelaTests(RespostaBase):
         """
         self._pedido()
 
-        self.assertNotContains(self._quadro(), 'kc-card rounded-xl p-3 kc-alerta')
+        self.assertNotContains(self._quadro(), 'kc-card rounded-lg p-2 kc-alerta')
 
     def test_a_animacao_existe_na_folha(self):
         """A classe sozinha não pisca nada."""
@@ -390,5 +390,5 @@ class AlertaNaTelaTests(RespostaBase):
 
         self.assertContains(resposta, 'id="kc-largura"')
         self.assertContains(resposta, '<option value="padrao" selected>Padrão</option>')
-        self.assertContains(resposta, "compacta: '260px', padrao: '320px', ampla: '400px'")
+        self.assertContains(resposta, "compacta: '230px', padrao: '280px', ampla: '350px'")
         self.assertContains(resposta, 'moda-kanban-comercial-largura')
