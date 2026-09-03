@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from django.contrib import messages
+from django.core.files import File
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.db.models import Q
@@ -25,7 +26,7 @@ from .forms import ItemPedidoProducaoForm, PersonalizacaoIndividualForm
 from .forms_arquivo import ArquivoPedidoForm
 from .forms_cliente import ClienteRapidoForm
 from .models import (
-    AprovacaoPedido, ArquivoPedido, Grade, ItemGradePedido, ItemPedidoProducao,
+    AprovacaoPedido, ArquivoPedido, Grade, ImagemRascunhoOP, ItemGradePedido, ItemPedidoProducao,
     OpcaoEstruturaOP2, PedidoProducao, Personalizacao, PersonalizacaoIndividual,
     Posicao, ProdutoModa, RegistroCriacaoArte, Tamanho, VisualItemPedido,
     RascunhoItemOP, RascunhoOP,
@@ -428,6 +429,13 @@ class Op2CreateView(ModaBaseView):
             messages.error(request, str(erro))
             return render(request, 'moda/op2_create.html', self._context(request))
 
+        rascunho_chave = (request.POST.get('rascunho_chave') or '').strip()
+        rascunho_op = None
+        if rascunho_chave:
+            rascunho_op = RascunhoOP.objects.filter(
+                filial=_filial(request), usuario=request.user, chave=rascunho_chave,
+            ).prefetch_related('imagens').first()
+
         with transaction.atomic():
             pedido = PedidoProducao.objects.create(
                 filial=_filial(request), cliente=cliente, vendedor=request.user,
@@ -521,6 +529,31 @@ class Op2CreateView(ModaBaseView):
                     ).strip(),
                     incluir_legado=False,
                 )
+                uid_item = (request.POST.get(f'item_{indice}_uid') or '').strip()
+                if rascunho_op and uid_item:
+                    for imagem_rascunho in rascunho_op.imagens.all():
+                        if imagem_rascunho.item_uid != uid_item:
+                            continue
+                        imagem_rascunho.arquivo.open('rb')
+                        visual = VisualItemPedido(
+                            item=item, posicao=Posicao.FRENTE_CAMISA,
+                            observacoes=(request.POST.get(
+                                f'item_{indice}_imagens_observacoes',
+                            ) or '')[:160],
+                        )
+                        try:
+                            visual.imagem.save(
+                                imagem_rascunho.nome_original,
+                                File(imagem_rascunho.arquivo), save=True,
+                            )
+                        finally:
+                            imagem_rascunho.arquivo.close()
+                        ArquivoPedido.objects.create(
+                            pedido=pedido, arquivo=visual.imagem,
+                            tipo=ArquivoPedido.Tipo.ARTE,
+                            descricao=f'Imagem · {item.nome_exibicao}',
+                            enviado_por=request.user,
+                        )
 
             for ordem, pessoa in enumerate(individuais, start=1):
                 PersonalizacaoIndividual.objects.create(
@@ -559,8 +592,10 @@ class Op2CreateView(ModaBaseView):
                     request.user, 'Orçamento salvo e enviado ao cliente pela OP 2.0.',
                 )
 
-            rascunho_chave = (request.POST.get('rascunho_chave') or '').strip()
             if rascunho_chave:
+                if rascunho_op:
+                    for imagem_rascunho in rascunho_op.imagens.all():
+                        imagem_rascunho.arquivo.delete(save=False)
                 RascunhoOP.objects.filter(
                     filial=_filial(request), usuario=request.user,
                     chave=rascunho_chave,
@@ -691,6 +726,14 @@ class Op2CreateView(ModaBaseView):
                 'dados': rascunho.dados,
                 'atualizado_em': rascunho.updated_at.isoformat(),
             } if rascunho else None,
+            'imagens_rascunho': [
+                {
+                    'item_uid': imagem.item_uid,
+                    'nome': imagem.nome_original,
+                    'url': imagem.arquivo.url,
+                }
+                for imagem in (rascunho.imagens.all() if rascunho else [])
+            ],
             'rascunho_chave': str(chave),
         }
 
@@ -911,8 +954,46 @@ class Op2RascunhoView(ModaBaseView):
     area = 'comercial'
     permissao_acao = 'criar'
     limite_bytes = 1024 * 1024
+    limite_imagem = 15 * 1024 * 1024
+
+    @staticmethod
+    def _imagem_json(imagem):
+        return {
+            'item_uid': imagem.item_uid,
+            'nome': imagem.nome_original,
+            'url': imagem.arquivo.url,
+        }
 
     def post(self, request):
+        if request.FILES:
+            chave_texto = (request.POST.get('rascunho_chave') or '').strip()
+            item_uid = (request.POST.get('item_uid') or '').strip()
+            try:
+                chave = UUID(chave_texto)
+            except (TypeError, ValueError):
+                return JsonResponse({'ok': False, 'erro': 'Rascunho inválido.'}, status=400)
+            uploads = request.FILES.getlist('imagens')
+            if not item_uid or not uploads:
+                return JsonResponse({'ok': False, 'erro': 'Produto ou imagem inválida.'}, status=400)
+            if any(upload.size > self.limite_imagem for upload in uploads):
+                return JsonResponse({'ok': False, 'erro': 'Cada imagem pode ter até 15 MB.'}, status=413)
+            rascunho, _ = RascunhoOP.objects.get_or_create(
+                filial=_filial(request), usuario=request.user, chave=chave,
+            )
+            for imagem in list(rascunho.imagens.filter(item_uid=item_uid)):
+                imagem.arquivo.delete(save=False)
+                imagem.delete()
+            imagens = [
+                ImagemRascunhoOP.objects.create(
+                    rascunho=rascunho, item_uid=item_uid,
+                    arquivo=upload, nome_original=upload.name[:255],
+                )
+                for upload in uploads
+            ]
+            return JsonResponse({
+                'ok': True,
+                'imagens': [self._imagem_json(imagem) for imagem in imagens],
+            })
         if len(request.body) > self.limite_bytes:
             return JsonResponse({'ok': False, 'erro': 'Rascunho muito grande.'}, status=413)
         try:
@@ -946,7 +1027,11 @@ class Op2RascunhoView(ModaBaseView):
                 filtros['chave'] = UUID(chave_texto)
             except ValueError:
                 return JsonResponse({'ok': False, 'erro': 'Rascunho inválido.'}, status=400)
-        RascunhoOP.objects.filter(**filtros).delete()
+        rascunhos = RascunhoOP.objects.filter(**filtros).prefetch_related('imagens')
+        for rascunho in rascunhos:
+            for imagem in rascunho.imagens.all():
+                imagem.arquivo.delete(save=False)
+        rascunhos.delete()
         return JsonResponse({'ok': True})
 
 

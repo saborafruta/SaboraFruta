@@ -14,6 +14,7 @@
 {{ clientes_json|json_script:"op2-clientes" }}
 {{ tamanhos_labels|json_script:"op2-tamanhos-labels" }}
 {{ rascunho_op|json_script:"op2-rascunho-servidor" }}
+{{ imagens_rascunho|json_script:"op2-imagens-rascunho" }}
 <style>
 .op2-shell{margin:-.75rem}.op2-work{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px}.op2-band{border:1px solid rgba(148,163,184,.22);border-radius:10px;padding:12px}.op2-label{display:block;margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;font-weight:800}.op2-card{border:1px solid rgba(148,163,184,.22);border-radius:10px;padding:10px}.op2-results{position:absolute;left:0;right:0;top:100%;z-index:40;max-height:240px;overflow:auto;border:1px solid rgba(148,163,184,.35);border-radius:10px;margin-top:4px;background:var(--card-bg,#18181b)}.op2-plus{min-height:78px;border:1px dashed rgba(148,163,184,.45);border-radius:10px;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;overflow:hidden}.op2-plus img{width:100%;height:110px;object-fit:cover}.op2-modal-grid{display:grid;grid-template-columns:330px minmax(0,1fr);gap:12px}.op2-model-list{max-height:58vh;overflow:auto}.op2-grade-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}.op2-grade-chip{border:1px solid rgba(148,163,184,.28);border-radius:10px;padding:10px;text-align:left;min-height:60px}.op2-grade-chip.is-on{border-color:#3b82f6;background:rgba(59,130,246,.13);box-shadow:inset 3px 0 #3b82f6}.op2-grade-panel{border:1px solid rgba(59,130,246,.38);border-radius:12px;padding:11px;background:rgba(59,130,246,.06)}.op2-size-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:8px}.op2-size-card{border:1px solid rgba(148,163,184,.24);border-radius:10px;padding:9px;background:rgba(148,163,184,.05)}.op2-size-name{display:block;text-align:center;font-size:12px;font-weight:900;margin-bottom:7px}.op2-stepper{display:grid;grid-template-columns:40px minmax(56px,1fr) 40px;gap:5px;align-items:center}.op2-qty-btn{height:40px;border:1px solid rgba(148,163,184,.3);border-radius:8px;font-size:20px;font-weight:800}.op2-qty-input{height:40px;min-width:0;text-align:center;font-size:18px;font-weight:800}.op2-qty-input::-webkit-inner-spin-button,.op2-qty-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.op2-file-previews{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}.op2-file-preview{border:1px solid rgba(148,163,184,.22);border-radius:9px;padding:7px;min-width:0}.op2-file-preview img{width:100%;height:90px;object-fit:cover;border-radius:6px;margin-bottom:5px}
 .op2-item-gallery{margin-top:10px;padding-top:10px;border-top:1px solid rgba(148,163,184,.14)}.op2-item-gallery-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}.op2-gallery-grid{display:flex;flex-wrap:wrap;gap:7px}.op2-gallery-image{width:112px;min-width:0;border:1px solid rgba(148,163,184,.18);border-radius:8px;overflow:hidden}.op2-gallery-image img{width:100%;height:76px;object-fit:cover}.op2-gallery-image figcaption{padding:4px 6px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.op2-gallery-add{width:112px;min-height:76px;border:1px dashed rgba(59,130,246,.65);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px;text-align:center;color:#3b82f6;cursor:pointer}.op2-gallery-add:hover{background:rgba(59,130,246,.08)}
@@ -43,6 +44,7 @@
     <template x-for="(item,idx) in itens" :key="item.uid">
       <div>
         <input type="hidden" :name="`item_${idx}_produto_id`" :value="item.produto_id">
+        <input type="hidden" :name="`item_${idx}_uid`" :value="item.uid">
         <input type="hidden" :name="`item_${idx}_grade_id`" :value="item.grade_id">
         <input type="hidden" :name="`item_${idx}_descricao`" :value="item.descricao">
         <input type="hidden" :name="`item_${idx}_quantidade`" :value="item.quantidade">
@@ -94,7 +96,7 @@
                 <div class="flex flex-wrap gap-2 justify-end"><button type="button" class="btn-primary text-sm" @click="retomarItemRascunho()">Continuar preenchimento</button><button type="button" class="btn-secondary text-sm" style="color:#ef4444" @click="descartarItemRascunho()">Descartar</button></div>
               </div>
               <section class="op2-item-gallery">
-                <div class="op2-item-gallery-head"><strong class="text-sm">Fotos e mockups</strong><small class="opacity-60">Este item</small></div>
+                <div class="op2-item-gallery-head"><strong class="text-sm">Fotos e mockups</strong><small class="opacity-60" x-text="itemRascunho?.imagensStatus||'Este item'"></small></div>
                 <div class="op2-gallery-grid">
                   <template x-for="imagem in (itemRascunho?.imagensPreview||[])" :key="imagem.chave"><figure class="op2-gallery-image"><img :src="imagem.url" :alt="imagem.nome"><figcaption x-text="imagem.nome"></figcaption></figure></template>
                   <label class="op2-gallery-add"><input type="file" accept="image/*" multiple class="hidden" @change="selecionarImagensItem(itemRascunho,$event)"><strong aria-hidden="true" style="font-size:26px;line-height:1">+</strong><small x-text="itemRascunho?.imagensNomes?.length?'Trocar imagens':'Adicionar imagens'"></small></label>
@@ -110,7 +112,7 @@
                 <div class="grid grid-cols-3 gap-2 text-sm"><div><span class="op2-label" x-text="item.estrutura_tipo==='conjunto'?'Conjuntos':'Peças'"></span><strong x-text="item.quantidade"></strong></div><div><span class="op2-label" x-text="item.estrutura_tipo==='conjunto'?'Por conjunto':'Unitário'"></span><strong x-text="moeda(item.valor_unitario)"></strong></div><div><span class="op2-label">Total</span><strong x-text="moeda(item.quantidade * item.valor_unitario)"></strong></div></div>
                 <div class="flex flex-wrap gap-2 justify-end"><button type="button" class="btn-secondary text-sm" @click="editarItem(idx)">Editar</button><button type="button" class="btn-secondary text-sm" @click="duplicarItem(idx)">Duplicar</button><button type="button" class="btn-secondary text-sm" style="color:#ef4444" @click="removerItem(idx)">Excluir</button></div></div>
                 <section class="op2-item-gallery">
-                  <div class="op2-item-gallery-head"><strong class="text-sm">Fotos e mockups</strong><small class="opacity-60" x-text="`${item.imagensNomes?.length||0} selecionada(s)`"></small></div>
+                  <div class="op2-item-gallery-head"><strong class="text-sm">Fotos e mockups</strong><small class="opacity-60" x-text="item.imagensStatus||`${item.imagensNomes?.length||0} salva(s)`"></small></div>
                   <div class="op2-gallery-grid">
                     <template x-for="imagem in (item.imagensPreview||[])" :key="imagem.chave"><figure class="op2-gallery-image"><img :src="imagem.url" :alt="imagem.nome"><figcaption x-text="imagem.nome"></figcaption></figure></template>
                     <label class="op2-gallery-add"><input type="file" :name="`item_${idx}_imagens`" :data-op2-imagens-uid="String(item.uid)" accept="image/*" multiple class="hidden" @change="selecionarImagensItem(item,$event)"><strong aria-hidden="true" style="font-size:26px;line-height:1">+</strong><small x-text="item.imagensNomes?.length?'Trocar imagens':'Adicionar imagens'"></small></label>
@@ -216,6 +218,7 @@ function op2NovaMelhorada(){
   estado.rascunhoRecuperado=false;
   estado.rascunhoNormalizado=false;
   estado.anexosParaReanexar=[];
+  estado.imagensRascunho=JSON.parse(document.getElementById('op2-imagens-rascunho')?.textContent||'[]');
   estado.autosavePausado=false;
   estado.autosaveTimer=null;
   const iniciar=estado.recolherSidebar.bind(estado);
@@ -576,6 +579,9 @@ function op2NovaMelhorada(){
   estado.validarAntesDeSalvar=function(event){
     validarFormulario.call(this,event);
     if(event.defaultPrevented)return;
+    if(this.itens.some(item=>item.imagensStatus==='Salvando imagens…')){
+      event.preventDefault();alert('Aguarde o término do envio das imagens.');return;
+    }
     for(const item of this.itens){
       if(item.estrutura_tipo==='conjunto'){
         const erroConjunto=validarConjuntoOp2(item.configuracao_conjunto,JSON.parse(document.getElementById('op2-estrutura-opcoes').textContent));
@@ -626,13 +632,37 @@ function op2NovaMelhorada(){
     this.anexosPreview.forEach(item=>{if(item.url)URL.revokeObjectURL(item.url)});
     this.anexosPreview=Array.from(event.target.files||[]).map(arquivo=>this.arquivoPreview(arquivo));
   };
-  estado.selecionarImagensItem=function(item,event){
+  estado.selecionarImagensItem=async function(item,event){
     (item.imagensPreview||[]).forEach(imagem=>{if(imagem.url)URL.revokeObjectURL(imagem.url)});
     const arquivos=Array.from(event.target.files||[]);
     this.arquivosImagensItem[String(item.uid)]=arquivos;
     item.imagensNomes=arquivos.map(arquivo=>arquivo.name);
     item.imagensPreview=arquivos.map(arquivo=>this.arquivoPreview(arquivo));
+    item.imagensStatus='Salvando imagens…';
     this.agendarAutosave();
+    const corpo=new FormData();
+    corpo.append('rascunho_chave',this.rascunhoChave);
+    corpo.append('item_uid',String(item.uid));
+    arquivos.forEach(arquivo=>corpo.append('imagens',arquivo));
+    try{
+      const resposta=await fetch('{% url "moda:op2-rascunho" %}',{
+        method:'POST',credentials:'same-origin',
+        headers:{'X-CSRFToken':(document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)||[])[1]||''},
+        body:corpo,
+      });
+      const dados=await resposta.json();
+      if(!resposta.ok||!dados.ok)throw new Error(dados.erro||'Falha no upload');
+      item.imagensNomes=dados.imagens.map(imagem=>imagem.nome);
+      item.imagensPreview=dados.imagens.map(imagem=>({chave:imagem.url,nome:imagem.nome,imagem:true,url:imagem.url}));
+      item.imagensStatus=`${dados.imagens.length} imagem(ns) salva(s)`;
+      this.imagensRascunho=[
+        ...this.imagensRascunho.filter(imagem=>String(imagem.item_uid)!==String(item.uid)),
+        ...dados.imagens,
+      ];
+      this.arquivosImagensItem[String(item.uid)]=[];
+      event.target.value='';
+      this.agendarAutosave();
+    }catch(erro){item.imagensStatus='Não foi possível salvar — tente novamente';}
   };
   estado.aplicarArquivosImagens=function(){
     const entradas=Array.from(this.$root.querySelectorAll('[data-op2-imagens-uid]'));
@@ -653,7 +683,7 @@ function op2NovaMelhorada(){
     this.camposRascunho.forEach(nome=>{const campo=this.$root.querySelector(`[name="${nome}"]`);if(campo)campos[nome]=campo.value});
     const semPreview=item=>{if(!item)return item;const {imagensPreview,...dados}=item;return dados};
     const itens=this.itens.map(semPreview);
-    return{versao:3,rascunhoChave:this.rascunhoChave,salvoEm:Date.now(),campos,clienteId:this.clienteId,contatoNome:this.contatoNome,contatoTelefone:this.contatoTelefone,contatos:this.contatos,clientesAdicionais:this.clientesAdicionais,itens,itemRascunho:semPreview(this.itemRascunho),draft:semPreview(this.draft),origemEditor:this.origemEditor,editandoIdx:this.editandoIdx,modalProduto:this.modalProduto,personalizacoes:this.personalizacoes,pagamentos:this.pagamentos,anexosNomes:[...this.anexosParaReanexar,...this.anexosPreview.map(a=>a.nome),...this.itens.flatMap(i=>i.imagensNomes||[]),...(this.itemRascunho?.imagensNomes||[])]};
+    return{versao:4,rascunhoChave:this.rascunhoChave,salvoEm:Date.now(),campos,clienteId:this.clienteId,contatoNome:this.contatoNome,contatoTelefone:this.contatoTelefone,contatos:this.contatos,clientesAdicionais:this.clientesAdicionais,itens,itemRascunho:semPreview(this.itemRascunho),draft:semPreview(this.draft),origemEditor:this.origemEditor,editandoIdx:this.editandoIdx,modalProduto:this.modalProduto,personalizacoes:this.personalizacoes,pagamentos:this.pagamentos,anexosNomes:[...this.anexosParaReanexar,...this.anexosPreview.map(a=>a.nome)]};
   };
   estado.temConteudoRascunho=function(dados){
     const c=dados.campos||{};
@@ -691,15 +721,20 @@ function op2NovaMelhorada(){
     this.rascunhoNormalizado=itensNormalizados.some(
       (item,indice)=>String(item.uid)!==String(itensOriginais[indice]?.uid),
     );
-    this.itens=itensNormalizados.map(item=>({...item,imagensNomes:[],imagensPreview:[]}));this.personalizacoes=Array.isArray(dados.personalizacoes)?dados.personalizacoes:[];this.pagamentos=Array.isArray(dados.pagamentos)&&dados.pagamentos.length?dados.pagamentos:this.pagamentos;
+    this.itens=itensNormalizados.map(item=>{
+      const imagens=this.imagensRascunho.filter(imagem=>String(imagem.item_uid)===String(item.uid));
+      return{...item,imagensNomes:imagens.map(imagem=>imagem.nome),imagensPreview:imagens.map(imagem=>({chave:imagem.url,nome:imagem.nome,imagem:true,url:imagem.url})),imagensStatus:imagens.length?`${imagens.length} imagem(ns) salva(s)`:''};
+    });this.personalizacoes=Array.isArray(dados.personalizacoes)?dados.personalizacoes:[];this.pagamentos=Array.isArray(dados.pagamentos)&&dados.pagamentos.length?dados.pagamentos:this.pagamentos;
     const rascunhoLegado=!dados.itemRascunho&&dados.draft?.produto_id&&dados.modalProduto===false?dados.draft:null;
     const itemRascunho=dados.itemRascunho||rascunhoLegado||null;
     const rascunhoNormalizado=itemRascunho?this.normalizarUidsItens(
       [...this.itens,itemRascunho],
     ).at(-1):null;
     if(itemRascunho&&String(rascunhoNormalizado.uid)!==String(itemRascunho.uid))this.rascunhoNormalizado=true;
-    this.itemRascunho=rascunhoNormalizado?{...rascunhoNormalizado,imagensNomes:[],imagensPreview:[]}:null;this.draft=this.novoDraft();this.origemEditor='novo';this.editandoIdx=null;this.modalProduto=false;
-    this.anexosParaReanexar=Array.from(new Set(dados.anexosNomes||[]));
+    const imagensDoRascunho=rascunhoNormalizado?this.imagensRascunho.filter(imagem=>String(imagem.item_uid)===String(rascunhoNormalizado.uid)):[];
+    this.itemRascunho=rascunhoNormalizado?{...rascunhoNormalizado,imagensNomes:imagensDoRascunho.map(imagem=>imagem.nome),imagensPreview:imagensDoRascunho.map(imagem=>({chave:imagem.url,nome:imagem.nome,imagem:true,url:imagem.url})),imagensStatus:imagensDoRascunho.length?`${imagensDoRascunho.length} imagem(ns) salva(s)`:''}:null;this.draft=this.novoDraft();this.origemEditor='novo';this.editandoIdx=null;this.modalProduto=false;
+    const nomesImagensSalvas=new Set(this.imagensRascunho.map(imagem=>imagem.nome));
+    this.anexosParaReanexar=Array.from(new Set(dados.anexosNomes||[])).filter(nome=>!nomesImagensSalvas.has(nome));
     this.$nextTick(()=>Object.entries(dados.campos||{}).forEach(([nome,valor])=>{const campo=this.$root.querySelector(`[name="${nome}"]`);if(campo)campo.value=valor||''}));
     this.rascunhoRecuperado=true;
   };

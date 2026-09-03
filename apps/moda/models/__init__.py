@@ -22,7 +22,7 @@ from .pedido import PedidoProducao
 from .personalizacao import Personalizacao
 from .produto import ProdutoCor, ProdutoModa, Variante
 from .qualidade import Inspecao, ItemInspecao
-from .rascunho_op import RascunhoOP
+from .rascunho_op import ImagemRascunhoOP, RascunhoOP
 from .rascunho_item_op import RascunhoItemOP
 from .roteiro import Operacao, OperacaoRoteiro, Roteiro, custo_por_peca
 from .visual import MockupVisual, Posicao, VisualItemPedido
@@ -48,6 +48,7 @@ __all__ = [
     'ItemGradePedido',
     'ItemRequisicao',
     'ImagemFicha',
+    'ImagemRascunhoOP',
     'Inspecao',
     'ItemInspecao',
     'ItemPedidoProducao',

@@ -16,7 +16,7 @@ from django.utils import timezone
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.moda.models import (
-    AprovacaoPedido, ArquivoPedido, Grade, ItemGrade, ItemGradePedido,
+    AprovacaoPedido, ArquivoPedido, Grade, ImagemRascunhoOP, ItemGrade, ItemGradePedido,
     ItemPedidoProducao,
     OpcaoEstruturaOP2, OrdemProducao, PedidoProducao, Personalizacao,
     PersonalizacaoIndividual, ProdutoModa, RegistroCriacaoArte, RascunhoItemOP,
@@ -1278,6 +1278,11 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'class="op2-item-gallery"')
         self.assertContains(resposta, 'selecionarImagensItem(item,$event)')
         self.assertContains(resposta, 'selecionarImagensItem(itemRascunho,$event)')
+        self.assertContains(resposta, 'selecionarImagensItem=async function')
+        self.assertContains(resposta, "corpo.append('imagens',arquivo)")
+        self.assertContains(resposta, "item.imagensStatus='Salvando imagens…'")
+        self.assertContains(resposta, 'op2-imagens-rascunho')
+        self.assertContains(resposta, ':name="`item_${idx}_uid`"')
         self.assertContains(resposta, ':name="`item_${idx}_imagens`"')
         self.assertContains(resposta, ':data-op2-imagens-uid="String(item.uid)"')
         self.assertContains(resposta, 'this.aplicarArquivosImagens()')
@@ -1355,6 +1360,60 @@ class Op2Tests(TestCase):
         self.assertContains(detalhe, visual.url_imagem)
         self.assertContains(detalhe, 'Usar esta arte na frente')
 
+        for arquivo in ArquivoPedido.objects.filter(pedido=criado):
+            arquivo.arquivo.delete(save=False)
+        visual.imagem.delete(save=False)
+
+    def test_imagem_do_rascunho_reabre_e_migra_para_o_produto_salvo(self):
+        self._login_op2()
+        chave = str(uuid4())
+        uid_item = 'item-persistente-1'
+        url_rascunho = reverse('moda:op2-rascunho')
+        self.client.post(
+            url_rascunho,
+            data=json.dumps({
+                'rascunhoChave': chave, 'clienteId': str(self.cliente.pk),
+                'itens': [{'uid': uid_item, 'produto_id': str(self.produto.pk)}],
+                'salvoEm': 100,
+            }),
+            content_type='application/json',
+        )
+        imagem = b'\x89PNG\r\n\x1a\nconteudo-rascunho'
+
+        upload = self.client.post(url_rascunho, {
+            'rascunho_chave': chave,
+            'item_uid': uid_item,
+            'imagens': SimpleUploadedFile(
+                'rascunho.png', imagem, content_type='image/png',
+            ),
+        })
+
+        self.assertEqual(upload.status_code, 200)
+        self.assertTrue(upload.json()['ok'])
+        imagem_rascunho = ImagemRascunhoOP.objects.get()
+        pagina = self.client.get(reverse('moda:op2-create') + f'?rascunho={chave}')
+        self.assertContains(pagina, imagem_rascunho.arquivo.url)
+
+        resposta = self.client.post(reverse('moda:op2-create'), {
+            'cliente': str(self.cliente.pk),
+            'rascunho_chave': chave,
+            **self._modelo_completo('item_0_'),
+            'item_0_uid': uid_item,
+            'item_0_produto_id': str(self.produto.pk),
+            'item_0_quantidade': '2',
+            'item_0_valor_unitario': '10',
+            'item_0_imagens_observacoes': 'Imagem recuperada do rascunho',
+            'pagamento_0_forma': 'nao_informado',
+            'pagamento_0_valor': '20.00',
+        })
+
+        criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[criado.pk]))
+        visual = VisualItemPedido.objects.get(item__pedido=criado)
+        self.assertEqual(visual.observacoes, 'Imagem recuperada do rascunho')
+        self.assertTrue(visual.imagem)
+        self.assertFalse(ImagemRascunhoOP.objects.exists())
+        self.assertFalse(RascunhoOP.objects.filter(chave=chave).exists())
         for arquivo in ArquivoPedido.objects.filter(pedido=criado):
             arquivo.arquivo.delete(save=False)
         visual.imagem.delete(save=False)
