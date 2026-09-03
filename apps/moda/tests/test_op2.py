@@ -1130,7 +1130,11 @@ class Op2Tests(TestCase):
             self.assertContains(resposta, rotulo)
         self.assertContains(resposta, '+ Outra forma')
         self.assertContains(resposta, 'não gera lançamentos no financeiro')
-        self.assertContains(resposta, 'op2-payment-required')
+        self.assertNotContains(resposta, 'op2-payment-required')
+        self.assertNotContains(resposta, 'soft-pill is-amber')
+        self.assertContains(resposta, 'class="op2-step-title', count=4)
+        self.assertContains(resposta, 'class="op2-step-number"', count=5)
+        self.assertContains(resposta, 'class="op2-required-pill"')
         self.assertContains(resposta, 'Selecione a forma de pagamento')
         self.assertContains(resposta, 'pagamento.valor=totalValor()')
 

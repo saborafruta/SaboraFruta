@@ -19,7 +19,7 @@
 .op2-results{background:#18181b!important;color:#f8fafc!important}.op2-results button,.op2-results strong,.op2-results small{color:inherit!important}.op2-qty-error{border-color:#ef4444!important;box-shadow:0 0 0 2px rgba(239,68,68,.18)}
 .op2-required-highlight .op2-label{color:#16a34a}.op2-required-highlight .form-input{border-color:rgba(22,163,74,.68);box-shadow:0 0 0 1px rgba(22,163,74,.10)}
 .op2-item-personalizacao{margin-top:10px;padding:12px;border:1px solid rgba(59,130,246,.28);border-radius:10px;background:rgba(59,130,246,.055)}.op2-personalizacao-grid{display:grid;grid-template-columns:minmax(115px,.7fr) minmax(150px,1fr) minmax(110px,.65fr) auto;gap:8px;align-items:end}.op2-chip{display:inline-flex;padding:3px 7px;border-radius:999px;font-size:11px;background:rgba(59,130,246,.12)}
-.op2-payment-required{border-color:rgba(245,158,11,.72);background:rgba(245,158,11,.07);box-shadow:inset 4px 0 #f59e0b}.op2-payment-required .op2-payment-title{color:#f59e0b}.op2-payment-select:invalid{border-color:#f59e0b;box-shadow:0 0 0 2px rgba(245,158,11,.12)}
+.op2-step-title{display:flex;align-items:center;gap:7px;color:#3b82f6;font-weight:900;line-height:1.2}.op2-step-number{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 7px;border-radius:999px;background:#2563eb;color:#fff;font-size:12px;box-shadow:0 4px 12px rgba(37,99,235,.24)}.op2-required-pill{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;background:rgba(37,99,235,.14);color:#3b82f6;font-size:10px;font-weight:800}
 .op2-grade-tag{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid currentColor}.op2-grade-dot{width:8px;height:8px;border-radius:50%;background:currentColor}
 .op2-payment-row{display:grid;grid-template-columns:minmax(190px,1fr) minmax(150px,.7fr) auto;gap:8px;align-items:start}.op2-payment-row label{min-width:0}.op2-payment-row .form-input{height:42px}.op2-payment-remove{margin-top:19px}
 .op2-multi{position:relative;min-width:0}.op2-multi-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;height:40px;padding:0 11px;border:1px solid #2a2a2e;border-radius:8px;background:#18181a;color:#e5e5e5;text-align:left}.op2-multi-trigger:hover,.op2-multi-trigger:focus-visible{border-color:#3b82f6}.op2-multi-summary{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}.op2-multi-chevron{flex:0 0 auto;transition:transform .15s}.op2-multi-chevron.is-open{transform:rotate(180deg)}.op2-multi-menu{position:absolute;z-index:70;top:calc(100% + 4px);left:0;right:0;max-height:240px;overflow:auto;padding:6px;border:1px solid #2a2a2e;border-radius:9px;background:#242426;color:#e5e5e5;box-shadow:0 14px 35px rgba(0,0,0,.35)}.op2-multi-option{display:flex;align-items:center;gap:9px;padding:8px;border-radius:6px;font-size:13px;line-height:1.25;cursor:pointer}.op2-multi-option:hover{background:rgba(59,130,246,.10)}.op2-multi-option input{width:16px;height:16px;flex:0 0 auto;accent-color:#2563eb}.op2-multi-help{display:block;margin-top:4px;font-size:11px;line-height:1.25;color:#64748b}body.tema-claro .op2-multi-trigger{border-color:#d1d5db;background:#fff;color:#111827;box-shadow:0 1px 2px rgba(0,0,0,.04)}body.tema-claro .op2-multi-menu{border-color:#d1d5db;background:#fff;color:#111827;box-shadow:0 14px 35px rgba(15,23,42,.18)}
@@ -74,7 +74,7 @@
     <div class="op2-work">
       <main class="card p-3 space-y-3">
         <section class="op2-band">
-          <h2 class="font-bold mb-2">1. Clientes</h2>
+          <h2 class="op2-step-title mb-2"><span class="op2-step-number">1</span><span>Clientes</span></h2>
           <div class="grid md:grid-cols-4 gap-2 op2-grid-compact">
             <div class="md:col-span-2">{% include "moda/_op2_cliente_campo.html" %}</div>
             {% include "moda/_op2_contatos.html" %}
@@ -83,7 +83,7 @@
           </div>
         </section>
         <section class="op2-band">
-          <div class="flex items-center justify-between gap-2 mb-2"><div><h2 class="font-bold">2 e 3. Modelos, personalização e impressão</h2><p class="text-xs opacity-70">A estrutura da peça e os detalhes aparecem só na sobreposição de adicionar modelo.</p></div><button type="button" class="btn-primary" @click="abrirModalItem()">+ Adicionar modelo</button></div>
+          <div class="flex items-center justify-between gap-2 mb-2"><div><h2 class="op2-step-title"><span class="op2-step-number">2</span><span class="op2-step-number">3</span><span>Modelos, personalização e impressão</span></h2><p class="text-xs opacity-70 mt-1">A estrutura da peça e os detalhes aparecem só na sobreposição de adicionar modelo.</p></div><button type="button" class="btn-primary" @click="abrirModalItem()">+ Adicionar modelo</button></div>
           <div class="space-y-2">
             <article x-show="temItemRascunho()&&!modalProduto" x-cloak class="op2-draft-card">
               <div class="grid md:grid-cols-[minmax(0,1fr)_minmax(180px,.45fr)_auto] gap-3 items-center">
@@ -124,8 +124,8 @@
             <div x-show="!itens.length&&!temItemRascunho()" class="text-center p-8 rounded-lg" style="border:1px dashed #64748b"><p class="font-bold">Nenhum modelo ainda</p><p class="text-sm opacity-70 mt-1">Clique em “Adicionar modelo” para escolher o modelo, estrutura, impressão e grade.</p><button type="button" class="btn-primary mt-3" @click="abrirModalItem()">Adicionar modelo</button></div>
           </div>
         </section>
-        <section class="op2-band op2-payment-required">
-          <div class="flex flex-wrap items-start justify-between gap-2 mb-3"><div><div class="flex flex-wrap items-center gap-2"><h2 class="font-bold op2-payment-title">4. Previsão de pagamento</h2><span class="soft-pill is-amber text-xs">Obrigatório</span></div><p class="text-xs opacity-80 mt-1">Selecione uma forma. O valor é preenchido automaticamente pelo total dos produtos e esta previsão não gera lançamentos no financeiro.</p></div><button type="button" class="btn-secondary text-sm" @click="adicionarPagamento()">+ Outra forma</button></div>
+        <section class="op2-band">
+          <div class="flex flex-wrap items-start justify-between gap-2 mb-3"><div><div class="flex flex-wrap items-center gap-2"><h2 class="op2-step-title"><span class="op2-step-number">4</span><span>Previsão de pagamento</span></h2><span class="op2-required-pill">Obrigatório</span></div><p class="text-xs opacity-80 mt-1">Selecione uma forma. O valor é preenchido automaticamente pelo total dos produtos e esta previsão não gera lançamentos no financeiro.</p></div><button type="button" class="btn-secondary text-sm" @click="adicionarPagamento()">+ Outra forma</button></div>
           <div class="space-y-2">
             <template x-for="(pagamento,idx) in pagamentos" :key="pagamento.uid">
               <div class="op2-payment-row">
@@ -138,7 +138,7 @@
           <div class="flex flex-wrap justify-between gap-2 mt-3 p-3 rounded-lg text-sm" :style="Math.abs(totalPagamentos()-totalValor())<0.01?'background:rgba(22,163,74,.10);color:#16a34a':'background:rgba(245,158,11,.12);color:#d97706'"><span>Soma prevista: <strong x-text="moeda(totalPagamentos())"></strong></span><span>Total do orçamento: <strong x-text="moeda(totalValor())"></strong></span></div>
         </section>
         <section class="op2-band">
-          <h2 class="font-bold mb-2">5. Anexos e observações gerais</h2>
+          <h2 class="op2-step-title mb-2"><span class="op2-step-number">5</span><span>Anexos e observações gerais</span></h2>
           <div class="grid md:grid-cols-4 gap-2 op2-grid-compact"><input type="file" name="arquivo" multiple class="form-input md:col-span-2" @change="previewAnexos($event)"><select name="tipo_arquivo" class="form-input">{% for v,l in tipos_arquivo %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select><input name="descricao_arquivo" class="form-input" placeholder="Descrição dos arquivos"><textarea name="observacoes" rows="3" class="form-input md:col-span-4" placeholder="Observações gerais da OP"></textarea></div>
           <label class="block mt-3"><span class="op2-label block">Primeiro registro da criação de artes</span><textarea name="informacoes_criacao" rows="3" class="form-input w-full" placeholder="Orientações, ajustes e informações combinadas com o cliente.">{{ request.POST.informacoes_criacao }}</textarea><small class="text-xs opacity-60">Será adicionado à linha do tempo com seu usuário, data e horário. Não aparece nos PDFs.</small></label>
           <div class="op2-file-previews mt-3" x-show="anexosPreview.length" x-cloak><template x-for="arquivo in anexosPreview" :key="arquivo.chave"><figure class="op2-file-preview"><img x-show="arquivo.imagem" :src="arquivo.url" :alt="arquivo.nome"><div x-show="!arquivo.imagem" class="h-[90px] flex items-center justify-center text-2xl">📎</div><figcaption class="text-xs truncate" x-text="arquivo.nome"></figcaption><small class="block opacity-60" x-text="arquivo.tamanho"></small></figure></template></div>
