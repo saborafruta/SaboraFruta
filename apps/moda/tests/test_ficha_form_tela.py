@@ -108,7 +108,7 @@ class FichaFormTelaTests(TestCase):
         html = self.client.get(self.url).content.decode()
         posicoes = [
             html.index('1. De qual produto é esta ficha'),
-            html.index('2. Versão e situação'),
+            html.index('2. Versão, situação e peso'),
             html.index('3. Como a peça é feita'),
         ]
 

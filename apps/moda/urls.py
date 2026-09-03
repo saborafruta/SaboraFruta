@@ -242,6 +242,7 @@ ROTAS_PRONTAS: list = [
     path('engenharia/ficha-tecnica/<int:pk>/editar/', vf.FichaFormView.as_view(), name='ficha-update'),
     path('engenharia/ficha-tecnica/<int:pk>/historico/', vf.FichaHistoricoView.as_view(), name='ficha-historico'),
     path('engenharia/ficha-tecnica/<int:pk>/excluir/', vf.FichaDeleteView.as_view(), name='ficha-delete'),
+    path('engenharia/ficha-tecnica/<int:pk>/grade/', vf.FichaGradeView.as_view(), name='ficha-grade'),
     path('engenharia/ficha-tecnica/<int:pk>/materiais/', vf.MaterialCreateView.as_view(), name='ficha-material-add'),
     path('engenharia/ficha-tecnica/<int:pk>/materiais/salvar/', vf.MaterialUpdateView.as_view(), name='ficha-material-salvar'),
     path('engenharia/ficha-tecnica/<int:pk>/materiais/<int:material_pk>/remover/', vf.MaterialDeleteView.as_view(), name='ficha-material-delete'),

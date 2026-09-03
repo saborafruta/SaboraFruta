@@ -59,6 +59,20 @@ class FichaTecnica(ComCodigoQr, FilialScopedModel):
         help_text='PNG, JPG, PDF, CDR ou AI. Em branco, usa o desenho do produto.',
     )
 
+    # PESO DA PECA PRONTA, em gramas.
+    #
+    # Fica na ficha e nao no produto porque e' resultado de engenharia: muda
+    # quando muda o tecido ou o consumo, e a ficha e' onde isso e' decidido.
+    #
+    # Nulo, e nao zero: peca sem pesagem e peca de 0 g sao coisas diferentes,
+    # e um zero gravado passaria por peso real na hora de cotar frete.
+    peso_peca_g = models.DecimalField(
+        max_digits=8, decimal_places=1, null=True, blank=True,
+        verbose_name='Peso da peça pronta (g)',
+        help_text='Quanto pesa UMA peça acabada, em gramas. Ex.: 240,5. Serve para frete, expedição e para conferir o rendimento do tecido.',
+        validators=[MinValueValidator(Decimal('0'))],
+    )
+
     observacoes = models.TextField(blank=True)
 
     objects = FilialManager()
@@ -125,6 +139,13 @@ class FichaTecnica(ComCodigoQr, FilialScopedModel):
         if roteiro is None:
             return self.custo_estimado
         return (self.custo_estimado + roteiro.custo_total).quantize(Decimal('0.01'))
+
+    @property
+    def peso_peca_kg(self):
+        """O mesmo peso em quilos — nulo continua nulo, nunca vira 0."""
+        if self.peso_peca_g is None:
+            return None
+        return (self.peso_peca_g / Decimal('1000')).quantize(Decimal('0.001'))
 
     @property
     def desenho(self):

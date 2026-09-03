@@ -7,11 +7,12 @@ e anexos. Misturar com as telas de Grade/Cor/Produto engordaria um arquivo
 que já é grande sem nenhum ganho.
 """
 from django.contrib import messages
+from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from .forms import FichaTecnicaForm, ImagemFichaForm, MaterialFichaForm
-from .models import FichaTecnica, ImagemFicha, MaterialFicha
+from .models import FichaTecnica, Grade, ImagemFicha, ItemGrade, MaterialFicha
 from .views import ModaBaseView
 
 
@@ -52,7 +53,43 @@ def _informacoes(produto) -> list[tuple[str, str]]:
         ('Coleção', str(produto.colecao) if produto.colecao_id else ''),
         ('Tecido', str(produto.tecido) if produto.tecido_id else ''),
         ('Composição', produto.composicao),
-        ('Grade', str(produto.grade) if produto.grade_id else ''),
+        # A grade sai com os tamanhos: o nome sozinho não diz se a peça vai
+        # até GG ou até XGG, e é isso que a fábrica precisa saber.
+        ('Grade', produto.grade.resumo_com_nome if produto.grade_id else ''),
+    ]
+
+
+def _grades_da_filial(filial, escolhida_id=None) -> list[dict]:
+    """
+    TODAS as grades cadastradas, com os tamanhos de cada uma.
+
+    A ficha mostrava só o nome da grade do produto -- e quando o produto
+    não tinha grade, um traço. Um traço não diz se falta cadastrar a grade
+    ou se falta ligá-la ao produto, e são problemas diferentes: o primeiro
+    resolve-se na tela de Grades, o segundo aqui.
+
+    Os tamanhos vêm junto porque é o que a fábrica lê. "Adulto" não diz se
+    a peça sai até GG ou até XGG; "PP | P | M | G | GG | XGG" diz.
+
+    Uma consulta para todas as grades, com os tamanhos pré-carregados: uma
+    por grade seria uma consulta por card da tela.
+    """
+    grades = (
+        Grade.objects.for_filial(filial).filter(ativo=True)
+        .prefetch_related(
+            Prefetch('itens', queryset=ItemGrade.objects.select_related('tamanho')),
+        )
+    )
+    return [
+        {
+            'id': grade.pk,
+            'nome': grade.nome,
+            'tipo': grade.get_tipo_display(),
+            'resumo': grade.resumo,
+            'tamanhos': [t.sigla for t in grade.tamanhos_ordenados()],
+            'escolhida': grade.pk == escolhida_id,
+        }
+        for grade in grades
     ]
 
 
@@ -227,7 +264,45 @@ class FichaDetailView(ModaBaseView):
             'custo_por_tipo': ficha.custo_por_tipo,
             'form_material': form_material or MaterialFichaForm(),
             'form_imagem': ImagemFichaForm(),
+            'grades': _grades_da_filial(
+                _filial(request), ficha.produto.grade_id,
+            ),
         }
+
+
+class FichaGradeView(ModaBaseView):
+    """
+    Escolhe a grade da peça sem sair da ficha.
+
+    A grade é campo do PRODUTO, e continua sendo -- isto aqui grava lá, não
+    numa cópia na ficha. O que muda é o caminho: quem está especificando a
+    peça percebe que falta grade aqui, e mandá-lo à tela do produto e de
+    volta só para marcar um radio é atrito que faz a ficha descer sem grade.
+    """
+
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        ficha = _ficha_da_filial(request, pk)
+        produto = ficha.produto
+        escolhida = (request.POST.get('grade') or '').strip()
+
+        if not escolhida:
+            produto.grade = None
+            produto.save(update_fields=['grade'])
+            messages.success(request, 'Grade retirada do produto.')
+            return redirect(reverse('moda:ficha-detail', args=[ficha.pk]))
+
+        grade = get_object_or_404(
+            Grade.objects.for_filial(_filial(request)), pk=escolhida,
+        )
+        produto.grade = grade
+        produto.save(update_fields=['grade'])
+        messages.success(
+            request,
+            f'Grade {grade.nome} ({grade.resumo}) aplicada ao produto {produto.codigo}.',
+        )
+        return redirect(reverse('moda:ficha-detail', args=[ficha.pk]))
 
 
 class MaterialCreateView(ModaBaseView):

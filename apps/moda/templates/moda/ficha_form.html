@@ -153,15 +153,21 @@
 
       </div>
 
-      {# ── 2. Versão e situação ──────────────────────────────────────── #}
+      {# ── 2. Versão, situação e peso ────────────────────────────────── #}
       <div class="card p-5">
         <h3 class="text-base font-semibold mb-4"
             :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-          2. Versão e situação
+          2. Versão, situação e peso
         </h3>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {% comment %}
+          O PESO DA PEÇA PRONTA fica aqui, e não junto dos materiais: é
+          resultado da ficha inteira, não de uma linha dela. Em branco a
+          ficha diz que ninguém pesou — que é o que faz alguém ir à balança
+          antes de cotar frete, em vez de cotar por cima.
+        {% endcomment %}
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {% for campo in form %}
-            {% if campo.name == 'versao' or campo.name == 'status' %}
+            {% if campo.name == 'versao' or campo.name == 'status' or campo.name == 'peso_peca_g' %}
               {% include "moda/_campo.html" %}
             {% endif %}
           {% endfor %}
