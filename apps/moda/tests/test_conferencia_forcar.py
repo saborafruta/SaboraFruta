@@ -185,10 +185,14 @@ class TelaDaPerguntaTests(ForcarBase):
         self.assertContains(resposta, 'O que acontece se prosseguir')
         self.assertContains(resposta, 'com o seu nome')
 
-    def test_com_expedicao_aberta_abre_o_qr_em_vez_da_pergunta(self):
+    def test_com_expedicao_aberta_vai_direto_para_a_conferencia(self):
         """
-        Quem já tem expedição não vê a pergunta das pendências: vê o QR da
-        conferência, que é a porta para conferir ao lado da caixa.
+        Quem já tem expedição não vê a pergunta das pendências, nem uma
+        tela intermediária de QR: cai direto na conferência por pessoa.
+
+        O atalho é do PEDIDO (computador), não da caixa (chão de fábrica) —
+        o QR e a impressão continuam existindo, só que como recurso à
+        parte, para não interromper quem já está com o cliente.
         """
         pedido = self._pedido_travado()
         item = pedido.itens.first()
@@ -204,12 +208,32 @@ class TelaDaPerguntaTests(ForcarBase):
             reverse('moda:pedido-conferencia', args=[pedido.pk])
         )
 
-        self.assertEqual(resposta.status_code, 200)
-        self.assertNotContains(resposta, 'pendência(s) que travam a produção')
-        self.assertContains(resposta, expedicao.codigo)
-        # E o caminho para conferir ali mesmo continua à mão.
-        self.assertContains(
-            resposta, reverse('moda:conferencia-pessoas', args=[expedicao.pk])
+        self.assertRedirects(
+            resposta,
+            reverse('moda:conferencia-pessoas', args=[expedicao.pk]),
+            fetch_redirect_response=False,
+        )
+
+    def test_com_mais_de_uma_expedicao_vai_para_a_fila(self):
+        """
+        Pedido com mais de um produto tem uma expedição por caixa — sem
+        escolher uma ao acaso, a fila já abre as conferências disponíveis.
+        """
+        pedido = self._pedido_travado()
+        item = pedido.itens.first()
+        for numero in (1, 2):
+            ordem = OrdemProducao.objects.create(
+                filial=self.filial, pedido=pedido, item=item,
+                numero=f'OP-000{numero}', ano=2026, sequencial=numero, quantidade=7,
+            )
+            Expedicao.objects.create(filial=self.filial, ordem=ordem, numero=numero)
+
+        resposta = self.client.get(
+            reverse('moda:pedido-conferencia', args=[pedido.pk])
+        )
+
+        self.assertRedirects(
+            resposta, reverse('moda:conferencia-fila'), fetch_redirect_response=False,
         )
 
 
