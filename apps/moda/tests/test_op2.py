@@ -18,7 +18,7 @@ from apps.moda.models import (
     AprovacaoPedido, ArquivoPedido, Grade, ItemGrade, ItemGradePedido,
     ItemPedidoProducao,
     OpcaoEstruturaOP2, OrdemProducao, PedidoProducao, Personalizacao,
-    PersonalizacaoIndividual, ProdutoModa, RegistroCriacaoArte, Tamanho,
+    PersonalizacaoIndividual, ProdutoModa, RegistroCriacaoArte, RascunhoOP, Tamanho,
     VisualItemPedido,
 )
 from apps.moda.forms_cliente import ClienteRapidoForm
@@ -141,6 +141,9 @@ class Op2Tests(TestCase):
         from apps.moda.views_op2 import _dados_modal_item
 
         self._login_op2()
+        RascunhoOP.objects.create(
+            filial=self.filial, usuario=self._usuario(), dados={'clienteId': 'temporario'},
+        )
         grupos = opcoes_estrutura_filial(self.filial)
         dados = {
             'cliente': str(self.cliente.pk),
@@ -161,7 +164,10 @@ class Op2Tests(TestCase):
         }
         resposta = self.client.post(reverse('moda:op2-create'), dados)
         self.assertEqual(resposta.status_code, 302)
-        item = PedidoProducao.objects.exclude(pk=self.pedido.pk).get().itens.get()
+        self.assertFalse(RascunhoOP.objects.exists())
+        criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        self.assertEqual(resposta.url, reverse('moda:op2-detail', args=[criado.pk]))
+        item = criado.itens.get()
         self.assertIn('Acabamentos: RECORTE + FORRO', item.observacoes)
         modal = _dados_modal_item(item, grupos)
         self.assertEqual(modal['estrutura']['malha'], 'OUTRO')
@@ -499,6 +505,42 @@ class Op2Tests(TestCase):
 
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'Selecione um cliente')
+
+    def test_autosave_da_op_cria_e_atualiza_um_rascunho_por_usuario(self):
+        self._login_op2()
+        url = reverse('moda:op2-rascunho')
+
+        resposta = self.client.post(
+            url, data=json.dumps({'clienteId': '10', 'salvoEm': 100}),
+            content_type='application/json',
+        )
+        self.assertEqual(resposta.status_code, 200)
+        resposta = self.client.post(
+            url, data=json.dumps({'clienteId': '20', 'salvoEm': 200}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(RascunhoOP.objects.count(), 1)
+        self.assertEqual(RascunhoOP.objects.get().dados['clienteId'], '20')
+
+    def test_tela_da_op_entrega_rascunho_do_servidor_e_permite_descartar(self):
+        self._login_op2()
+        usuario = self._usuario()
+        RascunhoOP.objects.create(
+            filial=self.filial, usuario=usuario,
+            dados={'clienteId': str(self.cliente.pk), 'salvoEm': 123},
+        )
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+
+        self.assertContains(resposta, 'op2-rascunho-servidor')
+        self.assertContains(resposta, 'Rascunho recuperado')
+        self.assertContains(resposta, 'resposta.redirected')
+        self.assertContains(resposta, str(self.cliente.pk))
+        resposta = self.client.delete(reverse('moda:op2-rascunho'))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertFalse(RascunhoOP.objects.exists())
 
     def test_busca_da_op_encontra_cliente_antigo_sem_vinculo_novo(self):
         cliente_antigo = Cliente.objects.create(

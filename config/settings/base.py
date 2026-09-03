@@ -242,7 +242,11 @@ ERP_FOCUSNFE_WEBHOOK_TOKEN = env('FOCUSNFE_WEBHOOK_TOKEN', default='')
 
 # SessÃ£o
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
-SESSION_COOKIE_AGE = 60 * 60 * 8  # 8 horas
+# Encerra após 24 horas sem atividade. Cada uso renova o prazo; o botão
+# "Sair" continua invalidando a sessão imediatamente.
+SESSION_COOKIE_AGE = env.int('SESSION_COOKIE_AGE_SECONDS', default=60 * 60 * 24)
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 
 # Logging — sem isso, uma excecao 500 nao tratada em producao (DEBUG=False)

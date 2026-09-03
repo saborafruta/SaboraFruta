@@ -28,6 +28,7 @@ from .models import (
     AprovacaoPedido, ArquivoPedido, Grade, ItemGradePedido, ItemPedidoProducao,
     OpcaoEstruturaOP2, PedidoProducao, Personalizacao, PersonalizacaoIndividual,
     Posicao, ProdutoModa, RegistroCriacaoArte, Tamanho, VisualItemPedido,
+    RascunhoOP,
 )
 from .services.historico import HistoricoService
 from .services.financeiro import FinanceiroPedidoService
@@ -538,6 +539,10 @@ class Op2CreateView(ModaBaseView):
                     request.user, 'Orçamento salvo e enviado ao cliente pela OP 2.0.',
                 )
 
+            RascunhoOP.objects.filter(
+                filial=_filial(request), usuario=request.user,
+            ).delete()
+
         messages.success(request, f'Rascunho #{pedido.numero:06d} criado.')
         if destino == 'enviar':
             link = request.build_absolute_uri(
@@ -578,6 +583,9 @@ class Op2CreateView(ModaBaseView):
                 ativo=True,
             ).order_by('razao_social')
         )
+        rascunho = RascunhoOP.objects.filter(
+            filial=_filial(request), usuario=request.user,
+        ).first()
         return {
             'title': 'Nova OP 2.0',
             'clientes': clientes,
@@ -622,7 +630,12 @@ class Op2CreateView(ModaBaseView):
             'prioridades': PedidoProducao.Prioridade.choices,
             'formas_pagamento_previstas': PedidoProducao.FormaPagamentoPrevista.choices,
             'hoje': timezone.localdate(),
+            'rascunho_op': {
+                'dados': rascunho.dados,
+                'atualizado_em': rascunho.updated_at.isoformat(),
+            } if rascunho else None,
         }
+
 
     @staticmethod
     def _indices_itens(request):
@@ -832,6 +845,36 @@ class Op2CreateView(ModaBaseView):
                 descricao=visual.get_posicao_display(),
                 enviado_por=request.user,
             )
+
+
+class Op2RascunhoView(ModaBaseView):
+    area = 'comercial'
+    permissao_acao = 'criar'
+    limite_bytes = 1024 * 1024
+
+    def post(self, request):
+        if len(request.body) > self.limite_bytes:
+            return JsonResponse({'ok': False, 'erro': 'Rascunho muito grande.'}, status=413)
+        try:
+            dados = json.loads(request.body)
+        except (TypeError, ValueError):
+            return JsonResponse({'ok': False, 'erro': 'Dados inválidos.'}, status=400)
+        if not isinstance(dados, dict):
+            return JsonResponse({'ok': False, 'erro': 'Dados inválidos.'}, status=400)
+        rascunho, _ = RascunhoOP.objects.update_or_create(
+            filial=_filial(request), usuario=request.user,
+            defaults={'dados': dados},
+        )
+        return JsonResponse({
+            'ok': True,
+            'atualizado_em': rascunho.updated_at.isoformat(),
+        })
+
+    def delete(self, request):
+        RascunhoOP.objects.filter(
+            filial=_filial(request), usuario=request.user,
+        ).delete()
+        return JsonResponse({'ok': True})
 
 
 class Op2ModeloRapidoView(ModaBaseView):

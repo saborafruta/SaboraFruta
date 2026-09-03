@@ -12,6 +12,7 @@
 {{ grade_cores_json|json_script:"op2-grade-cores" }}
 {{ clientes_json|json_script:"op2-clientes" }}
 {{ tamanhos_labels|json_script:"op2-tamanhos-labels" }}
+{{ rascunho_op|json_script:"op2-rascunho-servidor" }}
 <style>
 .op2-shell{margin:-.75rem}.op2-work{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px}.op2-band{border:1px solid rgba(148,163,184,.22);border-radius:10px;padding:12px}.op2-label{display:block;margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;font-weight:800}.op2-card{border:1px solid rgba(148,163,184,.22);border-radius:10px;padding:10px}.op2-results{position:absolute;left:0;right:0;top:100%;z-index:40;max-height:240px;overflow:auto;border:1px solid rgba(148,163,184,.35);border-radius:10px;margin-top:4px;background:var(--card-bg,#18181b)}.op2-plus{min-height:78px;border:1px dashed rgba(148,163,184,.45);border-radius:10px;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;overflow:hidden}.op2-plus img{width:100%;height:110px;object-fit:cover}.op2-modal-grid{display:grid;grid-template-columns:330px minmax(0,1fr);gap:12px}.op2-model-list{max-height:58vh;overflow:auto}.op2-grade-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}.op2-grade-chip{border:1px solid rgba(148,163,184,.28);border-radius:10px;padding:10px;text-align:left;min-height:60px}.op2-grade-chip.is-on{border-color:#3b82f6;background:rgba(59,130,246,.13);box-shadow:inset 3px 0 #3b82f6}.op2-grade-panel{border:1px solid rgba(59,130,246,.38);border-radius:12px;padding:11px;background:rgba(59,130,246,.06)}.op2-size-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:8px}.op2-size-card{border:1px solid rgba(148,163,184,.24);border-radius:10px;padding:9px;background:rgba(148,163,184,.05)}.op2-size-name{display:block;text-align:center;font-size:12px;font-weight:900;margin-bottom:7px}.op2-stepper{display:grid;grid-template-columns:40px minmax(56px,1fr) 40px;gap:5px;align-items:center}.op2-qty-btn{height:40px;border:1px solid rgba(148,163,184,.3);border-radius:8px;font-size:20px;font-weight:800}.op2-qty-input{height:40px;min-width:0;text-align:center;font-size:18px;font-weight:800}.op2-qty-input::-webkit-inner-spin-button,.op2-qty-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.op2-file-previews{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}.op2-file-preview{border:1px solid rgba(148,163,184,.22);border-radius:9px;padding:7px;min-width:0}.op2-file-preview img{width:100%;height:90px;object-fit:cover;border-radius:6px;margin-bottom:5px}
 .op2-results{background:#18181b!important;color:#f8fafc!important}.op2-results button,.op2-results strong,.op2-results small{color:inherit!important}.op2-qty-error{border-color:#ef4444!important;box-shadow:0 0 0 2px rgba(239,68,68,.18)}
@@ -23,6 +24,7 @@
 .op2-conjunto-shell{border:1px solid rgba(37,99,235,.35);border-radius:14px;padding:12px;background:linear-gradient(135deg,rgba(37,99,235,.07),rgba(14,165,233,.025))}.op2-conjunto-intro{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.op2-conjunto-kicker{display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:#2563eb}.op2-conjunto-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}.op2-conjunto-tabs button{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;padding:10px;border:1px solid rgba(148,163,184,.28);border-radius:10px;text-align:left}.op2-conjunto-tabs button>span{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:rgba(148,163,184,.12);font-size:11px;font-weight:900}.op2-conjunto-tabs button small{opacity:.65}.op2-conjunto-tabs button.is-on{border-color:#2563eb;background:rgba(37,99,235,.12);box-shadow:inset 3px 0 #2563eb}.op2-conjunto-component{padding:12px;border:1px solid rgba(148,163,184,.22);border-radius:11px;background:var(--card-bg,#18181b)}.op2-conjunto-total{padding:5px 9px;border-radius:999px;background:rgba(37,99,235,.12);color:#2563eb;font-size:12px;font-weight:900}.op2-conjunto-grade{margin-top:12px;padding-top:12px;border-top:1px solid rgba(148,163,184,.2)}.op2-conjunto-multi{position:relative}.op2-conjunto-multi summary{display:flex;justify-content:space-between;align-items:center;gap:7px;height:40px;padding:0 11px;border:1px solid rgba(148,163,184,.35);border-radius:8px;cursor:pointer;list-style:none}.op2-conjunto-multi-summary{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}.op2-conjunto-multi-summary.is-multipla{font-size:11px}.op2-conjunto-multi>div{position:absolute;z-index:80;left:0;right:0;max-height:230px;overflow:auto;padding:6px;background:var(--card-bg,#242426);border:1px solid rgba(148,163,184,.35);border-radius:8px;box-shadow:0 15px 35px rgba(0,0,0,.25)}.op2-conjunto-multi label{display:flex;gap:8px;align-items:center;padding:7px;border-radius:6px;font-size:12px}.op2-conjunto-multi input{width:16px;height:16px}.op2-conjunto-balance{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:10px;padding:9px;border-radius:9px;font-size:13px}.op2-conjunto-balance small{margin-left:8px}.op2-conjunto-balance.is-ok{background:rgba(22,163,74,.1);color:#16a34a}.op2-conjunto-balance.is-warn{background:rgba(245,158,11,.12);color:#d97706}.op2-personalizacao-conjunto-grid{display:grid;grid-template-columns:minmax(90px,.55fr) minmax(125px,.8fr) minmax(80px,.45fr) 34px minmax(90px,.55fr) minmax(125px,.8fr) minmax(80px,.45fr) auto;gap:7px;align-items:end}.op2-copy-mini{height:40px;width:34px;border-radius:8px;background:rgba(37,99,235,.12);color:#2563eb;font-weight:900}
 .tema-claro .op2-conjunto-component{background:#fff;color:#111827}.tema-claro .op2-conjunto-multi>div{background:#fff;color:#111827}
 .op2-field-note summary{cursor:pointer;list-style:none;font-size:10px;color:#64748b;text-align:right}.op2-field-note summary:hover,.op2-field-note[open] summary{color:#2563eb}
+.op2-autosave{display:flex;align-items:center;gap:6px;font-size:11px;color:#64748b}.op2-autosave-dot{width:8px;height:8px;border-radius:50%;background:#16a34a}.op2-autosave.is-saving .op2-autosave-dot{background:#f59e0b}.op2-autosave.is-offline .op2-autosave-dot{background:#3b82f6}.op2-recovered{padding:8px 12px;border:1px solid rgba(37,99,235,.35);border-radius:9px;background:rgba(37,99,235,.09);color:#2563eb;font-size:12px}
 @media(max-width:767px){.op2-payment-row{grid-template-columns:1fr}.op2-payment-remove{margin-top:0}}
 @media(max-width:900px){.op2-personalizacao-conjunto-grid{grid-template-columns:1fr 1fr}.op2-copy-mini{width:100%}}@media(max-width:767px){.op2-personalizacao-grid,.op2-personalizacao-conjunto-grid{grid-template-columns:1fr}.op2-personalizacao-grid button{width:100%}.op2-conjunto-intro{align-items:stretch;flex-direction:column}.op2-conjunto-tabs{grid-template-columns:1fr}}
 @media(max-width:1023px){.op2-work{grid-template-columns:minmax(0,1fr)}.op2-aside{display:grid;grid-template-columns:1fr 1fr;gap:12px}.op2-modal-grid{grid-template-columns:1fr}input,select,textarea{font-size:16px!important}}
@@ -60,9 +62,10 @@
       <div><input type="hidden" :name="`pagamento_${idx}_forma`" :value="pagamento.forma"><input type="hidden" :name="`pagamento_${idx}_valor`" :value="pagamento.valor"></div>
     </template>
     <header class="card p-3 flex flex-wrap items-center justify-between gap-2 sticky top-0 z-30">
-      <div class="min-w-0"><a href="{% url 'moda:comercial' %}" class="text-xs font-bold" style="color:#3b82f6">← Comercial</a><h1 class="text-lg md:text-xl font-bold truncate">Nova OP 2.0</h1><p class="text-xs" :style="temaClaro?'color:#64748b':'color:#94a3b8'">Cliente, modelos, impressão, grades, anexos e observações em uma tela limpa.</p></div>
-      <div class="flex flex-wrap items-center justify-end gap-2"><button type="submit" name="destino" value="salvar" class="btn-secondary">Salvar</button><button type="submit" name="destino" value="enviar" formtarget="_blank" class="btn-primary">Salvar e enviar para cliente</button><a href="{% url 'moda:comercial' %}" class="btn-secondary" style="color:#ef4444" onclick="return confirm('Cancelar esta nova OP e descartar os dados preenchidos?')">Cancelar OP</a></div>
+      <div class="min-w-0"><a href="{% url 'moda:comercial' %}" class="text-xs font-bold" style="color:#3b82f6">← Comercial</a><h1 class="text-lg md:text-xl font-bold truncate">Nova OP 2.0</h1><p class="text-xs" :style="temaClaro?'color:#64748b':'color:#94a3b8'">Cliente, modelos, impressão, grades, anexos e observações em uma tela limpa.</p><div class="op2-autosave mt-1" :class="{'is-saving':estadoRascunho==='salvando','is-offline':estadoRascunho==='local'}"><span class="op2-autosave-dot"></span><span x-text="mensagemRascunho"></span></div></div>
+      <div class="flex flex-wrap items-center justify-end gap-2"><button type="submit" name="destino" value="salvar" class="btn-secondary">Salvar</button><button type="submit" name="destino" value="enviar" formtarget="_blank" class="btn-primary">Salvar e enviar para cliente</button><a href="{% url 'moda:comercial' %}" class="btn-secondary" style="color:#ef4444" @click="if(!confirm('Cancelar esta nova OP e descartar os dados preenchidos?')){$event.preventDefault()}else{descartarRascunho()}">Cancelar OP</a></div>
     </header>
+    <div x-show="rascunhoRecuperado" x-cloak class="op2-recovered"><strong>Rascunho recuperado.</strong> Seu preenchimento anterior voltou automaticamente.<span x-show="anexosParaReanexar.length"> Por segurança, selecione novamente os arquivos: <span x-text="anexosParaReanexar.join(', ')"></span>.</span></div>
     <div class="op2-work">
       <main class="card p-3 space-y-3">
         <section class="op2-band">
@@ -177,10 +180,15 @@ function op2NovaMelhorada(){
   estado.clientesAdicionais=[];
   estado.adicionandoCliente=false;
   estado.enviandoFormulario=false;
+  estado.estadoRascunho='pronto';
+  estado.mensagemRascunho='O preenchimento será salvo automaticamente';
+  estado.rascunhoRecuperado=false;
+  estado.anexosParaReanexar=[];
+  estado.autosavePausado=false;
+  estado.autosaveTimer=null;
   const iniciar=estado.recolherSidebar.bind(estado);
   estado.recolherSidebar=function(){
     iniciar();
-    try{const canal=new BroadcastChannel('op2-salvo');canal.onmessage=e=>{if(e.data?.opUrl)window.location.assign(e.data.opUrl)}}catch(e){}
   };
   estado.personalizacoes=[];
   estado.pagamentos=[{uid:Date.now()+Math.random(),forma:'',valor:'',valorEditado:false}];
@@ -238,6 +246,7 @@ function op2NovaMelhorada(){
   estado.totalComponenteConjunto=function(componente){return op2TotalComponenteConjunto(this.draft.configuracao_conjunto,componente)};
   estado.init=function(){
     this.$watch('draft.estrutura_tipo',tipo=>{this.aplicarPadroesEstrutura();if(tipo==='conjunto')this.inicializarConjunto()});
+    this.iniciarAutosave();
   };
   estado.draft=estado.novoDraft();
   estado.garantirGrade=function(gradeId){
@@ -491,6 +500,76 @@ function op2NovaMelhorada(){
   estado.previewAnexos=function(event){
     this.anexosPreview.forEach(item=>{if(item.url)URL.revokeObjectURL(item.url)});
     this.anexosPreview=Array.from(event.target.files||[]).map(arquivo=>this.arquivoPreview(arquivo));
+  };
+  estado.chaveRascunho='op2-rascunho:{{ request.user.pk }}:{{ request.filial_ativa.pk }}';
+  estado.camposRascunho=['data_pedido','data_prevista_entrega','prioridade','tipo_arquivo','descricao_arquivo','observacoes','informacoes_criacao'];
+  estado.capturarRascunho=function(){
+    const campos={};
+    this.camposRascunho.forEach(nome=>{const campo=this.$root.querySelector(`[name="${nome}"]`);if(campo)campos[nome]=campo.value});
+    return{versao:1,salvoEm:Date.now(),campos,clienteId:this.clienteId,contatoNome:this.contatoNome,contatoTelefone:this.contatoTelefone,contatos:this.contatos,clientesAdicionais:this.clientesAdicionais,itens:this.itens,draft:this.draft,editandoIdx:this.editandoIdx,modalProduto:this.modalProduto,personalizacoes:this.personalizacoes,pagamentos:this.pagamentos,anexosNomes:[...this.anexosParaReanexar,...this.anexosPreview.map(a=>a.nome),...this.itens.flatMap(i=>i.imagensNomes||[])]};
+  };
+  estado.temConteudoRascunho=function(dados){
+    const c=dados.campos||{};
+    return Boolean(dados.clienteId||dados.contatoNome||dados.contatoTelefone||(dados.clientesAdicionais||[]).length||(dados.itens||[]).length||dados.draft?.produto_id||(dados.personalizacoes||[]).some(p=>p.nome||p.numero||p.tamanhoId)||(dados.pagamentos||[]).some(p=>p.forma||Number(p.valor||0)>0)||c.data_pedido!=='{{ hoje|date:"Y-m-d" }}'||c.data_prevista_entrega||c.descricao_arquivo||c.observacoes||c.informacoes_criacao);
+  };
+  estado.salvarLocal=function(){
+    if(this.autosavePausado)return null;
+    const dados=this.capturarRascunho();
+    if(!this.temConteudoRascunho(dados))return null;
+    try{localStorage.setItem(this.chaveRascunho,JSON.stringify(dados));this.estadoRascunho='local';this.mensagemRascunho=navigator.onLine?'Protegido neste computador':'Sem internet — protegido neste computador'}catch(e){this.mensagemRascunho='Não foi possível gravar a cópia local'}
+    return dados;
+  };
+  estado.salvarServidor=async function(dados){
+    if(!dados||this.autosavePausado)return;
+    this.estadoRascunho='salvando';this.mensagemRascunho='Salvando rascunho…';
+    try{
+      const resposta=await fetch('{% url "moda:op2-rascunho" %}',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':(document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)||[])[1]||''},body:JSON.stringify(dados)});
+      if(!resposta.ok||resposta.redirected||!(resposta.headers.get('content-type')||'').includes('application/json'))throw new Error('autosave');
+      const agora=new Date();this.estadoRascunho='servidor';this.mensagemRascunho=`Salvo automaticamente às ${agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+    }catch(e){this.estadoRascunho='local';this.mensagemRascunho='Sem conexão com o servidor — protegido neste computador'}
+  };
+  estado.agendarAutosave=function(){
+    if(this.autosavePausado)return;
+    clearTimeout(this.autosaveTimer);
+    const dados=this.salvarLocal();
+    this.autosaveTimer=setTimeout(()=>this.salvarServidor(this.capturarRascunho()),900);
+    return dados;
+  };
+  estado.aplicarRascunho=function(dados){
+    if(!dados||!this.temConteudoRascunho(dados))return;
+    this.clienteId=String(dados.clienteId||'');this.contatoNome=dados.contatoNome||'';this.contatoTelefone=dados.contatoTelefone||'';
+    this.contatos=Array.isArray(dados.contatos)?dados.contatos:[];this.clientesAdicionais=Array.isArray(dados.clientesAdicionais)?dados.clientesAdicionais:[];
+    this.itens=(Array.isArray(dados.itens)?dados.itens:[]).map(item=>({...item,imagensNomes:[]}));this.personalizacoes=Array.isArray(dados.personalizacoes)?dados.personalizacoes:[];this.pagamentos=Array.isArray(dados.pagamentos)&&dados.pagamentos.length?dados.pagamentos:this.pagamentos;
+    this.draft={...this.novoDraft(),...(dados.draft||{})};this.editandoIdx=Number.isInteger(dados.editandoIdx)?dados.editandoIdx:null;this.modalProduto=Boolean(dados.modalProduto&&dados.draft?.produto_id);
+    this.anexosParaReanexar=Array.from(new Set(dados.anexosNomes||[]));
+    this.$nextTick(()=>Object.entries(dados.campos||{}).forEach(([nome,valor])=>{const campo=this.$root.querySelector(`[name="${nome}"]`);if(campo)campo.value=valor||''}));
+    this.rascunhoRecuperado=true;
+  };
+  estado.iniciarAutosave=function(){
+    sessionStorage.removeItem('op2-rascunho-concluindo');
+    let local=null;try{local=JSON.parse(localStorage.getItem(this.chaveRascunho)||'null')}catch(e){}
+    const servidor=JSON.parse(document.getElementById('op2-rascunho-servidor')?.textContent||'null')?.dados||null;
+    const escolhido=Number(local?.salvoEm||0)>=Number(servidor?.salvoEm||0)?local:servidor;
+    if(escolhido)this.aplicarRascunho(escolhido);
+    ['itens','draft','personalizacoes','pagamentos','clienteId','contatoNome','contatoTelefone','clientesAdicionais'].forEach(chave=>this.$watch(chave,()=>this.agendarAutosave()));
+    this.$root.addEventListener('input',()=>this.agendarAutosave());this.$root.addEventListener('change',()=>this.agendarAutosave());
+    window.addEventListener('pagehide',()=>this.salvarLocal());
+    window.addEventListener('online',()=>this.agendarAutosave());
+  };
+  estado.descartarRascunho=function(){
+    this.autosavePausado=true;clearTimeout(this.autosaveTimer);localStorage.removeItem(this.chaveRascunho);
+    fetch('{% url "moda:op2-rascunho" %}',{method:'DELETE',credentials:'same-origin',keepalive:true,headers:{'X-CSRFToken':(document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)||[])[1]||''}}).catch(()=>{});
+  };
+  const validarComAutosave=estado.validarAntesDeSalvar.bind(estado);
+  estado.validarAntesDeSalvar=function(event){
+    validarComAutosave(event);if(event.defaultPrevented)return;
+    this.salvarLocal();sessionStorage.setItem('op2-rascunho-concluindo',this.chaveRascunho);this.autosavePausado=true;clearTimeout(this.autosaveTimer);
+    if(event.submitter?.value==='enviar')setTimeout(()=>{this.autosavePausado=false},5000);
+  };
+  const recolherComAutosave=estado.recolherSidebar.bind(estado);
+  estado.recolherSidebar=function(){
+    recolherComAutosave();
+    try{const canal=new BroadcastChannel('op2-salvo');canal.onmessage=e=>{if(e.data?.opUrl){localStorage.removeItem(this.chaveRascunho);window.location.assign(e.data.opUrl)}}}catch(e){}
   };
   return configurarClientesOp2(estado, {
     buscar: '{% url "moda:cliente-buscar" %}',
