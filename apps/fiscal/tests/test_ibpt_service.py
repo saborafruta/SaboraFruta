@@ -121,3 +121,38 @@ class IBPTServiceTests(TestCase):
         self.assertFalse(AliquotaIBPT.objects.filter(ncm='101011000').exists())
         self.assertFalse(AliquotaIBPT.objects.filter(ncm='0101').exists())
         self.assertTrue(AliquotaIBPT.objects.filter(ncm='20080000').exists())
+
+    @patch('apps.fiscal.services.ibpt_service.requests.get')
+    def test_ncm_com_excecao_tarifaria_nao_derruba_a_sincronizacao(self, get):
+        """
+        O mesmo NCM pode ter uma linha geral e uma por Excecao Tarifaria da
+        TIPI (campo `ex`), cada uma com sua aliquota -- "03057200" chega da
+        API como tres linhas. `AliquotaIBPT` ainda nao rastreia a excecao,
+        entao duas linhas pelo mesmo NCM colidiriam na mesma chave do
+        `bulk_create` (e o Postgres rejeita). Fica a taxa geral.
+        """
+        def mercadoria(codigo):
+            return {
+                'codigo': codigo, 'tipo': 0, 'ex': None, 'descricao': 'x',
+                'nacionalfederal': '1', 'importadosfederal': '1',
+                'estadual': '1', 'municipal': '0',
+                'vigenciainicio': '2026-01-01', 'vigenciafim': '2026-12-31',
+                'versao': '26.2.A', 'fonte': 'IBPT',
+            }
+        geral = mercadoria('03057200')
+        excecao_1 = {**mercadoria('03057200'), 'ex': '01', 'nacionalfederal': '13.45'}
+        excecao_2 = {**mercadoria('03057200'), 'ex': '02', 'nacionalfederal': '13.45'}
+        mercadorias = [mercadoria(f'{20080000 + i:08d}') for i in range(9999)]
+
+        resposta = Mock()
+        resposta.json.return_value = {
+            'uf': 'RN', 'versao': '26.2.A',
+            'ncm': [excecao_1, excecao_2, geral] + mercadorias,
+        }
+        get.return_value = resposta
+
+        resultado = sincronizar_tabela_ibpt('RN')
+
+        self.assertEqual(resultado['quantidade'], 10000)
+        aliquota = AliquotaIBPT.objects.get(ncm='03057200')
+        self.assertEqual(aliquota.federal_nacional, Decimal('1'))

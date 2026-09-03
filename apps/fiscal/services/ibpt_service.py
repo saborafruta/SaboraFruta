@@ -107,6 +107,32 @@ def consultar_ncm_ibpt(ncm: str, uf: str) -> AliquotaIBPT:
     )
 
 
+def _preferir_taxa_geral(itens: list[dict]) -> list[dict]:
+    """
+    Um NCM pode ter mais de uma linha na tabela: a taxa geral (`ex` vazio)
+    e uma linha por Excecao Tarifaria da TIPI (`ex` numerado) -- a mesma
+    mercadoria com aliquota diferente sob exceoes especificas. Ex.:
+    "03057200" tem uma linha geral e duas exceoes (peixe defumado, peixe
+    salgado), cada uma com sua propria aliquota.
+
+    `AliquotaIBPT` nao rastreia a excecao -- nem quem consulta rastreia:
+    `obter_aliquota_ibpt` recebe so o NCM, sem o `ex_tipi` que o cadastro
+    do produto ja guarda (`Produto.ex_tipi`). Ate essa ligacao existir,
+    mais de uma linha pelo mesmo NCM colide no `bulk_create` (mesma chave
+    uf+ncm+versao duas vezes no mesmo INSERT, e o Postgres rejeita).
+    Fica a taxa geral quando ela existe -- e' a que mais se aproxima do
+    NCM sem excecao, que e' o caso comum -- e nunca se descarta o NCM
+    inteiro so porque uma das linhas dele e' uma excecao.
+    """
+    escolhidos: dict[str, dict] = {}
+    for item in itens:
+        codigo = item.get('codigo')
+        atual = escolhidos.get(codigo)
+        if atual is None or (atual.get('ex') and not item.get('ex')):
+            escolhidos[codigo] = item
+    return list(escolhidos.values())
+
+
 def sincronizar_tabela_ibpt(uf: str) -> dict:
     uf = str(uf or '').strip().upper()
     resposta = requests.get(
@@ -129,6 +155,7 @@ def sincronizar_tabela_ibpt(uf: str) -> dict:
     itens = [item for item in (dados.get('ncm') or []) if item.get('tipo') == 0]
     if len(itens) < 10000:
         raise DadosInvalidosError('A tabela IBPT recebida esta incompleta.')
+    itens = _preferir_taxa_geral(itens)
     registros = [_normalizar_registro(item, uf) for item in itens]
     quantidade = _salvar_registros(registros)
     return {
