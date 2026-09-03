@@ -1,3 +1,11 @@
 [deploy]
 # Roda ANTES de iniciar o servidor — aplica todas as migrations pendentes
 releaseCommand = "python manage.py migrate --noinput"
+# Só entrega tráfego à nova versão depois de confirmar que aplicação,
+# banco de dados e diretório de arquivos estão disponíveis.
+healthcheckPath = "/health/"
+healthcheckTimeout = 300
+# Mantém a versão anterior atendendo durante a troca e dá tempo para as
+# requisições que já começaram terminarem antes de encerrar o container.
+overlapSeconds = 30
+drainingSeconds = 20
