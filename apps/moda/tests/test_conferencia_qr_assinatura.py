@@ -318,6 +318,24 @@ class ConferirPorQuantidadeTests(ConferenciaBase):
 class PersonalizacaoDaCaixaTests(ConferenciaBase):
     """Cada expedição mostra somente as peças nominais do próprio produto."""
 
+    def test_conferencia_com_outro_item_da_op_nao_gera_erro(self):
+        pedido = self._pedido_com_grade()
+        outro_item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Short', quantidade=1,
+            valor_unitario=Decimal('30'), ordem=2,
+        )
+        expedicao = self._expedicao(pedido, self.item)
+        outra_ordem = OrdemProducao.objects.get(pedido=pedido, item=outro_item)
+        ExpedicaoService.criar(self.filial, outra_ordem, self.usuario, forcar=True)
+
+        resposta = self.client.get(
+            reverse('moda:conferencia-pessoas', args=[expedicao.pk])
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Outros itens desta OP para conferir')
+        self.assertContains(resposta, 'Short')
+
     def test_conferencia_nao_mistura_personalizacoes_de_outro_produto(self):
         pedido = self._pedido_com_grade()
         outro_item = ItemPedidoProducao.objects.create(

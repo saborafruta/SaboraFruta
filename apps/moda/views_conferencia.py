@@ -163,10 +163,11 @@ class ConferenciaPessoasView(ModaBaseView):
 
         quantidades = _linhas_de_quantidade(expedicao)
         demais_expedicoes = []
-        if expedicao.pedido_id:
+        pedido_id = expedicao.ordem.pedido_id
+        if pedido_id:
             demais_expedicoes = list(
                 Expedicao.objects.for_filial(_filial(request))
-                .filter(ordem__pedido_id=expedicao.pedido_id)
+                .filter(ordem__pedido_id=pedido_id)
                 .exclude(pk=expedicao.pk)
                 .exclude(status=Expedicao.Status.CANCELADA)
                 .select_related('ordem__item')
