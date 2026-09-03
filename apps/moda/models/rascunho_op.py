@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from django.conf import settings
 from django.db import models
 
@@ -12,14 +14,9 @@ class RascunhoOP(FilialScopedModel):
         on_delete=models.CASCADE,
         related_name='rascunhos_op',
     )
+    chave = models.UUIDField(default=uuid4, unique=True, editable=False)
     dados = models.JSONField(default=dict, blank=True)
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=('filial', 'usuario'),
-                name='moda_rascunho_op_filial_usuario_unico',
-            ),
-        ]
         verbose_name = 'rascunho de OP'
         verbose_name_plural = 'rascunhos de OP'

@@ -35,6 +35,7 @@
 <div class="op2-shell" x-data="op2NovaMelhorada()" x-init="recolherSidebar()">
   <form method="post" enctype="multipart/form-data" class="space-y-3" @submit="validarAntesDeSalvar">
     {% csrf_token %}
+    <input type="hidden" name="rascunho_chave" value="{{ rascunho_chave }}">
     <input type="hidden" name="item_rascunho" :value="temItemRascunho()?JSON.stringify(itemRascunho):''">
     <template x-for="(item,idx) in itens" :key="item.uid">
       <div>
@@ -259,6 +260,7 @@ function op2NovaMelhorada(){
   estado.totalGradeConjunto=function(componente,gradeId){return Object.values(this.componenteConjunto(componente).gradePorGrade?.[String(gradeId)]||{}).reduce((s,q)=>s+Number(q||0),0)};
   estado.totalComponenteConjunto=function(componente){return op2TotalComponenteConjunto(this.draft.configuracao_conjunto,componente)};
   estado.init=function(){
+    const url=new URL(window.location.href);if(!url.searchParams.has('rascunho')&&!url.searchParams.has('sessao')){url.searchParams.set('sessao','{{ rascunho_chave }}');history.replaceState({},'',url)}
     this.$watch('draft.estrutura_tipo',tipo=>{this.aplicarPadroesEstrutura();if(tipo==='conjunto')this.inicializarConjunto()});
     this.iniciarAutosave();
   };
@@ -273,9 +275,8 @@ function op2NovaMelhorada(){
     if(!confirm('Descartar este item em rascunho? As demais informações da OP serão mantidas.'))return;
     this.itemRascunho=null;if(this.origemEditor==='rascunho')this.modalProduto=false;this.origemEditor='novo';this.draft=this.novoDraft();this.buscaProduto='';this.agendarAutosave();
   };
-  const abrirModalNovo=estado.abrirModalItem.bind(estado);
   estado.abrirModalItem=function(){
-    abrirModalNovo();this.origemEditor='novo';this.agendarAutosave();
+    this.editandoIdx=null;this.draft=this.novoDraft();this.buscaProduto='';this.novoModeloAberto=false;this.modalProduto=true;this.origemEditor='novo';this.agendarAutosave();
   };
   estado.garantirGrade=function(gradeId){
     gradeId=String(gradeId);
@@ -547,12 +548,13 @@ function op2NovaMelhorada(){
     this.anexosPreview.forEach(item=>{if(item.url)URL.revokeObjectURL(item.url)});
     this.anexosPreview=Array.from(event.target.files||[]).map(arquivo=>this.arquivoPreview(arquivo));
   };
-  estado.chaveRascunho='op2-rascunho:{{ request.user.pk }}:{{ request.filial_ativa.pk }}';
+  estado.rascunhoChave='{{ rascunho_chave }}';
+  estado.chaveRascunho='op2-rascunho:{{ request.user.pk }}:{{ request.filial_ativa.pk }}:{{ rascunho_chave }}';
   estado.camposRascunho=['data_pedido','data_prevista_entrega','prioridade','tipo_arquivo','descricao_arquivo','observacoes','informacoes_criacao'];
   estado.capturarRascunho=function(){
     const campos={};
     this.camposRascunho.forEach(nome=>{const campo=this.$root.querySelector(`[name="${nome}"]`);if(campo)campos[nome]=campo.value});
-    return{versao:2,salvoEm:Date.now(),campos,clienteId:this.clienteId,contatoNome:this.contatoNome,contatoTelefone:this.contatoTelefone,contatos:this.contatos,clientesAdicionais:this.clientesAdicionais,itens:this.itens,itemRascunho:this.itemRascunho,draft:this.draft,origemEditor:this.origemEditor,editandoIdx:this.editandoIdx,modalProduto:this.modalProduto,personalizacoes:this.personalizacoes,pagamentos:this.pagamentos,anexosNomes:[...this.anexosParaReanexar,...this.anexosPreview.map(a=>a.nome),...this.itens.flatMap(i=>i.imagensNomes||[])]};
+    return{versao:3,rascunhoChave:this.rascunhoChave,salvoEm:Date.now(),campos,clienteId:this.clienteId,contatoNome:this.contatoNome,contatoTelefone:this.contatoTelefone,contatos:this.contatos,clientesAdicionais:this.clientesAdicionais,itens:this.itens,itemRascunho:this.itemRascunho,draft:this.draft,origemEditor:this.origemEditor,editandoIdx:this.editandoIdx,modalProduto:this.modalProduto,personalizacoes:this.personalizacoes,pagamentos:this.pagamentos,anexosNomes:[...this.anexosParaReanexar,...this.anexosPreview.map(a=>a.nome),...this.itens.flatMap(i=>i.imagensNomes||[])]};
   };
   estado.temConteudoRascunho=function(dados){
     const c=dados.campos||{};
@@ -605,7 +607,7 @@ function op2NovaMelhorada(){
   };
   estado.descartarRascunho=function(){
     this.autosavePausado=true;clearTimeout(this.autosaveTimer);localStorage.removeItem(this.chaveRascunho);
-    fetch('{% url "moda:op2-rascunho" %}',{method:'DELETE',credentials:'same-origin',keepalive:true,headers:{'X-CSRFToken':(document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)||[])[1]||''}}).catch(()=>{});
+    fetch('{% url "moda:op2-rascunho" %}?chave='+encodeURIComponent(this.rascunhoChave),{method:'DELETE',credentials:'same-origin',keepalive:true,headers:{'X-CSRFToken':(document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)||[])[1]||''}}).catch(()=>{});
   };
   const validarComAutosave=estado.validarAntesDeSalvar.bind(estado);
   estado.validarAntesDeSalvar=function(event){

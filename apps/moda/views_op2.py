@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 from io import BytesIO
 import json
 from urllib.parse import quote
-from uuid import uuid4
+from uuid import UUID, uuid4
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from django.contrib import messages
@@ -556,9 +556,18 @@ class Op2CreateView(ModaBaseView):
                     request.user, 'Orçamento salvo e enviado ao cliente pela OP 2.0.',
                 )
 
-            RascunhoOP.objects.filter(
-                filial=_filial(request), usuario=request.user,
-            ).delete()
+            rascunho_chave = (request.POST.get('rascunho_chave') or '').strip()
+            if rascunho_chave:
+                RascunhoOP.objects.filter(
+                    filial=_filial(request), usuario=request.user,
+                    chave=rascunho_chave,
+                ).delete()
+            else:
+                # Compatibilidade com uma aba aberta antes de cada rascunho
+                # ganhar sua própria chave.
+                RascunhoOP.objects.filter(
+                    filial=_filial(request), usuario=request.user,
+                ).delete()
 
         messages.success(request, f'Rascunho #{pedido.numero:06d} criado.')
         if destino == 'enviar':
@@ -615,9 +624,22 @@ class Op2CreateView(ModaBaseView):
                 ativo=True,
             ).order_by('razao_social')
         )
-        rascunho = RascunhoOP.objects.filter(
-            filial=_filial(request), usuario=request.user,
-        ).first()
+        chave_retomada = (request.GET.get('rascunho') or '').strip()
+        chave_sessao = (
+            request.POST.get('rascunho_chave')
+            or request.GET.get('sessao') or ''
+        ).strip()
+        try:
+            chave = UUID(chave_retomada or chave_sessao) if (chave_retomada or chave_sessao) else uuid4()
+        except (TypeError, ValueError):
+            chave = uuid4()
+        rascunho = None
+        if chave_retomada or chave_sessao:
+            rascunho = RascunhoOP.objects.filter(
+                filial=_filial(request), usuario=request.user, chave=chave,
+            ).first()
+            if chave_retomada and rascunho is None:
+                chave = uuid4()
         return {
             'title': 'Nova OP 2.0',
             'clientes': clientes,
@@ -666,6 +688,7 @@ class Op2CreateView(ModaBaseView):
                 'dados': rascunho.dados,
                 'atualizado_em': rascunho.updated_at.isoformat(),
             } if rascunho else None,
+            'rascunho_chave': str(chave),
         }
 
 
@@ -893,8 +916,16 @@ class Op2RascunhoView(ModaBaseView):
             return JsonResponse({'ok': False, 'erro': 'Dados inválidos.'}, status=400)
         if not isinstance(dados, dict):
             return JsonResponse({'ok': False, 'erro': 'Dados inválidos.'}, status=400)
+        chave_texto = str(dados.pop('rascunhoChave', '') or '').strip()
+        try:
+            chave = UUID(chave_texto)
+        except (TypeError, ValueError):
+            existente = RascunhoOP.objects.filter(
+                filial=_filial(request), usuario=request.user,
+            ).order_by('-updated_at').first()
+            chave = existente.chave if existente else uuid4()
         rascunho, _ = RascunhoOP.objects.update_or_create(
-            filial=_filial(request), usuario=request.user,
+            filial=_filial(request), usuario=request.user, chave=chave,
             defaults={'dados': dados},
         )
         return JsonResponse({
@@ -903,9 +934,14 @@ class Op2RascunhoView(ModaBaseView):
         })
 
     def delete(self, request):
-        RascunhoOP.objects.filter(
-            filial=_filial(request), usuario=request.user,
-        ).delete()
+        filtros = {'filial': _filial(request), 'usuario': request.user}
+        chave_texto = (request.GET.get('chave') or '').strip()
+        if chave_texto:
+            try:
+                filtros['chave'] = UUID(chave_texto)
+            except ValueError:
+                return JsonResponse({'ok': False, 'erro': 'Rascunho inválido.'}, status=400)
+        RascunhoOP.objects.filter(**filtros).delete()
         return JsonResponse({'ok': True})
 
 

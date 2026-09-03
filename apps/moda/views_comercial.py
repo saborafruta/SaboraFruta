@@ -22,9 +22,10 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import NoReverseMatch, Resolver404, resolve, reverse
 
 from apps.core.services.exceptions import DomainError
+from apps.cadastros.models import Cliente
 
 from .menu import GRUPOS_POR_SLUG
-from .models import PedidoProducao
+from .models import PedidoProducao, RascunhoOP
 from .services.kanban_comercial import COLUNAS, KanbanComercialService
 from .views import ModaBaseView, itens_com_tela
 
@@ -46,6 +47,32 @@ class ComercialView(ModaBaseView):
             'atrasados': request.GET.get('atrasados') == '1',
         }
         dados = KanbanComercialService.quadro(_filial(request), filtros)
+        rascunhos = list(RascunhoOP.objects.filter(
+            filial=_filial(request), usuario=request.user,
+        ).order_by('-updated_at'))
+        clientes_ids = {
+            int(rascunho.dados.get('clienteId'))
+            for rascunho in rascunhos
+            if str(rascunho.dados.get('clienteId') or '').isdigit()
+        }
+        clientes = {
+            cliente.pk: cliente.nome_display
+            for cliente in Cliente.objects.for_filial(_filial(request)).filter(pk__in=clientes_ids)
+        }
+        for rascunho in rascunhos:
+            dados_rascunho = rascunho.dados or {}
+            itens = dados_rascunho.get('itens') or []
+            item_incompleto = dados_rascunho.get('itemRascunho') or dados_rascunho.get('draft') or {}
+            cliente_id = str(dados_rascunho.get('clienteId') or '')
+            rascunho.cliente_nome = clientes.get(
+                int(cliente_id) if cliente_id.isdigit() else None,
+                'Cliente ainda não informado',
+            )
+            rascunho.quantidade_itens = len(itens)
+            rascunho.modelo_nome = (
+                (itens[0].get('nome') if itens else '')
+                or item_incompleto.get('nome') or 'Nenhum modelo concluído'
+            )
         grupo = GRUPOS_POR_SLUG['comercial']
 
         return render(request, 'moda/kanban_comercial.html', {
@@ -56,6 +83,7 @@ class ComercialView(ModaBaseView):
             'tem_filtro': any(filtros.values()),
             'prioridades': PedidoProducao.Prioridade.choices,
             'colunas': COLUNAS,
+            'rascunhos_op': rascunhos,
             # Sem permissão de editar, o quadro é leitura: os cartões não
             # ganham `draggable` e nenhum POST passa pelo serviço.
             'pode_mover': request.user.tem_permissao('moda', 'editar'),

@@ -4,6 +4,7 @@ from datetime import timedelta
 from decimal import Decimal
 from io import BytesIO
 from zipfile import ZipFile
+from uuid import uuid4
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.template.loader import get_template
@@ -542,23 +543,27 @@ class Op2Tests(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'Selecione um cliente')
 
-    def test_autosave_da_op_cria_e_atualiza_um_rascunho_por_usuario(self):
+    def test_autosave_da_op_mantem_sessoes_de_rascunho_separadas(self):
         self._login_op2()
         url = reverse('moda:op2-rascunho')
+        primeira = str(uuid4())
+        segunda = str(uuid4())
 
         resposta = self.client.post(
-            url, data=json.dumps({'clienteId': '10', 'salvoEm': 100}),
+            url, data=json.dumps({'rascunhoChave': primeira, 'clienteId': '10', 'salvoEm': 100}),
             content_type='application/json',
         )
         self.assertEqual(resposta.status_code, 200)
         resposta = self.client.post(
-            url, data=json.dumps({'clienteId': '20', 'salvoEm': 200}),
+            url, data=json.dumps({'rascunhoChave': segunda, 'clienteId': '20', 'salvoEm': 200}),
             content_type='application/json',
         )
 
         self.assertEqual(resposta.status_code, 200)
-        self.assertEqual(RascunhoOP.objects.count(), 1)
-        self.assertEqual(RascunhoOP.objects.get().dados['clienteId'], '20')
+        self.assertEqual(RascunhoOP.objects.count(), 2)
+        self.assertEqual(
+            RascunhoOP.objects.get(chave=segunda).dados['clienteId'], '20',
+        )
 
     def test_tela_da_op_entrega_rascunho_do_servidor_e_permite_descartar(self):
         self._login_op2()
@@ -568,8 +573,15 @@ class Op2Tests(TestCase):
             dados={'clienteId': str(self.cliente.pk), 'salvoEm': 123},
         )
 
-        resposta = self.client.get(reverse('moda:op2-create'))
+        nova = self.client.get(reverse('moda:op2-create'))
 
+        self.assertIsNone(nova.context['rascunho_op'])
+        self.assertNotEqual(nova.context['rascunho_chave'], str(RascunhoOP.objects.get().chave))
+        resposta = self.client.get(
+            reverse('moda:op2-create') + f'?rascunho={RascunhoOP.objects.get().chave}'
+        )
+
+        self.assertIsNotNone(resposta.context['rascunho_op'])
         self.assertContains(resposta, 'op2-rascunho-servidor')
         self.assertContains(resposta, 'Rascunho recuperado')
         self.assertContains(resposta, 'resposta.redirected')
@@ -577,13 +589,28 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'Continuar preenchimento')
         self.assertContains(resposta, 'Salvar como rascunho')
         self.assertContains(resposta, 'name="item_rascunho"')
-        self.assertContains(resposta, "abrirModalNovo();this.origemEditor='novo'")
+        self.assertContains(resposta, "this.editandoIdx=null;this.draft=this.novoDraft()")
+        self.assertNotContains(resposta, 'abrirModalItem.bind(estado)')
         self.assertNotContains(resposta, 'Conclua ou descarte o item que já está em rascunho')
         self.assertContains(resposta, 'this.modalProduto=false;')
         self.assertContains(resposta, str(self.cliente.pk))
         resposta = self.client.delete(reverse('moda:op2-rascunho'))
         self.assertEqual(resposta.status_code, 200)
         self.assertFalse(RascunhoOP.objects.exists())
+
+    def test_kanban_exibe_rascunho_e_nova_op_abre_outra_sessao(self):
+        self._login_op2()
+        rascunho = RascunhoOP.objects.create(
+            filial=self.filial, usuario=self._usuario(),
+            dados={'clienteId': str(self.cliente.pk), 'itens': []},
+        )
+
+        resposta = self.client.get(reverse('moda:comercial'))
+
+        self.assertContains(resposta, 'RASCUNHO')
+        self.assertContains(resposta, f'?rascunho={rascunho.chave}')
+        self.assertContains(resposta, self.cliente.nome_display)
+        self.assertContains(resposta, '+ Nova OP 2.0')
 
     def test_finaliza_op_e_vincula_item_incompleto_sem_somar_no_total(self):
         self._login_op2()

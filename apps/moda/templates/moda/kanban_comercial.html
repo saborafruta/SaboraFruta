@@ -250,6 +250,7 @@
         <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Comercial</h2>
         <p class="text-sm mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
           {{ total }} pedido(s) no quadro · {{ pecas }} peça(s) · R$ {{ valor|floatformat:2 }}
+          {% if rascunhos_op %}· {{ rascunhos_op|length }} OP(s) em rascunho{% endif %}
           {% if atrasados %}
             · <span style="color:#dc2626; font-weight:700;">{{ atrasados }} atrasado(s)</span>
           {% endif %}
@@ -354,7 +355,7 @@
   <div class="overflow-x-auto pb-3">
     <div class="kc-board flex gap-3 items-stretch">
       {% for r in raias %}
-        <div class="kc-raia p-3 space-y-2 {% if not r.total %}vazia{% endif %}"
+        <div class="kc-raia p-3 space-y-2 {% if not r.total %}{% if not forloop.first or not rascunhos_op %}vazia{% endif %}{% endif %}"
              data-coluna="{{ r.coluna.chave }}">
           <div class="kc-cabecalho flex items-baseline justify-between gap-2 pb-2 border-b"
                :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
@@ -362,7 +363,7 @@
                 :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'"
                 title="{{ r.coluna.descricao }}">{{ r.coluna.label }}</h3>
             <span class="kc-contador text-xs font-bold tabular-nums"
-                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ r.total }}</span>
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{% if forloop.first %}{% with total_rascunhos=rascunhos_op|length %}{{ r.total|add:total_rascunhos }}{% endwith %}{% else %}{{ r.total }}{% endif %}</span>
           </div>
 
           {% comment %}
@@ -381,6 +382,15 @@
           </p>
 
           <div class="kc-lista space-y-2 min-h-[60px]" data-lista>
+            {% if forloop.first %}{% for rascunho in rascunhos_op %}
+              <div class="kc-card rounded-xl p-3" style="border:1px dashed #f59e0b;border-left:4px solid #f59e0b;background:rgba(245,158,11,.08)"
+                   data-url="{% url 'moda:op2-create' %}?rascunho={{ rascunho.chave }}" tabindex="0" role="link"
+                   data-pecas="0" data-valor="0" data-atrasado="0"
+                   data-busca="rascunho {{ rascunho.cliente_nome }} {{ rascunho.modelo_nome }}">
+                <div class="flex items-start justify-between gap-2"><div class="min-w-0"><span class="text-[10px] font-bold px-2 py-1 rounded-full" style="background:rgba(245,158,11,.18);color:#d97706">RASCUNHO</span><p class="text-xs font-semibold mt-2 truncate" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">{{ rascunho.cliente_nome }}</p><p class="text-[10px] mt-1 truncate" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ rascunho.modelo_nome }}</p></div><a href="{% url 'moda:op2-create' %}?rascunho={{ rascunho.chave }}" class="btn-secondary text-xs">Continuar</a></div>
+                <div class="kc-meta-grid"><div class="kc-meta-item"><span class="kc-meta-label">Produtos concluídos</span><span class="kc-meta-valor">{{ rascunho.quantidade_itens }}</span></div><div class="kc-meta-item"><span class="kc-meta-label">Última alteração</span><span class="kc-meta-valor">{{ rascunho.updated_at|date:"d/m H:i" }}</span></div></div>
+              </div>
+            {% endfor %}{% endif %}
             {% for c in r.cartoes %}
               {% comment %}
                 Peças, valor e atraso viajam no cartão porque o resumo da
@@ -491,7 +501,7 @@
     </div>
   </div>
 
-  {% if not total %}
+  {% if not total and not rascunhos_op %}
     <div class="card p-8 text-center">
       <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
         {% if tem_filtro %}
