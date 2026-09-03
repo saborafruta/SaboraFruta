@@ -454,7 +454,9 @@ class PedidoConferenciaView(ModaBaseView):
             .order_by('numero')
         )
 
-        if not expedicoes:
+        itens_com_expedicao = {e.ordem.item_id for e in expedicoes}
+        itens_do_pedido = set(pedido.itens.values_list('id', flat=True))
+        if itens_com_expedicao != itens_do_pedido:
             # ANTES ISTO ERA UM BECO: a mensagem explicava por que não dava e
             # devolvia a pessoa ao pedido, sem caminho nenhum. Agora ela vê o
             # que está travando e decide — o sistema informa, não impede.
@@ -563,11 +565,17 @@ class PedidoConferenciaForcarView(ModaBaseView):
             f'Conferência aberta por cima de {len(bloqueios)} pendência(s). '
             f'O registro ficou na expedição, com o seu nome.',
         )
-        if len(expedicoes) == 1:
+        todas_expedicoes = list(
+            Expedicao.objects.for_filial(_filial(request))
+            .filter(ordem__pedido=pedido)
+            .exclude(status=Expedicao.Status.CANCELADA)
+            .order_by('numero')
+        )
+        if todas_expedicoes:
             return redirect(
-                reverse('moda:conferencia-pessoas', args=[expedicoes[0].pk])
+                reverse('moda:conferencia-pessoas', args=[todas_expedicoes[0].pk])
             )
-        return redirect(reverse('moda:expedicao-list'))
+        return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
 
     @staticmethod
     def _marca(usuario, bloqueios) -> str:
@@ -597,12 +605,14 @@ class PedidoConferenciaForcarView(ModaBaseView):
             OrdemProducao.objects.filter(pedido=pedido)
             .exclude(status__in=OrdemProducao.STATUS_ENCERRADOS)
         )
-        if existentes:
-            return existentes
-
-        criadas = OrdemProducaoService.gerar_do_pedido(
-            pedido, usuario=usuario, forcar=True,
-        )
+        itens_com_ordem = {ordem.item_id for ordem in existentes}
+        tem_item_sem_ordem = pedido.itens.exclude(pk__in=itens_com_ordem).exists()
+        if tem_item_sem_ordem:
+            criadas = OrdemProducaoService.gerar_do_pedido(
+                pedido, usuario=usuario, forcar=True,
+            )
+        else:
+            criadas = []
         if marca:
             for ordem in criadas:
                 ordem.observacoes = (
@@ -610,7 +620,13 @@ class PedidoConferenciaForcarView(ModaBaseView):
                     if ordem.observacoes else marca
                 )
                 ordem.save(update_fields=['observacoes'])
-        return criadas
+        ordens = existentes + criadas
+        ordens_com_expedicao = set(
+            Expedicao.objects.filter(ordem__in=ordens)
+            .exclude(status=Expedicao.Status.CANCELADA)
+            .values_list('ordem_id', flat=True)
+        )
+        return [ordem for ordem in ordens if ordem.pk not in ordens_com_expedicao]
 
 
 class ConferenciaFilaView(ModaBaseView):

@@ -126,6 +126,31 @@ class ConferenciaBase(TestCase):
 class FluxoConferenciaEQrTests(ConferenciaBase):
     """A conferência abre direto; o QR fica em ação própria da OP."""
 
+    def test_cria_expedicao_para_item_que_faltava(self):
+        pedido = self._pedido_com_grade()
+        outro_item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Oversized', quantidade=1,
+            valor_unitario=Decimal('30'), ordem=2,
+        )
+        primeira = self._expedicao(pedido, self.item)
+        OrdemProducao.objects.filter(item=outro_item).delete()
+
+        resposta = self.client.get(
+            reverse('moda:pedido-conferencia', args=[pedido.pk])
+        )
+
+        self.assertRedirects(
+            resposta, reverse('moda:conferencia-pessoas', args=[primeira.pk])
+        )
+        self.assertEqual(
+            Expedicao.objects.filter(ordem__pedido=pedido)
+            .exclude(status=Expedicao.Status.CANCELADA).count(),
+            2,
+        )
+        self.assertTrue(
+            Expedicao.objects.filter(ordem__item=outro_item).exists()
+        )
+
     def test_o_botao_abre_direto_a_conferencia(self):
         pedido = self._pedido_com_grade()
         expedicao = self._expedicao(pedido)
@@ -176,16 +201,17 @@ class FluxoConferenciaEQrTests(ConferenciaBase):
         self.assertContains(resposta, 'Camisa')
         self.assertContains(resposta, 'Short')
 
-    def test_sem_expedicao_continua_perguntando(self):
-        """O desvio das pendências não pode ter sumido junto."""
+    def test_sem_expedicao_abre_conferencia_direto(self):
         pedido = self._pedido_com_grade()
 
         resposta = self.client.get(
             reverse('moda:pedido-conferencia', args=[pedido.pk])
         )
 
-        self.assertEqual(resposta.status_code, 200)
-        self.assertContains(resposta, 'ainda não passou pela produção')
+        expedicao = Expedicao.objects.get(ordem__pedido=pedido)
+        self.assertRedirects(
+            resposta, reverse('moda:conferencia-pessoas', args=[expedicao.pk])
+        )
 
 
 class OrdemDeVariosProdutosTests(ConferenciaBase):
