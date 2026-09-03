@@ -501,6 +501,39 @@ class Op2Tests(TestCase):
         self.assertEqual(configuracao['camisa']['grades'], [])
         self.assertEqual(configuracao['calcao']['grades'], [])
 
+    def test_cria_op_com_conjunto_sem_grade_e_quantidade_manual(self):
+        grupos = opcoes_estrutura_filial(self.filial)
+
+        def componente(slug):
+            return {
+                'estrutura': {
+                    campo: (['N/A'] if campo in {'tipo_impressao', 'acabamentos'} else 'N/A')
+                    for campo in grupos[slug]['campos']
+                },
+                'grades': [],
+                'gradePorGrade': {},
+            }
+
+        self._login_op2()
+        resposta = self.client.post(reverse('moda:op2-create'), {
+            'cliente': str(self.cliente.pk),
+            'item_0_produto_id': str(self.produto.pk),
+            'item_0_estrutura_tipo': 'conjunto',
+            'item_0_configuracao_conjunto': json.dumps({
+                'camisa': componente('camisa'),
+                'calcao': componente('calcao'),
+            }),
+            'item_0_quantidade': '1',
+            'item_0_valor_unitario': '100.00',
+            'pagamento_0_forma': 'nao_informado',
+            'pagamento_0_valor': '100.00',
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        item = PedidoProducao.objects.exclude(pk=self.pedido.pk).get().itens.get()
+        self.assertEqual(item.quantidade, 1)
+        self.assertFalse(item.grade.exists())
+
     def test_entrega_parcial_mantem_op_na_etapa_do_item_pendente(self):
         self._item(status=ItemPedidoProducao.StatusFluxo.ENTREGUE, entregue=10)
         pendente = self._item(status=ItemPedidoProducao.StatusFluxo.PRODUCAO)

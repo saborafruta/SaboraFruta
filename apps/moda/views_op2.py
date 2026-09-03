@@ -378,9 +378,10 @@ class Op2CreateView(ModaBaseView):
                         dados.get('configuracao_conjunto'), estrutura_opcoes,
                         _filial(request),
                     )
-                    dados['quantidade'] = str(total_componente(
-                        configuracao_conjunto, 'camisa',
-                    ))
+                    if configuracao_conjunto['camisa']['grades']:
+                        dados['quantidade'] = str(total_componente(
+                            configuracao_conjunto, 'camisa',
+                        ))
                 else:
                     validar_estrutura_item(dados, estrutura_opcoes)
                 dados['valor_unitario'] = str(validar_valor_unitario(dados.get('valor_unitario')))
