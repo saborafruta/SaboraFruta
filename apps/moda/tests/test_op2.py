@@ -1254,6 +1254,26 @@ class Op2Tests(TestCase):
         self.assertNotContains(resposta, '+ Frente')
         self.assertNotContains(resposta, '+ Costas')
 
+    def test_nova_op_permite_duplicar_item_e_trocar_modelo(self):
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('moda:op2-create'))
+
+        self.assertContains(resposta, '@click="duplicarItem(idx)">Duplicar</button>')
+        self.assertContains(resposta, "origemEditor==='duplicar'?'Duplicar modelo da OP'")
+        self.assertContains(resposta, "origemEditor==='duplicar'?'Adicionar cópia'")
+        self.assertContains(resposta, 'this.draft=JSON.parse(JSON.stringify(item))')
+        self.assertContains(resposta, 'this.draft.uid=Date.now()+Math.random()')
+        self.assertContains(resposta, 'this.draft.imagensNomes=[]')
+        self.assertContains(resposta, 'this.draft.imagensObservacoes=\'\'')
+        self.assertContains(resposta, 'produtoAnterior!==String(id)')
+        self.assertContains(resposta, 'gradeAtualCompativel')
+        self.assertContains(resposta, 'gradeCamisaCompativel')
+        self.assertContains(resposta, 'this.draft.gradePorGrade={}')
+
     def test_nova_op_salva_anexo_e_mockup_e_exibe_na_op(self):
         self.client.force_login(self._usuario())
         session = self.client.session

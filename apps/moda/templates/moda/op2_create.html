@@ -97,7 +97,7 @@
                 <div class="grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,.9fr)_auto] gap-3 items-center">
                 <div class="min-w-0"><strong class="block truncate" x-text="item.nome"></strong><div class="flex flex-wrap items-center gap-1 mt-1"><span class="op2-grade-tag" :style="estiloGrade(item)"><span class="op2-grade-dot"></span><span x-text="item.grade_nome || 'Sem grade'"></span></span><template x-for="linha in item.gradeQuantidades" :key="linha.tamanho_id"><span class="op2-chip" :style="estiloGrade(item)" x-text="`${tamanhoLabels[linha.tamanho_id] || linha.tamanho_id}: ${linha.quantidade}`"></span></template></div><p class="text-xs opacity-70 mt-1" x-text="item.codigo"></p></div>
                 <div class="grid grid-cols-3 gap-2 text-sm"><div><span class="op2-label" x-text="item.estrutura_tipo==='conjunto'?'Conjuntos':'Peças'"></span><strong x-text="item.quantidade"></strong></div><div><span class="op2-label" x-text="item.estrutura_tipo==='conjunto'?'Por conjunto':'Unitário'"></span><strong x-text="moeda(item.valor_unitario)"></strong></div><div><span class="op2-label">Total</span><strong x-text="moeda(item.quantidade * item.valor_unitario)"></strong></div></div>
-                <div class="flex gap-2 justify-end"><button type="button" class="btn-secondary text-sm" @click="editarItem(idx)">Editar</button><button type="button" class="btn-secondary text-sm" style="color:#ef4444" @click="removerItem(idx)">Excluir</button></div></div>
+                <div class="flex flex-wrap gap-2 justify-end"><button type="button" class="btn-secondary text-sm" @click="editarItem(idx)">Editar</button><button type="button" class="btn-secondary text-sm" @click="duplicarItem(idx)">Duplicar</button><button type="button" class="btn-secondary text-sm" style="color:#ef4444" @click="removerItem(idx)">Excluir</button></div></div>
                 <div class="flex flex-wrap items-center gap-2 pt-2 mt-2" style="border-top:1px solid rgba(148,163,184,.14)"><button type="button" class="btn-secondary text-sm" :aria-expanded="personalizar" @click="personalizar=!personalizar; if(personalizar && !personalizacoesDoItem(item.uid).length) adicionarLinhaPersonalizacao(item.uid)">Adicionar nomes / números</button></div>
                 <div class="flex flex-wrap items-center gap-1 mt-2" x-show="personalizacoesDoItem(item.uid).some(p=>p.nome || p.numero)">
                   <span class="op2-label mb-0">Nomes / números</span><template x-for="pessoa in personalizacoesDoItem(item.uid).filter(p=>p.nome || p.numero)" :key="pessoa.uid"><span class="op2-chip" x-text="[tamanhoLabels[pessoa.tamanhoId],pessoa.nome,pessoa.numero?'#'+pessoa.numero:''].filter(Boolean).join(' · ')"></span></template>
@@ -168,7 +168,7 @@
   </form>
   <div x-show="modalProduto" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-3" style="background:rgba(0,0,0,.72)" @click.self="fecharModalItem()" @keydown.escape.window="if(modalProduto)fecharModalItem()">
     <div class="card p-4 w-full max-w-7xl overflow-y-auto" style="max-height:94vh">
-      <div class="flex justify-between gap-2 mb-3"><div><h2 class="text-xl font-bold" x-text="editandoIdx===null?'Adicionar modelo à OP':'Editar modelo da OP'"></h2><p class="text-xs opacity-70">Escolha o modelo e complete a estrutura, impressão e grades ainda nesta sobreposição.</p><div class="op2-autosave mt-1" :class="{'is-saving':estadoRascunho==='salvando','is-offline':estadoRascunho==='local'}"><span class="op2-autosave-dot"></span><span x-text="mensagemRascunho"></span></div></div><button type="button" class="text-2xl" @click="fecharModalItem()">×</button></div>
+      <div class="flex justify-between gap-2 mb-3"><div><h2 class="text-xl font-bold" x-text="origemEditor==='duplicar'?'Duplicar modelo da OP':editandoIdx===null?'Adicionar modelo à OP':'Editar modelo da OP'"></h2><p class="text-xs opacity-70">Escolha o modelo e complete a estrutura, impressão e grades ainda nesta sobreposição.</p><div class="op2-autosave mt-1" :class="{'is-saving':estadoRascunho==='salvando','is-offline':estadoRascunho==='local'}"><span class="op2-autosave-dot"></span><span x-text="mensagemRascunho"></span></div></div><button type="button" class="text-2xl" @click="fecharModalItem()">×</button></div>
       <div class="op2-modal-grid">
         <aside><input type="search" x-model="buscaProduto" class="form-input w-full mb-2" placeholder="Buscar modelo, código, referência, tecido ou grade"><div class="op2-model-list space-y-2"><template x-for="modelo in modelosRapidos" :key="modelo.id"><button type="button" class="op2-card text-left w-full" :class="draft.produto_id===modelo.id?'ring-2 ring-blue-500':''" x-show="combina(buscaProduto, modelo.nome+' '+modelo.codigo)" @click="escolherProduto(modelo.id,modelo.nome,modelo.codigo,modelo.info)"><strong x-text="modelo.nome"></strong><small class="block mt-1 opacity-70" x-text="modelo.codigo"></small></button></template>{% for modelo in modelos %}<button type="button" class="op2-card text-left w-full" :class="draft.produto_id==='{{ modelo.pk }}'?'ring-2 ring-blue-500':''" x-show="combina(buscaProduto, '{{ modelo.nome|escapejs }} {{ modelo.codigo|escapejs }} {{ modelo.referencia|escapejs }} {{ modelo.modelo|escapejs }} {{ modelo.tecido|escapejs }} {% if modelo.grade %}{{ modelo.grade.nome|escapejs }} {{ modelo.grade.resumo|escapejs }}{% endif %}')" @click="escolherProduto('{{ modelo.pk }}','{{ modelo.nome|escapejs }}','{{ modelo.codigo|escapejs }}','{{ modelo.codigo|escapejs }}{% if modelo.referencia %} · {{ modelo.referencia|escapejs }}{% endif %}{% if modelo.tecido %} · {{ modelo.tecido|escapejs }}{% endif %}')"><strong>{{ modelo.nome }}</strong><small class="block mt-1 opacity-70">{{ modelo.codigo }}{% if modelo.referencia %} · {{ modelo.referencia }}{% endif %}{% if modelo.grade %} · {{ modelo.grade.nome }}{% endif %}</small></button>{% endfor %}</div></aside>
         <main class="space-y-3" :class="draft.estrutura_tipo==='conjunto'?'is-conjunto':''">
@@ -184,7 +184,7 @@
             <div class="op2-grade-grid mb-3"><template x-for="grade in grades" :key="grade.id"><button type="button" class="op2-grade-chip" :class="draft.grades.includes(grade.id)?'is-on':''" @click.prevent="alternarGrade(grade.id)"><strong class="block" x-text="grade.nome"></strong><small class="block opacity-70 mt-1" x-text="grade.resumo"></small></button></template></div>
             <div class="space-y-3"><template x-for="grade in gradesSelecionadas()" :key="grade.id"><section class="op2-grade-panel"><div class="flex items-center justify-between gap-2 mb-3"><div><strong x-text="grade.nome"></strong><small class="block opacity-60" x-text="grade.tipo"></small></div><strong class="text-sm" style="color:#3b82f6" x-text="`${totalGrade(grade.id)} peça(s)`"></strong></div><div class="op2-size-grid"><template x-for="tamanhoId in grade.tamanhos" :key="`${grade.id}-${tamanhoId}`"><div class="op2-size-card"><span class="op2-size-name" x-text="tamanhoLabels[tamanhoId] || tamanhoId"></span><div class="op2-stepper"><button type="button" class="op2-qty-btn" @click.prevent="alterarDraftGrade(grade.id,tamanhoId,-1)" :aria-label="`Diminuir ${tamanhoLabels[tamanhoId] || tamanhoId} da grade ${grade.nome}`">−</button><input type="number" min="0" inputmode="numeric" :value="quantidadeDraftGrade(grade.id,tamanhoId)" @input="definirDraftGrade(grade.id,tamanhoId,$event.target.value)" @focus="$event.target.select()" class="form-input op2-qty-input" :aria-label="`Quantidade ${tamanhoLabels[tamanhoId] || tamanhoId} da grade ${grade.nome}`"><button type="button" class="op2-qty-btn" @click.prevent="alterarDraftGrade(grade.id,tamanhoId,1)" :aria-label="`Aumentar ${tamanhoLabels[tamanhoId] || tamanhoId} da grade ${grade.nome}`">+</button></div></div></template></div></section></template><p x-show="!draft.grades.length" class="text-sm opacity-60 text-center py-3">Selecione uma grade para informar os tamanhos.</p></div>
           </section>
-          <div class="flex justify-end gap-2 sticky bottom-0 p-2" :style="temaClaro?'background:#fff':'background:#1f1f21'"><button type="button" class="btn-secondary" @click="fecharModalItem()">Salvar como rascunho</button><button type="button" class="btn-primary" @click="salvarDraft()" x-text="editandoIdx===null?'Adicionar à OP':'Salvar alterações'"></button></div>
+          <div class="flex justify-end gap-2 sticky bottom-0 p-2" :style="temaClaro?'background:#fff':'background:#1f1f21'"><button type="button" class="btn-secondary" @click="fecharModalItem()" x-text="origemEditor==='duplicar'&&temItemRascunho()?'Fechar sem adicionar':'Salvar como rascunho'"></button><button type="button" class="btn-primary" @click="salvarDraft()" x-text="origemEditor==='duplicar'?'Adicionar cópia':editandoIdx===null?'Adicionar à OP':'Salvar alterações'"></button></div>
         </main>
       </div>
     </div>
@@ -289,7 +289,7 @@ function op2NovaMelhorada(){
   estado.itemRascunho=null;
   estado.origemEditor='novo';
   estado.temItemRascunho=function(){return Boolean(this.itemRascunho?.produto_id)};
-  estado.fecharModalItem=function(){if(this.origemEditor==='rascunho'&&this.draft?.produto_id)this.itemRascunho=JSON.parse(JSON.stringify(this.draft));else if(this.origemEditor==='novo'&&!this.temItemRascunho()&&this.draft?.produto_id)this.itemRascunho=JSON.parse(JSON.stringify(this.draft));this.modalProduto=false;this.agendarAutosave()};
+  estado.fecharModalItem=function(){if(this.origemEditor==='rascunho'&&this.draft?.produto_id)this.itemRascunho=JSON.parse(JSON.stringify(this.draft));else if((this.origemEditor==='novo'||this.origemEditor==='duplicar')&&!this.temItemRascunho()&&this.draft?.produto_id)this.itemRascunho=JSON.parse(JSON.stringify(this.draft));this.modalProduto=false;this.agendarAutosave()};
   estado.retomarItemRascunho=function(){if(!this.temItemRascunho())return;this.origemEditor='rascunho';this.editandoIdx=null;this.draft=JSON.parse(JSON.stringify(this.itemRascunho));this.modalProduto=true;this.agendarAutosave()};
   estado.limparItemRascunho=function(){if(this.origemEditor==='rascunho')this.itemRascunho=null;this.modalProduto=false;this.editandoIdx=null;this.origemEditor='novo';this.draft=this.novoDraft();this.buscaProduto='';this.agendarAutosave()};
   estado.descartarItemRascunho=function(){
@@ -310,6 +310,9 @@ function op2NovaMelhorada(){
   };
   estado.escolherProduto=function(id,nome,codigo,info){
     const grade=this.gradeMap[id]||{};
+    const produtoAnterior=String(this.draft.produto_id||'');
+    const novaGradeId=String(grade.grade_id||'');
+    const gradeAtualCompativel=novaGradeId&&this.draft.grades.map(String).includes(novaGradeId);
     this.draft.produto_id=String(id);
     this.draft.nome=nome;
     this.draft.nome_editavel=String(codigo||'').startsWith('OP2-');
@@ -319,14 +322,17 @@ function op2NovaMelhorada(){
     this.draft.grade_nome=grade.grade||'';
     if(!this.draft.tipo_impressao?.length)this.draft.tipo_impressao=['N/A'];
     this.draft.tipo_impressao_label=grade.tipo_impressao_label||'';
-    if(grade.grade_id&&!this.draft.grades.includes(String(grade.grade_id))){
-      this.draft.grades=[String(grade.grade_id)];
+    if(produtoAnterior!==String(id)&&!gradeAtualCompativel){
+      this.draft.grades=novaGradeId?[novaGradeId]:[];
+      this.draft.gradePorGrade={};
     }
     this.draft.grades.forEach(gradeId=>this.garantirGrade(gradeId));
-    if(this.draft.estrutura_tipo==='conjunto'&&grade.grade_id){
+    if(this.draft.estrutura_tipo==='conjunto'&&produtoAnterior!==String(id)){
       const camisa=this.componenteConjunto('camisa');
-      camisa.grades=[String(grade.grade_id)];
-      this.garantirGradeConjunto('camisa',String(grade.grade_id));
+      const gradeCamisaCompativel=camisa.grades.map(String).includes(novaGradeId);
+      if(!novaGradeId){camisa.grades=[];camisa.gradePorGrade={}}
+      else if(!gradeCamisaCompativel){camisa.grades=[novaGradeId];camisa.gradePorGrade={}}
+      if(novaGradeId)this.garantirGradeConjunto('camisa',novaGradeId);
     }
     this.somarDraftGrade();
   };
@@ -431,10 +437,7 @@ function op2NovaMelhorada(){
     }
     return item;
   };
-  estado.editarItem=function(idx){
-    this.origemEditor='item';
-    this.editandoIdx=idx;
-    this.draft=JSON.parse(JSON.stringify(this.itens[idx]));
+  estado.prepararDraftExistente=function(){
     this.draft.estrutura_outros=this.draft.estrutura_outros||{};
     this.draft.estrutura_observacoes=this.draft.estrutura_observacoes||{};
     this.draft.estrutura=op2EstruturaPadraoNaoMultipla(this.estruturaOpcoes,this.draft.estrutura_tipo,this.draft.estrutura||{});
@@ -445,6 +448,28 @@ function op2NovaMelhorada(){
       this.draft.gradePorGrade[gradeId]=Object.fromEntries((this.draft.gradeQuantidades||[]).map(linha=>[String(linha.tamanho_id),Number(linha.quantidade||0)]));
     }
     this.draft.grades=gradeId?[gradeId]:[];
+  };
+  estado.editarItem=function(idx){
+    this.origemEditor='item';
+    this.editandoIdx=idx;
+    this.draft=JSON.parse(JSON.stringify(this.itens[idx]));
+    this.prepararDraftExistente();
+    this.modalProduto=true;
+    this.somarDraftGrade();
+  };
+  estado.duplicarItem=function(idx){
+    const item=this.itens[idx];
+    if(!item)return;
+    this.origemEditor='duplicar';
+    this.editandoIdx=null;
+    this.draft=JSON.parse(JSON.stringify(item));
+    this.draft.uid=Date.now()+Math.random();
+    this.draft.imagensNomes=[];
+    this.draft.imagensPreview=[];
+    this.draft.imagensObservacoes='';
+    this.prepararDraftExistente();
+    this.buscaProduto='';
+    this.novoModeloAberto=false;
     this.modalProduto=true;
     this.somarDraftGrade();
   };
