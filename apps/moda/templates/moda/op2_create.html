@@ -6,7 +6,7 @@
 {% block extra_head %}<script>localStorage.setItem('sidebar-collapsed','true');</script>{% endblock %}
 {% block content %}
 {{ estrutura_opcoes|json_script:"op2-estrutura-opcoes" }}
-<script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260904-1"></script>
+<script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260904-2"></script>
 <script src="{% static 'js/op2_clientes.js' %}"></script>
 {{ modelos_grade|json_script:"op2-modelos-grade" }}
 {{ grades_json|json_script:"op2-grades" }}

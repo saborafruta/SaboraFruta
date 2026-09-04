@@ -153,6 +153,12 @@ function op2PreservarEstruturaAoTrocarTipo(grupos, draft, tipoAnterior, tipoNovo
         ...(configuracao[componente].observacoes_campos || {}),
         ...(draft.estrutura_observacoes || {}),
       };
+      if ((draft.grades || []).length) {
+        configuracao[componente].grades = [...draft.grades].map(String);
+        configuracao[componente].gradePorGrade = JSON.parse(JSON.stringify(
+          draft.gradePorGrade || {},
+        ));
+      }
     }
     draft.configuracao_conjunto = configuracao;
     return draft;
@@ -173,6 +179,12 @@ function op2PreservarEstruturaAoTrocarTipo(grupos, draft, tipoAnterior, tipoNovo
     draft.estrutura_observacoes = {
       ...(draft.estrutura_observacoes || {}), ...(origem.observacoes_campos || {}),
     };
+    if ((origem.grades || []).length) {
+      draft.grades = [...origem.grades].map(String);
+      draft.gradePorGrade = JSON.parse(JSON.stringify(origem.gradePorGrade || {}));
+      const totalGrade = op2TotalComponenteConjunto(configuracao, componenteAtivo);
+      if (totalGrade > 0) draft.quantidade = totalGrade;
+    }
   }
   return draft;
 }

@@ -73,6 +73,48 @@ test('troca entre conjunto e peça individual preserva a estrutura preenchida', 
   assert.equal(draft.estrutura.gola, 'POLO');
 });
 
+test('troca de peça individual para conjunto preserva grade e quantidades', () => {
+  const opcoes = {
+    camisa: { campos: { cor: ['AZUL', 'N/A'] } },
+    calcao: { campos: { cor: ['AZUL', 'N/A'] } },
+  };
+  const draft = {
+    estrutura: { cor: 'AZUL' }, tipo_impressao: ['N/A'],
+    cor_personalizada: '', estrutura_outros: {}, estrutura_observacoes: {},
+    grades: ['1'], gradePorGrade: { 1: { 9: 2, 10: 3 } },
+    configuracao_conjunto: op2NovaConfiguracaoConjunto(opcoes),
+  };
+
+  op2PreservarEstruturaAoTrocarTipo(opcoes, draft, 'camisa', 'conjunto');
+
+  assert.deepEqual(draft.configuracao_conjunto.camisa.grades, ['1']);
+  assert.deepEqual(draft.configuracao_conjunto.camisa.gradePorGrade, { 1: { 9: 2, 10: 3 } });
+  assert.deepEqual(draft.configuracao_conjunto.calcao.gradePorGrade, { 1: { 9: 2, 10: 3 } });
+  draft.configuracao_conjunto.camisa.gradePorGrade[1][9] = 7;
+  assert.equal(draft.configuracao_conjunto.calcao.gradePorGrade[1][9], 2);
+});
+
+test('troca de conjunto para peça individual preserva a grade do componente ativo', () => {
+  const opcoes = {
+    camisa: { campos: { cor: ['AZUL', 'N/A'] } },
+    calcao: { campos: { cor: ['AZUL', 'N/A'] } },
+  };
+  const configuracao = op2NovaConfiguracaoConjunto(opcoes);
+  configuracao.calcao.grades = ['2'];
+  configuracao.calcao.gradePorGrade = { 2: { 11: 4, 12: 2 } };
+  const draft = {
+    estrutura: {}, tipo_impressao: ['N/A'], quantidade: 1,
+    cor_personalizada: '', estrutura_outros: {}, estrutura_observacoes: {},
+    grades: [], gradePorGrade: {}, configuracao_conjunto: configuracao,
+  };
+
+  op2PreservarEstruturaAoTrocarTipo(opcoes, draft, 'conjunto', 'calcao', 'calcao');
+
+  assert.deepEqual(draft.grades, ['2']);
+  assert.deepEqual(draft.gradePorGrade, { 2: { 11: 4, 12: 2 } });
+  assert.equal(draft.quantidade, 6);
+});
+
 test('valor visível prevalece sobre valor antigo ao entrar no conjunto', () => {
   const opcoes = {
     agasalho: { campos: { tipo_impressao: ['BORDADO', 'SUBLIMAÇÃO', 'N/A'] } },
