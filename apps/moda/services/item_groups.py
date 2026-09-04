@@ -1,9 +1,11 @@
 """Agrupamento visual dos itens da OP por produto.
 
 A fábrica ainda precisa de uma linha interna por grade: grades diferentes podem
-ter cortes, personalizações, preços e técnicas diferentes.  Na tela e nos PDFs,
-porém, essas linhas são variantes do mesmo produto e devem aparecer juntas.
+ter cortes e personalizações diferentes. Na tela e no PDF, essas linhas ficam
+juntas somente quando pertencem ao mesmo produto e compartilham a mesma ficha
+técnica. Uma especificação diferente precisa continuar visível em bloco próprio.
 """
+import json
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -42,13 +44,49 @@ class GrupoItemOP:
         return valores.pop() if len(valores) == 1 else None
 
 
+def _texto(valor):
+    return ' '.join(str(valor or '').split()).casefold()
+
+
+def _configuracao_tecnica_conjunto(configuracao):
+    """Retira apenas as grades do conjunto antes de comparar sua ficha."""
+    resultado = {}
+    for componente, dados in sorted((configuracao or {}).items()):
+        if not isinstance(dados, dict):
+            resultado[componente] = dados
+            continue
+        resultado[componente] = {
+            chave: valor for chave, valor in dados.items()
+            if chave not in {'grades', 'gradePorGrade'}
+        }
+    return json.dumps(
+        resultado, ensure_ascii=False, sort_keys=True,
+        separators=(',', ':'), default=str,
+    )
+
+
+def _ficha_tecnica(item):
+    return (
+        item.modelo_id,
+        item.cor_id,
+        item.tecido_id,
+        _texto(item.gola),
+        _texto(item.manga),
+        _texto(item.acabamento),
+        _texto(item.observacoes),
+        _configuracao_tecnica_conjunto(item.configuracao_conjunto),
+    )
+
+
 def _chave(item):
     if item.produto_id:
-        return ('produto', item.produto_id)
-    return (
-        'livre', (item.descricao or '').strip().casefold(),
-        item.modelo_id, (item.referencia or '').strip().casefold(),
-    )
+        produto = ('produto', item.produto_id)
+    else:
+        produto = (
+            'livre', (item.descricao or '').strip().casefold(),
+            item.modelo_id, (item.referencia or '').strip().casefold(),
+        )
+    return (*produto, 'ficha', *_ficha_tecnica(item))
 
 
 def _nome_base(item):
@@ -58,7 +96,7 @@ def _nome_base(item):
 
 
 def agrupar_itens_op(itens) -> list[GrupoItemOP]:
-    """Agrupa variantes preservando a ordem em que o produto entrou na OP."""
+    """Agrupa grades com a mesma ficha, preservando a ordem de entrada."""
     grupos = []
     por_chave = {}
     for item in itens:

@@ -178,17 +178,14 @@ class ArteNoPdfTests(TestCase):
         adulto = Grade.objects.create(filial=self.filial, nome='Adulto')
         oversized = Grade.objects.create(filial=self.filial, nome='Oversized')
         itens = []
-        for indice, (grade, quantidade, valor, tecnica) in enumerate((
+        for grade, quantidade, valor, tecnica in (
             (adulto, 2, '70.00', Personalizacao.Tecnica.SUBLIMACAO),
-            (oversized, 3, '75.00', Personalizacao.Tecnica.SILK),
-        )):
+            (oversized, 3, '75.00', Personalizacao.Tecnica.SUBLIMACAO),
+        ):
             item = ItemPedidoProducao.objects.create(
                 pedido=pedido, produto=produto, grade_tamanho=grade,
                 quantidade=quantidade, valor_unitario=Decimal(valor),
-                observacoes=(
-                    f'Estrutura da peça:\nTipo impressao: TÉCNICA-{indice}'
-                    f'\nMalha: DRY-{indice}'
-                ),
+                observacoes='Estrutura da peça:\nTipo impressao: SUBLIMAÇÃO\nMalha: DRY',
             )
             itens.append(item)
             Personalizacao.objects.create(item=item, tecnica=tecnica)
@@ -206,11 +203,36 @@ class ArteNoPdfTests(TestCase):
 
         self.assertTrue(pdf.startswith(b'%PDF'))
         self.assertEqual(_paginas(pdf), 1)
-        self.assertIn('DRY-0', texto)
-        self.assertNotIn('DRY-1', texto)
+        self.assertEqual(len(agrupar_itens_op(itens)), 1)
+        self.assertIn('DRY', texto)
         self.assertNotIn('Tipo impressao', texto)
         self.assertNotIn('Sublimação', texto)
-        self.assertNotIn('Silk', texto)
+
+    def test_mesmo_produto_com_fichas_tecnicas_diferentes_ocupa_folhas_separadas(self):
+        pedido = self._pedido()
+        produto = ProdutoModa.objects.create(
+            filial=self.filial, codigo='CAM-TEC', nome='Camisa com variações',
+        )
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=10)
+        itens = []
+        for indice, malha in enumerate(('DRY FIT', 'HELANQUINHA')):
+            grade = Grade.objects.create(filial=self.filial, nome=f'Grade {indice + 1}')
+            item = ItemPedidoProducao.objects.create(
+                pedido=pedido, produto=produto, grade_tamanho=grade,
+                quantidade=1,
+                observacoes=f'Estrutura da peça:\nTipo de peça: Camisa\nMalha: {malha}',
+            )
+            ItemGradePedido.objects.create(item=item, tamanho=tamanho, quantidade=1)
+            itens.append(item)
+
+        from apps.moda.services.item_groups import agrupar_itens_op
+
+        grupos = agrupar_itens_op(itens)
+        pdf = PedidoPdfService.gerar(pedido)
+
+        self.assertEqual(len(grupos), 2)
+        self.assertNotEqual(grupos[0].chave, grupos[1].chave)
+        self.assertEqual(_paginas(pdf), 2)
 
     def test_orcamento_separa_itens_do_mesmo_produto_por_grade(self):
         from apps.moda.services.orcamento_pdf import _estilos
