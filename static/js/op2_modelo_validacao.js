@@ -108,20 +108,23 @@ function op2PrepararConfiguracaoConjunto(grupos, configuracao) {
   return resultado;
 }
 
-function op2EstruturaTemInformacao(estrutura) {
-  return Object.values(estrutura || {}).some(valor => op2ListaMultisselecao(valor)
-    .some(opcao => opcao && opcao !== 'N/A'));
-}
-
-function op2MesclarEstruturaPreferindoDestino(destino, origem) {
-  const resultado = { ...(origem || {}), ...(destino || {}) };
-  for (const [campo, valor] of Object.entries(origem || {})) {
-    if (!op2ListaMultisselecao(resultado[campo]).some(opcao => opcao && opcao !== 'N/A')
-        && op2ListaMultisselecao(valor).some(opcao => opcao && opcao !== 'N/A')) {
-      resultado[campo] = JSON.parse(JSON.stringify(valor));
+function op2AplicarEstruturaVisivel(grupos, tipoDestino, destino, origem) {
+  const estrutura = { ...(destino?.estrutura || {}) };
+  const outros = { ...(destino?.outros || {}) };
+  const camposDestino = grupos?.[tipoDestino]?.campos || {};
+  for (const [campo, opcoes] of Object.entries(camposDestino)) {
+    const valorOrigem = origem?.estrutura?.[campo];
+    const valores = op2ListaMultisselecao(valorOrigem);
+    if (!valores.some(valor => valor && valor !== 'N/A')) continue;
+    if (valores.every(valor => opcoes.includes(valor))) {
+      estrutura[campo] = JSON.parse(JSON.stringify(valorOrigem));
+      if (origem?.outros?.[campo]) outros[campo] = origem.outros[campo];
+    } else if (opcoes.includes('OUTRO')) {
+      estrutura[campo] = op2CampoMultisselecao(campo) ? ['OUTRO'] : 'OUTRO';
+      outros[campo] = origem?.outros?.[campo] || valores.join(', ');
     }
   }
-  return resultado;
+  return { estrutura, outros };
 }
 
 function op2PreservarEstruturaAoTrocarTipo(grupos, draft, tipoAnterior, tipoNovo, componenteAtivo = 'camisa') {
@@ -129,22 +132,27 @@ function op2PreservarEstruturaAoTrocarTipo(grupos, draft, tipoAnterior, tipoNovo
   const conjuntoAnterior = tipoAnterior === 'conjunto';
   const conjuntoNovo = tipoNovo === 'conjunto';
   const configuracao = op2PrepararConfiguracaoConjunto(grupos, draft.configuracao_conjunto);
+  const estruturaVisivel = {
+    ...(draft.estrutura || {}),
+    ...(!conjuntoAnterior ? { tipo_impressao: draft.tipo_impressao } : {}),
+  };
 
   if (conjuntoNovo && !conjuntoAnterior) {
-    const conjuntoJaPreenchido = ['camisa', 'calcao'].some(componente =>
-      op2EstruturaTemInformacao(configuracao[componente].estrutura)
-      || Object.keys(configuracao[componente].outros || {}).length
-      || Object.keys(configuracao[componente].observacoes_campos || {}).length,
-    );
-    if (!conjuntoJaPreenchido) {
-      for (const componente of ['camisa', 'calcao']) {
-        configuracao[componente].estrutura = op2MesclarEstruturaPreferindoDestino(
-          configuracao[componente].estrutura, draft.estrutura,
-        );
-        configuracao[componente].cor_personalizada = draft.cor_personalizada || '';
-        configuracao[componente].outros = { ...(draft.estrutura_outros || {}) };
-        configuracao[componente].observacoes_campos = { ...(draft.estrutura_observacoes || {}) };
-      }
+    for (const componente of ['camisa', 'calcao']) {
+      const transferido = op2AplicarEstruturaVisivel(
+        grupos, componente,
+        { estrutura: configuracao[componente].estrutura, outros: configuracao[componente].outros },
+        { estrutura: estruturaVisivel, outros: draft.estrutura_outros },
+      );
+      configuracao[componente].estrutura = transferido.estrutura;
+      configuracao[componente].outros = transferido.outros;
+      configuracao[componente].cor_personalizada = (
+        draft.cor_personalizada || configuracao[componente].cor_personalizada || ''
+      );
+      configuracao[componente].observacoes_campos = {
+        ...(configuracao[componente].observacoes_campos || {}),
+        ...(draft.estrutura_observacoes || {}),
+      };
     }
     draft.configuracao_conjunto = configuracao;
     return draft;
@@ -152,11 +160,18 @@ function op2PreservarEstruturaAoTrocarTipo(grupos, draft, tipoAnterior, tipoNovo
 
   if (conjuntoAnterior && !conjuntoNovo) {
     const origem = configuracao[componenteAtivo] || configuracao.camisa;
-    draft.estrutura = op2MesclarEstruturaPreferindoDestino(draft.estrutura, origem.estrutura);
-    draft.cor_personalizada = draft.cor_personalizada || origem.cor_personalizada || '';
-    draft.estrutura_outros = { ...(origem.outros || {}), ...(draft.estrutura_outros || {}) };
+    const transferido = op2AplicarEstruturaVisivel(
+      grupos, tipoNovo,
+      { estrutura: draft.estrutura, outros: draft.estrutura_outros }, origem,
+    );
+    draft.estrutura = transferido.estrutura;
+    draft.tipo_impressao = op2ListaMultisselecao(
+      transferido.estrutura.tipo_impressao || draft.tipo_impressao || 'N/A',
+    );
+    draft.cor_personalizada = origem.cor_personalizada || draft.cor_personalizada || '';
+    draft.estrutura_outros = transferido.outros;
     draft.estrutura_observacoes = {
-      ...(origem.observacoes_campos || {}), ...(draft.estrutura_observacoes || {}),
+      ...(draft.estrutura_observacoes || {}), ...(origem.observacoes_campos || {}),
     };
   }
   return draft;

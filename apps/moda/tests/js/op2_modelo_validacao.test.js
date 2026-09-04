@@ -73,6 +73,27 @@ test('troca entre conjunto e peça individual preserva a estrutura preenchida', 
   assert.equal(draft.estrutura.gola, 'POLO');
 });
 
+test('valor visível prevalece sobre valor antigo ao entrar no conjunto', () => {
+  const opcoes = {
+    agasalho: { campos: { tipo_impressao: ['BORDADO', 'SUBLIMAÇÃO', 'N/A'] } },
+    camisa: { campos: { tipo_impressao: ['BORDADO', 'SUBLIMAÇÃO', 'N/A'] } },
+    calcao: { campos: { tipo_impressao: ['BORDADO', 'SUBLIMAÇÃO', 'N/A'] } },
+  };
+  const configuracao = op2NovaConfiguracaoConjunto(opcoes);
+  configuracao.camisa.estrutura.tipo_impressao = ['SUBLIMAÇÃO'];
+  configuracao.calcao.estrutura.tipo_impressao = ['SUBLIMAÇÃO'];
+  const draft = {
+    estrutura: {}, tipo_impressao: ['BORDADO'],
+    estrutura_outros: {}, estrutura_observacoes: {}, cor_personalizada: '',
+    configuracao_conjunto: configuracao,
+  };
+
+  op2PreservarEstruturaAoTrocarTipo(opcoes, draft, 'agasalho', 'conjunto');
+
+  assert.deepEqual(draft.configuracao_conjunto.camisa.estrutura.tipo_impressao, ['BORDADO']);
+  assert.deepEqual(draft.configuracao_conjunto.calcao.estrutura.tipo_impressao, ['BORDADO']);
+});
+
 test('conjunto exige duas fichas completas com totais iguais', () => {
   const opcoes = {
     camisa: { campos: { cor: ['AZUL', 'N/A'] } },
