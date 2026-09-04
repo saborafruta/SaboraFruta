@@ -340,6 +340,7 @@
   .cart-total-field input { width:100%;min-width:0;padding:0;border:0!important;outline:none!important;box-shadow:none!important;background:transparent!important;color:var(--pdv-t1)!important;font-size:17px;font-weight:800; }
   .cart-total-field svg { flex-shrink:0;color:var(--pdv-t2); }
   .cart-total-discount { font-size:10px;color:var(--pdv-t2); }
+  .cart-total-surcharge { font-size:10px;color:#f59e0b;font-weight:700; }
   .cart-sale-before { display:block;font-size:11px;font-weight:500;color:var(--pdv-t2); }
   .cart-sale-impact { white-space:nowrap;font-size:10px;line-height:1.35;text-align:right;color:var(--pdv-paid); }
   .cart-combo-count { font-size:11px;color:var(--pdv-accent-text);white-space:nowrap; }
@@ -1620,7 +1621,7 @@
           <div class="cart-total-editor">
             <label class="cart-total-label" for="pdv-total-carrinho">TOTAL DA VENDA</label>
             <div class="cart-total-values">
-              <div class="cart-total-field" title="Edite o total para dar desconto. Enter ou sair do campo aplica; Esc cancela.">
+              <div class="cart-total-field" title="Edite o total para aplicar desconto ou acréscimo. Enter ou sair do campo aplica; Esc cancela.">
                 <span>R$</span>
                 <input id="pdv-total-carrinho" type="text" inputmode="decimal" aria-label="Total da venda no carrinho"
                        :disabled="!venda.itens.length" :value="editandoTotalCarrinho ? totalCarrinhoRascunho : fmt(venda.total)"
@@ -1634,6 +1635,10 @@
                 <s class="cart-sale-before" x-text="'R$ '+fmt(Number(venda.subtotal)+Number(venda.acrescimo||0))"></s>
                 <span class="cart-total-discount"
                       x-text="'− R$ '+fmt(venda.desconto)+' ('+fmt(venda.subtotal>0?venda.desconto/venda.subtotal*100:0)+'%)'"></span>
+              </div>
+              <div class="cart-total-details" x-show="Number(venda.acrescimo||0)>0" x-cloak>
+                <span class="cart-sale-before" x-text="'R$ '+fmt(venda.subtotal)"></span>
+                <span class="cart-total-surcharge" x-text="'+ R$ '+fmt(venda.acrescimo)+' de acréscimo'"></span>
               </div>
             </div>
           </div>
@@ -4438,13 +4443,15 @@ function pdv() {
         this.toast_('Informe um valor final válido, igual ou maior que zero.','erro');return;
       }
       const total=this.arredondarDesconto(numero);
-      const minimo=this.arredondarDesconto(Number(this.venda.acrescimo||0));
-      const maximo=this.arredondarDesconto(this.venda.subtotal+minimo);
-      if(total<minimo || total>maximo) {
-        this.toast_('Para dar desconto, informe um total entre R$ '+this.fmt(minimo)+' e R$ '+this.fmt(maximo)+'.','erro');return;
+      const subtotal=this.arredondarDesconto(Number(this.venda.subtotal||0));
+      if(total>subtotal) {
+        this.venda.desconto=0;
+        this.venda.acrescimo=this.arredondarDesconto(total-subtotal);
+      } else {
+        this.venda.acrescimo=0;
+        this.venda.desconto=this.limitarDesconto(subtotal-total,subtotal);
       }
-      this.sincronizarTotalFinal(total.toFixed(2).replace('.',','));
-      this.aplicarDescontoGeralValor();
+      this.recalcularTotais();
     },
     abrirDescontoItem(item) {
       this.itemEditando=item;

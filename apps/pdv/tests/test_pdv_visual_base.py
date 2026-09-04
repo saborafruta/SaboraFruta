@@ -44,6 +44,15 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn('bottom: 18px;', toast)
         self.assertIn('html:not(.tema-claro) .pdv-toast', toast)
 
+    def test_total_editavel_aceita_desconto_ou_acrescimo(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+        self.assertIn('Edite o total para aplicar desconto ou acréscimo.', template)
+        self.assertIn('if(total>subtotal) {', template)
+        self.assertIn('this.venda.acrescimo=this.arredondarDesconto(total-subtotal);', template)
+        self.assertIn('this.venda.desconto=this.limitarDesconto(subtotal-total,subtotal);', template)
+        self.assertIn("'+ R$ '+fmt(venda.acrescimo)+' de acréscimo'", template)
+        self.assertNotIn('Para dar desconto, informe um total entre', template)
+
     def test_catalogo_mostra_nome_completo_no_hover(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
         self.assertIn('class="prod-card-main" :title="p.descricao"', template)
