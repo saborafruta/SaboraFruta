@@ -2572,7 +2572,7 @@ class Op2Tests(TestCase):
         self.assertLess(html.rindex('Informações importantes da OP e Artes'), html.index('Resumo de conferência'))
         self.assertEqual(recente, self.pedido.historico_criacao.first())
 
-    def test_pdf_do_orcamento_continua_disponivel_depois_de_virar_op(self):
+    def test_pdfs_do_orcamento_e_da_op_estao_sempre_disponiveis(self):
         self._login_op2()
         detalhe_url = reverse('moda:op2-detail', args=[self.pedido.pk])
         orcamento_url = reverse('moda:pedido-orcamento-pdf', args=[self.pedido.pk])
@@ -2581,7 +2581,12 @@ class Op2Tests(TestCase):
         detalhe = self.client.get(detalhe_url)
         self.assertContains(detalhe, f'href="{orcamento_url}"')
         self.assertContains(detalhe, 'Abrir PDF do orçamento')
-        self.assertNotContains(detalhe, f'href="{op_url}"')
+        self.assertContains(detalhe, f'href="{op_url}"')
+        self.assertContains(detalhe, 'Abrir PDF da OP')
+        pdf_op = self.client.get(op_url)
+        self.assertEqual(pdf_op.status_code, 200)
+        self.assertEqual(pdf_op['Content-Type'], 'application/pdf')
+        self.assertTrue(pdf_op.content.startswith(b'%PDF-'))
 
         self.pedido.status = PedidoProducao.Status.AGUARDANDO_APROVACAO
         self.pedido.save(update_fields=['status'])
@@ -2590,6 +2595,19 @@ class Op2Tests(TestCase):
         self.assertContains(detalhe, 'Abrir PDF do orçamento')
         self.assertContains(detalhe, f'href="{op_url}"')
         self.assertContains(detalhe, 'Abrir PDF da OP')
+
+    def test_acoes_financeiras_ficam_no_resumo_e_historico_nao_duplica(self):
+        self._login_op2()
+        detalhe = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+        html = detalhe.content.decode()
+        cabecalho = re.search(r'<header .*?</header>', html, re.S).group()
+        resumo = re.search(r'<section class="card p-3 sticky top-32">.*?</section>', html, re.S).group()
+
+        self.assertNotIn('Pagamento previsto', cabecalho)
+        self.assertNotIn('Gerar financeiro', cabecalho)
+        self.assertIn('Pagamento previsto', resumo)
+        self.assertIn('Gerar financeiro', resumo)
+        self.assertEqual(html.count('@click="historico=true"'), 1)
 
     def test_criacao_permite_editar_apagar_e_isola_outro_pedido(self):
         self._login_op2()

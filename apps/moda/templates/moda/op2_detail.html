@@ -69,12 +69,10 @@
       <div class="flex flex-wrap gap-2">
         {% if pedido.status != 'confirmado' and pedido.status != 'entregue' %}<form method="post" action="{% url 'moda:op2-action' pedido.pk %}">{% csrf_token %}<input type="hidden" name="acao" value="aprovar"><button class="btn-secondary">Aprovar no sistema</button></form>{% endif %}
         <a class="btn-secondary" href="{% url 'moda:pedido-orcamento-pdf' pedido.pk %}" target="_blank" rel="noopener">Abrir PDF do orçamento</a>
-        {% if pedido.status != 'orcamento' %}<a class="btn-secondary" href="{% url 'moda:pedido-pdf' pedido.pk %}" target="_blank" rel="noopener">Abrir PDF da OP</a>{% endif %}
+        <a class="btn-secondary" href="{% url 'moda:pedido-pdf' pedido.pk %}" target="_blank" rel="noopener">Abrir PDF da OP</a>
         <button class="btn-secondary" style="color:#16a34a" @click="prepararWhatsapp" :disabled="preparandoWhatsapp" x-text="preparandoWhatsapp?'Preparando…':'◉ WhatsApp'"></button>
         {% if pedido.status == 'pronto' %}<a class="btn-primary" style="background:#059669" href="{% url 'moda:pedido-conferencia' pedido.pk %}">Conferir com o cliente</a><a class="btn-secondary" href="{% url 'moda:pedido-conferencia-qr' pedido.pk %}">Imprimir QR Code</a>{% endif %}
-        {% if pedido.status == 'orcamento' %}<button type="button" class="btn-secondary" @click="pagamentoPrevisto=true">Pagamento previsto</button>{% endif %}
-        {% if not pedido.financeiro_gerado and pedido.status != 'cancelado' %}<button type="button" class="btn-primary" @click="financeiro=true">Gerar financeiro</button>{% else %}{% if status_pagamento %}{% include 'moda/_pagamento_tag.html' %}{% endif %}{% if pode_ver_financeiro %}<button type="button" class="btn-secondary" @click="extratoFinanceiro=true" aria-controls="op2-extrato" :aria-expanded="extratoFinanceiro">Extrato de pagamentos</button>{% endif %}{% endif %}
-        <button class="btn-secondary md:hidden" type="button" @click="historico=true">Histórico</button>
+        {% if pedido.financeiro_gerado %}{% if status_pagamento %}{% include 'moda/_pagamento_tag.html' %}{% endif %}{% if pode_ver_financeiro %}<button type="button" class="btn-secondary" @click="extratoFinanceiro=true" aria-controls="op2-extrato" :aria-expanded="extratoFinanceiro">Extrato de pagamentos</button>{% endif %}{% endif %}
         <form class="md:hidden" method="post" action="{% url 'moda:op2-action' pedido.pk %}" onsubmit="return confirm('Duplicar esta OP como um novo orçamento?')">{% csrf_token %}<input type="hidden" name="acao" value="duplicar"><button class="btn-secondary w-full">Duplicar</button></form>
         {% if pedido.status != 'cancelado' %}<form method="post" action="{% url 'moda:op2-action' pedido.pk %}" onsubmit="return confirm('Cancelar esta OP? Ela sairá de todo o fluxo de produção.')">{% csrf_token %}<input type="hidden" name="acao" value="cancelar"><button class="btn-secondary" style="color:#ef4444">Cancelar OP</button></form>{% endif %}
       </div>
@@ -205,21 +203,22 @@
           {% elif pedido.financeiro_gerado %}
             <p class="text-sm opacity-60">Nenhum título ativo foi encontrado para esta OP.</p>
           {% else %}
-            <p class="text-sm opacity-60">O financeiro ainda não foi gerado. Use o botão “Gerar financeiro” no topo.</p>
+            <p class="text-sm opacity-60">O financeiro ainda não foi gerado. Use o botão “Gerar financeiro” no resumo da conferência.</p>
           {% endif %}
         </section>
       </div>
       {% endif %}
 
       <section class="op2-section mb-3 md:hidden" data-pane="resumo" :class="pane==='resumo'?'is-active':''">
-        <h2 class="font-bold mb-3">Resumo</h2>
+        <h2 class="font-bold mb-3">Resumo de conferência</h2>
         <dl class="space-y-2 text-sm"><div class="flex justify-between"><dt>Produtos</dt><dd class="font-bold">{{ grupos_itens|length }}</dd></div><div class="flex justify-between"><dt>Unidades comerciais</dt><dd class="font-bold">{{ pedido.quantidade_total }}</dd></div><div class="flex justify-between"><dt>Entregues</dt><dd class="font-bold" style="color:#16a34a">{{ total_entregue }}</dd></div><div class="flex justify-between"><dt>Pendentes</dt><dd class="font-bold" style="color:#f97316">{{ total_pendente }}</dd></div><div class="flex justify-between"><dt>Total</dt><dd class="font-bold">R$ {{ pedido.valor_total }}</dd></div></dl>{% if pedido.entrega_parcial %}<div class="mt-3 p-2 rounded text-xs" style="background:rgba(249,115,22,.13);color:#f97316">Entrega parcial. A OP permanece na etapa do produto pendente menos avançado.</div>{% endif %}
+        {% if pedido.status == 'orcamento' or not pedido.financeiro_gerado and pedido.status != 'cancelado' %}<div class="grid gap-2 mt-4 pt-3 border-t">{% if pedido.status == 'orcamento' %}<button type="button" class="btn-secondary w-full" @click="pagamentoPrevisto=true">Pagamento previsto</button>{% endif %}{% if not pedido.financeiro_gerado and pedido.status != 'cancelado' %}<button type="button" class="btn-primary w-full" @click="financeiro=true">Gerar financeiro</button>{% endif %}</div>{% endif %}
       </section>
     </main>
 
     <aside class="op2-aside space-y-3">
       {% include "moda/_op2_criacao_timeline.html" %}
-      <section class="card p-3 sticky top-32"><h2 class="font-bold mb-3">Resumo de conferência</h2><dl class="space-y-2 text-sm"><div class="flex justify-between"><dt>Produtos</dt><dd class="font-bold">{{ grupos_itens|length }}</dd></div><div class="flex justify-between"><dt>Unidades comerciais</dt><dd class="font-bold">{{ pedido.quantidade_total }}</dd></div><div class="flex justify-between"><dt>Entregues</dt><dd class="font-bold" style="color:#16a34a">{{ total_entregue }}</dd></div><div class="flex justify-between"><dt>Pendentes</dt><dd class="font-bold" style="color:#f97316">{{ total_pendente }}</dd></div><div class="flex justify-between"><dt>Total</dt><dd class="font-bold">R$ {{ pedido.valor_total }}</dd></div></dl>{% if pedido.entrega_parcial %}<div class="mt-3 p-2 rounded text-xs" style="background:rgba(249,115,22,.13);color:#f97316">Entrega parcial. A OP permanece na etapa do produto pendente menos avançado.</div>{% endif %}</section>
+      <section class="card p-3 sticky top-32"><h2 class="font-bold mb-3">Resumo de conferência</h2><dl class="space-y-2 text-sm"><div class="flex justify-between"><dt>Produtos</dt><dd class="font-bold">{{ grupos_itens|length }}</dd></div><div class="flex justify-between"><dt>Unidades comerciais</dt><dd class="font-bold">{{ pedido.quantidade_total }}</dd></div><div class="flex justify-between"><dt>Entregues</dt><dd class="font-bold" style="color:#16a34a">{{ total_entregue }}</dd></div><div class="flex justify-between"><dt>Pendentes</dt><dd class="font-bold" style="color:#f97316">{{ total_pendente }}</dd></div><div class="flex justify-between"><dt>Total</dt><dd class="font-bold">R$ {{ pedido.valor_total }}</dd></div></dl>{% if pedido.entrega_parcial %}<div class="mt-3 p-2 rounded text-xs" style="background:rgba(249,115,22,.13);color:#f97316">Entrega parcial. A OP permanece na etapa do produto pendente menos avançado.</div>{% endif %}{% if pedido.status == 'orcamento' or not pedido.financeiro_gerado and pedido.status != 'cancelado' %}<div class="grid gap-2 mt-4 pt-3 border-t">{% if pedido.status == 'orcamento' %}<button type="button" class="btn-secondary w-full" @click="pagamentoPrevisto=true">Pagamento previsto</button>{% endif %}{% if not pedido.financeiro_gerado and pedido.status != 'cancelado' %}<button type="button" class="btn-primary w-full" @click="financeiro=true">Gerar financeiro</button>{% endif %}</div>{% endif %}</section>
     </aside>
   </div>
 
