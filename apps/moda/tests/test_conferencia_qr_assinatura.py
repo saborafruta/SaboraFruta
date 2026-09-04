@@ -193,6 +193,52 @@ class FluxoConferenciaEQrTests(ConferenciaBase):
             resposta, reverse('moda:conferencia-pessoas', args=[expedicao.pk])
         )
 
+    def test_qr_fica_disponivel_por_item_antes_da_expedicao(self):
+        pedido = self._pedido_com_grade()
+        outro = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Short', quantidade=5,
+            valor_unitario=Decimal('30'), ordem=2,
+        )
+
+        resposta = self.client.get(
+            reverse('moda:pedido-conferencia-qr', args=[pedido.pk])
+        )
+
+        self.assertContains(resposta, self.item.nome_exibicao)
+        self.assertContains(resposta, outro.nome_exibicao)
+        for item in (self.item, outro):
+            self.assertContains(resposta, reverse(
+                'moda:pedido-item-qr-imagem', args=[pedido.pk, item.pk],
+            ))
+        self.assertEqual(OrdemProducao.objects.count(), 0)
+        self.assertEqual(Expedicao.objects.count(), 0)
+
+    def test_qr_do_item_abre_op_e_depois_a_conferencia(self):
+        pedido = self._pedido_com_grade()
+        abrir = reverse(
+            'moda:pedido-item-qr-abrir', args=[pedido.pk, self.item.pk],
+        )
+        imagem = reverse(
+            'moda:pedido-item-qr-imagem', args=[pedido.pk, self.item.pk],
+        )
+
+        resposta = self.client.get(abrir)
+        self.assertRedirects(
+            resposta,
+            reverse('moda:op2-detail', args=[pedido.pk]) + f'#item-{self.item.pk}',
+            fetch_redirect_response=False,
+        )
+        png = self.client.get(imagem)
+        self.assertEqual(png.status_code, 200)
+        self.assertEqual(png['Content-Type'], 'image/png')
+        self.assertTrue(png.content.startswith(b'\x89PNG'))
+
+        expedicao = self._expedicao(pedido)
+        resposta = self.client.get(abrir)
+        self.assertRedirects(
+            resposta, reverse('moda:conferencia-pessoas', args=[expedicao.pk]),
+        )
+
     def test_varias_caixas_mostram_um_qr_cada(self):
         """
         Escolher por conta própria mandaria conferir a caixa errada.

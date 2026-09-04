@@ -537,8 +537,62 @@ class PedidoConferenciaView(ModaBaseView):
         })
 
 
+def _item_do_pedido(request, pk, item_pk):
+    from .models import ItemPedidoProducao
+
+    return get_object_or_404(
+        ItemPedidoProducao.objects.select_related(
+            'pedido__cliente', 'produto', 'grade_tamanho',
+        ).filter(pedido__filial=_filial(request), pedido_id=pk),
+        pk=item_pk,
+    )
+
+
+def _expedicao_do_item(request, item):
+    return (
+        Expedicao.objects.for_filial(_filial(request))
+        .filter(ordem__item=item)
+        .exclude(status=Expedicao.Status.CANCELADA)
+        .order_by('-numero')
+        .first()
+    )
+
+
+class PedidoItemQrAbrirView(ModaBaseView):
+    """Destino estável do QR: item agora, conferência quando ela existir."""
+
+    area = 'comercial'
+
+    def get(self, request, pk, item_pk):
+        item = _item_do_pedido(request, pk, item_pk)
+        expedicao = _expedicao_do_item(request, item)
+        if expedicao:
+            return redirect(reverse('moda:conferencia-pessoas', args=[expedicao.pk]))
+        return redirect(
+            reverse('moda:op2-detail', args=[item.pedido_id]) + f'#item-{item.pk}'
+        )
+
+
+class PedidoItemQrImagemView(ModaBaseView):
+    """Imagem do QR disponível desde a primeira gravação do item."""
+
+    area = 'comercial'
+
+    def get(self, request, pk, item_pk):
+        import qrcode
+        from io import BytesIO
+
+        item = _item_do_pedido(request, pk, item_pk)
+        destino = request.build_absolute_uri(reverse(
+            'moda:pedido-item-qr-abrir', args=[item.pedido_id, item.pk],
+        ))
+        buffer = BytesIO()
+        qrcode.make(destino).save(buffer, 'PNG')
+        return HttpResponse(buffer.getvalue(), content_type='image/png')
+
+
 class PedidoConferenciaQrView(ModaBaseView):
-    """QR e impressão das caixas: aberto só pelo botão próprio da OP."""
+    """Um QR por item, disponível antes mesmo da criação das expedições."""
 
     area = 'comercial'
 
@@ -550,6 +604,13 @@ class PedidoConferenciaQrView(ModaBaseView):
             .select_related('cliente'),
             pk=pk,
         )
+        itens = list(
+            pedido.itens.select_related('produto', 'grade_tamanho')
+            .order_by('ordem', 'pk')
+        )
+        if not itens:
+            messages.error(request, 'Adicione um item antes de imprimir o QR Code.')
+            return redirect(reverse('moda:op2-detail', args=[pedido.pk]))
         expedicoes = list(
             Expedicao.objects.for_filial(_filial(request))
             .filter(ordem__pedido=pedido)
@@ -557,14 +618,37 @@ class PedidoConferenciaQrView(ModaBaseView):
             .select_related('ordem__item__produto', 'ordem__item__grade_tamanho')
             .order_by('numero')
         )
-        if not expedicoes:
-            messages.error(request, 'Ainda não há uma expedição para imprimir o QR Code.')
-            return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
+        expedicoes_por_item = {e.ordem.item_id: e for e in expedicoes}
+        etiquetas = []
+        for item in itens:
+            expedicao = expedicoes_por_item.get(item.pk)
+            etiquetas.append({
+                'item': item,
+                'expedicao': expedicao,
+                'codigo': (
+                    expedicao.codigo if expedicao else f'ITEM-{item.pk:06d}'
+                ),
+                'imagem_url': (
+                    reverse('moda:conferencia-qr', args=[expedicao.pk])
+                    if expedicao else reverse(
+                        'moda:pedido-item-qr-imagem', args=[pedido.pk, item.pk],
+                    )
+                ),
+                'destino_url': (
+                    reverse('moda:conferencia-pessoas', args=[expedicao.pk])
+                    if expedicao else reverse(
+                        'moda:pedido-item-qr-abrir', args=[pedido.pk, item.pk],
+                    )
+                ),
+                'quantidade': (
+                    expedicao.quantidade_esperada if expedicao else item.quantidade
+                ),
+            })
 
         return render(request, 'moda/conferencia_qr.html', {
             'title': f'Conferir pedido #{pedido.numero:06d}',
             'pedido': pedido,
-            'expedicoes': expedicoes,
+            'etiquetas': etiquetas,
         })
 
 class PedidoConferenciaForcarView(ModaBaseView):

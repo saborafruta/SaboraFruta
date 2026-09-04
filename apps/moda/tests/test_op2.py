@@ -2608,6 +2608,21 @@ class Op2Tests(TestCase):
         self.assertContains(detalhe, f'href="{op_url}"')
         self.assertContains(detalhe, 'Abrir PDF da OP')
 
+    def test_botao_qr_laranja_aparece_apos_primeiro_item(self):
+        self._login_op2()
+        detalhe_url = reverse('moda:op2-detail', args=[self.pedido.pk])
+        qr_url = reverse('moda:pedido-conferencia-qr', args=[self.pedido.pk])
+
+        sem_item = self.client.get(detalhe_url)
+        self.assertNotContains(sem_item, 'Imprimir QR Code')
+
+        self._item()
+        com_item = self.client.get(detalhe_url)
+
+        self.assertContains(com_item, f'href="{qr_url}"')
+        self.assertContains(com_item, 'Imprimir QR Code')
+        self.assertContains(com_item, 'background:#f97316')
+
     def test_acoes_financeiras_ficam_no_resumo_e_historico_nao_duplica(self):
         self._login_op2()
         detalhe = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))

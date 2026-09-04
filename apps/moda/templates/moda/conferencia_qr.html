@@ -1,6 +1,6 @@
 {% extends "_base.html" %}
 {% block title %}{{ title }}{% endblock %}
-{% block page_title %}Conferir para entrega{% endblock %}
+{% block page_title %}QR Codes dos itens{% endblock %}
 {% block content %}
 
 {% comment %}
@@ -33,27 +33,26 @@
 
   <div class="sem-impressao">
     <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      <a href="{% url 'moda:pedido-detail' pedido.pk %}"
+      <a href="{% url 'moda:op2-detail' pedido.pk %}"
          :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">‹ Voltar para o pedido</a>
     </p>
     <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-      Conferir para entrega
+      QR Codes dos itens
     </h2>
     <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       Pedido #{{ pedido.numero|stringformat:"06d" }} · {{ pedido.cliente }}
-      {% if expedicoes|length > 1 %}
-        · <strong>{{ expedicoes|length }} caixas</strong>, uma por produto — cada
-        uma tem o seu código.
+      {% if etiquetas|length > 1 %}
+        · <strong>{{ etiquetas|length }} itens</strong>, cada um com seu QR Code.
       {% endif %}
     </p>
   </div>
 
-  {% for e in expedicoes %}
+  {% for etiqueta in etiquetas %}
     <div class="etiqueta rounded-xl p-6 text-center"
          style="background:#fff; color:#111827; border:1px solid #d1d5db;">
 
       <p class="text-xs font-bold uppercase tracking-widest" style="color:#6b7280;">
-        Conferência de entrega
+        {% if etiqueta.expedicao %}Conferência de entrega{% else %}Item da OP{% endif %}
       </p>
 
       {# A caixa precisa se explicar antes mesmo de alguém apontar a câmera. #}
@@ -78,23 +77,23 @@
         </p>
         <p style="font-size:10px; line-height:1.2; margin:0; color:#6b7280;
                   font-weight:700; text-transform:uppercase; letter-spacing:.06em;">
-          Produto desta caixa
+          Produto
         </p>
         <p style="font-size:15px; line-height:1.3; margin:2px 0 0; font-weight:800;">
-          {{ e.ordem.item.nome_exibicao }}
+          {{ etiqueta.item.nome_exibicao }}
         </p>
-        {% if e.ordem.item.referencia %}
+        {% if etiqueta.item.referencia %}
           <p style="font-size:11px; line-height:1.2; margin:3px 0 0; color:#6b7280;">
-            Referência: <strong style="color:#374151;">{{ e.ordem.item.referencia }}</strong>
+            Referência: <strong style="color:#374151;">{{ etiqueta.item.referencia }}</strong>
           </p>
         {% endif %}
       </div>
 
-      <img src="{% url 'moda:conferencia-qr' e.pk %}" alt="QR da conferência {{ e.codigo }}"
+      <img src="{{ etiqueta.imagem_url }}" alt="QR do item {{ etiqueta.codigo }}"
            style="width:220px; height:220px; margin:10px auto; display:block;">
 
       <p style="font-family:monospace; font-size:15px; font-weight:700; letter-spacing:1px;">
-        {{ e.codigo }}
+        {{ etiqueta.codigo }}
       </p>
 
       <div style="margin-top:14px; text-align:left; display:inline-block;">
@@ -103,12 +102,17 @@
           <strong>#{{ pedido.numero|stringformat:"06d" }}</strong>
         </p>
         <p style="font-size:13px; margin:2px 0;">
-          <span style="color:#6b7280;">Expedição:</span>
-          <strong>#{{ e.numero|stringformat:"04d" }}</strong>
+          {% if etiqueta.expedicao %}
+            <span style="color:#6b7280;">Expedição:</span>
+            <strong>#{{ etiqueta.expedicao.numero|stringformat:"04d" }}</strong>
+          {% else %}
+            <span style="color:#6b7280;">Item:</span>
+            <strong>#{{ etiqueta.item.pk|stringformat:"06d" }}</strong>
+          {% endif %}
         </p>
         <p style="font-size:13px; margin:2px 0;">
           <span style="color:#6b7280;">Peças:</span>
-          <strong>{{ e.quantidade_esperada }}</strong>
+          <strong>{{ etiqueta.quantidade }}</strong>
         </p>
         {% if pedido.data_prevista_entrega %}
           <p style="font-size:13px; margin:2px 0;">
@@ -119,22 +123,22 @@
       </div>
 
       <p style="font-size:11px; color:#6b7280; margin-top:14px;">
-        Aponte a câmera do celular para conferir ao lado da caixa.
+        Aponte a câmera do celular para abrir este item.
       </p>
     </div>
 
     <div class="sem-impressao flex flex-wrap gap-2">
-      <a href="{% url 'moda:conferencia-pessoas' e.pk %}" class="btn-primary text-sm">
-        CONFERIR NESTA TELA
+      <a href="{{ etiqueta.destino_url }}" class="btn-primary text-sm">
+        {% if etiqueta.expedicao %}CONFERIR NESTA TELA{% else %}ABRIR ITEM DA OP{% endif %}
       </a>
       <button type="button" class="btn-secondary text-sm" onclick="window.print()">
         IMPRIMIR ETIQUETA
       </button>
-      <a href="{% url 'moda:conferencia-qr' e.pk %}" download="conferencia-{{ e.codigo }}.png"
+      <a href="{{ etiqueta.imagem_url }}" download="qr-{{ etiqueta.codigo }}.png"
          class="btn-secondary text-sm">BAIXAR PNG</a>
-      <a href="{% url 'moda:expedicao-detail' e.pk %}" class="btn-secondary text-sm">
+      {% if etiqueta.expedicao %}<a href="{% url 'moda:expedicao-detail' etiqueta.expedicao.pk %}" class="btn-secondary text-sm">
         ABRIR EXPEDIÇÃO
-      </a>
+      </a>{% endif %}
     </div>
 
     {% comment %}
@@ -142,11 +146,11 @@
       depois precisa ver que a caixa já passou, e por quem — senão confere
       de novo e a segunda passada apaga a primeira.
     {% endcomment %}
-    {% if e.assinado or e.recebido_por %}
+    {% if etiqueta.expedicao and etiqueta.expedicao.assinado or etiqueta.expedicao and etiqueta.expedicao.recebido_por %}
       <div class="sem-impressao card p-3 text-sm" style="border-left:3px solid #059669;">
         <p :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
-          Recebimento assinado por <strong>{{ e.recebido_por }}</strong>
-          {% if e.assinado_em %}em {{ e.assinado_em|date:"d/m/Y H:i" }}{% endif %}.
+          Recebimento assinado por <strong>{{ etiqueta.expedicao.recebido_por }}</strong>
+          {% if etiqueta.expedicao.assinado_em %}em {{ etiqueta.expedicao.assinado_em|date:"d/m/Y H:i" }}{% endif %}.
         </p>
       </div>
     {% endif %}
@@ -156,8 +160,8 @@
        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
     <p>
       Quem escanear precisa estar logado, com permissão do módulo e na filial
-      certa — o código abre a tela, não substitui o acesso. A assinatura do
-      cliente é colhida na própria conferência.
+      certa. Antes da expedição, o QR abre o item na OP; depois, o mesmo QR
+      encaminha para a conferência correspondente.
     </p>
   </div>
 

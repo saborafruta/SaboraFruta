@@ -71,7 +71,8 @@
         <a class="btn-secondary" href="{% url 'moda:pedido-orcamento-pdf' pedido.pk %}" target="_blank" rel="noopener">Abrir PDF do orçamento</a>
         <a class="btn-secondary" href="{% url 'moda:pedido-pdf' pedido.pk %}" target="_blank" rel="noopener">Abrir PDF da OP</a>
         <button class="btn-secondary" style="color:#16a34a" @click="prepararWhatsapp" :disabled="preparandoWhatsapp" x-text="preparandoWhatsapp?'Preparando…':'◉ WhatsApp'"></button>
-        {% if pedido.status == 'pronto' %}<a class="btn-primary" style="background:#059669" href="{% url 'moda:pedido-conferencia' pedido.pk %}">Conferir com o cliente</a><a class="btn-secondary" href="{% url 'moda:pedido-conferencia-qr' pedido.pk %}">Imprimir QR Code</a>{% endif %}
+        {% if pedido.status == 'pronto' %}<a class="btn-primary" style="background:#059669" href="{% url 'moda:pedido-conferencia' pedido.pk %}">Conferir com o cliente</a>{% endif %}
+        {% if grupos_itens %}<a class="btn-primary" style="background:#f97316;border-color:#f97316;color:#fff" href="{% url 'moda:pedido-conferencia-qr' pedido.pk %}">Imprimir QR Code</a>{% endif %}
         {% if pedido.financeiro_gerado %}{% if status_pagamento %}{% include 'moda/_pagamento_tag.html' %}{% endif %}{% if pode_ver_financeiro %}<button type="button" class="btn-secondary" @click="extratoFinanceiro=true" aria-controls="op2-extrato" :aria-expanded="extratoFinanceiro">Extrato de pagamentos</button>{% endif %}{% endif %}
         <form class="md:hidden" method="post" action="{% url 'moda:op2-action' pedido.pk %}" onsubmit="return confirm('Duplicar esta OP como um novo orçamento?')">{% csrf_token %}<input type="hidden" name="acao" value="duplicar"><button class="btn-secondary w-full">Duplicar</button></form>
         {% if pedido.status != 'cancelado' %}<form method="post" action="{% url 'moda:op2-action' pedido.pk %}" onsubmit="return confirm('Cancelar esta OP? Ela sairá de todo o fluxo de produção.')">{% csrf_token %}<input type="hidden" name="acao" value="cancelar"><button class="btn-secondary" style="color:#ef4444">Cancelar OP</button></form>{% endif %}
@@ -117,7 +118,7 @@
                 <div class="op2-product-group-total"><span class="op2-label block">Total do produto</span><strong>{{ grupo.quantidade }} {% if grupo.itens.0.eh_conjunto %}conjuntos{% else %}peças{% endif %}</strong></div>
               </header>
               {% for item in grupo.itens %}
-            <article class="op2-item op2-item-variant" style="border-color:{{ item.grade_cor }}" x-data="{detalhes:false,gradeEdit:false,personalizar:false,pessoas:[{uid:Date.now()+Math.random(),tamanhoId:'',nome:'',numero:''}]}">
+            <article id="item-{{ item.pk }}" class="op2-item op2-item-variant" style="border-color:{{ item.grade_cor }}" x-data="{detalhes:false,gradeEdit:false,personalizar:false,pessoas:[{uid:Date.now()+Math.random(),tamanhoId:'',nome:'',numero:''}]}">
               <header class="op2-item-head">
                 <div class="min-w-0">
                   <h4 class="op2-item-name font-bold truncate">{{ item.nome_base_op|default:item.nome_exibicao }}</h4>

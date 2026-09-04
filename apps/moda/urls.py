@@ -106,6 +106,8 @@ ROTAS_PRONTAS: list = [
     # quando o pedido esta' Pronto.
     path('comercial/pedidos/<int:pk>/conferencia/', vcon.PedidoConferenciaView.as_view(), name='pedido-conferencia'),
     path('comercial/pedidos/<int:pk>/imprimir-qr/', vcon.PedidoConferenciaQrView.as_view(), name='pedido-conferencia-qr'),
+    path('comercial/pedidos/<int:pk>/itens/<int:item_pk>/qr.png', vcon.PedidoItemQrImagemView.as_view(), name='pedido-item-qr-imagem'),
+    path('comercial/pedidos/<int:pk>/itens/<int:item_pk>/abrir-qr/', vcon.PedidoItemQrAbrirView.as_view(), name='pedido-item-qr-abrir'),
     # O desvio: abre a conferencia por cima das pendencias. POST, e nao GET,
     # porque cria ordem e expedicao -- link que cria coisa e' link que o
     # navegador dispara sozinho ao pre-carregar a pagina.
