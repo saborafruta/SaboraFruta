@@ -159,6 +159,24 @@ class FluxoConferenciaEQrTests(ConferenciaBase):
 
         self.assertRedirects(resposta, reverse('moda:conferencia-pessoas', args=[expedicao.pk]))
 
+    def test_varios_itens_abrem_a_conferencia_da_propria_op(self):
+        pedido = self._pedido_com_grade()
+        outro_item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Oversized', quantidade=1,
+            valor_unitario=Decimal('30'), ordem=2,
+        )
+        primeira = self._expedicao(pedido, self.item)
+        outra_ordem = OrdemProducao.objects.get(pedido=pedido, item=outro_item)
+        ExpedicaoService.criar(self.filial, outra_ordem, self.usuario, forcar=True)
+
+        resposta = self.client.get(
+            reverse('moda:pedido-conferencia', args=[pedido.pk])
+        )
+
+        self.assertRedirects(
+            resposta, reverse('moda:conferencia-pessoas', args=[primeira.pk])
+        )
+
     def test_qr_e_impresso_em_tela_separada(self):
         """
         Quem já está no computador certo não pode ficar sem saída: o QR é

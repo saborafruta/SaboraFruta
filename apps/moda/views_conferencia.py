@@ -462,12 +462,9 @@ class PedidoConferenciaView(ModaBaseView):
             # que está travando e decide — o sistema informa, não impede.
             return PedidoConferenciaForcarView().post(request, pk)
 
-        if len(expedicoes) == 1:
-            return redirect(reverse('moda:conferencia-pessoas', args=[expedicoes[0].pk]))
-
-        # Cada produto tem a sua expedição. Sem escolher uma caixa ao acaso,
-        # a fila já abre as conferências disponíveis diretamente.
-        return redirect(reverse('moda:conferencia-fila'))
+        # Abre a primeira caixa da própria OP. As demais aparecem dentro da
+        # conferência como atalhos, sem desviar o usuário para a fila geral.
+        return redirect(reverse('moda:conferencia-pessoas', args=[expedicoes[0].pk]))
 
     @staticmethod
     def _perguntar(request, pedido):
