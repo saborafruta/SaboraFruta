@@ -1164,8 +1164,6 @@ def api_venda_finalizar(request):
     pagamentos = body.get("pagamentos", [])
     if not itens:
         return JsonResponse({"erro": "Carrinho vazio."}, status=400)
-    if not pagamentos:
-        return JsonResponse({"erro": "Informe ao menos uma forma de pagamento."}, status=400)
 
     cliente_id = body.get("cliente_id")
     desconto = Decimal(str(body.get("desconto", "0")))
@@ -1254,8 +1252,6 @@ def api_venda_finalizar_forcado(request):
     pagamentos = body.get("pagamentos", [])
     if not itens:
         return JsonResponse({"erro": "Carrinho vazio."}, status=400)
-    if not pagamentos:
-        return JsonResponse({"erro": "Informe ao menos uma forma de pagamento."}, status=400)
 
     cliente_id = body.get("cliente_id")
     desconto = Decimal(str(body.get("desconto", "0")))

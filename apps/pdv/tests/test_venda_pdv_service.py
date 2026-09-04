@@ -411,6 +411,38 @@ class VendaPDVServiceTests(TestCase):
         self.assertFalse(venda.pagamentos.exists())
         self.assertEqual(Estoque.objects.get(produto=produto, filial=self.filial).quantidade_atual, 1)
 
+    def test_endpoints_finalizam_venda_gratis_sem_forma_de_pagamento(self):
+        self.client.force_login(self.usuario)
+        session = self.client.session
+        session['filial_ativa_id'] = self.filial.pk
+        session.save()
+
+        for endpoint in ('api_venda_finalizar', 'api_venda_finalizar_forcado'):
+            with self.subTest(endpoint=endpoint):
+                produto = self.criar_produto(f'Produto grátis via {endpoint}')
+                self.abastecer(produto, '1')
+                resposta = self.client.post(
+                    reverse(f'pdv:{endpoint}'),
+                    data=json.dumps({
+                        'itens': [{
+                            'produto_id': produto.pk,
+                            'quantidade': 1,
+                            'preco_manual': 0,
+                        }],
+                        'pagamentos': [],
+                    }),
+                    content_type='application/json',
+                )
+
+                self.assertEqual(resposta.status_code, 200, resposta.content)
+                venda = VendaPDV.objects.get(pk=resposta.json()['venda_id'])
+                self.assertEqual(venda.valor_total, 0)
+                self.assertFalse(venda.pagamentos.exists())
+                self.assertEqual(
+                    Estoque.objects.get(produto=produto, filial=self.filial).quantidade_atual,
+                    0,
+                )
+
     def test_venda_mista_cobra_apenas_itens_pagos(self):
         produto = self.criar_produto()
         self.abastecer(produto, '3')
