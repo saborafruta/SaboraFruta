@@ -2095,6 +2095,19 @@ class Op2ActionView(ModaBaseView):
         individual.save()
         messages.success(request, 'Nome, número e tamanho atualizados.')
 
+    def _acao_remover_individual(self, request, pedido):
+        individual = get_object_or_404(
+            pedido.individuais.select_related('item', 'tamanho'),
+            pk=request.POST.get('individual_id'),
+        )
+        identificacao = individual.identificacao
+        produto = individual.item.nome_exibicao
+        individual.delete()
+        messages.success(
+            request,
+            f'Personalização {identificacao} removida de {produto}.',
+        )
+
     @staticmethod
     def _validar_tamanho_calcao(item, tamanho_id, ignorar=None):
         if not str(tamanho_id or '').isdigit():

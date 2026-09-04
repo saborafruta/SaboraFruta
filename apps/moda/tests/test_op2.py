@@ -1948,6 +1948,33 @@ class Op2Tests(TestCase):
         self.assertContains(detalhe, 'Salvar alteração')
         self.assertContains(detalhe, 'value="NOME CORRIGIDO"')
 
+    def test_op_existente_permite_remover_uma_personalizacao(self):
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=10)
+        item = self._item(quantidade=1)
+        ItemGradePedido.objects.create(item=item, tamanho=tamanho, quantidade=1)
+        pessoa = PersonalizacaoIndividual.objects.create(
+            pedido=self.pedido, item=item, tamanho=tamanho,
+            nome='REMOVER ESTE NOME', numero='15',
+        )
+        self.client.force_login(self._usuario())
+        session = self.client.session
+        session['filial_id'] = self.filial.pk
+        session.save()
+
+        detalhe = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+        self.assertContains(detalhe, 'value="remover_individual"')
+        self.assertContains(detalhe, 'Remover a personalização de')
+
+        resposta = self.client.post(
+            reverse('moda:op2-action', args=[self.pedido.pk]),
+            {'acao': 'remover_individual', 'individual_id': str(pessoa.pk)},
+        )
+
+        self.assertRedirects(
+            resposta, reverse('moda:op2-detail', args=[self.pedido.pk])
+        )
+        self.assertFalse(PersonalizacaoIndividual.objects.filter(pk=pessoa.pk).exists())
+
     def test_op_existente_atualiza_pagamento_previsto_sem_gerar_financeiro(self):
         self._item(quantidade=2)
         self.client.force_login(self._usuario())
