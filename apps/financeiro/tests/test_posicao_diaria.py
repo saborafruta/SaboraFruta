@@ -969,7 +969,7 @@ class PosicaoDiariaCaixaTests(TestCase):
             for item in PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()["entradas"]
         ))
 
-    def test_baixa_de_boleto_compensa_no_proximo_dia_util(self):
+    def test_baixa_de_boleto_entra_no_dia_e_sai_das_previsoes(self):
         self.forma.tipo = TipoFormaPagamento.BOLETO
         self.forma.prazo_compensacao_dias_uteis = 1
         self.forma.save(update_fields=["tipo", "prazo_compensacao_dias_uteis"])
@@ -990,17 +990,27 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(conta.data_liquidacao_prevista, date(2026, 8, 24))
         self.assertEqual(
             PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()["total_entradas"],
-            Decimal("0"),
+            Decimal("80.00"),
         )
         self.assertEqual(
             PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()["total_entradas"],
-            Decimal("80.00"),
+            Decimal("0"),
         )
         response = self.client.get(reverse("financeiro:posicao_diaria"), {
             "data": "2026-08-21", "previsao": "7d",
         })
-        self.assertContains(response, "Ver título")
-        self.assertContains(response, reverse("financeiro:receber_detail", args=[conta.pk]))
+        self.assertNotContains(response, "Conta a receber - Cliente boleto")
+        posicao = PosicaoDiariaCaixaService(
+            self.filial, date(2026, 8, 21),
+        ).gerar(
+            incluir_previstos=True,
+            previsao_inicio=date(2026, 8, 21),
+            previsao_fim=date(2026, 8, 28),
+        )
+        self.assertFalse(any(
+            item["origem_codigo"] == "receber" and item["registro_id"] == conta.pk
+            for item in posicao["previsoes"]
+        ))
 
     def test_baixa_parcial_nao_antecipa_taxa_sobre_saldo_a_receber(self):
         self.forma.tipo = TipoFormaPagamento.BOLETO
