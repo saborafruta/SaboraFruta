@@ -1325,7 +1325,12 @@ class Op2ActionView(ModaBaseView):
 
     def post(self, request, pk):
         pedido = _pedido(request, pk)
-        acao = request.POST.get('acao') or ''
+        # O formulário de uma personalização tem a ação padrão escondida
+        # (editar) e o botão Remover envia uma segunda ação. Em HTML, o botão
+        # acionado vem por último; usar apenas ``get`` lia a primeira e
+        # transformava a remoção numa edição bem-sucedida.
+        acoes = request.POST.getlist('acao')
+        acao = acoes[-1] if acoes else ''
         handler = getattr(self, f'_acao_{acao}', None)
         if handler is None:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':

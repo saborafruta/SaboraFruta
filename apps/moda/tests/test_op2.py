@@ -1967,7 +1967,12 @@ class Op2Tests(TestCase):
 
         resposta = self.client.post(
             reverse('moda:op2-action', args=[self.pedido.pk]),
-            {'acao': 'remover_individual', 'individual_id': str(pessoa.pk)},
+            {
+                # Igual ao navegador: o hidden de edição e o botão clicado
+                # chegam juntos, nesta ordem.
+                'acao': ['editar_individual', 'remover_individual'],
+                'individual_id': str(pessoa.pk),
+            },
         )
 
         self.assertRedirects(
