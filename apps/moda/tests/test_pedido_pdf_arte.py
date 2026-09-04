@@ -234,6 +234,45 @@ class ArteNoPdfTests(TestCase):
         self.assertNotEqual(grupos[0].chave, grupos[1].chave)
         self.assertEqual(_paginas(pdf), 2)
 
+    def test_mesmo_produto_com_na_e_sublimacao_ocupa_folhas_separadas(self):
+        pedido = self._pedido()
+        produto = ProdutoModa.objects.create(
+            filial=self.filial, codigo='CAM-IMP', nome='Camisa com impressões',
+        )
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=10)
+        itens = []
+        for indice, grade_nome in enumerate(('Adulto', 'Oversized')):
+            grade = Grade.objects.create(filial=self.filial, nome=grade_nome)
+            item = ItemPedidoProducao.objects.create(
+                pedido=pedido, produto=produto, grade_tamanho=grade,
+                quantidade=1,
+                # Reproduz o #000016: o resumo compartilhado ficou igual,
+                # embora somente um item tenha impressão salva.
+                observacoes=(
+                    'Estrutura da peça:\nTipo impressao: SUBLIMAÇÃO\nMalha: DRY'
+                ),
+            )
+            ItemGradePedido.objects.create(item=item, tamanho=tamanho, quantidade=1)
+            itens.append(item)
+            if indice:
+                Personalizacao.objects.create(
+                    item=item, tecnica=Personalizacao.Tecnica.SUBLIMACAO,
+                )
+
+        from apps.moda.services.item_groups import agrupar_itens_op
+        from apps.moda.services.pedido_pdf import _estrutura_item
+
+        grupos = agrupar_itens_op(itens)
+        pdf = PedidoPdfService.gerar(pedido)
+
+        self.assertEqual(len(grupos), 2)
+        self.assertNotEqual(grupos[0].chave, grupos[1].chave)
+        self.assertEqual(_paginas(pdf), 2)
+        self.assertIn(('Tipo de impressão', 'N/A'), _estrutura_item(itens[0])[1])
+        self.assertIn(
+            ('Tipo de impressão', 'Sublimação'), _estrutura_item(itens[1])[1],
+        )
+
     def test_orcamento_separa_itens_do_mesmo_produto_por_grade(self):
         from apps.moda.services.orcamento_pdf import _estilos
 

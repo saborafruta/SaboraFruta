@@ -8,6 +8,7 @@ técnica. Uma especificação diferente precisa continuar visível em bloco pró
 import json
 from dataclasses import dataclass
 from decimal import Decimal
+import unicodedata
 
 
 GRADE_CORES = (
@@ -48,6 +49,63 @@ def _texto(valor):
     return ' '.join(str(valor or '').split()).casefold()
 
 
+def _rotulo_normalizado(valor):
+    texto = unicodedata.normalize('NFKD', str(valor or ''))
+    return ' '.join(
+        ''.join(letra for letra in texto if not unicodedata.combining(letra))
+        .casefold().split()
+    )
+
+
+def _observacoes_sem_tipo_impressao(observacoes):
+    """A impressão é comparada pela relação real, não pelo resumo replicado."""
+    linhas = []
+    for linha in str(observacoes or '').splitlines():
+        rotulo = linha.split(':', 1)[0] if ':' in linha else ''
+        if _rotulo_normalizado(rotulo) in {
+            'tipo impressao', 'tipo de impressao',
+        }:
+            continue
+        linhas.append(linha)
+    return _texto('\n'.join(linhas))
+
+
+def _personalizacoes_ativas(item):
+    return [
+        personalizacao for personalizacao in item.personalizacoes.all()
+        if _texto(personalizacao.tecnica) not in {
+            '', 'n/a', 'sem impressao', 'sem_impressao',
+        }
+    ]
+
+
+def tipos_impressao_item(item):
+    """Rótulos das impressões efetivamente salvas; sem relação significa N/A."""
+    tecnicas = []
+    for personalizacao in _personalizacoes_ativas(item):
+        rotulo = personalizacao.get_tecnica_display()
+        if rotulo not in tecnicas:
+            tecnicas.append(rotulo)
+    return tecnicas or ['N/A']
+
+
+def _assinatura_personalizacoes(item):
+    """Campos técnicos da aplicação, sem arquivo/ID, em ordem canônica."""
+    return tuple(sorted(
+        (
+            _texto(personalizacao.tipo),
+            _texto(personalizacao.tecnica),
+            _texto(personalizacao.local),
+            _texto(personalizacao.nome_personalizado),
+            _texto(personalizacao.numero_personalizado),
+            _texto(personalizacao.patrocinios),
+            personalizacao.quantidade_patrocinadores,
+            _texto(personalizacao.observacoes),
+        )
+        for personalizacao in _personalizacoes_ativas(item)
+    ))
+
+
 def _configuracao_tecnica_conjunto(configuracao):
     """Retira apenas as grades do conjunto antes de comparar sua ficha."""
     resultado = {}
@@ -73,7 +131,8 @@ def _ficha_tecnica(item):
         _texto(item.gola),
         _texto(item.manga),
         _texto(item.acabamento),
-        _texto(item.observacoes),
+        _observacoes_sem_tipo_impressao(item.observacoes),
+        _assinatura_personalizacoes(item),
         _configuracao_tecnica_conjunto(item.configuracao_conjunto),
     )
 

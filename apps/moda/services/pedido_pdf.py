@@ -32,7 +32,7 @@ from reportlab.platypus import (
 from .pdf_marca import (
     ALTURA_TARJA, bloco_empresa, desenhar_tarja, esc, estilos_empresa, logo,
 )
-from .item_groups import agrupar_itens_op
+from .item_groups import agrupar_itens_op, tipos_impressao_item
 
 AZUL = colors.HexColor('#0f4aa1')
 AZUL_ESCURO = colors.HexColor('#173f7f')
@@ -216,7 +216,7 @@ def _estrutura_item(item):
     texto = (item.observacoes or '').strip()
     marcador = 'Estrutura da peça:'
     if marcador not in texto:
-        return texto, []
+        return texto, [('Tipo de impressão', ' + '.join(tipos_impressao_item(item)))]
     livre, bloco = texto.split(marcador, 1)
     campos = []
     for linha in bloco.splitlines():
@@ -226,6 +226,16 @@ def _estrutura_item(item):
         rotulo, valor = (parte.strip() for parte in linha.split(':', 1))
         if valor:
             campos.append((rotulo, valor))
+    rotulos_impressao = {
+        'tipo impressão', 'tipo impressao', 'tipo de impressão',
+    }
+    impressao = ('Tipo de impressão', ' + '.join(tipos_impressao_item(item)))
+    for indice, (rotulo, _) in enumerate(campos):
+        if rotulo.casefold() in rotulos_impressao:
+            campos[indice] = impressao
+            break
+    else:
+        campos.insert(0, impressao)
     return livre.strip(), campos
 
 

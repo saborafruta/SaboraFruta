@@ -196,6 +196,18 @@ class Op2Tests(TestCase):
         self.assertEqual(modal['estrutura_outros']['malha'], 'Neoprene leve')
         self.assertEqual(modal['estrutura_observacoes']['malha'], 'Painel frontal')
 
+    def test_modal_reabre_impressao_individual_em_vez_do_resumo_compartilhado(self):
+        from apps.moda.views_op2 import _dados_modal_item
+
+        item = ItemPedidoProducao.objects.create(
+            pedido=self.pedido, produto=self.produto, quantidade=1,
+            observacoes='Estrutura da peça:\nTipo impressao: SUBLIMAÇÃO',
+        )
+
+        modal = _dados_modal_item(item, opcoes_estrutura_filial(self.filial))
+
+        self.assertEqual(modal['tipo_impressao'], ['N/A'])
+
     def test_impressao_e_acabamento_aceitam_multiplas_opcoes(self):
         from apps.moda.services.op2_estrutura import validar_estrutura_item
 

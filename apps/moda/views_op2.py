@@ -34,7 +34,7 @@ from .services.historico import HistoricoService
 from .services.financeiro import FinanceiroPedidoService
 from .services.grade_pedido import GradePedidoService
 from .services.individual import IndividualService
-from .services.item_groups import GRADE_CORES, agrupar_itens_op
+from .services.item_groups import GRADE_CORES, agrupar_itens_op, tipos_impressao_item
 from .services.conjunto import (
     COMPONENTES_CONJUNTO, quantidades_agregadas, resumo_conjunto, total_componente,
     validar_configuracao_conjunto,
@@ -273,7 +273,6 @@ def _dados_modal_item(item, estrutura_opcoes):
                     if campo_multisselecao(campo) else 'OUTRO'
                 )
 
-    arte = item.personalizacoes.first()
     grade_id = str(item.grade_tamanho_id or '')
     quantidades = {
         str(linha.tamanho_id): linha.quantidade for linha in item.grade.all()
@@ -295,10 +294,11 @@ def _dados_modal_item(item, estrutura_opcoes):
         'valor_unitario': (
             str(item.valor_unitario) if item.valor_unitario is not None else ''
         ),
-        'tipo_impressao': estrutura.pop('tipo_impressao', None) or [(
-            arte.get_tecnica_display() if arte else
-            getattr(item.produto, 'get_tipo_impressao_display', lambda: '')()
-        ).upper()],
+        # ``observacoes`` é compartilhada entre grades do mesmo produto. A
+        # impressão, porém, é individual e deve vir da relação deste item.
+        'tipo_impressao': [
+            rotulo.upper() for rotulo in tipos_impressao_item(item)
+        ],
         'estrutura_tipo': estrutura_tipo,
         'estrutura': estrutura,
         'cor_personalizada': cor_personalizada,
