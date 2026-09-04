@@ -36,7 +36,7 @@ from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.core.services.exceptions import DomainError
 from apps.moda.models import (
-    Expedicao, ItemGradePedido, ItemPedidoProducao, OrdemProducao,
+    Expedicao, ItemConferencia, ItemGradePedido, ItemPedidoProducao, OrdemProducao,
     PedidoProducao, PersonalizacaoIndividual, ProdutoModa, Tamanho,
 )
 from apps.moda.services import ExpedicaoService, OrdemProducaoService
@@ -322,6 +322,52 @@ class ConferirPorQuantidadeTests(ConferenciaBase):
         for sigla, tamanho in self.tamanhos.items():
             self.assertContains(resposta, f'qtd_{tamanho.pk}')
         self.assertContains(resposta, 'Conferência completa da OP')
+        self.assertContains(resposta, 'max="3"')
+        self.assertContains(resposta, 'máximo 3')
+
+    def test_quantidade_acima_do_pedido_e_recusada_no_servidor(self):
+        pedido = self._pedido_com_grade()
+        expedicao = self._expedicao(pedido)
+
+        resposta = self.client.post(
+            reverse('moda:conferencia-pessoas-salvar', args=[expedicao.pk]),
+            {f'qtd_{self.tamanhos["P"].pk}': '9'},
+            follow=True,
+        )
+
+        expedicao.refresh_from_db()
+        self.assertEqual(expedicao.quantidade_conferida, 0)
+        self.assertContains(
+            resposta,
+            'P: a quantidade conferida não pode ultrapassar as 3 peça(s) pedidas.',
+        )
+
+    def test_servico_tambem_recusa_quantidade_acima_da_grade(self):
+        pedido = self._pedido_com_grade()
+        expedicao = self._expedicao(pedido)
+
+        with self.assertRaisesMessage(
+            DomainError,
+            'P: a quantidade conferida não pode ultrapassar as 3 peça(s) pedidas.',
+        ):
+            ExpedicaoService.conferir(
+                expedicao, {self.tamanhos['P'].pk: 4}, {'conferido_por': 'Chefe'},
+            )
+
+    def test_contagem_antiga_acima_do_limite_e_exibida_ajustada_com_aviso(self):
+        pedido = self._pedido_com_grade()
+        expedicao = self._expedicao(pedido)
+        ItemConferencia.objects.create(
+            expedicao=expedicao, tamanho=self.tamanhos['P'], quantidade=9,
+        )
+
+        resposta = self.client.get(
+            reverse('moda:conferencia-pessoas', args=[expedicao.pk])
+        )
+
+        self.assertContains(resposta, 'value="3"')
+        self.assertContains(resposta, 'Foi encontrada 1 contagem antiga acima do pedido.')
+        self.assertEqual(resposta.context['conferido_total'], 3)
 
     def test_nao_lista_tamanho_sem_peca_pedida(self):
         pedido = self._pedido_com_grade()
@@ -458,6 +504,9 @@ class PersonalizacaoDaCaixaTests(ConferenciaBase):
         self.assertContains(resposta, f'qtd_{segunda.pk}_{xgg.pk}')
         self.assertContains(resposta, 'EDUARDO')
         self.assertContains(resposta, 'COMPLEMENTO')
+        self.assertContains(resposta, 'aria-labelledby="produto-', count=2)
+        self.assertContains(resposta, f'OP {primeira.ordem.numero}')
+        self.assertContains(resposta, f'OP {segunda.ordem.numero}')
         self.assertContains(resposta, f'pessoa_{primeira.pk}')
         self.assertContains(resposta, f'pessoa_{segunda.pk}')
         self.assertNotContains(resposta, 'Outros itens desta OP para conferir')

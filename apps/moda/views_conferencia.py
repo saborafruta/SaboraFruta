@@ -69,10 +69,15 @@ def _linhas_de_quantidade(expedicao) -> list[dict]:
     for celula in expedicao.grade_esperada:
         if not celula.quantidade:
             continue
+        quantidade_conferida = conferido.get(celula.tamanho_id, 0)
         linhas.append({
             'tamanho': celula.tamanho,
             'esperado': celula.quantidade,
-            'conferido': conferido.get(celula.tamanho_id, 0),
+            # Contagens antigas podiam ultrapassar a grade. Não repetimos o
+            # erro no formulário: mostramos o limite correto e avisamos que
+            # a conferência precisa ser confirmada para persistir o ajuste.
+            'conferido': min(quantidade_conferida, celula.quantidade),
+            'ajustada_ao_limite': quantidade_conferida > celula.quantidade,
         })
     return linhas
 
@@ -181,6 +186,7 @@ class ConferenciaPessoasView(ModaBaseView):
         artes = []
         urls_de_arte = set()
         esperado_total = conferido_total = conferidas_total = 0
+        ajustes_ao_limite = 0
 
         for caixa in expedicoes:
             ids_conferidos = set(
@@ -203,15 +209,22 @@ class ConferenciaPessoasView(ModaBaseView):
                     quantidade['tamanho'].pk, []
                 )
 
+            esperado_grupo = sum(linha['esperado'] for linha in quantidades)
+            conferido_grupo = sum(linha['conferido'] for linha in quantidades)
+            ajustes_ao_limite += sum(
+                1 for linha in quantidades if linha['ajustada_ao_limite']
+            )
             grupos.append({
                 'expedicao': caixa,
                 'item': caixa.ordem.item,
                 'quantidades': quantidades,
+                'esperado': esperado_grupo,
+                'conferido': conferido_grupo,
                 'travada': caixa.passou_por(Expedicao.Status.SEPARACAO),
             })
             todas_as_pessoas.extend(linhas)
-            esperado_total += sum(linha['esperado'] for linha in quantidades)
-            conferido_total += sum(linha['conferido'] for linha in quantidades)
+            esperado_total += esperado_grupo
+            conferido_total += conferido_grupo
             conferidas_total += len(ids_conferidos)
 
             for arte in _artes(caixa):
@@ -230,6 +243,7 @@ class ConferenciaPessoasView(ModaBaseView):
             'artes': artes,
             'esperado_total': esperado_total,
             'conferido_total': conferido_total,
+            'ajustes_ao_limite': ajustes_ao_limite,
             # Depois da separação a conferência não se mexe mais: o que foi
             # separado saiu da bancada, e reabrir aqui daria uma conferência
             # que não corresponde à caixa.
@@ -262,21 +276,25 @@ class ConferenciaPessoasSalvarView(ModaBaseView):
 
         contadas = marcadas = 0
         enviou_quantidades = enviou_pessoas = False
-        with transaction.atomic():
-            for caixa in expedicoes:
-                quantidade = self._quantidades(
-                    request, caixa, prefixo=len(expedicoes) > 1,
-                )
-                pessoas = self._pessoas(
-                    request, caixa, prefixo=len(expedicoes) > 1,
-                )
-                if quantidade is not None:
-                    contadas += quantidade
-                    enviou_quantidades = True
-                if pessoas is not None:
-                    marcadas += pessoas
-                    enviou_pessoas = True
-            assinou = self._assinatura(request, expedicao)
+        try:
+            with transaction.atomic():
+                for caixa in expedicoes:
+                    quantidade = self._quantidades(
+                        request, caixa, prefixo=len(expedicoes) > 1,
+                    )
+                    pessoas = self._pessoas(
+                        request, caixa, prefixo=len(expedicoes) > 1,
+                    )
+                    if quantidade is not None:
+                        contadas += quantidade
+                        enviou_quantidades = True
+                    if pessoas is not None:
+                        marcadas += pessoas
+                        enviou_pessoas = True
+                assinou = self._assinatura(request, expedicao)
+        except DomainError as erro:
+            messages.error(request, str(erro))
+            return volta
 
         partes = []
         if enviou_quantidades:
@@ -317,14 +335,10 @@ class ConferenciaPessoasSalvarView(ModaBaseView):
         if not quantidades:
             return None
 
-        try:
-            return ExpedicaoService.conferir(
-                expedicao, quantidades,
-                {'conferido_por': _quem(request.user)},
-            )
-        except DomainError as erro:
-            messages.error(request, str(erro))
-            return None
+        return ExpedicaoService.conferir(
+            expedicao, quantidades,
+            {'conferido_por': _quem(request.user)},
+        )
 
     # ── Por pessoa ───────────────────────────────────────────────────────
 

@@ -97,6 +97,22 @@ class ExpedicaoService:
                 'A conferência já foi encerrada — o documento passou desta etapa.'
             )
 
+        esperadas = {
+            celula.tamanho_id: celula
+            for celula in expedicao.grade_esperada
+            if celula.quantidade
+        }
+        for tamanho_id, quantidade in quantidades.items():
+            quantidade = max(0, int(quantidade))
+            celula = esperadas.get(tamanho_id)
+            if celula is None:
+                raise DomainError('Foi informado um tamanho que não pertence a esta ordem.')
+            if quantidade > celula.quantidade:
+                raise DomainError(
+                    f'{celula.tamanho.sigla}: a quantidade conferida não pode '
+                    f'ultrapassar as {celula.quantidade} peça(s) pedidas.'
+                )
+
         atuais = {i.tamanho_id: i for i in expedicao.conferencia.all()}
         total = 0
 

@@ -2,7 +2,28 @@
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}Conferência de Produtos para Entrega{% endblock %}
 {% block content %}
-<style>@media (min-width:1000px){.conferencia-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(290px,1fr);gap:16px}.conferencia-trabalho{grid-column:1 / span 1!important}.conferencia-consulta{grid-column:2 / span 1!important;grid-row:1;position:sticky;top:16px;align-self:start}}</style>
+<style>
+  .produto-conferencia{border:1px solid rgba(100,116,139,.35);border-radius:12px;overflow:hidden}
+  .produto-conferencia__cabecalho{border-left:4px solid #2563eb;background:rgba(37,99,235,.08)}
+  .grade-cabecalho,.grade-linha{display:grid;grid-template-columns:minmax(70px,.65fr) minmax(72px,.7fr) minmax(180px,1.25fr) minmax(90px,.7fr) minmax(180px,1.6fr);gap:12px;align-items:center}
+  .grade-cabecalho{padding:9px 14px;border-bottom:1px solid rgba(100,116,139,.28)}
+  .grade-linha{padding:12px 14px;border-bottom:1px solid rgba(100,116,139,.2)}
+  .grade-linha:last-child{border-bottom:0}
+  .grade-rotulo-mobile{display:none}
+  .contador-pecas{display:inline-grid;grid-template-columns:42px 68px 42px;gap:6px;align-items:center}
+  .contador-pecas button{min-height:42px;font-size:18px}
+  @media (min-width:1000px){.conferencia-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(290px,1fr);gap:16px}.conferencia-trabalho{grid-column:1 / span 1!important}.conferencia-consulta{grid-column:2 / span 1!important;grid-row:1;position:sticky;top:16px;align-self:start}}
+  @media (max-width:767px){
+    .grade-cabecalho{display:none}
+    .grade-linha{grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:14px}
+    .grade-rotulo-mobile{display:block;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.62;margin-bottom:3px}
+    .grade-tamanho{grid-column:1}.grade-situacao{grid-column:2;text-align:right}.grade-pedido{grid-column:1}.grade-conferido{grid-column:2;grid-row:2 / span 2;text-align:right}.grade-pessoas{grid-column:1 / -1;padding-top:10px;border-top:1px solid rgba(100,116,139,.22)}
+    .contador-pecas{grid-template-columns:44px 62px 44px}.contador-pecas button{min-height:44px}
+    .produto-conferencia__cabecalho{padding:13px!important}
+    .barra-conferencia__conteudo,.barra-conferencia__contadores{width:100%}
+    .barra-conferencia__acao{width:100%;min-height:46px;justify-content:center}
+  }
+</style>
 
 {% comment %}
   A TELA É PARA O CELULAR, e ocupa a página toda no computador. Quem confere
@@ -122,106 +143,105 @@
           </div>
 
           {% if grupos %}
-            <div class="overflow-x-auto">
-              <table class="w-full text-sm" style="min-width:760px;">
-                <thead>
-                  <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
-                    <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
-                    <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tamanho</th>
-                    <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Pedido</th>
-                    <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Conferido</th>
-                    <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
-                    <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nome e número</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for grupo in grupos %}
-                  {% for l in grupo.quantidades %}
-                    <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
-                      <td class="px-4 py-2.5">
-                        <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ grupo.item.nome_exibicao }}</strong>
-                        <div class="text-xs opacity-60">Expedição #{{ grupo.expedicao.numero|stringformat:"04d" }}</div>
-                      </td>
-                      <td class="px-4 py-2.5">
-                        <span class="text-sm font-bold uppercase tracking-wide"
-                              :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.tamanho.sigla }}</span>
-                      </td>
-                      <td class="px-4 py-2.5 text-center"
-                          :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ l.esperado }}</td>
-                      <td class="px-4 py-2.5 text-center">
-                        {% comment %}
-                          Os botões −/+ existem porque contar peça a peça com
-                          o telefone na mão é toque, não digitação: abrir o
-                          teclado numérico a cada tamanho é o que faz a
-                          pessoa desistir e lançar tudo de memória no fim.
-                        {% endcomment %}
-                        <div class="inline-flex items-center gap-1">
-                          <button type="button" class="btn-secondary"
-                                  style="padding:6px 10px; line-height:1;"
-                                  {% if travada or not pode_agir %}disabled{% endif %}
-                                  @click="somar('{{ grupo.expedicao.pk }}-{{ l.tamanho.pk }}', -1)">−</button>
-                          <input id="qtd-{{ grupo.expedicao.pk }}-{{ l.tamanho.pk }}" type="number" min="0"
-                                 name="qtd_{% if grupos|length > 1 %}{{ grupo.expedicao.pk }}_{% endif %}{{ l.tamanho.pk }}"
-                                 value="{{ l.conferido }}" inputmode="numeric"
-                                 data-esperado="{{ l.esperado }}"
-                                 class="form-input text-center"
-                                 style="width:72px; padding:8px 4px; font-size:16px;"
-                                 {% if travada or not pode_agir %}disabled{% endif %}
-                                 @input="recontar()">
-                          <button type="button" class="btn-secondary"
-                                  style="padding:6px 10px; line-height:1;"
-                                  {% if travada or not pode_agir %}disabled{% endif %}
-                                  @click="somar('{{ grupo.expedicao.pk }}-{{ l.tamanho.pk }}', 1)">+</button>
+            <div x-show="avisoLimite" x-cloak role="alert" aria-live="polite"
+                 class="mx-4 mt-4 rounded-lg px-4 py-3 text-sm font-semibold"
+                 style="background:rgba(217,119,6,.14);color:#d97706;border:1px solid rgba(217,119,6,.35);"
+                 x-text="avisoLimite"></div>
+            {% if ajustes_ao_limite %}
+              <div role="alert" class="mx-4 mt-4 rounded-lg px-4 py-3 text-sm"
+                   style="background:rgba(217,119,6,.14);color:#d97706;border:1px solid rgba(217,119,6,.35);">
+                {% if ajustes_ao_limite == 1 %}Foi encontrada 1 contagem antiga acima do pedido.{% else %}Foram encontradas {{ ajustes_ao_limite }} contagens antigas acima do pedido.{% endif %}
+                O valor foi limitado nesta tela; confirme a conferência para salvar a correção.
+              </div>
+            {% endif %}
+
+            <div class="p-3 sm:p-4 space-y-4">
+              {% for grupo in grupos %}
+                <section class="produto-conferencia" aria-labelledby="produto-{{ grupo.expedicao.pk }}">
+                  <div class="produto-conferencia__cabecalho px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                    <div class="min-w-0">
+                      <h4 id="produto-{{ grupo.expedicao.pk }}" class="font-semibold"
+                          :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ grupo.item.nome_exibicao }}</h4>
+                      <div class="flex flex-wrap items-center gap-2 mt-1 text-xs"
+                           :style="temaClaro ? 'color:#475569;' : 'color:#94a3b8;'">
+                        <span class="soft-pill">OP {{ grupo.expedicao.ordem.numero }}</span>
+                        <span class="soft-pill">Expedição #{{ grupo.expedicao.numero|stringformat:"04d" }}</span>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <span class="block text-xs uppercase tracking-wide opacity-60">Conferido</span>
+                      <strong :style="totalGrupo('{{ grupo.expedicao.pk }}') == {{ grupo.esperado }} ? 'color:#059669;' : 'color:#d97706;'">
+                        <span x-text="totalGrupo('{{ grupo.expedicao.pk }}')">{{ grupo.conferido }}</span>/{{ grupo.esperado }}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {% if grupo.quantidades %}
+                    <div class="grade-cabecalho text-xs font-semibold uppercase tracking-wide"
+                         :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                      <span>Tamanho</span><span>Pedido</span><span>Conferido</span><span>Situação</span><span>Nome e número</span>
+                    </div>
+                    {% for l in grupo.quantidades %}
+                      <div class="grade-linha text-sm">
+                        <div class="grade-tamanho">
+                          <span class="grade-rotulo-mobile">Tamanho</span>
+                          <strong class="uppercase tracking-wide">{{ l.tamanho.sigla }}</strong>
                         </div>
-                      </td>
-                      {% comment %}
-                        A SITUAÇÃO É POR LINHA, e não só no total: o total
-                        pode fechar com dois erros que se cancelam -- dois P
-                        a mais e dois G a menos somam zero, e o cliente
-                        recebe a caixa errada mesmo com o rodapé verde.
-                      {% endcomment %}
-                      <td class="px-4 py-2.5 text-right text-xs font-semibold"
-                          x-html="rotulo('{{ grupo.expedicao.pk }}-{{ l.tamanho.pk }}')"></td>
-                      <td class="px-4 py-2.5">
-                        {% for pessoa in l.pessoas %}
-                          <label for="pessoa-{{ grupo.expedicao.pk }}-{{ pessoa.pessoa.pk }}" class="flex items-center justify-between gap-3 py-1 cursor-pointer">
-                            <span class="min-w-0"><strong>{{ pessoa.pessoa.nome|default:"—" }}</strong>
-                              <span class="ml-2 font-mono">#{{ pessoa.pessoa.numero|default:"—" }}</span></span>
-                            <input id="pessoa-{{ grupo.expedicao.pk }}-{{ pessoa.pessoa.pk }}" type="checkbox"
-                                   name="pessoa{% if grupos|length > 1 %}_{{ grupo.expedicao.pk }}{% endif %}" value="{{ pessoa.pessoa.pk }}"
-                                   class="w-6 h-6 pessoa-check shrink-0" {% if pessoa.conferido %}checked{% endif %}
+                        <div class="grade-pedido">
+                          <span class="grade-rotulo-mobile">Pedido</span>
+                          <span>{{ l.esperado }} peça(s)</span>
+                        </div>
+                        <div class="grade-conferido">
+                          <span class="grade-rotulo-mobile">Conferido</span>
+                          <div class="contador-pecas">
+                            <button type="button" class="btn-secondary" aria-label="Retirar uma peça de {{ l.tamanho.sigla }}"
+                                    {% if travada or not pode_agir %}disabled{% endif %}
+                                    @click="somar('{{ grupo.expedicao.pk }}-{{ l.tamanho.pk }}', -1)">−</button>
+                            <input id="qtd-{{ grupo.expedicao.pk }}-{{ l.tamanho.pk }}" type="number" min="0" max="{{ l.esperado }}"
+                                   name="qtd_{% if grupos|length > 1 %}{{ grupo.expedicao.pk }}_{% endif %}{{ l.tamanho.pk }}"
+                                   value="{{ l.conferido }}" inputmode="numeric" pattern="[0-9]*"
+                                   data-esperado="{{ l.esperado }}" data-expedicao="{{ grupo.expedicao.pk }}"
+                                   class="form-input text-center" style="padding:8px 3px;font-size:16px;"
+                                   aria-label="Quantidade conferida do tamanho {{ l.tamanho.sigla }}; máximo {{ l.esperado }}"
                                    {% if travada or not pode_agir %}disabled{% endif %}
-                                   @change="pessoas += $event.target.checked ? 1 : -1">
-                          </label>
-                        {% empty %}<span class="text-xs opacity-60">Sem personalização neste tamanho</span>{% endfor %}
-                      </td>
-                    </tr>
-                  {% empty %}
-                    <tr><td colspan="6" class="px-4 py-4 text-sm opacity-60">{{ grupo.item.nome_exibicao }} não tem grade preenchida.</td></tr>
-                  {% endfor %}
-                  {% endfor %}
-                </tbody>
-                <tfoot>
-                  <tr style="border-top:2px solid rgba(127,127,127,.35);">
-                    <td class="px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">OP inteira</td>
-                    <td class="px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total</td>
-                    <td class="px-4 py-3 text-center font-bold"
-                        :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ esperado_total }}</td>
-                    <td class="px-4 py-3 text-center font-bold"
-                        :style="contadas == {{ esperado_total }} ? 'color:#059669;' : 'color:#d97706;'"
-                        x-text="contadas"></td>
-                    <td></td><td></td>
-                  </tr>
-                </tfoot>
-              </table>
+                                   @input="limitar($event.target)">
+                            <button type="button" class="btn-secondary" aria-label="Adicionar uma peça de {{ l.tamanho.sigla }}"
+                                    {% if travada or not pode_agir %}disabled{% endif %}
+                                    @click="somar('{{ grupo.expedicao.pk }}-{{ l.tamanho.pk }}', 1)">+</button>
+                          </div>
+                          <span class="block text-xs mt-1 opacity-60">máximo {{ l.esperado }}</span>
+                        </div>
+                        <div class="grade-situacao text-xs font-semibold"
+                             x-html="rotulo('{{ grupo.expedicao.pk }}-{{ l.tamanho.pk }}')"></div>
+                        <div class="grade-pessoas">
+                          <span class="grade-rotulo-mobile">Nome e número</span>
+                          {% for pessoa in l.pessoas %}
+                            <label for="pessoa-{{ grupo.expedicao.pk }}-{{ pessoa.pessoa.pk }}" class="flex items-center justify-between gap-3 py-1 cursor-pointer">
+                              <span class="min-w-0"><strong>{{ pessoa.pessoa.nome|default:"—" }}</strong>
+                                <span class="ml-2 font-mono">#{{ pessoa.pessoa.numero|default:"—" }}</span></span>
+                              <input id="pessoa-{{ grupo.expedicao.pk }}-{{ pessoa.pessoa.pk }}" type="checkbox"
+                                     name="pessoa{% if grupos|length > 1 %}_{{ grupo.expedicao.pk }}{% endif %}" value="{{ pessoa.pessoa.pk }}"
+                                     class="w-6 h-6 pessoa-check shrink-0" {% if pessoa.conferido %}checked{% endif %}
+                                     {% if travada or not pode_agir %}disabled{% endif %}
+                                     @change="pessoas += $event.target.checked ? 1 : -1">
+                            </label>
+                          {% empty %}<span class="text-xs opacity-60">Sem personalização neste tamanho</span>{% endfor %}
+                        </div>
+                      </div>
+                    {% endfor %}
+                  {% else %}
+                    <div class="px-4 py-4 text-sm opacity-60">Este produto não tem grade preenchida.</div>
+                  {% endif %}
+                </section>
+              {% endfor %}
+
+              <div class="flex items-center justify-between gap-4 rounded-lg px-4 py-3"
+                   style="border:1px solid rgba(100,116,139,.3);">
+                <div><span class="block text-xs uppercase tracking-wide opacity-60">OP inteira</span><strong>Total do pedido</strong></div>
+                <strong :style="contadas == {{ esperado_total }} ? 'color:#059669;' : 'color:#d97706;'">
+                  <span x-text="contadas"></span>/{{ esperado_total }} peças
+                </strong>
+              </div>
             </div>
 
             <!--
@@ -234,7 +254,7 @@
                  style="background:rgba(217,119,6,.12);">
               <p class="text-xs font-semibold" style="color:#d97706;"
                  x-text="contadas > {{ esperado_total }}
-                   ? ('Sobram ' + (contadas - {{ esperado_total }}) + ' peça(s) em relação ao pedido.')
+                   ? ('A quantidade excede o pedido em ' + (contadas - {{ esperado_total }}) + ' peça(s).')
                    : ('Faltam ' + ({{ esperado_total }} - contadas) + ' peça(s) para fechar o pedido.')"></p>
             </div>
           {% else %}
@@ -490,8 +510,8 @@
            ? 'background:rgba(255,255,255,.92); border-top:1px solid #e2e8f0;'
            : 'background:rgba(17,17,20,.92); border-top:1px solid #2a2a2e;'"
          style="backdrop-filter:blur(6px);">
-      <div class="flex flex-wrap items-center justify-between gap-3 px-1">
-        <div class="flex flex-wrap gap-2">
+      <div class="barra-conferencia__conteudo flex flex-wrap items-center justify-between gap-3 px-1">
+        <div class="barra-conferencia__contadores flex flex-wrap gap-2">
           <span class="soft-pill text-sm"
                 :class="contadas == {{ esperado_total }} ? 'is-green' : 'is-amber'">
             Peças conferidas: <strong x-text="contadas"></strong> de {{ esperado_total }}
@@ -508,7 +528,7 @@
             Conferência fechada — a expedição já passou da separação.
           </span>
         {% elif pode_agir %}
-          <button type="submit" class="btn-primary">Confirmar Conferência</button>
+          <button type="submit" class="barra-conferencia__acao btn-primary">Confirmar Conferência</button>
         {% endif %}
       </div>
     </div>
@@ -520,6 +540,8 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('conferenciaEntrega', (inicial) => ({
     pessoas: inicial.pessoas,
     contadas: inicial.contadas,
+    avisoLimite: '',
+    avisoLimiteTimer: null,
     filtro: '',
     assinou: false,
     quadro: null,
@@ -546,11 +568,51 @@ document.addEventListener('alpine:init', () => {
       this.contadas = total;
     },
 
+    totalGrupo(expedicaoId) {
+      let total = 0;
+      this.campos().forEach((campo) => {
+        if (campo.dataset.expedicao !== String(expedicaoId)) return;
+        const valor = parseInt(campo.value, 10);
+        total += isNaN(valor) || valor < 0 ? 0 : valor;
+      });
+      // A leitura de `contadas` mantém esta expressão reativa quando algum
+      // campo muda; o total em si continua vindo dos campos do grupo.
+      void this.contadas;
+      return total;
+    },
+
+    avisarLimite(campo) {
+      const maximo = parseInt(campo.dataset.esperado, 10) || 0;
+      this.avisoLimite = `Este tamanho aceita no máximo ${maximo} peça(s), conforme o pedido.`;
+      window.clearTimeout(this.avisoLimiteTimer);
+      this.avisoLimiteTimer = window.setTimeout(() => { this.avisoLimite = ''; }, 4500);
+    },
+
+    limitar(campo) {
+      const maximo = parseInt(campo.dataset.esperado, 10) || 0;
+      const digitado = parseInt(campo.value, 10);
+      const valor = isNaN(digitado) ? 0 : Math.max(0, digitado);
+      if (valor > maximo) {
+        campo.value = maximo;
+        this.avisarLimite(campo);
+      } else if (valor !== digitado) {
+        campo.value = valor;
+      }
+      this.recontar();
+    },
+
     somar(id, passo) {
       const campo = document.getElementById(`qtd-${id}`);
       if (!campo || campo.disabled) return;
       const valor = parseInt(campo.value, 10) || 0;
-      campo.value = Math.max(0, valor + passo);
+      const maximo = parseInt(campo.dataset.esperado, 10) || 0;
+      const novoValor = Math.max(0, valor + passo);
+      if (novoValor > maximo) {
+        campo.value = maximo;
+        this.avisarLimite(campo);
+      } else {
+        campo.value = novoValor;
+      }
       this.recontar();
     },
 
