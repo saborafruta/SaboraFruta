@@ -273,6 +273,42 @@ class ArteNoPdfTests(TestCase):
             ('Tipo de impressão', 'Sublimação'), _estrutura_item(itens[1])[1],
         )
 
+    def test_conjunto_exibe_detalhes_tecnicos_somente_nos_componentes(self):
+        from apps.moda.services.conjunto import resumo_conjunto
+        from apps.moda.services.pedido_pdf import LARGURA_UTIL, _estilos
+
+        pedido = self._pedido()
+        produto = ProdutoModa.objects.create(
+            filial=self.filial, codigo='CONJ-01', nome='Conjunto Futsal',
+        )
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', ordem=10)
+        grade = Grade.objects.create(filial=self.filial, nome='Adulto')
+        estrutura = {
+            'cor': 'BRANCO + AZUL',
+            'malha': 'COLMEIA',
+            'tipo_impressao': ['SUBLIMAÇÃO'],
+        }
+        componente = {
+            'estrutura': estrutura,
+            'grades': [str(grade.pk)],
+            'gradePorGrade': {str(grade.pk): {str(tamanho.pk): 1}},
+        }
+        configuracao = {'camisa': componente, 'calcao': componente}
+        item = ItemPedidoProducao.objects.create(
+            pedido=pedido, produto=produto, quantidade=1,
+            configuracao_conjunto=configuracao,
+            observacoes='Estrutura da peça:\n' + resumo_conjunto(configuracao),
+        )
+
+        texto = self._texto_layout(PedidoPdfService._item(
+            pedido, item, _estilos(), 0, largura_util=LARGURA_UTIL / 2,
+        ))
+
+        self.assertEqual(texto.count('Tipo de peça'), 1)
+        self.assertEqual(texto.count('BRANCO + AZUL'), 2)
+        self.assertEqual(texto.count('COLMEIA'), 2)
+        self.assertEqual(texto.count('SUBLIMAÇÃO'), 2)
+
     def test_orcamento_separa_itens_do_mesmo_produto_por_grade(self):
         from apps.moda.services.orcamento_pdf import _estilos
 

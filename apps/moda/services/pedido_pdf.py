@@ -869,30 +869,40 @@ class PedidoPdfService:
 
         observacao, estrutura = _estrutura_item(item)
         nome_produto = item.nome_base_op if titulo else item.nome_exibicao
-        campos = [('Produto', nome_produto)]
-        campos += [
-            (rotulo, valor) for rotulo, valor in (
-                ('Modelo', str(item.modelo) if item.modelo_id else ''),
-                ('Cor', str(item.cor) if item.cor_id else ''),
-                ('Tecido / Malha', item.tecido_exibicao),
-                ('Gola', item.get_gola_display() if item.gola else ''),
-                ('Manga', item.get_manga_display() if item.manga else ''),
-                ('Acabamento', item.acabamento),
-            ) if valor
-        ]
-        # A estrutura é preenchida especificamente para esta OP e por isso
-        # vence o valor legado do cadastro quando os rótulos coincidem.
-        indices = {rotulo.casefold(): indice for indice, (rotulo, _) in enumerate(campos)}
-        excluir = {rotulo.casefold() for rotulo in excluir_campos}
-        for par in estrutura:
-            chave = par[0].casefold()
-            if chave in excluir:
-                continue
-            if chave in indices:
-                campos[indices[chave]] = par
-            else:
-                indices[chave] = len(campos)
-                campos.append(par)
+        if item.eh_conjunto:
+            # Cor, malha, acabamento e impressão pertencem a cada componente.
+            # O resumo textual do conjunto também contém esses campos, mas
+            # repeti-los aqui cria uma terceira ficha igual acima de Camisa e
+            # Calção e ainda pode sugerir que ambos têm a mesma especificação.
+            campos = [('Produto', nome_produto), ('Tipo de peça', 'Conjunto')]
+        else:
+            campos = [('Produto', nome_produto)]
+            campos += [
+                (rotulo, valor) for rotulo, valor in (
+                    ('Modelo', str(item.modelo) if item.modelo_id else ''),
+                    ('Cor', str(item.cor) if item.cor_id else ''),
+                    ('Tecido / Malha', item.tecido_exibicao),
+                    ('Gola', item.get_gola_display() if item.gola else ''),
+                    ('Manga', item.get_manga_display() if item.manga else ''),
+                    ('Acabamento', item.acabamento),
+                ) if valor
+            ]
+            # A estrutura é preenchida especificamente para esta OP e por isso
+            # vence o valor legado do cadastro quando os rótulos coincidem.
+            indices = {
+                rotulo.casefold(): indice
+                for indice, (rotulo, _) in enumerate(campos)
+            }
+            excluir = {rotulo.casefold() for rotulo in excluir_campos}
+            for par in estrutura:
+                chave = par[0].casefold()
+                if chave in excluir:
+                    continue
+                if chave in indices:
+                    campos[indices[chave]] = par
+                else:
+                    indices[chave] = len(campos)
+                    campos.append(par)
         pares_por_linha = 3 if largura_util >= 200 * mm else 2
         dados = []
         for inicio in range(0, len(campos), pares_por_linha):
