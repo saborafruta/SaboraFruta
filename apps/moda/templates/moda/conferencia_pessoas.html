@@ -68,19 +68,6 @@
     </div>
   </div>
 
-  {% if demais_expedicoes %}
-    <div class="card p-3" style="border-left:3px solid #3b82f6;">
-      <p class="text-sm font-semibold">Outros itens desta OP para conferir</p>
-      <div class="flex flex-wrap gap-2 mt-2">
-        {% for outra in demais_expedicoes %}
-          <a class="btn-secondary text-sm" href="{% url 'moda:conferencia-pessoas' outra.pk %}">
-            {{ outra.ordem.item.nome_exibicao }} · {{ outra.quantidade_esperada }} peça{{ outra.quantidade_esperada|pluralize }}
-          </a>
-        {% endfor %}
-      </div>
-    </div>
-  {% endif %}
-
   {% if expedicao.recebido_por %}
     <div class="card p-4" style="border-left:3px solid #059669;">
       <p class="text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
@@ -110,16 +97,16 @@
       {# ══ Coluna do trabalho ═════════════════════════════════════════ #}
       <div class="conferencia-trabalho lg:col-span-2 space-y-4">
 
-        {# ── 1. Por quantidade ───────────────────────────────────── #}
+        {# Uma única conferência reúne todas as caixas/itens desta OP. #}
         <div class="card overflow-hidden">
           <div class="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2"
                :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
             <div>
               <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-                {% if linhas %}Conferência por tamanho, nome e número{% else %}Quantidade por tamanho{% endif %}
+                Conferência completa da OP
               </h3>
               <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                {% if linhas %}Confira cada peça pelo tamanho, nome e número; a contagem por tamanho fica nesta mesma conferência.{% else %}Conte as peças da caixa e lance o que encontrou.{% endif %}
+                Confira todos os produtos, tamanhos, nomes e números nesta mesma tela.
               </p>
             </div>
             {% if quantidades and not travada and pode_agir %}
@@ -134,11 +121,13 @@
             {% endif %}
           </div>
 
-          {% if quantidades %}
+          {% if grupos %}
             <div class="overflow-x-auto">
-              <table class="w-full text-sm">
+              <table class="w-full text-sm" style="min-width:760px;">
                 <thead>
                   <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+                    <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
                     <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
                         :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Tamanho</th>
                     <th class="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide"
@@ -147,13 +136,18 @@
                         :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Conferido</th>
                     <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
                         :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
-                    {% if linhas %}<th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nome, número e peça</th>{% endif %}
+                    <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nome e número</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {% for l in quantidades %}
+                  {% for grupo in grupos %}
+                  {% for l in grupo.quantidades %}
                     <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
+                      <td class="px-4 py-2.5">
+                        <strong :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ grupo.item.nome_exibicao }}</strong>
+                        <div class="text-xs opacity-60">Expedição #{{ grupo.expedicao.numero|stringformat:"04d" }}</div>
+                      </td>
                       <td class="px-4 py-2.5">
                         <span class="text-sm font-bold uppercase tracking-wide"
                               :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ l.tamanho.sigla }}</span>
@@ -171,8 +165,9 @@
                           <button type="button" class="btn-secondary"
                                   style="padding:6px 10px; line-height:1;"
                                   {% if travada or not pode_agir %}disabled{% endif %}
-                                  @click="somar('{{ l.tamanho.pk }}', -1)">−</button>
-                          <input type="number" min="0" name="qtd_{{ l.tamanho.pk }}"
+                                  @click="somar('{{ grupo.expedicao.pk }}-{{ l.tamanho.pk }}', -1)">−</button>
+                          <input id="qtd-{{ grupo.expedicao.pk }}-{{ l.tamanho.pk }}" type="number" min="0"
+                                 name="qtd_{% if grupos|length > 1 %}{{ grupo.expedicao.pk }}_{% endif %}{{ l.tamanho.pk }}"
                                  value="{{ l.conferido }}" inputmode="numeric"
                                  data-esperado="{{ l.esperado }}"
                                  class="form-input text-center"
@@ -182,7 +177,7 @@
                           <button type="button" class="btn-secondary"
                                   style="padding:6px 10px; line-height:1;"
                                   {% if travada or not pode_agir %}disabled{% endif %}
-                                  @click="somar('{{ l.tamanho.pk }}', 1)">+</button>
+                                  @click="somar('{{ grupo.expedicao.pk }}-{{ l.tamanho.pk }}', 1)">+</button>
                         </div>
                       </td>
                       {% comment %}
@@ -192,24 +187,30 @@
                         recebe a caixa errada mesmo com o rodapé verde.
                       {% endcomment %}
                       <td class="px-4 py-2.5 text-right text-xs font-semibold"
-                          x-html="rotulo('{{ l.tamanho.pk }}')"></td>
-                      {% if linhas %}<td class="px-4 py-2.5">
+                          x-html="rotulo('{{ grupo.expedicao.pk }}-{{ l.tamanho.pk }}')"></td>
+                      <td class="px-4 py-2.5">
                         {% for pessoa in l.pessoas %}
-                          <label for="pessoa-{{ pessoa.pessoa.pk }}" class="flex items-center justify-between gap-3 py-1 cursor-pointer">
+                          <label for="pessoa-{{ grupo.expedicao.pk }}-{{ pessoa.pessoa.pk }}" class="flex items-center justify-between gap-3 py-1 cursor-pointer">
                             <span class="min-w-0"><strong>{{ pessoa.pessoa.nome|default:"—" }}</strong>
                               <span class="ml-2 font-mono">#{{ pessoa.pessoa.numero|default:"—" }}</span></span>
-                            <input id="pessoa-{{ pessoa.pessoa.pk }}" type="checkbox" name="pessoa" value="{{ pessoa.pessoa.pk }}"
+                            <input id="pessoa-{{ grupo.expedicao.pk }}-{{ pessoa.pessoa.pk }}" type="checkbox"
+                                   name="pessoa{% if grupos|length > 1 %}_{{ grupo.expedicao.pk }}{% endif %}" value="{{ pessoa.pessoa.pk }}"
                                    class="w-6 h-6 pessoa-check shrink-0" {% if pessoa.conferido %}checked{% endif %}
                                    {% if travada or not pode_agir %}disabled{% endif %}
                                    @change="pessoas += $event.target.checked ? 1 : -1">
                           </label>
                         {% empty %}<span class="text-xs opacity-60">Sem personalização neste tamanho</span>{% endfor %}
-                      </td>{% endif %}
+                      </td>
                     </tr>
+                  {% empty %}
+                    <tr><td colspan="6" class="px-4 py-4 text-sm opacity-60">{{ grupo.item.nome_exibicao }} não tem grade preenchida.</td></tr>
+                  {% endfor %}
                   {% endfor %}
                 </tbody>
                 <tfoot>
                   <tr style="border-top:2px solid rgba(127,127,127,.35);">
+                    <td class="px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                        :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">OP inteira</td>
                     <td class="px-4 py-3 text-xs font-semibold uppercase tracking-wide"
                         :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Total</td>
                     <td class="px-4 py-3 text-center font-bold"
@@ -217,7 +218,7 @@
                     <td class="px-4 py-3 text-center font-bold"
                         :style="contadas == {{ esperado_total }} ? 'color:#059669;' : 'color:#d97706;'"
                         x-text="contadas"></td>
-                    <td></td>{% if linhas %}<td></td>{% endif %}
+                    <td></td><td></td>
                   </tr>
                 </tfoot>
               </table>
@@ -239,12 +240,11 @@
           {% else %}
             <div class="p-6 text-center">
               <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                Este item não tem grade lançada, então não há tamanho a contar.
-                Lance a grade no pedido para conferir peça por peça.
+                Esta OP ainda não tem itens disponíveis para conferência.
               </p>
             </div>
           {% endif %}
-        {% if not linhas %}</div>{% endif %}
+        </div>
 
         {% comment %}A personalização já é marcada na linha do respectivo tamanho acima.{% endcomment %}
         {% comment %}
@@ -547,7 +547,7 @@ document.addEventListener('alpine:init', () => {
     },
 
     somar(id, passo) {
-      const campo = this.$root.querySelector(`input[name="qtd_${id}"]`);
+      const campo = document.getElementById(`qtd-${id}`);
       if (!campo || campo.disabled) return;
       const valor = parseInt(campo.value, 10) || 0;
       campo.value = Math.max(0, valor + passo);
@@ -565,7 +565,7 @@ document.addEventListener('alpine:init', () => {
     // uma segunda lista em JS poderia discordar do numero que a linha
     // mostra, e a tela diria duas coisas sobre a mesma peca.
     rotulo(id) {
-      const campo = this.$root.querySelector(`input[name="qtd_${id}"]`);
+      const campo = document.getElementById(`qtd-${id}`);
       if (!campo) return '';
       const esperado = parseInt(campo.dataset.esperado, 10) || 0;
       const achado = parseInt(campo.value, 10) || 0;

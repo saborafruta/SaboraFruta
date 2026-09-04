@@ -275,7 +275,7 @@ class ConferirPorQuantidadeTests(ConferenciaBase):
         self.assertEqual(resposta.status_code, 200)
         for sigla, tamanho in self.tamanhos.items():
             self.assertContains(resposta, f'qtd_{tamanho.pk}')
-        self.assertContains(resposta, 'Quantidade por tamanho')
+        self.assertContains(resposta, 'Conferência completa da OP')
 
     def test_nao_lista_tamanho_sem_peca_pedida(self):
         pedido = self._pedido_com_grade()
@@ -377,8 +377,62 @@ class PersonalizacaoDaCaixaTests(ConferenciaBase):
         )
 
         self.assertEqual(resposta.status_code, 200)
-        self.assertContains(resposta, 'Outros itens desta OP para conferir')
+        self.assertContains(resposta, 'Conferência completa da OP')
         self.assertContains(resposta, 'Short')
+
+    def test_todos_os_itens_grades_e_pessoas_ficam_na_mesma_tabela(self):
+        pedido = self._pedido_com_grade()
+        xgg = Tamanho.objects.create(filial=self.filial, sigla='XGG', ordem=9)
+        outro_item = ItemPedidoProducao.objects.create(
+            pedido=pedido, descricao='Oversized', quantidade=1,
+            valor_unitario=Decimal('30'), ordem=2,
+        )
+        ItemGradePedido.objects.create(item=outro_item, tamanho=xgg, quantidade=1)
+        pessoa_pp = PersonalizacaoIndividual.objects.create(
+            pedido=pedido, item=self.item, tamanho=self.tamanhos['P'],
+            nome='EDUARDO', numero='1',
+        )
+        pessoa_xgg = PersonalizacaoIndividual.objects.create(
+            pedido=pedido, item=outro_item, tamanho=xgg,
+            nome='COMPLEMENTO', numero='7',
+        )
+        primeira = self._expedicao(pedido, self.item)
+        outra_ordem = OrdemProducao.objects.get(pedido=pedido, item=outro_item)
+        segunda = ExpedicaoService.criar(
+            self.filial, outra_ordem, self.usuario, forcar=True,
+        )
+
+        resposta = self.client.get(
+            reverse('moda:conferencia-pessoas', args=[primeira.pk])
+        )
+
+        self.assertContains(resposta, 'Camisa')
+        self.assertContains(resposta, 'Oversized')
+        self.assertContains(resposta, f'qtd_{primeira.pk}_{self.tamanhos["P"].pk}')
+        self.assertContains(resposta, f'qtd_{segunda.pk}_{xgg.pk}')
+        self.assertContains(resposta, 'EDUARDO')
+        self.assertContains(resposta, 'COMPLEMENTO')
+        self.assertContains(resposta, f'pessoa_{primeira.pk}')
+        self.assertContains(resposta, f'pessoa_{segunda.pk}')
+        self.assertNotContains(resposta, 'Outros itens desta OP para conferir')
+
+        self.client.post(
+            reverse('moda:conferencia-pessoas-salvar', args=[primeira.pk]),
+            {
+                f'qtd_{primeira.pk}_{self.tamanhos["P"].pk}': '3',
+                f'qtd_{primeira.pk}_{self.tamanhos["M"].pk}': '10',
+                f'qtd_{primeira.pk}_{self.tamanhos["G"].pk}': '7',
+                f'qtd_{segunda.pk}_{xgg.pk}': '1',
+                f'pessoa_{primeira.pk}': str(pessoa_pp.pk),
+                f'pessoa_{segunda.pk}': str(pessoa_xgg.pk),
+            },
+        )
+        primeira.refresh_from_db()
+        segunda.refresh_from_db()
+        self.assertEqual(primeira.quantidade_conferida, 20)
+        self.assertEqual(segunda.quantidade_conferida, 1)
+        self.assertEqual(primeira.conferencia_pessoas.count(), 1)
+        self.assertEqual(segunda.conferencia_pessoas.count(), 1)
 
     def test_conferencia_nao_mistura_personalizacoes_de_outro_produto(self):
         pedido = self._pedido_com_grade()
@@ -441,9 +495,11 @@ class PersonalizacaoDaCaixaTests(ConferenciaBase):
             reverse('moda:conferencia-pessoas', args=[expedicao.pk])
         )
 
-        self.assertContains(resposta, 'Nome, número e peça')
+        self.assertContains(resposta, 'Nome e número')
         self.assertContains(resposta, 'ALINHADA')
-        self.assertContains(resposta, f'id="pessoa-{pedido.individuais.get().pk}"')
+        self.assertContains(
+            resposta, f'id="pessoa-{expedicao.pk}-{pedido.individuais.get().pk}"'
+        )
 
 
 class ArteNaConferenciaTests(ConferenciaBase):

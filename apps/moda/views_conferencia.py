@@ -149,6 +149,25 @@ def _pessoas(expedicao):
     )
 
 
+def _expedicoes_da_op(request, expedicao):
+    """Todas as caixas ativas da mesma OP, sempre na mesma ordem visual."""
+    pedido_id = expedicao.ordem.pedido_id
+    if not pedido_id:
+        return [expedicao]
+    return list(
+        Expedicao.objects.for_filial(_filial(request))
+        .filter(ordem__pedido_id=pedido_id)
+        .exclude(status=Expedicao.Status.CANCELADA)
+        .select_related('ordem__pedido__cliente', 'ordem__item__produto')
+        .prefetch_related(
+            'conferencia', 'conferencia_pessoas',
+            'ordem__item__grade__tamanho', 'ordem__item__personalizacoes',
+            'ordem__pedido__arquivos',
+        )
+        .order_by('ordem__item__ordem', 'numero', 'pk')
+    )
+
+
 class ConferenciaPessoasView(ModaBaseView):
     """A lista de pessoas para conferir, peça a peça."""
 
@@ -156,45 +175,65 @@ class ConferenciaPessoasView(ModaBaseView):
 
     def get(self, request, pk):
         expedicao = _expedicao(request, pk)
-        conferidas = set(
-            expedicao.conferencia_pessoas.values_list('individual_id', flat=True)
-        )
-        pessoas = list(_pessoas(expedicao))
+        expedicoes = _expedicoes_da_op(request, expedicao)
+        grupos = []
+        todas_as_pessoas = []
+        artes = []
+        urls_de_arte = set()
+        esperado_total = conferido_total = conferidas_total = 0
 
-        quantidades = _linhas_de_quantidade(expedicao)
-        demais_expedicoes = []
-        pedido_id = expedicao.ordem.pedido_id
-        if pedido_id:
-            demais_expedicoes = list(
-                Expedicao.objects.for_filial(_filial(request))
-                .filter(ordem__pedido_id=pedido_id)
-                .exclude(pk=expedicao.pk)
-                .exclude(status=Expedicao.Status.CANCELADA)
-                .select_related('ordem__item')
-                .order_by('numero')
+        for caixa in expedicoes:
+            ids_conferidos = set(
+                caixa.conferencia_pessoas.values_list('individual_id', flat=True)
             )
-        linhas = [{'pessoa': p, 'conferido': p.pk in conferidas} for p in pessoas]
-        pessoas_por_tamanho = {}
-        for linha in linhas:
-            pessoas_por_tamanho.setdefault(linha['pessoa'].tamanho_id, []).append(linha)
-        for quantidade in quantidades:
-            quantidade['pessoas'] = pessoas_por_tamanho.get(quantidade['tamanho'].pk, [])
+            pessoas = list(_pessoas(caixa))
+            linhas = [
+                {'pessoa': pessoa, 'conferido': pessoa.pk in ids_conferidos}
+                for pessoa in pessoas
+            ]
+            pessoas_por_tamanho = {}
+            for linha in linhas:
+                pessoas_por_tamanho.setdefault(
+                    linha['pessoa'].tamanho_id, []
+                ).append(linha)
+
+            quantidades = _linhas_de_quantidade(caixa)
+            for quantidade in quantidades:
+                quantidade['pessoas'] = pessoas_por_tamanho.get(
+                    quantidade['tamanho'].pk, []
+                )
+
+            grupos.append({
+                'expedicao': caixa,
+                'item': caixa.ordem.item,
+                'quantidades': quantidades,
+                'travada': caixa.passou_por(Expedicao.Status.SEPARACAO),
+            })
+            todas_as_pessoas.extend(linhas)
+            esperado_total += sum(linha['esperado'] for linha in quantidades)
+            conferido_total += sum(linha['conferido'] for linha in quantidades)
+            conferidas_total += len(ids_conferidos)
+
+            for arte in _artes(caixa):
+                if arte['url'] not in urls_de_arte:
+                    urls_de_arte.add(arte['url'])
+                    artes.append(arte)
 
         return render(request, 'moda/conferencia_pessoas.html', {
             'title': f'Conferência — Expedição #{expedicao.numero:04d}',
             'expedicao': expedicao,
-            'linhas': linhas,
-            'total': len(pessoas),
-            'conferidas': sum(1 for p in pessoas if p.pk in conferidas),
-            'quantidades': quantidades,
-            'demais_expedicoes': demais_expedicoes,
-            'artes': _artes(expedicao),
-            'esperado_total': sum(l['esperado'] for l in quantidades),
-            'conferido_total': sum(l['conferido'] for l in quantidades),
+            'grupos': grupos,
+            'linhas': todas_as_pessoas,
+            'total': len(todas_as_pessoas),
+            'conferidas': conferidas_total,
+            'quantidades': [l for g in grupos for l in g['quantidades']],
+            'artes': artes,
+            'esperado_total': esperado_total,
+            'conferido_total': conferido_total,
             # Depois da separação a conferência não se mexe mais: o que foi
             # separado saiu da bancada, e reabrir aqui daria uma conferência
             # que não corresponde à caixa.
-            'travada': expedicao.passou_por(Expedicao.Status.SEPARACAO),
+            'travada': any(g['travada'] for g in grupos),
             'pode_agir': request.user.tem_permissao('moda', 'editar'),
         })
 
@@ -215,19 +254,34 @@ class ConferenciaPessoasSalvarView(ModaBaseView):
     def post(self, request, pk):
         expedicao = _expedicao(request, pk)
         volta = redirect(reverse('moda:conferencia-pessoas', args=[expedicao.pk]))
+        expedicoes = _expedicoes_da_op(request, expedicao)
 
-        if expedicao.passou_por(Expedicao.Status.SEPARACAO):
-            messages.error(request, 'A conferência desta expedição já foi fechada.')
+        if any(e.passou_por(Expedicao.Status.SEPARACAO) for e in expedicoes):
+            messages.error(request, 'A conferência desta OP já foi fechada.')
             return volta
 
-        contadas = self._quantidades(request, expedicao)
-        marcadas = self._pessoas(request, expedicao)
-        assinou = self._assinatura(request, expedicao)
+        contadas = marcadas = 0
+        enviou_quantidades = enviou_pessoas = False
+        with transaction.atomic():
+            for caixa in expedicoes:
+                quantidade = self._quantidades(
+                    request, caixa, prefixo=len(expedicoes) > 1,
+                )
+                pessoas = self._pessoas(
+                    request, caixa, prefixo=len(expedicoes) > 1,
+                )
+                if quantidade is not None:
+                    contadas += quantidade
+                    enviou_quantidades = True
+                if pessoas is not None:
+                    marcadas += pessoas
+                    enviou_pessoas = True
+            assinou = self._assinatura(request, expedicao)
 
         partes = []
-        if contadas is not None:
+        if enviou_quantidades:
             partes.append(f'{contadas} peça(s) contada(s)')
-        if marcadas is not None:
+        if enviou_pessoas:
             partes.append(f'{marcadas} pessoa(s) conferida(s)')
         if assinou:
             partes.append(f'recebimento assinado por {expedicao.recebido_por}')
@@ -239,7 +293,7 @@ class ConferenciaPessoasSalvarView(ModaBaseView):
     # ── Por quantidade ───────────────────────────────────────────────────
 
     @staticmethod
-    def _quantidades(request, expedicao):
+    def _quantidades(request, expedicao, prefixo=False):
         """
         As caixinhas por tamanho. Devolve o total contado, ou None se a tela
         não mandou nenhuma -- que é diferente de mandar tudo zerado.
@@ -250,10 +304,11 @@ class ConferenciaPessoasSalvarView(ModaBaseView):
         """
         validos = {c.tamanho_id for c in expedicao.grade_esperada}
         quantidades = {}
+        inicio = f'qtd_{expedicao.pk}_' if prefixo else 'qtd_'
         for chave, valor in request.POST.items():
-            if not chave.startswith('qtd_'):
+            if not chave.startswith(inicio):
                 continue
-            id_tamanho = chave[4:]
+            id_tamanho = chave[len(inicio):]
             if not id_tamanho.isdigit() or int(id_tamanho) not in validos:
                 continue
             valor = (valor or '').strip()
@@ -274,13 +329,14 @@ class ConferenciaPessoasSalvarView(ModaBaseView):
     # ── Por pessoa ───────────────────────────────────────────────────────
 
     @staticmethod
-    def _pessoas(request, expedicao):
+    def _pessoas(request, expedicao, prefixo=False):
         validas = set(_pessoas(expedicao).values_list('id', flat=True))
         if not validas:
             return None
 
+        nome_campo = f'pessoa_{expedicao.pk}' if prefixo else 'pessoa'
         marcadas = {
-            int(v) for v in request.POST.getlist('pessoa') if v.isdigit()
+            int(v) for v in request.POST.getlist(nome_campo) if v.isdigit()
         } & validas
 
         # O FORMULÁRIO INTEIRO manda o estado, então o que sumiu foi
