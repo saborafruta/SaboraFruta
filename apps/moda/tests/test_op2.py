@@ -1963,6 +1963,7 @@ class Op2Tests(TestCase):
 
         detalhe = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
         self.assertContains(detalhe, 'value="remover_individual"')
+        self.assertContains(detalhe, 'data-no-autosave="true"')
         self.assertContains(detalhe, 'Remover a personalização de')
 
         resposta = self.client.post(
