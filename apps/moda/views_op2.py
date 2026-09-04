@@ -1679,14 +1679,6 @@ class Op2ActionView(ModaBaseView):
 
     def _acao_remover_item(self, request, pedido):
         item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
-        ordens = list(item.ordens.only('numero'))
-        if ordens:
-            numeros = ', '.join(ordem.numero for ordem in ordens[:3])
-            raise DomainError(
-                f'Este produto não pode ser excluído porque já gerou a ordem '
-                f'de produção {numeros}. O vínculo é preservado para manter o '
-                f'histórico da fábrica.'
-            )
         item.excluido_em = timezone.now()
         item.excluido_por = request.user
         item.save(update_fields=['excluido_em', 'excluido_por'])

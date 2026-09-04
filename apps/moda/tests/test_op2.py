@@ -2196,7 +2196,7 @@ class Op2Tests(TestCase):
         )
         self.assertEqual(irmao.personalizacoes.get().tecnica, 'sublimacao')
 
-    def test_excluir_item_com_ordem_de_producao_nao_retorna_erro_500(self):
+    def test_excluir_item_com_ordem_move_para_lixeira_e_preserva_vinculo(self):
         item = self._item(quantidade=3)
         ordem = OrdemProducao.objects.create(
             filial=self.filial,
@@ -2218,9 +2218,12 @@ class Op2Tests(TestCase):
         )
 
         self.assertEqual(resposta.status_code, 200)
-        self.assertTrue(ItemPedidoProducao.objects.filter(pk=item.pk).exists())
-        self.assertContains(resposta, ordem.numero)
-        self.assertContains(resposta, 'não pode ser excluído')
+        self.assertFalse(ItemPedidoProducao.objects.filter(pk=item.pk).exists())
+        apagado = ItemPedidoProducao.all_objects.get(pk=item.pk)
+        self.assertIsNotNone(apagado.excluido_em)
+        self.assertTrue(apagado.ordens.filter(pk=ordem.pk).exists())
+        self.assertContains(resposta, 'Produto movido para a lixeira.')
+        self.assertContains(resposta, 'Restaurar')
 
     def test_excluir_item_move_para_lixeira_e_restaurar_preserva_dados(self):
         tamanho = Tamanho.objects.create(
