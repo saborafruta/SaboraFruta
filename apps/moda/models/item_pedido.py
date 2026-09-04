@@ -9,9 +9,17 @@ como na grade da ficha) é o bloco seguinte e vai apontar para cá.
 """
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import models
 
 from .cadastros import Modelo
+
+
+class ItemPedidoAtivoManager(models.Manager):
+    """Esconde da operação normal os itens enviados para a lixeira."""
+
+    def get_queryset(self):
+        return super().get_queryset().filter(excluido_em__isnull=True)
 
 
 class ItemPedidoProducao(models.Model):
@@ -121,6 +129,16 @@ class ItemPedidoProducao(models.Model):
         default=0, help_text='Posição do item na ficha.',
     )
     criado_em = models.DateTimeField(auto_now_add=True)
+    excluido_em = models.DateTimeField(null=True, blank=True, db_index=True)
+    excluido_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='itens_op_excluidos',
+    )
+
+    # A aplicação inteira continua enxergando somente itens ativos (totais,
+    # PDF, produção e financeiro). A lixeira usa explicitamente all_objects.
+    objects = ItemPedidoAtivoManager()
+    all_objects = models.Manager()
 
     class Meta:
         db_table = 'moda_itens_pedido'

@@ -2195,6 +2195,66 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, ordem.numero)
         self.assertContains(resposta, 'não pode ser excluído')
 
+    def test_excluir_item_move_para_lixeira_e_restaurar_preserva_dados(self):
+        tamanho = Tamanho.objects.create(
+            filial=self.filial, sigla='M-LIX', ordem=10,
+        )
+        item = self._item(quantidade=3)
+        ItemGradePedido.objects.create(
+            item=item, tamanho=tamanho, quantidade=3,
+        )
+        Personalizacao.objects.create(item=item, tecnica='silk', local='Peito')
+        self._login_op2()
+
+        resposta = self.client.post(
+            reverse('moda:op2-action', args=[self.pedido.pk]),
+            {'acao': 'remover_item', 'item_id': str(item.pk)},
+            follow=True,
+        )
+
+        self.assertContains(resposta, 'Produto movido para a lixeira.')
+        self.assertFalse(ItemPedidoProducao.objects.filter(pk=item.pk).exists())
+        apagado = ItemPedidoProducao.all_objects.get(pk=item.pk)
+        self.assertIsNotNone(apagado.excluido_em)
+        self.assertEqual(apagado.excluido_por, self._usuario())
+        self.assertEqual(apagado.grade.get().quantidade, 3)
+        self.assertEqual(apagado.personalizacoes.get().local, 'Peito')
+        self.assertContains(resposta, 'Lixeira de produtos')
+        self.assertContains(resposta, 'Camisa personalizada')
+        self.assertContains(resposta, 'Restaurar')
+
+        resposta = self.client.post(
+            reverse('moda:op2-action', args=[self.pedido.pk]),
+            {'acao': 'restaurar_item', 'item_id': str(item.pk)},
+            follow=True,
+        )
+
+        self.assertContains(resposta, 'Produto restaurado para a OP.')
+        restaurado = ItemPedidoProducao.objects.get(pk=item.pk)
+        self.assertIsNone(restaurado.excluido_em)
+        self.assertIsNone(restaurado.excluido_por)
+        self.assertEqual(restaurado.grade.get().quantidade, 3)
+        self.assertEqual(restaurado.personalizacoes.get().local, 'Peito')
+
+    def test_lixeira_nao_permite_restaurar_item_de_outra_op(self):
+        outro_pedido = PedidoProducao.objects.create(
+            filial=self.filial, cliente=self.cliente,
+        )
+        item = ItemPedidoProducao.objects.create(
+            pedido=outro_pedido, produto=self.produto, quantidade=1,
+            valor_unitario=Decimal('25'), excluido_em=timezone.now(),
+        )
+        self._login_op2()
+
+        resposta = self.client.post(
+            reverse('moda:op2-action', args=[self.pedido.pk]),
+            {'acao': 'restaurar_item', 'item_id': str(item.pk)},
+        )
+
+        self.assertEqual(resposta.status_code, 404)
+        item = ItemPedidoProducao.all_objects.get(pk=item.pk)
+        self.assertIsNotNone(item.excluido_em)
+
     def test_editor_completo_mantem_quantidade_quando_item_nao_tem_grade(self):
         self.client.force_login(self._usuario())
         session = self.client.session

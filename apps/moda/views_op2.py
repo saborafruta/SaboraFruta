@@ -11,7 +11,6 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from django.contrib import messages
 from django.core.files import File
 from django.db import IntegrityError, transaction
-from django.db.models.deletion import ProtectedError
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -1100,6 +1099,13 @@ class Op2DetailView(ModaBaseView):
             'individuais__tamanho', 'individuais__tamanho_calcao', 'ordens',
         ))
         grupos_itens = agrupar_itens_op(itens)
+        itens_excluidos = list(
+            ItemPedidoProducao.all_objects.filter(
+                pedido=pedido, excluido_em__isnull=False,
+            ).select_related(
+                'produto', 'modelo', 'grade_tamanho', 'excluido_por',
+            ).prefetch_related('grade__tamanho').order_by('-excluido_em', '-pk')
+        )
         modelos = list(
             ProdutoModa.objects.for_filial(_filial(request)).filter(
                 ativo=True,
@@ -1184,6 +1190,7 @@ class Op2DetailView(ModaBaseView):
             ],
             'pode_editar_cliente': request.user.tem_permissao('cadastros', 'editar'),
             'itens': itens,
+            'itens_excluidos': itens_excluidos,
             'pode_criar_cliente': request.user.tem_permissao('cadastros', 'criar'),
             'form_cliente': ClienteRapidoForm(),
             'grupos_itens': grupos_itens,
@@ -1680,15 +1687,26 @@ class Op2ActionView(ModaBaseView):
                 f'de produção {numeros}. O vínculo é preservado para manter o '
                 f'histórico da fábrica.'
             )
-        try:
-            item.delete()
-        except ProtectedError as erro:
-            raise DomainError(
-                'Este produto já possui movimentações vinculadas e não pode ser '
-                'excluído. O vínculo foi preservado para manter o histórico.'
-            ) from erro
+        item.excluido_em = timezone.now()
+        item.excluido_por = request.user
+        item.save(update_fields=['excluido_em', 'excluido_por'])
+        GradePedidoService.recalcular_pedido(pedido)
         _sincronizar_status(pedido)
-        messages.success(request, 'Produto removido.')
+        messages.success(request, 'Produto movido para a lixeira.')
+
+    def _acao_restaurar_item(self, request, pedido):
+        item = get_object_or_404(
+            ItemPedidoProducao.all_objects.filter(
+                pedido=pedido, excluido_em__isnull=False,
+            ),
+            pk=request.POST.get('item_id'),
+        )
+        item.excluido_em = None
+        item.excluido_por = None
+        item.save(update_fields=['excluido_em', 'excluido_por'])
+        GradePedidoService.recalcular_pedido(pedido)
+        _sincronizar_status(pedido)
+        messages.success(request, 'Produto restaurado para a OP.')
 
     def _acao_editar_item(self, request, pedido):
         estrutura_opcoes = opcoes_estrutura_filial(_filial(request))
