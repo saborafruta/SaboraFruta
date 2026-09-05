@@ -6,6 +6,8 @@
 {% block extra_head %}
 <style>
   #relatorio-contas-pagas { color:#111827; font-size:9px; }
+  #relatorio-contas-pagas .text-gray-500,
+  #relatorio-contas-pagas .text-gray-600 { color:#1f2937 !important; }
   #relatorio-contas-pagas > * + * { margin-top:7px !important; }
   #relatorio-contas-pagas h2 { font-size:16px; line-height:1.1; }
   #relatorio-contas-pagas h2 + p { margin-top:2px; font-size:8px; }
@@ -13,13 +15,13 @@
   .paid-summary { gap:0 !important; padding:0 !important; border-radius:0 !important; }
   .paid-summary > div { min-width:0; padding:4px 6px; border-right:1px solid #d1d5db; }
   .paid-summary > div:last-child { border-right:0; }
-  .paid-summary span { font-size:6px !important; }
+  .paid-summary span { font-size:6.5px !important; color:#1f2937 !important; }
   .paid-summary strong { font-size:9px !important; white-space:nowrap; }
   .paid-table { border-radius:0 !important; }
-  .paid-table table { table-layout:fixed; font-size:7px !important; }
-  .paid-table th { padding:3px 4px !important; font-size:6px !important; }
-  .paid-table td { padding:3px 4px !important; line-height:1.15; }
-  .paid-table td div { font-size:6.2px !important; }
+  .paid-table table { table-layout:fixed; font-size:7.4px !important; }
+  .paid-table th { padding:3px 4px !important; font-size:6.5px !important; color:#1f2937 !important; }
+  .paid-table td { padding:3px 4px !important; line-height:1.2; }
+  .paid-table td div { font-size:7px !important; color:#1f2937 !important; }
   #relatorio-contas-pagas table tr:hover { background:#fff !important; color:#111827 !important; }
   @page { size: A4 portrait; margin: 0; }
   @media print {
@@ -46,7 +48,7 @@
         {% if data_ini or data_fim %} · Pagamentos de {% if data_ini %}{{ data_ini }}{% else %}…{% endif %} até {% if data_fim %}{{ data_fim }}{% else %}…{% endif %}{% endif %}
         {% if q %} · Busca: {{ q }}{% endif %}
       </p>
-      <p class="mt-0.5 text-xs text-gray-500">Gerado em {{ gerado_em|date:"d/m/Y H:i" }} · {{ totais.quantidade|default:0 }} título{{ totais.quantidade|default:0|pluralize }}</p>
+      <p class="mt-0.5 text-xs text-gray-500">Gerado em {{ gerado_em|date:"d/m/Y H:i" }} · {{ totais.quantidade_exibida|default:0 }} despesa{{ totais.quantidade_exibida|default:0|pluralize }}</p>
     </div>
     <div class="no-print flex gap-2">
       <button type="button" onclick="window.print()" class="btn-secondary">Imprimir</button>
@@ -56,7 +58,7 @@
 
   <div class="report-box paid-summary grid grid-cols-2 gap-3 rounded-lg border bg-white p-4 sm:grid-cols-4">
     <div><span class="block text-xs uppercase text-gray-500">Total pago</span><strong class="text-lg text-emerald-700">R$ {{ totais.valor_pago|default:0|floatformat:2 }}</strong></div>
-    <div><span class="block text-xs uppercase text-gray-500">Títulos</span><strong class="text-lg">{{ totais.quantidade|default:0 }}</strong></div>
+    <div><span class="block text-xs uppercase text-gray-500">Despesas</span><strong class="text-lg">{{ totais.quantidade_exibida|default:0 }}</strong></div>
     <div><span class="block text-xs uppercase text-gray-500">Juros e multas</span><strong class="text-lg">R$ {{ totais.acrescimos|default:0|floatformat:2 }}</strong></div>
     <div><span class="block text-xs uppercase text-gray-500">Descontos</span><strong class="text-lg">R$ {{ totais.descontos|default:0|floatformat:2 }}</strong></div>
   </div>
@@ -73,7 +75,22 @@
         </tr>
       </thead>
       <tbody>
-        {% for conta in contas %}
+        {% for linha in linhas %}
+          {% if linha.tipo == 'taxas' %}
+          <tr class="border-b">
+            <td class="whitespace-nowrap px-3 py-2 font-semibold">
+              {% if linha.data_inicio == linha.data_fim %}{{ linha.data_inicio|date:"d/m/Y" }}{% else %}{{ linha.data_inicio|date:"d/m/Y" }} a {{ linha.data_fim|date:"d/m/Y" }}{% endif %}
+            </td>
+            <td class="px-3 py-2">
+              <span class="font-semibold text-blue-700">TAXAS E TARIFAS CONSOLIDADAS</span>
+              <div>{{ linha.quantidade }} cobrança{{ linha.quantidade|pluralize }} automática{{ linha.quantidade|pluralize }}</div>
+            </td>
+            <td class="px-3 py-2">Taxas por transação</td>
+            <td class="px-3 py-2">{{ linha.formas }}<div>{{ linha.contas }}</div></td>
+            <td class="whitespace-nowrap px-3 py-2 text-right font-bold text-emerald-700">R$ {{ linha.valor_pago|floatformat:2 }}</td>
+          </tr>
+          {% else %}
+          {% with conta=linha.conta %}
           <tr class="border-b">
             <td class="whitespace-nowrap px-3 py-2 font-semibold">{{ conta.data_pagamento|date:"d/m/Y" }}</td>
             <td class="px-3 py-2">
@@ -87,6 +104,8 @@
             <td class="px-3 py-2 text-xs">{{ conta.forma_pagamento|default:"Não informada" }}{% if conta.conta_bancaria %}<div class="text-gray-500">{{ conta.conta_bancaria }}</div>{% endif %}</td>
             <td class="whitespace-nowrap px-3 py-2 text-right font-bold text-emerald-700">R$ {{ conta.valor_pago|floatformat:2 }}</td>
           </tr>
+          {% endwith %}
+          {% endif %}
         {% empty %}
           <tr><td colspan="5" class="px-4 py-10 text-center text-gray-500">Nenhuma conta paga encontrada.</td></tr>
         {% endfor %}

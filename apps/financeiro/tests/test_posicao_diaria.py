@@ -343,6 +343,52 @@ class PosicaoDiariaCaixaTests(TestCase):
         contas_pagas = (templates / "pagar" / "relatorio_pagas.html").read_text(encoding="utf-8")
         self.assertIn("#cash-report table tr:hover", posicao)
         self.assertIn("#relatorio-contas-pagas table tr:hover", contas_pagas)
+        self.assertIn("#relatorio-contas-pagas .text-gray-500", contas_pagas)
+        self.assertIn("color:#1f2937 !important", contas_pagas)
+
+    def test_relatorio_contas_pagas_consolida_taxas_automaticas(self):
+        dados_base = {
+            "filial": self.filial,
+            "data_emissao": date(2026, 9, 4),
+            "data_vencimento": date(2026, 9, 4),
+            "data_pagamento": date(2026, 9, 4),
+            "status": StatusContaPagar.PAGO,
+            "valor_saldo": Decimal("0.00"),
+            "forma_pagamento": self.forma,
+            "conta_bancaria": self.banco,
+            "usuario": self.usuario,
+        }
+        for indice, valor in enumerate((Decimal("3.47"), Decimal("0.79")), start=1):
+            ContaPagar.objects.create(
+                **dados_base,
+                descricao_despesa=f"Taxa automática {indice}",
+                documento_tipo="taxa_extrato",
+                documento_id=indice,
+                valor_original=valor,
+                valor_final=valor,
+                valor_pago=valor,
+            )
+        ContaPagar.objects.create(
+            **dados_base,
+            descricao_despesa="Compra comum",
+            valor_original=Decimal("20.00"),
+            valor_final=Decimal("20.00"),
+            valor_pago=Decimal("20.00"),
+        )
+
+        response = self.client.get(reverse("financeiro:pagar_pagas_relatorio"), {
+            "data_ini": "2026-09-04",
+            "data_fim": "2026-09-04",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "TAXAS E TARIFAS CONSOLIDADAS", count=1)
+        self.assertContains(response, "2 cobranças automáticas")
+        self.assertContains(response, "R$ 4,26")
+        self.assertNotContains(response, "Taxa automática 1")
+        self.assertNotContains(response, "Taxa automática 2")
+        self.assertContains(response, "Compra comum")
+        self.assertEqual(response.context["totais"]["quantidade_exibida"], 2)
 
     def test_transferencia_com_taxa_fica_fora_do_extrato_e_reduz_saldo(self):
         forma = FormaPagamento.objects.create(

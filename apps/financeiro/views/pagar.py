@@ -485,6 +485,41 @@ def _filtrar_contas_pagas(request):
     }
 
 
+def _linhas_relatorio_contas_pagas(contas):
+    """Agrupa tarifas automáticas em uma única linha, apenas para impressão."""
+    contas = list(contas)
+    taxas = [
+        conta for conta in contas
+        if (conta.documento_tipo or '').startswith('taxa_')
+    ]
+    if not taxas:
+        return [{'tipo': 'conta', 'conta': conta} for conta in contas]
+
+    datas = sorted({conta.data_pagamento for conta in taxas if conta.data_pagamento})
+    formas = sorted({str(conta.forma_pagamento) for conta in taxas if conta.forma_pagamento})
+    contas_bancarias = sorted({str(conta.conta_bancaria) for conta in taxas if conta.conta_bancaria})
+    linha_taxas = {
+        'tipo': 'taxas',
+        'quantidade': len(taxas),
+        'valor_pago': sum((conta.valor_pago or Decimal('0') for conta in taxas), Decimal('0')),
+        'data_inicio': datas[0] if datas else None,
+        'data_fim': datas[-1] if datas else None,
+        'formas': ', '.join(formas) or 'Não informada',
+        'contas': ', '.join(contas_bancarias) or 'Conta não definida',
+    }
+
+    linhas = []
+    taxas_adicionadas = False
+    for conta in contas:
+        if (conta.documento_tipo or '').startswith('taxa_'):
+            if not taxas_adicionadas:
+                linhas.append(linha_taxas)
+                taxas_adicionadas = True
+            continue
+        linhas.append({'tipo': 'conta', 'conta': conta})
+    return linhas
+
+
 def _limites_mes(referencia):
     inicio = referencia.replace(day=1)
     fim = referencia.replace(day=monthrange(referencia.year, referencia.month)[1])
@@ -760,9 +795,11 @@ class ContaPagaRelatorioView(PermissaoRequiredMixin, View):
             despesas_pessoais=Sum('valor_final', filter=Q(plano_contas__despesa_pessoal=True)),
         )
         totais['acrescimos'] = (totais['juros'] or 0) + (totais['multas'] or 0)
+        linhas = _linhas_relatorio_contas_pagas(qs)
+        totais['quantidade_exibida'] = len(linhas)
         return render(request, 'financeiro/pagar/relatorio_pagas.html', {
             'title': 'Relatorio de Contas Pagas',
-            'contas': list(qs),
+            'linhas': linhas,
             'totais': totais,
             'filial': _filial(request),
             'gerado_em': timezone.localtime(),
