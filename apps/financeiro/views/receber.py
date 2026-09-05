@@ -80,16 +80,27 @@ def _vincular_vendas(titulos, filial):
         .only('pk', 'numero', 'financeiro_gerado_em')
     } if pedidos_ids else {}
     for titulo in titulos:
+        titulo.origem_url = ''
+        titulo.origem_label = ''
         if titulo.documento_tipo == 'venda_pdv':
             venda = vendas.get(titulo.documento_id)
             titulo.venda_vinculada = venda
             titulo.origem_venda_numero = f'#{venda.numero_venda:06d}' if venda else '—'
             titulo.origem_venda_data = venda.data_venda if venda else None
+            if venda:
+                titulo.origem_url = reverse('pdv:comprovante_venda', args=[venda.pk])
+                titulo.origem_label = 'Ver venda'
+                titulo.status_entrega = ContaReceber.StatusEntrega.ENTREGUE
+                titulo.data_entrega_prevista = None
+                titulo.previsao_entrega_complemento = ''
         elif titulo.documento_tipo == 'pedido_moda':
             pedido = pedidos.get(titulo.documento_id)
             titulo.venda_vinculada = None
             titulo.origem_venda_numero = f'OP #{pedido.numero:06d}' if pedido else '—'
             titulo.origem_venda_data = pedido.financeiro_gerado_em if pedido else None
+            if pedido:
+                titulo.origem_url = reverse('moda:op2-detail', args=[pedido.pk])
+                titulo.origem_label = 'Ver OP'
         else:
             titulo.venda_vinculada = None
             titulo.origem_venda_numero = '—'
@@ -394,6 +405,7 @@ class ContaReceberDetailView(PermissaoRequiredMixin, View):
             ),
             pk=pk,
         )
+        _vincular_vendas([conta], filial)
         pode_baixar = (
             request.user.tem_permissao('financeiro', 'editar')
             and conta.status not in [StatusContaReceber.PAGO, StatusContaReceber.CANCELADO]

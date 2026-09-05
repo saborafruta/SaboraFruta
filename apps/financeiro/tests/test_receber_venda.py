@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from django.shortcuts import render
 from django.test import RequestFactory, TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.cadastros.models import Cliente
@@ -15,8 +16,9 @@ from apps.financeiro.models.conta_bancaria import PlanoContas
 from apps.financeiro.models.receber_pagar import ContaReceber
 from apps.financeiro.services.receber_service import ContaReceberService
 from apps.financeiro.views.receber import (
-    ContaReceberListView, ContaReceberRelatorioView, _vincular_vendas,
+    ContaReceberDetailView, ContaReceberListView, ContaReceberRelatorioView, _vincular_vendas,
 )
+from apps.moda.models import PedidoProducao
 from apps.pdv.models import VendaPDV
 
 
@@ -60,6 +62,7 @@ class ReceberVendaTests(TestCase):
         )
 
     def _get(self, view, **params):
+        pk = params.pop('pk', None)
         request = RequestFactory().get('/financeiro/receber/', params)
         request.user = self.usuario
         request.filial_ativa = self.filial
@@ -67,7 +70,7 @@ class ReceberVendaTests(TestCase):
         with timezone.override('America/Sao_Paulo'), patch(
             'apps.financeiro.views.receber.render', wraps=render,
         ) as rendering:
-            response = view().get(request)
+            response = view().get(request, pk) if pk is not None else view().get(request)
         return response, rendering.call_args.args[2]
 
     def test_listagem_e_relatorio_separam_conta_documento_venda_e_datas(self):
@@ -128,6 +131,53 @@ class ReceberVendaTests(TestCase):
             for conta in parcelas:
                 self.assertEqual(conta.venda_vinculada.numero_venda, 1014)
                 self.assertEqual(conta.venda_vinculada.data_venda, self.venda.data_venda)
+
+    def test_venda_pdv_aparece_entregue_e_numero_abre_comprovante(self):
+        response, context = self._get(ContaReceberListView)
+
+        conta = context['contas'][0]
+        self.assertEqual(conta.status_entrega, ContaReceber.StatusEntrega.ENTREGUE)
+        self.assertEqual(
+            conta.origem_url,
+            reverse('pdv:comprovante_venda', args=[self.venda.pk]),
+        )
+        self.assertContains(response, conta.origem_url)
+
+    def test_detalhe_oferece_atalho_da_venda_e_da_op(self):
+        response, _ = self._get(ContaReceberDetailView, pk=self.conta.pk, modal='1')
+        self.assertContains(response, 'Ver venda')
+        self.assertContains(response, reverse('pdv:comprovante_venda', args=[self.venda.pk]))
+
+        pedido = PedidoProducao.objects.create(
+            filial=self.filial,
+            cliente=self.cliente,
+            numero=91,
+            data_pedido=date(2026, 8, 20),
+        )
+        conta_op = ContaReceber.objects.create(
+            filial=self.filial,
+            cliente=self.cliente,
+            documento_tipo='pedido_moda',
+            documento_id=pedido.pk,
+            valor_original=10,
+            valor_final=10,
+            valor_saldo=10,
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+        )
+        response, _ = self._get(ContaReceberDetailView, pk=conta_op.pk, modal='1')
+        self.assertContains(response, 'Ver OP')
+        self.assertContains(response, reverse('moda:op2-detail', args=[pedido.pk]))
+
+    def test_comprovante_interno_da_venda_exige_login_e_respeita_filial(self):
+        url = reverse('pdv:comprovante_venda', args=[self.venda.pk])
+        self.assertEqual(self.client.get(url).status_code, 302)
+
+        self.client.force_login(self.usuario)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '#001014')
+        self.assertContains(response, self.cliente.razao_social)
 
     def test_relatorio_respeita_pendentes_todos_e_status_especifico(self):
         paga = ContaReceber.objects.create(

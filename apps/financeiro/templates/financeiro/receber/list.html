@@ -336,8 +336,9 @@
   <!-- ── Cards mobile ── -->
   <div class="md:hidden space-y-3">
     {% for c in contas %}
-    <a href="{% url 'financeiro:receber_detail' c.pk %}" @click.prevent="abrirDetalhe($el.href)"
-       class="card p-4 block space-y-3 hover:opacity-90 transition-opacity">
+    <article role="button" tabindex="0" @click="abrirDetalhe('{% url 'financeiro:receber_detail' c.pk %}')"
+       @keydown.enter.prevent="abrirDetalhe('{% url 'financeiro:receber_detail' c.pk %}')"
+       class="card p-4 block space-y-3 hover:opacity-90 transition-opacity cursor-pointer">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <div class="font-semibold truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
@@ -357,7 +358,9 @@
       <div class="grid grid-cols-2 gap-2 text-xs">
         <div>
           <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nº da venda</span>
-          <div class="font-semibold">{{ c.origem_venda_numero }}</div>
+          <div class="font-semibold">
+            {% if c.documento_tipo == 'venda_pdv' and c.origem_url %}<a href="{{ c.origem_url }}" target="_blank" rel="noopener" @click.stop class="text-blue-500 hover:underline">{{ c.origem_venda_numero }}</a>{% else %}{{ c.origem_venda_numero }}{% endif %}
+          </div>
         </div>
         <div>
           <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Data da venda</span>
@@ -379,7 +382,7 @@
           </div>
         </div>
       </div>
-    </a>
+    </article>
     {% empty %}
     <div class="card p-6 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       Nenhuma conta encontrada.
@@ -438,7 +441,7 @@
             </td>
             {% if entrega_habilitada %}<td class="px-4 py-3" style="min-width:10rem;max-width:16rem">{% include "financeiro/receber/_entrega_acionavel.html" with conta=c %}</td>{% endif %}
             <td class="px-4 py-3 text-xs font-mono whitespace-nowrap">
-              {{ c.origem_venda_numero }}
+              {% if c.documento_tipo == 'venda_pdv' and c.origem_url %}<a href="{{ c.origem_url }}" target="_blank" rel="noopener" class="text-blue-500 hover:underline">{{ c.origem_venda_numero }}</a>{% else %}{{ c.origem_venda_numero }}{% endif %}
             </td>
             <td class="px-4 py-3 text-sm whitespace-nowrap">
               {{ c.origem_venda_data|date:"d/m/Y"|default:"—" }}

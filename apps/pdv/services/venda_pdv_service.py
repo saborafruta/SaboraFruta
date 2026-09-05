@@ -12,6 +12,7 @@ from apps.estoque.models import MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.financeiro.constants.enums import StatusContaReceber, TipoFormaPagamento
 from apps.financeiro.models import ContaReceber, FormaPagamento
+from apps.financeiro.services.categorias_receita import categoria_vendas_produtos
 from apps.pdv.models import ItemVendaPDV, PagamentoVendaPDV, VendaPDV
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
 from apps.pdv.services.oferta_contexto_service import contexto_oferta_do_payload
@@ -757,6 +758,7 @@ class VendaPDVService:
         # Emissão baseada na data da venda (respeita lançamento retroativo).
         hoje = timezone.localtime(venda.data_venda).date() if venda.data_venda else timezone.localdate()
         vencimento = hoje + timedelta(days=dias)
+        categoria = categoria_vendas_produtos(filial)
         ContaReceber.objects.create(
             filial=filial,
             cliente_id=venda.cliente_id,
@@ -769,7 +771,10 @@ class VendaPDVService:
             data_emissao=hoje,
             data_vencimento=vencimento,
             forma_pagamento=forma,
+            plano_contas=categoria,
+            conta_contabil=categoria.conta_contabil if categoria else None,
             status=StatusContaReceber.ABERTO,
+            status_entrega=ContaReceber.StatusEntrega.ENTREGUE,
             observacao=f"Gerada automaticamente da venda #{venda.numero_venda} ({forma.descricao}).",
             usuario=venda.usuario,
         )

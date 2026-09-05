@@ -13,6 +13,7 @@ from apps.core.models import RegistroAuditoria
 from apps.estoque.models import Estoque, MovimentacaoEstoque
 from apps.financeiro.constants.enums import TipoFormaPagamento
 from apps.financeiro.models import ContaReceber, FormaPagamento
+from apps.financeiro.models.conta_bancaria import PlanoContas
 from apps.financeiro.services.receber_service import ContaReceberService
 from apps.pdv.models import VendaPDV
 from apps.pdv.services.venda_pdv_service import VendaPDVService
@@ -39,6 +40,14 @@ class AuditarCancelamentosPDVTests(TestCase):
             descricao="Vale auditoria",
             tipo=TipoFormaPagamento.VALE,
         )
+        self.categoria_vendas = PlanoContas.objects.create(
+            empresa=self.empresa,
+            codigo='3100100001',
+            descricao='Vendas de produtos',
+            tipo='R',
+            nivel=3,
+            aceita_lancamento=True,
+        )
         self.produto = self.criar_produto("Produto auditado")
         self.abastecer(self.produto, "5")
         self.venda = VendaPDVService.finalizar_venda(
@@ -53,6 +62,8 @@ class AuditarCancelamentosPDVTests(TestCase):
             documento_tipo="venda_pdv",
             documento_id=self.venda.pk,
         )
+        self.assertEqual(self.conta.plano_contas, self.categoria_vendas)
+        self.assertEqual(self.conta.status_entrega, ContaReceber.StatusEntrega.ENTREGUE)
         VendaPDV.objects.filter(pk=self.venda.pk).update(
             status="cancelada",
             cancelado_em=timezone.now(),

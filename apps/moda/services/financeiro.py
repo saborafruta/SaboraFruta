@@ -25,6 +25,7 @@ from apps.core.services.exceptions import DomainError
 from apps.financeiro.constants.enums import StatusContaReceber
 from apps.financeiro.models.receber_pagar import ContaReceber
 from apps.financeiro.services.receber_service import ContaReceberService
+from apps.financeiro.services.categorias_receita import categoria_vendas_produtos
 
 CENTAVO = Decimal('0.01')
 PRAZO_LIMITE_SALDO_DIAS = 30
@@ -213,6 +214,7 @@ class FinanceiroPedidoService:
 
         total = len(expandidas)
         contas = []
+        categoria = categoria_vendas_produtos(pedido.filial)
         for numero, (p, cliente, valor, entrada) in enumerate(expandidas, start=1):
             conta = ContaReceber(
                 filial=pedido.filial,
@@ -233,6 +235,8 @@ class FinanceiroPedidoService:
                 ),
                 data_entrega_prevista=pedido.data_prevista_entrega,
                 forma_pagamento=pedido.forma_pagamento,
+                plano_contas=categoria,
+                conta_contabil=categoria.conta_contabil if categoria else None,
                 conta_bancaria=(
                     pedido.conta_bancaria_entrada
                     or (

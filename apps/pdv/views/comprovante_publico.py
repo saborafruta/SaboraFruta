@@ -49,6 +49,34 @@ def buscar(token):
     )
 
 
+def buscar_interno(request, pk):
+    return get_object_or_404(
+        VendaPDV.objects.for_filial(request.filial_ativa)
+        .select_related('filial__empresa', 'cliente')
+        .prefetch_related('itens__produto', 'pagamentos__forma_pagamento'),
+        pk=pk, status='finalizada',
+    )
+
+
+@requer_permissao('pdv', 'ver')
+@require_GET
+def visualizar_interno(request, pk):
+    venda = buscar_interno(request, pk)
+    return privado(render(request, 'pdv/comprovante_publico.html', {
+        'cupom': dados_comprovante(venda),
+        'pdf_url': reverse('pdv:comprovante_venda_pdf', args=[venda.pk]),
+    }))
+
+
+@requer_permissao('pdv', 'ver')
+@require_GET
+def baixar_pdf_interno(request, pk):
+    venda = buscar_interno(request, pk)
+    response = HttpResponse(gerar_pdf(venda), content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="comprovante-{venda.numero_venda:06d}.pdf"'
+    return privado(response)
+
+
 @require_GET
 def visualizar(request, token):
     venda = buscar(token)

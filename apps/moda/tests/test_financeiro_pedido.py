@@ -8,6 +8,7 @@ from apps.core.models import Empresa, Filial
 from apps.core.services.exceptions import DomainError
 from apps.financeiro.constants.enums import StatusContaReceber, TipoFormaPagamento
 from apps.financeiro.models import ContaBancaria, CondicaoPagamento, FormaPagamento
+from apps.financeiro.models.conta_bancaria import PlanoContas
 from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaReceber
 from apps.moda.models import ItemPedidoProducao, PedidoProducao, ProdutoModa
 from apps.moda.services.financeiro import FinanceiroPedidoService
@@ -63,6 +64,14 @@ class FinanceiroPedidoEntradaTests(TestCase):
             intervalo_dias=0,
             dias_primeira_parcela=0,
         )
+        cls.categoria_vendas = PlanoContas.objects.create(
+            empresa=cls.empresa,
+            codigo='3100100001',
+            descricao='Vendas de produtos',
+            tipo='R',
+            nivel=3,
+            aceita_lancamento=True,
+        )
 
     def _pedido(self, entrada=Decimal("0"), forma=None, conta=None, entrega=date(2026, 9, 5)):
         produto = ProdutoModa.objects.create(
@@ -111,6 +120,7 @@ class FinanceiroPedidoEntradaTests(TestCase):
         self.assertEqual(saldo.valor_original, Decimal("800.00"))
         self.assertEqual(saldo.valor_pago, Decimal("0"))
         self.assertEqual(saldo.data_vencimento, date(2026, 9, 5))
+        self.assertTrue(all(conta.plano_contas == self.categoria_vendas for conta in contas))
 
     def test_saldo_respeita_limite_de_trinta_dias_da_data_do_pedido(self):
         pedido = self._pedido(

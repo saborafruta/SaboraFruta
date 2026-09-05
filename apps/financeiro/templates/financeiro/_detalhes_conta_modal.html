@@ -12,6 +12,7 @@
       {% if tipo_conta == 'receber' and entrega_habilitada %}<p class="mt-2">Entrega: {% include "financeiro/receber/_entrega_resumo.html" %}</p>{% endif %}
     </div>
     <div class="flex flex-wrap gap-2">
+    {% if tipo_conta == 'receber' and conta.origem_url %}<a href="{{ conta.origem_url }}" target="_blank" rel="noopener" class="btn-secondary">{{ conta.origem_label }}</a>{% endif %}
     {% if tipo_conta == 'receber' and pode_editar_titulo %}<a href="{% url 'financeiro:receber_editar' conta.pk %}" class="btn-secondary" @click.prevent="abrirEdicaoTitulo($el.href)">Editar informações</a>{% endif %}
     {% if tipo_conta == 'receber' and pode_excluir and not conta.excluido %}<button type="button" class="btn-secondary text-rose-600" @click="exclusaoAberta=!exclusaoAberta">Excluir</button>{% endif %}
     {% if tipo_conta == 'pagar' and pode_editar_lancamento %}
