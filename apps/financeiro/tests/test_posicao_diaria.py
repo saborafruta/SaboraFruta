@@ -246,6 +246,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "Taxas em pagamentos")
         self.assertContains(response, '<table class="cr-day-table"', count=2)
         self.assertContains(response, "table-header-group")
+        self.assertNotContains(response, "continuação")
 
     def test_relatorio_filtra_saida_por_categoria_fornecedor_e_funcionario(self):
         categoria = self._categoria_despesa("Uniformes da equipe")
@@ -337,6 +338,11 @@ class PosicaoDiariaCaixaTests(TestCase):
                 conteudo = arquivo.read_text(encoding="utf-8")
                 self.assertIn("A4 portrait", conteudo)
                 self.assertNotIn("A4 landscape", conteudo)
+
+        posicao = (templates / "posicao_diaria_relatorio.html").read_text(encoding="utf-8")
+        contas_pagas = (templates / "pagar" / "relatorio_pagas.html").read_text(encoding="utf-8")
+        self.assertIn("#cash-report table tr:hover", posicao)
+        self.assertIn("#relatorio-contas-pagas table tr:hover", contas_pagas)
 
     def test_transferencia_com_taxa_fica_fora_do_extrato_e_reduz_saldo(self):
         forma = FormaPagamento.objects.create(

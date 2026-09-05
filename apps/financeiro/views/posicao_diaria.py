@@ -639,28 +639,6 @@ class PosicaoDiariaCaixaRelatorioView(PermissaoRequiredMixin, View):
                     for entrada, saida in zip_longest(entradas, saidas)
                 ],
             })
-        blocos_relatorio = []
-        linhas_na_pagina = 0
-        capacidade_pagina = 18
-        maximo_linhas_bloco = 16
-        for dia in dias_relatorio:
-            linhas = dia["linhas"]
-            for indice in range(0, len(linhas), maximo_linhas_bloco):
-                linhas_bloco = linhas[indice:indice + maximo_linhas_bloco]
-                quebra_antes = bool(
-                    linhas_na_pagina
-                    and linhas_na_pagina + len(linhas_bloco) > capacidade_pagina
-                )
-                if quebra_antes:
-                    linhas_na_pagina = 0
-                blocos_relatorio.append({
-                    "data": dia["data"],
-                    "dia_semana": dia["dia_semana"],
-                    "linhas": linhas_bloco,
-                    "continuacao": indice > 0,
-                    "quebra_antes": quebra_antes,
-                })
-                linhas_na_pagina += len(linhas_bloco)
         filtros_selecionados = [
             item for item in (
                 f"Categoria: {categoria_selecionada.caminho_descricao}" if categoria_selecionada else "",
@@ -688,7 +666,6 @@ class PosicaoDiariaCaixaRelatorioView(PermissaoRequiredMixin, View):
             "data_fim": data_fim,
             "periodo_unico": data_inicio == data_fim,
             "dias_relatorio": dias_relatorio,
-            "blocos_relatorio": blocos_relatorio,
             "filtros_selecionados": filtros_selecionados,
             "filtros_ativos": bool(filtros_selecionados),
             "gerado_em": timezone.localtime(),

@@ -30,7 +30,6 @@
   .cr-line { break-inside:avoid; page-break-inside:avoid; }
   .cr-line td { padding:3px 4px; border-bottom:1px solid #cfd7e1; vertical-align:top; }
   .cr-line:last-child td { border-bottom:0; }
-  .cr-page-break { display:block; height:0; break-after:page; page-break-after:always; }
   .cr-description { font-size:6.7px; line-height:1.14; min-width:0; }
   .cr-description strong { display:block; color:#172033; font-size:7.2px; }
   .cr-counterparty { display:inline; margin-right:3px; font-weight:700; }
@@ -61,6 +60,9 @@
   .cr-accounts td:first-child { white-space:normal; }
   .cr-accounts tfoot td { border-top:2px solid #9eb0c4; border-bottom:0; font-weight:800; }
   .cr-footer { display:flex; justify-content:space-between; gap:8px; margin-top:5px; padding-top:3px; border-top:1px solid #9eabba; color:#718096; font-size:5.8px; }
+  #cash-report table tr:hover { background:#fff !important; color:#172033 !important; }
+  #cash-report .cr-day-title:hover { background:#1f4d7a !important; color:#fff !important; }
+  #cash-report .cr-side-head:hover { background:transparent !important; color:#526174 !important; }
   @page { size:A4 portrait; margin:0; }
   @media print {
     nav, header, aside, .no-print, .app-back-link { display:none !important; }
@@ -113,12 +115,11 @@
     {% if filtros_selecionados %}<div class="cr-filters">Filtros: {{ filtros_selecionados|join:" · " }}</div>{% endif %}
 
     <div class="cr-days">
-      {% for dia in blocos_relatorio %}
-        {% if dia.quebra_antes %}<div class="html2pdf__page-break cr-page-break" aria-hidden="true"></div>{% endif %}
+      {% for dia in dias_relatorio %}
         <table class="cr-day-table" data-columns="off">
           <colgroup><col class="cr-description-col"><col class="cr-value-col"><col class="cr-description-col"><col class="cr-value-col"></colgroup>
           <thead>
-            <tr class="cr-day-title"><th colspan="4">{{ dia.dia_semana }} · {{ dia.data|date:"d/m/Y" }}{% if dia.continuacao %} · continuação{% endif %}</th></tr>
+            <tr class="cr-day-title"><th colspan="4">{{ dia.dia_semana }} · {{ dia.data|date:"d/m/Y" }}</th></tr>
             <tr class="cr-side-head"><th>Entradas · descrição / origem / forma / conta</th><th>Valor</th><th>Saídas · descrição / destino / forma / conta</th><th>Valor</th></tr>
           </thead>
           <tbody>
@@ -178,7 +179,7 @@ document.getElementById('exportar-caixa-pdf').addEventListener('click', function
     image: {type:'jpeg', quality:0.98},
     html2canvas: {scale:2, useCORS:true, backgroundColor:'#ffffff'},
     jsPDF: {unit:'mm', format:'a4', orientation:'portrait'},
-    pagebreak: {mode:['css','legacy'], after:['.cr-page-break'], avoid:['.cr-day-table thead','.cr-line','.cr-summary','.cr-fees','.cr-accounts']}
+    pagebreak: {mode:['css','legacy'], avoid:['.cr-day-table thead','.cr-line','.cr-summary','.cr-fees','.cr-accounts']}
   }).from(document.getElementById('cash-report')).save().finally(function () {
     button.disabled = false;
     button.textContent = 'Exportar PDF';
