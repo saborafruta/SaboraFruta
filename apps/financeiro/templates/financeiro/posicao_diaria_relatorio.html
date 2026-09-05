@@ -6,50 +6,56 @@
 {% block extra_head %}
 <style>
   #cash-report { color:#172033; font-family:Inter,Arial,sans-serif; }
-  .cr-sheet { background:#fff; border:1px solid #d8e0ea; border-radius:10px; padding:18px; }
-  .cr-header { display:flex; justify-content:space-between; gap:24px; padding-bottom:11px; border-bottom:2px solid #1f4d7a; }
-  .cr-kicker { color:#1f4d7a; font-size:10px; font-weight:800; letter-spacing:.13em; text-transform:uppercase; }
-  .cr-title { margin:3px 0 0; font-size:22px; line-height:1.1; font-weight:800; }
+  .cr-sheet { background:#fff; border:1px solid #aebaca; border-radius:2px; padding:11px; }
+  .cr-header { display:flex; justify-content:space-between; gap:18px; padding-bottom:6px; border-bottom:2px solid #1f4d7a; }
+  .cr-kicker { color:#1f4d7a; font-size:7.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+  .cr-title { margin:2px 0 0; font-size:16px; line-height:1.05; font-weight:800; }
   .cr-muted { color:#607086; }
   .cr-period { min-width:190px; text-align:right; }
-  .cr-period strong { display:block; font-size:15px; }
-  .cr-ledgers { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px; margin-top:12px; align-items:start; }
-  .cr-ledger { overflow:hidden; border:1px solid #d8e0ea; border-radius:7px; }
-  .cr-ledger-head { display:flex; align-items:center; justify-content:space-between; padding:7px 9px; border-bottom:1px solid #d8e0ea; font-size:11px; }
+  .cr-period strong { display:block; font-size:11px; }
+  .cr-period small { font-size:7px; }
+  .cr-ledgers { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:6px; margin-top:7px; align-items:start; }
+  .cr-ledger { overflow:hidden; border:1px solid #9eabba; border-radius:0; }
+  .cr-ledger-head { display:flex; align-items:center; justify-content:space-between; padding:4px 5px; border-bottom:1px solid #9eabba; font-size:8px; }
   .cr-ledger-head.entry { background:#eaf8f0; color:#17663c; }
   .cr-ledger-head.exit { background:#fff0f1; color:#9b2531; }
-  .cr-ledger-head h2 { margin:0; font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
-  .cr-row { display:grid; grid-template-columns:minmax(0,1fr) 72px; gap:7px; padding:6px 8px; border-bottom:1px solid #e8edf3; break-inside:avoid; page-break-inside:avoid; }
+  .cr-ledger-head h2 { margin:0; font-size:8.5px; text-transform:uppercase; letter-spacing:.05em; }
+  .cr-columns { display:grid; grid-template-columns:minmax(0,1fr) 60px; gap:4px; padding:2px 4px; border-bottom:1px solid #9eabba; background:#eef2f6; color:#526174; font-size:6px; font-weight:800; text-transform:uppercase; }
+  .cr-columns span:last-child { text-align:right; }
+  .cr-row { display:grid; grid-template-columns:minmax(0,1fr) 60px; gap:4px; padding:3px 4px; border-bottom:1px solid #cfd7e1; break-inside:avoid; page-break-inside:avoid; }
   .cr-row:last-child { border-bottom:0; }
-  .cr-description { font-size:9px; line-height:1.24; min-width:0; }
-  .cr-description strong { display:block; color:#172033; font-size:9.5px; }
-  .cr-counterparty { display:block; margin-top:1px; font-weight:700; }
-  .cr-detail { display:block; margin-top:2px; color:#607086; }
-  .cr-value { text-align:right; white-space:nowrap; font-size:10px; font-weight:800; }
-  .cr-value small { display:block; margin-top:2px; color:#a23b45; font-size:7.5px; font-weight:700; white-space:normal; }
-  .cr-empty { padding:20px 8px; color:#718096; text-align:center; font-size:9px; }
-  .cr-summary { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:7px; margin-top:11px; break-inside:avoid; page-break-inside:avoid; }
-  .cr-metric { min-width:0; border:1px solid #d8e0ea; border-radius:6px; padding:7px 8px; }
-  .cr-metric span { display:block; color:#607086; font-size:7.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; }
-  .cr-metric strong { display:block; margin-top:2px; font-size:12px; white-space:nowrap; }
+  .cr-description { font-size:6.7px; line-height:1.14; min-width:0; }
+  .cr-description strong { display:block; color:#172033; font-size:7.2px; }
+  .cr-counterparty { display:inline; margin-right:3px; font-weight:700; }
+  .cr-detail { display:inline; color:#607086; }
+  .cr-detail + .cr-detail::before { content:' · '; }
+  .cr-value { text-align:right; white-space:nowrap; font-size:7.5px; font-weight:800; }
+  .cr-value small { display:block; margin-top:1px; color:#a23b45; font-size:6px; font-weight:700; white-space:normal; }
+  .cr-empty { padding:10px 5px; color:#718096; text-align:center; font-size:7px; }
+  .cr-summary { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); margin-top:7px; border:1px solid #9eabba; border-right:0; break-inside:avoid; page-break-inside:avoid; }
+  .cr-metric { min-width:0; border-right:1px solid #9eabba; border-radius:0; padding:3px 4px; }
+  .cr-metric span { display:block; color:#607086; font-size:6px; font-weight:800; letter-spacing:.03em; text-transform:uppercase; }
+  .cr-metric strong { display:block; margin-top:1px; font-size:8px; white-space:nowrap; }
   .cr-metric.entry strong, .cr-positive { color:#167247; }
   .cr-metric.exit strong, .cr-negative { color:#b12d3b; }
-  .cr-metric.final { border-color:#8eb4da; background:#eef6ff; }
-  .cr-accounts { margin-top:10px; break-inside:avoid; page-break-inside:avoid; }
-  .cr-section-title { display:flex; align-items:end; justify-content:space-between; gap:12px; margin-bottom:5px; }
-  .cr-section-title h2 { margin:0; font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
-  .cr-accounts table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:8.5px; }
-  .cr-accounts th { padding:4px 6px; background:#eef2f7; color:#526174; text-align:right; text-transform:uppercase; font-size:7px; letter-spacing:.04em; }
+  .cr-metric.final { background:#eef6ff; }
+  .cr-accounts { margin-top:7px; break-inside:avoid; page-break-inside:avoid; }
+  .cr-section-title { display:flex; align-items:end; justify-content:space-between; gap:8px; margin-bottom:2px; }
+  .cr-section-title h2 { margin:0; font-size:8px; text-transform:uppercase; letter-spacing:.05em; }
+  .cr-accounts table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:7px; }
+  .cr-accounts th { padding:2px 4px; background:#e7ecf2; color:#526174; text-align:right; text-transform:uppercase; font-size:6px; letter-spacing:.03em; }
   .cr-accounts th:first-child, .cr-accounts td:first-child { width:36%; text-align:left; }
-  .cr-accounts td { padding:4px 6px; border-bottom:1px solid #e3e9f0; text-align:right; white-space:nowrap; }
+  .cr-accounts td { padding:2px 4px; border-bottom:1px solid #cfd7e1; text-align:right; white-space:nowrap; }
   .cr-accounts td:first-child { white-space:normal; }
   .cr-accounts tfoot td { border-top:2px solid #9eb0c4; border-bottom:0; font-weight:800; }
-  .cr-footer { display:flex; justify-content:space-between; gap:12px; margin-top:9px; padding-top:6px; border-top:1px solid #d8e0ea; color:#718096; font-size:7px; }
-  @page { size:A4 landscape; margin:6mm; }
+  .cr-footer { display:flex; justify-content:space-between; gap:8px; margin-top:5px; padding-top:3px; border-top:1px solid #9eabba; color:#718096; font-size:5.8px; }
+  @page { size:A4 portrait; margin:0; }
   @media print {
-    nav, header, aside, .no-print { display:none !important; }
-    html, body, main { margin:0 !important; padding:0 !important; background:#fff !important; }
-    #cash-report { width:100%; }
+    nav, header, aside, .no-print, .app-back-link { display:none !important; }
+    html, body, body > .flex, .app-shell-content, main, .app-content-frame { background:#fff !important; }
+    html, body, main, .app-content-frame { margin:0 !important; padding:0 !important; }
+    .app-content-frame { max-width:none !important; }
+    #cash-report { width:100%; min-height:297mm; padding:7mm; background:#fff; }
     .cr-sheet { border:0; border-radius:0; padding:0; }
     * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
   }
@@ -57,6 +63,11 @@
     .cr-ledgers { grid-template-columns:1fr; }
     .cr-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
     .cr-metric.final { grid-column:1 / -1; }
+  }
+  @media print {
+    .cr-ledgers { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+    .cr-summary { grid-template-columns:repeat(5,minmax(0,1fr)); }
+    .cr-metric.final { grid-column:auto; }
   }
 </style>
 {% endblock %}
@@ -88,6 +99,7 @@
     <div class="cr-ledgers">
       <section class="cr-ledger">
         <div class="cr-ledger-head entry"><h2>Entradas</h2><strong>R$ {{ posicao.total_entradas|floatformat:2 }}</strong></div>
+        <div class="cr-columns"><span>Descrição / origem / forma / conta</span><span>Valor</span></div>
         {% for mov in posicao.entradas %}
           <div class="cr-row">
             <div class="cr-description">
@@ -103,6 +115,7 @@
 
       <section class="cr-ledger">
         <div class="cr-ledger-head exit"><h2>Saídas</h2><strong>R$ {{ posicao.total_saidas|floatformat:2 }}</strong></div>
+        <div class="cr-columns"><span>Descrição / destino / forma / conta</span><span>Valor</span></div>
         {% for mov in posicao.saidas %}
           <div class="cr-row">
             <div class="cr-description">
@@ -127,7 +140,7 @@
 
     <section class="cr-accounts">
       <div class="cr-section-title"><h2>Saldos das contas bancárias</h2><span class="cr-muted text-[8px]">Conferência: abertura + entradas - saídas = fechamento</span></div>
-      <table>
+      <table data-columns="off">
         <thead><tr><th>Conta</th><th>Saldo inicial</th><th>Entradas</th><th>Saídas</th><th>Saldo final</th></tr></thead>
         <tbody>
           {% for conta in posicao.contas %}<tr><td><strong>{{ conta.descricao|default:conta.banco_nome }}</strong>{% if conta.banco_nome %}<span class="cr-muted"> · {{ conta.banco_nome }}</span>{% endif %}</td><td>R$ {{ conta.posicao_abertura|floatformat:2 }}</td><td class="cr-positive">+ R$ {{ conta.posicao_entradas|floatformat:2 }}</td><td class="cr-negative">- R$ {{ conta.posicao_saidas|floatformat:2 }}</td><td><strong>R$ {{ conta.posicao_fechamento|floatformat:2 }}</strong></td></tr>{% empty %}<tr><td colspan="5">Nenhuma conta ativa.</td></tr>{% endfor %}
@@ -153,7 +166,7 @@ document.getElementById('exportar-caixa-pdf').addEventListener('click', function
     filename: 'posicao-caixa-{{ data_inicio|date:"Y-m-d" }}{% if not periodo_unico %}-a-{{ data_fim|date:"Y-m-d" }}{% endif %}.pdf',
     image: {type:'jpeg', quality:0.98},
     html2canvas: {scale:2, useCORS:true, backgroundColor:'#ffffff'},
-    jsPDF: {unit:'mm', format:'a4', orientation:'landscape'},
+    jsPDF: {unit:'mm', format:'a4', orientation:'portrait'},
     pagebreak: {mode:['css','legacy'], avoid:['.cr-row','.cr-summary','.cr-accounts']}
   }).from(document.getElementById('cash-report')).save().finally(function () {
     button.disabled = false;

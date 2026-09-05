@@ -231,6 +231,11 @@
   entradasExpandidas:false,
   saidasExpandidas:false,
   taxasModal: false,
+  relatoriosModal: false,
+  relatorioPeriodo: 'hoje',
+  relatorioDataBase: '{{ hoje|date:"Y-m-d" }}',
+  relatorioInicio: '{{ hoje|date:"Y-m-d" }}',
+  relatorioFim: '{{ hoje|date:"Y-m-d" }}',
   movimentoModal: {{ movimento_modal|yesno:'true,false' }},
   contaPagarModal: false,
   contaReceberModal: false,
@@ -240,6 +245,56 @@
   tituloPagarHtml: '',
   tituloPagarErro: '',
   previsoesCarregando: false,
+  dataRelatorio(valor) {
+    const partes = String(valor || '').split('-').map(Number);
+    return new Date(partes[0], (partes[1] || 1) - 1, partes[2] || 1, 12);
+  },
+  dataRelatorioISO(data) {
+    const ano = data.getFullYear();
+    const mes = String(data.getMonth() + 1).padStart(2, '0');
+    const dia = String(data.getDate()).padStart(2, '0');
+    return `${ano}-${mes}-${dia}`;
+  },
+  selecionarPeriodoRelatorio(periodo) {
+    this.relatorioPeriodo = periodo;
+    if (periodo === 'personalizado') return;
+    const referencia = this.dataRelatorio(this.relatorioDataBase);
+    let inicio = new Date(referencia);
+    let fim = new Date(referencia);
+    if (periodo === 'ontem') {
+      inicio.setDate(inicio.getDate() - 1); fim = new Date(inicio);
+    } else if (periodo === 'semana') {
+      const deslocamento = (inicio.getDay() + 6) % 7;
+      inicio.setDate(inicio.getDate() - deslocamento);
+    } else if (['7', '15', '30'].includes(periodo)) {
+      inicio.setDate(inicio.getDate() - (Number(periodo) - 1));
+    } else if (periodo === 'mes') {
+      inicio = new Date(referencia.getFullYear(), referencia.getMonth(), 1, 12);
+      fim = new Date(referencia.getFullYear(), referencia.getMonth() + 1, 0, 12);
+    }
+    this.relatorioInicio = this.dataRelatorioISO(inicio);
+    this.relatorioFim = this.dataRelatorioISO(fim);
+  },
+  abrirRelatorio(tipo) {
+    const destinos = {
+      pagar: '{% url "financeiro:pagar_relatorio" %}',
+      receber: '{% url "financeiro:receber_relatorio" %}',
+      pagas: '{% url "financeiro:pagar_pagas_relatorio" %}',
+      caixa: '{% url "financeiro:posicao_diaria_relatorio" %}'
+    };
+    const parametros = new URLSearchParams();
+    if (tipo === 'caixa') {
+      parametros.set('data', this.relatorioFim);
+      parametros.set('periodo', 'personalizado');
+      parametros.set('data_inicio', this.relatorioInicio);
+      parametros.set('data_fim', this.relatorioFim);
+    } else {
+      parametros.set('data_ini', this.relatorioInicio);
+      parametros.set('data_fim', this.relatorioFim);
+      if (tipo === 'pagar' || tipo === 'receber') parametros.set('status', 'pendentes');
+    }
+    window.open(`${destinos[tipo]}?${parametros.toString()}`, '_blank', 'noopener');
+  },
   normalizarBusca(valor) {
     return String(valor || '')
       .normalize('NFD')
@@ -415,7 +470,6 @@
       <p class="mt-1 text-sm text-gray-500">Confira o que entrou, o que saiu e onde o dinheiro terminou no dia.</p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      <a href="{% url 'financeiro:posicao_diaria_relatorio' %}?data={{ data_referencia|date:'Y-m-d' }}&periodo={{ periodo }}&data_inicio={{ data_inicio|date:'Y-m-d' }}&data_fim={{ data_fim|date:'Y-m-d' }}{% if conta_filtro %}&conta={{ conta_filtro }}{% endif %}&ordem={{ ordem_movimentos }}" target="_blank" class="btn-primary">Imprimir relatório</a>
       {% if historico_disponivel %}<a href="?fonte=historico&data={{ data_referencia|date:'Y-m-d' }}&periodo={{ periodo }}&data_inicio={{ data_inicio|date:'Y-m-d' }}&data_fim={{ data_fim|date:'Y-m-d' }}" class="btn-secondary">Histórico importado</a>{% endif %}
       <a href="{% url 'financeiro:pagar_pagas' %}" class="btn-secondary">Contas Pagas</a>
       <a href="{% url 'financeiro:pagar_list' %}" class="btn-secondary">Contas a pagar</a>
@@ -433,9 +487,12 @@
     <form method="get" class="flex flex-col gap-4">
       <input type="hidden" name="periodo" value="{{ periodo }}">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <label class="block text-xs font-semibold uppercase text-gray-500">Dia da conferência
-        <input type="date" name="data" value="{{ data_referencia|date:'Y-m-d' }}" class="form-input mt-1 w-full sm:w-52">
-      </label>
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <label class="block text-xs font-semibold uppercase text-gray-500">Dia da conferência
+          <input type="date" name="data" value="{{ data_referencia|date:'Y-m-d' }}" class="form-input mt-1 w-full sm:w-52">
+        </label>
+        <button type="button" class="btn-primary min-h-10" @click="relatoriosModal=true; selecionarPeriodoRelatorio('hoje')">Imprimir relatórios</button>
+      </div>
       <div class="flex flex-wrap gap-2">
         {% if user_is_admin %}
           {% if mostrar_excluidos %}<a href="?data={{ data_referencia|date:'Y-m-d' }}" class="btn-secondary">Ocultar excluídos</a>
@@ -669,6 +726,42 @@
   {% if mostrar_excluidos and posicao.excluidos %}
     <section class="rounded-lg border border-dashed border-rose-300 p-4"><h3 class="font-semibold text-rose-600">Movimentos manuais excluídos</h3><div class="mt-3 space-y-2">{% for mov in posicao.excluidos %}<div class="flex flex-col gap-2 rounded border p-3 sm:flex-row sm:items-center sm:justify-between"><div><strong>{{ mov.descricao }}</strong><span class="block text-xs text-gray-500">{{ mov.conta.descricao|default:mov.conta.banco_nome }} · R$ {{ mov.valor|floatformat:2 }}</span></div><form method="post" class="flex gap-2">{% csrf_token %}<input type="hidden" name="acao" value="restaurar_movimento"><input type="hidden" name="movimento_id" value="{{ mov.registro_id }}"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}"><input name="justificativa" required class="form-input" placeholder="Motivo da restauração"><button class="btn-secondary" type="submit">Restaurar</button></form></div>{% endfor %}</div></section>
   {% endif %}
+
+  <template x-teleport="body"><div x-show="relatoriosModal" x-cloak class="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto p-3 sm:p-6" style="background:rgba(15,23,42,.82);backdrop-filter:blur(10px)" @keydown.escape.window="relatoriosModal=false" @click.self="relatoriosModal=false" role="dialog" aria-modal="true" aria-label="Imprimir relatórios financeiros">
+    <div class="my-auto w-full max-w-4xl overflow-hidden rounded-xl border border-slate-300 bg-white text-slate-900 shadow-2xl dark:border-slate-700 dark:bg-zinc-900 dark:text-slate-100" @click.stop>
+      <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-6 dark:border-slate-700">
+        <div><span class="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-300">Central de impressão</span><h3 class="mt-1 text-xl font-bold">Imprimir relatórios</h3><p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Escolha primeiro o período e depois abra o relatório desejado em A4 vertical.</p></div>
+        <button type="button" class="btn-secondary h-9 w-9 shrink-0 px-0 text-lg" @click="relatoriosModal=false" aria-label="Fechar relatórios">×</button>
+      </div>
+      <div class="max-h-[82vh] overflow-y-auto p-4 sm:p-6">
+        <section class="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+          <div class="grid gap-4 sm:grid-cols-[190px_minmax(0,1fr)] sm:items-end">
+            <label class="block text-xs font-bold uppercase text-slate-500">Data de referência<input type="date" x-model="relatorioDataBase" @change="selecionarPeriodoRelatorio(relatorioPeriodo)" class="form-input mt-1 w-full"></label>
+            <div><span class="mb-2 block text-xs font-bold uppercase text-slate-500">Período</span><div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+              <button type="button" class="rounded-md border px-3 py-2 text-xs font-semibold" :class="relatorioPeriodo==='hoje' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 dark:border-slate-700'" @click="selecionarPeriodoRelatorio('hoje')">Hoje</button>
+              <button type="button" class="rounded-md border px-3 py-2 text-xs font-semibold" :class="relatorioPeriodo==='ontem' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 dark:border-slate-700'" @click="selecionarPeriodoRelatorio('ontem')">Ontem</button>
+              <button type="button" class="rounded-md border px-3 py-2 text-xs font-semibold" :class="relatorioPeriodo==='semana' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 dark:border-slate-700'" @click="selecionarPeriodoRelatorio('semana')">Esta semana</button>
+              <button type="button" class="rounded-md border px-3 py-2 text-xs font-semibold" :class="relatorioPeriodo==='7' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 dark:border-slate-700'" @click="selecionarPeriodoRelatorio('7')">7 dias</button>
+              <button type="button" class="rounded-md border px-3 py-2 text-xs font-semibold" :class="relatorioPeriodo==='15' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 dark:border-slate-700'" @click="selecionarPeriodoRelatorio('15')">15 dias</button>
+              <button type="button" class="rounded-md border px-3 py-2 text-xs font-semibold" :class="relatorioPeriodo==='30' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 dark:border-slate-700'" @click="selecionarPeriodoRelatorio('30')">30 dias</button>
+              <button type="button" class="rounded-md border px-3 py-2 text-xs font-semibold" :class="relatorioPeriodo==='mes' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 dark:border-slate-700'" @click="selecionarPeriodoRelatorio('mes')">Este mês</button>
+              <button type="button" class="rounded-md border px-3 py-2 text-xs font-semibold" :class="relatorioPeriodo==='personalizado' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 dark:border-slate-700'" @click="selecionarPeriodoRelatorio('personalizado')">Personalizado</button>
+            </div></div>
+          </div>
+          <div class="mt-4 grid grid-cols-2 gap-3 border-t border-slate-200 pt-4 dark:border-slate-700">
+            <label class="block text-xs font-semibold">Data inicial<input type="date" x-model="relatorioInicio" :readonly="relatorioPeriodo!=='personalizado'" class="form-input mt-1 w-full"></label>
+            <label class="block text-xs font-semibold">Data final<input type="date" x-model="relatorioFim" :readonly="relatorioPeriodo!=='personalizado'" class="form-input mt-1 w-full"></label>
+          </div>
+        </section>
+        <section class="mt-4 grid gap-3 sm:grid-cols-2">
+          <button type="button" @click="abrirRelatorio('pagar')" class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-left transition hover:border-rose-500 dark:border-rose-900 dark:bg-rose-950/20"><span class="text-xs font-bold uppercase text-rose-600">01</span><strong class="mt-1 block">Contas a pagar</strong><small class="mt-1 block text-slate-600 dark:text-slate-400">Títulos pendentes com vencimento no período.</small><span class="mt-3 inline-flex text-xs font-bold text-rose-700 dark:text-rose-300">Abrir relatório →</span></button>
+          <button type="button" @click="abrirRelatorio('receber')" class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-left transition hover:border-emerald-500 dark:border-emerald-900 dark:bg-emerald-950/20"><span class="text-xs font-bold uppercase text-emerald-600">02</span><strong class="mt-1 block">Contas a receber</strong><small class="mt-1 block text-slate-600 dark:text-slate-400">Títulos pendentes com vencimento no período.</small><span class="mt-3 inline-flex text-xs font-bold text-emerald-700 dark:text-emerald-300">Abrir relatório →</span></button>
+          <button type="button" @click="abrirRelatorio('pagas')" class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-left transition hover:border-blue-500 dark:border-blue-900 dark:bg-blue-950/20"><span class="text-xs font-bold uppercase text-blue-600">03</span><strong class="mt-1 block">Contas pagas</strong><small class="mt-1 block text-slate-600 dark:text-slate-400">Despesas efetivamente pagas no período.</small><span class="mt-3 inline-flex text-xs font-bold text-blue-700 dark:text-blue-300">Abrir relatório →</span></button>
+          <button type="button" @click="abrirRelatorio('caixa')" class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-left transition hover:border-amber-500 dark:border-amber-900 dark:bg-amber-950/20"><span class="text-xs font-bold uppercase text-amber-700">04</span><strong class="mt-1 block">Entradas e saídas</strong><small class="mt-1 block text-slate-600 dark:text-slate-400">Entradas à esquerda, saídas à direita e os totais dos cards.</small><span class="mt-3 inline-flex text-xs font-bold text-amber-800 dark:text-amber-300">Abrir relatório →</span></button>
+        </section>
+      </div>
+    </div>
+  </div></template>
 
   <template x-teleport="body"><div x-show="taxasModal" x-cloak class="fixed inset-0 z-[190] flex items-center justify-center overflow-y-auto p-3 sm:p-6" style="background:rgba(15,23,42,.82);backdrop-filter:blur(10px)" @keydown.escape.window="taxasModal=false" @click.self="taxasModal=false" role="dialog" aria-modal="true" aria-label="Detalhes das taxas">
     <div class="pc-fee-dialog my-auto" @click.stop>

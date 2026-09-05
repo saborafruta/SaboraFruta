@@ -5,10 +5,28 @@
 
 {% block extra_head %}
 <style>
-  #relatorio-contas-pagas { color: #111827; }
+  #relatorio-contas-pagas { color:#111827; font-size:9px; }
+  #relatorio-contas-pagas > * + * { margin-top:7px !important; }
+  #relatorio-contas-pagas h2 { font-size:16px; line-height:1.1; }
+  #relatorio-contas-pagas h2 + p { margin-top:2px; font-size:8px; }
+  #relatorio-contas-pagas h2 + p + p { margin-top:1px; font-size:7px; }
+  .paid-summary { gap:0 !important; padding:0 !important; border-radius:0 !important; }
+  .paid-summary > div { min-width:0; padding:4px 6px; border-right:1px solid #d1d5db; }
+  .paid-summary > div:last-child { border-right:0; }
+  .paid-summary span { font-size:6px !important; }
+  .paid-summary strong { font-size:9px !important; white-space:nowrap; }
+  .paid-table { border-radius:0 !important; }
+  .paid-table table { table-layout:fixed; font-size:7px !important; }
+  .paid-table th { padding:3px 4px !important; font-size:6px !important; }
+  .paid-table td { padding:3px 4px !important; line-height:1.15; }
+  .paid-table td div { font-size:6.2px !important; }
+  @page { size: A4 portrait; margin: 0; }
   @media print {
-    nav, header, aside, .no-print { display: none !important; }
-    body, main { background: #fff !important; }
+    nav, header, aside, .no-print, .app-back-link { display: none !important; }
+    html, body, body > .flex, .app-shell-content, main, .app-content-frame { background: #fff !important; }
+    html, body, main, .app-content-frame { margin: 0 !important; padding: 0 !important; }
+    .app-content-frame { max-width: none !important; }
+    #relatorio-contas-pagas { min-height: 297mm; padding: 9mm; background: #fff !important; }
     #relatorio-contas-pagas { color: #000 !important; }
     #relatorio-contas-pagas .report-box { border-color: #d1d5db !important; box-shadow: none !important; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -17,7 +35,7 @@
 {% endblock %}
 
 {% block content %}
-<div id="relatorio-contas-pagas" class="space-y-5">
+<div id="relatorio-contas-pagas" class="space-y-5" data-columns="off">
   <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
     <div>
       <p class="no-print mb-1 text-sm"><a href="{% url 'financeiro:pagar_pagas' %}" class="text-blue-600 hover:underline">Contas Pagas</a> › Relatório</p>
@@ -35,14 +53,14 @@
     </div>
   </div>
 
-  <div class="report-box grid grid-cols-2 gap-3 rounded-lg border bg-white p-4 sm:grid-cols-4">
+  <div class="report-box paid-summary grid grid-cols-2 gap-3 rounded-lg border bg-white p-4 sm:grid-cols-4">
     <div><span class="block text-xs uppercase text-gray-500">Total pago</span><strong class="text-lg text-emerald-700">R$ {{ totais.valor_pago|default:0|floatformat:2 }}</strong></div>
     <div><span class="block text-xs uppercase text-gray-500">Títulos</span><strong class="text-lg">{{ totais.quantidade|default:0 }}</strong></div>
     <div><span class="block text-xs uppercase text-gray-500">Juros e multas</span><strong class="text-lg">R$ {{ totais.acrescimos|default:0|floatformat:2 }}</strong></div>
     <div><span class="block text-xs uppercase text-gray-500">Descontos</span><strong class="text-lg">R$ {{ totais.descontos|default:0|floatformat:2 }}</strong></div>
   </div>
 
-  <div class="report-box overflow-hidden rounded-lg border bg-white">
+  <div class="report-box paid-table overflow-hidden rounded-lg border bg-white">
     <table class="w-full text-sm">
       <thead class="bg-gray-50">
         <tr class="border-b">
@@ -91,7 +109,7 @@ document.getElementById('exportar-pagas-pdf').addEventListener('click', function
     filename: 'contas-pagas-{{ gerado_em|date:"Y-m-d" }}.pdf',
     image: { type: 'jpeg', quality: 0.96 },
     html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
   }).from(document.getElementById('relatorio-contas-pagas')).save().finally(function () {
     hiddenElements.forEach(function (element) { element.style.display = ''; });
     button.disabled = false;

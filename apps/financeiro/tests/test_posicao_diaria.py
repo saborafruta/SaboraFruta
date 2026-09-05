@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 
 from django.test import TestCase
 from django.urls import reverse
@@ -154,8 +155,16 @@ class PosicaoDiariaCaixaTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Posição Diária de Caixa")
-        self.assertContains(response, "Imprimir relatório")
+        self.assertContains(response, "Imprimir relatórios")
         self.assertContains(response, reverse("financeiro:posicao_diaria_relatorio"))
+        self.assertContains(response, reverse("financeiro:pagar_relatorio"))
+        self.assertContains(response, reverse("financeiro:receber_relatorio"))
+        self.assertContains(response, reverse("financeiro:pagar_pagas_relatorio"))
+        for opcao in (
+            "Hoje", "Ontem", "Esta semana", "7 dias", "15 dias", "30 dias",
+            "Este mês", "Personalizado", "Data inicial", "Data final",
+        ):
+            self.assertContains(response, opcao)
         self.assertContains(response, "Venda #1")
         self.assertContains(response, "Compra de material de limpeza")
         self.assertContains(response, "Contas a receber")
@@ -200,6 +209,22 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertNotContains(response, "Transferencia para caixa")
         self.assertEqual(response.context["posicao"]["total_abertura"], Decimal("170.00"))
         self.assertEqual(response.context["posicao"]["total_fechamento"], Decimal("210.00"))
+        self.assertContains(response, "size:A4 portrait")
+        self.assertContains(response, "orientation:'portrait'")
+
+    def test_quatro_relatorios_usam_folha_a4_vertical(self):
+        templates = Path(__file__).resolve().parents[1] / "templates" / "financeiro"
+        arquivos = (
+            templates / "posicao_diaria_relatorio.html",
+            templates / "pagar" / "relatorio.html",
+            templates / "receber" / "relatorio.html",
+            templates / "pagar" / "relatorio_pagas.html",
+        )
+        for arquivo in arquivos:
+            with self.subTest(arquivo=arquivo.name):
+                conteudo = arquivo.read_text(encoding="utf-8")
+                self.assertIn("A4 portrait", conteudo)
+                self.assertNotIn("A4 landscape", conteudo)
 
     def test_transferencia_com_taxa_fica_fora_do_extrato_e_reduz_saldo(self):
         forma = FormaPagamento.objects.create(
