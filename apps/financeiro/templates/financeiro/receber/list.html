@@ -359,7 +359,7 @@
         <div>
           <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nº da venda</span>
           <div class="font-semibold">
-            {% if c.documento_tipo == 'venda_pdv' and c.origem_url %}<a href="{{ c.origem_url }}" target="_blank" rel="noopener" @click.stop class="text-blue-500 hover:underline">{{ c.origem_venda_numero }}</a>{% else %}{{ c.origem_venda_numero }}{% endif %}
+            {% if c.origem_url %}<a href="{{ c.origem_url }}" target="_blank" rel="noopener" @click.stop class="text-blue-500 hover:underline">{{ c.origem_venda_numero }}</a>{% else %}{{ c.origem_venda_numero }}{% endif %}
           </div>
         </div>
         <div>
@@ -441,7 +441,7 @@
             </td>
             {% if entrega_habilitada %}<td class="px-4 py-3" style="min-width:10rem;max-width:16rem">{% include "financeiro/receber/_entrega_acionavel.html" with conta=c %}</td>{% endif %}
             <td class="px-4 py-3 text-xs font-mono whitespace-nowrap">
-              {% if c.documento_tipo == 'venda_pdv' and c.origem_url %}<a href="{{ c.origem_url }}" target="_blank" rel="noopener" class="text-blue-500 hover:underline">{{ c.origem_venda_numero }}</a>{% else %}{{ c.origem_venda_numero }}{% endif %}
+              {% if c.origem_url %}<a href="{{ c.origem_url }}" target="_blank" rel="noopener" class="text-blue-500 hover:underline">{{ c.origem_venda_numero }}</a>{% else %}{{ c.origem_venda_numero }}{% endif %}
             </td>
             <td class="px-4 py-3 text-sm whitespace-nowrap">
               {{ c.origem_venda_data|date:"d/m/Y"|default:"—" }}

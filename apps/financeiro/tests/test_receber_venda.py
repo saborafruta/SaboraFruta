@@ -169,6 +169,30 @@ class ReceberVendaTests(TestCase):
         self.assertContains(response, 'Ver OP')
         self.assertContains(response, reverse('moda:op2-detail', args=[pedido.pk]))
 
+    def test_numero_da_op_na_listagem_abre_a_op(self):
+        pedido = PedidoProducao.objects.create(
+            filial=self.filial,
+            cliente=self.cliente,
+            numero=92,
+            data_pedido=date(2026, 8, 20),
+        )
+        ContaReceber.objects.create(
+            filial=self.filial,
+            cliente=self.cliente,
+            documento_tipo='pedido_moda',
+            documento_id=pedido.pk,
+            valor_original=10,
+            valor_final=10,
+            valor_saldo=10,
+            data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 30),
+        )
+
+        response, _ = self._get(ContaReceberListView)
+
+        self.assertContains(response, 'OP #000092')
+        self.assertContains(response, reverse('moda:op2-detail', args=[pedido.pk]), count=2)
+
     def test_comprovante_interno_da_venda_exige_login_e_respeita_filial(self):
         url = reverse('pdv:comprovante_venda', args=[self.venda.pk])
         self.assertEqual(self.client.get(url).status_code, 302)
