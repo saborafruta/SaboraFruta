@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, RegistroAuditoria, Usuario
-from apps.cadastros.models import Cliente, Fornecedor
+from apps.cadastros.models import Cliente, Fornecedor, FornecedorFilial, Funcionario
 from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber, TipoFormaPagamento
 from apps.financeiro.models import ContaBancaria, FormaPagamento, PlanoContabil, PlanoContas
 from apps.financeiro.models.extrato import ExtratoBancario
@@ -211,6 +211,118 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(response.context["posicao"]["total_fechamento"], Decimal("210.00"))
         self.assertContains(response, "size:A4 portrait")
         self.assertContains(response, "orientation:'portrait'")
+
+    def test_relatorio_separa_dias_ordena_e_exibe_taxas_em_bloco_proprio(self):
+        for data_movimento, historico, valor in (
+            (date(2026, 8, 20), "Entrada quinta", Decimal("25.00")),
+            (date(2026, 8, 21), "Saída sexta", Decimal("-10.00")),
+        ):
+            ExtratoBancario.objects.create(
+                filial=self.filial,
+                conta_bancaria=self.banco,
+                data_lancamento=data_movimento,
+                historico=historico,
+                valor=valor,
+                origem="manual",
+            )
+
+        response = self.client.get(reverse("financeiro:posicao_diaria_relatorio"), {
+            "data": "2026-08-21",
+            "periodo": "personalizado",
+            "data_inicio": "2026-08-20",
+            "data_fim": "2026-08-21",
+            "ordem": "conta",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [dia["data"] for dia in response.context["dias_relatorio"]],
+            [date(2026, 8, 21), date(2026, 8, 20)],
+        )
+        self.assertContains(response, "Sexta-feira · 21/08/2026")
+        self.assertContains(response, "Quinta-feira · 20/08/2026")
+        self.assertContains(response, "Resumo das taxas", html=False)
+        self.assertContains(response, "Taxas em recebimentos")
+        self.assertContains(response, "Taxas em pagamentos")
+        self.assertContains(response, '<table class="cr-day-table"', count=2)
+        self.assertContains(response, "table-header-group")
+
+    def test_relatorio_filtra_saida_por_categoria_fornecedor_e_funcionario(self):
+        categoria = self._categoria_despesa("Uniformes da equipe")
+        fornecedor = Fornecedor.objects.create(
+            filial=self.filial,
+            tipo_pessoa="J",
+            razao_social="Fornecedor selecionado",
+            cpf_cnpj="11222333000181",
+        )
+        FornecedorFilial.objects.create(fornecedor=fornecedor, filial=self.filial)
+        funcionario = Funcionario.objects.create(
+            filial=self.filial,
+            nome="Funcionário selecionado",
+            cpf="12345678901",
+        )
+        conta = ContaPagar.objects.create(
+            filial=self.filial,
+            fornecedor=fornecedor,
+            funcionario=funcionario,
+            plano_contas=categoria,
+            descricao_despesa="Despesa que deve aparecer",
+            valor_original=Decimal("31.00"),
+            valor_final=Decimal("31.00"),
+            valor_pago=Decimal("31.00"),
+            valor_saldo=Decimal("0.00"),
+            data_emissao=date(2026, 8, 21),
+            data_vencimento=date(2026, 8, 21),
+            data_pagamento=date(2026, 8, 21),
+            status=StatusContaPagar.PAGO,
+            usuario=self.usuario,
+        )
+        PagamentoContaPagar.objects.create(
+            filial=self.filial,
+            conta_pagar=conta,
+            data_pagamento=date(2026, 8, 21),
+            valor_pago=Decimal("31.00"),
+            forma_pagamento=self.forma,
+            conta_bancaria=self.banco,
+            usuario=self.usuario,
+        )
+        outra = ContaPagar.objects.create(
+            filial=self.filial,
+            descricao_despesa="Despesa que deve ficar fora",
+            valor_original=Decimal("12.00"),
+            valor_final=Decimal("12.00"),
+            valor_pago=Decimal("12.00"),
+            valor_saldo=Decimal("0.00"),
+            data_emissao=date(2026, 8, 21),
+            data_vencimento=date(2026, 8, 21),
+            data_pagamento=date(2026, 8, 21),
+            status=StatusContaPagar.PAGO,
+            usuario=self.usuario,
+        )
+        PagamentoContaPagar.objects.create(
+            filial=self.filial,
+            conta_pagar=outra,
+            data_pagamento=date(2026, 8, 21),
+            valor_pago=Decimal("12.00"),
+            forma_pagamento=self.forma,
+            conta_bancaria=self.banco,
+            usuario=self.usuario,
+        )
+
+        response = self.client.get(reverse("financeiro:posicao_diaria_relatorio"), {
+            "data": "2026-08-21",
+            "periodo": "hoje",
+            "categoria": categoria.pk,
+            "fornecedor": fornecedor.pk,
+            "funcionario": funcionario.pk,
+        })
+
+        self.assertContains(response, "Despesa que deve aparecer")
+        self.assertNotContains(response, "Despesa que deve ficar fora")
+        self.assertContains(response, "Categoria: Uniformes da equipe")
+        self.assertContains(response, "Fornecedor: Fornecedor selecionado")
+        self.assertContains(response, "Funcionário: Funcionário selecionado")
+        self.assertEqual(response.context["posicao"]["total_saidas"], Decimal("31.00"))
 
     def test_quatro_relatorios_usam_folha_a4_vertical(self):
         templates = Path(__file__).resolve().parents[1] / "templates" / "financeiro"

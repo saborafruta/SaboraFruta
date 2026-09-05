@@ -50,6 +50,9 @@ class MovimentoDiario:
     op_url: str = ""
     venda_pdv_id: int | None = None
     transferencia: bool = False
+    categoria_id: int | None = None
+    fornecedor_id: int | None = None
+    funcionario_id: int | None = None
 
     @property
     def valor(self):
@@ -132,11 +135,24 @@ class PosicaoDiariaCaixaService:
     def gerar(
         self, *, incluir_excluidos=False, incluir_previstos=False,
         previsao_inicio=None, previsao_fim=None, conta_filtro=None, ordem="horario",
+        categoria_filtro=None, fornecedor_filtro=None, funcionario_filtro=None,
     ):
         movimentos = self._movimentos_do_dia(incluir_excluidos=incluir_excluidos)
         movimentos_ativos = [mov for mov in movimentos if not mov.excluido]
         movimentos_operacionais = [mov for mov in movimentos_ativos if not mov.transferencia]
         movimentos_exibidos = movimentos_operacionais
+        if categoria_filtro:
+            movimentos_exibidos = [
+                mov for mov in movimentos_exibidos if mov.categoria_id == categoria_filtro
+            ]
+        if fornecedor_filtro:
+            movimentos_exibidos = [
+                mov for mov in movimentos_exibidos if mov.fornecedor_id == fornecedor_filtro
+            ]
+        if funcionario_filtro:
+            movimentos_exibidos = [
+                mov for mov in movimentos_exibidos if mov.funcionario_id == funcionario_filtro
+            ]
         if conta_filtro:
             movimentos_exibidos = [
                 mov for mov in movimentos_exibidos
@@ -164,12 +180,20 @@ class PosicaoDiariaCaixaService:
         else:
             movimentos_exibidos = sorted(
                 movimentos_exibidos,
-                key=lambda mov: mov.momento or timezone.make_aware(datetime.combine(mov.data, time.min)),
+                key=lambda mov: (
+                    mov.data,
+                    timezone.localtime(mov.momento).time() if mov.momento else time.min,
+                    mov.registro_id,
+                ),
                 reverse=True,
             )
         entradas = [mov for mov in movimentos_exibidos if mov.entrada > ZERO]
         saidas = [mov for mov in movimentos_exibidos if mov.saida > ZERO]
-        entradas_com_taxa = [mov for mov in movimentos_ativos if mov.entrada > ZERO]
+        entradas_operacionais = [mov for mov in movimentos_operacionais if mov.entrada > ZERO]
+        saidas_operacionais = [mov for mov in movimentos_operacionais if mov.saida > ZERO]
+        filtros_analiticos = bool(categoria_filtro or fornecedor_filtro or funcionario_filtro)
+        movimentos_para_taxas = movimentos_exibidos if filtros_analiticos else movimentos_ativos
+        entradas_com_taxa = [mov for mov in movimentos_para_taxas if mov.entrada > ZERO]
         saldo_anterior = self._saldos_antes_do_dia()
         por_conta_dia = defaultdict(lambda: ZERO)
         for mov in movimentos_ativos:
@@ -185,10 +209,16 @@ class PosicaoDiariaCaixaService:
             nome_base = " ".join(filter(None, [conta.descricao, conta.banco_nome, conta.tipo_conta])).casefold()
             eh_dinheiro = "dinheiro" in nome_base or "caixa" in nome_base
             conta.posicao_abertura = abertura
-            entradas_conta = [m for m in entradas if m.conta and m.conta.pk == conta.pk]
+            entradas_conta = [
+                m for m in entradas_operacionais if m.conta and m.conta.pk == conta.pk
+            ]
             conta.posicao_entradas = sum((m.entrada for m in entradas_conta), ZERO)
             conta.posicao_saidas = sum(
-                (m.saida for m in saidas if m.conta and m.conta.pk == conta.pk), ZERO
+                (
+                    m.saida for m in saidas_operacionais
+                    if m.conta and m.conta.pk == conta.pk
+                ),
+                ZERO,
             )
             conta.posicao_fechamento = fechamento
             conta.posicao_cor = "azul" if eh_dinheiro else self.CORES[indice % len(self.CORES)]
@@ -390,6 +420,7 @@ class PosicaoDiariaCaixaService:
                 numero_parcelas=item.numero_parcelas,
                 data_credito=item.data_credito,
                 transferencia=item.tipo_lancamento == "transferencia",
+                categoria_id=item.plano_contas_id,
             ))
 
         recebimentos = PagamentoContaReceber.objects.filter(
@@ -448,6 +479,7 @@ class PosicaoDiariaCaixaService:
                 bandeira=item.bandeira,
                 numero_parcelas=item.numero_parcelas,
                 op_url=contexto_titulo["op_url"],
+                categoria_id=titulo.plano_contas_id,
             ))
 
         pagamentos = PagamentoContaPagar.objects.filter(
@@ -497,6 +529,9 @@ class PosicaoDiariaCaixaService:
                     item.conta_pagar.plano_contas.descricao
                     if item.conta_pagar.plano_contas_id else "Despesa sem classificacao"
                 ),
+                categoria_id=item.conta_pagar.plano_contas_id,
+                fornecedor_id=item.conta_pagar.fornecedor_id,
+                funcionario_id=item.conta_pagar.funcionario_id,
             ))
 
         try:

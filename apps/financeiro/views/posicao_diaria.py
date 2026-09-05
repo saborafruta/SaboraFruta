@@ -1,6 +1,7 @@
 from calendar import monthrange
 from datetime import timedelta
 from decimal import Decimal
+from itertools import zip_longest
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -12,6 +13,7 @@ from django.utils.dateparse import parse_date
 from django.views import View
 
 from apps.core.models import RegistroAuditoria
+from apps.cadastros.models import Fornecedor, Funcionario
 from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
@@ -351,6 +353,17 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         grupo_despesa_pessoal = PlanoContas.objects.filter(
             empresa=request.filial_ativa.empresa, tipo='D', nivel=1, despesa_pessoal=True, ativo=True,
         ).order_by('codigo', 'pk').first()
+        categorias_relatorio = PlanoContas.objects.filter(
+            empresa=request.filial_ativa.empresa,
+            ativo=True,
+            aceita_lancamento=True,
+        ).order_by('tipo', 'codigo', 'descricao')
+        fornecedores_relatorio = Fornecedor.objects.for_filial(request.filial_ativa).filter(
+            ativo=True,
+        ).order_by('razao_social', 'nome_fantasia')
+        funcionarios_relatorio = Funcionario.objects.for_filial(request.filial_ativa).filter(
+            ativo=True,
+        ).order_by('nome')
         context = {
             "historico_disponivel": historico.exists(),
             "title": "Posicao Diaria de Caixa", "data_referencia": data_referencia, "posicao": posicao,
@@ -383,6 +396,9 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             "subgrupo_edicao_id": subgrupo_edicao_id,
             "grupo_edicao_id": grupo_edicao_id,
             "grupo_despesa_pessoal_id": grupo_despesa_pessoal.pk if grupo_despesa_pessoal else '',
+            "categorias_relatorio": categorias_relatorio,
+            "fornecedores_relatorio": fornecedores_relatorio,
+            "funcionarios_relatorio": funcionarios_relatorio,
             **meta_contexto,
         }
         if request.GET.get("partial") == "previsoes":
@@ -573,18 +589,94 @@ class PosicaoDiariaCaixaRelatorioView(PermissaoRequiredMixin, View):
         )
         conta_texto = request.GET.get("conta", "").strip()
         conta_filtro = int(conta_texto) if conta_texto.isdigit() else None
-        ordem = request.GET.get("ordem", "horario")
-        if ordem not in {"horario", "conta", "forma"}:
-            ordem = "horario"
+        def filtro_id(nome):
+            valor = request.GET.get(nome, "").strip()
+            return int(valor) if valor.isdigit() else None
+
+        categoria_filtro = filtro_id("categoria")
+        fornecedor_filtro = filtro_id("fornecedor")
+        funcionario_filtro = filtro_id("funcionario")
+        ordem = "horario"
         posicao = PosicaoDiariaCaixaService(
             request.filial_ativa, data_fim, data_inicio=data_inicio,
-        ).gerar(conta_filtro=conta_filtro, ordem=ordem)
+        ).gerar(
+            conta_filtro=conta_filtro,
+            ordem=ordem,
+            categoria_filtro=categoria_filtro,
+            fornecedor_filtro=fornecedor_filtro,
+            funcionario_filtro=funcionario_filtro,
+        )
+        categorias = PlanoContas.objects.filter(
+            empresa=request.filial_ativa.empresa,
+            ativo=True,
+            aceita_lancamento=True,
+        ).order_by("tipo", "codigo", "descricao")
+        fornecedores = Fornecedor.objects.for_filial(request.filial_ativa).filter(
+            ativo=True,
+        ).order_by("razao_social", "nome_fantasia")
+        funcionarios = Funcionario.objects.for_filial(request.filial_ativa).filter(
+            ativo=True,
+        ).order_by("nome")
+        categoria_selecionada = categorias.filter(pk=categoria_filtro).first()
+        fornecedor_selecionado = fornecedores.filter(pk=fornecedor_filtro).first()
+        funcionario_selecionado = funcionarios.filter(pk=funcionario_filtro).first()
+        nomes_semana = (
+            "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira",
+            "Sexta-feira", "Sábado", "Domingo",
+        )
+        datas_movimentos = sorted(
+            {mov.data for mov in posicao["extrato"]}, reverse=True,
+        )
+        dias_relatorio = []
+        for data_movimento in datas_movimentos:
+            entradas = [mov for mov in posicao["entradas"] if mov.data == data_movimento]
+            saidas = [mov for mov in posicao["saidas"] if mov.data == data_movimento]
+            dias_relatorio.append({
+                "data": data_movimento,
+                "dia_semana": nomes_semana[data_movimento.weekday()],
+                "linhas": [
+                    {"entrada": entrada, "saida": saida}
+                    for entrada, saida in zip_longest(entradas, saidas)
+                ],
+            })
+        blocos_relatorio = []
+        linhas_na_pagina = 0
+        capacidade_pagina = 18
+        maximo_linhas_bloco = 16
+        for dia in dias_relatorio:
+            linhas = dia["linhas"]
+            for indice in range(0, len(linhas), maximo_linhas_bloco):
+                linhas_bloco = linhas[indice:indice + maximo_linhas_bloco]
+                quebra_antes = bool(
+                    linhas_na_pagina
+                    and linhas_na_pagina + len(linhas_bloco) > capacidade_pagina
+                )
+                if quebra_antes:
+                    linhas_na_pagina = 0
+                blocos_relatorio.append({
+                    "data": dia["data"],
+                    "dia_semana": dia["dia_semana"],
+                    "linhas": linhas_bloco,
+                    "continuacao": indice > 0,
+                    "quebra_antes": quebra_antes,
+                })
+                linhas_na_pagina += len(linhas_bloco)
+        filtros_selecionados = [
+            item for item in (
+                f"Categoria: {categoria_selecionada.caminho_descricao}" if categoria_selecionada else "",
+                f"Fornecedor: {fornecedor_selecionado}" if fornecedor_selecionado else "",
+                f"Funcionário: {funcionario_selecionado}" if funcionario_selecionado else "",
+            ) if item
+        ]
         retorno = reverse("financeiro:posicao_diaria") + "?" + urlencode({
             "data": data_referencia.isoformat(),
             "periodo": periodo,
             "data_inicio": data_inicio.isoformat(),
             "data_fim": data_fim.isoformat(),
             **({"conta": conta_filtro} if conta_filtro else {}),
+            **({"categoria": categoria_filtro} if categoria_filtro else {}),
+            **({"fornecedor": fornecedor_filtro} if fornecedor_filtro else {}),
+            **({"funcionario": funcionario_filtro} if funcionario_filtro else {}),
             "ordem": ordem,
         })
         return render(request, self.template_name, {
@@ -595,6 +687,10 @@ class PosicaoDiariaCaixaRelatorioView(PermissaoRequiredMixin, View):
             "data_inicio": data_inicio,
             "data_fim": data_fim,
             "periodo_unico": data_inicio == data_fim,
+            "dias_relatorio": dias_relatorio,
+            "blocos_relatorio": blocos_relatorio,
+            "filtros_selecionados": filtros_selecionados,
+            "filtros_ativos": bool(filtros_selecionados),
             "gerado_em": timezone.localtime(),
             "retorno_url": retorno,
         })

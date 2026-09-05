@@ -234,6 +234,8 @@ def _filtrar_contas_pagar_abertas(request, manager=None, params=None):
     status = params.get('status', 'pendentes')
     q = params.get('q', '').strip()
     beneficiario = params.get('beneficiario', '').strip()
+    fornecedor_id = params.get('fornecedor', '').strip()
+    funcionario_id = params.get('funcionario', '').strip()
     data_ini = params.get('data_ini', '')
     data_fim = params.get('data_fim', '')
     if not params and status == 'pendentes':
@@ -275,6 +277,10 @@ def _filtrar_contas_pagar_abertas(request, manager=None, params=None):
             | Q(funcionario__nome__icontains=beneficiario)
             | Q(funcionario__cpf__icontains=beneficiario)
         )
+    if fornecedor_id.isdigit():
+        qs = qs.filter(fornecedor_id=int(fornecedor_id))
+    if funcionario_id.isdigit():
+        qs = qs.filter(funcionario_id=int(funcionario_id))
     if data_ini:
         qs = qs.filter(data_vencimento__gte=data_ini)
     if data_fim:
@@ -284,6 +290,8 @@ def _filtrar_contas_pagar_abertas(request, manager=None, params=None):
         'status': status,
         'q': q,
         'beneficiario': beneficiario,
+        'fornecedor': fornecedor_id if fornecedor_id.isdigit() else '',
+        'funcionario': funcionario_id if funcionario_id.isdigit() else '',
         'data_ini': data_ini,
         'data_fim': data_fim,
     }
@@ -432,6 +440,8 @@ def _filtrar_contas_pagas(request):
     data_ini = request.GET.get('data_ini') or inicio_mes.isoformat()
     data_fim = request.GET.get('data_fim') or fim_mes.isoformat()
     ordenacao = request.GET.get('ordenacao', 'recentes')
+    fornecedor_id = request.GET.get('fornecedor', '').strip()
+    funcionario_id = request.GET.get('funcionario', '').strip()
     categoria_contexto = _categorias_financeiras_filtro(request)
 
     if q:
@@ -450,6 +460,10 @@ def _filtrar_contas_pagas(request):
         qs = qs.filter(data_pagamento__gte=data_ini)
     if data_fim:
         qs = qs.filter(data_pagamento__lte=data_fim)
+    if fornecedor_id.isdigit():
+        qs = qs.filter(fornecedor_id=int(fornecedor_id))
+    if funcionario_id.isdigit():
+        qs = qs.filter(funcionario_id=int(funcionario_id))
     qs = _aplicar_filtro_categoria_financeira(qs, categoria_contexto)
 
     ordenacoes = {
@@ -464,6 +478,8 @@ def _filtrar_contas_pagas(request):
         'data_ini': data_ini,
         'data_fim': data_fim,
         'ordenacao': ordenacao,
+        'fornecedor': fornecedor_id if fornecedor_id.isdigit() else '',
+        'funcionario': funcionario_id if funcionario_id.isdigit() else '',
         'mostrar_excluidos': mostrar_excluidos,
         **categoria_contexto,
     }

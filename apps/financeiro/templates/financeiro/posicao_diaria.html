@@ -236,6 +236,9 @@
   relatorioDataBase: '{{ hoje|date:"Y-m-d" }}',
   relatorioInicio: '{{ hoje|date:"Y-m-d" }}',
   relatorioFim: '{{ hoje|date:"Y-m-d" }}',
+  relatorioCategoria: '',
+  relatorioFornecedor: '',
+  relatorioFuncionario: '',
   movimentoModal: {{ movimento_modal|yesno:'true,false' }},
   contaPagarModal: false,
   contaReceberModal: false,
@@ -292,6 +295,18 @@
       parametros.set('data_ini', this.relatorioInicio);
       parametros.set('data_fim', this.relatorioFim);
       if (tipo === 'pagar' || tipo === 'receber') parametros.set('status', 'pendentes');
+    }
+    if (this.relatorioCategoria) {
+      parametros.set(
+        tipo === 'pagar' || tipo === 'pagas' ? 'categoria_financeira' : 'categoria',
+        this.relatorioCategoria
+      );
+    }
+    if (this.relatorioFornecedor && tipo !== 'receber') {
+      parametros.set('fornecedor', this.relatorioFornecedor);
+    }
+    if (this.relatorioFuncionario && tipo !== 'receber') {
+      parametros.set('funcionario', this.relatorioFuncionario);
     }
     window.open(`${destinos[tipo]}?${parametros.toString()}`, '_blank', 'noopener');
   },
@@ -751,6 +766,29 @@
           <div class="mt-4 grid grid-cols-2 gap-3 border-t border-slate-200 pt-4 dark:border-slate-700">
             <label class="block text-xs font-semibold">Data inicial<input type="date" x-model="relatorioInicio" :readonly="relatorioPeriodo!=='personalizado'" class="form-input mt-1 w-full"></label>
             <label class="block text-xs font-semibold">Data final<input type="date" x-model="relatorioFim" :readonly="relatorioPeriodo!=='personalizado'" class="form-input mt-1 w-full"></label>
+          </div>
+        </section>
+        <section class="mt-4 rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+          <div><span class="text-xs font-bold uppercase text-slate-500">Filtros opcionais</span><p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Fornecedor e funcionário se aplicam às contas a pagar, contas pagas e saídas do caixa.</p></div>
+          <div class="mt-3 grid gap-3 sm:grid-cols-3">
+            <label class="block text-xs font-semibold">Categoria
+              <select x-model="relatorioCategoria" class="form-input mt-1 w-full">
+                <option value="">Todas as categorias</option>
+                {% for categoria in categorias_relatorio %}<option value="{{ categoria.pk }}">{{ categoria.caminho_descricao }}</option>{% endfor %}
+              </select>
+            </label>
+            <label class="block text-xs font-semibold">Fornecedor
+              <select x-model="relatorioFornecedor" class="form-input mt-1 w-full">
+                <option value="">Todos os fornecedores</option>
+                {% for fornecedor in fornecedores_relatorio %}<option value="{{ fornecedor.pk }}">{{ fornecedor }}</option>{% endfor %}
+              </select>
+            </label>
+            <label class="block text-xs font-semibold">Funcionário
+              <select x-model="relatorioFuncionario" class="form-input mt-1 w-full">
+                <option value="">Todos os funcionários</option>
+                {% for funcionario in funcionarios_relatorio %}<option value="{{ funcionario.pk }}">{{ funcionario }}</option>{% endfor %}
+              </select>
+            </label>
           </div>
         </section>
         <section class="mt-4 grid gap-3 sm:grid-cols-2">

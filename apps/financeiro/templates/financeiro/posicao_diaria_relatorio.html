@@ -14,16 +14,23 @@
   .cr-period { min-width:190px; text-align:right; }
   .cr-period strong { display:block; font-size:11px; }
   .cr-period small { font-size:7px; }
-  .cr-ledgers { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:6px; margin-top:7px; align-items:start; }
-  .cr-ledger { overflow:hidden; border:1px solid #9eabba; border-radius:0; }
-  .cr-ledger-head { display:flex; align-items:center; justify-content:space-between; padding:4px 5px; border-bottom:1px solid #9eabba; font-size:8px; }
-  .cr-ledger-head.entry { background:#eaf8f0; color:#17663c; }
-  .cr-ledger-head.exit { background:#fff0f1; color:#9b2531; }
-  .cr-ledger-head h2 { margin:0; font-size:8.5px; text-transform:uppercase; letter-spacing:.05em; }
-  .cr-columns { display:grid; grid-template-columns:minmax(0,1fr) 60px; gap:4px; padding:2px 4px; border-bottom:1px solid #9eabba; background:#eef2f6; color:#526174; font-size:6px; font-weight:800; text-transform:uppercase; }
-  .cr-columns span:last-child { text-align:right; }
-  .cr-row { display:grid; grid-template-columns:minmax(0,1fr) 60px; gap:4px; padding:3px 4px; border-bottom:1px solid #cfd7e1; break-inside:avoid; page-break-inside:avoid; }
-  .cr-row:last-child { border-bottom:0; }
+  .cr-filters { margin-top:4px; color:#526174; font-size:6.5px; font-weight:700; }
+  .cr-days { margin-top:6px; overflow-x:auto; }
+  .cr-day-table { width:100%; margin-top:5px; border:1px solid #9eabba; border-collapse:collapse; table-layout:fixed; }
+  .cr-day-table:first-child { margin-top:0; }
+  .cr-day-table col.cr-description-col { width:42%; }
+  .cr-day-table col.cr-value-col { width:8%; }
+  .cr-day-table th, .cr-day-table td { border-right:1px solid #c2ccd8; }
+  .cr-day-table th:last-child, .cr-day-table td:last-child { border-right:0; }
+  .cr-day-title th { padding:3px 5px; background:#1f4d7a; color:#fff; font-size:7px; letter-spacing:.07em; text-align:left; text-transform:uppercase; }
+  .cr-side-head th { padding:3px 4px; border-bottom:1px solid #9eabba; color:#526174; font-size:6px; text-align:left; text-transform:uppercase; }
+  .cr-side-head th:nth-child(1), .cr-side-head th:nth-child(2) { background:#eaf8f0; }
+  .cr-side-head th:nth-child(3), .cr-side-head th:nth-child(4) { background:#fff0f1; }
+  .cr-side-head th:nth-child(2), .cr-side-head th:nth-child(4) { text-align:right; }
+  .cr-line { break-inside:avoid; page-break-inside:avoid; }
+  .cr-line td { padding:3px 4px; border-bottom:1px solid #cfd7e1; vertical-align:top; }
+  .cr-line:last-child td { border-bottom:0; }
+  .cr-page-break { display:block; height:0; break-after:page; page-break-after:always; }
   .cr-description { font-size:6.7px; line-height:1.14; min-width:0; }
   .cr-description strong { display:block; color:#172033; font-size:7.2px; }
   .cr-counterparty { display:inline; margin-right:3px; font-weight:700; }
@@ -39,6 +46,11 @@
   .cr-metric.entry strong, .cr-positive { color:#167247; }
   .cr-metric.exit strong, .cr-negative { color:#b12d3b; }
   .cr-metric.final { background:#eef6ff; }
+  .cr-fees { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:6px; border:1px solid #c9943b; break-inside:avoid; page-break-inside:avoid; }
+  .cr-fee { padding:3px 5px; border-right:1px solid #d9b66f; background:#fff8e8; }
+  .cr-fee:last-child { border-right:0; background:#ffefc7; }
+  .cr-fee span { display:block; color:#725019; font-size:6px; font-weight:800; text-transform:uppercase; }
+  .cr-fee strong { display:block; margin-top:1px; color:#9b4b12; font-size:8px; }
   .cr-accounts { margin-top:7px; break-inside:avoid; page-break-inside:avoid; }
   .cr-section-title { display:flex; align-items:end; justify-content:space-between; gap:8px; margin-bottom:2px; }
   .cr-section-title h2 { margin:0; font-size:8px; text-transform:uppercase; letter-spacing:.05em; }
@@ -60,12 +72,15 @@
     * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
   }
   @media (max-width:760px) {
-    .cr-ledgers { grid-template-columns:1fr; }
+    .cr-days { margin-right:-11px; margin-left:-11px; }
+    .cr-day-table { min-width:720px; }
     .cr-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
     .cr-metric.final { grid-column:1 / -1; }
   }
   @media print {
-    .cr-ledgers { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+    .cr-days { overflow:visible; }
+    .cr-day-table { min-width:0; }
+    .cr-day-table thead { display:table-header-group; }
     .cr-summary { grid-template-columns:repeat(5,minmax(0,1fr)); }
     .cr-metric.final { grid-column:auto; }
   }
@@ -95,51 +110,47 @@
         <small class="cr-muted">{{ posicao.extrato|length }} movimento{{ posicao.extrato|length|pluralize }} · emitido em {{ gerado_em|date:"d/m/Y H:i" }}</small>
       </div>
     </div>
+    {% if filtros_selecionados %}<div class="cr-filters">Filtros: {{ filtros_selecionados|join:" · " }}</div>{% endif %}
 
-    <div class="cr-ledgers">
-      <section class="cr-ledger">
-        <div class="cr-ledger-head entry"><h2>Entradas</h2><strong>R$ {{ posicao.total_entradas|floatformat:2 }}</strong></div>
-        <div class="cr-columns"><span>Descrição / origem / forma / conta</span><span>Valor</span></div>
-        {% for mov in posicao.entradas %}
-          <div class="cr-row">
-            <div class="cr-description">
-              <strong>{{ mov.descricao }}</strong>
-              {% if mov.contraparte %}<span class="cr-counterparty">Cliente/origem: {{ mov.contraparte }}</span>{% endif %}
-              <span class="cr-detail">{{ mov.hora }} · {{ mov.origem }}{% if mov.classificacao %} · {{ mov.classificacao }}{% endif %}{% if mov.documento %} · Doc. {{ mov.documento }}{% endif %}</span>
-              <span class="cr-detail"><b>Forma / conta:</b> {{ mov.forma_pagamento }} · {{ mov.conta.descricao|default:mov.conta.banco_nome|default:"Conta não definida" }}{% if mov.bandeira %} · {{ mov.bandeira|title }}{% endif %}{% if mov.numero_parcelas %} {{ mov.numero_parcelas }}x{% endif %}</span>
-            </div>
-            <div class="cr-value">R$ {{ mov.entrada|floatformat:2 }}{% if mov.valor_taxa > 0 %}<small>Bruto R$ {{ mov.valor_bruto|floatformat:2 }}<br>Taxa R$ {{ mov.valor_taxa|floatformat:2 }}{% if mov.taxa_percentual > 0 %} ({{ mov.taxa_percentual|floatformat:2 }}%){% endif %}</small>{% endif %}</div>
-          </div>
-        {% empty %}<div class="cr-empty">Nenhuma entrada no período.</div>{% endfor %}
-      </section>
-
-      <section class="cr-ledger">
-        <div class="cr-ledger-head exit"><h2>Saídas</h2><strong>R$ {{ posicao.total_saidas|floatformat:2 }}</strong></div>
-        <div class="cr-columns"><span>Descrição / destino / forma / conta</span><span>Valor</span></div>
-        {% for mov in posicao.saidas %}
-          <div class="cr-row">
-            <div class="cr-description">
-              <strong>{{ mov.descricao }}</strong>
-              {% if mov.contraparte %}<span class="cr-counterparty">Fornecedor/funcionário: {{ mov.contraparte }}</span>{% endif %}
-              <span class="cr-detail">{{ mov.hora }} · {{ mov.origem }}{% if mov.classificacao %} · {{ mov.classificacao }}{% endif %}{% if mov.documento %} · Doc. {{ mov.documento }}{% endif %}</span>
-              <span class="cr-detail"><b>Forma / conta:</b> {{ mov.forma_pagamento }} · {{ mov.conta.descricao|default:mov.conta.banco_nome|default:"Conta não definida" }}</span>
-            </div>
-            <div class="cr-value">R$ {{ mov.saida|floatformat:2 }}{% if mov.valor_taxa > 0 %}<small>Taxa adicional R$ {{ mov.valor_taxa|floatformat:2 }}{% if mov.taxa_percentual > 0 %} ({{ mov.taxa_percentual|floatformat:2 }}%){% endif %}</small>{% endif %}</div>
-          </div>
-        {% empty %}<div class="cr-empty">Nenhuma saída no período.</div>{% endfor %}
-      </section>
+    <div class="cr-days">
+      {% for dia in blocos_relatorio %}
+        {% if dia.quebra_antes %}<div class="html2pdf__page-break cr-page-break" aria-hidden="true"></div>{% endif %}
+        <table class="cr-day-table" data-columns="off">
+          <colgroup><col class="cr-description-col"><col class="cr-value-col"><col class="cr-description-col"><col class="cr-value-col"></colgroup>
+          <thead>
+            <tr class="cr-day-title"><th colspan="4">{{ dia.dia_semana }} · {{ dia.data|date:"d/m/Y" }}{% if dia.continuacao %} · continuação{% endif %}</th></tr>
+            <tr class="cr-side-head"><th>Entradas · descrição / origem / forma / conta</th><th>Valor</th><th>Saídas · descrição / destino / forma / conta</th><th>Valor</th></tr>
+          </thead>
+          <tbody>
+            {% for linha in dia.linhas %}
+              <tr class="cr-line">
+                <td>{% if linha.entrada %}<div class="cr-description"><strong>{{ linha.entrada.descricao }}</strong>{% if linha.entrada.contraparte %}<span class="cr-counterparty">Cliente/origem: {{ linha.entrada.contraparte }}</span>{% endif %}<span class="cr-detail">{{ linha.entrada.hora }} · {{ linha.entrada.origem }}{% if linha.entrada.classificacao %} · {{ linha.entrada.classificacao }}{% endif %}{% if linha.entrada.documento %} · Doc. {{ linha.entrada.documento }}{% endif %}</span><span class="cr-detail"><b>Forma / conta:</b> {{ linha.entrada.forma_pagamento }} · {{ linha.entrada.conta.descricao|default:linha.entrada.conta.banco_nome|default:"Conta não definida" }}{% if linha.entrada.bandeira %} · {{ linha.entrada.bandeira|title }}{% endif %}{% if linha.entrada.numero_parcelas %} {{ linha.entrada.numero_parcelas }}x{% endif %}</span></div>{% endif %}</td>
+                <td class="cr-value">{% if linha.entrada %}R$ {{ linha.entrada.entrada|floatformat:2 }}{% if linha.entrada.valor_taxa > 0 %}<small>Bruto R$ {{ linha.entrada.valor_bruto|floatformat:2 }}<br>Taxa R$ {{ linha.entrada.valor_taxa|floatformat:2 }}{% if linha.entrada.taxa_percentual > 0 %} ({{ linha.entrada.taxa_percentual|floatformat:2 }}%){% endif %}</small>{% endif %}{% endif %}</td>
+                <td>{% if linha.saida %}<div class="cr-description"><strong>{{ linha.saida.descricao }}</strong>{% if linha.saida.contraparte %}<span class="cr-counterparty">Fornecedor/funcionário: {{ linha.saida.contraparte }}</span>{% endif %}<span class="cr-detail">{{ linha.saida.hora }} · {{ linha.saida.origem }}{% if linha.saida.classificacao %} · {{ linha.saida.classificacao }}{% endif %}{% if linha.saida.documento %} · Doc. {{ linha.saida.documento }}{% endif %}</span><span class="cr-detail"><b>Forma / conta:</b> {{ linha.saida.forma_pagamento }} · {{ linha.saida.conta.descricao|default:linha.saida.conta.banco_nome|default:"Conta não definida" }}</span></div>{% endif %}</td>
+                <td class="cr-value">{% if linha.saida %}R$ {{ linha.saida.saida|floatformat:2 }}{% if linha.saida.valor_taxa > 0 %}<small>Taxa adicional R$ {{ linha.saida.valor_taxa|floatformat:2 }}{% if linha.saida.taxa_percentual > 0 %} ({{ linha.saida.taxa_percentual|floatformat:2 }}%){% endif %}</small>{% endif %}{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% empty %}<div class="cr-empty">Nenhuma entrada ou saída encontrada para os filtros selecionados.</div>{% endfor %}
     </div>
 
     <section class="cr-summary" aria-label="Resumo do caixa">
-      <div class="cr-metric"><span>Saldo inicial</span><strong>R$ {{ posicao.total_abertura|floatformat:2 }}</strong></div>
+      <div class="cr-metric"><span>Saldo inicial{% if filtros_ativos %} geral{% endif %}</span><strong>R$ {{ posicao.total_abertura|floatformat:2 }}</strong></div>
       <div class="cr-metric entry"><span>Total de entradas</span><strong>+ R$ {{ posicao.total_entradas|floatformat:2 }}</strong></div>
       <div class="cr-metric exit"><span>Total de saídas</span><strong>- R$ {{ posicao.total_saidas|floatformat:2 }}</strong></div>
       <div class="cr-metric"><span>Resultado do dia</span><strong class="{% if posicao.variacao_dia < 0 %}cr-negative{% else %}cr-positive{% endif %}">R$ {{ posicao.variacao_dia|floatformat:2 }}</strong></div>
-      <div class="cr-metric final"><span>Saldo final</span><strong>R$ {{ posicao.total_fechamento|floatformat:2 }}</strong></div>
+      <div class="cr-metric final"><span>Saldo final{% if filtros_ativos %} geral{% endif %}</span><strong>R$ {{ posicao.total_fechamento|floatformat:2 }}</strong></div>
+    </section>
+
+    <section class="cr-fees" aria-label="Resumo das taxas">
+      <div class="cr-fee"><span>Taxas em recebimentos</span><strong>R$ {{ posicao.total_taxas_entradas|floatformat:2 }}</strong></div>
+      <div class="cr-fee"><span>Taxas em pagamentos</span><strong>R$ {{ posicao.total_taxas_pagamentos|floatformat:2 }}</strong></div>
+      <div class="cr-fee"><span>Total de taxas</span><strong>R$ {{ posicao.total_taxas_transacoes|floatformat:2 }}</strong></div>
     </section>
 
     <section class="cr-accounts">
-      <div class="cr-section-title"><h2>Saldos das contas bancárias</h2><span class="cr-muted text-[8px]">Conferência: abertura + entradas - saídas = fechamento</span></div>
+      <div class="cr-section-title"><h2>Saldos das contas bancárias</h2><span class="cr-muted text-[8px]">{% if filtros_ativos %}Saldos gerais; os filtros acima afetam movimentos e taxas{% else %}Conferência: abertura + entradas - saídas = fechamento{% endif %}</span></div>
       <table data-columns="off">
         <thead><tr><th>Conta</th><th>Saldo inicial</th><th>Entradas</th><th>Saídas</th><th>Saldo final</th></tr></thead>
         <tbody>
@@ -149,7 +160,7 @@
       </table>
     </section>
 
-    <footer class="cr-footer"><span>Taxas em recebimentos: R$ {{ posicao.total_taxas_entradas|floatformat:2 }} · Taxas em pagamentos: R$ {{ posicao.total_taxas_pagamentos|floatformat:2 }} · Total de taxas: R$ {{ posicao.total_taxas_transacoes|floatformat:2 }}</span><span>Documento para conferência interna</span></footer>
+    <footer class="cr-footer"><span>Movimentos ordenados do dia mais recente para o mais antigo e, em cada dia, do horário mais recente para o mais antigo.</span><span>Documento para conferência interna</span></footer>
   </article>
 </div>
 {% endblock %}
@@ -167,7 +178,7 @@ document.getElementById('exportar-caixa-pdf').addEventListener('click', function
     image: {type:'jpeg', quality:0.98},
     html2canvas: {scale:2, useCORS:true, backgroundColor:'#ffffff'},
     jsPDF: {unit:'mm', format:'a4', orientation:'portrait'},
-    pagebreak: {mode:['css','legacy'], avoid:['.cr-row','.cr-summary','.cr-accounts']}
+    pagebreak: {mode:['css','legacy'], after:['.cr-page-break'], avoid:['.cr-day-table thead','.cr-line','.cr-summary','.cr-fees','.cr-accounts']}
   }).from(document.getElementById('cash-report')).save().finally(function () {
     button.disabled = false;
     button.textContent = 'Exportar PDF';

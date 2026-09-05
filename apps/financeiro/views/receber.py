@@ -159,6 +159,7 @@ class ContaReceberListView(PermissaoRequiredMixin, View):
         q = request.GET.get('q', '').strip()
         data_ini = request.GET.get('data_ini', '')
         data_fim = request.GET.get('data_fim', '')
+        categoria_id = request.GET.get('categoria', '').strip()
 
         if status == 'pendentes':
             qs = qs.filter(status__in=[
@@ -178,6 +179,8 @@ class ContaReceberListView(PermissaoRequiredMixin, View):
             qs = qs.filter(data_vencimento__gte=data_ini)
         if data_fim:
             qs = qs.filter(data_vencimento__lte=data_fim)
+        if categoria_id.isdigit():
+            qs = qs.filter(plano_contas_id=int(categoria_id))
 
         # Totais da seleção filtrada
         entrega = _contexto_entrega(request, filial)
@@ -213,6 +216,7 @@ class ContaReceberListView(PermissaoRequiredMixin, View):
             'q': q,
             'data_ini': data_ini,
             'data_fim': data_fim,
+            'categoria_filtro': categoria_id if categoria_id.isdigit() else '',
             'totais_filtro': totais_filtro,
             'page_querystring': page_querystring,
             'pill_status': PILL_STATUS,
@@ -238,6 +242,7 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
         q = request.GET.get('q', '').strip()
         data_ini = request.GET.get('data_ini', '')
         data_fim = request.GET.get('data_fim', '')
+        categoria_id = request.GET.get('categoria', '').strip()
 
         qs = (
             ContaReceber.objects.for_filial(filial)
@@ -263,6 +268,8 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
             qs = qs.filter(data_vencimento__gte=data_ini)
         if data_fim:
             qs = qs.filter(data_vencimento__lte=data_fim)
+        if categoria_id.isdigit():
+            qs = qs.filter(plano_contas_id=int(categoria_id))
 
         entrega = _contexto_entrega(request, filial)
         if entrega['entrega_filtro']:
@@ -295,6 +302,7 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
             'status_label': status_label,
             'data_ini': data_ini,
             'data_fim': data_fim,
+            'categoria_filtro': categoria_id if categoria_id.isdigit() else '',
             'total_geral_saldo': totais['total_saldo'] or Decimal('0'),
             'total_geral_valor': totais['total_valor'] or Decimal('0'),
             'total_geral_pago': totais['total_pago'] or Decimal('0'),
