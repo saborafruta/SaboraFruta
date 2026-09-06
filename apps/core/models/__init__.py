@@ -6,6 +6,7 @@ from .usuario import Usuario, PerfilAcesso, Permissao, SessaoUsuario, UsuarioFil
 from .log import LogSistema, LogAcesso, RegistroAuditoria
 from .parametros import ParametrosSistema, ParametroDocumentoFiscal
 from .notificacao import Notificacao, NotificacaoLeitura
+from .tenant import EmpresaBanco, TenantPublicLink
 
 __all__ = [
     'FilialScopedModel', 'FilialManager', 'TimestampedModel', 'ActiveModel',
@@ -15,4 +16,5 @@ __all__ = [
     'LogSistema', 'LogAcesso', 'RegistroAuditoria',
     'ParametrosSistema', 'ParametroDocumentoFiscal',
     'Notificacao', 'NotificacaoLeitura',
+    'EmpresaBanco', 'TenantPublicLink',
 ]

@@ -28,8 +28,11 @@ logger = logging.getLogger(__name__)
 @shared_task(name="apps.cashback.tasks.expiracao.expirar_creditos_vencidos")
 def expirar_creditos_vencidos():
     """Expira em lote o saldo disponível de todos os créditos de cashback vencidos."""
+    from apps.core.services.tenant_task_service import TenantTaskService
     from apps.cashback.services.wallet_service import CashbackWalletService
 
-    total = CashbackWalletService.expirar_creditos()
+    total = TenantTaskService.executar_em_todos(
+        CashbackWalletService.expirar_creditos,
+    )
     logger.info("Expiração de cashback em lote: %s carteira(s) processada(s).", total)
     return total

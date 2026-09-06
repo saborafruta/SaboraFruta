@@ -29,6 +29,11 @@ logger = logging.getLogger(__name__)
 def recalcular_recompra_todas_filiais():
     """Recalcula o padrão de recompra de todas as filiais ativas."""
     from django.core.management import call_command
+    from apps.core.services.tenant_task_service import TenantTaskService
 
-    call_command('recalcular_recompra')
+    def executar():
+        call_command('recalcular_recompra')
+        return 0
+
+    TenantTaskService.executar_em_todos(executar)
     logger.info('Recálculo de recompra concluído.')
