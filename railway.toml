@@ -1,3 +1,7 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
 [deploy]
 # Roda ANTES de iniciar o servidor — aplica todas as migrations pendentes
 releaseCommand = "python manage.py migrate --noinput"
