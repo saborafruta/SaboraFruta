@@ -10,11 +10,11 @@
   .cr-header { display:flex; justify-content:space-between; gap:18px; padding-bottom:6px; border-bottom:2px solid #1f4d7a; }
   .cr-kicker { color:#1f4d7a; font-size:7.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
   .cr-title { margin:2px 0 0; font-size:16px; line-height:1.05; font-weight:800; }
-  .cr-muted { color:#607086; }
+  .cr-muted { color:#172033; }
   .cr-period { min-width:190px; text-align:right; }
   .cr-period strong { display:block; font-size:11px; }
   .cr-period small { font-size:7px; }
-  .cr-filters { margin-top:4px; color:#526174; font-size:6.5px; font-weight:700; }
+  .cr-filters { margin-top:4px; color:#172033; font-size:6.5px; font-weight:700; }
   .cr-days { margin-top:6px; overflow-x:auto; }
   .cr-day-table { width:100%; margin-top:5px; border:1px solid #9eabba; border-collapse:collapse; table-layout:fixed; }
   .cr-day-table:first-child { margin-top:0; }
@@ -23,7 +23,7 @@
   .cr-day-table th, .cr-day-table td { border-right:1px solid #c2ccd8; }
   .cr-day-table th:last-child, .cr-day-table td:last-child { border-right:0; }
   .cr-day-title th { padding:3px 5px; background:#1f4d7a; color:#fff; font-size:7px; letter-spacing:.07em; text-align:left; text-transform:uppercase; }
-  .cr-side-head th { padding:3px 4px; border-bottom:1px solid #9eabba; color:#526174; font-size:6px; text-align:left; text-transform:uppercase; }
+  .cr-side-head th { padding:3px 4px; border-bottom:1px solid #9eabba; color:#172033; font-size:6px; text-align:left; text-transform:uppercase; }
   .cr-side-head th:nth-child(1), .cr-side-head th:nth-child(2) { background:#eaf8f0; }
   .cr-side-head th:nth-child(3), .cr-side-head th:nth-child(4) { background:#fff0f1; }
   .cr-side-head th:nth-child(2), .cr-side-head th:nth-child(4) { text-align:right; }
@@ -33,14 +33,14 @@
   .cr-description { font-size:6.7px; line-height:1.14; min-width:0; }
   .cr-description strong { display:block; color:#172033; font-size:7.2px; }
   .cr-counterparty { display:inline; margin-right:3px; font-weight:700; }
-  .cr-detail { display:inline; color:#607086; }
+  .cr-detail { display:inline; color:#172033; }
   .cr-detail + .cr-detail::before { content:' · '; }
   .cr-value { text-align:right; white-space:nowrap; font-size:7.5px; font-weight:800; }
   .cr-value small { display:block; margin-top:1px; color:#a23b45; font-size:6px; font-weight:700; white-space:normal; }
-  .cr-empty { padding:10px 5px; color:#718096; text-align:center; font-size:7px; }
+  .cr-empty { padding:10px 5px; color:#172033; text-align:center; font-size:7px; }
   .cr-summary { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); margin-top:7px; border:1px solid #9eabba; border-right:0; break-inside:avoid; page-break-inside:avoid; }
   .cr-metric { min-width:0; border-right:1px solid #9eabba; border-radius:0; padding:3px 4px; }
-  .cr-metric span { display:block; color:#607086; font-size:6px; font-weight:800; letter-spacing:.03em; text-transform:uppercase; }
+  .cr-metric span { display:block; color:#172033; font-size:6px; font-weight:800; letter-spacing:.03em; text-transform:uppercase; }
   .cr-metric strong { display:block; margin-top:1px; font-size:8px; white-space:nowrap; }
   .cr-metric.entry strong, .cr-positive { color:#167247; }
   .cr-metric.exit strong, .cr-negative { color:#b12d3b; }
@@ -50,12 +50,12 @@
   .cr-section-title h2 { margin:0; font-size:8px; text-transform:uppercase; letter-spacing:.05em; }
   .cr-section-title span { font-size:6.5px; }
   .cr-accounts table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:7px; }
-  .cr-accounts th { padding:2px 4px; background:#e7ecf2; color:#526174; text-align:right; text-transform:uppercase; font-size:6px; letter-spacing:.03em; }
+  .cr-accounts th { padding:2px 4px; background:#e7ecf2; color:#172033; text-align:right; text-transform:uppercase; font-size:6px; letter-spacing:.03em; }
   .cr-accounts th:first-child, .cr-accounts td:first-child { width:36%; text-align:left; }
   .cr-accounts td { padding:2px 4px; border-bottom:1px solid #cfd7e1; text-align:right; white-space:nowrap; }
   .cr-accounts td:first-child { white-space:normal; }
   .cr-accounts tfoot td { border-top:2px solid #9eb0c4; border-bottom:0; font-weight:800; }
-  .cr-footer { display:flex; justify-content:space-between; gap:8px; margin-top:5px; padding-top:3px; border-top:1px solid #9eabba; color:#718096; font-size:5.8px; }
+  .cr-footer { display:flex; justify-content:space-between; gap:8px; margin-top:5px; padding-top:3px; border-top:1px solid #9eabba; color:#172033; font-size:5.8px; }
   /* Compacta somente a cópia exportada para aproveitar o fim da página sem
      separar o fechamento dos saldos bancários. */
   #cash-report.cr-pdf-exporting .cr-header { padding-bottom:4px; }
@@ -72,7 +72,7 @@
   #cash-report.cr-pdf-exporting .cr-footer { margin-top:3px; padding-top:2px; }
   #cash-report table tr:hover { background:#fff !important; color:#172033 !important; }
   #cash-report .cr-day-title:hover { background:#1f4d7a !important; color:#fff !important; }
-  #cash-report .cr-side-head:hover { background:transparent !important; color:#526174 !important; }
+  #cash-report .cr-side-head:hover { background:transparent !important; color:#172033 !important; }
   @page { size:A4 portrait; margin:0; }
   @media print {
     nav, header, aside, .no-print, .app-back-link { display:none !important; }
