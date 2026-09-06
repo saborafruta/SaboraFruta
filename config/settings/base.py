@@ -1,6 +1,7 @@
 ﻿"""
 ConfiguraÃ§Ãµes base do projeto ERP iNoovaTed.
 """
+import json
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -76,6 +77,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.core.middleware.tenant.TenantContextMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # Middlewares customizados
@@ -112,6 +114,64 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': env.db("DATABASE_URL"),
 }
+DATABASE_CONNECT_TIMEOUT = env.int('DATABASE_CONNECT_TIMEOUT', default=5)
+DATABASE_STATEMENT_TIMEOUT_MS = env.int('DATABASE_STATEMENT_TIMEOUT_MS', default=30000)
+DATABASE_LOCK_TIMEOUT_MS = env.int('DATABASE_LOCK_TIMEOUT_MS', default=5000)
+DATABASE_IDLE_TRANSACTION_TIMEOUT_MS = env.int(
+    'DATABASE_IDLE_TRANSACTION_TIMEOUT_MS', default=30000,
+)
+
+
+def _tenant_database_config(raw_config):
+    """Converte URL ou objeto JSON em configuração de banco Django."""
+    if isinstance(raw_config, str):
+        return env.db_url_config(raw_config)
+    if isinstance(raw_config, dict):
+        if 'URL' in raw_config:
+            config = env.db_url_config(raw_config['URL'])
+            config.update({key: value for key, value in raw_config.items() if key != 'URL'})
+            return config
+        return raw_config
+    raise ValueError('Configuração de banco tenant deve ser URL ou objeto JSON.')
+
+
+# O recurso nasce desligado. Assim, publicar este código não muda o banco usado
+# por nenhum cliente até a ativação explícita em um ambiente validado.
+TENANT_DATABASE_ROUTING_ENABLED = env.bool('TENANT_DATABASE_ROUTING_ENABLED', default=False)
+TENANT_DATABASE_PROVISIONING_MODE = env('TENANT_DATABASE_PROVISIONING_MODE', default='manual')
+TENANT_PUBLIC_LINK_ROUTING_READY = env.bool('TENANT_PUBLIC_LINK_ROUTING_READY', default=False)
+TENANT_BACKGROUND_TASKS_READY = env.bool('TENANT_BACKGROUND_TASKS_READY', default=False)
+TENANT_DATABASES_JSON = env('TENANT_DATABASES_JSON', default='')
+RAILWAY_API_TOKEN = env('RAILWAY_API_TOKEN', default='')
+RAILWAY_PROJECT_TOKEN = env('RAILWAY_PROJECT_TOKEN', default='')
+RAILWAY_PROJECT_ID = env('RAILWAY_PROJECT_ID', default='')
+RAILWAY_ENVIRONMENT_ID = env('RAILWAY_ENVIRONMENT_ID', default='')
+RAILWAY_SERVICE_ID = env('RAILWAY_SERVICE_ID', default='')
+RAILWAY_TENANT_DATABASE_IMAGE = env('RAILWAY_TENANT_DATABASE_IMAGE', default='postgres:16-alpine')
+RAILWAY_TENANT_DATABASE_VOLUME_PATH = env(
+    'RAILWAY_TENANT_DATABASE_VOLUME_PATH', default='/var/lib/postgresql/data',
+)
+
+TENANT_DATABASE_ALIASES = []
+if TENANT_DATABASES_JSON:
+    for alias, raw_config in json.loads(TENANT_DATABASES_JSON).items():
+        if alias == 'default':
+            raise ValueError('Alias default não pode ser usado em TENANT_DATABASES_JSON.')
+        DATABASES[alias] = _tenant_database_config(raw_config)
+        TENANT_DATABASE_ALIASES.append(alias)
+
+# Todos os módulos operacionais atuais precisam acompanhar a empresa. A lista é
+# explícita para que apps de terceiros (beat/results/storage) permaneçam centrais.
+TENANT_ROUTED_APPS = [
+    'admin', 'analytics', 'auth', 'cadastros', 'cashback', 'compras',
+    'contenttypes', 'core', 'crm', 'estoque', 'financeiro', 'fiscal',
+    'food_service', 'logistica', 'lotes', 'mapas', 'moda', 'pdv', 'polpa',
+    'producao', 'produtos', 'qualidade', 'sessions', 'vendas',
+]
+TENANT_GLOBAL_MODELS = [
+    'core.empresabanco', 'core.tenantpubliclink', 'sessions.session',
+]
+DATABASE_ROUTERS = ['apps.core.db_router.TenantDatabaseRouter']
 
 # Auth
 AUTH_USER_MODEL = 'core.Usuario'

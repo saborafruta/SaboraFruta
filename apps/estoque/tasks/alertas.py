@@ -16,8 +16,7 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name='apps.estoque.tasks.alertas.verificar_vencimentos')
-def verificar_vencimentos():
+def _verificar_vencimentos_banco_atual():
     """Percorre lotes ativos e gera/atualiza alertas para vencimentos em ate 60 dias."""
     from apps.estoque.models import LoteProduto
     from apps.estoque.services.alerta_service import AlertaService
@@ -42,8 +41,14 @@ def verificar_vencimentos():
     return gerados
 
 
-@shared_task(name='apps.estoque.tasks.alertas.bloquear_lotes_vencidos')
-def bloquear_lotes_vencidos():
+@shared_task(name='apps.estoque.tasks.alertas.verificar_vencimentos')
+def verificar_vencimentos():
+    from apps.core.services.tenant_task_service import TenantTaskService
+
+    return TenantTaskService.executar_em_todos(_verificar_vencimentos_banco_atual)
+
+
+def _bloquear_lotes_vencidos_banco_atual():
     """Bloqueia automaticamente todos os lotes vencidos."""
     from apps.estoque.models import LoteProduto
     from apps.estoque.services.alerta_service import AlertaService
@@ -63,8 +68,14 @@ def bloquear_lotes_vencidos():
     return bloqueados
 
 
-@shared_task(name='apps.estoque.tasks.alertas.verificar_estoque_minimo')
-def verificar_estoque_minimo():
+@shared_task(name='apps.estoque.tasks.alertas.bloquear_lotes_vencidos')
+def bloquear_lotes_vencidos():
+    from apps.core.services.tenant_task_service import TenantTaskService
+
+    return TenantTaskService.executar_em_todos(_bloquear_lotes_vencidos_banco_atual)
+
+
+def _verificar_estoque_minimo_banco_atual():
     """Conta produtos vinculados a filiais com estoque abaixo do minimo."""
     from apps.estoque.models import Estoque
     from apps.produtos.models import ProdutoFilial
@@ -95,3 +106,10 @@ def verificar_estoque_minimo():
     # Hook: enviar email/webhook aqui.
     logger.info('verificar_estoque_minimo: %d produtos com estoque abaixo do minimo', count)
     return count
+
+
+@shared_task(name='apps.estoque.tasks.alertas.verificar_estoque_minimo')
+def verificar_estoque_minimo():
+    from apps.core.services.tenant_task_service import TenantTaskService
+
+    return TenantTaskService.executar_em_todos(_verificar_estoque_minimo_banco_atual)

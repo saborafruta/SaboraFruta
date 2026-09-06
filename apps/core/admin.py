@@ -4,7 +4,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from apps.core.models import (
     Empresa, Filial, LogAcesso, LogSistema, PerfilAcesso, Permissao, RegistroAuditoria,
     PoliticaReplicacao, PoliticaReplicacaoFilial, SessaoUsuario, Usuario,
-    UsuarioFilialAcesso,
+    UsuarioFilialAcesso, EmpresaBanco,
 )
 
 
@@ -13,6 +13,24 @@ class EmpresaAdmin(admin.ModelAdmin):
     list_display = ['razao_social', 'nome_fantasia', 'cnpj', 'regime_tributario', 'ativo']
     list_filter = ['ativo', 'regime_tributario']
     search_fields = ['razao_social', 'nome_fantasia', 'cnpj']
+
+
+@admin.register(EmpresaBanco)
+class EmpresaBancoAdmin(admin.ModelAdmin):
+    list_display = [
+        'empresa', 'db_alias', 'status', 'provisionamento_modo',
+        'railway_database_service_name', 'ultima_verificacao_em',
+    ]
+    list_filter = ['status', 'provisionamento_modo', 'ativo']
+    search_fields = [
+        'empresa__razao_social', 'empresa__nome_fantasia', 'empresa__cnpj',
+        'db_alias', 'railway_database_service_name',
+    ]
+    autocomplete_fields = ['empresa']
+    readonly_fields = [
+        'provisionamento_solicitado_em', 'provisionado_em',
+        'ultima_migracao_em', 'ultima_verificacao_em', 'ultimo_erro',
+    ]
 
 
 @admin.register(Filial)

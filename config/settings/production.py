@@ -16,12 +16,42 @@ if env.bool('DATABASE_SSL_REQUIRE', default=False):
     database_config.setdefault('OPTIONS', {})
     database_config['OPTIONS']['sslmode'] = 'require'
 
+def _with_database_timeouts(config):
+    config = {**config}
+    if 'postgresql' not in config.get('ENGINE', ''):
+        return config
+    options = {**config.get('OPTIONS', {})}
+    options.setdefault('connect_timeout', DATABASE_CONNECT_TIMEOUT)
+    server_options = options.get('options', '')
+    timeout_flags = (
+        f'-c statement_timeout={DATABASE_STATEMENT_TIMEOUT_MS} '
+        f'-c lock_timeout={DATABASE_LOCK_TIMEOUT_MS} '
+        f'-c idle_in_transaction_session_timeout={DATABASE_IDLE_TRANSACTION_TIMEOUT_MS}'
+    )
+    options['options'] = f'{server_options} {timeout_flags}'.strip()
+    config['OPTIONS'] = options
+    return config
+
+
+tenant_database_configs = {
+    alias: DATABASES[alias]
+    for alias in TENANT_DATABASE_ALIASES
+    if alias in DATABASES
+}
+
 DATABASES = {
     'default': {
-        **database_config,
+        **_with_database_timeouts(database_config),
         'CONN_MAX_AGE': env.int('DATABASE_CONN_MAX_AGE', default=0),
     }
 }
+for alias, config in tenant_database_configs.items():
+    DATABASES[alias] = {
+        **_with_database_timeouts(config),
+        'CONN_MAX_AGE': config.get(
+            'CONN_MAX_AGE', env.int('DATABASE_CONN_MAX_AGE', default=0),
+        ),
+    }
 
 # Whitenoise — serve arquivos estáticos direto pelo Django, sem precisar de nginx
 MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
