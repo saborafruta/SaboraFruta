@@ -34,23 +34,29 @@ from apps.financeiro.views.contas_bancarias import ContaBancariaListView, _usuar
 from apps.financeiro.views.pagar import _contexto_meta_despesa_pessoal
 
 
-def _taxa_como_saida_relatorio(movimento, tipo):
-    rotulo = "Taxa de recebimento" if tipo == "recebimento" else "Taxa de pagamento"
+def _taxas_consolidadas_relatorio(recebimentos, pagamentos, data_movimento):
+    movimentos = [*recebimentos, *pagamentos]
     return SimpleNamespace(
-        data=movimento.data,
-        conta=movimento.conta,
-        descricao=rotulo,
-        contraparte=movimento.descricao,
-        origem=rotulo,
+        data=data_movimento,
+        conta=None,
+        descricao="Taxas financeiras",
+        contraparte="",
+        origem="Taxas consolidadas",
         classificacao="Despesa financeira",
-        documento=movimento.documento,
-        forma_pagamento=movimento.forma_pagamento,
-        saida=movimento.valor_taxa,
+        documento="",
+        forma_pagamento="",
+        saida=sum((mov.valor_taxa for mov in movimentos), Decimal("0")),
+        taxa_recebimentos=sum(
+            (mov.valor_taxa for mov in recebimentos), Decimal("0")
+        ),
+        taxa_pagamentos=sum(
+            (mov.valor_taxa for mov in pagamentos), Decimal("0")
+        ),
         valor_taxa=Decimal("0"),
-        taxa_percentual=movimento.taxa_percentual,
-        momento=movimento.momento,
-        hora=movimento.hora,
-        tipo_taxa=tipo,
+        taxa_percentual=Decimal("0"),
+        momento=max((mov.momento for mov in movimentos if mov.momento), default=None),
+        hora="--:--",
+        tipo_taxa="consolidada",
     )
 
 
@@ -645,20 +651,24 @@ class PosicaoDiariaCaixaRelatorioView(PermissaoRequiredMixin, View):
             "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira",
             "Sexta-feira", "Sábado", "Domingo",
         )
-        taxas_recebimentos = [
-            _taxa_como_saida_relatorio(mov, "recebimento")
-            for mov in posicao["movimentos_taxas_entradas"]
-            if not mov.transferencia
+        taxas_recebimentos_base = [
+            mov for mov in posicao["movimentos_taxas_entradas"] if not mov.transferencia
         ]
-        taxas_pagamentos = [
-            _taxa_como_saida_relatorio(mov, "pagamento")
-            for mov in posicao["taxas_pagamentos"]
-        ] + [
-            _taxa_como_saida_relatorio(mov, "pagamento")
-            for mov in posicao["movimentos_taxas_entradas"]
-            if mov.transferencia
+        taxas_pagamentos_base = [
+            *posicao["taxas_pagamentos"],
+            *[mov for mov in posicao["movimentos_taxas_entradas"] if mov.transferencia],
         ]
-        taxas_como_saidas = taxas_recebimentos + taxas_pagamentos
+        taxas_individuais = taxas_recebimentos_base + taxas_pagamentos_base
+        taxas_como_saidas = []
+        datas_taxas = sorted({mov.data for mov in taxas_individuais}, reverse=True)
+        for data_taxa in datas_taxas:
+            recebimentos_dia = [mov for mov in taxas_recebimentos_base if mov.data == data_taxa]
+            pagamentos_dia = [mov for mov in taxas_pagamentos_base if mov.data == data_taxa]
+            taxas_como_saidas.append(
+                _taxas_consolidadas_relatorio(
+                    recebimentos_dia, pagamentos_dia, data_taxa
+                )
+            )
         saidas_relatorio = sorted(
             [*posicao["saidas"], *taxas_como_saidas],
             key=lambda mov: (
@@ -700,7 +710,13 @@ class PosicaoDiariaCaixaRelatorioView(PermissaoRequiredMixin, View):
             )
             conta.relatorio_saidas = sum(
                 (
-                    mov.saida for mov in saidas_relatorio
+                    mov.saida for mov in posicao["saidas"]
+                    if mov.conta and mov.conta.pk == conta.pk
+                ),
+                Decimal("0"),
+            ) + sum(
+                (
+                    mov.valor_taxa for mov in taxas_individuais
                     if mov.conta and mov.conta.pk == conta.pk
                 ),
                 Decimal("0"),

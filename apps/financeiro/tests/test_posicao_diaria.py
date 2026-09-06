@@ -811,11 +811,23 @@ class PosicaoDiariaCaixaTests(TestCase):
         relatorio = self.client.get(
             reverse("financeiro:posicao_diaria_relatorio"), {"data": "2026-08-21"}
         )
-        self.assertContains(relatorio, "Taxa de recebimento")
-        self.assertContains(relatorio, "Referente a: Venda #1 - Consumidor final")
+        self.assertContains(relatorio, "Taxas financeiras", count=1)
+        self.assertContains(relatorio, "Taxas de entradas:", count=1)
+        self.assertContains(relatorio, "Taxas de saídas:", count=1)
+        self.assertContains(relatorio, "Total das taxas:", count=1)
         self.assertNotContains(relatorio, 'class="cr-fees"')
         self.assertEqual(relatorio.context["total_entradas_relatorio"], Decimal("80.00"))
         self.assertEqual(relatorio.context["total_saidas_relatorio"], Decimal("42.10"))
+        taxas = [
+            linha["saida"]
+            for dia in relatorio.context["dias_relatorio"]
+            for linha in dia["linhas"]
+            if linha["saida"] and getattr(linha["saida"], "tipo_taxa", "")
+        ]
+        self.assertEqual(len(taxas), 1)
+        self.assertEqual(taxas[0].taxa_recebimentos, Decimal("2.10"))
+        self.assertEqual(taxas[0].taxa_pagamentos, Decimal("0"))
+        self.assertEqual(taxas[0].saida, Decimal("2.10"))
 
     def test_pagamento_com_juros_nao_soma_o_juros_duas_vezes(self):
         conta = ContaPagar.objects.create(
@@ -921,10 +933,22 @@ class PosicaoDiariaCaixaTests(TestCase):
         relatorio = self.client.get(
             reverse("financeiro:posicao_diaria_relatorio"), {"data": "2026-08-24"}
         )
-        self.assertContains(relatorio, "Taxa de pagamento")
-        self.assertContains(relatorio, "Referente a: Fornecedor teste")
+        self.assertContains(relatorio, "Taxas financeiras", count=1)
+        self.assertContains(relatorio, "Taxas de entradas:", count=1)
+        self.assertContains(relatorio, "Taxas de saídas:", count=1)
+        self.assertContains(relatorio, "Total das taxas:", count=1)
         self.assertNotContains(relatorio, "Taxa adicional")
         self.assertEqual(relatorio.context["total_saidas_relatorio"], Decimal("100.50"))
+        taxas = [
+            linha["saida"]
+            for dia in relatorio.context["dias_relatorio"]
+            for linha in dia["linhas"]
+            if linha["saida"] and getattr(linha["saida"], "tipo_taxa", "")
+        ]
+        self.assertEqual(len(taxas), 1)
+        self.assertEqual(taxas[0].taxa_recebimentos, Decimal("0"))
+        self.assertEqual(taxas[0].taxa_pagamentos, Decimal("0.50"))
+        self.assertEqual(taxas[0].saida, Decimal("0.50"))
 
         dia_seguinte = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 25)).gerar()
         saldo_banco = next(item for item in dia_seguinte["contas"] if item.pk == self.banco.pk)
