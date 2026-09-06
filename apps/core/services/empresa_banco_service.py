@@ -61,13 +61,18 @@ class EmpresaBancoService:
 
     @classmethod
     def testar_conexao(cls, banco):
+        status_anterior = banco.status
         banco.ultima_verificacao_em = timezone.now()
         try:
             if not register_tenant_database(banco):
                 raise RuntimeError(f'Variável {banco.database_url_env_var} não configurada.')
             with connections[banco.db_alias].cursor() as cursor:
                 cursor.execute('SELECT 1')
-            banco.status = EmpresaBanco.Status.CONFIGURADO
+            banco.status = (
+                EmpresaBanco.Status.ATIVO
+                if status_anterior == EmpresaBanco.Status.ATIVO
+                else EmpresaBanco.Status.CONFIGURADO
+            )
             banco.ultimo_erro = ''
             ok, message = True, 'Conexão validada.'
         except Exception as exc:
