@@ -60,6 +60,22 @@
   .cr-accounts td:first-child { white-space:normal; }
   .cr-accounts tfoot td { border-top:2px solid #9eb0c4; border-bottom:0; font-weight:800; }
   .cr-footer { display:flex; justify-content:space-between; gap:8px; margin-top:5px; padding-top:3px; border-top:1px solid #9eabba; color:#718096; font-size:5.8px; }
+  /* Compacta somente a cópia exportada para aproveitar o fim da página sem
+     separar o fechamento dos saldos bancários. */
+  #cash-report.cr-pdf-exporting .cr-header { padding-bottom:4px; }
+  #cash-report.cr-pdf-exporting .cr-days { margin-top:4px; }
+  #cash-report.cr-pdf-exporting .cr-day-title th,
+  #cash-report.cr-pdf-exporting .cr-side-head th { padding-top:2px; padding-bottom:2px; }
+  #cash-report.cr-pdf-exporting .cr-line td { padding-top:2px; padding-bottom:2px; }
+  #cash-report.cr-pdf-exporting .cr-description { line-height:1.08; }
+  #cash-report.cr-pdf-exporting .cr-summary { margin-top:4px; }
+  #cash-report.cr-pdf-exporting .cr-metric { padding-top:2px; padding-bottom:2px; }
+  #cash-report.cr-pdf-exporting .cr-fees { margin-top:4px; }
+  #cash-report.cr-pdf-exporting .cr-fee { padding-top:2px; padding-bottom:2px; }
+  #cash-report.cr-pdf-exporting .cr-accounts { margin-top:4px; }
+  #cash-report.cr-pdf-exporting .cr-accounts th,
+  #cash-report.cr-pdf-exporting .cr-accounts td { padding-top:1px; padding-bottom:1px; }
+  #cash-report.cr-pdf-exporting .cr-footer { margin-top:3px; padding-top:2px; }
   #cash-report table tr:hover { background:#fff !important; color:#172033 !important; }
   #cash-report .cr-day-title:hover { background:#1f4d7a !important; color:#fff !important; }
   #cash-report .cr-side-head:hover { background:transparent !important; color:#526174 !important; }
@@ -171,16 +187,20 @@
 <script>
 document.getElementById('exportar-caixa-pdf').addEventListener('click', function () {
   var button = this;
+  var report = document.getElementById('cash-report');
   button.disabled = true;
   button.textContent = 'Gerando PDF...';
+  report.classList.add('cr-pdf-exporting');
+  void report.offsetHeight;
   html2pdf().set({
-    margin: 6,
+    margin: 5,
     filename: 'posicao-caixa-{{ data_inicio|date:"Y-m-d" }}{% if not periodo_unico %}-a-{{ data_fim|date:"Y-m-d" }}{% endif %}.pdf',
     image: {type:'jpeg', quality:0.98},
     html2canvas: {scale:2, useCORS:true, backgroundColor:'#ffffff'},
     jsPDF: {unit:'mm', format:'a4', orientation:'portrait'},
     pagebreak: {mode:['css','legacy'], avoid:['.cr-day-table thead','.cr-line','.cr-summary','.cr-fees','.cr-accounts']}
-  }).from(document.getElementById('cash-report')).save().finally(function () {
+  }).from(report).save().finally(function () {
+    report.classList.remove('cr-pdf-exporting');
     button.disabled = false;
     button.textContent = 'Exportar PDF';
   });

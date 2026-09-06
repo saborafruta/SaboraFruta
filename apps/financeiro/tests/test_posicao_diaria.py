@@ -211,6 +211,9 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(response.context["posicao"]["total_fechamento"], Decimal("210.00"))
         self.assertContains(response, "size:A4 portrait")
         self.assertContains(response, "orientation:'portrait'")
+        self.assertContains(response, "cr-pdf-exporting")
+        self.assertContains(response, "margin: 5")
+        self.assertContains(response, "avoid:['.cr-day-table thead','.cr-line','.cr-summary','.cr-fees','.cr-accounts']")
 
     def test_relatorio_separa_dias_ordena_e_exibe_taxas_em_bloco_proprio(self):
         for data_movimento, historico, valor in (
