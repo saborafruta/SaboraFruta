@@ -17,6 +17,7 @@
 <div class="flex flex-wrap items-center gap-2 mt-2">
   <button type="button" class="btn-secondary text-xs" style="min-width:36px;justify-content:center;padding-left:10px;padding-right:10px" aria-label="Adicionar cliente" title="Adicionar cliente" @click="adicionarCliente()">+</button>
   {% if pode_editar_cliente %}<button type="button" class="btn-secondary text-xs" x-show="clienteId && !adicionandoCliente" @click="abrirCadastroCliente(clienteId)">Editar cadastro do cliente atual</button>{% endif %}
+  <button type="button" class="btn-secondary text-xs" x-show="clienteId && !adicionandoCliente" x-cloak @click="abrirHistoricoCliente()">Histórico de OPs</button>
   <button type="button" class="btn-secondary text-xs" x-show="adicionandoCliente" x-cloak @click="cancelarClienteAdicional()">Cancelar adição</button>
 </div>
 <div class="flex flex-wrap gap-2 mt-2" x-show="clientesAdicionais.length" x-cloak>

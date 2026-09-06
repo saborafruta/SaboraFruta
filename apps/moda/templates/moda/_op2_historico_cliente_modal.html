@@ -1,0 +1,30 @@
+<div x-show="historicoCliente" x-cloak class="fixed inset-0 z-[65] flex items-center justify-center p-3" style="background:rgba(0,0,0,.72)" @click.self="historicoCliente=false">
+  <section role="dialog" aria-modal="true" aria-label="Histórico de OPs do cliente" class="card p-5 w-full max-w-4xl overflow-y-auto" style="max-height:94vh;overscroll-behavior:contain">
+    <div class="flex items-start justify-between gap-3">
+      <div><h2 class="text-xl font-bold">Histórico de OPs do cliente</h2><p class="text-sm opacity-70 mt-1">Use uma OP inteira ou marque somente os produtos que deseja reaproveitar.</p></div>
+      <button type="button" class="text-2xl" @click="historicoCliente=false" aria-label="Fechar">×</button>
+    </div>
+    <p x-show="historicoCarregando" class="mt-5 text-sm opacity-70">Carregando OPs anteriores…</p>
+    <p x-show="historicoErro" x-text="historicoErro" class="mt-4 p-3 rounded-lg text-sm" style="background:rgba(239,68,68,.12);color:#dc2626" role="alert"></p>
+    <p x-show="!historicoCarregando && !historicoErro && !historicoOps.length" class="mt-5 text-sm opacity-70">Este cliente ainda não possui outra OP para reaproveitar.</p>
+    <div class="space-y-3 mt-4">
+      <template x-for="op in historicoOps" :key="op.id">
+        <article class="p-3 rounded-xl" style="border:1px solid rgba(148,163,184,.22)">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div><strong x-text="`OP #${op.numero}`"></strong><p class="text-xs opacity-65" x-text="`${op.data} · ${op.status} · R$ ${Number(op.total).toLocaleString('pt-BR',{minimumFractionDigits:2})}`"></p></div>
+            <button type="button" class="btn-primary text-sm" @click="aproveitarHistorico(op,'completa')">Usar OP completa</button>
+          </div>
+          <div class="mt-3 space-y-2">
+            <template x-for="item in op.itens" :key="item.id">
+              <label class="flex items-center gap-3 p-2 rounded-lg cursor-pointer" style="border:1px solid rgba(148,163,184,.22)">
+                <input type="checkbox" :checked="itemHistoricoSelecionado(op.id,item.id)" @change="alternarItemHistorico(op.id,item.id)">
+                <span class="min-w-0 flex-1"><strong class="block truncate" x-text="item.nome"></strong><small class="opacity-65" x-text="[item.grade,`${item.quantidade} peça(s)`,`R$ ${Number(item.valor).toLocaleString('pt-BR',{minimumFractionDigits:2})}`].filter(Boolean).join(' · ')"></small></span>
+              </label>
+            </template>
+          </div>
+          <div class="flex justify-end mt-3"><button type="button" class="btn-secondary text-sm" @click="aproveitarHistorico(op,'itens')">Adicionar itens selecionados</button></div>
+        </article>
+      </template>
+    </div>
+  </section>
+</div>

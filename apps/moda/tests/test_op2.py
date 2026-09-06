@@ -1126,6 +1126,120 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'O valor atual da OP já vem preenchido e pode ser editado.')
         self.assertContains(resposta, 'name="valor_total"')
 
+    def test_valor_final_clicavel_aplica_desconto_e_atualiza_conta_receber(self):
+        from datetime import date
+
+        from apps.financeiro.constants.enums import StatusContaReceber
+        from apps.financeiro.models import ContaReceber
+
+        item = self._item(quantidade=10)
+        conta = ContaReceber.objects.create(
+            filial=self.filial, cliente=self.cliente,
+            documento_tipo='pedido_moda', documento_id=self.pedido.pk,
+            documento_numero=str(self.pedido.numero), parcela=1, total_parcelas=1,
+            valor_original=Decimal('500.00'), valor_final=Decimal('500.00'),
+            valor_pago=Decimal('100.00'), valor_saldo=Decimal('400.00'),
+            data_emissao=date.today(), data_vencimento=date.today(),
+            status=StatusContaReceber.PAGO_PARCIAL,
+        )
+        self.pedido.financeiro_gerado_em = timezone.now()
+        self.pedido.previsao_pagamento = [{'forma': 'pix', 'valor': '500.00'}]
+        self.pedido.save(update_fields=['financeiro_gerado_em', 'previsao_pagamento'])
+        self._login_op2()
+
+        pagina = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+        self.assertContains(pagina, 'Clique para editar o valor final')
+        self.assertContains(pagina, 'name="acao" value="valor_final"')
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'valor_final', 'valor_total': '450.00',
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        self.pedido.refresh_from_db()
+        conta.refresh_from_db()
+        self.assertEqual(self.pedido.desconto, Decimal('50.00'))
+        self.assertEqual(self.pedido.valor_total, Decimal('450.00'))
+        self.assertEqual(self.pedido.previsao_pagamento[0]['valor'], '450.00')
+        self.assertEqual(conta.valor_final, Decimal('450.00'))
+        self.assertEqual(conta.valor_saldo, Decimal('350.00'))
+
+    def test_valor_final_nao_pode_ficar_abaixo_do_ja_recebido(self):
+        from datetime import date
+
+        from apps.financeiro.constants.enums import StatusContaReceber
+        from apps.financeiro.models import ContaReceber
+
+        self._item(quantidade=10)
+        conta = ContaReceber.objects.create(
+            filial=self.filial, cliente=self.cliente,
+            documento_tipo='pedido_moda', documento_id=self.pedido.pk,
+            parcela=1, total_parcelas=1, valor_original=Decimal('500.00'),
+            valor_final=Decimal('500.00'), valor_pago=Decimal('300.00'),
+            valor_saldo=Decimal('200.00'), data_emissao=date.today(),
+            data_vencimento=date.today(), status=StatusContaReceber.PAGO_PARCIAL,
+        )
+        self.pedido.financeiro_gerado_em = timezone.now()
+        self.pedido.save(update_fields=['financeiro_gerado_em'])
+        self._login_op2()
+
+        self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'valor_final', 'valor_total': '250.00',
+        })
+
+        self.pedido.refresh_from_db()
+        conta.refresh_from_db()
+        self.assertEqual(self.pedido.valor_total, Decimal('500.00'))
+        self.assertEqual(conta.valor_final, Decimal('500.00'))
+
+    def test_historico_do_cliente_cria_rascunho_com_itens_selecionados(self):
+        escolhido = self._item(quantidade=3)
+        self._item(quantidade=7)
+        self._login_op2()
+        url = reverse('moda:op2-historico-cliente', args=[self.cliente.pk])
+
+        consulta = self.client.get(url)
+        self.assertEqual(consulta.status_code, 200)
+        self.assertEqual(consulta.json()['ops'][0]['numero'], f'{self.pedido.numero:06d}')
+
+        resposta = self.client.post(
+            url, {'origem_id': self.pedido.pk, 'modo': 'itens', 'item_ids': escolhido.pk},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        novo = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        self.assertEqual(novo.cliente, self.cliente)
+        self.assertEqual(list(novo.itens.values_list('quantidade', flat=True)), [3])
+        self.assertEqual(resposta.json()['redirect'], reverse('moda:op2-detail', args=[novo.pk]))
+
+    def test_botao_de_historico_aparece_na_nova_op_e_no_detalhe(self):
+        self._login_op2()
+        for url in (reverse('moda:op2-create'), reverse('moda:op2-detail', args=[self.pedido.pk])):
+            resposta = self.client.get(url)
+            self.assertContains(resposta, 'Histórico de OPs')
+            self.assertContains(resposta, 'Usar OP completa')
+            self.assertContains(resposta, 'Adicionar itens selecionados')
+
+    def test_pdf_identifica_o_nome_da_grade(self):
+        from apps.moda.services.pedido_pdf import PedidoPdfService, _estilos
+
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='G', ordem=10)
+        grade = Grade.objects.create(filial=self.filial, nome='Adulto')
+        ItemGrade.objects.create(grade=grade, tamanho=tamanho, ordem=10)
+        item = self._item(quantidade=3)
+        item.grade_tamanho = grade
+        item.save(update_fields=['grade_tamanho'])
+        ItemGradePedido.objects.create(item=item, tamanho=tamanho, quantidade=3)
+
+        barra = PedidoPdfService._grade(item, _estilos())[1]
+        texto = ' '.join(
+            getattr(celula, 'text', str(celula))
+            for linha in barra._cellvalues for celula in linha
+        )
+
+        self.assertIn('GRADE - Adulto', texto)
+
     def test_saldo_pendente_gera_conta_mesmo_sem_forma_informada(self):
         from apps.financeiro.models import ContaReceber
 

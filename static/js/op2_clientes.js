@@ -7,6 +7,8 @@ function configurarClientesOp2(estado, urls) {
     clienteBuscaErro: '', clienteBuscaTimer: null,
     modalCliente: false, clienteEditandoId: '', clienteCarregando: false,
     salvando: false, erro: '', erros: {},
+    historicoCliente: false, historicoCarregando: false,
+    historicoErro: '', historicoOps: [], historicoSelecionados: {},
     cancelarBuscaCliente() {
       clearTimeout(this.clienteBuscaTimer);
       this.clienteBuscaSeq++;
@@ -85,6 +87,61 @@ function configurarClientesOp2(estado, urls) {
       this.contatoNome = cliente.contato || '';
       this.contatoTelefone = cliente.telefone || '';
       this.clientesAdicionais = this.clientesAdicionais.filter(c => String(c.id) !== String(cliente.id));
+      this.historicoCliente = false;
+      this.historicoOps = [];
+      this.historicoSelecionados = {};
+    },
+    async abrirHistoricoCliente() {
+      if (!this.clienteId || !urls.historico) return;
+      this.historicoCliente = true;
+      this.historicoCarregando = true;
+      this.historicoErro = '';
+      this.historicoOps = [];
+      this.historicoSelecionados = {};
+      try {
+        let url = urls.historico.replace('/0/', '/' + encodeURIComponent(this.clienteId) + '/');
+        if (this.pedidoId) url += '?ignorar=' + encodeURIComponent(this.pedidoId);
+        const dados = await this.respostaCliente(await fetch(url, {
+          headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
+        }));
+        this.historicoOps = dados.ops || [];
+      } catch (erro) { this.historicoErro = erro.message; }
+      finally { this.historicoCarregando = false; }
+    },
+    alternarItemHistorico(opId, itemId) {
+      const chave = String(opId);
+      const atuais = new Set((this.historicoSelecionados[chave] || []).map(String));
+      if (atuais.has(String(itemId))) atuais.delete(String(itemId));
+      else atuais.add(String(itemId));
+      this.historicoSelecionados = {...this.historicoSelecionados, [chave]: [...atuais]};
+    },
+    itemHistoricoSelecionado(opId, itemId) {
+      return (this.historicoSelecionados[String(opId)] || []).map(String).includes(String(itemId));
+    },
+    async aproveitarHistorico(op, modo) {
+      const ids = this.historicoSelecionados[String(op.id)] || [];
+      if (modo === 'itens' && !ids.length) {
+        this.historicoErro = 'Selecione ao menos um item dessa OP.'; return;
+      }
+      const texto = modo === 'completa'
+        ? (this.pedidoId ? 'Substituir os itens e dados comerciais da OP atual por esta OP anterior?' : 'Criar agora um novo rascunho com a OP anterior completa?')
+        : (this.pedidoId ? 'Adicionar os itens selecionados à OP atual?' : 'Criar agora um novo rascunho com os itens selecionados?');
+      if (!confirm(texto)) return;
+      this.historicoCarregando = true;
+      this.historicoErro = '';
+      try {
+        const url = urls.historico.replace('/0/', '/' + encodeURIComponent(this.clienteId) + '/');
+        const corpo = new FormData();
+        corpo.append('origem_id', op.id); corpo.append('modo', modo);
+        if (this.pedidoId) corpo.append('destino_id', this.pedidoId);
+        ids.forEach(id => corpo.append('item_ids', id));
+        corpo.append('csrfmiddlewaretoken', (document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/) || [])[1] || '');
+        const dados = await this.respostaCliente(await fetch(url, {
+          method: 'POST', headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}, body: corpo
+        }));
+        if (!dados.ok) throw new Error(dados.erro || 'Não foi possível aproveitar a OP.');
+        window.location.assign(dados.redirect);
+      } catch (erro) { this.historicoErro = erro.message; this.historicoCarregando = false; }
     },
     adicionarCliente() {
       this.cancelarBuscaCliente();

@@ -1,7 +1,7 @@
 """Workspace da OP 2.0. A tela antiga continua disponível sem alterações."""
 from copy import copy
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
 from io import BytesIO
 import json
 from urllib.parse import quote
@@ -219,6 +219,42 @@ def _previsao_pagamento(request, total_esperado=None, *, obrigatoria=False):
     return linhas
 
 
+def _dinheiro_post(request, nome):
+    texto = (request.POST.get(nome) or '0').strip().replace(' ', '')
+    if ',' in texto:
+        texto = texto.replace('.', '').replace(',', '.')
+    try:
+        return Decimal(texto).quantize(Decimal('0.01'))
+    except (InvalidOperation, ValueError):
+        raise ValueError('Confira o valor informado.')
+
+
+def _redimensionar_previsao_pagamento(previsao, total_novo):
+    """Mantém as formas e redistribui seus valores para o novo total."""
+    linhas = [dict(linha) for linha in (previsao or []) if linha.get('forma')]
+    if not linhas:
+        return []
+    total_novo = Decimal(total_novo).quantize(Decimal('0.01'))
+    if total_novo == 0:
+        return [{'forma': PedidoProducao.FormaPagamentoPrevista.NAO_INFORMADO,
+                 'valor': '0.00'}]
+    valores = [Decimal(str(linha.get('valor') or '0')) for linha in linhas]
+    total_antigo = sum(valores, Decimal('0'))
+    distribuido = Decimal('0')
+    for indice, linha in enumerate(linhas):
+        if indice == len(linhas) - 1:
+            valor = total_novo - distribuido
+        elif total_antigo > 0:
+            valor = (total_novo * valores[indice] / total_antigo).quantize(
+                Decimal('0.01'), rounding=ROUND_DOWN,
+            )
+        else:
+            valor = Decimal('0')
+        distribuido += valor
+        linha['valor'] = f'{valor:.2f}'
+    return linhas
+
+
 def _dados_modal_item(item, estrutura_opcoes):
     """Serializa um item para o mesmo editor completo usado ao adicioná-lo."""
     texto = (item.observacoes or '').strip()
@@ -309,6 +345,101 @@ def _dados_modal_item(item, estrutura_opcoes):
         'gradePorGrade': {grade_id: quantidades} if grade_id else {},
         'configuracao_conjunto': item.configuracao_conjunto or {},
     }
+
+
+def _copiar_campo_arquivo(campo_origem, campo_destino, nome):
+    """Copia o conteúdo para um arquivo independente no novo pedido."""
+    if not campo_origem:
+        return
+    campo_origem.open('rb')
+    try:
+        campo_destino.save(nome, File(campo_origem), save=True)
+    finally:
+        campo_origem.close()
+
+
+def _copiar_itens_entre_ops(origem, destino, itens, *, copiar_acervo=False):
+    """Copia produtos e dependências, sempre reiniciando o fluxo produtivo."""
+    mapa = {}
+    proxima_ordem = (destino.itens.order_by('-ordem').values_list(
+        'ordem', flat=True,
+    ).first() or 0) + 10
+    for deslocamento, original in enumerate(itens):
+        item = copy(original)
+        item.pk = None
+        item.pedido = destino
+        item.ordem = proxima_ordem + deslocamento * 10
+        item.status_fluxo = ItemPedidoProducao.StatusFluxo.ORCAMENTO
+        item.quantidade_entregue = 0
+        item.excluido_em = None
+        item.excluido_por = None
+        item.save()
+        mapa[original.pk] = item
+        for grade in original.grade.all():
+            ItemGradePedido.objects.create(
+                item=item, tamanho=grade.tamanho, quantidade=grade.quantidade,
+            )
+        for arte in original.personalizacoes.all():
+            arquivo = arte.arquivo
+            copia = copy(arte)
+            copia.pk = None
+            copia.item = item
+            copia.arquivo = None
+            copia.save()
+            if arquivo:
+                _copiar_campo_arquivo(arquivo, copia.arquivo, arquivo.name.rsplit('/', 1)[-1])
+        for visual in original.visuais.all():
+            imagem = visual.imagem
+            copia = copy(visual)
+            copia.pk = None
+            copia.item = item
+            copia.imagem = None
+            copia.save()
+            if imagem:
+                _copiar_campo_arquivo(imagem, copia.imagem, imagem.name.rsplit('/', 1)[-1])
+
+    for pessoa in origem.individuais.filter(item_id__in=mapa):
+        copia = copy(pessoa)
+        copia.pk = None
+        copia.pedido = destino
+        copia.item = mapa[pessoa.item_id]
+        copia.save()
+
+    if copiar_acervo:
+        RegistroCriacaoArte.objects.bulk_create([
+            RegistroCriacaoArte(
+                pedido=destino, texto=registro.texto,
+                criado_por_id=registro.criado_por_id, criado_em=registro.criado_em,
+            )
+            for registro in origem.historico_criacao.all()
+        ])
+        for original in origem.arquivos.all():
+            copia = ArquivoPedido(
+                pedido=destino, tipo=original.tipo, descricao=original.descricao,
+                enviado_por=original.enviado_por,
+            )
+            _copiar_campo_arquivo(
+                original.arquivo, copia.arquivo, original.nome_arquivo,
+            )
+    return list(mapa.values())
+
+
+def _nova_op_aproveitada(origem, usuario, itens, *, completa):
+    novo = PedidoProducao.objects.create(
+        filial=origem.filial, cliente=origem.cliente, vendedor=usuario,
+        contato_nome=origem.contato_nome, contato_telefone=origem.contato_telefone,
+        data_pedido=timezone.localdate(), data_prevista_entrega=None,
+        prioridade=origem.prioridade, status=PedidoProducao.Status.ORCAMENTO,
+        observacoes=origem.observacoes if completa else '',
+        desconto=origem.desconto if completa else Decimal('0'),
+        acrescimo=origem.acrescimo if completa else Decimal('0'),
+        frete=origem.frete if completa else Decimal('0'),
+        previsao_pagamento=origem.previsao_pagamento if completa else [],
+    )
+    if completa:
+        novo.clientes_adicionais.set(origem.clientes_adicionais.all())
+    _copiar_itens_entre_ops(origem, novo, itens, copiar_acervo=completa)
+    return novo
 
 
 def _sincronizar_status(pedido):
@@ -901,6 +1032,7 @@ class Op2CreateView(ModaBaseView):
                 quantidades[(item.pk, int(tamanho_id))] = qtd
         return quantidades
 
+
     @staticmethod
     def _data_entrega(request):
         entrega = (request.POST.get('data_prevista_entrega') or '').strip()
@@ -955,6 +1087,108 @@ class Op2CreateView(ModaBaseView):
                 descricao=visual.get_posicao_display(),
                 enviado_por=request.user,
             )
+
+
+class Op2HistoricoClienteView(ModaBaseView):
+    """Lista e reaproveita OPs anteriores do cliente selecionado."""
+    area = 'comercial'
+    permissao_acao = 'editar'
+
+    def get(self, request, cliente_pk):
+        cliente = get_object_or_404(
+            Cliente.objects.for_filial(_filial(request)), pk=cliente_pk,
+        )
+        ignorar = (request.GET.get('ignorar') or '').strip()
+        pedidos = (
+            PedidoProducao.objects.for_filial(_filial(request))
+            .filter(cliente=cliente)
+            .exclude(pk=ignorar if ignorar.isdigit() else None)
+            .select_related('cliente')
+            .prefetch_related(
+                'itens__produto', 'itens__grade_tamanho', 'itens__grade__tamanho',
+            )
+            .order_by('-data_pedido', '-numero')[:30]
+        )
+        return JsonResponse({'ok': True, 'cliente': _cliente_json(cliente), 'ops': [
+            {
+                'id': str(pedido.pk), 'numero': f'{pedido.numero:06d}',
+                'data': pedido.data_pedido.strftime('%d/%m/%Y'),
+                'status': pedido.get_status_display(), 'total': f'{pedido.valor_total:.2f}',
+                'itens': [{
+                    'id': str(item.pk), 'nome': item.nome_exibicao,
+                    'quantidade': item.quantidade, 'valor': f'{item.subtotal:.2f}',
+                    'grade': item.grade_tamanho.nome if item.grade_tamanho_id else '',
+                } for item in pedido.itens.all()],
+            } for pedido in pedidos
+        ]})
+
+    def post(self, request, cliente_pk):
+        cliente = get_object_or_404(
+            Cliente.objects.for_filial(_filial(request)), pk=cliente_pk,
+        )
+        origem = get_object_or_404(
+            PedidoProducao.objects.for_filial(_filial(request)).filter(cliente=cliente),
+            pk=request.POST.get('origem_id'),
+        )
+        modo = (request.POST.get('modo') or '').strip()
+        if modo not in {'completa', 'itens'}:
+            return JsonResponse({'ok': False, 'erro': 'Escolha como deseja aproveitar a OP.'}, status=400)
+        itens_qs = origem.itens.select_related('produto').prefetch_related(
+            'grade__tamanho', 'personalizacoes', 'visuais',
+        )
+        if modo == 'itens':
+            itens_qs = itens_qs.filter(pk__in=request.POST.getlist('item_ids'))
+        itens = list(itens_qs)
+        if not itens:
+            return JsonResponse({'ok': False, 'erro': 'Selecione ao menos um item da OP anterior.'}, status=400)
+
+        try:
+            with transaction.atomic():
+                destino_id = (request.POST.get('destino_id') or '').strip()
+                if not destino_id:
+                    destino = _nova_op_aproveitada(
+                        origem, request.user, itens, completa=modo == 'completa',
+                    )
+                else:
+                    destino = _pedido(request, destino_id)
+                    if destino.pk == origem.pk:
+                        raise ValueError('Escolha uma OP anterior diferente da OP atual.')
+                    if destino.cliente_id != cliente.pk:
+                        raise ValueError('Salve a troca do cliente antes de usar o histórico.')
+                    if destino.financeiro_gerado:
+                        raise ValueError('Não é possível reaproveitar itens depois de gerar o financeiro.')
+                    if modo == 'completa':
+                        if destino.status != PedidoProducao.Status.ORCAMENTO:
+                            raise ValueError('A OP completa só pode substituir um orçamento em edição.')
+                        destino.itens.update(
+                            excluido_em=timezone.now(), excluido_por=request.user,
+                        )
+                        for campo in (
+                            'prioridade', 'observacoes', 'desconto', 'acrescimo',
+                            'frete', 'previsao_pagamento', 'contato_nome', 'contato_telefone',
+                        ):
+                            setattr(destino, campo, getattr(origem, campo))
+                        destino.save(update_fields=[
+                            'prioridade', 'observacoes', 'desconto', 'acrescimo',
+                            'frete', 'previsao_pagamento', 'contato_nome',
+                            'contato_telefone', 'updated_at',
+                        ])
+                        destino.clientes_adicionais.set(origem.clientes_adicionais.all())
+                    _copiar_itens_entre_ops(
+                        origem, destino, itens, copiar_acervo=modo == 'completa',
+                    )
+                    GradePedidoService.recalcular_pedido(destino)
+        except (TypeError, ValueError, DomainError) as erro:
+            return JsonResponse({'ok': False, 'erro': str(erro)}, status=400)
+
+        return JsonResponse({
+            'ok': True, 'redirect': reverse('moda:op2-detail', args=[destino.pk]),
+            'mensagem': (
+                f'OP #{origem.numero:06d} aproveitada por completo.'
+                if modo == 'completa' else
+                f'{len(itens)} item(ns) da OP #{origem.numero:06d} aproveitado(s).'
+            ),
+        })
 
 
 class Op2RascunhoView(ModaBaseView):
@@ -1177,6 +1411,7 @@ class Op2DetailView(ModaBaseView):
         return render(request, 'moda/op2_detail.html', {
             'title': f'OP 2.0 #{pedido.numero:06d}',
             'pedido': pedido,
+            'base_valor_op': pedido.subtotal + (pedido.frete or Decimal('0')),
             'cliente_atual_json': _cliente_json(pedido.cliente),
             'observacoes_livres': observacoes_livres,
             'contatos_json': contatos,
@@ -1419,18 +1654,48 @@ class Op2ActionView(ModaBaseView):
         else:
             messages.success(request, 'Rascunho salvo.')
 
-    def _acao_financeiro(self, request, pedido):
-        def dinheiro(nome):
-            texto = (request.POST.get(nome) or '0').strip().replace(' ', '')
-            if ',' in texto:
-                texto = texto.replace('.', '').replace(',', '.')
-            try:
-                return Decimal(texto).quantize(Decimal('0.01'))
-            except (InvalidOperation, ValueError):
-                raise ValueError('Confira os valores financeiros informados.')
+    def _acao_valor_final(self, request, pedido):
+        valor_total = _dinheiro_post(request, 'valor_total')
+        if valor_total < 0:
+            raise ValueError('O valor final não pode ser negativo.')
+        if valor_total > Decimal('9999999999.99'):
+            raise ValueError('O valor final informado é muito alto.')
+        if valor_total < (pedido.entrada or Decimal('0')):
+            raise ValueError(
+                'O valor final não pode ficar abaixo do adiantamento já informado.'
+            )
 
-        valor_total = dinheiro('valor_total')
-        entrada = dinheiro('entrada')
+        base = pedido.subtotal + (pedido.frete or Decimal('0'))
+        pedido.desconto = max(base - valor_total, Decimal('0'))
+        pedido.acrescimo = max(valor_total - base, Decimal('0'))
+        pedido.previsao_pagamento = _redimensionar_previsao_pagamento(
+            pedido.previsao_pagamento, valor_total,
+        )
+        pedido.save(update_fields=[
+            'desconto', 'acrescimo', 'previsao_pagamento', 'updated_at',
+        ])
+
+        contas_existem = FinanceiroPedidoService.contas_do_pedido(pedido).exists()
+        if contas_existem:
+            FinanceiroPedidoService.sincronizar_valor_total(pedido, request.user)
+        elif pedido.financeiro_gerado and valor_total > 0:
+            # Uma OP antes zerada não tinha títulos. Ao ganhar valor, volta a
+            # oferecer a geração do contas a receber.
+            pedido.financeiro_gerado_em = None
+            pedido.save(update_fields=['financeiro_gerado_em', 'updated_at'])
+
+        ajuste = base - valor_total
+        if ajuste > 0:
+            detalhe = f'Desconto de R$ {ajuste:.2f} aplicado.'
+        elif ajuste < 0:
+            detalhe = f'Acréscimo de R$ {-ajuste:.2f} aplicado.'
+        else:
+            detalhe = 'Valor final voltou ao total dos produtos e frete.'
+        messages.success(request, f'Valor final atualizado para R$ {valor_total:.2f}. {detalhe}')
+
+    def _acao_financeiro(self, request, pedido):
+        valor_total = _dinheiro_post(request, 'valor_total')
+        entrada = _dinheiro_post(request, 'entrada')
         if valor_total < 0:
             raise ValueError('O valor total não pode ser negativo.')
         if entrada < 0 or entrada > valor_total:
@@ -2141,42 +2406,9 @@ class Op2ActionView(ModaBaseView):
         messages.success(request, 'WhatsApp atualizado.')
 
     def _acao_duplicar(self, request, pedido):
-        novo = PedidoProducao.objects.create(
-            filial=pedido.filial, cliente=pedido.cliente, vendedor=request.user,
-            contato_nome=pedido.contato_nome, contato_telefone=pedido.contato_telefone,
-            data_pedido=timezone.localdate(), data_prevista_entrega=None,
-            prioridade=pedido.prioridade, status=PedidoProducao.Status.ORCAMENTO,
-            observacoes=pedido.observacoes, desconto=pedido.desconto,
-            acrescimo=pedido.acrescimo, frete=pedido.frete,
-            previsao_pagamento=pedido.previsao_pagamento,
+        novo = _nova_op_aproveitada(
+            pedido, request.user, list(pedido.itens.all()), completa=True,
         )
-        mapa = {}
-        for original in pedido.itens.all():
-            item = copy(original)
-            item.pk = None
-            item.pedido = novo
-            item.status_fluxo = ItemPedidoProducao.StatusFluxo.ORCAMENTO
-            item.quantidade_entregue = 0
-            item.save()
-            mapa[original.pk] = item
-            for grade in original.grade.all():
-                ItemGradePedido.objects.create(
-                    item=item, tamanho=grade.tamanho, quantidade=grade.quantidade,
-                )
-            for arte in original.personalizacoes.all():
-                copia = copy(arte); copia.pk = None; copia.item = item; copia.save()
-            for visual in original.visuais.all():
-                copia = copy(visual); copia.pk = None; copia.item = item; copia.save()
-        for pessoa in pedido.individuais.all():
-            copia = copy(pessoa)
-            copia.pk = None; copia.pedido = novo; copia.item = mapa[pessoa.item_id]; copia.save()
-        RegistroCriacaoArte.objects.bulk_create([
-            RegistroCriacaoArte(
-                pedido=novo, texto=registro.texto,
-                criado_por_id=registro.criado_por_id, criado_em=registro.criado_em,
-            )
-            for registro in pedido.historico_criacao.all()
-        ])
         messages.success(request, f'OP duplicada como rascunho #{novo.numero:06d}.')
         return _voltar(novo)
 

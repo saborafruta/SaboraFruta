@@ -194,6 +194,7 @@
     </div>
   </div>
   {% include "moda/_op2_cliente_modal.html" %}
+  {% include "moda/_op2_historico_cliente_modal.html" %}
   <div x-show="enviandoFormulario" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center p-4" style="background:rgba(0,0,0,.76)"><div class="card p-6 text-center"><strong class="text-lg">Salvando orçamento…</strong><p class="text-sm opacity-70 mt-2">Aguarde. Esta tela será atualizada automaticamente e não precisa clicar novamente.</p></div></div>
 </div>
 <script>
@@ -786,7 +787,8 @@ function op2NovaMelhorada(){
   return configurarClientesOp2(estado, {
     buscar: '{% url "moda:cliente-buscar" %}',
     criar: '{% url "moda:cliente-criar-json" %}',
-    editar: '{% url "moda:cliente-editar-json" 0 %}'
+    editar: '{% url "moda:cliente-editar-json" 0 %}',
+    historico: '{% url "moda:op2-historico-cliente" 0 %}'
   });
 }
 </script>

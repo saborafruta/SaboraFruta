@@ -67,6 +67,7 @@ ROTAS_PRONTAS: list = [
     path('comercial/op-2/novo/', vop2.Op2CreateView.as_view(), name='op2-create'),
     path('comercial/op-2/novo/rascunho/', vop2.Op2RascunhoView.as_view(), name='op2-rascunho'),
     path('comercial/op-2/modelos/rapido/', vop2.Op2ModeloRapidoView.as_view(), name='op2-modelo-rapido'),
+    path('comercial/op-2/historico-cliente/<int:cliente_pk>/', vop2.Op2HistoricoClienteView.as_view(), name='op2-historico-cliente'),
     path('comercial/op-2/<int:pk>/', vop2.Op2DetailView.as_view(), name='op2-detail'),
     path('comercial/op-2/<int:pk>/anexos.zip', vop2.Op2AnexosZipView.as_view(), name='op2-anexos-zip'),
     path('comercial/op-2/<int:pk>/acao/', vop2.Op2ActionView.as_view(), name='op2-action'),

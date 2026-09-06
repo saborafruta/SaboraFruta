@@ -74,6 +74,72 @@ class FinanceiroPedidoService:
             previsao_entrega_complemento='',
         )
 
+    @classmethod
+    @transaction.atomic
+    def sincronizar_valor_total(cls, pedido, usuario=None):
+        """Faz os títulos válidos somarem exatamente o novo total da OP.
+
+        O valor já recebido é um piso: um desconto nunca pode apagar dinheiro
+        que já entrou. O saldo novo é repartido na mesma proporção dos saldos
+        anteriores, preservando cliente, vencimento e quantidade de parcelas.
+        """
+        contas = list(
+            ContaReceber.objects.select_for_update()
+            .filter(documento_tipo=cls.DOCUMENTO_TIPO, documento_id=pedido.pk)
+            .exclude(status=StatusContaReceber.CANCELADO)
+            .order_by('parcela', 'pk')
+        )
+        if not contas:
+            return []
+
+        total_novo = pedido.valor_total.quantize(CENTAVO)
+        total_recebido = sum((conta.valor_pago for conta in contas), Decimal('0'))
+        if total_novo < total_recebido:
+            raise DomainError(
+                'O valor final não pode ficar abaixo do que já foi recebido '
+                f'(R$ {total_recebido:.2f}).'
+            )
+
+        saldo_novo = total_novo - total_recebido
+        saldo_anterior = sum((conta.valor_saldo for conta in contas), Decimal('0'))
+        saldos = []
+        distribuido = Decimal('0')
+        for indice, conta in enumerate(contas):
+            if indice == len(contas) - 1:
+                parcela_saldo = saldo_novo - distribuido
+            elif saldo_anterior > 0:
+                parcela_saldo = (
+                    saldo_novo * conta.valor_saldo / saldo_anterior
+                ).quantize(CENTAVO, rounding=ROUND_DOWN)
+            else:
+                parcela_saldo = Decimal('0')
+            distribuido += parcela_saldo
+            saldos.append(parcela_saldo)
+
+        # Quando tudo já estava pago e o valor aumentou, a diferença fica na
+        # última parcela em vez de criar um título solto sem referência.
+        if saldo_anterior <= 0 and saldos:
+            saldos[-1] = saldo_novo
+
+        atualizadas = []
+        for conta, saldo in zip(contas, saldos):
+            alvo_final = conta.valor_pago + saldo
+            valor_original = (
+                alvo_final - conta.valor_juros - conta.valor_multa
+                + conta.valor_desconto
+            )
+            if valor_original < 0:
+                raise DomainError(
+                    'Um título possui juros ou descontos próprios que impedem '
+                    'o ajuste automático. Edite esse título no contas a receber.'
+                )
+            atualizadas.append(ContaReceberService.editar(
+                conta=conta,
+                dados={'valor_original': valor_original.quantize(CENTAVO)},
+                usuario=usuario,
+            ))
+        return atualizadas
+
     @staticmethod
     def situacao_pagamento(valor_titulos=0, valor_recebido=0, valor_aberto=0):
         """Situação dos títulos válidos, sem descontar taxas do valor recebido."""

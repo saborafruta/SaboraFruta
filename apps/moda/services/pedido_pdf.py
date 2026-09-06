@@ -1091,8 +1091,14 @@ class PedidoPdfService:
             ('BACKGROUND', (-1, 1), (-1, 1), FUNDO),
         ]))
 
+        nome_grade = (
+            item.grade_tamanho.nome.strip()
+            if item.grade_tamanho_id and item.grade_tamanho.nome else ''
+        )
+        titulo_grade = f'{titulo} - {nome_grade}' if nome_grade else titulo
+
         return [Spacer(1, 4), _barra_secao(
-            3, titulo, e, largura_util, cor=cor, cor_clara=cor_clara,
+            3, titulo_grade, e, largura_util, cor=cor, cor_clara=cor_clara,
             arredondada=arredondada,
         ), Spacer(1, 3), tabela]
 
