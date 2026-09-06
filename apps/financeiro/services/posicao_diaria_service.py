@@ -194,6 +194,9 @@ class PosicaoDiariaCaixaService:
         filtros_analiticos = bool(categoria_filtro or fornecedor_filtro or funcionario_filtro)
         movimentos_para_taxas = movimentos_exibidos if filtros_analiticos else movimentos_ativos
         entradas_com_taxa = [mov for mov in movimentos_para_taxas if mov.entrada > ZERO]
+        movimentos_taxas_entradas = [
+            mov for mov in entradas_com_taxa if mov.valor_taxa > ZERO
+        ]
         saldo_anterior = self._saldos_antes_do_dia()
         por_conta_dia = defaultdict(lambda: ZERO)
         for mov in movimentos_ativos:
@@ -289,6 +292,7 @@ class PosicaoDiariaCaixaService:
             "total_taxas_pagamentos": total_taxas_pagamentos,
             "total_taxas_transacoes": total_taxas_transacoes,
             "transacoes_taxas": transacoes_taxas,
+            "movimentos_taxas_entradas": movimentos_taxas_entradas,
             "taxas_pagamentos": taxas_pagamentos,
             "detalhes_taxas": detalhes_taxas,
             "taxas_por_forma": taxas_por_forma,

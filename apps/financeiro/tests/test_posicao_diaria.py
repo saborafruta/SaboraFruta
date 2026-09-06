@@ -201,7 +201,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertTemplateUsed(response, "financeiro/posicao_diaria_relatorio.html")
         for texto in (
             "Relatório da Posição de Caixa", "21/08/2026", "Entradas", "Saídas",
-            "Venda #1", "Compra de material de limpeza", "Forma / conta", "Taxas",
+            "Venda #1", "Compra de material de limpeza", "Forma / conta", "saídas e taxas",
             "Saldo inicial", "Resultado do dia", "Saldo final", "Saldos das contas bancárias",
             "Banco principal", "Dinheiro em caixa", "Exportar PDF",
         ):
@@ -213,9 +213,10 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "orientation:'portrait'")
         self.assertContains(response, "cr-pdf-exporting")
         self.assertContains(response, "margin: 5")
-        self.assertContains(response, "avoid:['.cr-day-table thead','.cr-line','.cr-summary','.cr-fees','.cr-accounts']")
+        self.assertContains(response, "avoid:['.cr-day-table thead','.cr-line','.cr-summary','.cr-accounts']")
+        self.assertNotContains(response, 'class="cr-fees"')
 
-    def test_relatorio_separa_dias_ordena_e_exibe_taxas_em_bloco_proprio(self):
+    def test_relatorio_separa_dias_ordena_e_exibe_taxas_como_despesas(self):
         for data_movimento, historico, valor in (
             (date(2026, 8, 20), "Entrada quinta", Decimal("25.00")),
             (date(2026, 8, 21), "Saída sexta", Decimal("-10.00")),
@@ -244,9 +245,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         )
         self.assertContains(response, "Sexta-feira · 21/08/2026")
         self.assertContains(response, "Quinta-feira · 20/08/2026")
-        self.assertContains(response, "Resumo das taxas", html=False)
-        self.assertContains(response, "Taxas em recebimentos")
-        self.assertContains(response, "Taxas em pagamentos")
+        self.assertNotContains(response, "Resumo das taxas", html=False)
         self.assertContains(response, '<table class="cr-day-table"', count=2)
         self.assertContains(response, "table-header-group")
         self.assertNotContains(response, "continuação")
@@ -809,6 +808,15 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertNotContains(response, 'class="pc-fee-summary')
         self.assertContains(response, "R$ 2,10")
 
+        relatorio = self.client.get(
+            reverse("financeiro:posicao_diaria_relatorio"), {"data": "2026-08-21"}
+        )
+        self.assertContains(relatorio, "Taxa de recebimento")
+        self.assertContains(relatorio, "Referente a: Venda #1 - Consumidor final")
+        self.assertNotContains(relatorio, 'class="cr-fees"')
+        self.assertEqual(relatorio.context["total_entradas_relatorio"], Decimal("80.00"))
+        self.assertEqual(relatorio.context["total_saidas_relatorio"], Decimal("42.10"))
+
     def test_pagamento_com_juros_nao_soma_o_juros_duas_vezes(self):
         conta = ContaPagar.objects.create(
             filial=self.filial,
@@ -909,6 +917,14 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "Taxa: R$ 0,50")
         self.assertContains(response, "R$ 100,50")
         self.assertNotContains(response, "Tarifa bancaria")
+
+        relatorio = self.client.get(
+            reverse("financeiro:posicao_diaria_relatorio"), {"data": "2026-08-24"}
+        )
+        self.assertContains(relatorio, "Taxa de pagamento")
+        self.assertContains(relatorio, "Referente a: Fornecedor teste")
+        self.assertNotContains(relatorio, "Taxa adicional")
+        self.assertEqual(relatorio.context["total_saidas_relatorio"], Decimal("100.50"))
 
         dia_seguinte = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 25)).gerar()
         saldo_banco = next(item for item in dia_seguinte["contas"] if item.pk == self.banco.pk)

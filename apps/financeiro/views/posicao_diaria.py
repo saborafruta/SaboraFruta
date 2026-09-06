@@ -2,6 +2,7 @@ from calendar import monthrange
 from datetime import timedelta
 from decimal import Decimal
 from itertools import zip_longest
+from types import SimpleNamespace
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -31,6 +32,26 @@ from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaSe
 from apps.financeiro.services.receber_service import ContaReceberService
 from apps.financeiro.views.contas_bancarias import ContaBancariaListView, _usuario_admin
 from apps.financeiro.views.pagar import _contexto_meta_despesa_pessoal
+
+
+def _taxa_como_saida_relatorio(movimento, tipo):
+    rotulo = "Taxa de recebimento" if tipo == "recebimento" else "Taxa de pagamento"
+    return SimpleNamespace(
+        data=movimento.data,
+        conta=movimento.conta,
+        descricao=rotulo,
+        contraparte=movimento.descricao,
+        origem=rotulo,
+        classificacao="Despesa financeira",
+        documento=movimento.documento,
+        forma_pagamento=movimento.forma_pagamento,
+        saida=movimento.valor_taxa,
+        valor_taxa=Decimal("0"),
+        taxa_percentual=movimento.taxa_percentual,
+        momento=movimento.momento,
+        hora=movimento.hora,
+        tipo_taxa=tipo,
+    )
 
 
 class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
@@ -624,13 +645,37 @@ class PosicaoDiariaCaixaRelatorioView(PermissaoRequiredMixin, View):
             "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira",
             "Sexta-feira", "Sábado", "Domingo",
         )
-        datas_movimentos = sorted(
-            {mov.data for mov in posicao["extrato"]}, reverse=True,
+        taxas_recebimentos = [
+            _taxa_como_saida_relatorio(mov, "recebimento")
+            for mov in posicao["movimentos_taxas_entradas"]
+            if not mov.transferencia
+        ]
+        taxas_pagamentos = [
+            _taxa_como_saida_relatorio(mov, "pagamento")
+            for mov in posicao["taxas_pagamentos"]
+        ] + [
+            _taxa_como_saida_relatorio(mov, "pagamento")
+            for mov in posicao["movimentos_taxas_entradas"]
+            if mov.transferencia
+        ]
+        taxas_como_saidas = taxas_recebimentos + taxas_pagamentos
+        saidas_relatorio = sorted(
+            [*posicao["saidas"], *taxas_como_saidas],
+            key=lambda mov: (
+                mov.data,
+                mov.momento.timestamp() if mov.momento else 0,
+                getattr(mov, "registro_id", 0),
+            ),
+            reverse=True,
         )
+        datas_movimentos = sorted({
+            *[mov.data for mov in posicao["extrato"]],
+            *[mov.data for mov in taxas_como_saidas],
+        }, reverse=True)
         dias_relatorio = []
         for data_movimento in datas_movimentos:
             entradas = [mov for mov in posicao["entradas"] if mov.data == data_movimento]
-            saidas = [mov for mov in posicao["saidas"] if mov.data == data_movimento]
+            saidas = [mov for mov in saidas_relatorio if mov.data == data_movimento]
             dias_relatorio.append({
                 "data": data_movimento,
                 "dia_semana": nomes_semana[data_movimento.weekday()],
@@ -639,6 +684,27 @@ class PosicaoDiariaCaixaRelatorioView(PermissaoRequiredMixin, View):
                     for entrada, saida in zip_longest(entradas, saidas)
                 ],
             })
+        total_entradas_relatorio = sum(
+            (mov.entrada_bruta for mov in posicao["entradas"]), Decimal("0")
+        )
+        total_saidas_relatorio = sum(
+            (mov.saida for mov in saidas_relatorio), Decimal("0")
+        )
+        for conta in posicao["contas"]:
+            conta.relatorio_entradas = sum(
+                (
+                    mov.entrada_bruta for mov in posicao["entradas"]
+                    if mov.conta and mov.conta.pk == conta.pk
+                ),
+                Decimal("0"),
+            )
+            conta.relatorio_saidas = sum(
+                (
+                    mov.saida for mov in saidas_relatorio
+                    if mov.conta and mov.conta.pk == conta.pk
+                ),
+                Decimal("0"),
+            )
         filtros_selecionados = [
             item for item in (
                 f"Categoria: {categoria_selecionada.caminho_descricao}" if categoria_selecionada else "",
@@ -666,6 +732,8 @@ class PosicaoDiariaCaixaRelatorioView(PermissaoRequiredMixin, View):
             "data_fim": data_fim,
             "periodo_unico": data_inicio == data_fim,
             "dias_relatorio": dias_relatorio,
+            "total_entradas_relatorio": total_entradas_relatorio,
+            "total_saidas_relatorio": total_saidas_relatorio,
             "filtros_selecionados": filtros_selecionados,
             "filtros_ativos": bool(filtros_selecionados),
             "gerado_em": timezone.localtime(),

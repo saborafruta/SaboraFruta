@@ -45,14 +45,10 @@
   .cr-metric.entry strong, .cr-positive { color:#167247; }
   .cr-metric.exit strong, .cr-negative { color:#b12d3b; }
   .cr-metric.final { background:#eef6ff; }
-  .cr-fees { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:6px; border:1px solid #c9943b; break-inside:avoid; page-break-inside:avoid; }
-  .cr-fee { padding:3px 5px; border-right:1px solid #d9b66f; background:#fff8e8; }
-  .cr-fee:last-child { border-right:0; background:#ffefc7; }
-  .cr-fee span { display:block; color:#725019; font-size:6px; font-weight:800; text-transform:uppercase; }
-  .cr-fee strong { display:block; margin-top:1px; color:#9b4b12; font-size:8px; }
   .cr-accounts { margin-top:7px; break-inside:avoid; page-break-inside:avoid; }
   .cr-section-title { display:flex; align-items:end; justify-content:space-between; gap:8px; margin-bottom:2px; }
   .cr-section-title h2 { margin:0; font-size:8px; text-transform:uppercase; letter-spacing:.05em; }
+  .cr-section-title span { font-size:6.5px; }
   .cr-accounts table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:7px; }
   .cr-accounts th { padding:2px 4px; background:#e7ecf2; color:#526174; text-align:right; text-transform:uppercase; font-size:6px; letter-spacing:.03em; }
   .cr-accounts th:first-child, .cr-accounts td:first-child { width:36%; text-align:left; }
@@ -70,8 +66,6 @@
   #cash-report.cr-pdf-exporting .cr-description { line-height:1.08; }
   #cash-report.cr-pdf-exporting .cr-summary { margin-top:4px; }
   #cash-report.cr-pdf-exporting .cr-metric { padding-top:2px; padding-bottom:2px; }
-  #cash-report.cr-pdf-exporting .cr-fees { margin-top:4px; }
-  #cash-report.cr-pdf-exporting .cr-fee { padding-top:2px; padding-bottom:2px; }
   #cash-report.cr-pdf-exporting .cr-accounts { margin-top:4px; }
   #cash-report.cr-pdf-exporting .cr-accounts th,
   #cash-report.cr-pdf-exporting .cr-accounts td { padding-top:1px; padding-bottom:1px; }
@@ -142,9 +136,9 @@
             {% for linha in dia.linhas %}
               <tr class="cr-line">
                 <td>{% if linha.entrada %}<div class="cr-description"><strong>{{ linha.entrada.descricao }}</strong>{% if linha.entrada.contraparte %}<span class="cr-counterparty">Cliente/origem: {{ linha.entrada.contraparte }}</span>{% endif %}<span class="cr-detail">{{ linha.entrada.hora }} · {{ linha.entrada.origem }}{% if linha.entrada.classificacao %} · {{ linha.entrada.classificacao }}{% endif %}{% if linha.entrada.documento %} · Doc. {{ linha.entrada.documento }}{% endif %}</span><span class="cr-detail"><b>Forma / conta:</b> {{ linha.entrada.forma_pagamento }} · {{ linha.entrada.conta.descricao|default:linha.entrada.conta.banco_nome|default:"Conta não definida" }}{% if linha.entrada.bandeira %} · {{ linha.entrada.bandeira|title }}{% endif %}{% if linha.entrada.numero_parcelas %} {{ linha.entrada.numero_parcelas }}x{% endif %}</span></div>{% endif %}</td>
-                <td class="cr-value">{% if linha.entrada %}R$ {{ linha.entrada.entrada|floatformat:2 }}{% if linha.entrada.valor_taxa > 0 %}<small>Bruto R$ {{ linha.entrada.valor_bruto|floatformat:2 }}<br>Taxa R$ {{ linha.entrada.valor_taxa|floatformat:2 }}{% if linha.entrada.taxa_percentual > 0 %} ({{ linha.entrada.taxa_percentual|floatformat:2 }}%){% endif %}</small>{% endif %}{% endif %}</td>
-                <td>{% if linha.saida %}<div class="cr-description"><strong>{{ linha.saida.descricao }}</strong>{% if linha.saida.contraparte %}<span class="cr-counterparty">Fornecedor/funcionário: {{ linha.saida.contraparte }}</span>{% endif %}<span class="cr-detail">{{ linha.saida.hora }} · {{ linha.saida.origem }}{% if linha.saida.classificacao %} · {{ linha.saida.classificacao }}{% endif %}{% if linha.saida.documento %} · Doc. {{ linha.saida.documento }}{% endif %}</span><span class="cr-detail"><b>Forma / conta:</b> {{ linha.saida.forma_pagamento }} · {{ linha.saida.conta.descricao|default:linha.saida.conta.banco_nome|default:"Conta não definida" }}</span></div>{% endif %}</td>
-                <td class="cr-value">{% if linha.saida %}R$ {{ linha.saida.saida|floatformat:2 }}{% if linha.saida.valor_taxa > 0 %}<small>Taxa adicional R$ {{ linha.saida.valor_taxa|floatformat:2 }}{% if linha.saida.taxa_percentual > 0 %} ({{ linha.saida.taxa_percentual|floatformat:2 }}%){% endif %}</small>{% endif %}{% endif %}</td>
+                <td class="cr-value">{% if linha.entrada %}R$ {{ linha.entrada.entrada_bruta|floatformat:2 }}{% endif %}</td>
+                <td>{% if linha.saida %}<div class="cr-description"><strong>{{ linha.saida.descricao }}</strong>{% if linha.saida.contraparte %}<span class="cr-counterparty">{% if linha.saida.tipo_taxa %}Referente a: {% else %}Fornecedor/funcionário: {% endif %}{{ linha.saida.contraparte }}</span>{% endif %}<span class="cr-detail">{{ linha.saida.hora }} · {{ linha.saida.origem }}{% if linha.saida.classificacao %} · {{ linha.saida.classificacao }}{% endif %}{% if linha.saida.documento %} · Doc. {{ linha.saida.documento }}{% endif %}</span><span class="cr-detail"><b>Forma / conta:</b> {{ linha.saida.forma_pagamento }} · {{ linha.saida.conta.descricao|default:linha.saida.conta.banco_nome|default:"Conta não definida" }}</span></div>{% endif %}</td>
+                <td class="cr-value">{% if linha.saida %}R$ {{ linha.saida.saida|floatformat:2 }}{% if linha.saida.tipo_taxa and linha.saida.taxa_percentual > 0 %}<small>{{ linha.saida.taxa_percentual|floatformat:2 }}%</small>{% endif %}{% endif %}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -154,16 +148,10 @@
 
     <section class="cr-summary" aria-label="Resumo do caixa">
       <div class="cr-metric"><span>Saldo inicial{% if filtros_ativos %} geral{% endif %}</span><strong>R$ {{ posicao.total_abertura|floatformat:2 }}</strong></div>
-      <div class="cr-metric entry"><span>Total de entradas</span><strong>+ R$ {{ posicao.total_entradas|floatformat:2 }}</strong></div>
-      <div class="cr-metric exit"><span>Total de saídas</span><strong>- R$ {{ posicao.total_saidas|floatformat:2 }}</strong></div>
+      <div class="cr-metric entry"><span>Total de entradas brutas</span><strong>+ R$ {{ total_entradas_relatorio|floatformat:2 }}</strong></div>
+      <div class="cr-metric exit"><span>Total de saídas e taxas</span><strong>- R$ {{ total_saidas_relatorio|floatformat:2 }}</strong></div>
       <div class="cr-metric"><span>Resultado do dia</span><strong class="{% if posicao.variacao_dia < 0 %}cr-negative{% else %}cr-positive{% endif %}">R$ {{ posicao.variacao_dia|floatformat:2 }}</strong></div>
       <div class="cr-metric final"><span>Saldo final{% if filtros_ativos %} geral{% endif %}</span><strong>R$ {{ posicao.total_fechamento|floatformat:2 }}</strong></div>
-    </section>
-
-    <section class="cr-fees" aria-label="Resumo das taxas">
-      <div class="cr-fee"><span>Taxas em recebimentos</span><strong>R$ {{ posicao.total_taxas_entradas|floatformat:2 }}</strong></div>
-      <div class="cr-fee"><span>Taxas em pagamentos</span><strong>R$ {{ posicao.total_taxas_pagamentos|floatformat:2 }}</strong></div>
-      <div class="cr-fee"><span>Total de taxas</span><strong>R$ {{ posicao.total_taxas_transacoes|floatformat:2 }}</strong></div>
     </section>
 
     <section class="cr-accounts">
@@ -171,9 +159,9 @@
       <table data-columns="off">
         <thead><tr><th>Conta</th><th>Saldo inicial</th><th>Entradas</th><th>Saídas</th><th>Saldo final</th></tr></thead>
         <tbody>
-          {% for conta in posicao.contas %}<tr><td><strong>{{ conta.descricao|default:conta.banco_nome }}</strong>{% if conta.banco_nome %}<span class="cr-muted"> · {{ conta.banco_nome }}</span>{% endif %}</td><td>R$ {{ conta.posicao_abertura|floatformat:2 }}</td><td class="cr-positive">+ R$ {{ conta.posicao_entradas|floatformat:2 }}</td><td class="cr-negative">- R$ {{ conta.posicao_saidas|floatformat:2 }}</td><td><strong>R$ {{ conta.posicao_fechamento|floatformat:2 }}</strong></td></tr>{% empty %}<tr><td colspan="5">Nenhuma conta ativa.</td></tr>{% endfor %}
+          {% for conta in posicao.contas %}<tr><td><strong>{{ conta.descricao|default:conta.banco_nome }}</strong>{% if conta.banco_nome %}<span class="cr-muted"> · {{ conta.banco_nome }}</span>{% endif %}</td><td>R$ {{ conta.posicao_abertura|floatformat:2 }}</td><td class="cr-positive">+ R$ {{ conta.relatorio_entradas|floatformat:2 }}</td><td class="cr-negative">- R$ {{ conta.relatorio_saidas|floatformat:2 }}</td><td><strong>R$ {{ conta.posicao_fechamento|floatformat:2 }}</strong></td></tr>{% empty %}<tr><td colspan="5">Nenhuma conta ativa.</td></tr>{% endfor %}
         </tbody>
-        <tfoot><tr><td>Total consolidado</td><td>R$ {{ posicao.total_abertura|floatformat:2 }}</td><td>+ R$ {{ posicao.total_entradas|floatformat:2 }}</td><td>- R$ {{ posicao.total_saidas_bancarias|floatformat:2 }}</td><td>R$ {{ posicao.total_fechamento|floatformat:2 }}</td></tr></tfoot>
+        <tfoot><tr><td>Total consolidado</td><td>R$ {{ posicao.total_abertura|floatformat:2 }}</td><td>+ R$ {{ total_entradas_relatorio|floatformat:2 }}</td><td>- R$ {{ total_saidas_relatorio|floatformat:2 }}</td><td>R$ {{ posicao.total_fechamento|floatformat:2 }}</td></tr></tfoot>
       </table>
     </section>
 
@@ -198,7 +186,7 @@ document.getElementById('exportar-caixa-pdf').addEventListener('click', function
     image: {type:'jpeg', quality:0.98},
     html2canvas: {scale:2, useCORS:true, backgroundColor:'#ffffff'},
     jsPDF: {unit:'mm', format:'a4', orientation:'portrait'},
-    pagebreak: {mode:['css','legacy'], avoid:['.cr-day-table thead','.cr-line','.cr-summary','.cr-fees','.cr-accounts']}
+    pagebreak: {mode:['css','legacy'], avoid:['.cr-day-table thead','.cr-line','.cr-summary','.cr-accounts']}
   }).from(report).save().finally(function () {
     report.classList.remove('cr-pdf-exporting');
     button.disabled = false;
