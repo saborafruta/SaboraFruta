@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from django.core.exceptions import ImproperlyConfigured
 from django.contrib.sessions.models import Session
@@ -113,6 +113,28 @@ class MultitenancyFoundationTests(TestCase):
         self.assertEqual(
             self.banco.status, EmpresaBanco.Status.AGUARDANDO_CONFIGURACAO,
         )
+
+    def test_verificacao_nao_rebaixa_banco_ativo(self):
+        conexao = MagicMock()
+        fake_connections = MagicMock()
+        fake_connections.databases = {self.banco.db_alias: {}}
+        fake_connections.__getitem__.return_value = conexao
+
+        with (
+            patch(
+                'apps.core.services.empresa_banco_service.register_tenant_database',
+                return_value=True,
+            ),
+            patch(
+                'apps.core.services.empresa_banco_service.connections',
+                fake_connections,
+            ),
+        ):
+            ok, _message = EmpresaBancoService.testar_conexao(self.banco)
+
+        self.assertTrue(ok)
+        self.banco.refresh_from_db()
+        self.assertEqual(self.banco.status, EmpresaBanco.Status.ATIVO)
 
     @override_settings(
         TENANT_DATABASE_ROUTING_ENABLED=True,
