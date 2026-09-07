@@ -9,6 +9,7 @@ uma peca de cada vez, para saber qual causa qual.
 from decimal import Decimal
 
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
@@ -477,3 +478,128 @@ class EnderecoDoClienteCadastradoTests(BaseMDFe):
         )
 
         self.assertEqual(_endereco_destino_nfe(nfe), '')
+
+
+class PesoManualQuandoNaoCalculavelTests(BaseMDFe):
+    """
+    Produto sem peso_bruto cadastrado -> `_peso_produtos_nfe` não consegue
+    calcular. O campo virava readonly E vazio ao mesmo tempo: a validação
+    exige peso, ninguém consegue digitar o valor pra corrigir, e a tela
+    fica travada até alguém ir cadastrar o peso de cada produto -- mesmo
+    quando digitar o peso na mão já resolveria pra emitir agora.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.usuario)
+
+    def _url(self, nfe):
+        return reverse('logistica:mdfe-create') + f'?nfe_documento_id={nfe.pk}'
+
+    def _dados_validos(self, nfe, **kw):
+        from datetime import timedelta
+
+        dados = dict(
+            numero=1, serie='1',
+            data_emissao=timezone.localdate().isoformat(),
+            modal='rodoviario',
+            motorista_nome='Victor Trindade',
+            veiculo_placa='IYG5E68',
+            uf_carregamento='RN', municipio_carregamento='Natal',
+            uf_descarregamento='RN', municipio_descarregamento='Parnamirim',
+            inicio_viagem=timezone.localtime().strftime('%Y-%m-%dT%H:%M'),
+            previsao_chegada=(
+                timezone.localtime() + timedelta(hours=4)
+            ).strftime('%Y-%m-%dT%H:%M'),
+            nfe_documento_id=str(nfe.pk),
+        )
+        dados.update(kw)
+        return dados
+
+    def test_get_deixa_o_campo_editavel_quando_nao_da_pra_calcular(self):
+        from unittest import mock
+
+        nfe = self._nfe()
+        with mock.patch(
+            'apps.logistica.views._peso_produtos_nfe',
+            return_value=(Decimal('0'), ['Tangerina 400 g']),
+        ):
+            resposta = self.client.get(self._url(nfe))
+
+        widget_attrs = resposta.context['form'].fields['peso_carga_kg'].widget.attrs
+        self.assertNotIn('readonly', widget_attrs)
+
+    def test_get_mantem_readonly_quando_da_pra_calcular(self):
+        from unittest import mock
+
+        nfe = self._nfe()
+        with mock.patch(
+            'apps.logistica.views._peso_produtos_nfe',
+            return_value=(Decimal('75'), []),
+        ):
+            resposta = self.client.get(self._url(nfe))
+
+        widget_attrs = resposta.context['form'].fields['peso_carga_kg'].widget.attrs
+        self.assertTrue(widget_attrs.get('readonly'))
+
+    def test_post_aceita_peso_digitado_a_mao_quando_nao_calculavel(self):
+        from unittest import mock
+        from apps.logistica.models import MDFe
+
+        nfe = self._nfe()
+        with mock.patch(
+            'apps.logistica.views._peso_produtos_nfe',
+            return_value=(Decimal('0'), ['Tangerina 400 g']),
+        ):
+            resposta = self.client.post(
+                reverse('logistica:mdfe-create'),
+                self._dados_validos(nfe, peso_carga_kg='120.5'),
+            )
+
+        mdfe = MDFe.objects.get(filial=self.filial)
+        self.assertRedirects(resposta, reverse('logistica:mdfe-detail', args=[mdfe.pk]))
+        self.assertEqual(mdfe.peso_total_kg, Decimal('120.500'))
+
+    def test_post_sem_peso_e_sem_calculo_continua_travando_com_a_mensagem_certa(self):
+        """
+        O bug nao era a validacao existir -- era o campo ficar sem jeito
+        de corrigir. Sem digitar nada, o erro continua aparecendo, so' que
+        agora o campo aceita a correcao.
+        """
+        from unittest import mock
+
+        nfe = self._nfe()
+        with mock.patch(
+            'apps.logistica.views._peso_produtos_nfe',
+            return_value=(Decimal('0'), ['Tangerina 400 g']),
+        ):
+            resposta = self.client.post(
+                reverse('logistica:mdfe-create'),
+                self._dados_validos(nfe, peso_carga_kg=''),
+            )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn(
+            'Informe o peso bruto da carga para emitir o MDF-e.',
+            resposta.context['form'].errors['peso_carga_kg'],
+        )
+        widget_attrs = resposta.context['form'].fields['peso_carga_kg'].widget.attrs
+        self.assertNotIn('readonly', widget_attrs)
+
+    def test_post_com_peso_calculavel_ignora_valor_adulterado_no_campo_readonly(self):
+        """O campo so' e' editavel de verdade no client quando nao e' readonly."""
+        from unittest import mock
+        from apps.logistica.models import MDFe
+
+        nfe = self._nfe()
+        with mock.patch(
+            'apps.logistica.views._peso_produtos_nfe',
+            return_value=(Decimal('75'), []),
+        ):
+            self.client.post(
+                reverse('logistica:mdfe-create'),
+                self._dados_validos(nfe, peso_carga_kg='999'),
+            )
+
+        mdfe = MDFe.objects.get(filial=self.filial)
+        self.assertEqual(mdfe.peso_total_kg, Decimal('75.000'))

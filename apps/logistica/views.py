@@ -2145,6 +2145,7 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
         nfe_documento_inicial_json = "null"
         rota_automatica = None
         produtos_sem_peso = []
+        peso_calculado = False
         if nfe_documento:
             rota_automatica = _rota_filiais_nfe(nfe_documento)
             initial.update({
@@ -2153,7 +2154,8 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
                 if campo not in {"origem", "destino"}
             })
             peso_carga, produtos_sem_peso = _peso_produtos_nfe(nfe_documento)
-            if not produtos_sem_peso:
+            peso_calculado = peso_carga > 0 and not produtos_sem_peso
+            if peso_calculado:
                 initial["peso_carga_kg"] = peso_carga
             if nfe_documento.transportadora_id:
                 initial["transportadora"] = nfe_documento.transportadora_id
@@ -2206,7 +2208,12 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
                 veiculos.values_list("pk", flat=True).first(),
             )
         form = MDFeForm(filial=filial, initial=initial)
-        if nfe_documento:
+        # SO' TRAVA QUANDO DEU PRA CALCULAR. Readonly sem peso calculado e'
+        # beco sem saida: o campo fica vazio, a validacao exige peso, e
+        # ninguem consegue digitar o valor pra corrigir. Nesse caso o campo
+        # fica editavel -- e' exatamente o que a mensagem ja pede ("informe
+        # o peso bruto") -- ate' os produtos serem cadastrados com peso.
+        if peso_calculado:
             form.fields["peso_carga_kg"].widget.attrs["readonly"] = True
         motoristas_json, veiculos_json = _motoristas_veiculos_json(filial)
         return render(request, self.template_name, {
@@ -2250,26 +2257,24 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
         dados_post = request.POST.copy()
         rota_automatica = None
         produtos_sem_peso = []
+        peso_calculado = False
         if nfe_documento:
             rota_automatica = _rota_filiais_nfe(nfe_documento)
             for campo, valor in rota_automatica.items():
                 if campo not in {"origem", "destino"}:
                     dados_post[campo] = valor
             peso_carga, produtos_sem_peso = _peso_produtos_nfe(nfe_documento)
-            dados_post["peso_carga_kg"] = (
-                str(peso_carga) if peso_carga > 0 and not produtos_sem_peso else ""
-            )
+            peso_calculado = peso_carga > 0 and not produtos_sem_peso
+            # SO' SOBRESCREVE QUANDO DEU PRA CALCULAR. Sem isso, um peso
+            # digitado a mao pelo usuario (porque os produtos nao tem peso
+            # cadastrado) era apagado aqui antes mesmo de chegar na
+            # validacao -- o campo ficava travado em branco pra sempre.
+            if peso_calculado:
+                dados_post["peso_carga_kg"] = str(peso_carga)
         form = MDFeForm(dados_post, filial=filial)
-        if nfe_documento:
+        if peso_calculado:
             form.fields["peso_carga_kg"].widget.attrs["readonly"] = True
         formulario_valido = form.is_valid()
-        if produtos_sem_peso:
-            form.add_error(
-                "peso_carga_kg",
-                "Cadastre o peso bruto destes produtos antes de emitir: "
-                + ", ".join(produtos_sem_peso),
-            )
-            formulario_valido = False
         if formulario_valido:
             from apps.core.models.parametros import (
                 ParametroDocumentoFiscal,
