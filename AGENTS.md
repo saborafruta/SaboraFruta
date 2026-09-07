@@ -4,6 +4,16 @@ Este arquivo fica na raiz do repositório para ser lido automaticamente por
 agentes de IA que trabalham neste projeto. Estas regras valem desde o início de
 cada nova conversa ou tarefa.
 
+## Continuidade do multibanco e Railway
+
+Antes de qualquer tarefa relacionada a Railway, Banco Gerencial, banco por
+empresa, Central Administrativa, domínios `ited.app.br`/Eureka ou isolamento do
+Sabor a Fruta, leia integralmente
+`docs/CONTEXTO_MULTIBANCO_RAILWAY.md`. Esse arquivo registra a topologia atual,
+backups, rollback, limitações e pendências. Confirme o estado ao vivo antes de
+agir, pois nomes de serviços antigos não representam necessariamente sua função
+atual.
+
 ## Fonte da verdade: GitHub
 
 A `origin/main` do GitHub é a fonte da verdade para todo trabalho novo. Nunca
