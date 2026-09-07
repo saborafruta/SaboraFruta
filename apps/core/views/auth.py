@@ -119,7 +119,12 @@ class SelecionarFilialView(View):
 
         empresas = []
         if request.user.is_superuser:
-            empresas = Empresa.objects.filter(
+            # Ao voltar de uma empresa, o contexto operacional ainda aponta
+            # para o banco daquele tenant. A seleção global do Super Admin,
+            # porém, pertence ao diretório gerencial e deve listar todas as
+            # empresas e filiais contratadas.
+            filiais = filiais.using('default')
+            empresas = Empresa.objects.using('default').filter(
                 filiais__in=filiais,
                 ativo=True,
             ).distinct().order_by('nome_fantasia', 'razao_social')

@@ -20,6 +20,7 @@ from apps.core.services.railway_provisioner import RailwayProvisioner
 from apps.core.services.tenant_public_link_service import TenantPublicLinkService
 from apps.core.services.tenant_task_service import TenantTaskService
 from apps.core.tenant_context import get_current_tenant_db, tenant_db
+from apps.core.views.auth import SelecionarFilialView
 
 
 class MultitenancyFoundationTests(TestCase):
@@ -265,6 +266,25 @@ class MultitenancyFoundationTests(TestCase):
         self.assertEqual(request.user.pk, self.usuario.pk)
         self.assertEqual(request.session['auth_database_alias'], 'default')
         using.assert_not_called()
+
+    def test_selecao_global_consulta_filiais_no_banco_gerencial(self):
+        self.usuario.is_superuser = True
+        self.usuario.is_staff = True
+        self.usuario.save(update_fields=['is_superuser', 'is_staff'])
+        request = RequestFactory().get('/auth/selecionar-filial/')
+        request.session = {'tenant_db_alias': self.banco.db_alias}
+        request.user = self.usuario
+
+        with (
+            tenant_db(self.banco.db_alias),
+            patch('apps.core.views.auth.render', side_effect=lambda _r, _t, c: c),
+        ):
+            context = SelecionarFilialView().get(request)
+
+        self.assertEqual(context['filiais']._db, 'default')
+        self.assertEqual(context['empresas']._db, 'default')
+        self.assertEqual(list(context['filiais']), [self.filial])
+        self.assertEqual(list(context['empresas']), [self.empresa])
 
     @override_settings(
         TENANT_DATABASE_ROUTING_ENABLED=True,
