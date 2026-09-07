@@ -11,6 +11,7 @@ from django.utils.text import slugify
 from apps.core.models import EmpresaBanco
 from apps.core.services.railway_provisioner import RailwayProvisioner
 from apps.core.services.tenant_bootstrap_service import TenantBootstrapService
+from apps.core.tenant_context import tenant_db
 from apps.core.tenant_registry import register_tenant_database
 
 
@@ -90,8 +91,15 @@ class EmpresaBancoService:
         if not register_tenant_database(banco):
             return False, 'Configuração de conexão indisponível.'
         try:
-            call_command('migrate', database=banco.db_alias, interactive=False, verbosity=0)
-            resumo = TenantBootstrapService.sincronizar_empresa(banco.empresa, banco.db_alias)
+            # RunPython migrations que não usam explicitamente o alias precisam
+            # receber o contexto do tenant; sem ele, o ORM cairia no banco central.
+            with tenant_db(banco.db_alias):
+                call_command(
+                    'migrate', database=banco.db_alias, interactive=False, verbosity=0,
+                )
+                resumo = TenantBootstrapService.sincronizar_empresa(
+                    banco.empresa, banco.db_alias,
+                )
             banco.status = EmpresaBanco.Status.ATIVO
             banco.ultima_migracao_em = timezone.now()
             banco.ultimo_erro = ''
