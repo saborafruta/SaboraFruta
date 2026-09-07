@@ -77,6 +77,11 @@ urlpatterns = [
     path("pedidos/<int:pk>/", views.PedidoExpedicaoDetailView.as_view(), name="pedido-expedicao-detail"),
     path("pedidos/<int:pk>/editar/", views.PedidoExpedicaoUpdateView.as_view(), name="pedido-expedicao-update"),
     path("pedidos/<int:pk>/excluir/", views.PedidoExpedicaoDeleteView.as_view(), name="pedido-expedicao-delete"),
+    path(
+        "pedidos/<int:pk>/estornar-e-excluir/",
+        views.PedidoExpedicaoEstornarEExcluirView.as_view(),
+        name="pedido-expedicao-estornar-e-excluir",
+    ),
     path("pedidos/<int:pk>/cancelar/", views.PedidoExpedicaoCancelarView.as_view(), name="pedido-expedicao-cancelar"),
     path("pedidos/<int:pk>/itens/da-venda/", views.PedidoExpedicaoTrazerItensView.as_view(), name="pedido-expedicao-itens-da-venda"),
     path("pedidos/<int:pk>/cobrar/", views.PedidoExpedicaoCobrarView.as_view(), name="pedido-expedicao-cobrar"),

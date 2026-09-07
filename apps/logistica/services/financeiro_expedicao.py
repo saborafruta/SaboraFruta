@@ -37,6 +37,7 @@ from apps.core.services.exceptions import DadosInvalidosError
 from apps.financeiro.constants.enums import StatusContaReceber
 from apps.financeiro.models.receber_pagar import ContaReceber
 from apps.financeiro.services.parcelamento import ParcelamentoService
+from apps.financeiro.services.receber_service import ContaReceberService
 
 ZERO = Decimal('0')
 CENTAVOS = Decimal('0.01')
@@ -287,3 +288,28 @@ class FinanceiroExpedicaoService:
         return titulos.update(
             status=StatusContaReceber.CANCELADO, valor_saldo=ZERO,
         )
+
+    @classmethod
+    @transaction.atomic
+    def estornar_recebimentos(cls, pedido, motivo: str, usuario) -> int:
+        """
+        Desfaz TODO recebimento já lançado nesta expedição, uma baixa de
+        cada vez, para então a cobrança poder ser cancelada e o pedido
+        excluído sem deixar dinheiro sem origem no financeiro.
+
+        UMA BAIXA DE CADA VEZ, PELO SERVIÇO PRÓPRIO: `excluir_baixa` já
+        recalcula saldo, status e taxas do título a cada remoção -- refazer
+        essa conta aqui seria duplicar uma regra que já existe e diverge no
+        dia em que ela mudar lá.
+
+        NÃO CANCELA O TÍTULO SOZINHO. Depois de zerado o recebimento, quem
+        decide se cancela é quem chamou isto -- normalmente seguido de
+        `cancelar_titulos`, que é o mesmo caminho que a exclusão comum já
+        usa para título em aberto.
+        """
+        total = 0
+        for titulo in cls.titulos(pedido).filter(status__in=COM_DINHEIRO):
+            for pagamento in list(titulo.pagamentos.all()):
+                ContaReceberService.excluir_baixa(pagamento, motivo, usuario)
+                total += 1
+        return total

@@ -183,11 +183,22 @@
                 clique que termina em mensagem de erro. `data_expedicao`
                 so' trava fora do cancelado -- uma vez cancelado, cancelar
                 ja' e' a decisao de encerrar, a data vira so' historico.
+                Com dinheiro recebido, o botao chama o endpoint que estorna
+                o recebimento e exclui de uma vez -- sem isso o clique so'
+                terminava numa mensagem de erro mandando ir ao Financeiro.
               {% endcomment %}
               {% if p.status != 'expedido' and p.status != 'entregue' %}
                 {% if p.status == 'cancelado' or not p.data_expedicao %}
-                <button type="button" title="Excluir pedido" class="oms-acao" style="color:#f87171;"
-                        @click="excluir = { url: '{% url 'logistica:pedido-expedicao-delete' p.pk %}', numero: '#{{ p.numero|stringformat:"06d" }}', cliente: '{{ p.cliente.nome_fantasia|default:p.cliente.razao_social|escapejs }}', itens: {{ p.qtd_itens|default:0 }} }">
+                <button type="button"
+                        title="{% if p.tem_dinheiro_recebido %}Estornar recebimento e excluir{% else %}Excluir pedido{% endif %}"
+                        class="oms-acao" style="color:#f87171;"
+                        @click="excluir = {
+                          url: '{% if p.tem_dinheiro_recebido %}{% url 'logistica:pedido-expedicao-estornar-e-excluir' p.pk %}{% else %}{% url 'logistica:pedido-expedicao-delete' p.pk %}{% endif %}',
+                          numero: '#{{ p.numero|stringformat:"06d" }}',
+                          cliente: '{{ p.cliente.nome_fantasia|default:p.cliente.razao_social|escapejs }}',
+                          itens: {{ p.qtd_itens|default:0 }},
+                          comDinheiro: {{ p.tem_dinheiro_recebido|yesno:'true,false' }}
+                        }">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                   </svg>
@@ -254,8 +265,16 @@
       {% endif %}
       {% if p.status != 'expedido' and p.status != 'entregue' %}
         {% if p.status == 'cancelado' or not p.data_expedicao %}
-        <button type="button" class="oms-acao" title="Excluir" style="color:#f87171;"
-                @click="excluir = { url: '{% url 'logistica:pedido-expedicao-delete' p.pk %}', numero: '#{{ p.numero|stringformat:"06d" }}', cliente: '{{ p.cliente.nome_fantasia|default:p.cliente.razao_social|escapejs }}', itens: {{ p.qtd_itens|default:0 }} }">
+        <button type="button" class="oms-acao"
+                title="{% if p.tem_dinheiro_recebido %}Estornar recebimento e excluir{% else %}Excluir{% endif %}"
+                style="color:#f87171;"
+                @click="excluir = {
+                  url: '{% if p.tem_dinheiro_recebido %}{% url 'logistica:pedido-expedicao-estornar-e-excluir' p.pk %}{% else %}{% url 'logistica:pedido-expedicao-delete' p.pk %}{% endif %}',
+                  numero: '#{{ p.numero|stringformat:"06d" }}',
+                  cliente: '{{ p.cliente.nome_fantasia|default:p.cliente.razao_social|escapejs }}',
+                  itens: {{ p.qtd_itens|default:0 }},
+                  comDinheiro: {{ p.tem_dinheiro_recebido|yesno:'true,false' }}
+                }">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
           </svg>
@@ -332,7 +351,10 @@
   {% comment %}
     Modal em vez de confirm() do navegador: exclusao aqui apaga tambem os
     itens do pedido (FK em cascata), entao vale mostrar numero, cliente e
-    quantos itens vao junto antes de confirmar.
+    quantos itens vao junto antes de confirmar. Com dinheiro recebido, o
+    aviso muda: o recebimento é estornado no contas a receber ANTES da
+    exclusão, no mesmo clique -- é bom quem confirma saber disso, porque
+    não tem confirm() nenhum lá no Financeiro pra avisar de novo.
   {% endcomment %}
   <div x-show="excluir" x-cloak @keydown.escape.window="excluir = null"
        class="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -347,12 +369,21 @@
         </div>
         <div class="min-w-0">
           <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
-            Excluir pedido <span x-text="excluir?.numero"></span>?
+            <template x-if="excluir?.comDinheiro">
+              <span>Estornar recebimento e excluir pedido <span x-text="excluir?.numero"></span>?</span>
+            </template>
+            <template x-if="!excluir?.comDinheiro">
+              <span>Excluir pedido <span x-text="excluir?.numero"></span>?</span>
+            </template>
           </h3>
           <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
             Cliente: <strong x-text="excluir?.cliente"></strong>.
             <template x-if="excluir?.itens > 0">
               <span>Os <strong x-text="excluir.itens"></strong> iten(s) do pedido são apagados junto.</span>
+            </template>
+            <template x-if="excluir?.comDinheiro">
+              <span>Este pedido tem recebimento lançado no contas a receber -- ele
+              será <strong>estornado</strong> lá antes de excluir, nesse mesmo clique.</span>
             </template>
             Esta ação não pode ser desfeita.
           </p>
@@ -363,7 +394,12 @@
         <form method="post" :action="excluir?.url">
           {% csrf_token %}
           <button type="submit" class="btn-primary text-sm" style="background:#dc2626; border-color:#dc2626;">
-            Excluir pedido
+            <template x-if="excluir?.comDinheiro">
+              <span>Estornar e excluir</span>
+            </template>
+            <template x-if="!excluir?.comDinheiro">
+              <span>Excluir pedido</span>
+            </template>
           </button>
         </form>
       </div>

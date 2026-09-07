@@ -7,7 +7,7 @@ from xml.etree import ElementTree
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Exists, OuterRef, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -22,8 +22,9 @@ from apps.core.models.empresa import Filial
 from apps.core.services.exceptions import DadosInvalidosError, DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeError
-from apps.financeiro.constants.enums import StatusDocumentoFiscal
+from apps.financeiro.constants.enums import StatusContaReceber, StatusDocumentoFiscal
 from apps.financeiro.models.fiscal import DocumentoFiscal
+from apps.financeiro.models.receber_pagar import ContaReceber
 from apps.logistica.models_viagem import Viagem
 from apps.logistica.services.log_viagem import LogViagemService
 from apps.logistica.services.mdfe_viagem import MDFeViagemService
@@ -1055,10 +1056,22 @@ class PedidoExpedicaoListView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         filial = _filial(request)
+        # SO' PRA DECIDIR QUAL BOTAO MOSTRAR na coluna de ações: "Excluir"
+        # de cara, ou "Estornar e excluir" quando já tem dinheiro no contas
+        # a receber -- sem isso a tela so' saberia depois do clique, no
+        # redirecionamento de erro que a exclusão comum já dá.
+        titulo_com_dinheiro = ContaReceber.objects.filter(
+            documento_tipo="pedido_expedicao",
+            documento_id=OuterRef("pk"),
+            status__in=(StatusContaReceber.PAGO, StatusContaReceber.PAGO_PARCIAL),
+        )
         qs = (
             PedidoExpedicao.objects.for_filial(filial)
             .select_related("cliente", "transportadora", "responsavel")
-            .annotate(qtd_itens=Count("itens"))
+            .annotate(
+                qtd_itens=Count("itens"),
+                tem_dinheiro_recebido=Exists(titulo_com_dinheiro),
+            )
         )
 
         status = request.GET.get("status", "")
@@ -1255,55 +1268,105 @@ class PedidoExpedicaoUpdateView(PermissaoRequiredMixin, View):
         })
 
 
+# Expedido/entregue ainda em curso virou historico de operacao: o que saiu,
+# quando e para quem. Apagar isso deixaria o registro da entrega sem
+# origem, entao a saida ali e' cancelar, nao excluir. Uma vez cancelado,
+# porem, esses dois nunca se aplicam -- 'cancelado' nao e' 'expedido' nem
+# 'entregue' -- entao a trava ja nao pega mais.
+_STATUS_BLOQUEIA_EXCLUSAO_PEDIDO = (
+    PedidoExpedicao.Status.EXPEDIDO,
+    PedidoExpedicao.Status.ENTREGUE,
+)
+
+
+def _bloqueio_exclusao_pedido_expedicao(pedido) -> str:
+    """
+    Por que este pedido não pode ser excluído agora -- vazio quando pode.
+
+    Compartilhado entre excluir direto e "estornar e excluir": os dois
+    caminhos aceitam o mesmo pedido, e divergir a regra entre eles deixaria
+    um jeito de excluir um pedido que o outro recusa.
+    """
+    if pedido.status in _STATUS_BLOQUEIA_EXCLUSAO_PEDIDO:
+        return (
+            f"Pedido #{pedido.numero:06d} já foi {pedido.get_status_display().lower()} "
+            f"e não pode ser excluído. Use o cancelamento para encerrá-lo sem perder o histórico."
+        )
+    # `data_expedicao` e' preenchida a mao no formulario -- pega quem marcou
+    # saida sem passar por 'expedido'/'entregue'. MAS SO' TRAVA se o pedido
+    # ainda estiver ativo: uma vez cancelado, cancelar JA' e' a decisao de
+    # encerrar, e a data vira so' um dado historico, nao motivo pra prender
+    # a exclusao -- e' exatamente o "cancela e depois exclui" que essa
+    # trava existia pra fechar, e o usuario decidiu que esse caminho fica
+    # liberado.
+    if pedido.data_expedicao and pedido.status != PedidoExpedicao.Status.CANCELADO:
+        return (
+            f"Pedido #{pedido.numero:06d} tem saída registrada em "
+            f"{pedido.data_expedicao:%d/%m/%Y} e não pode ser excluído. "
+            f"Cancele o pedido primeiro, ou estorne a saída antes de excluir."
+        )
+    return ""
+
+
+def _excluir_pedido_expedicao(pedido) -> str:
+    """
+    A parte de baixo da exclusão, comum aos dois caminhos: cancela a
+    cobrança em aberto, tira a entrega do romaneio e apaga o pedido.
+
+    PRESSUPÕE que os bloqueios (status, data de expedição, dinheiro
+    recebido) já foram checados por quem chamou -- não repete a checagem
+    para não divergir da mensagem que o usuário já viu.
+    """
+    numero = pedido.numero
+    # Avisa que a exclusao mexeu num romaneio ja montado -- sem isso o
+    # pedido simplesmente sumiria da carga sem ninguem perceber.
+    romaneio = pedido.romaneio
+
+    # A COBRANCA EM ABERTO VAI JUNTO, cancelada: titulo apontando para
+    # pedido que nao existe e' cobranca que ninguem consegue explicar ao
+    # cliente que ligar perguntando.
+    canceladas = FinanceiroExpedicaoService.cancelar_titulos(pedido)
+
+    # A ENTREGA TAMBEM: o vinculo e' SET_NULL, entao ela sobreviveria solta
+    # no romaneio, somando peso e valor de uma carga que nao existe mais --
+    # e o motorista sairia com uma parada sem pedido.
+    entrega = RomaneioDoPedidoService.entrega_do_pedido(pedido)
+    if entrega is not None:
+        entrega.delete()
+
+    pedido.delete()
+    if romaneio:
+        romaneio.recalcular_totais()
+
+    recado = f"Pedido #{numero:06d} excluído."
+    if romaneio:
+        recado += f" Saiu do romaneio {romaneio}, que agora tem uma carga a menos."
+    if canceladas:
+        recado += f" {canceladas} parcela(s) da cobrança foram canceladas."
+    return recado
+
+
 class PedidoExpedicaoDeleteView(PermissaoRequiredMixin, View):
     """Exclui um pedido de expedição. Os itens vão junto (FK em cascata)."""
 
     permissao_modulo = "logistica"
     permissao_acao = "excluir"
 
-    # Expedido/entregue ainda em curso virou historico de operacao: o que
-    # saiu, quando e para quem. Apagar isso deixaria o registro da entrega
-    # sem origem, entao a saida aqui e' cancelar, nao excluir. Uma vez
-    # cancelado, porem, esses dois nunca se aplicam -- 'cancelado' nao e'
-    # 'expedido' nem 'entregue' -- entao a trava ja nao pega mais.
-    STATUS_BLOQUEADOS = (
-        PedidoExpedicao.Status.EXPEDIDO,
-        PedidoExpedicao.Status.ENTREGUE,
-    )
-
     def post(self, request, pk):
         pedido = get_object_or_404(
             PedidoExpedicao.objects.for_filial(_filial(request)), pk=pk
         )
 
-        if pedido.status in self.STATUS_BLOQUEADOS:
-            messages.error(
-                request,
-                f"Pedido #{pedido.numero:06d} já foi {pedido.get_status_display().lower()} "
-                f"e não pode ser excluído. Use o cancelamento para encerrá-lo sem perder o histórico.",
-            )
-            return redirect("logistica:pedido-expedicao-list")
-
-        # `data_expedicao` e' preenchida a mao no formulario -- pega quem
-        # marcou saida sem passar por 'expedido'/'entregue'. MAS SO' TRAVA
-        # se o pedido ainda estiver ativo: uma vez cancelado, cancelar JA'
-        # e' a decisao de encerrar, e a data vira so' um dado historico, nao
-        # motivo pra prender a exclusao -- e' exatamente o "cancela e depois
-        # exclui" que essa trava existia pra fechar, e o usuario decidiu que
-        # esse caminho fica liberado.
-        if pedido.data_expedicao and pedido.status != PedidoExpedicao.Status.CANCELADO:
-            messages.error(
-                request,
-                f"Pedido #{pedido.numero:06d} tem saída registrada em "
-                f"{pedido.data_expedicao:%d/%m/%Y} e não pode ser excluído. "
-                f"Cancele o pedido primeiro, ou estorne a saída antes de excluir.",
-            )
+        bloqueio = _bloqueio_exclusao_pedido_expedicao(pedido)
+        if bloqueio:
+            messages.error(request, bloqueio)
             return redirect("logistica:pedido-expedicao-list")
 
         # DINHEIRO RECEBIDO SEGURA A EXCLUSAO. O titulo aponta para o pedido
         # por tipo e id; apagar o pedido deixaria um recebimento no contas a
         # receber sem origem -- dinheiro que entrou e nao se sabe do que. O
-        # caminho e' estornar o recebimento primeiro, com quem recebeu
+        # caminho e' estornar o recebimento primeiro (veja
+        # PedidoExpedicaoEstornarEExcluirView), com quem recebeu
         # respondendo por isso.
         cobranca = FinanceiroExpedicaoService.resumo(pedido)
         if cobranca["tem_dinheiro"]:
@@ -1315,32 +1378,47 @@ class PedidoExpedicaoDeleteView(PermissaoRequiredMixin, View):
             )
             return redirect("logistica:pedido-expedicao-detail", pk=pedido.pk)
 
-        numero = pedido.numero
-        # Avisa que a exclusao mexeu num romaneio ja montado -- sem isso o
-        # pedido simplesmente sumiria da carga sem ninguem perceber.
-        romaneio = pedido.romaneio
+        recado = _excluir_pedido_expedicao(pedido)
+        messages.success(request, recado)
+        return redirect("logistica:pedido-expedicao-list")
 
-        # A COBRANCA EM ABERTO VAI JUNTO, cancelada: titulo apontando para
-        # pedido que nao existe e' cobranca que ninguem consegue explicar ao
-        # cliente que ligar perguntando.
-        canceladas = FinanceiroExpedicaoService.cancelar_titulos(pedido)
 
-        # A ENTREGA TAMBEM: o vinculo e' SET_NULL, entao ela sobreviveria
-        # solta no romaneio, somando peso e valor de uma carga que nao existe
-        # mais -- e o motorista sairia com uma parada sem pedido.
-        entrega = RomaneioDoPedidoService.entrega_do_pedido(pedido)
-        if entrega is not None:
-            entrega.delete()
+class PedidoExpedicaoEstornarEExcluirView(PermissaoRequiredMixin, View):
+    """
+    Estorna todo recebimento já lançado e exclui o pedido, em um só clique.
 
-        pedido.delete()
-        if romaneio:
-            romaneio.recalcular_totais()
+    O ATALHO PARA O CAMINHO QUE JÁ EXISTIA. Sem isto, quem tentava excluir
+    um pedido com dinheiro recebido esbarrava na mensagem de erro e tinha
+    que ir até o Financeiro, achar o título, excluir a baixa manualmente, e
+    só então voltar aqui pra excluir -- o mesmo resultado, com mais cliques
+    e mais chance de esquecer o segundo passo. Aqui os dois acontecem numa
+    transação só.
+    """
 
-        recado = f"Pedido #{numero:06d} excluído."
-        if romaneio:
-            recado += f" Saiu do romaneio {romaneio}, que agora tem uma carga a menos."
-        if canceladas:
-            recado += f" {canceladas} parcela(s) da cobrança foram canceladas."
+    permissao_modulo = "logistica"
+    permissao_acao = "excluir"
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(
+            PedidoExpedicao.objects.for_filial(_filial(request)), pk=pk
+        )
+
+        bloqueio = _bloqueio_exclusao_pedido_expedicao(pedido)
+        if bloqueio:
+            messages.error(request, bloqueio)
+            return redirect("logistica:pedido-expedicao-list")
+
+        with transaction.atomic():
+            estornadas = FinanceiroExpedicaoService.estornar_recebimentos(
+                pedido, motivo=f"Excluído por {request.user}.", usuario=request.user,
+            )
+            recado = _excluir_pedido_expedicao(pedido)
+
+        if estornadas:
+            recado += (
+                f" {estornadas} recebimento(s) foram estornados no contas a "
+                "receber antes da exclusão."
+            )
         messages.success(request, recado)
         return redirect("logistica:pedido-expedicao-list")
 

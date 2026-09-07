@@ -734,8 +734,8 @@ class CobrancaDaExpedicaoTests(ItensDaVendaBase):
             numero_parcelas=3, intervalo_dias=30, dias_primeira_parcela=30,
         )
 
-    def _carga_avulsa(self, forma=None, condicao=None):
-        pedido = self._expedicao()
+    def _carga_avulsa(self, forma=None, condicao=None, numero=1):
+        pedido = self._expedicao(numero=numero)
         pedido.forma_pagamento = forma if forma is not None else self.a_prazo
         pedido.condicao_pagamento = condicao if condicao is not None else self.condicao
         pedido.save()
@@ -1409,3 +1409,100 @@ class ExclusaoDoPedidoTests(CobrancaDaExpedicaoTests):
         html = self.client.get(reverse('logistica:pedido-expedicao-list')).content.decode()
 
         self.assertNotIn(reverse('logistica:pedido-expedicao-delete', args=[pedido.pk]), html)
+
+
+class EstornarEExcluirPedidoTests(CobrancaDaExpedicaoTests):
+    """
+    O atalho para quando a exclusão direta esbarra em dinheiro recebido:
+    estorna a baixa no contas a receber e exclui o pedido, num clique só.
+    """
+
+    def test_estorna_recebimento_e_exclui_o_pedido(self):
+        pedido = self._carga_avulsa()
+        FinanceiroExpedicaoService.gerar_titulos(pedido, self.usuario, antecipado=True)
+        titulo = FinanceiroExpedicaoService.titulos(pedido).get()
+        self.assertEqual(titulo.status, StatusContaReceber.PAGO)
+
+        resposta = self.client.post(
+            reverse('logistica:pedido-expedicao-estornar-e-excluir', args=[pedido.pk]),
+            follow=True,
+        )
+
+        self.assertFalse(PedidoExpedicao.objects.filter(pk=pedido.pk).exists())
+        titulo.refresh_from_db()
+        # Estornado (sem pagamento) E cancelado -- o mesmo destino que um
+        # titulo em aberto ja tinha na exclusao comum, so' que este passou
+        # primeiro pelo estorno da baixa.
+        self.assertEqual(titulo.status, StatusContaReceber.CANCELADO)
+        self.assertEqual(titulo.pagamentos.count(), 0)
+        avisos = [str(m) for m in resposta.context['messages']]
+        self.assertTrue(any('recebimento(s) foram estornados' in a for a in avisos), avisos)
+
+    def test_sem_dinheiro_recebido_apenas_exclui(self):
+        """A carga pode nao ter recebimento nenhum -- o atalho nao quebra."""
+        pedido = self._carga_avulsa()
+        FinanceiroExpedicaoService.gerar_titulos(pedido, self.usuario)
+
+        resposta = self.client.post(
+            reverse('logistica:pedido-expedicao-estornar-e-excluir', args=[pedido.pk]),
+            follow=True,
+        )
+
+        self.assertFalse(PedidoExpedicao.objects.filter(pk=pedido.pk).exists())
+        avisos = [str(m) for m in resposta.context['messages']]
+        self.assertFalse(any('estornados' in a for a in avisos), avisos)
+
+    def test_recusa_para_pedido_ja_expedido(self):
+        pedido = self._carga_avulsa()
+        pedido.status = PedidoExpedicao.Status.EXPEDIDO
+        pedido.save(update_fields=['status'])
+
+        self.client.post(
+            reverse('logistica:pedido-expedicao-estornar-e-excluir', args=[pedido.pk]),
+        )
+
+        self.assertTrue(PedidoExpedicao.objects.filter(pk=pedido.pk).exists())
+
+    def test_recusa_para_pedido_ativo_com_data_de_expedicao(self):
+        pedido = self._carga_avulsa()
+        pedido.data_expedicao = timezone.localdate()
+        pedido.save(update_fields=['data_expedicao'])
+
+        self.client.post(
+            reverse('logistica:pedido-expedicao-estornar-e-excluir', args=[pedido.pk]),
+        )
+
+        self.assertTrue(PedidoExpedicao.objects.filter(pk=pedido.pk).exists())
+
+    def test_cancelado_com_dinheiro_recebido_estorna_e_exclui(self):
+        pedido = self._carga_avulsa()
+        FinanceiroExpedicaoService.gerar_titulos(pedido, self.usuario, antecipado=True)
+        pedido.data_expedicao = timezone.localdate()
+        pedido.status = PedidoExpedicao.Status.CANCELADO
+        pedido.save(update_fields=['data_expedicao', 'status'])
+
+        self.client.post(
+            reverse('logistica:pedido-expedicao-estornar-e-excluir', args=[pedido.pk]),
+        )
+
+        self.assertFalse(PedidoExpedicao.objects.filter(pk=pedido.pk).exists())
+
+    def test_lista_mostra_o_botao_certo_conforme_tem_dinheiro_ou_nao(self):
+        com_dinheiro = self._carga_avulsa()
+        FinanceiroExpedicaoService.gerar_titulos(com_dinheiro, self.usuario, antecipado=True)
+        sem_dinheiro = self._carga_avulsa(numero=2)
+
+        html = self.client.get(reverse('logistica:pedido-expedicao-list')).content.decode()
+
+        self.assertIn(
+            reverse('logistica:pedido-expedicao-estornar-e-excluir', args=[com_dinheiro.pk]),
+            html,
+        )
+        self.assertNotIn(
+            reverse('logistica:pedido-expedicao-delete', args=[com_dinheiro.pk]),
+            html,
+        )
+        self.assertIn(
+            reverse('logistica:pedido-expedicao-delete', args=[sem_dinheiro.pk]),
+            html,
+        )
