@@ -1261,9 +1261,11 @@ class PedidoExpedicaoDeleteView(PermissaoRequiredMixin, View):
     permissao_modulo = "logistica"
     permissao_acao = "excluir"
 
-    # Depois de expedido o pedido virou historico de operacao: o que saiu,
-    # quando e para quem. Apagar isso deixaria o registro da entrega sem
-    # origem, entao a saida aqui e' cancelar, nao excluir.
+    # Expedido/entregue ainda em curso virou historico de operacao: o que
+    # saiu, quando e para quem. Apagar isso deixaria o registro da entrega
+    # sem origem, entao a saida aqui e' cancelar, nao excluir. Uma vez
+    # cancelado, porem, esses dois nunca se aplicam -- 'cancelado' nao e'
+    # 'expedido' nem 'entregue' -- entao a trava ja nao pega mais.
     STATUS_BLOQUEADOS = (
         PedidoExpedicao.Status.EXPEDIDO,
         PedidoExpedicao.Status.ENTREGUE,
@@ -1282,16 +1284,19 @@ class PedidoExpedicaoDeleteView(PermissaoRequiredMixin, View):
             )
             return redirect("logistica:pedido-expedicao-list")
 
-        # Fecha o caminho "cancela e depois exclui", que devolveria a
-        # exclusao a um pedido ja expedido. `data_expedicao` e' preenchida a
-        # mao no formulario, entao nao pega quem expediu sem registrar a
-        # data -- mas nesse caso tambem nao ha registro de saida a proteger.
-        if pedido.data_expedicao:
+        # `data_expedicao` e' preenchida a mao no formulario -- pega quem
+        # marcou saida sem passar por 'expedido'/'entregue'. MAS SO' TRAVA
+        # se o pedido ainda estiver ativo: uma vez cancelado, cancelar JA'
+        # e' a decisao de encerrar, e a data vira so' um dado historico, nao
+        # motivo pra prender a exclusao -- e' exatamente o "cancela e depois
+        # exclui" que essa trava existia pra fechar, e o usuario decidiu que
+        # esse caminho fica liberado.
+        if pedido.data_expedicao and pedido.status != PedidoExpedicao.Status.CANCELADO:
             messages.error(
                 request,
                 f"Pedido #{pedido.numero:06d} tem saída registrada em "
                 f"{pedido.data_expedicao:%d/%m/%Y} e não pode ser excluído. "
-                f"Ele permanece na lista como cancelado.",
+                f"Cancele o pedido primeiro, ou estorne a saída antes de excluir.",
             )
             return redirect("logistica:pedido-expedicao-list")
 

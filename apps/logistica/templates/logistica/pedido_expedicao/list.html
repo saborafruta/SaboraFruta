@@ -180,15 +180,19 @@
               {% comment %}
                 Expedido/entregue nao aparece com botao de excluir: a view
                 recusa esses status, entao mostrar o botao so levaria a um
-                clique que termina em mensagem de erro.
+                clique que termina em mensagem de erro. `data_expedicao`
+                so' trava fora do cancelado -- uma vez cancelado, cancelar
+                ja' e' a decisao de encerrar, a data vira so' historico.
               {% endcomment %}
-              {% if p.status != 'expedido' and p.status != 'entregue' and not p.data_expedicao %}
+              {% if p.status != 'expedido' and p.status != 'entregue' %}
+                {% if p.status == 'cancelado' or not p.data_expedicao %}
                 <button type="button" title="Excluir pedido" class="oms-acao" style="color:#f87171;"
                         @click="excluir = { url: '{% url 'logistica:pedido-expedicao-delete' p.pk %}', numero: '#{{ p.numero|stringformat:"06d" }}', cliente: '{{ p.cliente.nome_fantasia|default:p.cliente.razao_social|escapejs }}', itens: {{ p.qtd_itens|default:0 }} }">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                   </svg>
                 </button>
+                {% endif %}
               {% endif %}
             </div>
           </td>
@@ -248,13 +252,15 @@
           </svg>
         </button>
       {% endif %}
-      {% if p.status != 'expedido' and p.status != 'entregue' and not p.data_expedicao %}
+      {% if p.status != 'expedido' and p.status != 'entregue' %}
+        {% if p.status == 'cancelado' or not p.data_expedicao %}
         <button type="button" class="oms-acao" title="Excluir" style="color:#f87171;"
                 @click="excluir = { url: '{% url 'logistica:pedido-expedicao-delete' p.pk %}', numero: '#{{ p.numero|stringformat:"06d" }}', cliente: '{{ p.cliente.nome_fantasia|default:p.cliente.razao_social|escapejs }}', itens: {{ p.qtd_itens|default:0 }} }">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
           </svg>
         </button>
+        {% endif %}
       {% endif %}
     </div>
     {% empty %}

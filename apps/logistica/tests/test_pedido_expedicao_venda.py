@@ -1339,3 +1339,73 @@ class ExclusaoDoPedidoTests(CobrancaDaExpedicaoTests):
 
         self.assertFalse(PedidoExpedicao.objects.filter(pk=pedido.pk).exists())
         self.assertEqual(ItemPedidoExpedicao.objects.count(), 0)
+
+    def test_expedido_nao_pode_ser_excluido(self):
+        pedido = self._carga_avulsa()
+        pedido.status = PedidoExpedicao.Status.EXPEDIDO
+        pedido.save(update_fields=['status'])
+
+        resposta = self.client.post(
+            reverse('logistica:pedido-expedicao-delete', args=[pedido.pk]),
+            follow=True,
+        )
+
+        self.assertTrue(PedidoExpedicao.objects.filter(pk=pedido.pk).exists())
+        avisos = [str(m) for m in resposta.context['messages']]
+        self.assertTrue(any('não pode ser excluído' in a for a in avisos), avisos)
+
+    def test_com_data_de_expedicao_e_ainda_ativo_nao_pode_ser_excluido(self):
+        """
+        `data_expedicao` preenchida a mão sem status ir a 'expedido' ainda
+        marca saída registrada -- fecha o caminho de burlar a trava do
+        status. Mas só enquanto o pedido continua ativo.
+        """
+        pedido = self._carga_avulsa()
+        pedido.data_expedicao = timezone.localdate()
+        pedido.save(update_fields=['data_expedicao'])
+
+        resposta = self.client.post(
+            reverse('logistica:pedido-expedicao-delete', args=[pedido.pk]),
+            follow=True,
+        )
+
+        self.assertTrue(PedidoExpedicao.objects.filter(pk=pedido.pk).exists())
+        avisos = [str(m) for m in resposta.context['messages']]
+        self.assertTrue(any('não pode ser excluído' in a for a in avisos), avisos)
+
+    def test_cancelado_com_data_de_expedicao_pode_ser_excluido(self):
+        """
+        Uma vez cancelado, cancelar já é a decisão de encerrar -- a data de
+        expedição vira só um dado histórico, não motivo pra prender a
+        exclusão.
+        """
+        pedido = self._carga_avulsa()
+        pedido.data_expedicao = timezone.localdate()
+        pedido.status = PedidoExpedicao.Status.CANCELADO
+        pedido.save(update_fields=['data_expedicao', 'status'])
+
+        self.client.post(
+            reverse('logistica:pedido-expedicao-delete', args=[pedido.pk]),
+            follow=True,
+        )
+
+        self.assertFalse(PedidoExpedicao.objects.filter(pk=pedido.pk).exists())
+
+    def test_lista_mostra_excluir_no_cancelado_mesmo_com_data_de_expedicao(self):
+        pedido = self._carga_avulsa()
+        pedido.data_expedicao = timezone.localdate()
+        pedido.status = PedidoExpedicao.Status.CANCELADO
+        pedido.save(update_fields=['data_expedicao', 'status'])
+
+        html = self.client.get(reverse('logistica:pedido-expedicao-list')).content.decode()
+
+        self.assertIn(reverse('logistica:pedido-expedicao-delete', args=[pedido.pk]), html)
+
+    def test_lista_esconde_excluir_se_ativo_com_data_de_expedicao(self):
+        pedido = self._carga_avulsa()
+        pedido.data_expedicao = timezone.localdate()
+        pedido.save(update_fields=['data_expedicao'])
+
+        html = self.client.get(reverse('logistica:pedido-expedicao-list')).content.decode()
+
+        self.assertNotIn(reverse('logistica:pedido-expedicao-delete', args=[pedido.pk]), html)
