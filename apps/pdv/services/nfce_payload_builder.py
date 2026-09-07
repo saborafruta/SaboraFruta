@@ -140,6 +140,21 @@ def _cfop_item_destino(produto, local_destino: str) -> str:
     return (produto.cfop_venda_interna or "").strip() or "5102"
 
 
+def _cfop_bonificacao_destino(local_destino: str) -> str:
+    """
+    CFOP de "Remessa em bonificação, doação ou brinde" -- 5910 dentro do
+    estado, 6910 fora. Não varia por produto como o CFOP de venda: é o
+    mesmo grupo fiscal (5.910/6.910/7.910) qualquer que seja a mercadoria,
+    porque o que muda a classificação aqui é a NATUREZA da saída, não o
+    item.
+    """
+    if local_destino == "3":
+        return "7910"
+    if local_destino == "2":
+        return "6910"
+    return "5910"
+
+
 def _base_reduzida(base: Decimal, reducao: Any) -> Decimal:
     percentual = min(max(_decimal(reducao), Decimal("0")), Decimal("100"))
     return _dinheiro(base * (Decimal("1") - percentual / Decimal("100")))
@@ -352,6 +367,7 @@ def _montar_item_fiscal(
     data_emissao: date,
     desconto_rateado: Decimal,
     acrescimo_rateado: Decimal,
+    bonificacao: bool = False,
 ) -> dict:
     produto = item_venda.produto
     quantidade = _decimal(item_venda.quantidade)
@@ -369,7 +385,11 @@ def _montar_item_fiscal(
         "codigo_produto": produto.codigo or str(produto.pk),
         "descricao": (produto.descricao_pdv or produto.descricao or "")[:120],
         "codigo_ncm": (produto.ncm or "").replace(".", "").strip(),
-        "cfop": _cfop_item_destino(produto, local_destino),
+        "cfop": (
+            _cfop_bonificacao_destino(local_destino)
+            if bonificacao
+            else _cfop_item_destino(produto, local_destino)
+        ),
         "unidade_comercial": unidade,
         "quantidade_comercial": float(quantidade),
         "valor_unitario_comercial": float(valor_unitario),
@@ -432,6 +452,7 @@ def _montar_itens(venda, itens: list, local_destino: str) -> list[dict]:
             data_emissao,
             descontos[i],
             acrescimos[i],
+            bonificacao=venda.bonificacao,
         )
         for i, item in enumerate(itens)
     ]
@@ -779,7 +800,7 @@ class NfcePayloadBuilder:
             # ── Identificação do emitente (topo, formato v2) ────────────────
             "cnpj_emitente": cnpj,
             # ── Dados da nota ───────────────────────────────────────────────
-            "natureza_operacao": "VENDA AO CONSUMIDOR",
+            "natureza_operacao": "BONIFICAÇÃO" if venda.bonificacao else "VENDA AO CONSUMIDOR",
             "numero": numero_nfce,
             "serie": str(serie_nfce),
             "data_emissao": data_emissao,
@@ -842,7 +863,7 @@ class NfePayloadBuilder:
 
         payload: Dict[str, Any] = {
             "cnpj_emitente": cnpj,
-            "natureza_operacao": "VENDA DE MERCADORIAS",
+            "natureza_operacao": "BONIFICAÇÃO" if venda.bonificacao else "VENDA DE MERCADORIAS",
             "numero": numero_nfe,
             "serie": str(serie_nfe),
             "data_emissao": data_emissao,

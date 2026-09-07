@@ -47,6 +47,7 @@ class VendaPDVService:
         data_venda=None,
         observacao: str = "",
         request=None,
+        bonificacao: bool = False,
     ) -> VendaPDV:
         if not sessao:
             raise DadosInvalidosError("Nenhuma sessao de caixa aberta.")
@@ -71,6 +72,14 @@ class VendaPDVService:
             )
             if not cliente:
                 raise DadosInvalidosError("Cliente nao encontrado na filial ativa.")
+        # BONIFICAÇÃO SEMPRE TEM DESTINATÁRIO. Diferente do balcão, onde
+        # "Consumidor Final" é uma saída válida, uma bonificação é dirigida
+        # -- brinde para quem comprou, amostra para um mercado -- e a nota
+        # precisa de alguém identificado para sair.
+        if bonificacao and not cliente:
+            raise DadosInvalidosError(
+                "Selecione um cliente para a bonificação — ela não sai para o consumidor final."
+            )
         venda = VendaPDV.objects.create(
             sessao_pdv=sessao,
             filial=filial,
@@ -78,6 +87,7 @@ class VendaPDVService:
             cliente=cliente,
             status="finalizada",
             delivery=delivery,
+            bonificacao=bonificacao,
             endereco_entrega=endereco_entrega or {},
             valor_desconto=desconto,
             valor_acrescimo=acrescimo,
@@ -118,18 +128,29 @@ class VendaPDVService:
         valor_total = cls._decimal(subtotal - desconto + acrescimo, cls.MONEY)
         if valor_total < 0:
             raise DadosInvalidosError("Total da venda nao pode ficar negativo.")
-        if valor_total > 0 and not pagamentos and credito_valor <= 0:
-            raise DadosInvalidosError("Informe ao menos uma forma de pagamento.")
 
-        valor_pago, troco_total, valor_nao_contabilizado = cls._registrar_pagamentos(
-            venda=venda,
-            filial=filial,
-            pagamentos=pagamentos,
-            valor_total=valor_total,
-            credito_valor=credito_valor,
-            usuario=usuario,
-            request=request,
-        )
+        if bonificacao:
+            # NÃO PASSA POR PAGAMENTO. A nota sai com o valor comercial dos
+            # itens (é o que a base de ICMS do CFOP 5910/6910 exige), mas
+            # ninguém cobra isso do cliente -- mesmo tratamento que
+            # Doação/Permuta já davam a uma forma de pagamento isolada:
+            # baixa o estoque, não entra no caixa nem gera conta a receber.
+            valor_pago = valor_total
+            troco_total = Decimal("0.00")
+            valor_nao_contabilizado = valor_total
+        else:
+            if valor_total > 0 and not pagamentos and credito_valor <= 0:
+                raise DadosInvalidosError("Informe ao menos uma forma de pagamento.")
+
+            valor_pago, troco_total, valor_nao_contabilizado = cls._registrar_pagamentos(
+                venda=venda,
+                filial=filial,
+                pagamentos=pagamentos,
+                valor_total=valor_total,
+                credito_valor=credito_valor,
+                usuario=usuario,
+                request=request,
+            )
 
         if credito_valor > 0 and cliente_id:
             cls._aplicar_credito_cliente(filial, cliente_id, credito_valor)

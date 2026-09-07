@@ -1172,6 +1172,7 @@ def api_venda_finalizar(request):
     endereco_entrega = body.get("endereco_entrega", {})
     credito_valor = Decimal(str(body.get("credito_valor", "0")))
     forcar_estoque_negativo = True
+    bonificacao = bool(body.get("bonificacao", False))
 
     try:
         data_venda = _data_venda_retroativa(request, body)
@@ -1201,6 +1202,7 @@ def api_venda_finalizar(request):
                 data_venda=data_venda,
                 observacao=body.get("observacao", ""),
                 request=request,
+                bonificacao=bonificacao,
             )
             if comanda_id:
                 _fechar_comanda_origem(comanda_id, request, venda)

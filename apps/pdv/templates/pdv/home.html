@@ -151,6 +151,7 @@
   .btn-venda-main { background: linear-gradient(135deg,#2563eb,#3b82f6); }
   .btn-orcamento-main { background: linear-gradient(135deg,#a16207,#ca8a04); }
   .btn-delivery-main { background: linear-gradient(135deg,#1d4ed8,#3b82f6); }
+  .btn-bonificacao-main { background: linear-gradient(135deg,#7c3aed,#a855f7); }
   .btn-fim { width:100%; padding:15px 12px; border:none; border-radius:12px; color:#fff;
              font-size:14px; font-weight:800; letter-spacing:.04em; display:flex;
              align-items:center; justify-content:center; gap:9px; transition:.15s; }
@@ -177,6 +178,7 @@
   .mode-btn.act-venda { background:linear-gradient(135deg,#2563eb,#3b82f6); color:#fff; box-shadow:0 2px 10px rgba(37,99,235,.45); }
   .mode-btn.act-delivery { background:linear-gradient(135deg,#1d4ed8,#3b82f6); color:#fff; box-shadow:0 2px 10px rgba(37,99,235,.45); }
   .mode-btn.act-orcamento { background:linear-gradient(135deg,#a16207,#ca8a04); color:#fff; box-shadow:0 2px 10px rgba(161,98,7,.45); }
+  .mode-btn.act-bonificacao { background:linear-gradient(135deg,#7c3aed,#a855f7); color:#fff; box-shadow:0 2px 10px rgba(124,58,237,.45); }
 
   /* Botões de ação do rodapé do catálogo */
   .cat-action-btn {
@@ -967,17 +969,18 @@
   .pdv-topbar .mode-seg { background:var(--pdv-header-control-bg);border-color:var(--pdv-header-control-border); }
   .pdv-topbar .mode-btn { color:var(--pdv-header-muted); }
   .pdv-topbar .mode-btn:hover { background:var(--pdv-header-control-hover);color:var(--pdv-header-text); }
-  .pdv-topbar .mode-btn.act-venda,.pdv-topbar .mode-btn.act-delivery,.pdv-topbar .mode-btn.act-orcamento {
+  .pdv-topbar .mode-btn.act-venda,.pdv-topbar .mode-btn.act-delivery,.pdv-topbar .mode-btn.act-orcamento,.pdv-topbar .mode-btn.act-bonificacao {
     background:#fff;color:#173b8f;box-shadow:none;
   }
   html.tema-claro .pdv-topbar .mode-btn.act-venda,
   html.tema-claro .pdv-topbar .mode-btn.act-delivery,
-  html.tema-claro .pdv-topbar .mode-btn.act-orcamento { background:#fff3e8;color:#c2410c; }
+  html.tema-claro .pdv-topbar .mode-btn.act-orcamento,
+  html.tema-claro .pdv-topbar .mode-btn.act-bonificacao { background:#fff3e8;color:#c2410c; }
   html.tema-claro #pdv-app > .pdv-topbar { position:relative;background:#c2410c !important;border-radius:0;box-shadow:0 12px 30px rgba(241,90,36,.16); }
   html.tema-claro #pdv-app > .pdv-topbar::before { content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:var(--pdv-header-bg);border-radius:0 0 18px 0; }
   html.tema-claro #pdv-app > .pdv-topbar > * { position:relative;z-index:1; }
   html.tema-claro .pdv-topbar .mode-seg { background:rgba(194,65,12,.42);border-color:rgba(255,255,255,.34);box-shadow:none; }
-  html.tema-claro .pdv-topbar .mode-btn:not(.act-venda):not(.act-delivery):not(.act-orcamento),
+  html.tema-claro .pdv-topbar .mode-btn:not(.act-venda):not(.act-delivery):not(.act-orcamento):not(.act-bonificacao),
   html.tema-claro .pdv-topbar .topbar-btn { background:rgba(194,65,12,.36) !important;border-color:rgba(255,231,213,.36) !important;color:#fff !important; }
   html.tema-claro .pdv-topbar .topbar-btn:hover { background:rgba(194,65,12,.50) !important; }
   .brand-switch {
@@ -1266,6 +1269,18 @@
               :class="modo==='orcamento' ? 'mode-btn act-orcamento' : 'mode-btn'">
         <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         Orçamento
+      </button>
+      {% comment %}
+        BONIFICAÇÃO NÃO PASSA PELO PAGAMENTO. Sai com o CFOP 5910/6910 na
+        nota (em vez do CFOP de venda) e não entra no caixa nem gera conta
+        a receber -- é o mesmo tratamento que Doação/Permuta já davam a uma
+        forma de pagamento isolada, só que sem o operador precisar
+        selecionar nada na tela de pagamento.
+      {% endcomment %}
+      <button @click="modo='bonificacao';venda.delivery=false"
+              :class="modo==='bonificacao' ? 'mode-btn act-bonificacao' : 'mode-btn'">
+        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.59 13.41L11 3.83A2 2 0 009.59 3.24L4 3a1 1 0 00-1 1l.24 5.59a2 2 0 00.59 1.41l9.58 9.58a2 2 0 002.83 0l4.35-4.35a2 2 0 000-2.82z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7.5 7.5h.01"/></svg>
+        Bonificação
       </button>
     </div>
 
@@ -1949,6 +1964,21 @@
         <button type="button" class="btn-action" @click="carregarEstado()">Tentar novamente</button>
       </div>
 
+      <!-- BONIFICAÇÃO NÃO PASSA POR PAGAMENTO. O painel de forma de
+           pagamento continua na tela (trocar de modo não deveria apagar o
+           que o operador já lançou), mas este aviso deixa claro que ele
+           não precisa ser preenchido -- o botão de finalizar já não
+           depende dele quando o modo é bonificação. -->
+      <div x-show="modo==='bonificacao'" x-cloak
+           style="margin:10px 12px 0;padding:10px 12px;border-radius:10px;background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.32);">
+        <p style="font-size:12px;font-weight:700;color:#c4b5fd;margin:0 0 2px;">🎁 Bonificação — sem cobrança</p>
+        <p style="font-size:11px;color:#a78bfa;margin:0;">
+          Não é preciso lançar forma de pagamento. A nota sai com o valor
+          comercial dos itens, com CFOP de bonificação, sem gerar caixa nem
+          conta a receber.
+        </p>
+      </div>
+
       <!-- Título Forma de Pagamento -->
       <div class="payment-panel-heading" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--pdv-bd2);flex-shrink:0;">
         <div style="display:flex;align-items:center;gap:8px;">
@@ -2212,10 +2242,10 @@
         <!-- Botões finais -->
         <div style="padding:12px;display:flex;flex-direction:column;gap:8px;">
           <!-- Botão principal -->
-          <button @click="modo==='orcamento' ? gerarOrcamento() : confirmarFinalizarVenda()"
-                  :disabled="modo==='orcamento' ? venda.itens.length===0 : !podeFinalizar"
-                  :style="(modo==='orcamento' ? venda.itens.length===0 : !podeFinalizar) ? 'opacity:0.4;cursor:not-allowed;' : 'cursor:pointer;'"
-                  :class="'btn-fim ' + (modo==='orcamento' ? 'btn-orcamento-main' : (venda.delivery ? 'btn-delivery-main' : 'btn-venda-main'))">
+          <button @click="handleFinalizarClick()"
+                  :disabled="botaoFinalizarDisabled"
+                  :style="botaoFinalizarDisabled ? 'opacity:0.4;cursor:not-allowed;' : 'cursor:pointer;'"
+                  :class="'btn-fim ' + (modo==='orcamento' ? 'btn-orcamento-main' : (modo==='bonificacao' ? 'btn-bonificacao-main' : (venda.delivery ? 'btn-delivery-main' : 'btn-venda-main')))">
             <template x-if="modo==='orcamento'">
               <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
             </template>
@@ -2224,8 +2254,12 @@
             </template>
             <span x-text="labelBotaoFinalizar"></span>
           </button>
+          <p x-show="modo==='bonificacao' && !podeFinalizarBonificacao && venda.itens.length>0" x-cloak
+             style="font-size:11px;color:#f59e0b;text-align:center;margin:0;">
+            Selecione um cliente — bonificação não sai para o Consumidor Final.
+          </p>
           <div style="display:flex;gap:8px;">
-            <button @click="salvarPendente()" x-show="modo!=='orcamento'"
+            <button @click="salvarPendente()" x-show="modo!=='orcamento' && modo!=='bonificacao'"
                     class="btn-rodape btn-rodape-secondary">
               <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7M5 19h14"/></svg>
               Salvar Pendente (F8)
@@ -2930,14 +2964,14 @@
          : 'display:none;'">
     <section class="sale-confirm" role="dialog" aria-modal="true" aria-labelledby="sale-confirm-title">
       <header>
-        <div style="font-size:32px;" aria-hidden="true">🧾</div>
-        <h2 id="sale-confirm-title">Confirmar finalização</h2>
-        <p>Confira os dados antes de concluir a venda.</p>
+        <div style="font-size:32px;" aria-hidden="true" x-text="modo==='bonificacao' ? '🎁' : '🧾'"></div>
+        <h2 id="sale-confirm-title" x-text="modo==='bonificacao' ? 'Confirmar bonificação' : 'Confirmar finalização'"></h2>
+        <p x-text="modo==='bonificacao' ? 'Sai sem cobrança — a nota registra o valor comercial, mas ninguém paga.' : 'Confira os dados antes de concluir a venda.'"></p>
       </header>
       <dl class="sale-confirm-summary">
         <div><dt>Cliente</dt><dd x-text="venda.cliente.nome"></dd></div>
         <div><dt>Itens / unidades</dt><dd x-text="venda.itens.length+' / '+fmtQtd(totalUnidades)"></dd></div>
-        <div class="sale-confirm-total"><dt>Total</dt><dd x-text="'R$ '+fmt(venda.total)"></dd></div>
+        <div class="sale-confirm-total"><dt x-text="modo==='bonificacao' ? 'Valor da nota' : 'Total'"></dt><dd x-text="'R$ '+fmt(venda.total)"></dd></div>
         <template x-if="trocoTotal>0">
           <div class="payment-change"><dt>Troco</dt><dd x-text="'R$ '+fmt(trocoTotal)"></dd></div>
         </template>
@@ -2950,7 +2984,9 @@
       </template>
       <footer>
         <button type="button" @click="showModalConfirmacao=false">Voltar</button>
-        <button type="button" class="sale-confirm-submit" @click="finalizarVenda()">✓ Confirmar venda</button>
+        <button type="button" class="sale-confirm-submit"
+                @click="modo==='bonificacao' ? finalizarBonificacao() : finalizarVenda()"
+                x-text="modo==='bonificacao' ? '✓ Confirmar bonificação' : '✓ Confirmar venda'"></button>
       </footer>
     </section>
   </div>
@@ -3806,6 +3842,17 @@ function pdv() {
       return descontosItens + parseFloat(this.venda.desconto||0);
     },
     get podeFinalizar() { return this.sessao && this.venda.itens.length>0 && parseFloat(this.venda.restante)<=0.001; },
+    // BONIFICAÇÃO NÃO PASSA POR PAGAMENTO -- exige carrinho e um cliente
+    // de verdade selecionado (nunca "Consumidor Final"), porque a saída é
+    // dirigida a alguém, não ao balcão.
+    get podeFinalizarBonificacao() {
+      return !!(this.sessao && this.venda.itens.length>0 && this.venda.cliente && this.venda.cliente.id);
+    },
+    get botaoFinalizarDisabled() {
+      if (this.modo==='orcamento') return this.venda.itens.length===0;
+      if (this.modo==='bonificacao') return !this.podeFinalizarBonificacao;
+      return !this.podeFinalizar;
+    },
     get formasPagamentoVisiveis() { return this.mostrarMaisFormas ? this.formasPagamento : this.formasPagamento.slice(0,6); },
     get produtosVisiveis() {
       if ((this.buscaQuery || '').trim()) return this.produtos;
@@ -3819,7 +3866,13 @@ function pdv() {
     },
     get labelBotaoFinalizar() {
       if (this.modo==='orcamento') return 'GERAR ORÇAMENTO (F12)';
+      if (this.modo==='bonificacao') return 'FINALIZAR BONIFICAÇÃO (F12)';
       return this.venda.delivery ? 'FINALIZAR DELIVERY (F12)' : 'FINALIZAR VENDA (F12)';
+    },
+    handleFinalizarClick() {
+      if (this.modo==='orcamento') return this.gerarOrcamento();
+      if (this.modo==='bonificacao') return this.confirmarFinalizarBonificacao();
+      return this.confirmarFinalizarVenda();
     },
 
     temPromocao(item) {
@@ -4684,6 +4737,64 @@ function pdv() {
           this.toast_('Erro: '+(d.erro||''),'erro');
         }
       } catch { this.toast_('Erro de comunicação','erro'); }
+      finally { this._finalizando = false; }
+    },
+
+    confirmarFinalizarBonificacao() {
+      if (!this.podeFinalizarBonificacao) return;
+      const itensNegativos = this.itensComEstoqueInsuficiente();
+      if (itensNegativos.length) {
+        this.abrirModalEstoqueInsuficiente(itensNegativos);
+        return;
+      }
+      this.showModalConfirmacao=true;
+    },
+
+    // BONIFICAÇÃO NÃO PASSA POR PAGAMENTO: manda `pagamentos: []` e a
+    // flag `bonificacao: true`, que o serviço usa para não cobrar
+    // (não entra no caixa nem gera conta a receber) e para o CFOP da
+    // nota sair 5910/6910 em vez do CFOP de venda.
+    async finalizarBonificacao() {
+      this.showModalConfirmacao=false;
+      if (!this.podeFinalizarBonificacao) return;
+      if (this._finalizando) return;
+      this._finalizando = true;
+      try {
+        const payload = {
+          sessao_id: this.sessao?.id,
+          cliente_id: this.venda.cliente?.id||null,
+          itens: this.venda.itens,
+          pagamentos: [],
+          desconto: this.venda.desconto,
+          acrescimo: this.venda.acrescimo,
+          delivery: false,
+          endereco_entrega: {},
+          credito_valor: 0,
+          data_venda: (this.usuarioEhAdmin && this.dataVendaRetroativa) ? this.dataVendaRetroativa : null,
+          observacao: this.venda.observacao || '',
+          venda_edicao_origem_id: this.vendaEdicaoOrigemId || null,
+          comanda_id: this.venda.comanda_id_origem || null,
+          bonificacao: true,
+          forcar_estoque_negativo: true,
+        };
+        const r = await fetch('/pdv/api/venda/finalizar/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(payload)});
+        let d;
+        try { d = await r.json(); } catch(jsonErr) {
+          if (r.redirected || r.status === 200) {
+            this.toast_('Sessão expirada. Recarregue a página e faça login novamente.','erro');
+          } else {
+            this.toast_('Erro HTTP '+r.status+' ao finalizar bonificação.','erro');
+          }
+          this._finalizando = false; return;
+        }
+        if (d.ok) {
+          this.vendaFinalizadaData = { id: d.venda_id || d.id || null, numero: d.numero_venda };
+          this.toast_('✓ Bonificação #'+String(d.numero_venda).padStart(6,'0')+' finalizada!','ok');
+          this.showModalImpressao = true;
+        } else {
+          this.toast_('Erro: '+(d.erro||''),'erro');
+        }
+      } catch(e) { this.toast_('Erro de comunicação: '+e.message,'erro'); }
       finally { this._finalizando = false; }
     },
 
@@ -6247,7 +6358,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         if (e.key==='F6') { e.preventDefault(); this.abrirDescontoGeral(); }
         if (e.key==='F7') { e.preventDefault(); this.abrirHistorico(); }
         if (e.key==='F8') { e.preventDefault(); this.salvarPendente(); }
-        if (e.key==='F12') { e.preventDefault(); this.modo==='orcamento' ? this.gerarOrcamento() : this.confirmarFinalizarVenda(); }
+        if (e.key==='F12') { e.preventDefault(); this.handleFinalizarClick(); }
         if (e.key==='Escape') {
           this.showModalCliente=this.showModalDelivery=this.showModalPendentes=this.showModalOrcamentos=false;
           this.showModalConfirmacao=this.showModalDescontoItem=this.showModalDesconto=false;

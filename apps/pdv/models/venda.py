@@ -30,6 +30,12 @@ class VendaPDV(TimestampedModel):
     status = models.CharField(max_length=20, default="aberta")
     origem = models.CharField(max_length=20, default="pdv")
     delivery = models.BooleanField(default=False)
+    # Saída sem cobrança -- brinde, amostra, troca de mercadoria. Não gera
+    # caixa nem conta a receber (mesmo tratamento que Doação/Permuta já
+    # davam a uma forma de pagamento isolada), mas dá baixa de estoque
+    # normalmente e sai com CFOP de bonificação (5910/6910) na nota, em vez
+    # do CFOP de venda.
+    bonificacao = models.BooleanField(default=False)
     endereco_entrega = models.JSONField(default=dict, blank=True)
     # Rascunho das formas de pagamento selecionadas antes de salvar como
     # pendente -- NAO sao pagamentos de verdade (isso e' PagamentoVendaPDV,
