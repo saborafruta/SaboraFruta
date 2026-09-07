@@ -37,7 +37,8 @@ class LoginView(View):
             return render(request, self.template_name, {'form': form})
 
         login(request, user)
-        filiais = _filiais_permitidas(user)
+        operational_user = getattr(request, '_tenant_authenticated_user', user)
+        filiais = _filiais_permitidas(operational_user)
         if user.is_superuser:
             request.session.pop('filial_ativa_id', None)
             return redirect('core:selecionar-filial')
