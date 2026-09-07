@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -369,9 +370,24 @@ class FornecedorAjaxCreateView(PermissaoRequiredMixin, View):
 
 
 class FornecedorUpdateView(PermissaoRequiredMixin, View):
+    """
+    Editar fornecedor.
+
+    Aceita `?next=` opcional: outras telas (a lista de Produtores do Polpa,
+    por exemplo) linkam para cá para editar um fornecedor sem sair do
+    cadastro específico -- salvar ou cancelar volta para lá, não para a
+    lista geral de fornecedores.
+    """
+
     permissao_modulo = 'cadastros'
     permissao_acao = 'editar'
     template_name = 'cadastros/fornecedor/form.html'
+
+    def _next_url(self, request):
+        bruto = request.POST.get('next') or request.GET.get('next', '')
+        if bruto and url_has_allowed_host_and_scheme(bruto, allowed_hosts={request.get_host()}):
+            return bruto
+        return None
 
     def get(self, request, pk):
         fornecedor = get_object_or_404(
@@ -383,7 +399,7 @@ class FornecedorUpdateView(PermissaoRequiredMixin, View):
             'cadastro_log_pk': fornecedor.pk,
             **cadastro_log_context(fornecedor, 'fornecedores', 'Fornecedor', request.user),
             'title': f'Editar — {fornecedor}',
-            'cancel_url': reverse_lazy('cadastros:fornecedor-list'),
+            'cancel_url': self._next_url(request) or reverse_lazy('cadastros:fornecedor-list'),
         })
 
     def post(self, request, pk):
@@ -396,18 +412,27 @@ class FornecedorUpdateView(PermissaoRequiredMixin, View):
                 fornecedor = form.save()
                 ReplicacaoCadastrosService.sincronizar_fornecedor(fornecedor)
             messages.success(request, 'Fornecedor atualizado.')
-            return redirect('cadastros:fornecedor-list')
+            return redirect(self._next_url(request) or 'cadastros:fornecedor-list')
         return render(request, self.template_name, {
             'form': form,
             'fornecedor': fornecedor,
             'cadastro_log_pk': fornecedor.pk,
             **cadastro_log_context(fornecedor, 'fornecedores', 'Fornecedor', request.user),
             'title': f'Editar — {fornecedor}',
-            'cancel_url': reverse_lazy('cadastros:fornecedor-list'),
+            'cancel_url': self._next_url(request) or reverse_lazy('cadastros:fornecedor-list'),
         })
 
 
 class FornecedorDeleteView(PermissaoRequiredMixin, View):
+    """
+    "Excluir" fornecedor, na prática, e' desativar.
+
+    Nunca apaga a linha: `Recebimento.produtor` (e outros movimentos) tem
+    `on_delete=PROTECT`, entao um fornecedor com historico nem deixaria
+    apagar de verdade -- o banco recusaria. Desativar e' o que sobra, e e'
+    o que ja' esconde o fornecedor das buscas e das novas operacoes.
+    """
+
     permissao_modulo = 'cadastros'
     permissao_acao = 'excluir'
 
@@ -418,7 +443,10 @@ class FornecedorDeleteView(PermissaoRequiredMixin, View):
         fornecedor.ativo = False
         fornecedor.save(update_fields=['ativo', 'updated_at'])
         messages.success(request, f'Fornecedor "{fornecedor}" desativado.')
-        return redirect('cadastros:fornecedor-list')
+        # Volta para quem chamou -- essa tela e' acionada tambem de fora do
+        # cadastro (ex.: a lista de produtores do Polpa), e mandar sempre
+        # para `fornecedor-list` tiraria a pessoa de onde estava trabalhando.
+        return redirect(request.META.get('HTTP_REFERER', 'cadastros:fornecedor-list'))
 
 
 class FornecedorToggleAtivoView(PermissaoRequiredMixin, View):

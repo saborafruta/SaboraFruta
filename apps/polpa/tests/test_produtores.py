@@ -210,6 +210,87 @@ class AOrdemEOEscopoTests(ProdutoresBase):
         self.assertEqual(historico[0]['produtor'].pk, self.santa_rita.pk)
 
 
+class AcoesDoFornecedorTests(ProdutoresBase):
+    """
+    Editar, ativar/desativar e excluir o fornecedor sem sair da tela de
+    Produtores — as três ações que faltavam aqui e já existem no cadastro
+    de fornecedores.
+
+    A PERMISSÃO É DE OUTRO MÓDULO. As ações mexem no cadastro de Cadastros,
+    não da Polpa; sem checar aqui, alguém sem acesso a Cadastros veria o
+    botão e só descobriria que não pode ao clicar.
+    """
+
+    def test_com_permissao_a_tela_mostra_as_tres_acoes(self):
+        self._carga(produtor=self.boa_vista)
+
+        resposta = self.client.get(reverse('polpa:recebimento-produtores'))
+
+        self.assertContains(resposta, 'Editar fornecedor')
+        self.assertContains(resposta, 'Desativar fornecedor')
+        self.assertContains(resposta, 'Excluir fornecedor')
+
+    def test_editar_leva_ao_cadastro_do_fornecedor_e_volta_para_ca(self):
+        self._carga(produtor=self.boa_vista)
+        editar_url = reverse('cadastros:fornecedor-update', args=[self.boa_vista.pk])
+        aqui = reverse('polpa:recebimento-produtores')
+
+        resposta = self.client.get(aqui)
+
+        self.assertContains(resposta, f'{editar_url}?next={aqui}')
+
+    def test_ativar_desativar_aponta_para_a_view_de_toggle(self):
+        self._carga(produtor=self.boa_vista)
+        toggle_url = reverse('cadastros:fornecedor-toggle-ativo', args=[self.boa_vista.pk])
+
+        resposta = self.client.get(reverse('polpa:recebimento-produtores'))
+
+        self.assertContains(resposta, toggle_url)
+
+    def test_excluir_aponta_para_a_view_de_excluir_com_confirmacao(self):
+        self._carga(produtor=self.boa_vista)
+        excluir_url = reverse('cadastros:fornecedor-delete', args=[self.boa_vista.pk])
+
+        resposta = self.client.get(reverse('polpa:recebimento-produtores'))
+
+        self.assertContains(resposta, excluir_url)
+        self.assertContains(resposta, 'onsubmit="return confirm(')
+
+    def test_produtor_inativo_ganha_o_selo_na_tela(self):
+        self.boa_vista.ativo = False
+        self.boa_vista.save(update_fields=['ativo'])
+        self._carga(produtor=self.boa_vista)
+
+        resposta = self.client.get(reverse('polpa:recebimento-produtores'))
+
+        self.assertContains(resposta, 'inativo')
+        self.assertContains(resposta, 'Ativar fornecedor')
+
+    def test_sem_permissao_de_editar_o_botao_de_editar_some(self):
+        """
+        Continua podendo ver o histórico — só não vê um botão que levaria a
+        um clique sem efeito.
+        """
+        from apps.core.models import Permissao
+
+        self.usuario.perfil.is_admin = False
+        self.usuario.perfil.save(update_fields=['is_admin'])
+        # Sem isto o perfil nem entra na tela de Produtores — a permissão de
+        # ver a Polpa (o módulo guarda-chuva E a área) é a primeira
+        # barreira, antes da de editar o fornecedor.
+        Permissao.objects.create(perfil=self.usuario.perfil, modulo='polpa', pode_ver=True)
+        Permissao.objects.create(
+            perfil=self.usuario.perfil, modulo='polpa_recebimento', pode_ver=True,
+        )
+        self._carga(produtor=self.boa_vista)
+
+        resposta = self.client.get(reverse('polpa:recebimento-produtores'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertNotContains(resposta, 'Editar fornecedor')
+        self.assertNotContains(resposta, 'Excluir fornecedor')
+
+
 class ATelaTests(ProdutoresBase):
 
     def test_a_tela_abre_e_mostra_o_produtor(self):

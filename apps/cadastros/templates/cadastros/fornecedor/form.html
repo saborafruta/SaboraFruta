@@ -338,7 +338,7 @@ html.tema-escuro body { background: var(--forn-bg) !important; }
     </div>
 
     <div class="form-actions">
-      <a href="{% url 'cadastros:fornecedor-list' %}" class="erp-btn-cancel">Cancelar</a>
+      <a href="{{ cancel_url }}" class="erp-btn-cancel">Cancelar</a>
       <button type="submit" class="erp-btn-save">Salvar fornecedor</button>
     </div>
   </form>

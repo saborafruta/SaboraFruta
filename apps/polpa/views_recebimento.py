@@ -121,6 +121,12 @@ class ProdutoresView(PolpaBaseView):
                 'kg_aceito': sum((l['kg_aceito'] for l in linhas), Decimal('0')),
                 'valor': sum((l['valor'] for l in linhas), Decimal('0')),
             },
+            # As ações (editar, ativar/desativar, excluir) mexem no cadastro
+            # do FORNECEDOR -- permissão de outro módulo, não da Polpa. Sem
+            # checar aqui, um usuário sem acesso a Cadastros veria o botão e
+            # só descobriria que não pode ao clicar.
+            'pode_editar_fornecedor': request.user.tem_permissao('cadastros', 'editar'),
+            'pode_excluir_fornecedor': request.user.tem_permissao('cadastros', 'excluir'),
         })
 
 
