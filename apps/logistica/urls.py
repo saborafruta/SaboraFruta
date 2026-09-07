@@ -68,6 +68,11 @@ urlpatterns = [
     # OMS — Pedidos de Expedição
     path("pedidos/", views.PedidoExpedicaoListView.as_view(), name="pedido-expedicao-list"),
     path("pedidos/novo/", views.PedidoExpedicaoCreateView.as_view(), name="pedido-expedicao-create"),
+    path(
+        "pedidos/de-vendas-pdv/",
+        views.PedidoExpedicaoDeVendasPdvListView.as_view(),
+        name="pedido-expedicao-de-vendas-pdv",
+    ),
     path("pedidos/<int:pk>/", views.PedidoExpedicaoDetailView.as_view(), name="pedido-expedicao-detail"),
     path("pedidos/<int:pk>/editar/", views.PedidoExpedicaoUpdateView.as_view(), name="pedido-expedicao-update"),
     path("pedidos/<int:pk>/excluir/", views.PedidoExpedicaoDeleteView.as_view(), name="pedido-expedicao-delete"),

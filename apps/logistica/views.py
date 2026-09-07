@@ -30,7 +30,9 @@ from apps.logistica.services.financeiro_expedicao import (
     FinanceiroExpedicaoService,
 )
 from apps.logistica.services.itens_da_venda import ItensDaVendaService
+from apps.logistica.services import pedido_de_venda_pdv as PedidoDeVendaPdvService
 from apps.logistica.services.romaneio_do_pedido import RomaneioDoPedidoService
+from apps.pdv.models import VendaPDV
 from apps.logistica.services.viagem import ViagemService
 from apps.estoque.models import MovimentacaoEstoque
 from apps.logistica.forms import (
@@ -1073,6 +1075,59 @@ class PedidoExpedicaoListView(PermissaoRequiredMixin, View):
             "data_fim": data_fim,
             "kpis": kpis,
         })
+
+
+class PedidoExpedicaoDeVendasPdvListView(PermissaoRequiredMixin, View):
+    """
+    Escolhe quais vendas do PDV com NF-e viram Pedido de Expedição.
+
+    MANUAL, DE PROPÓSITO: nem toda venda com NF-e precisa rodar num
+    caminhão -- a maioria do PDV é balcão. Quem decide é quem opera esta
+    tela, entre as vendas que já têm entrega marcada e NF-e autorizada.
+    """
+
+    permissao_modulo = "logistica"
+    permissao_acao = "criar"
+    template_name = "logistica/pedido_expedicao/de_vendas_pdv.html"
+
+    def get(self, request):
+        filial = _filial(request)
+        vendas = PedidoDeVendaPdvService.vendas_pdv_elegiveis(filial)
+        return render(request, self.template_name, {
+            "title": "Gerar pedidos de vendas do PDV",
+            "vendas": vendas,
+            "cancel_url": reverse("logistica:pedido-expedicao-list"),
+        })
+
+    def post(self, request):
+        filial = _filial(request)
+        ids = request.POST.getlist("venda_id")
+        if not ids:
+            messages.error(request, "Selecione ao menos uma venda.")
+            return redirect("logistica:pedido-expedicao-de-vendas-pdv")
+
+        vendas = VendaPDV.objects.for_filial(filial).filter(pk__in=ids)
+        criados, erros = [], []
+        for venda in vendas:
+            try:
+                pedido = PedidoDeVendaPdvService.gerar_pedido_expedicao(venda, request.user)
+            except DadosInvalidosError as erro:
+                erros.append(f"Venda #{venda.numero_venda:06d}: {erro}")
+            else:
+                criados.append(pedido)
+
+        if criados:
+            numeros = ", ".join(f"#{p.numero:06d}" for p in criados)
+            messages.success(
+                request,
+                f"{len(criados)} pedido(s) de expedição criado(s): {numeros}.",
+            )
+        for erro in erros:
+            messages.error(request, erro)
+
+        if len(criados) == 1 and not erros:
+            return redirect("logistica:pedido-expedicao-detail", pk=criados[0].pk)
+        return redirect("logistica:pedido-expedicao-list")
 
 
 class PedidoExpedicaoCreateView(PermissaoRequiredMixin, View):

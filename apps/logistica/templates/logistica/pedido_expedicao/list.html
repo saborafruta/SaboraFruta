@@ -21,12 +21,26 @@
       <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Pedidos de Expedição (OMS)</h2>
       <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Gerencie os pedidos gerados para expedição e separação.</p>
     </div>
-    <a href="{% url 'logistica:pedido-expedicao-create' %}" class="btn-primary flex items-center gap-2">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-      </svg>
-      Novo Pedido
-    </a>
+    <div class="flex items-center gap-2">
+      {% comment %}
+        VENDA DO PDV COM NF-e E ENTREGA MARCADA também precisa rodar num
+        caminhão e entrar no MDF-e -- este botão leva pra escolher quais
+        dessas vendas viram pedido aqui. Não é automático de propósito:
+        a maioria do PDV é balcão, sem entrega nenhuma.
+      {% endcomment %}
+      <a href="{% url 'logistica:pedido-expedicao-de-vendas-pdv' %}" class="btn-secondary flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7H6a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-3M9 7h6m-6 0V5a2 2 0 012-2h2a2 2 0 012 2v2m-6 0h6"/>
+        </svg>
+        Gerar do PDV
+      </a>
+      <a href="{% url 'logistica:pedido-expedicao-create' %}" class="btn-primary flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        Novo Pedido
+      </a>
+    </div>
   </div>
 
   {% comment %}

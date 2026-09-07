@@ -544,6 +544,20 @@ class PedidoExpedicao(FilialScopedModel):
         related_name="pedidos_expedicao",
         help_text="Pedido de venda que originou esta expedição, quando houver.",
     )
+    # A VENDA DO PDV QUE ORIGINOU ESTA EXPEDIÇÃO, quando existe.
+    #
+    # Mesma ideia do `pedido_venda` acima, para o outro canal de venda: uma
+    # venda do PDV marcada como entrega, com NF-e já autorizada, também
+    # precisa rodar num caminhão e entrar no MDF-e -- e sem este vínculo
+    # não haveria como saber que pedido corresponde a qual venda, nem
+    # evitar gerar dois pedidos da mesma venda.
+    venda_pdv = models.ForeignKey(
+        "pdv.VendaPDV",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="pedidos_expedicao",
+        help_text="Venda do PDV (com NF-e) que originou esta expedição, quando houver.",
+    )
     transportadora = models.ForeignKey(
         "cadastros.Transportadora",
         on_delete=models.SET_NULL,
