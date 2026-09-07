@@ -22,6 +22,7 @@ from apps.core.models.empresa import Filial
 from apps.core.services.exceptions import DadosInvalidosError, DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeError
+from apps.financeiro.constants.enums import StatusDocumentoFiscal
 from apps.financeiro.models.fiscal import DocumentoFiscal
 from apps.logistica.models_viagem import Viagem
 from apps.logistica.services.log_viagem import LogViagemService
@@ -1082,8 +1083,10 @@ class PedidoExpedicaoDeVendasPdvListView(PermissaoRequiredMixin, View):
     Escolhe quais vendas do PDV com NF-e viram Pedido de Expedição.
 
     MANUAL, DE PROPÓSITO: nem toda venda com NF-e precisa rodar num
-    caminhão -- a maioria do PDV é balcão. Quem decide é quem opera esta
-    tela, entre as vendas que já têm entrega marcada e NF-e autorizada.
+    caminhão -- a maioria do PDV é balcão de fato, sem entrega nenhuma.
+    Quem decide é quem opera esta tela, entre as vendas que já têm NF-e
+    autorizada (`delivery` não é filtro -- balcão para pessoa jurídica
+    também pode sair com NF-e e precisar de carga depois).
     """
 
     permissao_modulo = "logistica"
@@ -1377,6 +1380,10 @@ class PedidoExpedicaoDetailView(PermissaoRequiredMixin, View):
             "pedido": pedido,
             "itens": itens,
             "item_form": item_form,
+            # SÓ PARA PEDIDO NASCIDO DE VENDA DO PDV COM NF-e: é a mesma NF-e
+            # que o MDF-e vai carregar, então o botão já entra com ela
+            # selecionada (mesmo padrão de apps/estoque/outras_movimentacoes.py).
+            "mdfe_create_url": self._mdfe_create_url(pedido),
             # O QUE A VENDA TEM E A EXPEDIÇÃO AINDA NÃO: é o que decide se o
             # botão de trazer aparece, e quantas linhas ele traria.
             "venda": ItensDaVendaService.resumo(pedido),
@@ -1393,6 +1400,26 @@ class PedidoExpedicaoDetailView(PermissaoRequiredMixin, View):
                 empresa=filial.empresa, ativo=True,
             ).order_by("numero_parcelas", "descricao"),
         })
+
+    @staticmethod
+    def _mdfe_create_url(pedido):
+        """
+        Link para gerar o MDF-e já com a NF-e desta venda selecionada, só
+        quando existir NF-e autorizada e ela ainda não estiver amarrada a
+        nenhum MDF-e (mesma regra de `_vincular_nfe_ao_mdfe`).
+        """
+        if not pedido.venda_pdv_id:
+            return ""
+        nfe = DocumentoFiscal.objects.filter(
+            filial=pedido.filial, origem_tipo="venda_pdv",
+            origem_id=pedido.venda_pdv_id, tipo_documento="nfe",
+            status=StatusDocumentoFiscal.AUTORIZADA,
+        ).first()
+        if not nfe:
+            return ""
+        if DocumentoMDFe.objects.filter(documento_fiscal=nfe).exists():
+            return ""
+        return f"{reverse('logistica:mdfe-create')}?nfe_documento_id={nfe.pk}"
 
 
 class ItemPedidoExpedicaoCreateView(PermissaoRequiredMixin, View):

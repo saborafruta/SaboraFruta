@@ -5,10 +5,12 @@
 
 {% comment %}
   ESCOLHA MANUAL, DE PROPÓSITO. Nem toda venda do PDV com NF-e precisa
-  virar pedido de expedição -- a maioria é balcão, sem entrega nenhuma.
-  Esta lista já vem filtrada (entrega marcada, NF-e autorizada, sem
-  pedido ainda) para a escolha ser só "quais destas", não "quais de
-  todas".
+  virar pedido de expedição -- a maioria é balcão de fato, sem entrega
+  nenhuma. Esta lista já vem filtrada (NF-e autorizada, sem pedido ainda)
+  para a escolha ser só "quais destas", não "quais de todas". A coluna
+  Entrega ajuda a diferenciar: balcão com NF-e (pessoa jurídica que exige
+  o documento, mas ainda assim vai precisar de carga depois) também
+  aparece aqui, não só quem já marcou entrega.
 {% endcomment %}
 <div class="space-y-5">
 
@@ -18,8 +20,9 @@
     </p>
     <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Gerar pedidos de vendas do PDV</h2>
     <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      Vendas do PDV com entrega marcada e NF-e já autorizada, que ainda não têm
-      pedido de expedição. Selecione as que vão sair nesta carga.
+      Vendas do PDV com NF-e já autorizada, que ainda não têm pedido de
+      expedição -- com ou sem entrega marcada. Selecione as que vão sair
+      nesta carga.
     </p>
   </div>
 
@@ -39,6 +42,8 @@
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cliente</th>
               <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Data</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Entrega</th>
               <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
             </tr>
@@ -58,16 +63,23 @@
                 <td class="px-4 py-3" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
                   {{ venda.data_venda|date:"d/m/Y" }}
                 </td>
+                <td class="px-4 py-3">
+                  {% if venda.delivery %}
+                    <span class="soft-pill is-blue">Entrega</span>
+                  {% else %}
+                    <span class="soft-pill is-slate">Balcão</span>
+                  {% endif %}
+                </td>
                 <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
                   R$ {{ venda.valor_total|floatformat:2 }}
                 </td>
               </tr>
             {% empty %}
               <tr>
-                <td colspan="5" class="px-4 py-14 text-center">
+                <td colspan="6" class="px-4 py-14 text-center">
                   <p class="text-sm max-w-md mx-auto" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-                    Nenhuma venda do PDV elegível agora. Precisa ter entrega marcada,
-                    NF-e já autorizada, e ainda não ter virado pedido de expedição.
+                    Nenhuma venda do PDV elegível agora. Precisa ter NF-e já
+                    autorizada e ainda não ter virado pedido de expedição.
                   </p>
                 </td>
               </tr>

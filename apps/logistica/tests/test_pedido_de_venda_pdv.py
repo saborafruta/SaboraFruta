@@ -3,8 +3,10 @@ Pedido de expedição a partir de uma venda do PDV com NF-e.
 
 O QUE ESTES TESTES CERCAM:
 
-  · SÓ ENTRA QUEM TEM ENTREGA MARCADA E NF-e AUTORIZADA. Venda de balcão
-    (sem `delivery`) ou sem NF-e não precisa de expedição nem MDF-e;
+  · SÓ NF-e AUTORIZADA IMPORTA. `delivery` não é mais critério -- balcão
+    para pessoa jurídica também pode sair com NF-e e precisar de carga
+    depois (a J B RIBEIRO do caso real: venda sem entrega marcada, mas
+    com NF-e, que também precisa virar pedido de expedição);
 
   · A ESCOLHA É MANUAL — a lista mostra quem é elegível, o pedido nasce
     só quando alguém escolhe, nunca sozinho ao emitir a NF-e;
@@ -13,7 +15,11 @@ O QUE ESTES TESTES CERCAM:
     o cliente duas vezes;
 
   · UMA VENDA NÃO VIRA DOIS PEDIDOS — depois de gerado, ela some da lista
-    de elegíveis.
+    de elegíveis;
+
+  · O PEDIDO GANHA UM LINK PARA GERAR O MDF-e JÁ COM A NF-e SELECIONADA
+    (mesmo padrão de apps/estoque/outras_movimentacoes.py), e o link some
+    assim que a NF-e já estiver amarrada a algum MDF-e.
 """
 from decimal import Decimal
 
@@ -123,13 +129,15 @@ class VendasElegiveisTests(PedidoDeVendaPdvBase):
 
         self.assertIn(venda, list(elegiveis))
 
-    def test_venda_de_balcao_sem_entrega_fica_de_fora(self):
+    def test_venda_de_balcao_sem_entrega_com_nfe_fica_elegivel(self):
+        # Balcão para pessoa jurídica pode sair com NF-e (não NFC-e) e
+        # precisar de expedição depois -- `delivery` não é mais critério.
         venda = self._venda(delivery=False)
         self._nfe_autorizada(venda)
 
         elegiveis = PedidoDeVendaPdvService.vendas_pdv_elegiveis(self.filial)
 
-        self.assertNotIn(venda, list(elegiveis))
+        self.assertIn(venda, list(elegiveis))
 
     def test_venda_sem_nfe_fica_de_fora(self):
         venda = self._venda()
@@ -183,12 +191,15 @@ class GerarPedidoTests(PedidoDeVendaPdvBase):
         self.assertIsNone(pedido.forma_pagamento_id)
         self.assertIsNone(pedido.condicao_pagamento_id)
 
-    def test_recusa_venda_sem_entrega(self):
+    def test_gera_pedido_de_venda_sem_entrega_com_nfe(self):
+        # Mesmo caso da J B RIBEIRO: balcão (delivery=False) com NF-e
+        # autorizada -- vira pedido de expedição normalmente.
         venda = self._venda(delivery=False)
         self._nfe_autorizada(venda)
 
-        with self.assertRaises(DadosInvalidosError):
-            PedidoDeVendaPdvService.gerar_pedido_expedicao(venda, self.usuario)
+        pedido = PedidoDeVendaPdvService.gerar_pedido_expedicao(venda, self.usuario)
+
+        self.assertEqual(pedido.venda_pdv, venda)
 
     def test_recusa_venda_sem_nfe_autorizada(self):
         venda = self._venda()
@@ -241,3 +252,48 @@ class TelaTests(PedidoDeVendaPdvBase):
         self.assertRedirects(
             resposta, reverse('logistica:pedido-expedicao-de-vendas-pdv'),
         )
+
+    def test_detalhe_traz_link_para_gerar_mdfe_com_a_nfe_da_venda(self):
+        venda = self._venda()
+        nfe = self._nfe_autorizada(venda)
+        pedido = PedidoDeVendaPdvService.gerar_pedido_expedicao(venda, self.usuario)
+
+        resposta = self.client.get(
+            reverse('logistica:pedido-expedicao-detail', args=[pedido.pk]),
+        )
+
+        url_esperada = (
+            f"{reverse('logistica:mdfe-create')}?nfe_documento_id={nfe.pk}"
+        )
+        self.assertEqual(resposta.context['mdfe_create_url'], url_esperada)
+        self.assertContains(resposta, url_esperada)
+
+    def test_link_do_mdfe_some_quando_a_nfe_ja_esta_vinculada_a_um_mdfe(self):
+        from apps.logistica.models import MDFe, DocumentoMDFe
+
+        venda = self._venda()
+        nfe = self._nfe_autorizada(venda)
+        pedido = PedidoDeVendaPdvService.gerar_pedido_expedicao(venda, self.usuario)
+        mdfe = MDFe.objects.create(
+            filial=self.filial, numero=1, serie='1',
+            responsavel=self.usuario, modal=MDFe.Modal.RODOVIARIO,
+        )
+        DocumentoMDFe.objects.create(mdfe=mdfe, documento_fiscal=nfe)
+
+        resposta = self.client.get(
+            reverse('logistica:pedido-expedicao-detail', args=[pedido.pk]),
+        )
+
+        self.assertEqual(resposta.context['mdfe_create_url'], '')
+
+    def test_pedido_sem_venda_pdv_nao_tem_link_de_mdfe(self):
+        pedido = PedidoExpedicao.objects.create(
+            filial=self.filial, numero=999, cliente=self.cliente,
+            responsavel=self.usuario,
+        )
+
+        resposta = self.client.get(
+            reverse('logistica:pedido-expedicao-detail', args=[pedido.pk]),
+        )
+
+        self.assertEqual(resposta.context['mdfe_create_url'], '')

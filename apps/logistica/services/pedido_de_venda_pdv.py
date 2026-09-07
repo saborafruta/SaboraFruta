@@ -14,9 +14,17 @@ gerar pedido sozinho a cada emissão criaria lixo na fila. Quem decide
 quais vendas viram pedido é quem opera esta tela, escolhendo entre as
 elegíveis.
 
-SÓ ENTREGA, SÓ COM NF-e AUTORIZADA. Venda de balcão (sem `delivery`) não
-precisa de expedição nem MDF-e -- o cliente já levou. E sem NF-e
-autorizada não há documento fiscal para acompanhar a carga.
+SÓ NF-e AUTORIZADA, NÃO IMPORTA SE MARCOU ENTREGA. A princípio só venda
+com `delivery=True` precisaria de expedição -- o cliente de balcão já
+levou a mercadoria na hora. Mas na prática uma venda de balcão para
+pessoa jurídica também pode sair com NF-e (não NFC-e) por exigência
+fiscal do comprador, e mesmo assim precisar ir de carga depois -- o
+`delivery` e o tipo de documento fiscal são flags independentes (visto
+em `apps/analytics/views/dashboards.py`, que filtra os dois
+separadamente). Por isso o critério aqui é só "tem NF-e autorizada,
+está finalizada e ainda não tem pedido" -- quem decide se aquela venda
+específica precisa mesmo de expedição continua sendo o operador, ao
+escolher na tela.
 """
 from __future__ import annotations
 
@@ -47,8 +55,10 @@ def _ids_com_nfe_autorizada(filial):
 
 def vendas_pdv_elegiveis(filial):
     """
-    Vendas do PDV prontas para virar pedido de expedição: entrega marcada,
-    NF-e autorizada, e que ainda não têm pedido nenhum.
+    Vendas do PDV prontas para virar pedido de expedição: NF-e autorizada
+    e que ainda não têm pedido nenhum -- independente de `delivery`, pois
+    balcão para pessoa jurídica também pode sair com NF-e e precisar de
+    carga depois (ver módulo).
 
     `distinct()` porque uma venda com NF-e reemitida (nova versão após
     cancelamento) pode aparecer mais de uma vez em `_ids_com_nfe_autorizada`
@@ -58,7 +68,6 @@ def vendas_pdv_elegiveis(filial):
         VendaPDV.objects.for_filial(filial)
         .filter(
             pk__in=list(_ids_com_nfe_autorizada(filial)),
-            delivery=True,
             status="finalizada",
             pedidos_expedicao__isnull=True,
         )
@@ -82,10 +91,6 @@ def gerar_pedido_expedicao(venda: VendaPDV, usuario) -> PedidoExpedicao:
     if venda.pedidos_expedicao.exists():
         raise DadosInvalidosError(
             f"A venda #{venda.numero_venda:06d} já tem pedido de expedição."
-        )
-    if not venda.delivery:
-        raise DadosInvalidosError(
-            "Esta venda não está marcada como entrega — não precisa de expedição."
         )
     if not venda.cliente_id:
         raise DadosInvalidosError(
