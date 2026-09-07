@@ -375,3 +375,105 @@ class EntregaParaClienteTests(BaseMDFe):
 
         self.assertEqual(payload['uf_fim'], 'RN')
         self.assertEqual(mdfe.municipio_descarregamento, 'Parnamirim')
+
+
+class EnderecoDoClienteCadastradoTests(BaseMDFe):
+    """
+    Venda do PDV com NF-e para pessoa jurídica: o snapshot do destinatário
+    só guarda nome e cpf_cnpj (`nfce_payload_builder.py` nunca copiou
+    endereço para lá) -- mesmo quando o cadastro do cliente tem o endereço
+    completo. Sem cair pro cadastro, a tela de MDF-e sempre mostrava
+    "endereço não informado" e "Código IBGE não cadastrado" nesse caminho,
+    que é justamente o de uma venda de balcão com NF-e virando expedição.
+    """
+
+    def _cliente(self, **kw):
+        from apps.cadastros.models import Cliente
+
+        dados = dict(
+            filial=self.filial, razao_social='J B RIBEIRO LTDA',
+            cpf_cnpj='12345678000190', ativo=True,
+            endereco='Rua do Cliente', numero='321', bairro='Alecrim',
+            cidade='Natal', uf='RN', cep='59030000',
+            codigo_municipio_ibge='2408102',
+        )
+        dados.update(kw)
+        return Cliente.objects.create(**dados)
+
+    def _nfe_para_cliente(self, cliente, **kw):
+        from apps.financeiro.models import DocumentoFiscal
+
+        BaseMDFe._seq += 1
+        dados = dict(
+            filial=self.filial, tipo_documento='nfe',
+            numero=BaseMDFe._seq, serie=1, chave='5' * 44,
+            emitente_cnpj=self.filial.cnpj, data_emissao=timezone.localtime(),
+            usuario=self.usuario, status=StatusDocumentoFiscal.AUTORIZADA,
+            valor_total=Decimal('850'),
+            destinatario_tipo='cliente', destinatario_id=cliente.pk,
+            # Exatamente o que `nfce_payload_builder.py` grava de verdade:
+            # so' nome e documento, nunca endereco.
+            destinatario_snapshot={
+                'nome': cliente.razao_social, 'cpf_cnpj': cliente.cpf_cnpj,
+            },
+        )
+        dados.update(kw)
+        return DocumentoFiscal.objects.create(**dados)
+
+    def test_endereco_cai_pro_cadastro_do_cliente_quando_snapshot_nao_tem(self):
+        from apps.logistica.views import _endereco_destino_nfe
+
+        cliente = self._cliente()
+        nfe = self._nfe_para_cliente(cliente)
+
+        endereco = _endereco_destino_nfe(nfe)
+
+        self.assertIn('Rua do Cliente', endereco)
+        self.assertIn('321', endereco)
+        self.assertIn('Alecrim', endereco)
+        self.assertIn('Natal', endereco)
+        self.assertIn('RN', endereco)
+        self.assertIn('59030000', endereco)
+
+    def test_rota_pega_uf_municipio_e_codigo_ibge_do_cadastro(self):
+        from apps.logistica.views import _rota_filiais_nfe
+
+        cliente = self._cliente()
+        nfe = self._nfe_para_cliente(cliente)
+
+        rota = _rota_filiais_nfe(nfe)
+
+        self.assertEqual(rota['municipio_descarregamento'], 'Natal')
+        self.assertEqual(rota['uf_descarregamento'], 'RN')
+        self.assertEqual(rota['codigo_municipio_descarregamento'], '2408102')
+
+    def test_snapshot_com_endereco_ganha_do_cadastro(self):
+        """
+        O snapshot, quando tem o dado, é mais atual que o cadastro (reflete
+        o endereço no momento da venda) -- o cadastro é só o último recurso.
+        """
+        from apps.logistica.views import _endereco_destino_nfe
+
+        cliente = self._cliente()
+        nfe = self._nfe_para_cliente(cliente, destinatario_snapshot={
+            'nome': cliente.razao_social, 'cpf_cnpj': cliente.cpf_cnpj,
+            'logradouro': 'Avenida Nova', 'numero': '999',
+            'bairro': 'Tirol', 'cidade': 'Natal', 'uf': 'RN',
+            'cep': '59020000',
+        })
+
+        endereco = _endereco_destino_nfe(nfe)
+
+        self.assertIn('Avenida Nova', endereco)
+        self.assertNotIn('Rua do Cliente', endereco)
+
+    def test_sem_cliente_cadastrado_continua_sem_endereco(self):
+        """Destinatário 'consumidor' (sem cliente) não tem cadastro pra cair."""
+        from apps.logistica.views import _endereco_destino_nfe
+
+        nfe = self._nfe_para_cliente(
+            self._cliente(), destinatario_tipo='consumidor', destinatario_id=None,
+            destinatario_snapshot={'nome': 'Consumidor Final'},
+        )
+
+        self.assertEqual(_endereco_destino_nfe(nfe), '')

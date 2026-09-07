@@ -1618,44 +1618,66 @@ def _texto_xml_destino(documento):
     return {}
 
 
+def _cliente_destino_nfe(documento):
+    """
+    O cliente cadastrado como destinatário, quando houver.
+
+    ULTIMO RECURSO, NAO O PRIMEIRO. O snapshot do destinatário na NF-e do
+    PDV so' guarda nome e cpf_cnpj (`nfce_payload_builder.py`) -- endereço
+    nunca esteve ali, mesmo quando o cliente tem cadastro completo. Sem
+    isso, toda venda de balcão com NF-e que virava expedição chegava na
+    tela de MDF-e com "endereço não informado", mesmo o cadastro do
+    cliente tendo o endereço certinho.
+    """
+    if documento.destinatario_tipo != "cliente" or not documento.destinatario_id:
+        return None
+    return Cliente.objects.filter(pk=documento.destinatario_id).first()
+
+
 def _dados_destino_nfe(documento):
     snapshot = dict(documento.destinatario_snapshot or {})
     filial_destino = _filial_destino_nfe(documento, snapshot)
     xml = _texto_xml_destino(documento)
+    cliente_destino = _cliente_destino_nfe(documento)
 
     def primeiro(*valores):
         return next((str(valor).strip() for valor in valores if valor), "")
 
     dados = {
-        "nome": primeiro(snapshot.get("nome"), getattr(filial_destino, "razao_social", "")),
+        "nome": primeiro(
+            snapshot.get("nome"), getattr(filial_destino, "razao_social", ""),
+            getattr(cliente_destino, "nome_display", ""),
+        ),
         "logradouro": primeiro(
             getattr(filial_destino, "endereco", ""),
             snapshot.get("logradouro"), snapshot.get("endereco"),
-            xml.get("logradouro"),
+            xml.get("logradouro"), getattr(cliente_destino, "endereco", ""),
         ),
         "numero": primeiro(
             getattr(filial_destino, "numero", ""), snapshot.get("numero"),
-            xml.get("numero"),
+            xml.get("numero"), getattr(cliente_destino, "numero", ""),
         ),
         "complemento": primeiro(
             getattr(filial_destino, "complemento", ""), snapshot.get("complemento"),
-            xml.get("complemento"),
+            xml.get("complemento"), getattr(cliente_destino, "complemento", ""),
         ),
         "bairro": primeiro(
             getattr(filial_destino, "bairro", ""), snapshot.get("bairro"),
-            xml.get("bairro"),
+            xml.get("bairro"), getattr(cliente_destino, "bairro", ""),
         ),
         "cidade": primeiro(
             getattr(filial_destino, "cidade", ""),
             snapshot.get("cidade"), snapshot.get("municipio"),
             snapshot.get("nome_municipio"),
-            xml.get("cidade"),
+            xml.get("cidade"), getattr(cliente_destino, "cidade", ""),
         ),
         "uf": primeiro(
             getattr(filial_destino, "uf", ""), snapshot.get("uf"), xml.get("uf"),
+            getattr(cliente_destino, "uf", ""),
         ).upper(),
         "cep": primeiro(
             getattr(filial_destino, "cep", ""), snapshot.get("cep"), xml.get("cep"),
+            getattr(cliente_destino, "cep", ""),
         ),
         "codigo_municipio": primeiro(
             getattr(filial_destino, "codigo_municipio_ibge", ""),
@@ -1663,6 +1685,7 @@ def _dados_destino_nfe(documento):
             snapshot.get("codigo_municipio_ibge"),
             snapshot.get("codigo_ibge"),
             xml.get("codigo_municipio"),
+            getattr(cliente_destino, "codigo_municipio_ibge", ""),
         ),
     }
     partes = [
