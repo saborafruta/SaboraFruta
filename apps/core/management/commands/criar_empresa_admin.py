@@ -26,6 +26,7 @@ não é sobrescrita (a menos que --resetar-senha seja passado).
 import os
 import re
 
+from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
@@ -88,6 +89,10 @@ class Command(BaseCommand):
                 'nome_fantasia': op['nome_fantasia'] or op['razao_social'],
                 'cidade': op['cidade'],
                 'uf': uf,
+                'regime_tributario': Empresa.RegimeTributario.SIMPLES_NACIONAL,
+                'codigo_regime_tributario': (
+                    Empresa.CodigoRegimeTributario.SIMPLES_NACIONAL
+                ),
             },
         )
         self.stdout.write(f'  Empresa: {empresa} ({"criada" if criou_empresa else "já existia"})')
@@ -115,15 +120,29 @@ class Command(BaseCommand):
 
         usuario = Usuario.objects.filter(email=email).first()
         if usuario is None:
-            Usuario.objects.create_superuser(
-                email=email, nome=op['admin_nome'], password=senha,
-                empresa=empresa, filial=matriz, perfil=perfil,
+            criar_usuario = (
+                Usuario.objects.create_user
+                if settings.TENANT_DATABASE_ROUTING_ENABLED
+                else Usuario.objects.create_superuser
             )
-            self.stdout.write(self.style.SUCCESS(f'  Super admin criado: {email}'))
+            criar_usuario(
+                email=email,
+                nome=op['admin_nome'],
+                password=senha,
+                empresa=empresa,
+                filial=matriz,
+                perfil=perfil,
+            )
+            tipo = (
+                'Admin da empresa'
+                if settings.TENANT_DATABASE_ROUTING_ENABLED
+                else 'Super admin'
+            )
+            self.stdout.write(self.style.SUCCESS(f'  {tipo} criado: {email}'))
         elif op['resetar_senha']:
             usuario.set_password(senha)
-            usuario.is_superuser = True
-            usuario.is_staff = True
+            usuario.is_superuser = not settings.TENANT_DATABASE_ROUTING_ENABLED
+            usuario.is_staff = not settings.TENANT_DATABASE_ROUTING_ENABLED
             usuario.ativo = True
             usuario.save()
             self.stdout.write(self.style.SUCCESS(f'  Senha redefinida para: {email}'))
