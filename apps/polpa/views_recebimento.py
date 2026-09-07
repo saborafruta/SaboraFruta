@@ -72,26 +72,17 @@ class RecusasView(PolpaBaseView):
     """
     As cargas que voltaram.
 
-    É a MESMA fila, filtrada — e não uma tela paralela: duas consultas da
-    mesma coisa divergem no dia em que alguém acrescenta um status, e aí as
-    duas telas mostram números diferentes para a mesma pergunta.
+    NÃO É MAIS UMA TELA PRÓPRIA. Recusas e devoluções virou o mesmo filtro
+    que a fila de Recebimento já sabia fazer (`?status=recusado`); manter
+    um template e uma consulta paralelos para a mesma pergunta era o tipo
+    de duplicação que diverge no dia em que alguém acrescenta um status.
+    A rota continua para não quebrar link salvo ou favorito -- só redireciona
+    para dentro da tela de Recebimento de fruta, filtrada.
     """
 
     def get(self, request):
-        recusadas = RecebimentoService.fila(
-            _filial(request), {'status': Recebimento.Status.RECUSADO},
-        )
-        return render(request, 'polpa/recebimento_list.html', {
-            'title': 'Recusas e devoluções',
-            'recebimentos': recusadas[:200],
-            'filtros': {'status': Recebimento.Status.RECUSADO},
-            'tem_filtro': True,
-            'so_recusas': True,
-            'situacoes': Recebimento.Status.choices,
-            'frutas': Fruta.objects.for_filial(_filial(request)).filter(ativo=True),
-            'resumo': RecebimentoService.resumo(_filial(request)),
-            'pode_agir': False,
-        })
+        destino = reverse('polpa:recebimento-list') + f'?status={Recebimento.Status.RECUSADO}'
+        return redirect(destino)
 
 
 class ProdutoresView(PolpaBaseView):

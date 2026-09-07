@@ -469,6 +469,118 @@ class TelasTests(PolpaBase):
         self.assertContains(resposta, 'Falta para aprovar')
         self.assertContains(resposta, 'Classificação não registrada')
 
+    def test_quantidade_de_caixas_grava_pela_tela(self):
+        """
+        O peso das caixas já está dentro da tara — esta contagem é outra
+        coisa: quantas caixas devolver ao produtor.
+        """
+        fruta = self._fruta()
+
+        resposta = self.client.post(reverse('polpa:recebimento-create'), {
+            'fruta': fruta.pk, 'produtor': self.produtor.pk,
+            'data': '2026-08-25',
+            'peso_bruto': '12000', 'tara': '2000',
+            'desconto_kg': '0', 'preco_kg': '1.5', 'quantidade_caixas': '48',
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        carga = Recebimento.objects.for_filial(self.filial).first()
+        self.assertEqual(carga.quantidade_caixas, 48)
+
+    def test_quantidade_de_caixas_e_opcional(self):
+        """
+        Carga a granel não tem caixa nenhuma — e isso não pode virar um
+        zero indistinguível de "ninguém contou".
+        """
+        fruta = self._fruta()
+
+        resposta = self.client.post(reverse('polpa:recebimento-create'), {
+            'fruta': fruta.pk, 'produtor': self.produtor.pk,
+            'data': '2026-08-25',
+            'peso_bruto': '12000', 'tara': '2000',
+            'desconto_kg': '0', 'preco_kg': '1.5',
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        carga = Recebimento.objects.for_filial(self.filial).first()
+        self.assertIsNone(carga.quantidade_caixas)
+
+    def test_o_formulario_pede_a_quantidade_de_caixas(self):
+        resposta = self.client.get(reverse('polpa:recebimento-create'))
+
+        self.assertContains(resposta, 'name="quantidade_caixas"')
+
+    def test_o_detalhe_mostra_as_caixas(self):
+        carga = self._carga(quantidade_caixas=48)
+
+        resposta = self.client.get(
+            reverse('polpa:recebimento-detail', args=[carga.pk])
+        )
+
+        self.assertContains(resposta, '48')
+
+    def test_o_detalhe_sem_caixas_mostra_travessao(self):
+        carga = self._carga()
+
+        resposta = self.client.get(
+            reverse('polpa:recebimento-detail', args=[carga.pk])
+        )
+
+        self.assertContains(resposta, 'Caixas')
+
+
+class RecusasEDevolucoesTests(PolpaBase):
+    """
+    Recusas e devoluções deixou de ser tela própria — virou um filtro
+    dentro da fila de Recebimento de fruta, e não uma consulta paralela
+    que poderia divergir da fila principal no dia em que alguém
+    acrescentar um status novo.
+    """
+
+    def test_a_rota_antiga_redireciona_para_a_fila_filtrada(self):
+        """
+        Link salvo, favorito do navegador — nada disso pode quebrar.
+        """
+        resposta = self.client.get(reverse('polpa:recebimento-recusas'))
+
+        self.assertRedirects(
+            resposta,
+            reverse('polpa:recebimento-list') + '?status=recusado',
+            fetch_redirect_response=False,
+        )
+
+    def test_a_fila_de_recebimento_oferece_o_atalho(self):
+        resposta = self.client.get(reverse('polpa:recebimento-list'))
+
+        self.assertContains(resposta, 'Recusas e devoluções')
+        self.assertContains(resposta, '?status=recusado')
+
+    def test_filtrar_por_recusado_mostra_so_as_recusadas(self):
+        fruta = self._fruta()
+        aceita = self._carga(fruta=fruta)
+        recusada = self._carga(
+            fruta=fruta, status=Recebimento.Status.RECUSADO, motivo_recusa='Fruta verde.',
+        )
+
+        resposta = self.client.get(
+            reverse('polpa:recebimento-list'), {'status': 'recusado'},
+        )
+
+        self.assertContains(resposta, f'#{recusada.numero:05d}')
+        self.assertNotContains(resposta, f'#{aceita.numero:05d}')
+
+    def test_a_tela_de_recusas_ainda_deixa_filtrar_por_outra_coisa(self):
+        """
+        Antes era uma tela travada, sem o formulário de busca. Agora é a
+        mesma tela de sempre, então o filtro continua inteiro.
+        """
+        resposta = self.client.get(
+            reverse('polpa:recebimento-list'), {'status': 'recusado'},
+        )
+
+        self.assertContains(resposta, 'name="busca"')
+        self.assertContains(resposta, 'name="fruta"')
+
 
 class AcoesDaFilaTests(PolpaBase):
     """

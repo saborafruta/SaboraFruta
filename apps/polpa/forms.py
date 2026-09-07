@@ -146,7 +146,8 @@ class RecebimentoForm(forms.ModelForm):
         fields = (
             'fruta', 'produtor', 'data', 'hora_chegada',
             'placa', 'motorista', 'nota_fiscal',
-            'peso_bruto', 'tara', 'desconto_kg', 'preco_kg', 'observacao',
+            'quantidade_caixas', 'peso_bruto', 'tara', 'desconto_kg', 'preco_kg',
+            'observacao',
         )
         widgets = {
             'fruta': forms.Select(attrs=SELECT),
@@ -156,6 +157,7 @@ class RecebimentoForm(forms.ModelForm):
             'placa': forms.TextInput(attrs={**ENTRADA, 'placeholder': 'ABC1D23'}),
             'motorista': forms.TextInput(attrs=ENTRADA),
             'nota_fiscal': forms.TextInput(attrs=ENTRADA),
+            'quantidade_caixas': forms.NumberInput(attrs={**ENTRADA, 'min': '0', 'step': '1'}),
             'peso_bruto': forms.NumberInput(attrs={**ENTRADA, 'step': '0.001'}),
             'tara': forms.NumberInput(attrs={**ENTRADA, 'step': '0.001'}),
             'desconto_kg': forms.NumberInput(attrs={**ENTRADA, 'step': '0.001'}),

@@ -57,8 +57,11 @@ GRUPOS: tuple[Grupo, ...] = (
                  'Brix, pH, maturação e impureza — o que decide aceitar ou recusar.'),
             Item('produtores', 'Produtores',
                  'Quem fornece a fruta, com histórico de qualidade e rendimento.'),
-            Item('recusas', 'Recusas e devoluções',
-                 'Carga que voltou, com o motivo registrado.'),
+            # "Recusas e devoluções" deixou de ser tela própria: virou um
+            # atalho dentro da própria fila de Recebimento de fruta
+            # (mesmo filtro por situação, sem consulta paralela). A rota
+            # antiga (`recebimento-recusas`) continua existindo e
+            # redireciona para lá, então nenhum link salvo quebra.
         ),
     ),
     Grupo(

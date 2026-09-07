@@ -26,14 +26,27 @@
         {% endif %}
       </p>
     </div>
-    {% if pode_agir %}
-      <a href="{% url 'polpa:recebimento-create' %}" class="btn-primary text-sm">
-        + Novo recebimento
+    <div class="flex items-center gap-2">
+      {% comment %}
+        RECUSAS E DEVOLUÇÕES não tem mais tela própria: é a MESMA fila,
+        filtrada -- duas consultas da mesma coisa divergem no dia em que
+        alguém acrescenta um status novo. O atalho fica aqui, ao lado de
+        "Novo recebimento", em vez de precisar voltar ao hub do módulo.
+      {% endcomment %}
+      <a href="{% url 'polpa:recebimento-list' %}?status=recusado" class="btn-secondary text-sm">
+        Recusas e devoluções
+        {% if resumo.recusadas %}
+          <span class="soft-pill is-red text-xs ml-1">{{ resumo.recusadas }}</span>
+        {% endif %}
       </a>
-    {% endif %}
+      {% if pode_agir %}
+        <a href="{% url 'polpa:recebimento-create' %}" class="btn-primary text-sm">
+          + Novo recebimento
+        </a>
+      {% endif %}
+    </div>
   </div>
 
-  {% if not so_recusas %}
     <form method="get" class="card p-3 flex flex-wrap items-end gap-3">
       <div class="flex-1 min-w-[200px]">
         <label class="form-label">Produtor, fruta, nota ou placa</label>
@@ -71,7 +84,6 @@
         {% endif %}
       </div>
     </form>
-  {% endif %}
 
   <div class="card overflow-hidden">
     <div class="overflow-x-auto">

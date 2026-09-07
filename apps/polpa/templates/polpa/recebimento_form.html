@@ -152,7 +152,18 @@
 
     <div class="card p-4">
       <h3 class="text-sm font-semibold mb-3" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">A balança</h3>
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div>
+          <label class="form-label" for="{{ form.quantidade_caixas.id_for_label }}">
+            Caixas <span class="opacity-60">(opcional)</span>
+          </label>
+          <input type="number" step="1" min="0" name="quantidade_caixas" id="{{ form.quantidade_caixas.id_for_label }}"
+                 class="form-input w-full" value="{{ form.quantidade_caixas.value|default_if_none:'' }}">
+          {% if form.quantidade_caixas.errors %}<p class="text-xs mt-1" style="color:#dc2626;">{{ form.quantidade_caixas.errors.0 }}</p>{% endif %}
+          <p class="text-[11px] mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            O que devolver ao produtor.
+          </p>
+        </div>
         <div>
           <label class="form-label" for="{{ form.peso_bruto.id_for_label }}">Peso bruto (kg)</label>
           <input type="number" step="0.001" min="0" name="peso_bruto" id="{{ form.peso_bruto.id_for_label }}"

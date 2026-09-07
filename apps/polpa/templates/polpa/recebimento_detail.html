@@ -256,6 +256,12 @@
             <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nota fiscal</dt>
             <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ recebimento.nota_fiscal|default:"—" }}</dd>
           </div>
+          <div class="flex justify-between gap-3">
+            <dt :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Caixas</dt>
+            <dd :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+              {% if recebimento.quantidade_caixas is not None %}{{ recebimento.quantidade_caixas }}{% else %}—{% endif %}
+            </dd>
+          </div>
         </dl>
       </div>
 

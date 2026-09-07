@@ -77,6 +77,15 @@ class Recebimento(FilialScopedModel):
         max_digits=12, decimal_places=3, default=ZERO,
         validators=[MinValueValidator(0)], help_text='kg do veículo e das caixas.',
     )
+    # QUANTAS CAIXAS, e não o peso delas -- o peso das caixas já está
+    # dentro da tara. A contagem serve para outra coisa: saber quantas
+    # caixas retornáveis devolver ao produtor. Nulo (e não zero) é "não
+    # contado" -- uma carga a granel, sem caixa nenhuma, também é zero, e
+    # as duas situações não podem virar o mesmo número.
+    quantidade_caixas = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text='Quantas caixas vieram nesta carga — o que se deve devolver ao produtor.',
+    )
     # DESCONTO SEPARADO DO PESO, e não abatido do líquido: quem confere
     # precisa ver o peso que a balança marcou E o que foi descontado. Um
     # número só esconde a negociação dentro da pesagem.
