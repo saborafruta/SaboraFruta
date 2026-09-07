@@ -28,7 +28,7 @@ class RailwayProvisioner:
             service = cls._create_service(service_name, password)
             created = True
         service_id = service['id']
-        volume = cls._find_volume(f'{service_name}-volume')
+        volume = cls._find_volume(service_id)
         if not volume:
             cls._create_volume(service_id)
         if created or not volume:
@@ -143,12 +143,23 @@ class RailwayProvisioner:
         }})['volumeCreate']
 
     @classmethod
-    def _find_volume(cls, name):
-        query = '''query($id: String!) { project(id: $id) {
-          volumes { edges { node { id name } } }
-        } }'''
-        edges = cls._graphql(query, {'id': settings.RAILWAY_PROJECT_ID})['project']['volumes']['edges']
-        return next((edge['node'] for edge in edges if edge['node']['name'] == name), None)
+    def _find_volume(cls, service_id):
+        query = '''query($id: String!, $projectId: String!) {
+          environment(id: $id, projectId: $projectId) {
+            volumeInstances { edges { node {
+              serviceId volume { id name }
+            } } }
+          }
+        }'''
+        edges = cls._graphql(query, {
+            'id': settings.RAILWAY_ENVIRONMENT_ID,
+            'projectId': settings.RAILWAY_PROJECT_ID,
+        })['environment']['volumeInstances']['edges']
+        instance = next(
+            (edge['node'] for edge in edges if edge['node']['serviceId'] == service_id),
+            None,
+        )
+        return instance['volume'] if instance else None
 
     @classmethod
     def _deploy_service(cls, service_id):

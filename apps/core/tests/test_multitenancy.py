@@ -16,6 +16,7 @@ from apps.core.models import (
 )
 from apps.core.services.empresa_banco_service import EmpresaBancoService
 from apps.core.services.auth_service import AuthService
+from apps.core.services.railway_provisioner import RailwayProvisioner
 from apps.core.services.tenant_public_link_service import TenantPublicLinkService
 from apps.core.services.tenant_task_service import TenantTaskService
 from apps.core.tenant_context import get_current_tenant_db, tenant_db
@@ -311,3 +312,30 @@ class MultitenancyFoundationTests(TestCase):
         self.assertTrue(usuario.perfil.is_admin)
         self.assertFalse(usuario.is_superuser)
         self.assertFalse(usuario.is_staff)
+
+    @override_settings(
+        RAILWAY_PROJECT_ID='project-stage',
+        RAILWAY_ENVIRONMENT_ID='environment-stage',
+    )
+    def test_volume_railway_e_identificado_pelo_servico_e_nao_pelo_nome(self):
+        payload = {
+            'environment': {
+                'volumeInstances': {
+                    'edges': [
+                        {'node': {
+                            'serviceId': 'outro-servico',
+                            'volume': {'id': 'volume-1', 'name': 'postgres-volume'},
+                        }},
+                        {'node': {
+                            'serviceId': 'tenant-service-id',
+                            'volume': {'id': 'volume-2', 'name': 'nome-aleatorio-rnBF'},
+                        }},
+                    ],
+                },
+            },
+        }
+        with patch.object(RailwayProvisioner, '_graphql', return_value=payload) as graphql:
+            volume = RailwayProvisioner._find_volume('tenant-service-id')
+
+        self.assertEqual(volume['id'], 'volume-2')
+        graphql.assert_called_once()
