@@ -9,7 +9,7 @@
   alcance sem rolar. Carga parada é fruta esquentando — por isso a coluna
   de situação é a mais destacada da tabela.
 {% endcomment %}
-<div class="space-y-4">
+<div class="space-y-4" x-data="{ cancelar: null }">
 
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
@@ -92,6 +92,10 @@
                 :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
                 :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
+            {% if pode_agir or pode_cancelar %}
+              <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ações</th>
+            {% endif %}
           </tr>
         </thead>
         <tbody>
@@ -131,6 +135,45 @@
                   <span class="soft-pill is-amber text-xs">{{ r.get_status_display }}</span>
                 {% endif %}
               </td>
+              {% if pode_agir or pode_cancelar %}
+                <td class="px-4 py-3">
+                  <div class="flex items-center justify-end gap-1">
+                    {% comment %}
+                      EDITAR SÓ ENQUANTO A CARGA NÃO FOI DECIDIDA. Depois de
+                      aprovada a fruta já pode ter virado lote — reescrever o
+                      peso de origem mudaria o custo de algo já processado.
+                      `RecebimentoFormView` recusa do mesmo jeito; o botão só
+                      evita o clique que termina em mensagem de erro.
+                    {% endcomment %}
+                    {% if pode_agir and r.editavel %}
+                      <a href="{% url 'polpa:recebimento-update' r.pk %}"
+                         class="p-1.5 rounded" :style="temaClaro ? 'color:#555;' : 'color:#888;'"
+                         onmouseover="this.style.background=temaClaro?'#f0f0f0':'#1a1a1a'" onmouseout="this.style.background=''"
+                         title="Editar romaneio">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                        </svg>
+                      </a>
+                    {% endif %}
+                    {% comment %}
+                      SEM CANCELAR CARGA QUE JÁ VIROU LOTE. A fruta pode já
+                      estar num tanque; `RecebimentoService.cancelar` recusa
+                      do mesmo jeito -- aqui só evita oferecer um botão que
+                      sempre termina em erro.
+                    {% endcomment %}
+                    {% if pode_cancelar and r.status != 'cancelado' and not r.lote_id %}
+                      <button type="button" class="p-1.5 rounded" style="color:#f59e0b;"
+                              onmouseover="this.style.background=temaClaro?'#f0f0f0':'#1a1a1a'" onmouseout="this.style.background=''"
+                              title="Cancelar romaneio"
+                              @click="cancelar = { url: '{% url 'polpa:recebimento-cancelar' r.pk %}', numero: '#{{ r.numero|stringformat:"05d" }}', produtor: '{{ r.produtor|escapejs }}' }">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636A9 9 0 105.636 18.364 9 9 0 0018.364 5.636zM5.636 5.636l12.728 12.728"/>
+                        </svg>
+                      </button>
+                    {% endif %}
+                  </div>
+                </td>
+              {% endif %}
             </tr>
           {% empty %}
             <tr>
@@ -141,7 +184,7 @@
                 se resolve limpando o filtro, fila vazia se resolve abrindo
                 romaneio.
               {% endcomment %}
-              <td colspan="7" class="px-4 py-14 text-center">
+              <td colspan="{% if pode_agir or pode_cancelar %}8{% else %}7{% endif %}" class="px-4 py-14 text-center">
                 <p class="text-sm max-w-md mx-auto" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                   {% if tem_filtro %}
                     Nenhuma carga com esse filtro.
@@ -163,6 +206,49 @@
         </tbody>
       </table>
     </div>
+  </div>
+
+  {% comment %}
+    Cancelar: encerra sem apagar. O motivo é opcional mas vai carimbado no
+    romaneio com quem e quando -- é esse rastro que justifica preferir o
+    cancelamento à exclusão numa carga que já passou pela balança.
+  {% endcomment %}
+  <div x-show="cancelar" x-cloak @keydown.escape.window="cancelar = null"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background:rgba(0,0,0,.6);" @click.self="cancelar = null">
+    <form method="post" :action="cancelar?.url" class="card p-6 w-full max-w-md space-y-4">
+      {% csrf_token %}
+      <div class="flex items-start gap-3">
+        <div class="shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
+             style="background:rgba(245,158,11,.14); color:#f59e0b;">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M18.364 5.636A9 9 0 105.636 18.364 9 9 0 0018.364 5.636zM5.636 5.636l12.728 12.728"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Cancelar romaneio <span x-text="cancelar?.numero"></span>?
+          </h3>
+          <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Produtor: <strong x-text="cancelar?.produtor"></strong>.
+            O romaneio continua na lista com situação Cancelado — nada é apagado.
+          </p>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+          Motivo (opcional)
+        </label>
+        <textarea name="motivo" rows="2" class="form-input w-full"
+                  placeholder="Ex.: romaneio digitado em duplicidade"></textarea>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn-secondary text-sm" @click="cancelar = null">Voltar</button>
+        <button type="submit" class="btn-primary text-sm" style="background:#f59e0b; border-color:#f59e0b;">
+          Cancelar romaneio
+        </button>
+      </div>
+    </form>
   </div>
 
 </div>

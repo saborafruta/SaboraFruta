@@ -61,6 +61,10 @@ class RecebimentoListView(PolpaBaseView):
             'frutas': Fruta.objects.for_filial(_filial(request)).filter(ativo=True),
             'resumo': RecebimentoService.resumo(_filial(request)),
             'pode_agir': request.user.tem_permissao('polpa_recebimento', 'criar'),
+            # Cancelar é permissão própria (`CancelarView.permissao_acao`),
+            # separada de criar/editar -- quem pesa a carga nem sempre pode
+            # anular um romaneio já registrado.
+            'pode_cancelar': request.user.tem_permissao('polpa_recebimento', 'cancelar'),
         })
 
 

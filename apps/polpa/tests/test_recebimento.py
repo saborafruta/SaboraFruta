@@ -470,6 +470,96 @@ class TelasTests(PolpaBase):
         self.assertContains(resposta, 'Classificação não registrada')
 
 
+class AcoesDaFilaTests(PolpaBase):
+    """
+    Editar e cancelar o romaneio direto na fila — sem abrir o detalhe.
+
+    NEM TODA LINHA OFERECE AS DUAS AÇÕES. Editar só faz sentido antes da
+    decisão (`editavel`); cancelar só faz sentido enquanto a fruta não
+    virou lote. Oferecer o botão fora dessas condições levaria a um clique
+    que a view já recusaria — o que a tela evita é o clique morto, não a
+    regra em si, que continua sendo da view.
+    """
+
+    def test_carga_em_pesagem_mostra_editar_e_cancelar(self):
+        self._carga()
+
+        resposta = self.client.get(reverse('polpa:recebimento-list'))
+
+        self.assertContains(resposta, 'Editar romaneio')
+        self.assertContains(resposta, 'Cancelar romaneio')
+
+    def test_carga_ja_decidida_nao_mostra_editar(self):
+        carga = self._carga(status=Recebimento.Status.APROVADO)
+
+        resposta = self.client.get(reverse('polpa:recebimento-list'))
+
+        self.assertNotContains(resposta, 'Editar romaneio')
+
+    def test_carga_ja_cancelada_nao_oferece_cancelar_de_novo(self):
+        """
+        O texto "Cancelar romaneio" sozinho não serve de prova: o modal
+        compartilhado do rodapé da página sempre o tem. O que precisa
+        sumir é o GATILHO desta linha — a URL de cancelar deste romaneio.
+        """
+        carga = self._carga(status=Recebimento.Status.CANCELADO)
+
+        resposta = self.client.get(reverse('polpa:recebimento-list'))
+
+        self.assertNotContains(
+            resposta, reverse('polpa:recebimento-cancelar', args=[carga.pk]),
+        )
+
+    def test_carga_que_ja_virou_lote_nao_oferece_cancelar(self):
+        """
+        A fruta pode já estar no tanque -- cancelar deixaria o saldo sem
+        origem, e `RecebimentoService.cancelar` recusaria de qualquer jeito.
+        """
+        fruta = self._fruta()
+        fruta.produto = self._produto()
+        fruta.save()
+        carga = self._carga(fruta=fruta)
+        RecebimentoService.classificar(
+            carga, {'brix': Decimal('13'), 'impureza': Decimal('2')}, self.usuario,
+        )
+        RecebimentoService.aprovar(carga, self.usuario)
+
+        resposta = self.client.get(reverse('polpa:recebimento-list'))
+
+        self.assertNotContains(
+            resposta, reverse('polpa:recebimento-cancelar', args=[carga.pk]),
+        )
+
+    def test_cancelar_pela_fila_muda_a_situacao(self):
+        carga = self._carga()
+
+        self.client.post(
+            reverse('polpa:recebimento-cancelar', args=[carga.pk]),
+            {'motivo': 'Digitado em duplicidade'},
+        )
+
+        carga.refresh_from_db()
+        self.assertEqual(carga.status, Recebimento.Status.CANCELADO)
+        self.assertEqual(carga.motivo_recusa, 'Digitado em duplicidade')
+
+    def test_sem_permissao_de_criar_a_fila_nao_oferece_editar(self):
+        self.usuario.perfil.is_admin = False
+        self.usuario.perfil.save(update_fields=['is_admin'])
+        from apps.core.models import Permissao
+        Permissao.objects.create(perfil=self.usuario.perfil, modulo='polpa', pode_ver=True)
+        Permissao.objects.create(
+            perfil=self.usuario.perfil, modulo='polpa_recebimento',
+            pode_ver=True, pode_cancelar=True,
+        )
+        self._carga()
+
+        resposta = self.client.get(reverse('polpa:recebimento-list'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertNotContains(resposta, 'Editar romaneio')
+        self.assertContains(resposta, 'Cancelar romaneio')
+
+
 class PermissaoTests(PolpaBase):
     """
     Quem tem o vertical entra; quem tem a área responde pela área.
