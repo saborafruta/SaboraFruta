@@ -28,7 +28,7 @@ Nunca trate o nome de um serviço como prova de sua função atual. O serviço
 chamado `eureka-50649395000126` é, no momento, o aplicativo central que atende
 `ited.app.br`. Ele deixou de usar o banco da Eureka como `default` e passou a
 usar o Banco Gerencial. A Eureka continua como tenant no banco
-`Postgres-_uOr`.
+`Banco LR Sports`.
 
 Antes de mudar variáveis, domínios ou bancos:
 
@@ -47,8 +47,8 @@ Os aplicativos usam o mesmo repositório GitHub:
 - repositório: `saborafruta/SaboraFruta`;
 - branch de produção: `main`;
 - a `origin/main` é sempre a fonte da verdade;
-- um push em `main` pode disparar deploy tanto no iTed quanto no serviço
-  central legado e no Sabor a Fruta.
+- um push em `main` pode disparar deploy no app central do iTed e no Sabor a
+  Fruta.
 
 Commits importantes deste trabalho:
 
@@ -76,12 +76,16 @@ Serviços:
 
 | Função | Nome no Railway | Service ID |
 |---|---|---|
-| App central redundante | `iTed Comercial` | `5d25db60-f841-4880-b156-457c89bb61de` |
 | App que atende `ited.app.br` | `eureka-50649395000126` | `80d40f12-cc9e-4e10-a145-f4ce08b25193` |
-| Banco operacional da iTed | `Postgres` | `1e1a0552-ac7e-4907-b8c6-e489f1f64c19` |
+| Banco operacional da iTed | `Banco iTed` | `1e1a0552-ac7e-4907-b8c6-e489f1f64c19` |
 | Banco Gerencial | `Banco Gerencial` | `5e7f91de-3710-4c88-bb2b-6af43c324490` |
-| Banco operacional da Eureka | `Postgres-_uOr` | `89221c0e-ad62-4e89-82fb-626ccab14a81` |
+| Banco operacional da L&R Sports/Eureka | `Banco LR Sports` | `89221c0e-ad62-4e89-82fb-626ccab14a81` |
 | Redis | `Redis` | `f1955f60-1129-497f-8eb5-2e0f9d427761` |
+
+Em 07/09/2026, o app redundante `iTed Comercial` (service ID
+`5d25db60-f841-4880-b156-457c89bb61de`) foi removido após validação do app
+canônico. Ele não possuía volume. Nenhum banco, volume ou dado operacional foi
+apagado nessa consolidação.
 
 Empresas ativas no diretório central:
 
@@ -98,12 +102,13 @@ mudar com novos cadastros.
 
 - `https://ited.app.br`: produção principal. Está anexado ao serviço
   `eureka-50649395000126`, que foi configurado como app central;
-- `https://ited.up.railway.app`: outro app central, mantido como redundância e
-  apoio operacional;
 - `https://eureka-50649395000126-production.up.railway.app`: domínio Railway do
   mesmo app que atende `ited.app.br`;
 - `eureka.ited.app.br`: cadastro existe no Railway, mas o DNS estava sem
   resolução na última auditoria. Não é necessário para o fluxo central.
+
+O domínio `https://ited.up.railway.app` pertencia ao app redundante removido e
+deve responder 404. Não o use como endereço de produção.
 
 Foi tentada a transferência de `ited.app.br` para o serviço `iTed Comercial`.
 O Railway criou associação e certificado, mas o Cloudflare continuou apontando
@@ -112,16 +117,16 @@ domínio voltou a responder 200, e o serviço já ligado ao domínio foi convert
 em app central. Não repita a transferência sem acesso ao DNS do Cloudflare e uma
 janela de mudança.
 
-## Variáveis lógicas dos apps centrais
+## Variáveis lógicas do app central
 
-Os dois apps centrais foram configurados com estas variáveis. Verifique os
-valores por referência no Railway; nunca imprima segredos:
+O app central foi configurado com estas variáveis. Verifique os valores por
+referência no Railway; nunca imprima segredos:
 
 - `DATABASE_URL` -> `${{Banco Gerencial.DATABASE_URL}}`;
 - `MANAGEMENT_DATABASE_URL` -> `${{Banco Gerencial.DATABASE_URL}}`;
-- `TENANT_DATABASE_URL_ITED_06722483000114` -> `${{Postgres.DATABASE_URL}}`;
+- `TENANT_DATABASE_URL_ITED_06722483000114` -> `${{Banco iTed.DATABASE_URL}}`;
 - `TENANT_DATABASE_URL_EUREKA_50649395000126` ->
-  `${{Postgres-_uOr.DATABASE_URL}}`;
+  `${{Banco LR Sports.DATABASE_URL}}`;
 - `TENANT_DATABASES_JSON` com os aliases da iTed e Eureka;
 - `CELERY_BROKER_URL` -> `${{Redis.REDIS_URL}}`;
 - `TENANT_DATABASE_ROUTING_ENABLED=True`;
@@ -213,21 +218,12 @@ O token e a API foram validados sem criar um banco descartável, evitando custo.
 Ao provisionar a primeira empresa real nova, acompanhe o processo até o banco
 ficar `ATIVO` e confirme um login de usuário comum.
 
-### Limitação da redundância atual
+### Aplicativo central consolidado
 
-O provisionador grava a nova variável no serviço definido por
-`RAILWAY_SERVICE_ID`. Uma empresa criada pelo app de `ited.app.br` atualizará o
-serviço `eureka-50649395000126`, mas não replica automaticamente essa variável
-para o app redundante `iTed Comercial`.
-
-Portanto:
-
-- trate `ited.app.br` como produção canônica;
-- depois de criar um tenant, valide primeiro por `ited.app.br`;
-- se `ited.up.railway.app` também precisar atender o novo tenant, copie a
-  referência da variável para o segundo app e redeploye-o;
-- a solução definitiva é consolidar os dois apps depois da janela de rollback
-  e de uma troca de DNS controlada.
+Existe apenas um app central no projeto: o serviço `eureka-50649395000126`, que
+atende `ited.app.br`. O provisionador grava a variável do novo tenant nesse
+serviço, identificado por `RAILWAY_SERVICE_ID`. Depois de criar um tenant,
+valide o banco, o login e a seleção de empresa pelo domínio canônico.
 
 ## Sabor a Fruta permanece separado
 
@@ -325,10 +321,11 @@ Ordem geral:
 5. validar login, filiais, estoque, financeiro, fiscal e arquivos;
 6. manter Banco Gerencial e tenants intactos até conciliação completa.
 
-O banco `Postgres` original da iTed e o `Postgres-_uOr` original da Eureka não
-foram apagados. O serviço antigo também foi preservado. Isso permite rollback de
-configuração, mas não autoriza apagar ou sobrescrever dados criados após a
-virada.
+Os bancos originais continuam preservados, agora renomeados para `Banco iTed` e
+`Banco LR Sports`. O app redundante foi removido porque não tinha volume nem
+dados próprios. O rollback de configuração continua possível apontando o app
+canônico aos bancos preservados, mas isso não autoriza apagar ou sobrescrever
+dados criados após a virada.
 
 ### Corrupção ou perda de banco
 
@@ -369,7 +366,6 @@ Health checks:
 
 ```powershell
 curl.exe https://ited.app.br/health/
-curl.exe https://ited.up.railway.app/health/
 curl.exe https://saborafruta-production.up.railway.app/health/
 ```
 
@@ -387,8 +383,12 @@ curl.exe https://saborafruta-production.up.railway.app/health/
 - 35 links públicos indexados na migração: 1 da iTed e 34 da Eureka;
 - endpoints principais respondendo HTTP 200;
 - token de projeto e leitura da API Railway validados;
-- deployments dos dois apps iTed/Eureka e do Sabor a Fruta em `SUCCESS` na
-  última auditoria.
+- app canônico do iTed, seus três bancos e o Redis em `SUCCESS` após a
+  consolidação de 07/09/2026;
+- `ited.app.br/health/` respondeu HTTP 200 com banco e `media_root` válidos após
+  a remoção do app redundante;
+- os aliases da iTed e da L&R Sports foram novamente validados após a
+  renomeação dos serviços de banco.
 
 ## Pendências e melhorias futuras
 
@@ -397,14 +397,11 @@ tratadas conscientemente:
 
 1. corrigir o DNS de `eureka.ited.app.br` se esse subdomínio ainda for desejado;
 2. acompanhar ponta a ponta o primeiro banco criado para uma empresa real;
-3. consolidar os dois apps centrais depois da janela de rollback;
-4. sincronizar manualmente a variável de um novo tenant no app redundante se ele
-   continuar em uso;
-5. definir retenção e automação de backups fora da Railway;
-6. testar restauração completa periodicamente;
-7. avaliar limpeza das tabelas operacionais históricas do Banco Gerencial
+3. definir retenção e automação de backups fora da Railway;
+4. testar restauração completa periodicamente;
+5. avaliar limpeza das tabelas operacionais históricas do Banco Gerencial
    somente depois da janela de segurança;
-8. avaliar a normalização de antigos superusuários nos bancos tenants apenas
+6. avaliar a normalização de antigos superusuários nos bancos tenants apenas
    depois de garantir que o rollback para o modo antigo não será mais usado.
 
 ## Checklist para a próxima IA
