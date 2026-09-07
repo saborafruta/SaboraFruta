@@ -739,6 +739,38 @@ class ManifestoCargaUpdateView(PermissaoRequiredMixin, View):
         })
 
 
+class ManifestoCargaDeleteView(PermissaoRequiredMixin, View):
+    """Exclui um manifesto de carga. Os documentos vão junto (FK em cascata)."""
+
+    permissao_modulo = "logistica"
+    permissao_acao = "excluir"
+
+    # Em transito ou encerrado ja virou historico de operacao: a carga
+    # saiu ou chegou. Apagar isso perderia o registro de quando e com o
+    # que -- a saida dali pra frente e' cancelar, nao excluir (mesma regra
+    # do Romaneio de Carga e do Pedido de Expedicao).
+    STATUS_BLOQUEADOS = (
+        ManifestoCarga.Status.EM_TRANSITO,
+        ManifestoCarga.Status.ENCERRADO,
+    )
+
+    def post(self, request, pk):
+        manifesto = get_object_or_404(ManifestoCarga.objects.for_filial(_filial(request)), pk=pk)
+        if manifesto.status in self.STATUS_BLOQUEADOS:
+            messages.error(
+                request,
+                f"Manifesto #{manifesto.numero:06d} já está "
+                f"{manifesto.get_status_display().lower()} e não pode ser excluído. "
+                f"Use o cancelamento para encerrá-lo sem perder o histórico.",
+            )
+            return redirect("logistica:manifesto-list")
+
+        numero = manifesto.numero
+        manifesto.delete()
+        messages.success(request, f"Manifesto #{numero:06d} excluído.")
+        return redirect("logistica:manifesto-list")
+
+
 class ManifestoCargaDetailView(PermissaoRequiredMixin, View):
     permissao_modulo = "logistica"
     template_name = "logistica/manifesto/detail.html"

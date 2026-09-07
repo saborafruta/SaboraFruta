@@ -54,6 +54,7 @@ urlpatterns = [
     path("manifestos/novo/", views.ManifestoCargaCreateView.as_view(), name="manifesto-create"),
     path("manifestos/<int:pk>/", views.ManifestoCargaDetailView.as_view(), name="manifesto-detail"),
     path("manifestos/<int:pk>/editar/", views.ManifestoCargaUpdateView.as_view(), name="manifesto-update"),
+    path("manifestos/<int:pk>/excluir/", views.ManifestoCargaDeleteView.as_view(), name="manifesto-delete"),
     path("manifestos/<int:pk>/documentos/novo/", views.DocumentoManifestoCreateView.as_view(), name="manifesto-documento-create"),
     path("manifestos/<int:pk>/documentos/<int:documento_pk>/remover/", views.DocumentoManifestoDeleteView.as_view(), name="manifesto-documento-delete"),
     path("cte/", views.CTeListView.as_view(), name="cte-list"),
