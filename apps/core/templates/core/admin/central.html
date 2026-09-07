@@ -169,7 +169,7 @@
                  name="empresa"
                  x-model="empresa"
                  @click.stop="abrirEmpresa($event)"
-                 @input="abrirEmpresa($event)"
+                 @input="empresaAlterada($event)"
                  @keydown.escape="openEmpresa = false"
                  autocomplete="off"
                  placeholder="Pesquise ou escolha uma empresa..."
@@ -190,7 +190,7 @@
                         class="w-full text-left px-4 py-3 transition-all"
                         data-search="{{ empresa.razao_social|lower }} {{ empresa.nome_fantasia|default:''|lower }} {{ empresa.cnpj|lower }}"
                         x-show="$el.dataset.search.includes(empresa.toLowerCase())"
-                        @mousedown.prevent="empresa = '{{ empresa.nome_fantasia|default:empresa.razao_social|escapejs }}'; openEmpresa = false">
+                        @mousedown.prevent="selecionarEmpresa('{{ empresa.nome_fantasia|default:empresa.razao_social|escapejs }}')">
                   <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
                       <div class="font-semibold truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ empresa.nome_fantasia|default:empresa.razao_social }}</div>
@@ -221,10 +221,11 @@
                  @click.stop="abrirFilial($event)"
                  @input="abrirFilial($event)"
                  @keydown.escape="openFilial = false"
+                 :disabled="!empresa.trim()"
                  autocomplete="off"
-                 placeholder="Pesquise ou escolha uma filial..."
+                 :placeholder="empresa.trim() ? 'Pesquise ou escolha uma filial...' : 'Selecione primeiro uma empresa...'"
                  class="form-input pl-12 pr-10 h-12">
-          <button type="button" @click.stop="alternarFilial($event)" class="absolute right-3 top-1/2 -translate-y-1/2 p-1"
+          <button type="button" @click.stop="alternarFilial($event)" :disabled="!empresa.trim()" class="absolute right-3 top-1/2 -translate-y-1/2 p-1"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#9ca3af;'">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -238,9 +239,10 @@
               {% for filial in filiais %}
                 <button type="button"
                         class="w-full text-left px-4 py-3 transition-all"
+                        data-empresa="{{ filial.empresa.nome_fantasia|default:filial.empresa.razao_social|lower }}"
                         data-search="{{ filial.razao_social|lower }} {{ filial.nome_fantasia|default:''|lower }} {{ filial.cnpj|lower }} {{ filial.cidade|lower }} {{ filial.empresa.razao_social|lower }} {{ filial.empresa.nome_fantasia|default:''|lower }}"
-                        x-show="$el.dataset.search.includes(filial.toLowerCase())"
-                        @mousedown.prevent="filial = '{{ filial.nome_fantasia|default:filial.razao_social|escapejs }}'; openFilial = false">
+                        x-show="filialPertence($el.dataset.empresa) && $el.dataset.search.includes(filial.toLowerCase())"
+                        @mousedown.prevent="selecionarFilial('{{ filial.nome_fantasia|default:filial.razao_social|escapejs }}')">
                   <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
                       <div class="font-semibold truncate" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ filial.nome_fantasia|default:filial.razao_social }}</div>
