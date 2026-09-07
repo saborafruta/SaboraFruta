@@ -32,6 +32,10 @@ urlpatterns = [
     path('auth/preferencias-tabelas/', TabelaPreferenciasView.as_view(), name='preferencias-tabelas'),
 
     path('gestao/central/', admin_area.central_administrativa, name='admin_central'),
+    path(
+        'gestao/central/projetos-bancos/', admin_area.railway_pool_list,
+        name='admin_railway_pool_list',
+    ),
     path('gestao/parametros/', parametros_views.parametros_sistema, name='admin_parametros'),
     path('gestao/parametros/sincronizar-focus/', parametros_views.api_sincronizar_focus, name='admin_parametros_sincronizar_focus'),
     path('gestao/parametros/revelar-segredo/', parametros_views.api_revelar_segredo, name='admin_parametros_revelar_segredo'),

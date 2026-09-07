@@ -5,7 +5,7 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -23,7 +23,9 @@ from apps.core.constants.segmentos import SEGMENTOS
 from apps.core.services.modulos import (
     modulos_de_verticais, modulos_disponiveis, modulos_para_admin,
 )
-from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
+from apps.core.models import (
+    Empresa, Filial, PerfilAcesso, Permissao, RailwayProjectPool, Usuario,
+)
 from apps.core.services.imagem_filial import preparar_imagem_filial
 from apps.core.views.audit import core_log_context
 from apps.core.views._admin import admin_area_required, superuser_required
@@ -249,6 +251,28 @@ def central_administrativa(request):
         'modulos_verticais': modulos_de_verticais(
             filial_selecionada.empresa if filial_selecionada else None
         ),
+    })
+
+
+@superuser_required
+def railway_pool_list(request):
+    """Painel sem segredos para capacidade dos projetos de bancos."""
+    if request.method == 'POST':
+        pool = get_object_or_404(RailwayProjectPool, pk=request.POST.get('pool_id'))
+        from apps.core.services.railway_pool_service import RailwayPoolService
+
+        ok, message = RailwayPoolService.validate_and_activate(pool)
+        (messages.success if ok else messages.error)(request, message)
+        return redirect('core:admin_railway_pool_list')
+
+    pools = RailwayProjectPool.objects.annotate(
+        total_bancos=Count('bancos'),
+    ).order_by('prioridade', 'nome')
+    return render(request, 'core/admin/railway_pool_list.html', {
+        'pools': pools,
+        'multi_project_enabled': settings.RAILWAY_MULTI_PROJECT_ENABLED,
+        'page_title': 'Projetos de Bancos',
+        'central_url': reverse('core:admin_central'),
     })
 
 

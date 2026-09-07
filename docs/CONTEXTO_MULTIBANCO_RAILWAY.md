@@ -6,6 +6,11 @@
 > domínios ou armazenamento, leia este arquivo inteiro e confirme o estado ao
 > vivo. Nunca copie senhas, tokens, certificados ou URLs de banco para o Git.
 
+Para a expansão futura com um PostgreSQL e um volume por empresa distribuídos
+em vários projetos Railway, leia também
+`docs/ARQUITETURA_RAILWAY_MULTIPROJETO.md`. Essa fundação é controlada pela flag
+`RAILWAY_MULTI_PROJECT_ENABLED` e nasce desligada.
+
 ## Objetivo do trabalho
 
 O objetivo foi levar ao iTed Comercial a arquitetura multibanco que existia no

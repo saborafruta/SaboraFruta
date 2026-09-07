@@ -4,7 +4,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from apps.core.models import (
     Empresa, Filial, LogAcesso, LogSistema, PerfilAcesso, Permissao, RegistroAuditoria,
     PoliticaReplicacao, PoliticaReplicacaoFilial, SessaoUsuario, Usuario,
-    UsuarioFilialAcesso, EmpresaBanco,
+    UsuarioFilialAcesso, EmpresaBanco, RailwayProjectPool,
 )
 
 
@@ -19,18 +19,47 @@ class EmpresaAdmin(admin.ModelAdmin):
 class EmpresaBancoAdmin(admin.ModelAdmin):
     list_display = [
         'empresa', 'db_alias', 'status', 'provisionamento_modo',
-        'railway_database_service_name', 'ultima_verificacao_em',
+        'railway_project_pool', 'railway_database_service_name', 'ultima_verificacao_em',
     ]
-    list_filter = ['status', 'provisionamento_modo', 'ativo']
+    list_filter = ['status', 'provisionamento_modo', 'railway_project_pool', 'ativo']
     search_fields = [
         'empresa__razao_social', 'empresa__nome_fantasia', 'empresa__cnpj',
         'db_alias', 'railway_database_service_name',
     ]
-    autocomplete_fields = ['empresa']
+    autocomplete_fields = ['empresa', 'railway_project_pool']
     readonly_fields = [
         'provisionamento_solicitado_em', 'provisionado_em',
         'ultima_migracao_em', 'ultima_verificacao_em', 'ultimo_erro',
     ]
+
+
+@admin.register(RailwayProjectPool)
+class RailwayProjectPoolAdmin(admin.ModelAdmin):
+    list_display = [
+        'nome', 'connection_mode', 'status', 'prioridade', 'capacidade_operacional',
+        'ultimo_total_volumes', 'vagas_estimadas', 'ultima_verificacao_em', 'ativo',
+    ]
+    list_filter = ['connection_mode', 'status', 'ativo']
+    search_fields = ['nome', 'railway_project_id', 'railway_environment_id']
+    readonly_fields = ['ultimo_total_volumes', 'ultima_verificacao_em', 'ultimo_erro']
+    actions = ['validar_e_ativar']
+
+    @admin.action(description='Validar capacidade e ativar projetos selecionados')
+    def validar_e_ativar(self, request, queryset):
+        from apps.core.services.railway_pool_service import RailwayPoolService
+
+        sucessos = 0
+        erros = []
+        for pool in queryset:
+            ok, message = RailwayPoolService.validate_and_activate(pool)
+            if ok:
+                sucessos += 1
+            else:
+                erros.append(f'{pool.nome}: {message}')
+        if sucessos:
+            self.message_user(request, f'{sucessos} projeto(s) validado(s) e ativado(s).')
+        for error in erros:
+            self.message_user(request, error, level='error')
 
 
 @admin.register(Filial)
