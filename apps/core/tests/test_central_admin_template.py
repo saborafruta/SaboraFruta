@@ -12,6 +12,7 @@ class CentralAdminTemplateTests(SimpleTestCase):
         cls.source = Path(
             'apps/core/templates/core/admin/central.html'
         ).read_text(encoding='utf-8')
+        cls.base_source = Path('templates/_base.html').read_text(encoding='utf-8')
 
     def test_cabecalho_expoe_acessos_globais(self):
         for label in (
@@ -39,3 +40,11 @@ class CentralAdminTemplateTests(SimpleTestCase):
         self.assertLess(selection_start, modules_button)
         self.assertLess(modules_button, empty_selection)
         self.assertNotIn('Vertical de cada empresa', self.source)
+
+    def test_filiais_sao_filtradas_pela_empresa_escolhida(self):
+        self.assertIn('data-empresa=', self.source)
+        self.assertIn('filialPertence($el.dataset.empresa)', self.source)
+        self.assertIn('selecionarEmpresa(', self.source)
+        self.assertIn("this.filial = '';", self.base_source)
+        self.assertIn('filialPertence: function(empresaDaFilial)', self.base_source)
+        self.assertIn(':disabled="!empresa.trim()"', self.source)

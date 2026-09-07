@@ -1041,14 +1041,45 @@
           this.openFilial = false;
         },
         abrirFilial: function(event) {
+          if (!this.empresa.trim()) {
+            this.openFilial = false;
+            return;
+          }
           this.openFilial = true;
           this.openEmpresa = false;
+        },
+        selecionarEmpresa: function(nome) {
+          if (this.normalizar(this.empresa) !== this.normalizar(nome)) {
+            this.filial = '';
+          }
+          this.empresa = nome;
+          this.openEmpresa = false;
+          this.openFilial = false;
+        },
+        empresaAlterada: function(event) {
+          this.filial = '';
+          this.abrirEmpresa(event);
+        },
+        selecionarFilial: function(nome) {
+          this.filial = nome;
+          this.openFilial = false;
+        },
+        normalizar: function(valor) {
+          return (valor || '').trim().toLocaleLowerCase('pt-BR');
+        },
+        filialPertence: function(empresaDaFilial) {
+          return Boolean(this.empresa.trim())
+            && this.normalizar(empresaDaFilial) === this.normalizar(this.empresa);
         },
         alternarEmpresa: function(event) {
           this.openEmpresa = !this.openEmpresa;
           if (this.openEmpresa) this.openFilial = false;
         },
         alternarFilial: function(event) {
+          if (!this.empresa.trim()) {
+            this.openFilial = false;
+            return;
+          }
           this.openFilial = !this.openFilial;
           if (this.openFilial) this.openEmpresa = false;
         }
