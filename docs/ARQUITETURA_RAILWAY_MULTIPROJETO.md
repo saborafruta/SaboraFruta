@@ -1,8 +1,8 @@
 # Arquitetura Railway multiprojeto para bancos dedicados
 
-> Estado em 07/09/2026: fundação implementada no código, com ativação protegida
+> Estado em 07/09/2026: fundação publicada em produção, com ativação protegida
 > pela variável `RAILWAY_MULTI_PROJECT_ENABLED`. Nenhum projeto, banco, volume,
-> TCP Proxy ou credencial de produção foi criado por esta implementação local.
+> TCP Proxy ou credencial adicional foi criado durante esta implantação.
 > Leia também `docs/CONTEXTO_MULTIBANCO_RAILWAY.md` antes de operar o Railway.
 
 ## Objetivo e decisão arquitetural
@@ -194,8 +194,27 @@ Critério final para liberar o primeiro projeto remoto:
 - [x] painel de capacidade na Central e ação de validação;
 - [x] feature flag desligada por padrão;
 - [x] testes automatizados da fundação;
+- [x] fundação publicada no iTed e no Sabor a Fruta sem ativar o recurso;
 - [ ] homologação real em segundo projeto de stage;
 - [ ] ativação em produção.
 
 Os dois últimos itens dependem da criação deliberada de um segundo projeto e de
 um tenant canário. A ausência deles não altera o funcionamento atual.
+
+### Registro da publicação de 07/09/2026
+
+- commit funcional: `c29969832581679e861266da8c4831a7578f5a83`;
+- deployment iTed: `696b0839-db71-4219-b4a7-3bbcff943996` — `SUCCESS`;
+- deployment Sabor a Fruta: `fb3262f0-9f1d-4322-9126-2cf47cad2005` — `SUCCESS`;
+- `https://ited.app.br/health/`: HTTP 200, banco e media saudáveis;
+- `https://saborafruta-production.up.railway.app/health/`: HTTP 200, banco e
+  media saudáveis;
+- iTed: flag desligada, um pool principal inativo e dois bancos existentes
+  associados ao pool;
+- iTed: `check_tenant_databases` aprovou as conexões de iTed e Eureka;
+- Sabor a Fruta: flag e roteamento multibanco desligados, nenhum pool criado.
+
+O Railway também avisou que o Config as Code legado (`railway.toml`) continuará
+funcionando apenas até 01/12/2026. Migrar para o novo Infrastructure as Code é
+uma manutenção separada; não misturar essa migração com a ativação do primeiro
+pool remoto.
