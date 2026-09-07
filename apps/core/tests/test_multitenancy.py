@@ -244,6 +244,33 @@ class MultitenancyFoundationTests(TestCase):
         TENANT_PUBLIC_LINK_ROUTING_READY=True,
         TENANT_BACKGROUND_TASKS_READY=True,
     )
+    def test_middleware_recupera_sessao_antiga_de_superadmin_central(self):
+        self.usuario.is_superuser = True
+        self.usuario.is_staff = True
+        self.usuario.save(update_fields=['is_superuser', 'is_staff'])
+        request = RequestFactory().get('/auth/selecionar-filial/')
+        request.session = {'tenant_db_alias': self.banco.db_alias}
+        request.user = SimpleLazyObject(lambda: self.usuario)
+
+        with (
+            patch(
+                'apps.core.middleware.tenant.register_tenant_database',
+                return_value=True,
+            ),
+            patch.object(Usuario.objects, 'using') as using,
+        ):
+            response = TenantContextMiddleware(lambda req: req.user)(request)
+
+        self.assertIs(response, request.user)
+        self.assertEqual(request.user.pk, self.usuario.pk)
+        self.assertEqual(request.session['auth_database_alias'], 'default')
+        using.assert_not_called()
+
+    @override_settings(
+        TENANT_DATABASE_ROUTING_ENABLED=True,
+        TENANT_PUBLIC_LINK_ROUTING_READY=True,
+        TENANT_BACKGROUND_TASKS_READY=True,
+    )
     def test_rota_central_preserva_alias_sem_ativar_contexto(self):
         request = RequestFactory().get('/admin/')
         request.session = {'tenant_db_alias': self.banco.db_alias}

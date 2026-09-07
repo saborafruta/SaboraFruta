@@ -73,6 +73,17 @@ class TenantContextMiddleware:
         # usuário homônimo do banco operacional.
         if alias:
             request.user.is_authenticated
+            # Sessões de super administradores criadas antes da ativação do
+            # multibanco ainda não possuem ``auth_database_alias``. Como o
+            # LazyUser foi resolvido acima enquanto o router apontava para o
+            # gerencial, podemos reconhecê-las com segurança e atualizar a
+            # sessão sem obrigar o usuário a sair e entrar novamente.
+            if (
+                request.user.is_authenticated
+                and request.user.is_superuser
+                and request.user._state.db == 'default'
+            ):
+                request.session[AUTH_DATABASE_SESSION_KEY] = 'default'
 
         # O superusuário continua autenticado pelo banco gerencial.
         if request.session.get(AUTH_DATABASE_SESSION_KEY) == 'default':
