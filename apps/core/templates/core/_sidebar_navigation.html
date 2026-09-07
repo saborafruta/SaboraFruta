@@ -422,6 +422,7 @@
       {% url 'logistica:pedido-expedicao-list' as pedido_expedicao_url %}
       {% url 'pdv:home' as pdv_url %}
       {% url 'pdv:delivery' as delivery_url %}
+      {% url 'pdv:pre_venda_nova' as pre_venda_url %}
       {% url 'fiscal:consultas-cnpj' as fiscal_consultas_url %}
       {% url 'qualidade:analise_list' as qualidade_url %}
       {% url 'analytics:operacional' as analytics_url %}
@@ -758,6 +759,23 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 17h8M5 17h.01M19 17h.01M3 7h11v10H3V7zm11 3h3l4 4v3h-7v-7z"/>
         </svg>
         <span x-show="!collapsed">Delivery</span>
+      </a>
+
+      {% comment %}
+        PRÉ-VENDA: para quem está batendo porta, sem caixa nenhum atrás.
+        Mesmo padrão visual de PDV/Delivery, um item a mais no menu -- não
+        um submenu, porque é a ÚNICA tela desse fluxo.
+      {% endcomment %}
+      <a href="{{ pre_venda_url }}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="{% if '/pdv/pre-venda/' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
+         {% if '/pdv/pre-venda/' not in request.path %}@mouseenter="$el.style.background=temaClaro?'#eff6ff':'#242426'; $el.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" @mouseleave="$el.style.background='transparent'; $el.style.color=temaClaro?'#6b7280':'#f8fafc'; $el.style.fontWeight='';"{% endif %}
+         title="Pré-venda — vendedor externo">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a4 4 0 10-4-4"/>
+        </svg>
+        <span x-show="!collapsed">Pré-venda</span>
       </a>
 
       <!-- Qualidade -->

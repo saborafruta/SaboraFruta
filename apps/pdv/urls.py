@@ -11,6 +11,9 @@ urlpatterns = [
     path("", pdv.pdv_home, name="home"),
     path("vendas/", pdv.vendas_list, name="vendas_list"),
     path("orcamentos/", pdv.orcamentos_list, name="orcamentos_list"),
+    # Pré-venda — vendedor externo, sem caixa, sem pagamento
+    path("pre-venda/nova/", pdv.pre_venda_nova, name="pre_venda_nova"),
+    path("api/pre-venda/criar/", pdv.api_pre_venda_criar, name="api_pre_venda_criar"),
     # Busca
     path("api/produtos/", pdv.buscar_produto, name="api_produtos"),
     path("api/clientes/", pdv.buscar_cliente, name="api_clientes"),

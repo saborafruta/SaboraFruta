@@ -1370,6 +1370,85 @@ def api_venda_pendente(request):
 
 
 # ---------------------------------------------------------------------------
+# Pré-venda — vendedor externo, sem caixa, sem pagamento
+# ---------------------------------------------------------------------------
+# CAI NA MESMA FILA DE PENDENTES do PDV -- não é uma tela paralela com
+# consulta própria. `status='aberta'` é o mesmo estado que "Salvar
+# Pendente" já usa, e `api_pendentes` já filtra só por filial (nunca por
+# sessão), então uma pré-venda sem caixa nenhum já aparece lá para
+# QUALQUER UM com acesso ao PDV retomar e finalizar. A única diferença
+# real é que aqui não existe caixa aberto -- o vendedor externo não está
+# atrás de um PDV físico -- e por isso `sessao_pdv` fica None e a criação
+# não depende de `_sessao_aberta`.
+#
+# NÃO MEXE EM ESTOQUE. `_criar_item_rascunho` só grava o item como
+# intenção -- a baixa de verdade só acontece quando alguém retoma esta
+# pré-venda pela tela normal do PDV e finaliza com pagamento, no momento
+# da entrega.
+
+@requer_permissao('pdv', 'criar')
+def pre_venda_nova(request):
+    return render(request, "pdv/pre_venda_form.html", {
+        "title": "Nova Pré-venda",
+    })
+
+
+@requer_permissao('pdv', 'criar')
+@require_POST
+def api_pre_venda_criar(request):
+    try:
+        body = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"erro": "JSON inválido."}, status=400)
+
+    itens = body.get("itens", [])
+    if not itens:
+        return JsonResponse({"erro": "Adicione ao menos um item."}, status=400)
+
+    cliente_id = body.get("cliente_id")
+    if not cliente_id:
+        # Pré-venda é dirigida a alguém que o vendedor visitou -- ao
+        # contrário de uma venda de balcão, não faz sentido sair sem
+        # destinatário: é para esse cliente que a entrega vai acontecer.
+        return JsonResponse({"erro": "Selecione o cliente da pré-venda."}, status=400)
+
+    try:
+        with transaction.atomic():
+            numero = _proximo_numero_venda(request.filial_ativa)
+            venda = VendaPDV.objects.create(
+                sessao_pdv=None,
+                filial=request.filial_ativa,
+                numero_venda=numero,
+                cliente_id=cliente_id,
+                status="aberta",
+                origem="pre_venda",
+                observacao=body.get("observacao", ""),
+                usuario=request.user,
+                data_venda=timezone.now(),
+            )
+
+            subtotal = Decimal("0")
+            for idx, item in enumerate(itens, start=1):
+                produto = (
+                    Produto.objects.for_filial(request.filial_ativa)
+                    .select_related("unidade_medida").get(id=int(item["produto_id"]), ativo=True)
+                )
+                item_salvo = _criar_item_rascunho(venda, produto, item, idx)
+                subtotal += item_salvo.valor_total
+
+            venda.valor_subtotal = subtotal
+            venda.valor_total = subtotal
+            venda.save(update_fields=["valor_subtotal", "valor_total"])
+
+    except Produto.DoesNotExist:
+        return JsonResponse({"erro": "Produto não encontrado."}, status=404)
+    except Exception as exc:
+        return JsonResponse({"erro": str(exc)}, status=500)
+
+    return JsonResponse({"ok": True, "numero_venda": venda.numero_venda, "venda_id": venda.id})
+
+
+# ---------------------------------------------------------------------------
 # API — Listar pendentes
 # ---------------------------------------------------------------------------
 
