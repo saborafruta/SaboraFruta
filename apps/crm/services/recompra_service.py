@@ -452,16 +452,17 @@ class RecompraService:
             return False
 
         limite = timezone.now() - timedelta(hours=horas)
+        db_alias = filial._state.db or 'default'
         try:
-            with transaction.atomic():
+            with transaction.atomic(using=db_alias):
                 controle = (
-                    RecompraControle.objects
+                    RecompraControle.objects.using(db_alias)
                     .select_for_update(skip_locked=True)
                     .filter(empresa_id=filial.empresa_id)
                     .first()
                 )
                 if controle is None:
-                    controle, criado = RecompraControle.objects.get_or_create(
+                    controle, criado = RecompraControle.objects.using(db_alias).get_or_create(
                         empresa_id=filial.empresa_id,
                     )
                     if not criado:
@@ -472,7 +473,10 @@ class RecompraService:
 
                 cls.recalcular(filial)
                 controle.ultima_execucao = timezone.now()
-                controle.save(update_fields=['ultima_execucao', 'updated_at'])
+                controle.save(
+                    using=db_alias,
+                    update_fields=['ultima_execucao', 'updated_at'],
+                )
                 return True
         except Exception:
             # Dados levemente defasados são muito melhores que uma tela que
