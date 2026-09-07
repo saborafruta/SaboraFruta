@@ -1,7 +1,10 @@
+import os
+from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
 from django.core.exceptions import ImproperlyConfigured
+from django.core.management import call_command
 from django.contrib.sessions.models import Session
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils.functional import SimpleLazyObject
@@ -288,3 +291,23 @@ class MultitenancyFoundationTests(TestCase):
         self.assertIs(request._tenant_authenticated_user, tenant_user)
         self.assertEqual(request.session['tenant_db_alias'], self.banco.db_alias)
         logs.using.assert_called_once_with(self.banco.db_alias)
+
+    @override_settings(TENANT_DATABASE_ROUTING_ENABLED=True)
+    def test_nova_empresa_recebe_admin_local_e_nao_superusuario_global(self):
+        with patch.dict(os.environ, {'ADMIN_SENHA': 'Senha-Forte-9876'}):
+            call_command(
+                'criar_empresa_admin',
+                cnpj='11222333000181',
+                razao_social='Empresa Nova LTDA',
+                nome_fantasia='Empresa Nova',
+                uf='RN',
+                cidade='Natal',
+                admin_email='admin-nova@example.com',
+                admin_nome='Admin Nova',
+                stdout=StringIO(),
+            )
+
+        usuario = Usuario.objects.get(email='admin-nova@example.com')
+        self.assertTrue(usuario.perfil.is_admin)
+        self.assertFalse(usuario.is_superuser)
+        self.assertFalse(usuario.is_staff)
