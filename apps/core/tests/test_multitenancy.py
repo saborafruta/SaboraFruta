@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, Mock, patch
 from django.core.exceptions import ImproperlyConfigured
 from django.contrib.sessions.models import Session
 from django.test import RequestFactory, TestCase, override_settings
+from django.utils.functional import SimpleLazyObject
 
 from apps.core.db_router import TenantDatabaseRouter
 from apps.core.middleware.tenant import TenantContextMiddleware
@@ -210,7 +211,13 @@ class MultitenancyFoundationTests(TestCase):
     def test_middleware_substitui_usuario_central_pelo_usuario_do_tenant(self):
         request = RequestFactory().get('/dashboard/')
         request.session = {'tenant_db_alias': self.banco.db_alias}
-        request.user = self.usuario
+        contextos_ao_carregar_sessao = []
+
+        def carregar_usuario_central():
+            contextos_ao_carregar_sessao.append(get_current_tenant_db())
+            return self.usuario
+
+        request.user = SimpleLazyObject(carregar_usuario_central)
         tenant_user = Mock(email=self.usuario.email, is_authenticated=True)
         tenant_manager = Mock()
         tenant_manager.get.return_value = tenant_user
@@ -226,6 +233,7 @@ class MultitenancyFoundationTests(TestCase):
 
         self.assertIs(response, tenant_user)
         self.assertIs(request.user, tenant_user)
+        self.assertEqual(contextos_ao_carregar_sessao, [None])
 
     @override_settings(
         TENANT_DATABASE_ROUTING_ENABLED=True,
