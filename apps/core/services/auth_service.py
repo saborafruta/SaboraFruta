@@ -34,10 +34,11 @@ class AuthService:
             request.tenant_db_alias = None
 
         with tenant_db(tenant_alias):
-            user = authenticate(request, username=email, password=senha)
-        if user is None:
+            authenticated_user = authenticate(request, username=email, password=senha)
+        if authenticated_user is None:
             cls._registrar_falha(request, email, tenant_alias)
             raise DadosInvalidosError('E-mail ou senha incorretos.')
+        user = authenticated_user
         if not user.ativo:
             raise DadosInvalidosError('Usuário desativado. Contate o administrador.')
         if user.bloqueado_ate and user.bloqueado_ate > timezone.now():
@@ -46,7 +47,7 @@ class AuthService:
                 f'Usuário bloqueado por tentativas inválidas. Tente novamente em {minutos} minuto(s).'
             )
 
-        if user.is_superuser:
+        if user.is_superuser and not tenant_alias:
             request.session[AUTH_DATABASE_SESSION_KEY] = 'default'
         else:
             request.session.pop(AUTH_DATABASE_SESSION_KEY, None)
@@ -66,6 +67,12 @@ class AuthService:
             user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
             sucesso=True,
         )
+        if tenant_alias:
+            # A sessão Django referencia sempre o usuário do diretório central.
+            # O middleware troca esse objeto pelo homônimo do tenant durante a
+            # requisição operacional. Isso evita colisões de PK entre bancos.
+            request._tenant_authenticated_user = authenticated_user
+            user = Usuario.objects.using('default').get(email__iexact=email)
         return user
 
     @staticmethod
@@ -121,7 +128,14 @@ class AuthService:
 
     @staticmethod
     def trocar_filial(request, filial_id: int) -> Filial:
-        manager = Filial.objects.using('default') if settings.TENANT_DATABASE_ROUTING_ENABLED else Filial.objects
+        tenant_alias = getattr(request, 'tenant_db_alias', None)
+        is_global_admin = (
+            request.session.get(AUTH_DATABASE_SESSION_KEY) == 'default'
+            and request.user.is_superuser
+            and request.user._state.db == 'default'
+        )
+        lookup_alias = 'default' if is_global_admin else (tenant_alias or 'default')
+        manager = Filial.objects.using(lookup_alias)
         try:
             filial = manager.get(pk=filial_id, ativo=True, empresa__ativo=True)
         except Filial.DoesNotExist:
@@ -130,20 +144,30 @@ class AuthService:
             raise PermissaoNegadaError('Você não tem acesso a essa filial.')
 
         if settings.TENANT_DATABASE_ROUTING_ENABLED:
-            banco = (
-                EmpresaBanco.objects.using('default')
-                .filter(
+            if tenant_alias and not is_global_admin:
+                banco = EmpresaBanco.objects.using('default').filter(
+                    db_alias=tenant_alias,
+                    ativo=True,
+                    status=EmpresaBanco.Status.ATIVO,
+                ).first()
+            else:
+                banco = EmpresaBanco.objects.using('default').filter(
                     empresa_id=filial.empresa_id,
                     ativo=True,
                     status=EmpresaBanco.Status.ATIVO,
-                )
-                .first()
-            )
+                ).first()
             if not banco or not register_tenant_database(banco):
                 raise DadosInvalidosError('Esta empresa não possui banco ativo para acesso.')
             request.session['tenant_db_alias'] = banco.db_alias
             request.tenant_db_alias = banco.db_alias
-        if request.user.is_superuser:
+            if is_global_admin:
+                try:
+                    filial = Filial.objects.using(banco.db_alias).get(cnpj=filial.cnpj)
+                except Filial.DoesNotExist as exc:
+                    raise DadosInvalidosError(
+                        'A filial ainda não foi localizada no banco da empresa.'
+                    ) from exc
+        if is_global_admin:
             request.session[AUTH_DATABASE_SESSION_KEY] = 'default'
         request.session['filial_ativa_id'] = filial.pk
         return filial

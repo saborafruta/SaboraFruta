@@ -11,6 +11,7 @@ from apps.core.models import (
     Empresa, EmpresaBanco, Filial, PerfilAcesso, TenantPublicLink, Usuario,
 )
 from apps.core.services.empresa_banco_service import EmpresaBancoService
+from apps.core.services.auth_service import AuthService
 from apps.core.services.tenant_public_link_service import TenantPublicLinkService
 from apps.core.services.tenant_task_service import TenantTaskService
 from apps.core.tenant_context import get_current_tenant_db, tenant_db
@@ -200,3 +201,82 @@ class MultitenancyFoundationTests(TestCase):
         callback.assert_called_once_with()
         conexao.close.assert_called_once_with()
         self.assertIsNone(get_current_tenant_db())
+
+    @override_settings(
+        TENANT_DATABASE_ROUTING_ENABLED=True,
+        TENANT_PUBLIC_LINK_ROUTING_READY=True,
+        TENANT_BACKGROUND_TASKS_READY=True,
+    )
+    def test_middleware_substitui_usuario_central_pelo_usuario_do_tenant(self):
+        request = RequestFactory().get('/dashboard/')
+        request.session = {'tenant_db_alias': self.banco.db_alias}
+        request.user = self.usuario
+        tenant_user = Mock(email=self.usuario.email, is_authenticated=True)
+        tenant_manager = Mock()
+        tenant_manager.get.return_value = tenant_user
+
+        with (
+            patch(
+                'apps.core.middleware.tenant.register_tenant_database',
+                return_value=True,
+            ),
+            patch.object(Usuario.objects, 'using', return_value=tenant_manager),
+        ):
+            response = TenantContextMiddleware(lambda req: req.user)(request)
+
+        self.assertIs(response, tenant_user)
+        self.assertIs(request.user, tenant_user)
+
+    @override_settings(
+        TENANT_DATABASE_ROUTING_ENABLED=True,
+        TENANT_PUBLIC_LINK_ROUTING_READY=True,
+        TENANT_BACKGROUND_TASKS_READY=True,
+    )
+    def test_rota_central_preserva_alias_sem_ativar_contexto(self):
+        request = RequestFactory().get('/admin/')
+        request.session = {'tenant_db_alias': self.banco.db_alias}
+        request.user = self.usuario
+
+        response = TenantContextMiddleware(
+            lambda req: get_current_tenant_db(),
+        )(request)
+
+        self.assertIsNone(response)
+        self.assertEqual(request.session['tenant_db_alias'], self.banco.db_alias)
+
+    @override_settings(TENANT_DATABASE_ROUTING_ENABLED=True)
+    def test_login_tenant_mantem_sessao_no_usuario_do_diretorio_central(self):
+        request = RequestFactory().post('/auth/login/')
+        request.session = {}
+        request.tenant_db_alias = None
+        tenant_user = Mock(
+            pk=101,
+            email='tenant@example.com',
+            ativo=True,
+            bloqueado_ate=None,
+            filial=None,
+            filial_id=None,
+            is_superuser=False,
+        )
+        central_user = Mock(pk=999, email=tenant_user.email, is_superuser=False)
+        default_manager = Mock()
+        default_manager.get.return_value = central_user
+
+        with (
+            patch.object(
+                AuthService,
+                '_resolver_tenant_por_email',
+                return_value=self.banco.db_alias,
+            ),
+            patch('apps.core.services.auth_service.authenticate', return_value=tenant_user),
+            patch('apps.core.services.auth_service.get_client_ip', return_value='127.0.0.1'),
+            patch.object(Usuario.objects, 'using') as using,
+            patch('apps.core.services.auth_service.LogAcesso.objects') as logs,
+        ):
+            using.side_effect = lambda alias: default_manager if alias == 'default' else Mock()
+            user = AuthService.login(request, tenant_user.email, 'senha')
+
+        self.assertIs(user, central_user)
+        self.assertIs(request._tenant_authenticated_user, tenant_user)
+        self.assertEqual(request.session['tenant_db_alias'], self.banco.db_alias)
+        logs.using.assert_called_once_with(self.banco.db_alias)
