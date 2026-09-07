@@ -122,3 +122,85 @@ class ListaDeRomaneiosTests(TestCase):
 
         for resto in ('{#', '#}', '{%', '%}'):
             self.assertNotIn(resto, html, 'vazou sintaxe de template no HTML')
+
+
+class ExcluirRomaneioTests(TestCase):
+    """
+    Excluir apaga o romaneio (e as entregas junto, via cascata). Em rota ou
+    entregue vira historico de operacao -- ai' a saida e' cancelar, nao
+    excluir, mesma regra do Pedido de Expedicao.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.empresa = Empresa.objects.create(
+            razao_social='Carga LTDA', nome_fantasia='Carga',
+            cnpj='73345678000191', segmento='polpa_frutas',
+            regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        cls.filial = Filial.objects.create(
+            empresa=cls.empresa, razao_social='Matriz', cnpj='73345678000272',
+            uf='RN', cidade='Natal', is_matriz=True,
+        )
+        perfil = PerfilAcesso.objects.create(
+            empresa=cls.empresa, nome='Admin', is_admin=True,
+        )
+        cls.usuario = Usuario.objects.create_user(
+            email='exclui-carga@doca.local', nome='Carga', password='x' * 12,
+            empresa=cls.empresa, perfil=perfil, filial=cls.filial,
+        )
+
+    def setUp(self):
+        self.client.force_login(self.usuario)
+
+    def _romaneio(self, numero=1, status=RomaneioCarga.Status.RASCUNHO):
+        return RomaneioCarga.objects.create(
+            filial=self.filial, numero=numero, data=timezone.localdate(),
+            status=status, motorista_nome='Seu Zé', veiculo_placa='ABC1D23',
+        )
+
+    def test_exclui_romaneio_em_rascunho(self):
+        romaneio = self._romaneio(status=RomaneioCarga.Status.RASCUNHO)
+
+        resposta = self.client.post(
+            reverse('logistica:romaneio-delete', args=[romaneio.pk])
+        )
+
+        self.assertRedirects(resposta, reverse('logistica:romaneio-list'))
+        self.assertFalse(RomaneioCarga.objects.filter(pk=romaneio.pk).exists())
+
+    def test_exclui_romaneio_cancelado(self):
+        romaneio = self._romaneio(status=RomaneioCarga.Status.CANCELADO)
+
+        self.client.post(reverse('logistica:romaneio-delete', args=[romaneio.pk]))
+
+        self.assertFalse(RomaneioCarga.objects.filter(pk=romaneio.pk).exists())
+
+    def test_recusa_excluir_romaneio_em_rota(self):
+        romaneio = self._romaneio(status=RomaneioCarga.Status.EM_ROTA)
+
+        resposta = self.client.post(
+            reverse('logistica:romaneio-delete', args=[romaneio.pk])
+        )
+
+        self.assertRedirects(resposta, reverse('logistica:romaneio-list'))
+        self.assertTrue(RomaneioCarga.objects.filter(pk=romaneio.pk).exists())
+
+    def test_recusa_excluir_romaneio_entregue(self):
+        romaneio = self._romaneio(status=RomaneioCarga.Status.ENTREGUE)
+
+        self.client.post(reverse('logistica:romaneio-delete', args=[romaneio.pk]))
+
+        self.assertTrue(RomaneioCarga.objects.filter(pk=romaneio.pk).exists())
+
+    def test_lista_mostra_botao_excluir_so_para_status_nao_bloqueados(self):
+        bloqueado = self._romaneio(numero=1, status=RomaneioCarga.Status.EM_ROTA)
+        liberado = self._romaneio(numero=2, status=RomaneioCarga.Status.CANCELADO)
+
+        html = self.client.get(reverse('logistica:romaneio-list')).content.decode()
+
+        url_bloqueado = reverse('logistica:romaneio-delete', args=[bloqueado.pk])
+        url_liberado = reverse('logistica:romaneio-delete', args=[liberado.pk])
+        self.assertNotIn(url_bloqueado, html)
+        self.assertIn(url_liberado, html)

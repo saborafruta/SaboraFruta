@@ -363,6 +363,35 @@ class RomaneioAlterarStatusView(PermissaoRequiredMixin, View):
         return redirect(next_url)
 
 
+class RomaneioCargaDeleteView(PermissaoRequiredMixin, View):
+    """Exclui um romaneio. Os itens vão junto (FK em cascata)."""
+
+    permissao_modulo = "logistica"
+    permissao_acao = "excluir"
+
+    # Depois que o caminhao sai (em_rota) ou entrega (entregue), o romaneio
+    # virou historico de operacao -- apagar isso perderia o registro de
+    # quem saiu, quando e com o que. A saida daqui pra frente e' cancelar,
+    # nao excluir (mesma regra do Pedido de Expedicao).
+    STATUS_BLOQUEADOS = (RomaneioCarga.Status.EM_ROTA, RomaneioCarga.Status.ENTREGUE)
+
+    def post(self, request, pk):
+        romaneio = get_object_or_404(RomaneioCarga.objects.for_filial(_filial(request)), pk=pk)
+        if romaneio.status in self.STATUS_BLOQUEADOS:
+            messages.error(
+                request,
+                f"Romaneio #{romaneio.numero:06d} já está "
+                f"{romaneio.get_status_display().lower()} e não pode ser excluído. "
+                f"Use o cancelamento para encerrá-lo sem perder o histórico.",
+            )
+            return redirect("logistica:romaneio-list")
+
+        numero = romaneio.numero
+        romaneio.delete()
+        messages.success(request, f"Romaneio #{numero:06d} excluído.")
+        return redirect("logistica:romaneio-list")
+
+
 class ItemRomaneioCreateView(PermissaoRequiredMixin, View):
     permissao_modulo = "logistica"
     permissao_acao = "editar"
