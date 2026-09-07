@@ -40,6 +40,7 @@ ROTAS_PRONTAS: list = [
     path('recebimento/romaneios/<int:pk>/aprovar/', vrec.AprovarView.as_view(), name='recebimento-aprovar'),
     path('recebimento/romaneios/<int:pk>/recusar/', vrec.RecusarView.as_view(), name='recebimento-recusar'),
     path('recebimento/romaneios/<int:pk>/cancelar/', vrec.CancelarView.as_view(), name='recebimento-cancelar'),
+    path('recebimento/romaneios/<int:pk>/excluir/', vrec.RecebimentoDeleteView.as_view(), name='recebimento-delete'),
 
     # A lista de recusas é a MESMA fila, filtrada — e não uma tela paralela
     # que amanhã mostraria outra contagem da mesma coisa.

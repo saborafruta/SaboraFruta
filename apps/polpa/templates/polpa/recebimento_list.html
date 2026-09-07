@@ -9,7 +9,7 @@
   alcance sem rolar. Carga parada é fruta esquentando — por isso a coluna
   de situação é a mais destacada da tabela.
 {% endcomment %}
-<div class="space-y-4" x-data="{ cancelar: null }">
+<div class="space-y-4" x-data="{ cancelar: null, excluir: null }">
 
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
@@ -104,7 +104,7 @@
                 :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor</th>
             <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
                 :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
-            {% if pode_agir or pode_cancelar %}
+            {% if pode_agir or pode_cancelar or pode_excluir %}
               <th class="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide"
                   :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ações</th>
             {% endif %}
@@ -147,7 +147,7 @@
                   <span class="soft-pill is-amber text-xs">{{ r.get_status_display }}</span>
                 {% endif %}
               </td>
-              {% if pode_agir or pode_cancelar %}
+              {% if pode_agir or pode_cancelar or pode_excluir %}
                 <td class="px-4 py-3">
                   <div class="flex items-center justify-end gap-1">
                     {% comment %}
@@ -183,6 +183,21 @@
                         </svg>
                       </button>
                     {% endif %}
+                    {% comment %}
+                      SEM EXCLUIR CARGA QUE JÁ VIROU LOTE, mesma trava do
+                      cancelar: `RecebimentoService.excluir` recusa do mesmo
+                      jeito, e o saldo do estoque ficaria sem de onde veio.
+                    {% endcomment %}
+                    {% if pode_excluir and not r.lote_id %}
+                      <button type="button" class="p-1.5 rounded" style="color:#f87171;"
+                              onmouseover="this.style.background=temaClaro?'#f0f0f0':'#1a1a1a'" onmouseout="this.style.background=''"
+                              title="Excluir romaneio"
+                              @click="excluir = { url: '{% url 'polpa:recebimento-delete' r.pk %}', numero: '#{{ r.numero|stringformat:"05d" }}', produtor: '{{ r.produtor|escapejs }}' }">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                      </button>
+                    {% endif %}
                   </div>
                 </td>
               {% endif %}
@@ -196,7 +211,7 @@
                 se resolve limpando o filtro, fila vazia se resolve abrindo
                 romaneio.
               {% endcomment %}
-              <td colspan="{% if pode_agir or pode_cancelar %}8{% else %}7{% endif %}" class="px-4 py-14 text-center">
+              <td colspan="{% if pode_agir or pode_cancelar or pode_excluir %}8{% else %}7{% endif %}" class="px-4 py-14 text-center">
                 <p class="text-sm max-w-md mx-auto" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
                   {% if tem_filtro %}
                     Nenhuma carga com esse filtro.
@@ -258,6 +273,42 @@
         <button type="button" class="btn-secondary text-sm" @click="cancelar = null">Voltar</button>
         <button type="submit" class="btn-primary text-sm" style="background:#f59e0b; border-color:#f59e0b;">
           Cancelar romaneio
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {% comment %}
+    Excluir: tira a linha de vez -- para o registro digitado errado, sem
+    conserto que valha a pena. Diferente de cancelar, aqui não sobra rastro
+    nenhum na fila; por isso o aviso é mais direto e a cor é vermelha.
+  {% endcomment %}
+  <div x-show="excluir" x-cloak @keydown.escape.window="excluir = null"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background:rgba(0,0,0,.6);" @click.self="excluir = null">
+    <form method="post" :action="excluir?.url" class="card p-6 w-full max-w-md space-y-4">
+      {% csrf_token %}
+      <div class="flex items-start gap-3">
+        <div class="shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
+             style="background:rgba(239,68,68,.14); color:#ef4444;">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Excluir romaneio <span x-text="excluir?.numero"></span>?
+          </h3>
+          <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Produtor: <strong x-text="excluir?.produtor"></strong>.
+            A linha some da lista — sem rastro, diferente de cancelar. Não dá para desfazer.
+          </p>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn-secondary text-sm" @click="excluir = null">Voltar</button>
+        <button type="submit" class="btn-primary text-sm" style="background:#dc2626; border-color:#dc2626;">
+          Excluir romaneio
         </button>
       </div>
     </form>

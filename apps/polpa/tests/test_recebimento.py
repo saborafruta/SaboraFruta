@@ -672,6 +672,81 @@ class AcoesDaFilaTests(PolpaBase):
         self.assertContains(resposta, 'Cancelar romaneio')
 
 
+class ExcluirRomaneioTests(PolpaBase):
+    """
+    Apagar de vez o romaneio digitado errado — sem conserto que valha a
+    pena, diferente de cancelar (que deixa o rastro).
+
+    MESMA TRAVA DO CANCELAR: carga que já virou lote não pode sumir, ou o
+    saldo do estoque fica sem de onde veio.
+    """
+
+    def test_excluir_apaga_a_linha(self):
+        carga = self._carga()
+
+        resposta = self.client.post(
+            reverse('polpa:recebimento-delete', args=[carga.pk]),
+        )
+
+        self.assertRedirects(resposta, reverse('polpa:recebimento-list'))
+        self.assertFalse(Recebimento.objects.filter(pk=carga.pk).exists())
+
+    def test_nao_exclui_carga_que_ja_virou_lote(self):
+        fruta = self._fruta()
+        fruta.produto = self._produto()
+        fruta.save()
+        carga = self._carga(fruta=fruta)
+        RecebimentoService.classificar(
+            carga, {'brix': Decimal('13'), 'impureza': Decimal('2')}, self.usuario,
+        )
+        RecebimentoService.aprovar(carga, self.usuario)
+
+        resposta = self.client.post(
+            reverse('polpa:recebimento-delete', args=[carga.pk]), follow=True,
+        )
+
+        self.assertTrue(Recebimento.objects.filter(pk=carga.pk).exists())
+        avisos = [str(m) for m in resposta.context['messages']]
+        self.assertTrue(any('virou lote' in a for a in avisos), avisos)
+
+    def test_a_fila_so_oferece_excluir_a_quem_tem_a_carga_sem_lote(self):
+        fruta = self._fruta()
+        fruta.produto = self._produto()
+        fruta.save()
+        com_lote = self._carga(fruta=fruta)
+        RecebimentoService.classificar(
+            com_lote, {'brix': Decimal('13'), 'impureza': Decimal('2')}, self.usuario,
+        )
+        RecebimentoService.aprovar(com_lote, self.usuario)
+        sem_lote = self._carga(fruta=fruta, status=Recebimento.Status.CANCELADO)
+
+        resposta = self.client.get(reverse('polpa:recebimento-list'))
+
+        self.assertNotContains(
+            resposta, reverse('polpa:recebimento-delete', args=[com_lote.pk]),
+        )
+        self.assertContains(
+            resposta, reverse('polpa:recebimento-delete', args=[sem_lote.pk]),
+        )
+
+    def test_sem_permissao_de_excluir_o_botao_nao_aparece(self):
+        self.usuario.perfil.is_admin = False
+        self.usuario.perfil.save(update_fields=['is_admin'])
+        from apps.core.models import Permissao
+        Permissao.objects.create(perfil=self.usuario.perfil, modulo='polpa', pode_ver=True)
+        Permissao.objects.create(
+            perfil=self.usuario.perfil, modulo='polpa_recebimento', pode_ver=True,
+        )
+        carga = self._carga()
+
+        resposta = self.client.get(reverse('polpa:recebimento-list'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertNotContains(
+            resposta, reverse('polpa:recebimento-delete', args=[carga.pk]),
+        )
+
+
 class PermissaoTests(PolpaBase):
     """
     Quem tem o vertical entra; quem tem a área responde pela área.

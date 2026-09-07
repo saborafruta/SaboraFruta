@@ -65,6 +65,7 @@ class RecebimentoListView(PolpaBaseView):
             # separada de criar/editar -- quem pesa a carga nem sempre pode
             # anular um romaneio já registrado.
             'pode_cancelar': request.user.tem_permissao('polpa_recebimento', 'cancelar'),
+            'pode_excluir': request.user.tem_permissao('polpa_recebimento', 'excluir'),
         })
 
 
@@ -348,6 +349,29 @@ class CancelarView(PolpaBaseView):
         else:
             messages.success(request, 'Romaneio cancelado.')
         return redirect(reverse('polpa:recebimento-detail', args=[pk]))
+
+
+class RecebimentoDeleteView(PolpaBaseView):
+    """
+    Apaga o romaneio de verdade — sem conserto que valha a pena.
+
+    Permissão própria (`excluir`), separada de `cancelar`: cancelar deixa o
+    rastro na fila, apagar tira a linha. Nem todo perfil que pode anular um
+    romaneio deveria poder fazê-lo desaparecer.
+    """
+
+    permissao_acao = 'excluir'
+
+    def post(self, request, pk):
+        recebimento = _recebimento(request, pk)
+        numero = recebimento.numero
+        try:
+            RecebimentoService.excluir(recebimento)
+        except DomainError as erro:
+            messages.error(request, str(erro))
+        else:
+            messages.success(request, f'Romaneio #{numero:05d} excluído.')
+        return redirect(reverse('polpa:recebimento-list'))
 
 
 # ══════════════════════════════════════════════════════════════════════

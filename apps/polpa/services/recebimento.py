@@ -215,6 +215,25 @@ class RecebimentoService:
         ])
         return recebimento
 
+    @staticmethod
+    def excluir(recebimento: Recebimento) -> None:
+        """
+        Apaga o romaneio de verdade — o registro digitado errado, sem
+        conserto que valha a pena (nota trocada, produtor errado, duplicado
+        na correria da balança). Cancelar mantém o rastro; isto tira a
+        linha.
+
+        MESMA TRAVA DO CANCELAR: carga que já virou lote não pode sumir --
+        o saldo de matéria-prima no estoque ficaria sem de onde veio, que
+        é pior do que um romaneio errado ainda visível na fila.
+        """
+        if recebimento.lote_id:
+            raise DomainError(
+                'Esta carga já virou lote de matéria-prima. Não dá para '
+                'excluir sem deixar o saldo do estoque sem origem.'
+            )
+        recebimento.delete()
+
     # ── Apoio ────────────────────────────────────────────────────────────
 
     @staticmethod
