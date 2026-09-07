@@ -68,6 +68,12 @@ class TenantContextMiddleware:
                     )
                 return HttpResponseRedirect('/auth/login/')
 
+        # A sessão sempre referencia o diretório central. Force sua resolução
+        # antes de ativar o router do tenant; depois substituímos o objeto pelo
+        # usuário homônimo do banco operacional.
+        if alias:
+            request.user.is_authenticated
+
         # O superusuário continua autenticado pelo banco gerencial.
         if request.session.get(AUTH_DATABASE_SESSION_KEY) == 'default':
             request.user.is_authenticated
