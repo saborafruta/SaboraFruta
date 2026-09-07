@@ -22,11 +22,16 @@ class RailwayProvisioner:
         cls._validate_settings()
         service_name = cls._service_name_for_banco(banco)
         password = secrets.token_urlsafe(30)
-        service = cls._find_service(service_name)
+        service = cls._find_service(
+            service_name,
+            service_id=banco.railway_database_service_id,
+        )
         created = False
         if not service:
             service = cls._create_service(service_name, password)
             created = True
+        else:
+            service_name = service['name']
         service_id = service['id']
         volume = cls._find_volume(service_id)
         if not volume:
@@ -125,12 +130,17 @@ class RailwayProvisioner:
         return cls._graphql(query, variables)['serviceCreate']
 
     @classmethod
-    def _find_service(cls, name):
+    def _find_service(cls, name, service_id=''):
         query = '''query($id: String!) { project(id: $id) {
           services { edges { node { id name } } }
         } }'''
         edges = cls._graphql(query, {'id': settings.RAILWAY_PROJECT_ID})['project']['services']['edges']
-        return next((edge['node'] for edge in edges if edge['node']['name'] == name), None)
+        services = [edge['node'] for edge in edges]
+        if service_id:
+            existing = next((service for service in services if service['id'] == service_id), None)
+            if existing:
+                return existing
+        return next((service for service in services if service['name'] == name), None)
 
     @classmethod
     def _create_volume(cls, service_id):
