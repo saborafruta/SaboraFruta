@@ -150,6 +150,9 @@ RAILWAY_CONTROL_PROJECT_TOKEN = env(
 RAILWAY_PROJECT_ID = env('RAILWAY_PROJECT_ID', default='')
 RAILWAY_ENVIRONMENT_ID = env('RAILWAY_ENVIRONMENT_ID', default='')
 RAILWAY_SERVICE_ID = env('RAILWAY_SERVICE_ID', default='')
+RAILWAY_CONTROL_SERVICE_ID = env(
+    'RAILWAY_CONTROL_SERVICE_ID', default=RAILWAY_SERVICE_ID,
+)
 RAILWAY_TENANT_DATABASE_IMAGE = env('RAILWAY_TENANT_DATABASE_IMAGE', default='postgres:16-alpine')
 RAILWAY_TENANT_DATABASE_VOLUME_PATH = env(
     'RAILWAY_TENANT_DATABASE_VOLUME_PATH', default='/var/lib/postgresql/data',
@@ -173,7 +176,11 @@ TENANT_ROUTED_APPS = [
     'producao', 'produtos', 'qualidade', 'sessions', 'vendas',
 ]
 TENANT_GLOBAL_MODELS = [
-    'core.empresabanco', 'core.tenantpubliclink', 'sessions.session',
+    'core.empresabanco',
+    'core.filialfavorita',
+    'core.separacaofilial',
+    'core.tenantpubliclink',
+    'sessions.session',
 ]
 DATABASE_ROUTERS = ['apps.core.db_router.TenantDatabaseRouter']
 
@@ -266,6 +273,14 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+CELERY_TASK_PUBLISH_RETRY = False
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_BROKER_CONNECTION_TIMEOUT = env.int('CELERY_BROKER_CONNECTION_TIMEOUT', default=3)
+SEPARACAO_FILIAL_ASYNC_MODE = env('SEPARACAO_FILIAL_ASYNC_MODE', default='celery')
+TENANT_DATABASE_DELETION_MASTER_PASSWORD = env(
+    'TENANT_DATABASE_DELETION_MASTER_PASSWORD', default='',
+)
 
 # Transparencia tributaria (Lei 12.741/2012 / tabela IBPT).
 IBPT_API_BASE_URL = env(

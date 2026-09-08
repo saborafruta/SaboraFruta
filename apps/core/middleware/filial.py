@@ -29,6 +29,7 @@ class FilialMiddleware:
         '/gestao/central/',
         '/gestao/empresas/',
         '/gestao/filiais/',
+        '/gestao/separacoes-filiais/',
         '/admin/',
         '/static/',
         '/media/',

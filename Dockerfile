@@ -34,4 +34,4 @@ RUN DJANGO_SETTINGS_MODULE=config.settings.production \
     SECRET_KEY=build-only \
     python manage.py collectstatic --noinput
 EXPOSE 8000
-CMD python manage.py migrate --fake-initial --noinput && python manage.py migrate_tenant_databases && python manage.py ensure_quality_schema && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+CMD if [ "${SERVICE_ROLE:-web}" = "worker" ]; then python worker_health.py & exec celery -A config worker --loglevel=INFO --concurrency=1; else python manage.py migrate --fake-initial --noinput && python manage.py migrate_tenant_databases && python manage.py ensure_quality_schema && exec gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120; fi

@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 from django.http import HttpResponse
@@ -90,6 +91,9 @@ class CentralInfraViewsTests(TestCase):
             'core/admin/railway_pool_form.html',
             'core/admin/empresa_list.html',
             'core/admin/filial_list.html',
+            'core/admin/empresa_banco_progress.html',
+            'core/admin/filial_separar.html',
+            'core/admin/filial_separar_progress.html',
         ):
             self.assertIsNotNone(get_template(template))
 
@@ -98,6 +102,7 @@ class CentralInfraViewsTests(TestCase):
         urls = (
             reverse('core:admin_empresa_banco_list'),
             reverse('core:admin_empresa_banco_detail', args=[self.banco.pk]),
+            reverse('core:admin_empresa_banco_progress', args=[self.banco.pk]),
             reverse('core:admin_railway_pool_list'),
             reverse('core:admin_railway_pool_create'),
             reverse('core:admin_railway_pool_edit', args=[self.pool.pk]),
@@ -108,6 +113,47 @@ class CentralInfraViewsTests(TestCase):
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 200)
+
+    @override_settings(TENANT_DATABASE_DELETION_MASTER_PASSWORD='senha-teste')
+    @patch('apps.core.views.admin_area.EmpresaBancoService.excluir_banco_com_backup')
+    def test_exclusao_de_banco_exige_razao_social_completa(self, excluir):
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            reverse('core:admin_empresa_banco_excluir', args=[self.banco.pk]),
+            {'confirmacao': 'SIM', 'senha_master': 'senha-teste'},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        excluir.assert_not_called()
+
+    @override_settings(TENANT_DATABASE_DELETION_MASTER_PASSWORD='senha-teste')
+    @patch('apps.core.views.admin_area.EmpresaBancoService.excluir_banco_com_backup')
+    def test_exclusao_de_banco_exige_senha_master(self, excluir):
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            reverse('core:admin_empresa_banco_excluir', args=[self.banco.pk]),
+            {'confirmacao': self.empresa.razao_social, 'senha_master': 'errada'},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        excluir.assert_not_called()
+
+    @override_settings(TENANT_DATABASE_DELETION_MASTER_PASSWORD='senha-teste')
+    @patch('apps.core.views.admin_area.EmpresaBancoService.excluir_banco_com_backup')
+    def test_exclusao_valida_faz_backup_antes_de_responder(self, excluir):
+        excluir.return_value = ('backup.zip', Path('backup.zip'), {})
+        self.client.force_login(self.admin)
+        with patch('apps.core.views.admin_area._file_download_response', return_value=HttpResponse('zip')):
+            response = self.client.post(
+                reverse('core:admin_empresa_banco_excluir', args=[self.banco.pk]),
+                {
+                    'confirmacao': self.empresa.razao_social.lower(),
+                    'senha_master': 'senha-teste',
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        excluir.assert_called_once_with(self.banco)
 
     @patch('apps.core.views.admin_area.render', return_value=HttpResponse('ok'))
     def test_bancos_lista_empresas_filiais_e_status(self, render_mock):

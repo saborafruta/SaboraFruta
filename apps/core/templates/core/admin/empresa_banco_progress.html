@@ -1,0 +1,392 @@
+{% extends "_base.html" %}
+
+{% block title %}Criação do banco - ERP iNoovaTed{% endblock %}
+{% block page_title %}Central Administrativa{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<style>
+  .tenant-progress-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0 16px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+    max-width: 220px;
+  }
+  .tenant-progress-action-primary {
+    background: #1d4ed8;
+    color: #fff;
+    border-color: #1e40af;
+    box-shadow: 0 10px 22px rgba(29, 78, 216, 0.18);
+  }
+  .tenant-progress-action-primary:hover {
+    background: #1e40af;
+  }
+  .tenant-progress-action-secondary {
+    background: rgba(148, 163, 184, 0.10);
+    color: #bfdbfe;
+    border-color: rgba(147, 197, 253, 0.20);
+  }
+  body.tema-claro .tenant-progress-action-secondary {
+    background: #fff;
+    color: #475569;
+    border-color: #cbd5e1;
+  }
+  .tenant-progress-metrics {
+    display: grid;
+    grid-template-columns: minmax(0, 420px);
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .tenant-progress-metric {
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 14px;
+    padding: 12px 14px;
+    min-width: 0;
+  }
+  .tenant-progress-metric span {
+    display: block;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: #93c5fd;
+  }
+  .tenant-progress-metric strong {
+    display: block;
+    margin-top: 6px;
+    font-size: 16px;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+  body.tema-claro .tenant-progress-metric {
+    background: #f8fafc;
+    border-color: #e5e7eb;
+  }
+  body.tema-claro .tenant-progress-metric span {
+    color: #1d4ed8;
+  }
+  .tenant-progress-steps {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .tenant-progress-step {
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 16px;
+    padding: 14px;
+    min-width: 0;
+    min-height: 122px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .tenant-progress-step-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 900;
+    flex: none;
+  }
+  .tenant-progress-step-title,
+  .tenant-progress-step-text {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+  @media (max-width: 1100px) {
+    .tenant-progress-steps {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 760px) {
+    .tenant-progress-metrics,
+    .tenant-progress-steps {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="max-w-5xl mx-auto"
+         x-data="empresaBancoProgress()"
+         x-init="init()">
+  <div class="grid gap-6">
+    <div class="rounded-2xl border p-6 lg:p-8 overflow-hidden relative"
+         :style="temaClaro ? 'background:#fff; border-color:#e5e7eb; box-shadow:0 20px 50px rgba(15,23,42,0.08);' : 'background:#202024; border-color:#2a2a2e;'">
+      <div class="absolute inset-x-0 top-0 h-1"
+           :style="'background:linear-gradient(90deg,#f15a24 0%,#1d4ed8 ' + Math.max(progress, 15) + '%,transparent ' + Math.max(progress, 15) + '%);'"></div>
+
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-widest"
+             :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">Banco dedicado</p>
+          <h1 class="mt-2 text-2xl lg:text-3xl font-bold tracking-tight"
+              :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">
+            Criação do banco de {{ payload.empresa }}
+          </h1>
+          <p class="mt-2 text-sm leading-relaxed"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">
+            Pode aguardar nesta tela. Se fechar a aba ou a internet cair, volte aqui depois: o sistema consulta o status real e permite continuar.
+          </p>
+        </div>
+        <div class="h-14 w-14 rounded-2xl grid place-items-center shrink-0"
+             :style="payload.ready ? 'background:#dcfce7; color:#16a34a;' : ((payload.error || payload.blocked) ? 'background:#fee2e2; color:#dc2626;' : 'background:#eff6ff; color:#1d4ed8;')">
+          <svg x-show="!payload.ready && !payload.error && !payload.blocked" class="h-7 w-7 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+          </svg>
+          <svg x-show="payload.ready" class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+          </svg>
+          <svg x-show="payload.error || payload.blocked" class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M10.3 4.3L2.8 17a2 2 0 001.7 3h15a2 2 0 001.7-3L13.7 4.3a2 2 0 00-3.4 0z"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="mt-8">
+        <div class="flex items-end justify-between gap-3">
+          <div>
+            <div class="text-sm font-semibold" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'" x-text="payload.stage_label"></div>
+            <div class="mt-1 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'" x-text="statusText"></div>
+          </div>
+          <div class="text-3xl font-black tabular-nums" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">
+            <span x-text="progress"></span>%
+          </div>
+        </div>
+        <div class="mt-4 h-4 rounded-full overflow-hidden"
+             :style="temaClaro ? 'background:#e5e7eb;' : 'background:#2a2a2e;'">
+          <div class="h-full rounded-full transition-all duration-700"
+               :style="'width:' + progress + '%; background:linear-gradient(90deg,#f15a24,#1d4ed8);'"></div>
+        </div>
+        <div class="tenant-progress-metrics">
+          <div class="tenant-progress-metric" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">
+            <span x-text="primaryTimeTitle()"></span>
+            <strong x-text="primaryTimeLabel()"></strong>
+          </div>
+        </div>
+      </div>
+
+      <template x-if="payload.detail && !payload.ready">
+        <div class="mt-5 rounded-xl border p-4 text-sm"
+             :style="(payload.error || payload.blocked) ? 'background:#fef2f2; border-color:#fecaca; color:#991b1b;' : (temaClaro ? 'background:#fffbeb; border-color:#fde68a; color:#92400e;' : 'background:#2a2417; border-color:#854d0e; color:#fbbf24;')"
+             x-text="payload.detail"></div>
+      </template>
+
+      <div class="mt-7 flex flex-wrap items-center gap-3">
+        <a href="{{ list_url }}" class="tenant-progress-action tenant-progress-action-secondary">Voltar aos bancos</a>
+        <button type="button" class="tenant-progress-action tenant-progress-action-primary" x-show="!payload.blocked && (payload.error || !started)" @click="start()">Tentar novamente</button>
+        <a href="{{ next_url }}" class="tenant-progress-action tenant-progress-action-primary" x-show="payload.ready">{{ next_label }}</a>
+      </div>
+    </div>
+
+    <aside class="rounded-2xl border p-6 lg:p-7"
+           :style="temaClaro ? 'background:#fff; border-color:#e5e7eb; box-shadow:0 20px 50px rgba(15,23,42,0.05);' : 'background:#202024; border-color:#2a2a2e;'">
+      <div class="flex flex-wrap items-end justify-between gap-3">
+        <h2 class="text-lg font-bold" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">Etapas</h2>
+        <span class="text-xs font-semibold" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'" x-text="etaHint()"></span>
+      </div>
+      <div class="tenant-progress-steps mt-5">
+        <template x-for="step in steps" :key="step.percent">
+          <div class="tenant-progress-step"
+               :style="progress >= step.percent ? (temaClaro ? 'background:#f0fdf4; border-color:#bbf7d0;' : 'background:rgba(22,163,74,0.10); border-color:rgba(74,222,128,0.24);') : (temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#18181b; border-color:#2a2a2e;')">
+            <div class="tenant-progress-step-dot"
+                 :style="progress >= step.percent ? 'background:#dcfce7; color:#16a34a;' : (temaClaro ? 'background:#f3f4f6; color:#64748b;' : 'background:#2a2a2e; color:#a1a1aa;')">
+              <span x-text="progress >= step.percent ? 'OK' : step.index"></span>
+            </div>
+            <div>
+              <div class="tenant-progress-step-title text-sm font-semibold" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'" x-text="step.title"></div>
+              <div class="tenant-progress-step-text text-xs mt-1 leading-5" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'" x-text="step.text"></div>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <div class="mt-6 rounded-xl p-4 text-sm"
+           :style="temaClaro ? 'background:#f8fafc; color:#475569;' : 'background:#18181b; color:#d4d4d8;'">
+        Tempo normal: 1 a 3 minutos. Em alguns momentos o Railway pode levar mais tempo para publicar o banco e reiniciar o app.
+      </div>
+    </aside>
+  </div>
+</section>
+
+<script>
+function empresaBancoProgress() {
+  return {
+    payload: {{ payload_json|safe }},
+    progress: {{ payload.progress }},
+    started: false,
+    starting: false,
+    timer: null,
+    clockTimer: null,
+    redirected: false,
+    startedAt: Date.now(),
+    completedAt: null,
+    now: Date.now(),
+    lastUpdateAt: Date.now(),
+    estimatedTotalSeconds: 150,
+    statusText: 'Aguardando inicio...',
+    steps: [
+      { index: 1, percent: 10, title: 'Empresa salva', text: 'Registro central criado.' },
+      { index: 2, percent: 35, title: 'Banco solicitado', text: 'Servico Postgres sendo preparado.' },
+      { index: 3, percent: 65, title: 'Conexao validada', text: 'Variavel e acesso ao banco conferidos.' },
+      { index: 4, percent: 85, title: 'Estrutura aplicada', text: 'Tabelas e dados base sincronizados.' },
+      { index: 5, percent: 100, title: 'Pronto', text: 'Empresa liberada para uso.' },
+    ],
+    init() {
+      this.startedAt = this.resolveStartedAt(this.payload);
+      this.completedAt = this.resolveCompletedAt(this.payload);
+      this.now = Date.now();
+      this.lastUpdateAt = Date.now();
+      if (!this.payload.ready && !this.payload.blocked && !this.payload.error) {
+        this.timer = setInterval(() => this.refresh(), 3000);
+        this.clockTimer = setInterval(() => this.tickClock(), 1000);
+      } else if (this.completedAt) {
+        this.now = this.completedAt;
+      }
+      this.refresh();
+      if (!this.payload.ready) {
+        this.start();
+      }
+    },
+    parseTime(value) {
+      if (!value) return null;
+      const timestamp = Date.parse(value);
+      return Number.isNaN(timestamp) ? null : timestamp;
+    },
+    resolveStartedAt(data) {
+      return this.parseTime(data.requested_at) || this.startedAt || Date.now();
+    },
+    resolveCompletedAt(data) {
+      return this.parseTime(data.migrated_at) || (data.ready ? Date.now() : null);
+    },
+    tickClock() {
+      this.now = Date.now();
+    },
+    elapsedSeconds() {
+      const end = this.completedAt || this.now;
+      return Math.max(0, Math.floor((end - this.startedAt) / 1000));
+    },
+    elapsedLabel() {
+      return this.formatDuration(this.elapsedSeconds());
+    },
+    primaryTimeTitle() {
+      if (this.payload.ready) return 'Tempo total';
+      if (this.payload.error || this.payload.blocked) return 'Status';
+      return 'Previsao restante';
+    },
+    primaryTimeLabel() {
+      if (this.payload.ready) return this.elapsedLabel();
+      if (this.payload.error || this.payload.blocked) return 'Pausado';
+      return this.remainingLabel();
+    },
+    remainingLabel() {
+      if (this.payload.error || this.payload.blocked) return 'Pausado';
+      const remaining = Math.max(0, Math.ceil(this.estimatedTotalSeconds - this.elapsedSeconds()));
+      return remaining <= 0 ? 'finalizando' : this.formatDuration(remaining);
+    },
+    lastUpdateLabel() {
+      const seconds = Math.max(0, Math.floor((this.now - this.lastUpdateAt) / 1000));
+      if (seconds < 3) return 'agora';
+      return 'ha ' + this.formatDuration(seconds);
+    },
+    etaHint() {
+      if (this.payload.ready) return 'Processo concluido.';
+      if (this.payload.error || this.payload.blocked) return 'Aguardando acao do suporte.';
+      return 'Previsao recalculada em tempo real.';
+    },
+    formatDuration(seconds) {
+      const safeSeconds = Math.max(0, Math.floor(seconds || 0));
+      if (safeSeconds < 60) return safeSeconds + 's';
+      const minutes = Math.floor(safeSeconds / 60);
+      const rest = safeSeconds % 60;
+      return rest ? minutes + 'min ' + rest + 's' : minutes + 'min';
+    },
+    updateEstimate(data) {
+      this.lastUpdateAt = Date.now();
+      this.now = Date.now();
+      if (data.ready || data.error || data.blocked) return;
+      const currentProgress = Math.max(5, data.progress || this.progress || 5);
+      const elapsed = Math.max(1, this.elapsedSeconds());
+      const projected = Math.ceil(elapsed / (currentProgress / 100));
+      const baseline = currentProgress >= 85 ? 180 : (currentProgress >= 65 ? 150 : (currentProgress >= 35 ? 130 : 110));
+      const bounded = Math.min(420, Math.max(baseline, projected));
+      this.estimatedTotalSeconds = Math.round((this.estimatedTotalSeconds * 0.65) + (bounded * 0.35));
+    },
+    setPayload(data) {
+      this.payload = data;
+      this.startedAt = this.resolveStartedAt(data);
+      this.progress = Math.max(this.progress, data.progress || 0);
+      this.updateEstimate(data);
+      if (data.ready) {
+        this.completedAt = this.resolveCompletedAt(data);
+        if (this.completedAt) this.now = this.completedAt;
+        this.progress = 100;
+        this.statusText = '{{ ready_status_text }}';
+        if (this.timer) clearInterval(this.timer);
+        if (this.clockTimer) clearInterval(this.clockTimer);
+        if (!this.redirected) {
+          this.redirected = true;
+          setTimeout(() => { window.location.href = '{{ next_url }}'; }, 900);
+        }
+      } else if (data.blocked) {
+        this.statusText = 'Preparacao interrompida. A empresa precisa estar ativa para criar banco.';
+        if (this.timer) clearInterval(this.timer);
+        if (this.clockTimer) clearInterval(this.clockTimer);
+      } else if (data.error) {
+        this.statusText = 'Houve uma falha. Confira a mensagem e tente novamente.';
+      } else {
+        this.statusText = 'Trabalhando no Railway. Mantenha esta tela aberta se puder.';
+        if (!this.starting && ['pendente', 'aguardando_configuracao', 'configurado'].includes(data.status)) {
+          setTimeout(() => this.start(), 1500);
+        }
+      }
+    },
+    async refresh() {
+      try {
+        const response = await fetch('{{ status_url }}', { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if (response.ok) this.setPayload(await response.json());
+      } catch (e) {
+        this.statusText = 'Sem conexao agora. Vou continuar tentando quando a internet voltar.';
+      }
+    },
+    async start() {
+      if (this.starting || this.payload.ready) return;
+      this.started = true;
+      this.starting = true;
+      this.statusText = 'Iniciando preparacao do banco...';
+      try {
+        const response = await fetch('{{ start_url }}', {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        });
+        if (response.ok) {
+          this.setPayload(await response.json());
+        } else {
+          this.statusText = 'Nao consegui iniciar agora. Tente novamente em alguns segundos.';
+        }
+      } catch (e) {
+        this.statusText = 'Conexao caiu durante o inicio. Se o Railway continuou, esta tela vai detectar; se nao, use tentar novamente.';
+      } finally {
+        this.starting = false;
+        this.refresh();
+      }
+    }
+  }
+}
+</script>
+{% endblock %}

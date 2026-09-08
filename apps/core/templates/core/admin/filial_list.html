@@ -146,6 +146,7 @@
           </div>
           <div class="branch-dialog-body">
             <a href="{% url 'core:admin_filial_edit' filial.pk %}" class="branch-menu-link">Editar filial</a>
+            {% if filial.ativo and filial.empresa.ativo %}<a href="{% url 'core:admin_filial_separar' filial.pk %}" class="branch-menu-link">Separar filial</a>{% endif %}
             <form method="post" action="{% url 'core:admin_filial_toggle' filial.pk %}">{% csrf_token %}<button type="submit" class="branch-menu-button {% if filial.ativo %}is-danger{% endif %}">{% if filial.ativo %}Desativar filial{% else %}Ativar filial{% endif %}</button></form>
           </div>
         </div>

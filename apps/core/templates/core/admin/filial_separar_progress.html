@@ -1,0 +1,259 @@
+{% extends "_base.html" %}
+
+{% block title %}Separação de filial - ERP iNoovaTed{% endblock %}
+{% block page_title %}Central Administrativa{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<style>
+  .split-progress-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    padding: 0 14px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+    max-width: 220px;
+  }
+  .split-progress-action-primary {
+    background: #1d4ed8;
+    color: #fff;
+    border-color: #1e40af;
+    box-shadow: 0 10px 22px rgba(29, 78, 216, 0.18);
+  }
+  .split-progress-action-primary:hover { background: #1e40af; }
+  .split-progress-action-secondary {
+    background: rgba(148, 163, 184, 0.10);
+    color: #bfdbfe;
+    border-color: rgba(147, 197, 253, 0.20);
+  }
+  body.tema-claro .split-progress-action-secondary {
+    background: #fff;
+    color: #475569;
+    border-color: #cbd5e1;
+  }
+  .split-report-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="max-w-6xl mx-auto"
+         x-data="separacaoFilialProgress()"
+         x-init="init()">
+  <div class="grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
+    <div class="rounded-2xl border p-6 lg:p-8 overflow-hidden relative"
+         :style="temaClaro ? 'background:#fff; border-color:#e5e7eb; box-shadow:0 20px 50px rgba(15,23,42,0.08);' : 'background:#202024; border-color:#2a2a2e;'">
+      <div class="absolute inset-x-0 top-0 h-1"
+           :style="'background:linear-gradient(90deg,#f15a24 0%,#1d4ed8 ' + Math.max(progress, 8) + '%,transparent ' + Math.max(progress, 8) + '%);'"></div>
+
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-widest"
+             :style="temaClaro ? 'color:#1d4ed8;' : 'color:#93c5fd;'">Separação de filial</p>
+          <h1 class="mt-2 text-2xl lg:text-3xl font-bold tracking-tight"
+              :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">
+            Transformando filial em empresa independente
+          </h1>
+          <p class="mt-2 text-sm leading-relaxed"
+             :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">
+            Pode aguardar nesta tela. Se fechar a aba ou a internet cair, volte aqui depois: o sistema mostra a etapa real do processo e libera os arquivos ao concluir.
+          </p>
+        </div>
+        <div class="h-14 w-14 rounded-2xl grid place-items-center shrink-0"
+             :style="payload.ready ? 'background:#dcfce7; color:#16a34a;' : (payload.error ? 'background:#fee2e2; color:#dc2626;' : 'background:#eff6ff; color:#1d4ed8;')">
+          <svg x-show="!payload.ready && !payload.error" class="h-7 w-7 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+          </svg>
+          <svg x-show="payload.ready" class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+          </svg>
+          <svg x-show="payload.error" class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M10.3 4.3L2.8 17a2 2 0 001.7 3h15a2 2 0 001.7-3L13.7 4.3a2 2 0 00-3.4 0z"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="mt-8">
+        <div class="flex items-end justify-between gap-3">
+          <div>
+            <div class="text-sm font-semibold" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'" x-text="payload.stage_label"></div>
+            <div class="mt-1 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'" x-text="statusText"></div>
+          </div>
+          <div class="text-3xl font-black tabular-nums" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">
+            <span x-text="progress"></span>%
+          </div>
+        </div>
+        <div class="mt-4 h-4 rounded-full overflow-hidden"
+             :style="temaClaro ? 'background:#e5e7eb;' : 'background:#2a2a2e;'">
+          <div class="h-full rounded-full transition-all duration-700"
+               :style="'width:' + progress + '%; background:linear-gradient(90deg,#f15a24,#1d4ed8);'"></div>
+        </div>
+      </div>
+
+      <template x-if="payload.detail && !payload.ready">
+        <div class="mt-5 rounded-xl border p-4 text-sm"
+             :style="payload.error ? 'background:#fef2f2; border-color:#fecaca; color:#991b1b;' : (temaClaro ? 'background:#fffbeb; border-color:#fde68a; color:#92400e;' : 'background:#2a2417; border-color:#854d0e; color:#fbbf24;')"
+             x-text="payload.detail"></div>
+      </template>
+
+      <div class="mt-7 flex flex-wrap items-center gap-3">
+        <a href="{{ list_url }}" class="split-progress-action split-progress-action-secondary">Voltar às filiais</a>
+        <button type="button" class="split-progress-action split-progress-action-primary" x-show="payload.error || !started" @click="start()">Iniciar separação</button>
+        <a href="{{ backup_restauracao_url }}" class="split-progress-action split-progress-action-secondary" x-show="payload.backup_restauracao">Backup restauração</a>
+        <a href="{{ backup_exportacao_url }}" class="split-progress-action split-progress-action-secondary" x-show="payload.backup_exportacao">Exportar dados</a>
+        <a href="{{ list_url }}" class="split-progress-action split-progress-action-primary" x-show="payload.ready">Concluir</a>
+      </div>
+    </div>
+
+    <aside class="rounded-2xl border p-6 lg:p-7"
+           :style="temaClaro ? 'background:#fff; border-color:#e5e7eb; box-shadow:0 20px 50px rgba(15,23,42,0.05);' : 'background:#202024; border-color:#2a2a2e;'">
+      <h2 class="text-lg font-bold" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">Etapas</h2>
+      <div class="mt-5 space-y-4">
+        <template x-for="step in steps" :key="step.percent">
+          <div class="flex gap-3">
+            <div class="h-8 w-8 rounded-full grid place-items-center text-xs font-bold shrink-0"
+                 :style="progress >= step.percent ? 'background:#dcfce7; color:#16a34a;' : (temaClaro ? 'background:#f3f4f6; color:#64748b;' : 'background:#2a2a2e; color:#a1a1aa;')">
+              <span x-text="progress >= step.percent ? '✓' : step.index"></span>
+            </div>
+            <div>
+              <div class="text-sm font-semibold" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'" x-text="step.title"></div>
+              <div class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'" x-text="step.text"></div>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <div class="mt-6 rounded-xl p-4 text-sm"
+           :style="temaClaro ? 'background:#f8fafc; color:#475569;' : 'background:#18181b; color:#d4d4d8;'">
+        Tempo normal: 1 a 5 minutos. Empresas com muitos dados podem levar mais. Os backups são gerados antes de qualquer movimentação.
+      </div>
+    </aside>
+  </div>
+
+  <section class="mt-6 rounded-2xl border p-6"
+           x-show="payload.ready"
+           :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#202024; border-color:#2a2a2e;'">
+    <h2 class="text-lg font-bold" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">Relatório final</h2>
+    <div class="split-report-grid mt-4">
+      <div class="rounded-xl p-4" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <div class="text-xs text-gray-400">Nova empresa</div>
+        <div class="font-bold mt-1" x-text="payload.empresa_destino || '-'"></div>
+      </div>
+      <div class="rounded-xl p-4" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <div class="text-xs text-gray-400">Banco dedicado</div>
+        <div class="font-mono text-sm mt-1" x-text="payload.banco_destino || '-'"></div>
+      </div>
+      <div class="rounded-xl p-4" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
+        <div class="text-xs text-gray-400">Rollback</div>
+        <div class="font-bold mt-1">Assistido por backup</div>
+      </div>
+    </div>
+    <div class="mt-5 rounded-xl border p-4"
+         x-show="(payload.relatorio?.usuarios_revisao_manual || []).length"
+         :style="temaClaro ? 'background:#fffbeb; border-color:#fde68a;' : 'background:#2a2417; border-color:#854d0e;'">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 class="text-sm font-bold" :style="temaClaro ? 'color:#92400e;' : 'color:#fbbf24;'">Acessos aguardando revisao</h3>
+          <p class="mt-1 text-xs" :style="temaClaro ? 'color:#a16207;' : 'color:#fde68a;'">O acesso destes usuarios a nova empresa ficou suspenso. Os demais acessos foram mantidos.</p>
+        </div>
+        <a href="{{ usuarios_url }}" class="split-progress-action split-progress-action-secondary">Revisar usuarios</a>
+      </div>
+      <div class="mt-3 grid gap-2">
+        <template x-for="usuario in (payload.relatorio?.usuarios_revisao_manual || [])" :key="usuario.id">
+          <div class="rounded-lg border px-3 py-2"
+               :style="temaClaro ? 'background:#fff; border-color:#fde68a;' : 'background:#18181b; border-color:#713f12;'">
+            <div class="text-sm font-semibold" x-text="usuario.nome || usuario.email"></div>
+            <div class="text-xs opacity-75" x-text="usuario.email"></div>
+            <div class="mt-1 text-xs opacity-75"
+                 x-text="'Mantido em: ' + (usuario.acessos_mantidos || []).map(item => item.empresa + ' / ' + item.filial + ' (' + item.perfil + ')').join(', ')"></div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </section>
+</section>
+
+<script>
+function separacaoFilialProgress() {
+  return {
+    payload: {{ payload_json|safe }},
+    progress: {{ payload.progress }},
+    started: false,
+    starting: false,
+    timer: null,
+    statusText: 'Aguardando início...',
+    steps: [
+      { index: 1, percent: 5, title: 'Validação', text: 'Conferindo bloqueios e regras.' },
+      { index: 2, percent: 15, title: 'Backups', text: 'Restauração e exportação de dados.' },
+      { index: 3, percent: 35, title: 'Separação central', text: 'Empresa, filial, perfis e usuários.' },
+      { index: 4, percent: 65, title: 'Banco dedicado', text: 'Criação, estrutura e sincronização.' },
+      { index: 5, percent: 82, title: 'Dados operacionais', text: 'Cópia dos registros da filial.' },
+      { index: 6, percent: 100, title: 'Relatório', text: 'Auditoria e arquivos finais.' },
+    ],
+    init() {
+      this.refresh();
+      if (!this.payload.ready && !this.payload.error) {
+        this.start();
+      }
+      this.timer = setInterval(() => this.refresh(), 2500);
+    },
+    setPayload(data) {
+      this.payload = data;
+      this.progress = Math.max(this.progress, data.progress || 0);
+      if (data.ready) {
+        this.progress = 100;
+        this.statusText = 'Separação concluída. Baixe os arquivos e finalize.';
+        if (this.timer) clearInterval(this.timer);
+      } else if (data.error) {
+        this.statusText = 'Houve uma falha. Os backups gerados continuam disponíveis quando existirem.';
+      } else {
+        this.statusText = 'Trabalhando. Pode manter esta tela aberta.';
+      }
+    },
+    async refresh() {
+      try {
+        const response = await fetch('{{ status_url }}', { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if (response.ok) this.setPayload(await response.json());
+      } catch (e) {
+        this.statusText = 'Sem conexão agora. Vou continuar tentando quando a internet voltar.';
+      }
+    },
+    async start() {
+      if (this.starting || this.payload.ready || this.payload.status === 'executando') return;
+      this.started = true;
+      this.starting = true;
+      this.statusText = 'Iniciando separação...';
+      try {
+        const response = await fetch('{{ start_url }}', {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        });
+        if (response.ok) {
+          this.setPayload(await response.json());
+        } else {
+          this.statusText = 'Não consegui iniciar agora. Tente novamente em alguns segundos.';
+        }
+      } catch (e) {
+        this.statusText = 'A conexão caiu durante o início. Se o servidor continuar, esta tela vai detectar.';
+      } finally {
+        this.starting = false;
+        this.refresh();
+      }
+    }
+  }
+}
+</script>
+{% endblock %}

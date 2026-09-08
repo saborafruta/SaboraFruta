@@ -1,4 +1,5 @@
 """Provisionamento idempotente de um PostgreSQL dedicado por empresa."""
+import os
 import secrets
 import time
 from urllib.parse import quote
@@ -185,6 +186,31 @@ class RailwayApiClient:
             'skipDeploys': skip_deploys,
         }})['variableUpsert']
 
+    def delete_variable(self, service_id, name):
+        query = '''mutation($input: VariableDeleteInput!) {
+          variableDelete(input: $input)
+        }'''
+        return self.graphql(query, {'input': {
+            'projectId': self.project_id,
+            'environmentId': self.environment_id,
+            'serviceId': service_id,
+            'name': name,
+        }})['variableDelete']
+
+    def delete_service(self, service_id):
+        query = '''mutation($id: String!, $environmentId: String) {
+          serviceDelete(id: $id, environmentId: $environmentId)
+        }'''
+        return self.graphql(query, {
+            'id': service_id, 'environmentId': self.environment_id,
+        })['serviceDelete']
+
+    def delete_volume(self, volume_id):
+        query = '''mutation($volumeId: String!) {
+          volumeDelete(volumeId: $volumeId)
+        }'''
+        return self.graphql(query, {'volumeId': volume_id})['volumeDelete']
+
 
 class RailwayProvisioner:
     SERVICE_NAME_MAX_LENGTH = 32
@@ -260,6 +286,47 @@ class RailwayProvisioner:
         }
 
     @classmethod
+    def delete_postgres(cls, banco):
+        """Remove banco/volume no projeto correto após o backup obrigatório."""
+        cls._validate_settings()
+        pool = banco.railway_project_pool
+        client = cls._client_for_pool(pool)
+        service = client.find_service(
+            banco.railway_database_service_name,
+            service_id=banco.railway_database_service_id,
+        ) if (banco.railway_database_service_id or banco.railway_database_service_name) else None
+        service_id = service['id'] if service else banco.railway_database_service_id
+        volume_id = banco.railway_volume_id
+        variable_error = ''
+        cleanup_error = ''
+        if banco.database_url_env_var:
+            try:
+                cls._control_client().delete_variable(
+                    cls._control_service_id(), banco.database_url_env_var,
+                )
+            except RailwayProvisioningError as exc:
+                variable_error = str(exc)
+        if service_id:
+            client.delete_service(service_id)
+        if volume_id:
+            try:
+                client.delete_volume(volume_id)
+            except RailwayProvisioningError as exc:
+                cleanup_error = str(exc)
+        if pool:
+            try:
+                RailwayPoolService.update_observation(pool, client.volume_count())
+            except RailwayProvisioningError:
+                pass
+        return {
+            'service_id': service_id or '',
+            'volume_id': volume_id or '',
+            'env_var': banco.database_url_env_var,
+            'variable_error': variable_error,
+            'cleanup_error': cleanup_error,
+        }
+
+    @classmethod
     def _provision_legacy(cls, banco):
         """Fluxo original, mantido intacto enquanto a feature flag está desligada."""
         service_name = cls._service_name_for_banco(banco)
@@ -330,9 +397,18 @@ class RailwayProvisioner:
     def _validate_settings(cls):
         if not (settings.RAILWAY_PROJECT_TOKEN or settings.RAILWAY_API_TOKEN):
             raise RailwayProvisioningError('Token do projeto principal não configurado.')
-        for name in ('RAILWAY_PROJECT_ID', 'RAILWAY_ENVIRONMENT_ID', 'RAILWAY_SERVICE_ID'):
+        for name in ('RAILWAY_PROJECT_ID', 'RAILWAY_ENVIRONMENT_ID'):
             if not getattr(settings, name):
                 raise RailwayProvisioningError(f'{name} não está configurado.')
+        if not cls._control_service_id():
+            raise RailwayProvisioningError('RAILWAY_CONTROL_SERVICE_ID não está configurado.')
+
+    @staticmethod
+    def _control_service_id():
+        return (
+            getattr(settings, 'RAILWAY_CONTROL_SERVICE_ID', '')
+            or getattr(settings, 'RAILWAY_SERVICE_ID', '')
+        )
 
     @classmethod
     def _client_for_pool(cls, pool):
@@ -361,8 +437,22 @@ class RailwayProvisioner:
     @classmethod
     def _set_app_variable(cls, name, value):
         return cls._control_client().set_variable(
-            settings.RAILWAY_SERVICE_ID, name, value, skip_deploys=True,
+            cls._control_service_id(), name, value, skip_deploys=True,
         )
+
+    @classmethod
+    def sync_tenant_variables_from_control_app(cls):
+        """Carrega no worker URLs de tenants criados depois do último deploy."""
+        cls._validate_settings()
+        variables = cls._control_client().service_variables(
+            cls._control_service_id(),
+        )
+        synced = []
+        for name, value in variables.items():
+            if name.startswith('TENANT_DATABASE_URL_') and value:
+                os.environ[name] = str(value)
+                synced.append(name)
+        return synced
 
     @staticmethod
     def _public_database_url(proxy, credentials):

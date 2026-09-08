@@ -1,13 +1,20 @@
+import json
+from datetime import timedelta
+from pathlib import Path
+
 from django.contrib import messages
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
+from django.core.files.storage import default_storage
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.http import JsonResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
+from django.utils.crypto import constant_time_compare
 
 from apps.cadastros.services.replicacao_service import ReplicacaoCadastrosService
 from apps.core.forms.admin_forms import (
@@ -26,10 +33,14 @@ from apps.core.services.modulos import (
     modulos_de_verticais, modulos_disponiveis, modulos_para_admin,
 )
 from apps.core.models import (
-    Empresa, EmpresaBanco, Filial, PerfilAcesso, Permissao, RailwayProjectPool, Usuario,
+    Empresa, EmpresaBanco, Filial, PerfilAcesso, Permissao, RailwayProjectPool,
+    SeparacaoFilial, Usuario,
 )
 from apps.core.services.imagem_filial import preparar_imagem_filial
 from apps.core.services.empresa_banco_service import EmpresaBancoService
+from apps.core.services.separacao_filial_service import (
+    SeparacaoFilialError, SeparacaoFilialService,
+)
 from apps.core.views.audit import core_log_context
 from apps.core.views._admin import admin_area_required, superuser_required
 from apps.produtos.services.replicacao_service import ReplicacaoProdutoService
@@ -103,6 +114,64 @@ def _empresa_filtros_context(filtros):
         'banco_status_filters': BANCO_STATUS_FILTERS,
         'regime_choices': Empresa.RegimeTributario.choices,
         'uf_choices': UF.choices,
+    }
+
+
+def _senha_master_valida(request, senha):
+    senha_master = getattr(settings, 'TENANT_DATABASE_DELETION_MASTER_PASSWORD', '')
+    return (
+        constant_time_compare(senha, senha_master)
+        if senha_master else request.user.check_password(senha)
+    )
+
+
+def _file_download_response(path, content_type):
+    file_path = Path(path)
+    if not file_path.exists():
+        if not default_storage.exists(str(path)):
+            raise FileNotFoundError(str(path))
+        return FileResponse(
+            default_storage.open(str(path), 'rb'), as_attachment=True,
+            filename=file_path.name, content_type=content_type,
+        )
+    return FileResponse(
+        file_path.open('rb'), as_attachment=True,
+        filename=file_path.name, content_type=content_type,
+    )
+
+
+def _empresa_banco_progress_payload(banco):
+    EmpresaBancoService.validar_empresa_preparavel(banco)
+    banco.refresh_from_db()
+    progresso = {
+        EmpresaBanco.Status.PENDENTE: 8,
+        EmpresaBanco.Status.AGUARDANDO_CONFIGURACAO: 42,
+        EmpresaBanco.Status.CONFIGURADO: 72,
+        EmpresaBanco.Status.ATIVO: 100,
+        EmpresaBanco.Status.ERRO: 0,
+        EmpresaBanco.Status.INATIVO: 0,
+    }
+    etapas = {
+        EmpresaBanco.Status.PENDENTE: 'Preparando solicitação',
+        EmpresaBanco.Status.AGUARDANDO_CONFIGURACAO: 'Aguardando o Railway publicar o banco',
+        EmpresaBanco.Status.CONFIGURADO: 'Aplicando estrutura e dados iniciais',
+        EmpresaBanco.Status.ATIVO: 'Banco pronto para uso',
+        EmpresaBanco.Status.ERRO: 'Precisa de atenção',
+        EmpresaBanco.Status.INATIVO: 'Banco inativo',
+    }
+    return {
+        'id': banco.pk, 'empresa': banco.empresa.razao_social,
+        'alias': banco.db_alias, 'status': banco.status,
+        'status_label': banco.get_status_display(),
+        'stage_label': etapas.get(banco.status, banco.get_status_display()),
+        'progress': progresso.get(banco.status, 15),
+        'ready': banco.status == EmpresaBanco.Status.ATIVO,
+        'error': banco.status == EmpresaBanco.Status.ERRO,
+        'blocked': banco.status == EmpresaBanco.Status.INATIVO,
+        'detail': banco.ultimo_erro,
+        'requested_at': banco.provisionamento_solicitado_em.isoformat() if banco.provisionamento_solicitado_em else '',
+        'provisioned_at': banco.provisionado_em.isoformat() if banco.provisionado_em else '',
+        'migrated_at': banco.ultima_migracao_em.isoformat() if banco.ultima_migracao_em else '',
     }
 
 
@@ -278,6 +347,7 @@ def central_administrativa(request):
         empresa_contexto = filial_selecionada.empresa
     politica_form = None
     politica_filial_origem = None
+    replicacao_bloqueada = False
     if empresa_contexto:
         try:
             politica_filial_origem = filial_selecionada
@@ -286,6 +356,9 @@ def central_administrativa(request):
             if not politica_filial_origem:
                 politica_filial_origem = empresa_contexto.filiais.filter(ativo=True).order_by('razao_social').first()
             if politica_filial_origem:
+                replicacao_bloqueada = SeparacaoFilialService.replicacao_bloqueada(
+                    politica_filial_origem,
+                )
                 politica = get_or_create_politica_filial(politica_filial_origem)
                 politica_form = PoliticaReplicacaoForm(instance=politica)
         except Exception:
@@ -304,6 +377,7 @@ def central_administrativa(request):
         'empresa_contexto': empresa_contexto,
         'politica_form': politica_form,
         'politica_filial_origem': politica_filial_origem,
+        'replicacao_bloqueada': replicacao_bloqueada,
         'filial_selecionada': filial_selecionada,
         'total_empresas': Empresa.objects.count(),
         'total_filiais': Filial.objects.count(),
@@ -426,7 +500,78 @@ def empresa_banco_create(request, empresa_id):
         messages.success(request, f'Banco dedicado preparado para {empresa}.')
     else:
         messages.info(request, f'{empresa} já possui banco dedicado registrado.')
-    return redirect('core:admin_empresa_banco_detail', pk=banco.pk)
+    return redirect('core:admin_empresa_banco_progress', pk=banco.pk)
+
+
+@superuser_required
+def empresa_banco_progress(request, pk):
+    banco = get_object_or_404(EmpresaBanco.objects.select_related('empresa'), pk=pk)
+    payload = _empresa_banco_progress_payload(banco)
+    return render(request, 'core/admin/empresa_banco_progress.html', {
+        'banco': banco, 'payload': payload, 'payload_json': json.dumps(payload),
+        'status_url': reverse('core:admin_empresa_banco_status', args=[banco.pk]),
+        'start_url': reverse('core:admin_empresa_banco_start', args=[banco.pk]),
+        'list_url': reverse('core:admin_empresa_banco_list'),
+        'next_url': f"{reverse('core:admin_filial_list')}?empresa={banco.empresa_id}",
+        'next_label': 'Ver filiais',
+        'ready_status_text': 'Banco pronto. Abrindo as filiais...',
+        'page_title': 'Central Administrativa',
+    })
+
+
+@superuser_required
+def empresa_banco_status(request, pk):
+    banco = get_object_or_404(EmpresaBanco.objects.select_related('empresa'), pk=pk)
+    return JsonResponse(_empresa_banco_progress_payload(banco))
+
+
+@superuser_required
+@require_POST
+def empresa_banco_start(request, pk):
+    banco = get_object_or_404(EmpresaBanco.objects.select_related('empresa'), pk=pk)
+    ok, _ = EmpresaBancoService.validar_empresa_preparavel(banco)
+    if ok and banco.status != EmpresaBanco.Status.ATIVO:
+        if banco.status == EmpresaBanco.Status.CONFIGURADO:
+            EmpresaBancoService.migrar_banco(banco)
+        elif banco.status == EmpresaBanco.Status.AGUARDANDO_CONFIGURACAO:
+            EmpresaBancoService.testar_conexao(banco)
+        elif banco.status == EmpresaBanco.Status.ERRO and EmpresaBancoService.tem_banco_provisionado(banco):
+            EmpresaBancoService.testar_conexao(banco)
+        else:
+            EmpresaBancoService.solicitar_provisionamento(banco)
+    return JsonResponse(_empresa_banco_progress_payload(banco))
+
+
+@superuser_required
+@require_POST
+def empresa_banco_backup(request, pk):
+    banco = get_object_or_404(EmpresaBanco.objects.select_related('empresa'), pk=pk)
+    try:
+        _, backup_path = EmpresaBancoService.gerar_backup_completo_persistente(banco)
+    except Exception as exc:
+        messages.error(request, f'Backup não foi gerado: {exc}')
+        return redirect('core:admin_empresa_banco_list')
+    return _file_download_response(backup_path, 'application/zip')
+
+
+@superuser_required
+@require_POST
+def empresa_banco_excluir(request, pk):
+    banco = get_object_or_404(EmpresaBanco.objects.select_related('empresa'), pk=pk)
+    confirmacao = (request.POST.get('confirmacao') or '').strip()
+    senha = request.POST.get('senha_master') or ''
+    if not constant_time_compare(confirmacao.casefold(), banco.empresa.razao_social.strip().casefold()):
+        messages.error(request, 'Digite a razão social completa para confirmar a exclusão.')
+        return redirect('core:admin_empresa_banco_list')
+    if not _senha_master_valida(request, senha):
+        messages.error(request, 'Senha master inválida. Banco não excluído.')
+        return redirect('core:admin_empresa_banco_list')
+    try:
+        _, backup_path, _ = EmpresaBancoService.excluir_banco_com_backup(banco)
+    except Exception as exc:
+        messages.error(request, f'Banco não foi excluído: {exc}')
+        return redirect('core:admin_empresa_banco_list')
+    return _file_download_response(backup_path, 'application/zip')
 
 
 @superuser_required
@@ -446,6 +591,12 @@ def politica_replicacao_update(request, empresa_id):
     if form.is_valid():
         form.save()
         participa_replicacao = request.POST.get('participa_replicacao') == 'on'
+        if participa_replicacao and SeparacaoFilialService.replicacao_bloqueada(filial):
+            participa_replicacao = False
+            messages.warning(
+                request,
+                'Uma filial separada nao pode reativar replicacao automaticamente.',
+            )
         if filial.participa_replicacao != participa_replicacao:
             filial.participa_replicacao = participa_replicacao
             filial.save(update_fields=['participa_replicacao', 'updated_at'])
@@ -783,6 +934,105 @@ def filial_form(request, pk=None):
 @superuser_required
 def filial_toggle(request, pk):
     return _toggle(request, Filial, pk, 'core:admin_filial_list')
+
+
+@superuser_required
+def filial_separar(request, pk):
+    filial = get_object_or_404(Filial.objects.select_related('empresa'), pk=pk)
+    processo = SeparacaoFilialService.obter_ou_criar(filial, request.user)
+    simulacao = SeparacaoFilialService.simular(processo)
+    if request.method == 'POST':
+        if request.POST.get('acao') == 'executar':
+            confirmacao = (request.POST.get('confirmacao') or '').strip().upper()
+            senha_master = request.POST.get('senha_master') or ''
+            if confirmacao != 'SEPARAR':
+                messages.error(request, 'Digite SEPARAR para confirmar a separação da filial.')
+            elif not _senha_master_valida(request, senha_master):
+                messages.error(request, 'Senha master inválida.')
+            else:
+                try:
+                    processo = SeparacaoFilialService.confirmar_execucao(processo, request.user)
+                except SeparacaoFilialError as exc:
+                    messages.error(request, f'Não foi possível separar a filial: {exc}')
+                else:
+                    return redirect('core:admin_filial_separar_progress', pk=processo.pk)
+        processo.refresh_from_db()
+        simulacao = SeparacaoFilialService.simular(processo)
+    return render(request, 'core/admin/filial_separar.html', {
+        'filial': filial, 'processo': processo, 'simulacao': simulacao,
+        'bloqueios': simulacao.get('bloqueios', []),
+        'avisos': simulacao.get('avisos', []),
+        'usuarios': simulacao.get('usuarios', {}),
+        'contagens': simulacao.get('contagens', []),
+        'operacoes_abertas': simulacao.get('operacoes_abertas', []),
+        'plano': simulacao.get('plano', {}),
+        'central_url': reverse('core:admin_central'),
+        'page_title': 'Central Administrativa',
+    })
+
+
+@superuser_required
+def filial_separar_progress(request, pk):
+    processo = get_object_or_404(
+        SeparacaoFilial.objects.select_related(
+            'filial_origem', 'empresa_origem', 'empresa_destino', 'banco_destino',
+        ), pk=pk,
+    )
+    payload = SeparacaoFilialService.payload_progresso(processo)
+    return render(request, 'core/admin/filial_separar_progress.html', {
+        'processo': processo, 'payload': payload, 'payload_json': json.dumps(payload),
+        'status_url': reverse('core:admin_filial_separar_status', args=[processo.pk]),
+        'start_url': reverse('core:admin_filial_separar_start', args=[processo.pk]),
+        'list_url': reverse('core:admin_filial_list'),
+        'backup_restauracao_url': reverse(
+            'core:admin_filial_separar_download', args=[processo.pk, 'restauracao'],
+        ),
+        'backup_exportacao_url': reverse(
+            'core:admin_filial_separar_download', args=[processo.pk, 'exportacao'],
+        ),
+        'usuarios_url': reverse('core:admin_usuario_list') + '?central=1',
+        'page_title': 'Central Administrativa',
+    })
+
+
+@superuser_required
+def filial_separar_status(request, pk):
+    processo = get_object_or_404(SeparacaoFilial, pk=pk)
+    return JsonResponse(SeparacaoFilialService.payload_progresso(processo))
+
+
+@superuser_required
+@require_POST
+def filial_separar_start(request, pk):
+    processo = get_object_or_404(SeparacaoFilial, pk=pk)
+    if processo.status == SeparacaoFilial.Status.EXECUTANDO:
+        if processo.updated_at and processo.updated_at < timezone.now() - timedelta(minutes=15):
+            processo.status = SeparacaoFilial.Status.ERRO
+            processo.ultimo_erro = 'A execução anterior ficou sem atualização por mais de 15 minutos.'
+            processo.etapa_atual = 'Execução interrompida'
+            processo.save(update_fields=['status', 'ultimo_erro', 'etapa_atual', 'updated_at'])
+        return JsonResponse(SeparacaoFilialService.payload_progresso(processo))
+    if processo.status != SeparacaoFilial.Status.CONCLUIDO:
+        try:
+            SeparacaoFilialService.enfileirar_execucao(processo, request.user)
+        except SeparacaoFilialError:
+            pass
+    return JsonResponse(SeparacaoFilialService.payload_progresso(processo))
+
+
+@superuser_required
+def filial_separar_download(request, pk, tipo):
+    processo = get_object_or_404(SeparacaoFilial, pk=pk)
+    if tipo == 'restauracao':
+        path, content_type = processo.backup_path, 'application/zip'
+    elif tipo == 'exportacao':
+        path, content_type = processo.backup_exportacao_path, 'application/json; charset=utf-8'
+    else:
+        raise PermissionDenied('Arquivo inválido.')
+    if not path or (not Path(path).exists() and not default_storage.exists(path)):
+        messages.error(request, 'Arquivo ainda não foi gerado ou não está disponível.')
+        return redirect('core:admin_filial_separar_progress', pk=processo.pk)
+    return _file_download_response(path, content_type)
 
 
 @admin_area_required

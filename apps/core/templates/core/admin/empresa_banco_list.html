@@ -382,7 +382,7 @@
         <div class="tenant-bank-actions-cell">
           {% if banco %}
             {% if banco.status != "ativo" %}
-              <a href="{% url 'core:admin_empresa_banco_detail' banco.pk %}" class="tenant-bank-primary-action">
+              <a href="{% url 'core:admin_empresa_banco_progress' banco.pk %}" class="tenant-bank-primary-action">
                 {% if banco.status == "erro" %}Ver erro{% else %}Continuar{% endif %}
               </a>
             {% endif %}
@@ -512,27 +512,27 @@
                 Ver filiais
               </a>
               {% if banco.status != "ativo" %}
-                <a href="{% url 'core:admin_empresa_banco_detail' banco.pk %}">
+                <a href="{% url 'core:admin_empresa_banco_progress' banco.pk %}">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a9 9 0 1 0 9 9M12 7v5l3 2"></path></svg>
                   {% if banco.status == "erro" %}Ver erro e tentar novamente{% else %}Continuar configuração{% endif %}
                 </a>
               {% endif %}
-              {% if False %}<form method="post" action="{% url 'core:admin_empresa_banco_backup' banco.pk %}">
+              <form method="post" action="{% url 'core:admin_empresa_banco_backup' banco.pk %}">
                 {% csrf_token %}
                 <button type="submit">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"></path></svg>
                   Gerar backup completo (SQL + CSV)
                 </button>
-              </form>{% endif %}
-              {% if False %}<button type="button" class="is-danger" @click="actionsOpen = false; deleteOpen = true">
+              </form>
+              <button type="button" class="is-danger" @click="actionsOpen = false; deleteOpen = true">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3m-9 0 1 14h10l1-14M10 11v6m4-6v6"></path></svg>
                 Excluir banco dedicado
-              </button>{% endif %}
+              </button>
             </div>
           </div>
         </div>
 
-        {% if False %}<div x-show="deleteOpen" x-cloak x-transition.opacity class="tenant-bank-modal" role="dialog" aria-modal="true"
+        <div x-show="deleteOpen" x-cloak x-transition.opacity class="tenant-bank-modal" role="dialog" aria-modal="true"
              aria-labelledby="delete-title-{{ banco.pk }}" @click.self="deleteOpen = false" @keydown.escape.window="deleteOpen = false">
           <div class="tenant-bank-dialog" @click.stop>
             <div class="tenant-bank-dialog-head">
@@ -567,7 +567,7 @@
               </form>
             </div>
           </div>
-        </div>{% endif %}
+        </div>
       {% endif %}
       </td>
     </tr>

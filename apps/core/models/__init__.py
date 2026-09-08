@@ -7,6 +7,7 @@ from .log import LogSistema, LogAcesso, RegistroAuditoria
 from .parametros import ParametrosSistema, ParametroDocumentoFiscal
 from .notificacao import Notificacao, NotificacaoLeitura
 from .tenant import EmpresaBanco, RailwayProjectPool, TenantPublicLink
+from .separacao import SeparacaoFilial
 
 __all__ = [
     'FilialScopedModel', 'FilialManager', 'TimestampedModel', 'ActiveModel',
@@ -16,5 +17,5 @@ __all__ = [
     'LogSistema', 'LogAcesso', 'RegistroAuditoria',
     'ParametrosSistema', 'ParametroDocumentoFiscal',
     'Notificacao', 'NotificacaoLeitura',
-    'EmpresaBanco', 'RailwayProjectPool', 'TenantPublicLink',
+    'EmpresaBanco', 'RailwayProjectPool', 'TenantPublicLink', 'SeparacaoFilial',
 ]

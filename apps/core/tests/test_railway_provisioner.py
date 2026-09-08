@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase, override_settings
 
@@ -7,6 +7,68 @@ from apps.core.services.railway_provisioner import RailwayProvisioner
 
 
 class RailwayProvisionerTests(SimpleTestCase):
+    @override_settings(
+        RAILWAY_PROJECT_TOKEN='token-central',
+        RAILWAY_PROJECT_ID='project-central',
+        RAILWAY_ENVIRONMENT_ID='environment-central',
+        RAILWAY_SERVICE_ID='app-central',
+        RAILWAY_CONTROL_SERVICE_ID='app-central',
+    )
+    def test_exclusao_usa_cliente_do_pool_e_remove_variavel_central(self):
+        pool = SimpleNamespace(pk=7)
+        banco = SimpleNamespace(
+            railway_project_pool=pool,
+            railway_database_service_id='tenant-id',
+            railway_database_service_name='Banco Tenant',
+            railway_volume_id='volume-id',
+            database_url_env_var='TENANT_DATABASE_URL_TESTE',
+        )
+        pool_client = SimpleNamespace(
+            find_service=lambda *args, **kwargs: {'id': 'tenant-id'},
+            delete_service=Mock(),
+            delete_volume=Mock(),
+            volume_count=lambda: 3,
+        )
+        control_client = SimpleNamespace(delete_variable=Mock())
+        with (
+            patch.object(RailwayProvisioner, '_client_for_pool', return_value=pool_client),
+            patch.object(RailwayProvisioner, '_control_client', return_value=control_client),
+            patch('apps.core.services.railway_provisioner.RailwayPoolService.update_observation') as update,
+        ):
+            resultado = RailwayProvisioner.delete_postgres(banco)
+
+        control_client.delete_variable.assert_called_once_with(
+            'app-central', 'TENANT_DATABASE_URL_TESTE',
+        )
+        pool_client.delete_service.assert_called_once_with('tenant-id')
+        pool_client.delete_volume.assert_called_once_with('volume-id')
+        update.assert_called_once_with(pool, 3)
+        self.assertEqual(resultado['service_id'], 'tenant-id')
+
+    @override_settings(
+        RAILWAY_PROJECT_TOKEN='token-central',
+        RAILWAY_PROJECT_ID='project-central',
+        RAILWAY_ENVIRONMENT_ID='environment-central',
+        RAILWAY_CONTROL_SERVICE_ID='app-central',
+    )
+    def test_worker_sincroniza_urls_de_tenant_do_app_central(self):
+        client = SimpleNamespace(service_variables=lambda service_id: {
+            'TENANT_DATABASE_URL_NOVA': 'postgresql://tenant',
+            'SECRET_KEY': 'nao-copiar',
+        })
+        with (
+            patch.object(RailwayProvisioner, '_control_client', return_value=client),
+            patch.dict('os.environ', {}, clear=True),
+        ):
+            sincronizadas = RailwayProvisioner.sync_tenant_variables_from_control_app()
+            import os
+            valor = os.environ.get('TENANT_DATABASE_URL_NOVA')
+            segredo = os.environ.get('SECRET_KEY')
+
+        self.assertEqual(sincronizadas, ['TENANT_DATABASE_URL_NOVA'])
+        self.assertEqual(valor, 'postgresql://tenant')
+        self.assertIsNone(segredo)
+
     @override_settings(RAILWAY_PROJECT_ID='project-stage')
     def test_servico_importado_e_identificado_pelo_id(self):
         payload = {

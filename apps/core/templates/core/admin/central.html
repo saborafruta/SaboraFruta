@@ -522,7 +522,7 @@
   {% if empresa_contexto and politica_form %}
   <section class="card p-6 lg:p-7"
            x-data="{
-             replicacaoAtiva: {% if politica_filial_origem.participa_replicacao %}true{% else %}false{% endif %},
+             replicacaoAtiva: {% if politica_filial_origem.participa_replicacao and not replicacao_bloqueada %}true{% else %}false{% endif %},
              detalhesReplicacao: false,
              marcarTodas() {
                if (!this.replicacaoAtiva) return;
@@ -551,13 +551,16 @@
         <input type="hidden" name="filial_id" value="{{ politica_filial_origem.pk }}">
       {% endif %}
       <label class="replication-switch cursor-pointer">
-        <input type="checkbox" name="participa_replicacao" value="on" x-model="replicacaoAtiva">
+        <input type="checkbox" name="participa_replicacao" value="on" x-model="replicacaoAtiva" {% if replicacao_bloqueada %}disabled{% endif %}>
         <span class="switch-track"><span class="switch-thumb"></span></span>
         <span>
           <span class="block text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Replicacao ativa nesta filial</span>
           <span class="block text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#a8b3c2;'">Quando desligada, esta filial nao envia nem recebe cadastros replicados.</span>
         </span>
       </label>
+      {% if replicacao_bloqueada %}
+        <div class="text-sm text-amber-400">Esta filial foi separada e não pode voltar a compartilhar dados automaticamente.</div>
+      {% endif %}
 
       <div x-show="replicacaoAtiva" x-cloak x-transition.opacity.duration.150ms
            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border px-4 py-3"

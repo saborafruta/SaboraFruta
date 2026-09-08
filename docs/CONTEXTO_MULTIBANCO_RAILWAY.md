@@ -460,10 +460,57 @@ ferramenta de emergência técnica, mas não é o fluxo normal da Central.
   foram preservados. Não substituir esses serviços pelos arquivos antigos do
   Dev Edu, pois isso removeria a seleção automática de projetos e o TCP Proxy
   usado pelos bancos hospedados fora do projeto principal.
-- A operação destrutiva **Separar filial** e os comandos de exclusão/backup
-  físico do banco não devem ser habilitados apenas copiando HTML. No Dev Edu,
-  dependem de um modelo e de um orquestrador antigo extenso; precisam de uma
-  adaptação e auditoria próprias antes de voltarem a aparecer em produção.
+- A operação **Separar filial** foi adaptada ao modelo atual, incluindo banco
+  multiprojeto, simulação, bloqueio por operações abertas, confirmação dupla,
+  execução Celery, acompanhamento de progresso, backups e relatório final.
+- Ações de banco agora incluem configuração acompanhada por progresso, backup
+  completo em ZIP (SQL, CSVs e manifesto) e exclusão protegida. A exclusão só
+  prossegue depois do backup, da razão social completa e da senha master (ou
+  senha do Super Admin quando a variável master estiver vazia).
+- Bancos importados manualmente também podem ter o serviço Railway removido
+  quando possuem `railway_database_service_id`. Sem identificação inequívoca
+  do serviço físico, a operação é bloqueada para não apagar somente o cadastro
+  central e deixar infraestrutura órfã.
+
+## Separação segura de filial (08/09/2026)
+
+O fluxo portado do Dev Edu foi mantido na Central, mas adaptado à arquitetura
+mais nova deste repositório:
+
+1. **Separar filial** abre uma simulação sem alterar dados;
+2. o sistema bloqueia empresa com uma única filial ativa, CNPJ inválido ou
+   duplicado e operações ainda abertas;
+3. o administrador precisa digitar `SEPARAR` e confirmar a senha;
+4. um worker Celery executa a operação fora da requisição web;
+5. antes da mudança administrativa são gerados backup de restauração e
+   exportação auditável;
+6. a filial vira uma empresa independente, recebe perfis próprios e banco
+   dedicado, e seus dados operacionais são copiados para esse banco;
+7. usuários exclusivos acompanham a unidade; usuários compartilhados ficam
+   sinalizados para revisão;
+8. a replicação é desligada e não pode ser reativada automaticamente depois da
+   separação, evitando reconciliar bancos independentes sem análise;
+9. a tela de progresso pode ser reaberta e os arquivos de segurança continuam
+   disponíveis para download enquanto permanecerem no armazenamento.
+
+O modelo `core.separacaofilial` e `core.filialfavorita` pertencem ao Banco
+Gerencial (`TENANT_GLOBAL_MODELS`). Nunca execute o worker sem as mesmas
+variáveis de banco/tenant e Redis do app central. Em produção,
+`SEPARACAO_FILIAL_ASYNC_MODE=celery`; `inline` serve somente para testes locais.
+No worker, `RAILWAY_CONTROL_SERVICE_ID` deve apontar para o app web canônico,
+não para o próprio worker. Antes de cada tarefa, ele consulta esse app e carrega
+as URLs atuais dos tenants, inclusive bancos criados depois do último deploy.
+
+Os pacotes de backup não ficam no disco efêmero do container: são enviados ao
+`default_storage`. No iTed isso significa o bucket `media`, compartilhado pelo
+app web e pelo worker. Os campos `backup_path` guardam a chave do objeto, e o
+download da Central abre o arquivo pelo storage. Não troque isso por um caminho
+local em produção.
+
+Não existe separação silenciosa: nenhum botão inicia a operação final antes da
+simulação e da confirmação. Ainda assim, antes de usar em empresa real,
+confirme que o worker está `SUCCESS`, que o bucket/volume de backups responde e
+que o projeto Railway escolhido possui vaga operacional.
 
 ## Pendências e melhorias futuras
 
