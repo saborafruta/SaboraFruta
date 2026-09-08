@@ -200,9 +200,15 @@ class RemessaVendaForaService:
 
         # A INFORMACAO COMPLEMENTAR EXPLICA A NOTA a quem a ler na estrada --
         # fiscal de barreira inclusive. Sem ela, uma nota da empresa para ela
-        # mesma parece erro.
+        # mesma parece erro. O texto fixo (maiusculas) é o parametrizado com
+        # a contabilidade; o número/série que ele cita são os desta própria
+        # nota -- útil pra conferir o documento numa cópia sem o cabeçalho.
+        # O resto (viagem/veículo/responsável) é o detalhe operacional que
+        # já ajudava a fiscalização de estrada a entender a nota.
         texto = ' '.join([
-            'Remessa para venda fora do estabelecimento.',
+            'REMESSA PARA VENDA FORA DO ESTABELECIMENTO. MERCADORIA DESTINADA '
+            'À VENDA FORA DO ESTABELECIMENTO, CONFORME LEGISLAÇÃO FISCAL '
+            f'APLICÁVEL. NF-E DE ORIGEM Nº {numero}, SÉRIE {serie}.',
             f'Viagem {viagem.numero:06d}.',
             f'Veiculo {viagem.veiculo_placa}.' if viagem.veiculo_placa else '',
             f'Responsavel {viagem.motorista_nome}.' if viagem.motorista_nome else '',

@@ -29,6 +29,7 @@ urlpatterns = [
     # Vendas
     path("api/venda/finalizar/", pdv.api_venda_finalizar, name="api_venda_finalizar"),
     path("api/venda/finalizar/forcado/", pdv.api_venda_finalizar_forcado, name="api_venda_finalizar_forcado"),
+    path("api/viagens-remessa-aberta/", pdv.api_viagens_remessa_aberta, name="api_viagens_remessa_aberta"),
     path("api/venda/pendente/", pdv.api_venda_pendente, name="api_venda_pendente"),
     path("api/venda/orcamento/", pdv.api_venda_orcamento, name="api_venda_orcamento"),
     path("api/pendentes/", pdv.api_pendentes, name="api_pendentes"),

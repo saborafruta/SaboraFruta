@@ -171,10 +171,23 @@ class RemessaVendaForaTests(TestCase):
         payload = RemessaVendaForaService.construir_payload(self.viagem, 1, 1)
 
         info = payload['informacoes_adicionais_contribuinte']
-        self.assertIn('Remessa para venda fora do estabelecimento', info)
+        self.assertIn('REMESSA PARA VENDA FORA DO ESTABELECIMENTO', info)
+        self.assertIn('CONFORME LEGISLAÇÃO FISCAL APLICÁVEL', info)
         self.assertIn('000125', info)
         self.assertIn('ABC1234', info)
-        self.assertIn('venda fora do estabelecimento', info)
+
+    def test_o_texto_fixo_cita_o_numero_e_serie_da_propria_nota(self):
+        """
+        "NF-E DE ORIGEM Nº X, SÉRIE Y" nesta nota são o número e a série
+        DELA MESMA -- útil pra conferir o documento numa cópia sem o
+        cabeçalho, não uma referência a outra nota.
+        """
+        self._item()
+
+        payload = RemessaVendaForaService.construir_payload(self.viagem, 42, 3)
+
+        info = payload['informacoes_adicionais_contribuinte']
+        self.assertIn('NF-E DE ORIGEM Nº 42, SÉRIE 3', info)
 
     # ── O que a nota leva ────────────────────────────────────────────────
 

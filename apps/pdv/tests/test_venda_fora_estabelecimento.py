@@ -1,5 +1,6 @@
 """
-Venda fora do estabelecimento — venda normal, só muda o CFOP na nota.
+Venda fora do estabelecimento — venda normal, só muda o CFOP na nota, mas
+precisa de uma remessa (5904/6904) por trás.
 
 O QUE ESTES TESTES CERCAM:
 
@@ -15,7 +16,15 @@ O QUE ESTES TESTES CERCAM:
     aconteceu no balcão;
 
   · BONIFICAÇÃO E VENDA FORA NÃO COEXISTEM na mesma nota -- são naturezas
-    de saída que se excluem.
+    de saída que se excluem;
+
+  · EXIGE UMA VIAGEM COM REMESSA AUTORIZADA. CFOP 5103/6103 pressupõe que
+    a mercadoria já saiu por uma NF-e de remessa (5904/6904) -- sem ela
+    vinculada, a venda não sai;
+
+  · A NOTA DA VENDA CITA A REMESSA (número, série, chave) nas informações
+    adicionais, pra' quem ler o DANFE da venda achar de onde a mercadoria
+    saiu sem precisar voltar ao sistema.
 """
 from decimal import Decimal
 
@@ -24,8 +33,10 @@ from django.test import TestCase
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.core.services.exceptions import DadosInvalidosError
-from apps.financeiro.constants.enums import TipoFormaPagamento
+from apps.financeiro.constants.enums import StatusDocumentoFiscal, TipoFormaPagamento
 from apps.financeiro.models import FormaPagamento
+from apps.financeiro.models.fiscal import DocumentoFiscal
+from apps.logistica.models_viagem import Viagem
 from apps.pdv.models import Caixa, SessaoPDV
 from apps.pdv.services.nfce_payload_builder import NfePayloadBuilder, NfcePayloadBuilder
 from apps.pdv.services.venda_pdv_service import VendaPDVService
@@ -75,6 +86,11 @@ class VendaForaEstabelecimentoBase(TestCase):
             filial=self.filial, caixa=self.caixa, usuario=self.usuario,
             valor_abertura=Decimal('0.00'), status='aberto',
         )
+        # A VIAGEM PADRÃO JÁ NASCE COM REMESSA AUTORIZADA -- é o caso feliz
+        # que a maioria dos testes usa; quem quer testar a falta dela cria
+        # a própria viagem/documento à parte.
+        self.viagem = self._viagem(numero=1)
+        self._remessa_autorizada(self.viagem, numero=900, serie=1)
 
     def criar_produto(self, descricao='Polpa Venda Fora'):
         produto = Produto.objects.create(
@@ -86,6 +102,29 @@ class VendaForaEstabelecimentoBase(TestCase):
         ProdutoFilial.objects.create(produto=produto, filial=self.filial)
         return produto
 
+    def _viagem(self, numero, motorista_nome='Seu Zé', veiculo_placa='ABC1D23'):
+        return Viagem.objects.create(
+            filial=self.filial, numero=numero, motorista_nome=motorista_nome,
+            veiculo_placa=veiculo_placa, vendedor=self.usuario,
+        )
+
+    def _remessa_autorizada(self, viagem, numero, serie=1, chave=None):
+        chave = chave if chave is not None else f'{numero:044d}'
+        return DocumentoFiscal.objects.create(
+            filial=self.filial, tipo_documento='nfe',
+            origem_tipo='viagem_remessa', origem_id=viagem.pk,
+            numero=numero, serie=serie, chave=chave,
+            emitente_cnpj=self.filial.cnpj,
+            destinatario_snapshot={'nome': self.filial.razao_social},
+            valor_total=Decimal('1000.00'), status=StatusDocumentoFiscal.AUTORIZADA,
+            data_emissao=self._agora(), usuario=self.usuario,
+        )
+
+    @staticmethod
+    def _agora():
+        from django.utils import timezone
+        return timezone.now()
+
     def _finalizar(self, produto, **kw):
         dados = dict(
             sessao=self.sessao, filial=self.filial, usuario=self.usuario,
@@ -95,24 +134,29 @@ class VendaForaEstabelecimentoBase(TestCase):
         dados.update(kw)
         return VendaPDVService.finalizar_venda(**dados)
 
+    def _finalizar_fora(self, produto=None, **kw):
+        """O caso feliz: venda fora amparada pela viagem padrão do setUp."""
+        produto = produto or self.criar_produto()
+        dados = dict(venda_fora_estabelecimento=True, viagem_id=self.viagem.pk)
+        dados.update(kw)
+        return self._finalizar(produto, **dados)
+
 
 class FinalizarVendaForaTests(VendaForaEstabelecimentoBase):
 
     def test_e_venda_normal_com_pagamento_e_caixa(self):
         """Diferente da bonificação, esta flag não muda o fluxo de cobrança."""
-        produto = self.criar_produto()
-
-        venda = self._finalizar(produto, venda_fora_estabelecimento=True)
+        venda = self._finalizar_fora()
 
         self.assertTrue(venda.venda_fora_estabelecimento)
+        self.assertEqual(venda.viagem_id, self.viagem.pk)
         self.assertEqual(venda.valor_total, Decimal('20.00'))
         self.assertEqual(venda.pagamentos.count(), 1)
 
     def test_entra_no_caixa_normalmente(self):
-        produto = self.criar_produto()
         total_antes = self.sessao.total_vendas or Decimal('0')
 
-        self._finalizar(produto, venda_fora_estabelecimento=True)
+        self._finalizar_fora()
 
         self.sessao.refresh_from_db()
         self.assertEqual(
@@ -122,18 +166,13 @@ class FinalizarVendaForaTests(VendaForaEstabelecimentoBase):
 
     def test_sem_pagamento_continua_recusando(self):
         """Não é bonificação -- ainda exige o pagamento cobrir o total."""
-        produto = self.criar_produto()
-
         with self.assertRaises(DadosInvalidosError):
-            self._finalizar(produto, pagamentos=[], venda_fora_estabelecimento=True)
+            self._finalizar_fora(pagamentos=[])
 
     def test_bonificacao_e_venda_fora_nao_coexistem(self):
-        produto = self.criar_produto()
-
         with self.assertRaises(DadosInvalidosError):
-            self._finalizar(
-                produto, pagamentos=[], cliente_id=self.cliente.pk,
-                bonificacao=True, venda_fora_estabelecimento=True,
+            self._finalizar_fora(
+                pagamentos=[], cliente_id=self.cliente.pk, bonificacao=True,
             )
 
     def test_flag_padrao_e_false(self):
@@ -142,16 +181,63 @@ class FinalizarVendaForaTests(VendaForaEstabelecimentoBase):
         venda = self._finalizar(produto)
 
         self.assertFalse(venda.venda_fora_estabelecimento)
+        self.assertIsNone(venda.viagem_id)
+
+    def test_sem_viagem_selecionada_recusa(self):
+        produto = self.criar_produto()
+
+        with self.assertRaises(DadosInvalidosError):
+            self._finalizar(produto, venda_fora_estabelecimento=True)
+
+    def test_viagem_de_outra_filial_recusa(self):
+        outra_filial = Filial.objects.create(
+            empresa=self.empresa, razao_social='Outra Filial',
+            cnpj='72345678000273', uf='RN', cidade='Mossoró',
+        )
+        viagem_de_fora = Viagem.objects.create(
+            filial=outra_filial, numero=1, vendedor=self.usuario,
+        )
+        self._remessa_autorizada(viagem_de_fora, numero=901)
+        produto = self.criar_produto()
+
+        with self.assertRaises(DadosInvalidosError):
+            self._finalizar(
+                produto, venda_fora_estabelecimento=True, viagem_id=viagem_de_fora.pk,
+            )
+
+    def test_viagem_sem_remessa_autorizada_recusa(self):
+        viagem_sem_remessa = self._viagem(numero=2)
+        produto = self.criar_produto()
+
+        with self.assertRaises(DadosInvalidosError):
+            self._finalizar(
+                produto, venda_fora_estabelecimento=True, viagem_id=viagem_sem_remessa.pk,
+            )
+
+    def test_viagem_so_com_remessa_pendente_recusa(self):
+        """Emitida mas ainda não autorizada pela SEFAZ não ampara a venda."""
+        viagem = self._viagem(numero=3)
+        DocumentoFiscal.objects.create(
+            filial=self.filial, tipo_documento='nfe',
+            origem_tipo='viagem_remessa', origem_id=viagem.pk,
+            numero=902, serie=1, emitente_cnpj=self.filial.cnpj,
+            destinatario_snapshot={}, valor_total=Decimal('100'),
+            status=StatusDocumentoFiscal.PROCESSANDO,
+            data_emissao=self._agora(), usuario=self.usuario,
+        )
+        produto = self.criar_produto()
+
+        with self.assertRaises(DadosInvalidosError):
+            self._finalizar(
+                produto, venda_fora_estabelecimento=True, viagem_id=viagem.pk,
+            )
 
 
 class NotaFiscalVendaForaTests(VendaForaEstabelecimentoBase):
-    """O CFOP, a natureza da operação e o indicador de presença saem certos."""
+    """O CFOP, a natureza da operação, o indicador de presença e a remessa citada saem certos."""
 
     def _venda_fora(self):
-        produto = self.criar_produto()
-        return self._finalizar(
-            produto, venda_fora_estabelecimento=True, cliente_id=self.cliente.pk,
-        )
+        return self._finalizar_fora(cliente_id=self.cliente.pk)
 
     def test_nfce_sai_com_cfop_5103_e_natureza_certa(self):
         venda = self._venda_fora()
@@ -180,3 +266,29 @@ class NotaFiscalVendaForaTests(VendaForaEstabelecimentoBase):
         self.assertEqual(payload['natureza_operacao'], 'VENDA AO CONSUMIDOR')
         self.assertEqual(payload['items'][0]['cfop'], '5102')
         self.assertEqual(payload['presenca_comprador'], '1')
+
+
+class RemessaCitadaNaEmissaoTests(VendaForaEstabelecimentoBase):
+    """
+    `_texto_remessa_vinculada` é o texto que entra nas informações
+    adicionais da nota da venda -- testado direto, isolado do envio real
+    à Focus NFe (que exige token/CSC configurados na filial).
+    """
+
+    def test_cita_numero_serie_e_chave_da_remessa(self):
+        from apps.pdv.services.nfce_payload_builder import _texto_remessa_vinculada
+
+        venda = self._finalizar_fora(cliente_id=self.cliente.pk)
+
+        texto = _texto_remessa_vinculada(venda)
+
+        self.assertIn('remessa nº 900, série 1', texto)
+        self.assertIn(f'{900:044d}', texto)
+
+    def test_sem_viagem_nao_cita_remessa_nenhuma(self):
+        from apps.pdv.services.nfce_payload_builder import _texto_remessa_vinculada
+
+        produto = self.criar_produto()
+        venda = self._finalizar(produto)
+
+        self.assertEqual(_texto_remessa_vinculada(venda), '')

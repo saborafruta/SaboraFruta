@@ -1258,16 +1258,16 @@
 
     <!-- Modos (seletor segmentado) -->
     <div class="mode-seg">
-      <button @click="modo='venda';venda.delivery=false;venda.endereco_entrega={};venda.fora_estabelecimento=false"
+      <button @click="modo='venda';venda.delivery=false;venda.endereco_entrega={};venda.fora_estabelecimento=false;venda.viagem_id=null;venda.viagem_numero=null"
               :class="(modo==='venda'&&!venda.delivery&&!venda.fora_estabelecimento) ? 'mode-btn act-venda' : 'mode-btn'">
         <span style="font-size:14px;font-weight:800;">$</span> Venda
       </button>
-      <button @click="modo='venda';venda.fora_estabelecimento=false;solicitarDelivery()"
+      <button @click="modo='venda';venda.fora_estabelecimento=false;venda.viagem_id=null;venda.viagem_numero=null;solicitarDelivery()"
               :class="(modo==='venda'&&venda.delivery) ? 'mode-btn act-delivery' : 'mode-btn'">
         <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 001 1h1m-1-1V8h4l3 3v5a1 1 0 01-1 1h-1"/></svg>
         Delivery
       </button>
-      <button @click="modo='orcamento';venda.delivery=false;venda.fora_estabelecimento=false"
+      <button @click="modo='orcamento';venda.delivery=false;venda.fora_estabelecimento=false;venda.viagem_id=null;venda.viagem_numero=null"
               :class="modo==='orcamento' ? 'mode-btn act-orcamento' : 'mode-btn'">
         <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         Orçamento
@@ -1279,7 +1279,7 @@
         forma de pagamento isolada, só que sem o operador precisar
         selecionar nada na tela de pagamento.
       {% endcomment %}
-      <button @click="modo='bonificacao';venda.delivery=false;venda.fora_estabelecimento=false"
+      <button @click="modo='bonificacao';venda.delivery=false;venda.fora_estabelecimento=false;venda.viagem_id=null;venda.viagem_numero=null"
               :class="modo==='bonificacao' ? 'mode-btn act-bonificacao' : 'mode-btn'">
         <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.59 13.41L11 3.83A2 2 0 009.59 3.24L4 3a1 1 0 00-1 1l.24 5.59a2 2 0 00.59 1.41l9.58 9.58a2 2 0 002.83 0l4.35-4.35a2 2 0 000-2.82z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7.5 7.5h.01"/></svg>
         Bonificação
@@ -1290,9 +1290,12 @@
         em vez do CFOP de venda comum (5102/6102), porque a mercadoria saiu
         pra ser vendida ambulante/fora do balcão em vez de presencial no
         estabelecimento. Fica no mesmo `modo='venda'`, mesma lógica do
-        Delivery: um flag a mais na venda, não um fluxo à parte.
+        Delivery: um flag a mais na venda, não um fluxo à parte. MAS
+        PRECISA DE UMA REMESSA POR TRÁS -- CFOP 5103/6103 pressupõe que a
+        mercadoria já saiu por uma NF-e de remessa (5904/6904); por isso o
+        clique abre a escolha da viagem em vez de já marcar o modo.
       {% endcomment %}
-      <button @click="modo='venda';venda.delivery=false;venda.endereco_entrega={};venda.fora_estabelecimento=true"
+      <button @click="solicitarVendaFora()"
               :class="(modo==='venda'&&venda.fora_estabelecimento) ? 'mode-btn act-venda-fora' : 'mode-btn'">
         <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16V4m0 0L4 8m4-4l4 4m4 4v12m0 0l4-4m-4 4l-4-4"/></svg>
         Venda Fora
@@ -1994,6 +1997,26 @@
         </p>
       </div>
 
+      {% comment %}
+        VENDA FORA E' VENDA NORMAL -- o aviso aqui e' so' pra confirmar qual
+        remessa ampara a mercadoria, ja' que sem ela a nota nao teria de
+        onde ter saido. O pagamento continua obrigatorio, diferente da
+        bonificacao.
+      {% endcomment %}
+      <div x-show="modo==='venda' && venda.fora_estabelecimento" x-cloak
+           style="margin:10px 12px 0;padding:10px 12px;border-radius:10px;background:rgba(13,148,136,.12);border:1px solid rgba(13,148,136,.32);">
+        <p style="font-size:12px;font-weight:700;color:#5eead4;margin:0 0 2px;">🚚 Venda fora do estabelecimento</p>
+        <p style="font-size:11px;color:#2dd4bf;margin:0;">
+          <template x-if="venda.viagem_numero">
+            <span>Amparada pela remessa da Viagem #<span x-text="String(venda.viagem_numero).padStart(6,'0')"></span>.
+            CFOP 5103/6103 na nota. Pagamento continua obrigatório, como numa venda comum.</span>
+          </template>
+          <template x-if="!venda.viagem_numero">
+            <span>Selecione a viagem cuja remessa ampara esta mercadoria.</span>
+          </template>
+        </p>
+      </div>
+
       <!-- Título Forma de Pagamento -->
       <div class="payment-panel-heading" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--pdv-bd2);flex-shrink:0;">
         <div style="display:flex;align-items:center;gap:8px;">
@@ -2668,6 +2691,55 @@
       <div style="display:flex;gap:10px;">
         <button @click="showModalDelivery=false;venda.delivery=false" style="flex:1;padding:10px;background:#1e1e2a;border:none;border-radius:8px;color:#666;font-size:13px;cursor:pointer;">Cancelar</button>
         <button @click="confirmarDelivery()" style="flex:1;padding:10px;background:#f59e0b;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">✓ Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  {% comment %}
+    VENDA FORA DO ESTABELECIMENTO -- escolhe de qual viagem (com remessa
+    já autorizada) esta mercadoria saiu. Sem uma viagem selecionada não dá
+    pra marcar o modo: CFOP 5103/6103 pressupõe que existe uma NF-e de
+    remessa (5904/6904) por trás, e é dela que sai o número/série que a
+    nota da venda vai citar.
+  {% endcomment %}
+  <div x-cloak
+       :style="showModalVendaFora
+         ? 'position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.8);padding:16px;'
+         : 'display:none;'"
+       @keydown.escape.window="cancelarVendaFora()">
+    <div style="width:100%;max-width:420px;background:#13131e;border:1px solid #2a2a3e;border-radius:16px;padding:24px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <h2 style="font-size:15px;font-weight:700;color:#fff;margin:0;">🚚 Venda Fora do Estabelecimento</h2>
+        <button @click="cancelarVendaFora()" style="background:none;border:none;color:#555;font-size:18px;cursor:pointer;">✕</button>
+      </div>
+      <p style="font-size:11px;color:#888;margin:0 0 14px;">
+        Escolha a viagem cuja remessa amparou esta mercadoria. A nota sai com
+        CFOP 5103/6103, citando o número/série da remessa.
+      </p>
+      <div x-show="carregandoViagensRemessa" style="text-align:center;padding:24px;color:#666;font-size:12px;">Carregando…</div>
+      <div x-show="!carregandoViagensRemessa && viagensRemessaAberta.length===0" x-cloak
+           style="text-align:center;padding:24px 12px;color:#888;font-size:12px;">
+        Nenhuma viagem com remessa autorizada em aberto. Emita a NF-e de
+        remessa na tela de Viagens antes de vender fora do estabelecimento.
+      </div>
+      <div style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
+        <template x-for="viagem in viagensRemessaAberta" :key="viagem.id">
+          <button type="button" @click="confirmarVendaFora(viagem)"
+                  style="text-align:left;padding:12px 14px;background:#1e1e2a;border:1px solid #2a2a3e;border-radius:10px;cursor:pointer;transition:.13s;"
+                  onmouseover="this.style.borderColor='#0d9488'" onmouseout="this.style.borderColor='#2a2a3e'">
+            <div style="font-size:13px;font-weight:700;color:#e5e5f0;">
+              Viagem #<span x-text="String(viagem.numero).padStart(6,'0')"></span>
+            </div>
+            <div style="font-size:11px;color:#888;margin-top:2px;">
+              Remessa nº <span x-text="viagem.remessa_numero"></span>, série <span x-text="viagem.remessa_serie"></span>
+              <template x-if="viagem.veiculo_placa"><span> · <span x-text="viagem.veiculo_placa"></span></span></template>
+              <template x-if="viagem.motorista_nome"><span> · <span x-text="viagem.motorista_nome"></span></span></template>
+            </div>
+          </button>
+        </template>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:16px;">
+        <button @click="cancelarVendaFora()" style="flex:1;padding:10px;background:#1e1e2a;border:none;border-radius:8px;color:#666;font-size:13px;cursor:pointer;">Cancelar</button>
       </div>
     </div>
   </div>
@@ -3791,6 +3863,7 @@ function pdv() {
       subtotal: 0, desconto: 0, acrescimo: 0,
       total: 0, valor_pago: 0, restante: 0,
       delivery: false, endereco_entrega: {}, fora_estabelecimento: false,
+      viagem_id: null, viagem_numero: null,
       observacao: '', comanda_id_origem: null,
     },
 
@@ -3809,6 +3882,7 @@ function pdv() {
     formasPagamento: [], mostrarMaisFormas: false, formaPgtoSelecionada: null, valorPgto: '', prazoDiasPgto: '', bandeiraPgto: '', parcelasPgto: 1,
 
     showModalCaixa: false, showModalCliente: false, showModalDelivery: false,
+    showModalVendaFora: false, viagensRemessaAberta: [], carregandoViagensRemessa: false,
     showModalPendentes: false, showModalOrcamentos: false, showModalConfirmacao: false,
     showModalDescontoItem: false, showModalDesconto: false, showModalPrecoItem: false,
     showModalNovoCliente: false, showModalCaixaRel: false, showCaixaMenu: false, showImprimirMenu: false,
@@ -4684,6 +4758,7 @@ function pdv() {
           delivery: this.venda.delivery,
           endereco_entrega: this.venda.endereco_entrega,
           venda_fora_estabelecimento: this.venda.fora_estabelecimento || false,
+          viagem_id: this.venda.viagem_id || null,
           credito_valor: this.creditoAplicado || 0,
           data_venda: (this.usuarioEhAdmin && this.dataVendaRetroativa) ? this.dataVendaRetroativa : null,
           observacao: this.venda.observacao || '',
@@ -4731,6 +4806,7 @@ function pdv() {
           delivery: this.venda.delivery,
           endereco_entrega: this.venda.endereco_entrega,
           venda_fora_estabelecimento: this.venda.fora_estabelecimento || false,
+          viagem_id: this.venda.viagem_id || null,
           credito_valor: this.creditoAplicado || 0,
           data_venda: (this.usuarioEhAdmin && this.dataVendaRetroativa) ? this.dataVendaRetroativa : null,
           observacao: this.venda.observacao || '',
@@ -4824,6 +4900,7 @@ function pdv() {
             acrescimo:this.venda.acrescimo,observacao:this.venda.observacao||'',
             delivery:this.venda.delivery,endereco_entrega:this.venda.endereco_entrega,
             venda_fora_estabelecimento:this.venda.fora_estabelecimento||false,
+            viagem_id:this.venda.viagem_id||null,
             pagamentos:this.venda.pagamentos})});
         const d=await r.json();
         if (d.ok) { this.toast_('Venda salva como pendente','ok'); this.novaVenda(); await this.carregarPendentes(); }
@@ -5757,7 +5834,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
 
     novaVenda() {
       this.venda={id:null,numero:null,cliente:{id:null,nome:'Consumidor Final',cpf_cnpj:''},
-        itens:[],pagamentos:[],subtotal:0,desconto:0,acrescimo:0,total:0,valor_pago:0,restante:0,delivery:false,endereco_entrega:{},fora_estabelecimento:false,observacao:''};
+        itens:[],pagamentos:[],subtotal:0,desconto:0,acrescimo:0,total:0,valor_pago:0,restante:0,delivery:false,endereco_entrega:{},fora_estabelecimento:false,viagem_id:null,viagem_numero:null,observacao:''};
       this.creditoDisponivel=0; this.creditoAplicado=0; this.cashbackDisponivel=0;
       this.buscaQuery=''; this.produtos=[]; this.formaPgtoSelecionada=null;
       this.dataVendaRetroativa='';
@@ -6134,6 +6211,35 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       this.prepararDeliveryClienteSelecionado();
     },
 
+    // VENDA FORA PRECISA DE UMA VIAGEM COM REMESSA AUTORIZADA por trás --
+    // CFOP 5103/6103 pressupõe que a mercadoria já saiu por uma NF-e de
+    // remessa (5904/6904). Sem isso pra escolher, o operador nem consegue
+    // marcar o modo -- é melhor travar aqui do que deixar a venda passar e
+    // travar só na hora de emitir a nota, com o cliente já esperando.
+    async solicitarVendaFora() {
+      this.modo='venda'; this.venda.delivery=false; this.venda.endereco_entrega={};
+      this.carregandoViagensRemessa=true;
+      this.showModalVendaFora=true;
+      try {
+        const r = await fetch('/pdv/api/viagens-remessa-aberta/');
+        const d = await r.json();
+        this.viagensRemessaAberta = d.ok ? (d.viagens||[]) : [];
+      } catch { this.viagensRemessaAberta=[]; }
+      this.carregandoViagensRemessa=false;
+    },
+
+    confirmarVendaFora(viagem) {
+      this.venda.fora_estabelecimento=true;
+      this.venda.viagem_id=viagem.id;
+      this.venda.viagem_numero=viagem.numero;
+      this.showModalVendaFora=false;
+    },
+
+    cancelarVendaFora() {
+      this.showModalVendaFora=false;
+      if (!this.venda.viagem_id) { this.venda.fora_estabelecimento=false; }
+    },
+
     toggleDelivery() {
       if (this.venda.delivery) { this.venda.delivery=false; this.venda.endereco_entrega={}; this.deliveryAguardandoCliente=false; }
       else { this.solicitarDelivery(); }
@@ -6248,6 +6354,8 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         this.venda.delivery = d.delivery || false;
         this.venda.endereco_entrega = d.endereco_entrega || {};
         this.venda.fora_estabelecimento = d.venda_fora_estabelecimento || false;
+        this.venda.viagem_id = d.viagem_id || null;
+        this.venda.viagem_numero = d.viagem_numero || null;
         this.venda.observacao = d.observacao || '';
         // Restaura as formas de pagamento selecionadas antes de salvar como
         // pendente (_id novo pra nao colidir com o :key do Alpine).

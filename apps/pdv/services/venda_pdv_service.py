@@ -49,6 +49,7 @@ class VendaPDVService:
         request=None,
         bonificacao: bool = False,
         venda_fora_estabelecimento: bool = False,
+        viagem_id: int | None = None,
     ) -> VendaPDV:
         if not sessao:
             raise DadosInvalidosError("Nenhuma sessao de caixa aberta.")
@@ -89,6 +90,9 @@ class VendaPDVService:
             raise DadosInvalidosError(
                 "Bonificação e Venda Fora do Estabelecimento não podem estar marcadas juntas."
             )
+        viagem = None
+        if venda_fora_estabelecimento:
+            viagem = cls._resolver_viagem_da_remessa(filial, viagem_id)
         venda = VendaPDV.objects.create(
             sessao_pdv=sessao,
             filial=filial,
@@ -98,6 +102,7 @@ class VendaPDVService:
             delivery=delivery,
             bonificacao=bonificacao,
             venda_fora_estabelecimento=venda_fora_estabelecimento,
+            viagem=viagem,
             endereco_entrega=endereco_entrega or {},
             valor_desconto=desconto,
             valor_acrescimo=acrescimo,
@@ -192,6 +197,39 @@ class VendaPDVService:
             RecompraService.recalcular_cliente_da_venda(filial, venda.cliente_id)
 
         return venda
+
+    @classmethod
+    def _resolver_viagem_da_remessa(cls, filial, viagem_id: int | None):
+        """
+        A viagem cuja remessa ampara a venda fora do estabelecimento.
+
+        EXIGE REMESSA AUTORIZADA, NÃO SÓ EMITIDA. Uma remessa rejeitada ou
+        ainda em processamento na SEFAZ não amparou a mercadoria de
+        verdade -- vincular a venda a ela criaria um rastro fiscal que não
+        se sustenta se a remessa nunca for autorizada.
+        """
+        if not viagem_id:
+            raise DadosInvalidosError(
+                "Selecione a viagem cuja remessa amparou esta mercadoria "
+                "para vender fora do estabelecimento."
+            )
+        from apps.financeiro.constants.enums import StatusDocumentoFiscal
+        from apps.financeiro.models.fiscal import DocumentoFiscal
+        from apps.logistica.models_viagem import Viagem
+
+        viagem = Viagem.objects.for_filial(filial).filter(pk=viagem_id).first()
+        if not viagem:
+            raise DadosInvalidosError("Viagem não encontrada na filial ativa.")
+        tem_remessa_autorizada = DocumentoFiscal.objects.filter(
+            origem_tipo="viagem_remessa", origem_id=viagem.pk,
+            status=StatusDocumentoFiscal.AUTORIZADA,
+        ).exists()
+        if not tem_remessa_autorizada:
+            raise DadosInvalidosError(
+                f"A viagem #{viagem.numero:06d} ainda não tem remessa autorizada — "
+                "emita a NF-e de remessa antes de vender fora do estabelecimento."
+            )
+        return viagem
 
     @classmethod
     def resolver_preco_produto(

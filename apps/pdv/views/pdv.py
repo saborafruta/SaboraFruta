@@ -1174,6 +1174,7 @@ def api_venda_finalizar(request):
     forcar_estoque_negativo = True
     bonificacao = bool(body.get("bonificacao", False))
     venda_fora_estabelecimento = bool(body.get("venda_fora_estabelecimento", False))
+    viagem_id = body.get("viagem_id")
 
     try:
         data_venda = _data_venda_retroativa(request, body)
@@ -1205,6 +1206,7 @@ def api_venda_finalizar(request):
                 request=request,
                 bonificacao=bonificacao,
                 venda_fora_estabelecimento=venda_fora_estabelecimento,
+                viagem_id=viagem_id,
             )
             if comanda_id:
                 _fechar_comanda_origem(comanda_id, request, venda)
@@ -1264,6 +1266,7 @@ def api_venda_finalizar_forcado(request):
     endereco_entrega = body.get("endereco_entrega", {})
     credito_valor = Decimal(str(body.get("credito_valor", "0")))
     venda_fora_estabelecimento = bool(body.get("venda_fora_estabelecimento", False))
+    viagem_id = body.get("viagem_id")
 
     try:
         data_venda = _data_venda_retroativa(request, body)
@@ -1294,6 +1297,7 @@ def api_venda_finalizar_forcado(request):
                 observacao=body.get("observacao", ""),
                 request=request,
                 venda_fora_estabelecimento=venda_fora_estabelecimento,
+                viagem_id=viagem_id,
             )
             if comanda_id:
                 _fechar_comanda_origem(comanda_id, request, venda)
@@ -1303,6 +1307,48 @@ def api_venda_finalizar_forcado(request):
         return JsonResponse({"erro": str(exc)}, status=500)
 
     return JsonResponse({"ok": True, "numero_venda": venda.numero_venda, "venda_id": venda.id})
+
+
+# ---------------------------------------------------------------------------
+# API — Viagens com remessa autorizada (para "Venda Fora do Estabelecimento")
+# ---------------------------------------------------------------------------
+# A LISTA E' SO' DAS QUE JA' TEM REMESSA AUTORIZADA E AINDA ESTAO NA RUA.
+# Sem remessa, a venda 5103/6103 nao tem o que a amparar -- e uma viagem ja
+# finalizada/cancelada nao esta mais vendendo nada, mesmo que a remessa dela
+# ainda exista no historico.
+
+@requer_permissao('pdv', 'ver')
+def api_viagens_remessa_aberta(request):
+    from apps.financeiro.constants.enums import StatusDocumentoFiscal
+    from apps.financeiro.models.fiscal import DocumentoFiscal
+    from apps.logistica.models_viagem import Viagem
+
+    viagens = (
+        Viagem.objects.for_filial(request.filial_ativa)
+        .exclude(status__in=Viagem.STATUS_ENCERRADOS)
+        .order_by("-data_saida", "-numero")
+    )
+    remessas = {
+        doc.origem_id: doc
+        for doc in DocumentoFiscal.objects.filter(
+            origem_tipo="viagem_remessa",
+            origem_id__in=viagens.values_list("pk", flat=True),
+            status=StatusDocumentoFiscal.AUTORIZADA,
+        )
+    }
+    dados = [
+        {
+            "id": viagem.pk,
+            "numero": viagem.numero,
+            "veiculo_placa": viagem.veiculo_placa or "",
+            "motorista_nome": viagem.motorista_nome or "",
+            "remessa_numero": remessas[viagem.pk].numero,
+            "remessa_serie": remessas[viagem.pk].serie,
+        }
+        for viagem in viagens
+        if viagem.pk in remessas
+    ]
+    return JsonResponse({"ok": True, "viagens": dados})
 
 
 # ---------------------------------------------------------------------------
@@ -1332,6 +1378,7 @@ def api_venda_pendente(request):
     endereco_entrega = body.get("endereco_entrega", {})
     pagamentos_rascunho = body.get("pagamentos", [])
     venda_fora_estabelecimento = bool(body.get("venda_fora_estabelecimento", False))
+    viagem_id = body.get("viagem_id")
 
     try:
         with transaction.atomic():
@@ -1345,6 +1392,7 @@ def api_venda_pendente(request):
                 status="aberta",
                 delivery=delivery,
                 venda_fora_estabelecimento=venda_fora_estabelecimento,
+                viagem_id=viagem_id or None,
                 endereco_entrega=endereco_entrega,
                 pagamentos_rascunho=pagamentos_rascunho,
                 observacao=body.get("observacao", ""),
@@ -1522,6 +1570,8 @@ def api_pendente_detalhe(request, pk):
         "delivery": venda.delivery,
         "endereco_entrega": venda.endereco_entrega or {},
         "venda_fora_estabelecimento": venda.venda_fora_estabelecimento,
+        "viagem_id": venda.viagem_id,
+        "viagem_numero": venda.viagem.numero if venda.viagem_id else None,
         "pagamentos": venda.pagamentos_rascunho or [],
         "observacao": venda.observacao or "",
         "itens": itens,

@@ -170,6 +170,36 @@ def _presenca_comprador(venda) -> str:
     return "1"
 
 
+def _texto_remessa_vinculada(venda) -> str:
+    """
+    "Mercadoria remetida pela NF-e de remessa nº X, série Y, chave Z" na
+    nota da própria venda -- é o que permite relacionar remessa e venda
+    olhando só o DANFE da venda, sem precisar voltar ao sistema pra achar
+    de qual remessa a mercadoria saiu.
+
+    SEM REMESSA AUTORIZADA, TEXTO VAZIO. A venda em si não fica bloqueada
+    por isso (quem valida isso é `VendaPDVService.finalizar_venda`, na
+    hora de vender, não na hora de emitir) -- mas sem remessa pra citar
+    não há o que escrever aqui.
+    """
+    if not getattr(venda, "venda_fora_estabelecimento", False) or not venda.viagem_id:
+        return ""
+    remessa = (
+        DocumentoFiscal.objects.filter(
+            origem_tipo="viagem_remessa", origem_id=venda.viagem_id,
+            status=StatusDocumentoFiscal.AUTORIZADA,
+        )
+        .order_by("-id")
+        .first()
+    )
+    if not remessa:
+        return ""
+    partes = [f"Mercadoria remetida pela NF-e de remessa nº {remessa.numero}, série {remessa.serie}"]
+    if remessa.chave:
+        partes.append(f"chave {remessa.chave}")
+    return ", ".join(partes) + "."
+
+
 def _cfop_venda_fora_destino(local_destino: str) -> str:
     """
     CFOP de "Venda de produção do estabelecimento, efetuada fora do
@@ -985,6 +1015,7 @@ def emitir_nfce_para_venda(
 
     informacoes_adicionais = " | ".join(filter(None, [
         informacoes_adicionais.strip(),
+        _texto_remessa_vinculada(venda),
         (getattr(doc_params, "informacoes_complementares", "") or "").strip(),
         (params.informacoes_complementares_padrao or "").strip(),
     ]))
@@ -1084,6 +1115,7 @@ def emitir_nfe_para_venda(venda: VendaPDV, usuario, *, informacoes_adicionais: s
 
     informacoes_adicionais = " | ".join(filter(None, [
         informacoes_adicionais.strip(),
+        _texto_remessa_vinculada(venda),
         (getattr(doc_params, "informacoes_complementares", "") or "").strip(),
         (params.informacoes_complementares_padrao or "").strip(),
     ]))

@@ -42,6 +42,16 @@ class VendaPDV(TimestampedModel):
     # venda comum, porque a mercadoria saiu pra ser vendida ambulante/fora
     # do balcão em vez de presencial no estabelecimento.
     venda_fora_estabelecimento = models.BooleanField(default=False)
+    # A VIAGEM CUJA REMESSA AMPARA ESTA VENDA. So' se aplica quando
+    # venda_fora_estabelecimento=True -- e' o que liga esta venda (que roda
+    # no PDV, com pagamento e caixa normais) a' NF-e de remessa (5904/6904)
+    # emitida pelo modulo Viagem, pra' fiscal conseguir relacionar remessa,
+    # venda e retorno da mesma carga. SET_NULL porque apagar a viagem nao
+    # deveria apagar o historico da venda que ja aconteceu.
+    viagem = models.ForeignKey(
+        "logistica.Viagem", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="vendas_pdv_fora",
+    )
     endereco_entrega = models.JSONField(default=dict, blank=True)
     # Rascunho das formas de pagamento selecionadas antes de salvar como
     # pendente -- NAO sao pagamentos de verdade (isso e' PagamentoVendaPDV,
