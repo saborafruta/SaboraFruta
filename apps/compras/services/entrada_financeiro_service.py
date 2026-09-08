@@ -4,8 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
-from django.db import transaction
 
+from apps.core.tenant_context import tenant_atomic
 from apps.compras.models import EntradaNF, EntradaNFParcela
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.financeiro.constants.enums import StatusContaPagar
@@ -62,7 +62,7 @@ def validar_geracao_contas_pagar(entrada: EntradaNF) -> list[str]:
     return bloqueios
 
 
-@transaction.atomic
+@tenant_atomic
 def gerar_contas_pagar_da_entrada(entrada: EntradaNF, usuario) -> GeracaoContasPagarResultado:
     entrada = (
         EntradaNF.objects

@@ -6,13 +6,13 @@ from types import SimpleNamespace
 from urllib.parse import urlencode
 
 from django.contrib import messages
-from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views import View
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.models import RegistroAuditoria
 from apps.cadastros.models import Fornecedor, Funcionario
 from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
@@ -68,7 +68,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
     def get(self, request):
         return self._render(request)
 
-    @transaction.atomic
+    @tenant_atomic
     def post(self, request):
         acao = request.POST.get("acao")
         filial = request.filial_ativa

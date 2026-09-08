@@ -9,8 +9,8 @@ import csv
 import io
 from dataclasses import dataclass, field
 
-from django.db import transaction
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 
 from ..models import ItemGradePedido, PersonalizacaoIndividual, Tamanho
@@ -219,7 +219,7 @@ class IndividualService:
         ]
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def importar(cls, pedido, arquivo, nome_arquivo: str) -> ResultadoImportacao:
         """
         Importa a lista de pessoas de um CSV ou XLSX.

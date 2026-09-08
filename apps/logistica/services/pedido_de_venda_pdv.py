@@ -28,8 +28,8 @@ escolher na tela.
 """
 from __future__ import annotations
 
-from django.db import transaction
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.financeiro.constants.enums import StatusDocumentoFiscal
 from apps.financeiro.models import DocumentoFiscal
@@ -77,7 +77,7 @@ def vendas_pdv_elegiveis(filial):
     )
 
 
-@transaction.atomic
+@tenant_atomic
 def gerar_pedido_expedicao(venda: VendaPDV, usuario) -> PedidoExpedicao:
     """
     Cria o Pedido de Expedição a partir da venda, já com os itens.

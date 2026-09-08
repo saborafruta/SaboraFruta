@@ -1,9 +1,10 @@
 from decimal import Decimal
 
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError
 from django.db.models import Max, Q
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.financeiro.constants.enums import StatusContaPagar
 from apps.financeiro.models import (
     ContaPagar,
@@ -37,7 +38,7 @@ def _conta_contabil_taxas(empresa):
         codigo=Max("codigo_referencia"), ordem=Max("ordem"),
     )
     try:
-        with transaction.atomic():
+        with tenant_atomic():
             return PlanoContabil.objects.create(
                 empresa=empresa,
                 conta_pai=pai,
@@ -98,7 +99,7 @@ def _categoria_taxas(empresa):
     return categoria
 
 
-@transaction.atomic
+@tenant_atomic
 def sincronizar_taxa_transacao(
     *, origem, origem_id, filial, data, valor, forma_pagamento=None,
     conta_bancaria=None, retida_na_entrada=True,

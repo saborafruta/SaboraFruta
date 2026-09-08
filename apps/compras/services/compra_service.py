@@ -4,10 +4,10 @@ from __future__ import annotations
 import logging
 from decimal import Decimal
 
-from django.db import transaction
 from django.db.models import Avg, F
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.compras.models import (
     AvaliacaoFornecedor, EntradaNF, ItemEntradaNF, ItemPedidoCompra, PedidoCompra,
 )
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class CompraService:
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar_pedido(
         cls, filial, usuario, fornecedor,
         data_entrega_prevista=None, observacao: str = '',
@@ -49,7 +49,7 @@ class CompraService:
         return f'PC-{num:07d}'
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def adicionar_item(
         cls, pedido: PedidoCompra, produto, quantidade: Decimal,
         valor_unitario: Decimal, valor_ipi: Decimal = Decimal('0'),
@@ -76,7 +76,7 @@ class CompraService:
         return item
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def remover_item(cls, pedido: PedidoCompra, item_id: int):
         if pedido.status != PedidoCompra.Status.RASCUNHO:
             raise DadosInvalidosError('So e possivel remover itens em pedidos em rascunho.')
@@ -85,7 +85,7 @@ class CompraService:
         pedido.save()
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def aprovar_pedido(cls, pedido: PedidoCompra, usuario) -> PedidoCompra:
         if not pedido.pode_aprovar:
             raise DadosInvalidosError(
@@ -103,7 +103,7 @@ class CompraService:
         return pedido
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def enviar_fornecedor(cls, pedido: PedidoCompra, usuario) -> PedidoCompra:
         if not pedido.pode_enviar:
             raise DadosInvalidosError(
@@ -114,7 +114,7 @@ class CompraService:
         return pedido
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def cancelar_pedido(cls, pedido: PedidoCompra, usuario, motivo: str) -> PedidoCompra:
         if not pedido.pode_cancelar:
             raise DadosInvalidosError(
@@ -130,7 +130,7 @@ class CompraService:
         return pedido
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar_entrada_nf(
         cls, filial, usuario, fornecedor, numero_nf: str, serie_nf: str,
         data_emissao_nf, chave_acesso_nf: str = '',
@@ -174,7 +174,7 @@ class CompraService:
         )
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def adicionar_item_entrada(
         cls, entrada: EntradaNF, produto,
         quantidade: Decimal, valor_unitario: Decimal,
@@ -249,7 +249,7 @@ class CompraService:
         return item
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def remover_item_entrada(cls, item: ItemEntradaNF) -> dict:
         entrada = item.entrada
         if entrada.status not in (
@@ -312,7 +312,7 @@ class CompraService:
         entrada.save()
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def efetivar_entrada(
         cls,
         entrada: EntradaNF,
@@ -624,7 +624,7 @@ class CompraService:
         return avaliacao
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def cancelar_entrada(cls, entrada: EntradaNF, usuario, motivo: str) -> EntradaNF:
         if not entrada.pode_cancelar:
             raise DadosInvalidosError(

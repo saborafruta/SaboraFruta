@@ -20,8 +20,8 @@ moda; a ficha técnica lê de lá.
 """
 from __future__ import annotations
 
-from django.db import transaction
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.core.services.search import filter_queryset_by_terms, normalize_search_text
 
@@ -64,7 +64,7 @@ class ImportarProdutosService:
         ]
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def importar(cls, filial, ids: list[int], usuario=None) -> list:
         """
         Cria um produto de moda para cada produto do ERP escolhido.

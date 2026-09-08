@@ -13,9 +13,9 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.moda.models import EtapaOrdem
 
@@ -54,7 +54,7 @@ class FluxoService:
     # ── Criação ──────────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar_etapas(ordem) -> list[EtapaOrdem]:
         """
         Cria as onze etapas de uma ordem, todas pendentes.
@@ -87,7 +87,7 @@ class FluxoService:
     # ── Apontamento ──────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def apontar(cls, etapa: EtapaOrdem, usuario, dados: dict) -> list[str]:
         """
         Grava o apontamento da etapa, respeitando o que o perfil autoriza.

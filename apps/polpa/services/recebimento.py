@@ -23,10 +23,10 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.estoque.models import LoteProduto
 from apps.estoque.models.estoque import MovimentacaoEstoque
@@ -42,7 +42,7 @@ class RecebimentoService:
     # ── Classificação ────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def classificar(recebimento: Recebimento, dados: dict, usuario=None) -> Recebimento:
         """
         Grava a análise da carga e marca quem mediu.
@@ -72,7 +72,7 @@ class RecebimentoService:
     # ── Decisão ──────────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def aprovar(recebimento: Recebimento, usuario=None) -> LoteProduto:
         """
         Aceita a carga e faz nascer o lote de matéria-prima.
@@ -160,7 +160,7 @@ class RecebimentoService:
         return lote
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def recusar(recebimento: Recebimento, motivo: str, usuario=None) -> Recebimento:
         """
         Devolve a carga, com o motivo por extenso.
@@ -189,7 +189,7 @@ class RecebimentoService:
         return recebimento
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def cancelar(recebimento: Recebimento, motivo: str, usuario=None) -> Recebimento:
         """
         Anula o romaneio — o caminho para o erro de digitação.

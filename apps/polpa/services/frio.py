@@ -22,9 +22,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.estoque.models import LoteProduto
 from apps.polpa.models import (
@@ -40,7 +40,7 @@ class FrioService:
     # ── Temperatura ──────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def registrar_leitura(camara: Camara, temperatura, usuario=None, dados=None):
         """
         Grava uma medição e avisa quando ela sai da faixa.
@@ -133,7 +133,7 @@ class FrioService:
     # ── Posições ─────────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def mover(armazenado: LoteArmazenado, posicao: Posicao, usuario=None, motivo=''):
         """
         Move o lote para outra posição — e pode mudar de câmara junto.

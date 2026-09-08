@@ -191,7 +191,7 @@ class SeparacaoFilialService:
 
         try:
             cls._atualizar_progresso(processo, 5, 'Validando a separação')
-            with transaction.atomic():
+            with transaction.atomic(using='default'):
                 processo = SeparacaoFilial.objects.select_for_update().get(pk=processo.pk)
                 if processo.status == SeparacaoFilial.Status.CONCLUIDO:
                     return processo
@@ -221,7 +221,7 @@ class SeparacaoFilialService:
 
             cls._atualizar_progresso(processo, 35, 'Separando empresa, filial e usuários')
             usuarios_revisao = []
-            with transaction.atomic():
+            with transaction.atomic(using='default'):
                 processo = SeparacaoFilial.objects.select_for_update().get(pk=processo.pk)
                 filial = Filial.objects.select_for_update().select_related('empresa').get(pk=processo.filial_origem_id)
                 empresa_origem = processo.empresa_origem
@@ -279,7 +279,7 @@ class SeparacaoFilialService:
                 )
 
             cls._atualizar_progresso(processo, 94, 'Registrando auditoria e relatório final')
-            with transaction.atomic():
+            with transaction.atomic(using='default'):
                 processo = SeparacaoFilial.objects.select_for_update().get(pk=processo.pk)
 
                 registrar_auditoria(

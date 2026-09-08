@@ -23,8 +23,8 @@ como nasce nota rejeitada meses depois; a ficha prefere apontar que falta.
 """
 from __future__ import annotations
 
-from django.db import transaction
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.polpa.models import FichaProduto
 from apps.produtos.models import Produto, ProdutoFilial
@@ -37,7 +37,7 @@ class CatalogoService:
     # ── Gravação ─────────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def salvar(filial, dados: dict, ficha: FichaProduto | None = None) -> FichaProduto:
         """
         Cria ou atualiza o item — produto do ERP e ficha da fábrica juntos.

@@ -1,8 +1,8 @@
 """Serviço de consolidação do DRE."""
 from datetime import date, timedelta
-from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
+from apps.core.tenant_context import tenant_atomic
 from apps.financeiro.models import DREConsolidado, ContaReceber, ContaPagar
 from apps.produtos.models import LinhaProducao
 
@@ -19,7 +19,7 @@ def consolidar_dre_diario():
     return "ok"
 
 
-@transaction.atomic
+@tenant_atomic
 def consolidar_filial(filial, competencia: date, linha_producao=None):
     fim_mes = (competencia + timedelta(days=32)).replace(day=1)
 

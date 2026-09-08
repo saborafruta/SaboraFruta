@@ -5,9 +5,9 @@ from decimal import Decimal
 import re
 from typing import Any
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.financeiro.constants.enums import StatusDocumentoFiscal, TipoDocumentoFiscal
 from apps.financeiro.models import DocumentoFiscal
@@ -373,7 +373,7 @@ def sincronizar_mdfe_por_documento(documento: DocumentoFiscal) -> None:
         _sincronizar_status(mdfe)
 
 
-@transaction.atomic
+@tenant_atomic
 def criar_mdfe_transferencia(
     *,
     nfe: DocumentoFiscal,

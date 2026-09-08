@@ -24,10 +24,10 @@ que a fiscalização pede para ver.
 """
 from decimal import Decimal
 
-from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.estoque.models import MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
@@ -87,7 +87,7 @@ class ViagemService:
         return (ultimo or 0) + 1
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar(cls, filial, dados: dict, usuario=None) -> Viagem:
         """
         Abre uma viagem em planejamento.
@@ -136,7 +136,7 @@ class ViagemService:
         )
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def adicionar_item(cls, viagem: Viagem, dados: dict, usuario=None) -> ItemCarga:
         """Põe um produto na carga, com a natureza fiscal dele."""
         cls._exigir_editavel(viagem)
@@ -165,7 +165,7 @@ class ViagemService:
         return item
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def remover_item(cls, viagem: Viagem, item: ItemCarga, usuario=None) -> None:
         cls._exigir_editavel(viagem)
         # Antes do delete porque a linha descreve o item que ainda existe.
@@ -221,7 +221,7 @@ class ViagemService:
         return problemas
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def fechar_carga(cls, viagem: Viagem, usuario=None) -> Viagem:
         """
         Tira a mercadoria do estabelecimento.
@@ -334,7 +334,7 @@ class ViagemService:
     # ── Na rua ───────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def registrar_saida_do_saldo(
         cls, viagem: Viagem, produto, quantidade: Decimal, campo: str, lote=None,
         usuario=None, motivo: str = '',
@@ -381,7 +381,7 @@ class ViagemService:
         return saldo
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def registrar_retorno(cls, viagem: Viagem, produto, quantidade: Decimal,
                           lote=None, usuario=None) -> SaldoCarga:
         """O que não vendeu volta para o estoque da filial."""
@@ -464,7 +464,7 @@ class ViagemService:
         return pendencias
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def encerrar(cls, viagem: Viagem, usuario=None) -> Viagem:
         """
         Fecha a viagem.
@@ -576,7 +576,7 @@ class ViagemService:
     # ── Andar no ciclo ───────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def mudar_status(cls, viagem: Viagem, destino: str, usuario=None) -> Viagem:
         """
         Move a viagem uma etapa.
@@ -612,7 +612,7 @@ class ViagemService:
         return viagem
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def cancelar(cls, viagem: Viagem, motivo: str = '', usuario=None) -> Viagem:
         """
         Cancela a viagem.

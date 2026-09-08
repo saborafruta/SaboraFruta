@@ -1,8 +1,8 @@
 """Regras de negócio de Cliente."""
 from __future__ import annotations
 
-from django.db import transaction
 
+from apps.core.tenant_context import tenant_atomic
 from apps.cadastros.models import Cliente
 from apps.cadastros.services.cep_service import CepService
 from apps.cadastros.services.replicacao_service import ReplicacaoCadastrosService
@@ -12,7 +12,7 @@ from apps.core.services.exceptions import DadosInvalidosError
 class ClienteService:
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar(dados: dict, usuario, filial) -> Cliente:
         """Cria cliente validando duplicidade de CPF/CNPJ na filial."""
         cpf_cnpj = dados.get('cpf_cnpj')
@@ -32,7 +32,7 @@ class ClienteService:
         return cliente
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def atualizar(cliente: Cliente, dados: dict) -> Cliente:
         cpf_cnpj = dados.get('cpf_cnpj')
         if cpf_cnpj:

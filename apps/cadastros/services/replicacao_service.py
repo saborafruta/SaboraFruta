@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from django.core.exceptions import ObjectDoesNotExist
-from django.db import transaction
 
+from apps.core.tenant_context import tenant_atomic
 from apps.cadastros.models import Cliente, ClienteFilial, Fornecedor, FornecedorFilial
 from apps.core.models import Filial
 
@@ -77,7 +77,7 @@ def _sincronizar(modelo, origem, campos):
 
 class ReplicacaoCadastrosService:
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_cliente(cliente):
         politica = _politica(cliente.filial)
         if (
@@ -90,7 +90,7 @@ class ReplicacaoCadastrosService:
         _sincronizar(Cliente, cliente, CLIENTE_CAMPOS_REPLICAVEIS)
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_fornecedor(fornecedor):
         politica = _politica(fornecedor.filial)
         if (
@@ -103,7 +103,7 @@ class ReplicacaoCadastrosService:
         _sincronizar(Fornecedor, fornecedor, FORNECEDOR_CAMPOS_REPLICAVEIS)
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_clientes_da_filial(filial):
         politica = _politica(filial)
         if (
@@ -119,7 +119,7 @@ class ReplicacaoCadastrosService:
         return total
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_fornecedores_da_filial(filial):
         politica = _politica(filial)
         if (

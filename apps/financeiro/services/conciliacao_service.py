@@ -7,8 +7,8 @@ from __future__ import annotations
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db import transaction
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber
 from apps.financeiro.models.extrato import ConciliacaoBancaria, ExtratoBancario
@@ -66,7 +66,7 @@ class ConciliacaoService:
         return []
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def conciliar(extrato: ExtratoBancario, lancamento_tipo: str, lancamento_id: int, usuario, observacao: str = ''):
         if extrato.status == 'conciliado':
             raise DomainError('Este lançamento já está conciliado.')
@@ -99,7 +99,7 @@ class ConciliacaoService:
         return conciliacao
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def desconciliar(conciliacao: ConciliacaoBancaria):
         extrato = conciliacao.extrato
         conciliacao.delete()

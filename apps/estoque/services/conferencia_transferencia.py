@@ -1,8 +1,8 @@
 from decimal import Decimal, InvalidOperation
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.core.services.auditoria import registrar_auditoria
 from apps.core.services.notificacao_service import (
@@ -41,7 +41,7 @@ def _itens_auditoria(conferencia):
     ]
 
 
-@transaction.atomic
+@tenant_atomic
 def criar_conferencia_transferencia(
     *,
     documento_numero,
@@ -180,7 +180,7 @@ def _lote_destino(item):
     ).first()
 
 
-@transaction.atomic
+@tenant_atomic
 def concluir_conferencia(*, conferencia_id, filial_destino, usuario, itens, observacao=''):
     conferencia = (
         ConferenciaTransferencia.objects
@@ -368,7 +368,7 @@ def concluir_conferencia(*, conferencia_id, filial_destino, usuario, itens, obse
     return conferencia
 
 
-@transaction.atomic
+@tenant_atomic
 def cancelar_na_conferencia(*, conferencia_id, filial_destino, usuario):
     from apps.estoque.services.transferencia_cancelamento import cancelar_transferencia
 

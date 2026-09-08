@@ -24,9 +24,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.logistica.models import ItemRomaneioCarga, RomaneioCarga
 from apps.polpa.models import EntregaFria
@@ -173,7 +173,7 @@ class EntregaService:
     # ── Ação ─────────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def entregar(cls, parada, dados: dict, usuario=None) -> EntregaFria:
         """
         Registra a entrega: quem recebeu, quando e em que temperatura.
@@ -205,7 +205,7 @@ class EntregaService:
         return ficha
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def nao_entregar(cls, parada, dados: dict, usuario=None) -> EntregaFria:
         """
         Registra a ocorrência de quem voltou com a carga.

@@ -7,9 +7,10 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import re
 from xml.etree import ElementTree
 
-from django.db import DatabaseError, connection, transaction
+from django.db import DatabaseError, connection
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.cadastros.models import Fornecedor, FornecedorFilial
 from apps.cadastros.services.replicacao_service import ReplicacaoCadastrosService
 from apps.compras.models import EntradaNF, EntradaNFParcela
@@ -571,7 +572,7 @@ def importar_xml_para_entrada(xml_texto: str, filial, usuario, nome_arquivo: str
     doc_filial = somente_digitos(getattr(filial, 'cnpj', ''))
     doc_dest = destinatario.get('documento', '')
 
-    with transaction.atomic():
+    with tenant_atomic():
         fornecedor, fornecedor_pendente = localizar_fornecedor(
             filial,
             emitente.get('documento', ''),

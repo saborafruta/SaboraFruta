@@ -23,9 +23,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.polpa.models import OrdemPolpa, Subproduto
 
@@ -38,7 +38,7 @@ class SubprodutoService:
     # ── Registro ─────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def registrar(cls, op: OrdemPolpa, dados: dict, usuario=None) -> Subproduto:
         """
         Grava o subproduto e, quando cabe, credita o estoque.

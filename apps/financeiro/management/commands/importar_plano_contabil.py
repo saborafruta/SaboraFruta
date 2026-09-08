@@ -2,8 +2,8 @@ import json
 from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.models import Empresa
 from apps.financeiro.models import PlanoContabil
 
@@ -22,7 +22,7 @@ class Command(BaseCommand):
         parser.add_argument("--empresa-cnpj", required=True)
         parser.add_argument("--arquivo", default=str(DEFAULT_DATA_FILE))
 
-    @transaction.atomic
+    @tenant_atomic
     def handle(self, *args, **options):
         cnpj = "".join(filter(str.isdigit, options["empresa_cnpj"]))
         try:

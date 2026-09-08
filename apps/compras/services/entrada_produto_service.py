@@ -6,9 +6,9 @@ import unicodedata
 from dataclasses import dataclass
 from decimal import Decimal
 
-from django.db import transaction
 from django.db.models import Q
 
+from apps.core.tenant_context import tenant_atomic
 from apps.produtos.models import (
     Produto, ProdutoCodigoBarras, ProdutoFilial, ProdutoFornecedorEquivalencia,
     UnidadeMedida, UnidadeMedidaFilial,
@@ -294,7 +294,7 @@ def _revinculo_manual_liberado_por_ean(item, resolvido) -> bool:
     return bool(resolvido.produto.updated_at and item.updated_at and resolvido.produto.updated_at > item.updated_at)
 
 
-@transaction.atomic
+@tenant_atomic
 def reprocessar_vinculos_automaticos(entrada) -> dict[str, int]:
     """Tenta vincular itens pendentes por identificadores seguros ja cadastrados."""
     from apps.compras.services.compra_service import CompraService
@@ -351,7 +351,7 @@ def _equivalencias_do_item(entrada, item):
     )
 
 
-@transaction.atomic
+@tenant_atomic
 def sincronizar_vinculos_da_conferencia(entrada) -> dict[str, int]:
     """
     Poe a nota em dia com os vinculos ANTES de mostra-la ao conferente.
@@ -446,7 +446,7 @@ def _produto_existente_para_item(entrada, item, ean: str) -> Produto | None:
     return equivalencia.produto if equivalencia else None
 
 
-@transaction.atomic
+@tenant_atomic
 def criar_produto_e_vincular_item(entrada, item) -> Produto:
     unidade = _primeira_unidade(entrada.filial, item.unidade_estoque or item.unidade_xml)
     ean = _ean_util(item.ean_xml)

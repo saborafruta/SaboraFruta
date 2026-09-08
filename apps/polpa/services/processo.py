@@ -22,9 +22,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.polpa.models import ApontamentoEtapa, OrdemPolpa
 from apps.polpa.models.processo import (
@@ -40,7 +40,7 @@ class ProcessoService:
     # ── Montagem ─────────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def preparar(op: OrdemPolpa) -> list[ApontamentoEtapa]:
         """
         Cria as etapas desta ordem, se ainda não existirem.
@@ -108,7 +108,7 @@ class ProcessoService:
     # ── Apontamento ──────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def apontar(etapa: ApontamentoEtapa, dados: dict, usuario=None) -> ApontamentoEtapa:
         """
         Grava o que aconteceu na etapa.

@@ -1,7 +1,6 @@
 import logging
 
 from django.contrib import messages
-from django.db import transaction
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
@@ -10,6 +9,7 @@ from django.utils import timezone
 from django.views import View
 from decimal import Decimal, ROUND_HALF_UP
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.models import Filial
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.produtos.forms import (
@@ -1116,7 +1116,7 @@ class ComboPromocaoListView(PermissaoRequiredMixin, View):
             ):
                 messages.error(request, 'Remova faixas duplicadas do combo antes de salvar.')
             else:
-                with transaction.atomic():
+                with tenant_atomic():
                     promocao = form.save(commit=False)
                     promocao.filial = request.filial_ativa
                     promocao.save()
@@ -1146,7 +1146,7 @@ class ComboPromocaoListView(PermissaoRequiredMixin, View):
             elif _tem_duplicidade(linhas, lambda linha: linha['produto'].pk):
                 messages.error(request, 'O mesmo produto foi informado mais de uma vez no kit.')
             else:
-                with transaction.atomic():
+                with tenant_atomic():
                     kit = form.save(commit=False)
                     kit.filial = request.filial_ativa
                     kit.save()
@@ -1174,7 +1174,7 @@ class ComboPromocaoListView(PermissaoRequiredMixin, View):
             elif _tem_duplicidade(linhas, lambda linha: linha['produto'].pk):
                 messages.error(request, 'O mesmo produto foi informado mais de uma vez como brinde.')
             else:
-                with transaction.atomic():
+                with tenant_atomic():
                     brinde = form.save(commit=False)
                     brinde.filial = request.filial_ativa
                     brinde.save()
@@ -1211,7 +1211,7 @@ class ComboPromocaoListView(PermissaoRequiredMixin, View):
             ):
                 messages.error(request, 'Remova regras duplicadas de categoria ou subcategoria antes de salvar.')
             else:
-                with transaction.atomic():
+                with tenant_atomic():
                     kit = form.save(commit=False)
                     kit.filial = request.filial_ativa
                     kit.save()
@@ -1243,7 +1243,7 @@ class ComboPromocaoListView(PermissaoRequiredMixin, View):
             replicar = request.POST.get('preco_replicar_filiais') == 'on'
             relatorio = _relatorio_replicacao()
             filiais = _filiais_destino_request(request, 'replicar_preco_venda') if replicar else Filial.objects.none()
-            with transaction.atomic():
+            with tenant_atomic():
                 for linha in linhas:
                     produto = linha['produto']
                     _atualizar_preco_promocional(produto, linha, request.filial_ativa, replicar_filiais=replicar)

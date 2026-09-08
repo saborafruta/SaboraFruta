@@ -18,9 +18,9 @@ import base64
 import binascii
 
 from django.core.files.base import ContentFile
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.moda.models import (
     Expedicao, ItemConferencia, OrdemProducao, Volume,
@@ -43,7 +43,7 @@ class ExpedicaoService:
     # ── Criação ──────────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar(filial, ordem, usuario=None, forcar=False, observacao='') -> Expedicao:
         """
         Abre a expedição de uma ordem cuja produção terminou.
@@ -83,7 +83,7 @@ class ExpedicaoService:
     # ── Conferência ──────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def conferir(expedicao: Expedicao, quantidades: dict, dados: dict) -> int:
         """
         Grava a conferência por tamanho. Devolve o total conferido.
@@ -153,7 +153,7 @@ class ExpedicaoService:
     PREFIXO = 'data:image/png;base64,'
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def assinar(expedicao: Expedicao, nome: str, traco: str, documento: str = ''):
         """
         Grava quem recebeu e o traço da assinatura.
@@ -215,7 +215,7 @@ class ExpedicaoService:
     # ── Volumes ──────────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar_volume(expedicao: Expedicao, dados: dict) -> Volume:
         if expedicao.cancelada:
             raise DomainError('Expedição cancelada não recebe volumes.')
@@ -252,7 +252,7 @@ class ExpedicaoService:
     # ── Avanço ───────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def avancar(cls, expedicao: Expedicao, usuario, dados: dict | None = None) -> str:
         """Leva o documento para a próxima etapa, validando a atual."""
         dados = dados or {}
@@ -304,7 +304,7 @@ class ExpedicaoService:
                 )
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def cancelar(expedicao: Expedicao, motivo: str) -> None:
         if expedicao.entregue:
             raise DomainError('Expedição já entregue não é cancelada.')

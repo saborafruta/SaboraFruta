@@ -9,9 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.compras.models import EntradaNF, ItemEntradaNF
 from apps.core.services.exceptions import DadosInvalidosError
 
@@ -381,7 +381,7 @@ class EntradaCustoService:
         }
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def _salvar(
         entrada: EntradaNF,
         linhas: list[LinhaCustoEntrada],

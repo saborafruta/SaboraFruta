@@ -21,9 +21,9 @@ from decimal import Decimal
 import re
 from typing import Any, Dict, List
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.financeiro.constants.enums import StatusDocumentoFiscal, TipoDocumentoFiscal
 from apps.financeiro.models import DocumentoFiscal
@@ -296,7 +296,7 @@ def construir_payload_transferencia(
     return payload
 
 
-@transaction.atomic
+@tenant_atomic
 def emitir_nfe_transferencia(
     filial_origem,
     filial_destino,

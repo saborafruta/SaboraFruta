@@ -31,9 +31,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.logistica.models import ItemRomaneioCarga, RomaneioCarga
 from apps.polpa.models import CargaFria
@@ -253,7 +253,7 @@ class CarregamentoService:
         return item
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def despachar(cls, romaneio, temperatura, usuario=None):
         """
         Fecha a porta: grava a medição, marca a hora e põe o romaneio em rota.
@@ -414,7 +414,7 @@ class CarregamentoService:
         return f'Esta filial tem {total} venda(s): ' + '; '.join(motivos) + '.'
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def montar_carga(cls, filial, pedidos, dados: dict, usuario=None) -> RomaneioCarga:
         """
         Cria o romaneio de carga a partir das vendas escolhidas.

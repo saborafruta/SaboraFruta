@@ -9,7 +9,6 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db import transaction
 from django.db.models import (
     Case, Count, DecimalField, ExpressionWrapper, F, OuterRef, Q, Subquery, Sum, Value,
     When,
@@ -26,6 +25,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from apps.core.tenant_context import tenant_atomic
 from apps.compras.models import EntradaNF, ItemEntradaNF, PedidoCompra
 from apps.compras.services.entrada_custo_service import EntradaCustoService
 from apps.core.services.auditoria import auditoria_para_objeto, auditoria_relacionada, registrar_auditoria, snapshot_modelo
@@ -883,7 +883,7 @@ class EstoqueInlineEditView(PermissaoRequiredMixin, View):
 
         snapshot_antes = _produto_audit_snapshot(produto)
         try:
-            with transaction.atomic():
+            with tenant_atomic():
                 if field == 'descricao':
                     value = value.strip()
                     if not value:
@@ -2015,7 +2015,7 @@ class AjusteRapidoEstoqueView(PermissaoRequiredMixin, View):
 class AjusteRapidoEstoqueAtualizarView(AjusteRapidoEstoqueView):
     def post(self, request):
         try:
-            with transaction.atomic():
+            with tenant_atomic():
                 return self._atualizar(request)
         except Exception:
             logger.exception('Falha inesperada no ajuste rapido de estoque')

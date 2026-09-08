@@ -30,9 +30,9 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.moda.models import (
     ItemRequisicao, OrdemProducao, RequisicaoMaterial, ReservaMaterial,
@@ -224,7 +224,7 @@ class NecessidadeService:
     # ── Reserva ──────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def reservar(cls, filial, linha: Necessidade, usuario) -> list[ReservaMaterial]:
         """
         Separa o material que dá para separar, rateado entre as ordens.
@@ -277,7 +277,7 @@ class NecessidadeService:
         return criadas
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def cancelar_reserva(cls, reserva: ReservaMaterial, usuario) -> None:
         from apps.estoque.services.movimentacao_service import MovimentacaoService
 
@@ -294,7 +294,7 @@ class NecessidadeService:
     # ── Reserva ao começar a produzir ────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def reservar_da_ordem(cls, ordem, usuario) -> list[ReservaMaterial]:
         """
         Separa a matéria-prima desta ordem. Chamado quando a produção começa.
@@ -390,7 +390,7 @@ class NecessidadeService:
     # ── Requisição ───────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def gerar_requisicao(cls, filial, linhas: list[Necessidade], usuario) -> RequisicaoMaterial:
         """
         Cria a requisição com tudo que está em déficit.

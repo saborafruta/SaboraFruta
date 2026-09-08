@@ -6,6 +6,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models.signals import post_delete, post_save, pre_save
 
 
+from apps.core.tenant_context import tenant_atomic
 AUDITED_MODELS = set()
 
 
@@ -72,7 +73,6 @@ def _audit_pre_save(sender, instance, **kwargs):
 
 
 def _audit_save(sender, instance, created, **kwargs):
-    from django.db import transaction
     try:
         from apps.core.middleware.audit import get_client_ip, get_current_request
         from apps.core.models import LogSistema
@@ -81,7 +81,7 @@ def _audit_save(sender, instance, created, **kwargs):
         if not request or not getattr(request, 'user', None) or not request.user.is_authenticated:
             return
 
-        with transaction.atomic():
+        with tenant_atomic():
             LogSistema.objects.create(
                 filial=getattr(request, 'filial_ativa', None),
                 usuario=request.user,
@@ -99,7 +99,6 @@ def _audit_save(sender, instance, created, **kwargs):
 
 
 def _audit_delete(sender, instance, **kwargs):
-    from django.db import transaction
     try:
         from apps.core.middleware.audit import get_client_ip, get_current_request
         from apps.core.models import LogSistema
@@ -108,7 +107,7 @@ def _audit_delete(sender, instance, **kwargs):
         if not request or not getattr(request, 'user', None) or not request.user.is_authenticated:
             return
 
-        with transaction.atomic():
+        with tenant_atomic():
             LogSistema.objects.create(
                 filial=getattr(request, 'filial_ativa', None),
                 usuario=request.user,

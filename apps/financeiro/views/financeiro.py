@@ -8,9 +8,9 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.core.paginator import Paginator
 from django.db.models import Sum
-from django.db import transaction
 from django.views.decorators.http import require_POST
 from django.utils import timezone
+from apps.core.tenant_context import tenant_atomic
 from apps.core.models import Filial
 from apps.core.services.permissions import requer_permissao
 from apps.core.services.numeros import decimal_ptbr
@@ -278,7 +278,7 @@ def formas_pagamento(request):
                 )
             form = FormaPagamentoForm(request.POST, instance=obj, empresa=empresa, filial=filial)
             if form.is_valid():
-                with transaction.atomic():
+                with tenant_atomic():
                     forma = form.save()
                     _salvar_taxas_cartao(forma, request.POST.get("taxas_cartao_json"))
                 messages.success(request, "Forma de pagamento salva.")

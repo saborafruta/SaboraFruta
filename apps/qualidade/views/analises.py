@@ -1,13 +1,14 @@
 import json
 
 from django.contrib import messages
-from django.db import IntegrityError, connection, transaction
+from django.db import IntegrityError, connection
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.permissions import requer_permissao
 from apps.produtos.models import CategoriaProduto, Produto
 from apps.produtos.services.replicacao_service import ReplicacaoProdutoService
@@ -220,7 +221,7 @@ def parametro_create(request):
 
     if form.is_valid():
         try:
-            with transaction.atomic():
+            with tenant_atomic():
                 parametro = form.save(commit=False)
                 parametro.filial = request.filial_ativa
                 parametro.produto = produto
@@ -251,7 +252,7 @@ def padrao_create(request):
 
     if form.is_valid():
         try:
-            with transaction.atomic():
+            with tenant_atomic():
                 padrao = form.save(commit=False)
                 padrao.filial = request.filial_ativa
                 padrao.save()
@@ -301,7 +302,7 @@ def padrao_update(request, pk):
     )
     if form.is_valid():
         try:
-            with transaction.atomic():
+            with tenant_atomic():
                 padrao = form.save()
                 ReplicacaoProdutoService.sincronizar_parametro_qualidade_categoria(padrao)
             messages.success(request, f'Padrao "{padrao.nome_parametro}" atualizado.')
@@ -325,7 +326,7 @@ def aplicar_padroes_produto(request):
     padroes = _padroes_priorizados_para_produto(request, produto)
     criados = 0
 
-    with transaction.atomic():
+    with tenant_atomic():
         for padrao in padroes:
             dados = {
                 "tipo_valor": padrao.tipo_valor,

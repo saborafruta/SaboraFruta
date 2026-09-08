@@ -16,13 +16,13 @@ código da expedição — a mesma ideia do link de aprovação do pedido. Quem
 confere é a casa; quem assina o recebimento é quem recebeu.
 """
 from django.contrib import messages
-from django.db import transaction
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views import View
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 
 from .models import ConferenciaPessoa, Expedicao, PersonalizacaoIndividual
@@ -277,7 +277,7 @@ class ConferenciaPessoasSalvarView(ModaBaseView):
         contadas = marcadas = 0
         enviou_quantidades = enviou_pessoas = False
         try:
-            with transaction.atomic():
+            with tenant_atomic():
                 for caixa in expedicoes:
                     quantidade = self._quantidades(
                         request, caixa, prefixo=len(expedicoes) > 1,
@@ -698,7 +698,7 @@ class PedidoConferenciaForcarView(ModaBaseView):
         marca = self._marca(request.user, bloqueios)
 
         try:
-            with transaction.atomic():
+            with tenant_atomic():
                 ordens = self._ordens(pedido, request.user, marca)
                 expedicoes = [
                     ExpedicaoService.criar(

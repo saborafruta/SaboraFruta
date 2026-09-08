@@ -13,9 +13,9 @@ import logging
 from datetime import date, timedelta
 from decimal import Decimal
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import (
     DadosInvalidosError, EstoqueInsuficienteError,
 )
@@ -38,7 +38,7 @@ class OrdemProducaoService:
     # ----------------------------------------------------------------------
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar_op(
         cls,
         ficha_id: int,
@@ -91,7 +91,7 @@ class OrdemProducaoService:
     # ----------------------------------------------------------------------
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def abrir(cls, op: OrdemProducao, usuario) -> OrdemProducao:
         """Valida disponibilidade de MP e abre a OP."""
         if not op.pode_abrir:
@@ -143,7 +143,7 @@ class OrdemProducaoService:
     # ----------------------------------------------------------------------
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def iniciar(cls, op: OrdemProducao, usuario) -> OrdemProducao:
         """aberta → em_producao. Registra data/hora de início."""
         if not op.pode_iniciar:
@@ -160,7 +160,7 @@ class OrdemProducaoService:
     # ----------------------------------------------------------------------
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def encerrar(
         cls,
         op: OrdemProducao,
@@ -313,7 +313,7 @@ class OrdemProducaoService:
     # ----------------------------------------------------------------------
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def cancelar(cls, op: OrdemProducao, usuario, motivo: str) -> OrdemProducao:
         if not op.pode_cancelar:
             raise DadosInvalidosError(

@@ -23,6 +23,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.crm import constants as c
 from apps.crm.models import RecompraCliente, RecompraControle
@@ -234,7 +235,7 @@ class RecompraService:
 
     # -------------------------------------------------------- recálculo
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def recalcular(cls, filial, cliente_ids=None) -> int:
         """
         Recalcula o padrão de recompra no escopo de `filial` — a empresa
@@ -352,7 +353,7 @@ class RecompraService:
 
     # ---------------------------------------------------- definição manual
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def definir_manual(cls, *, filial, cliente, intervalo_dias: int):
         """
         Define à mão de quantos em quantos dias o cliente compra.

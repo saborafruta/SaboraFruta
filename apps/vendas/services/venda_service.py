@@ -14,10 +14,10 @@ from __future__ import annotations
 import logging
 from decimal import Decimal
 
-from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import (
     DadosInvalidosError, EstoqueInsuficienteError, PermissaoNegadaError,
 )
@@ -41,7 +41,7 @@ class VendaService:
     # ----------------------------------------------------------------------
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar_pedido(
         cls, filial, usuario, cliente, tipo=PedidoVenda.Tipo.PEDIDO,
         representante=None, tabela_preco=None, observacao='',
@@ -82,7 +82,7 @@ class VendaService:
         return f'PV-{num:07d}'
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def adicionar_item(
         cls, pedido: PedidoVenda, produto, quantidade: Decimal,
         valor_unitario: Decimal | None = None, percentual_desconto: Decimal = Decimal('0'),
@@ -123,7 +123,7 @@ class VendaService:
         return item
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def remover_item(cls, pedido: PedidoVenda, item_id: int):
         if pedido.status != PedidoVenda.Status.RASCUNHO:
             raise DadosInvalidosError('Só é possível remover itens em pedidos em rascunho.')
@@ -136,7 +136,7 @@ class VendaService:
     # ----------------------------------------------------------------------
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def confirmar_pedido(cls, pedido: PedidoVenda, usuario) -> PedidoVenda:
         """
         Confirma pedido:
@@ -191,7 +191,7 @@ class VendaService:
                 )
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def separar_pedido(cls, pedido: PedidoVenda, usuario) -> SeparacaoPedido:
         """
         Cria separação consumindo lotes via FEFO.
@@ -247,7 +247,7 @@ class VendaService:
         return f'SEP-{num:07d}'
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def faturar_pedido(cls, pedido: PedidoVenda, usuario) -> PedidoVenda:
         """
         Dá baixa real no estoque, libera reserva e muda para FATURADO.
@@ -346,7 +346,7 @@ class VendaService:
         return pedido
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def cancelar_pedido(cls, pedido: PedidoVenda, usuario, motivo: str) -> PedidoVenda:
         """Cancela pedido. Se estava reservado, libera a reserva."""
         if not pedido.pode_cancelar:
@@ -380,7 +380,7 @@ class VendaService:
     # ----------------------------------------------------------------------
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar_devolucao(
         cls, pedido: PedidoVenda, usuario, motivo: str, itens_devolvidos: list[dict],
         descricao: str = '',

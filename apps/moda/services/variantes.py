@@ -13,8 +13,8 @@ apagaria o histórico dela.
 """
 from dataclasses import dataclass
 
-from django.db import transaction
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 
 from ..models import Variante
@@ -57,7 +57,7 @@ def montar_sku(codigo_produto: str, sigla_cor: str, sigla_tamanho: str) -> str:
 class VarianteService:
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def gerar(produto) -> ResultadoGeracao:
         """
         Cria as variantes que faltam para o produto.

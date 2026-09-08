@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.food_service.models import (
     Comanda,
@@ -26,7 +26,7 @@ class PedidoPendenteService:
     """
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar_pedido_pendente(cls, *, mesa: Mesa, itens: list[dict]) -> PedidoPendente:
         if not itens:
             raise DadosInvalidosError('Carrinho vazio.')
@@ -97,7 +97,7 @@ class PedidoPendenteService:
         return pedido
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def confirmar_pedido(cls, *, pedido: PedidoPendente, usuario) -> None:
         if pedido.status != PedidoPendente.Status.PENDENTE:
             raise DadosInvalidosError('Pedido já foi processado.')

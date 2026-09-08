@@ -4,7 +4,7 @@ Carteira virtual de cashback — crédito, débito, estorno e expiração.
 O ledger (`MovimentoCashback`) é sempre a fonte da verdade; os saldos em
 `CarteiraCashback` são colunas de cache atualizadas na mesma transação
 de cada lançamento. Toda operação que muda saldo roda dentro de
-`transaction.atomic()` com `select_for_update()` na carteira, e
+`tenant_atomic()` com `select_for_update()` na carteira, e
 recalcula o saldo disponível por agregação do ledger antes de validar
 qualquer débito — nunca confia só no valor em cache para decisões
 críticas. Isso evita condição de corrida (duas requisições poderiam
@@ -16,10 +16,10 @@ from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
-from django.db import transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.middleware.audit import get_client_ip
 from apps.core.services.exceptions import DadosInvalidosError
 
@@ -58,7 +58,7 @@ class CashbackWalletService:
 
     # ------------------------------------------------------------- crédito
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def creditar(cls, *, venda, usuario=None, request=None) -> list:
         """
         Credita cashback pela venda finalizada, agrupando os itens por
@@ -156,7 +156,7 @@ class CashbackWalletService:
 
     # -------------------------------------------------------------- débito
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def debitar(cls, *, cliente, empresa, valor: Decimal, venda, usuario=None, request=None):
         """
         Debita `valor` da carteira do cliente para pagar (parte de) uma
@@ -224,14 +224,14 @@ class CashbackWalletService:
         carteira = CarteiraCashback.objects.filter(empresa=empresa, cliente=cliente).first()
         if not carteira:
             return Decimal("0")
-        with transaction.atomic():
+        with tenant_atomic():
             carteira = CarteiraCashback.objects.select_for_update().get(pk=carteira.pk)
             cls.expirar_creditos(carteira=carteira)
             return cls._recalcular_saldo_disponivel(carteira)
 
     # -------------------------------------------------------------- ajuste
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def ajustar_manual(cls, *, empresa, cliente, valor: Decimal, usuario, observacao: str, request=None):
         """
         Ajuste manual (positivo) de cashback — ex.: cortesia, correção de
@@ -260,7 +260,7 @@ class CashbackWalletService:
 
     # ------------------------------------------------------------ estorno
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def estornar_venda(cls, venda, usuario=None, motivo: str = "") -> None:
         """
         Reverte os efeitos de cashback de uma venda cancelada/editada.
@@ -374,7 +374,7 @@ class CashbackWalletService:
 
     # ----------------------------------------------------------- expiração
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def expirar_creditos(cls, *, carteira=None, hoje=None) -> int:
         """
         Expira o saldo ainda disponível de créditos vencidos.

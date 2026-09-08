@@ -5,9 +5,9 @@ import re
 from datetime import date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
-from django.db import transaction
 from django.db.models import Sum
 from django.core.paginator import Paginator
+from apps.core.tenant_context import tenant_atomic
 from apps.core.models import Filial
 from apps.financeiro.models.caixa_historico import (
     DiaCaixaHistorico, LoteCaixaHistorico, MovimentoCaixaHistorico,
@@ -81,7 +81,7 @@ def validar_historico(payload, inicio, fim):
     return sorted(dias, key=lambda x: x['data'])
 
 
-@transaction.atomic
+@tenant_atomic
 def importar_historico(payload, *, filial_id, cnpj, inicio, fim, aplicar=False):
     dias = validar_historico(payload, inicio, fim)
     # Serializa importações da filial. Valida tudo antes de criar o lote.

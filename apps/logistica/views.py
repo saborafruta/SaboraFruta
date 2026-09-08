@@ -6,7 +6,6 @@ from xml.etree import ElementTree
 
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -14,6 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views import View
 
+from apps.core.tenant_context import tenant_atomic
 from apps.cadastros.models import Cliente, Fornecedor, Motorista, Veiculo
 from apps.financeiro.models.formas_pagamento import (
     CondicaoPagamento, FormaPagamento,
@@ -1440,7 +1440,7 @@ class PedidoExpedicaoEstornarEExcluirView(PermissaoRequiredMixin, View):
             messages.error(request, bloqueio)
             return redirect("logistica:pedido-expedicao-list")
 
-        with transaction.atomic():
+        with tenant_atomic():
             estornadas = FinanceiroExpedicaoService.estornar_recebimentos(
                 pedido, motivo=f"Excluído por {request.user}.", usuario=request.user,
             )
@@ -2391,7 +2391,7 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
                 ParametrosSistema,
             )
 
-            with transaction.atomic():
+            with tenant_atomic():
                 parametros, _ = ParametrosSistema.objects.get_or_create(filial=filial)
                 ultimo_numero = (
                     MDFe.objects.for_filial(filial)
@@ -2670,7 +2670,7 @@ class MDFeDetailView(PermissaoRequiredMixin, View):
             and nfe_disponiveis_qs.count() == 1
         ):
             try:
-                with transaction.atomic():
+                with tenant_atomic():
                     _vincular_nfe_ao_mdfe(mdfe, nfe_disponiveis_qs.first())
             except ValueError:
                 pass
@@ -2719,7 +2719,7 @@ class MDFeVincularNFeView(PermissaoRequiredMixin, View):
             status="autorizada",
         )
         try:
-            with transaction.atomic():
+            with tenant_atomic():
                 _vincular_nfe_ao_mdfe(mdfe, nfe_documento)
         except ValueError as exc:
             messages.error(request, str(exc))
@@ -2753,7 +2753,7 @@ class MDFeVincularDocumentosView(PermissaoRequiredMixin, View):
 
         vinculados = []
         try:
-            with transaction.atomic():
+            with tenant_atomic():
                 for selecao in selecoes:
                     try:
                         tipo, documento_id = selecao.split(":", 1)

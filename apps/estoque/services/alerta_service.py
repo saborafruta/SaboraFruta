@@ -1,9 +1,9 @@
 """Servico de geracao de alertas de vencimento."""
 from __future__ import annotations
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.estoque.models import AlertaVencimento, LoteProduto
 
 
@@ -32,7 +32,7 @@ class AlertaService:
         return ''
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def gerar_alertas_lote(cls, lote: LoteProduto) -> AlertaVencimento | None:
         """Gera ou atualiza alerta para um lote especifico."""
         if (
@@ -76,7 +76,7 @@ class AlertaService:
         return alerta
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def bloquear_lote_vencido(cls, lote: LoteProduto) -> bool:
         """Bloqueia lote vencido para impedir vendas."""
         if not lote.esta_vencido:

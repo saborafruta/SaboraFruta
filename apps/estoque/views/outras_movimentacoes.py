@@ -6,13 +6,13 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.db import models as db_models
-from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views import View
 
+from apps.core.tenant_context import tenant_atomic
 from apps.cadastros.models import Cliente, Fornecedor, Motorista, Veiculo
 from apps.core.models import Filial
 from apps.core.services.auditoria import auditoria_para_objeto
@@ -110,7 +110,7 @@ class DevolucaoClienteView(PermissaoRequiredMixin, View):
             **perms,
         })
 
-    @transaction.atomic
+    @tenant_atomic
     def post(self, request):
         filial = self._get_filial(request)
         form = DevolucaoClienteForm(request.POST, filial=filial)
@@ -198,7 +198,7 @@ class DevolucaoFornecedorView(PermissaoRequiredMixin, View):
             **perms,
         })
 
-    @transaction.atomic
+    @tenant_atomic
     def post(self, request):
         filial = self._get_filial(request)
         form = DevolucaoFornecedorForm(request.POST, filial=filial)
@@ -271,7 +271,7 @@ class SaidaEspecialView(PermissaoRequiredMixin, View):
             **perms,
         })
 
-    @transaction.atomic
+    @tenant_atomic
     def post(self, request):
         filial = self._get_filial(request)
         form = SaidaEspecialForm(request.POST, filial=filial)
@@ -580,7 +580,7 @@ class DevolucaoClienteApiView(PermissaoRequiredMixin, View):
     permissao_modulo = 'estoque'
     permissao_acao = 'criar'
 
-    @transaction.atomic
+    @tenant_atomic
     def post(self, request):
         try:
             body = _json.loads(request.body)
@@ -1272,7 +1272,7 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
         # ── Transferência de estoque (atômica entre os itens) ───────
         documento_numero = _gerar_documento_numero_transferencia(filial.pk)
         try:
-            with transaction.atomic():
+            with tenant_atomic():
                 resultados = []
                 for item in itens_norm:
                     mov_saida, mov_entrada = MovimentacaoService.transferir_entre_filiais(

@@ -37,7 +37,7 @@ class TabelaPreferenciasViewTests(SimpleTestCase):
             'apps.core.views.preferencias_tabelas.Usuario.objects.select_for_update',
             return_value=selecionado,
         ), patch(
-            'apps.core.views.preferencias_tabelas.transaction.atomic',
+            'apps.core.views.preferencias_tabelas.tenant_atomic',
             return_value=nullcontext(),
         ):
             return TabelaPreferenciasView.as_view()(request)

@@ -1,7 +1,8 @@
 """Replicacao de produtos entre filiais conforme politica administrativa."""
 from django.core.exceptions import ObjectDoesNotExist
-from django.db import connection, transaction
+from django.db import connection
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.models import Filial
 from apps.produtos.models import (
     CategoriaProduto, CategoriaProdutoFilial, ClasseFiscal, ClasseFiscalFilial,
@@ -229,7 +230,7 @@ class ReplicacaoProdutoService:
         return qs.filter(nome=marca.nome).first()
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_categoria(cls, categoria):
         politica = cls._politica(categoria.filial)
         if not politica or not politica.replicar_categorias:
@@ -247,7 +248,7 @@ class ReplicacaoProdutoService:
         return sincronizadas
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_marca(cls, marca):
         politica = cls._politica(marca.filial)
         if not politica or not getattr(politica, 'replicar_marcas', False):
@@ -263,7 +264,7 @@ class ReplicacaoProdutoService:
         return sincronizadas
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_unidade(cls, unidade, filial_origem=None):
         filial_origem = filial_origem or unidade.filiais_vinculo.filter(ativo=True).select_related('filial').first()
         filial_origem = getattr(filial_origem, 'filial', filial_origem)
@@ -280,7 +281,7 @@ class ReplicacaoProdutoService:
         return sincronizadas
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_classe_fiscal(cls, classe_fiscal, filial_origem=None):
         filial_origem = filial_origem or classe_fiscal.filiais_vinculo.filter(ativo=True).select_related('filial').first()
         filial_origem = getattr(filial_origem, 'filial', filial_origem)
@@ -297,7 +298,7 @@ class ReplicacaoProdutoService:
         return sincronizadas
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_natureza_operacao(cls, natureza, filial_origem=None):
         filial_origem = filial_origem or natureza.filiais_vinculo.filter(ativo=True).select_related('filial').first()
         filial_origem = getattr(filial_origem, 'filial', filial_origem)
@@ -373,7 +374,7 @@ class ReplicacaoProdutoService:
         return None
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_produto(cls, produto):
         politica = cls._politica(produto.filial)
         if not politica or not politica.replicar_produtos_basicos:
@@ -389,7 +390,7 @@ class ReplicacaoProdutoService:
         return sincronizados
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_tabela_preco(cls, tabela):
         politica = cls._politica(tabela.filial)
         if not politica or not politica.replicar_tabelas_preco:
@@ -419,7 +420,7 @@ class ReplicacaoProdutoService:
             )
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_ficha_tecnica(cls, ficha):
         politica = cls._politica(ficha.filial)
         if not politica or not politica.replicar_ficha_tecnica:
@@ -460,7 +461,7 @@ class ReplicacaoProdutoService:
             )
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_parametro_qualidade_produto(cls, parametro):
         politica = cls._politica(parametro.filial)
         if not politica or not getattr(politica, 'replicar_qualidade', False):
@@ -490,7 +491,7 @@ class ReplicacaoProdutoService:
         return sincronizados
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_parametro_qualidade_categoria(cls, parametro):
         politica = cls._politica(parametro.filial)
         if not politica or not getattr(politica, 'replicar_qualidade', False):

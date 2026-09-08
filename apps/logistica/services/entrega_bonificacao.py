@@ -50,9 +50,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.logistica.models import (
     ComprovanteBonificacao, EntregaBonificacao, ItemCarga, VendaViagem,
@@ -106,7 +106,7 @@ class EntregaBonificacaoService:
     # ── O ciclo ──────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def mover(cls, entrega: EntregaBonificacao, destino: str,
               dados: dict | None = None, usuario=None) -> EntregaBonificacao:
         """
@@ -159,7 +159,7 @@ class EntregaBonificacaoService:
         return entrega
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def tratar_retorno(cls, entrega: EntregaBonificacao,
                        dados: dict | None = None,
                        usuario=None) -> EntregaBonificacao:
@@ -250,7 +250,7 @@ class EntregaBonificacaoService:
         )
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def entregar(cls, entrega: EntregaBonificacao, dados: dict,
                  usuario=None) -> EntregaBonificacao:
         """

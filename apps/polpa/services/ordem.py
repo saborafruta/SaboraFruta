@@ -32,10 +32,10 @@ import logging
 from collections import defaultdict
 from decimal import Decimal
 
-from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.estoque.models import Estoque
 from apps.polpa.models import FichaProduto, OrdemPolpa, Receita, ReservaInsumo
@@ -52,7 +52,7 @@ class OrdemPolpaService:
     # ── Abertura ─────────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar(filial, receita: Receita, dados: dict, usuario=None) -> OrdemPolpa:
         """
         Abre a OP a partir de uma receita.
@@ -193,7 +193,7 @@ class OrdemPolpaService:
     # ── Reserva de matéria-prima ─────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def reservar_insumos(cls, op: OrdemPolpa, usuario=None) -> list:
         """
         Separa o insumo desta ordem. Chamado quando a batida começa.
@@ -317,7 +317,7 @@ class OrdemPolpaService:
     # ── Movimento de estado ──────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def mover(cls, op: OrdemPolpa, destino: str, usuario=None, dados: dict | None = None):
         """
         Leva a OP para a situação indicada, com as regras de cada passagem.
@@ -413,7 +413,7 @@ class OrdemPolpaService:
     # ── Encerramento ─────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def concluir(
         cls, op: OrdemPolpa, usuario, quantidade: Decimal,
         peso_saida: Decimal | None = None, numero_lote: str = '',

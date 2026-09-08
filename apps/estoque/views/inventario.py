@@ -4,7 +4,6 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db import transaction
 from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -16,6 +15,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.auditoria import auditoria_para_objeto, registrar_auditoria, snapshot_modelo
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE, PermissaoRequiredMixin
@@ -234,7 +234,7 @@ class InventarioCreateView(PermissaoRequiredMixin, View):
     def post(self, request):
         form = InventarioForm(request.POST)
         if form.is_valid():
-            with transaction.atomic():
+            with tenant_atomic():
                 inventario = form.save(commit=False)
                 inventario.filial = request.filial_ativa
                 inventario.usuario_inicio = request.user
@@ -313,7 +313,7 @@ class InventarioDetailView(PermissaoRequiredMixin, View):
         try:
             antes_inventario = snapshot_modelo(inventario)
             itens_alterados = 0
-            with transaction.atomic():
+            with tenant_atomic():
                 itens = list(inventario.itens.select_related('produto').order_by('produto__descricao'))
                 for item in itens:
                     quantidade = _decimal_from_request(request.POST.get(f'quantidade_contada_{item.pk}'))

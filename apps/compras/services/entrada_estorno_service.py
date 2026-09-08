@@ -4,10 +4,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
-from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.compras.models import EntradaNF, EntradaNFParcela
 from apps.compras.services.entrada_financeiro_service import DOCUMENTO_TIPO_ENTRADA_NF
 from apps.core.services.exceptions import DadosInvalidosError
@@ -156,7 +156,7 @@ def calcular_impacto_estorno_entrada(entrada: EntradaNF) -> ImpactoEstornoEntrad
     )
 
 
-@transaction.atomic
+@tenant_atomic
 def estornar_entrada(entrada: EntradaNF, usuario, motivo: str) -> tuple[EntradaNF, list[MovimentacaoEstoque]]:
     if not motivo.strip():
         raise DadosInvalidosError('Informe a justificativa para estornar a entrada.')

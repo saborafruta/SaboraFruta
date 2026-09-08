@@ -10,13 +10,14 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from django.contrib import messages
 from django.core.files import File
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.cadastros.models import Cliente
 from apps.core.services.exceptions import DadosInvalidosError, DomainError
 from apps.financeiro.models import ContaBancaria, FormaPagamento
@@ -574,7 +575,7 @@ class Op2CreateView(ModaBaseView):
                 filial=_filial(request), usuario=request.user, chave=rascunho_chave,
             ).prefetch_related('imagens').first()
 
-        with transaction.atomic():
+        with tenant_atomic():
             pedido = PedidoProducao.objects.create(
                 filial=_filial(request), cliente=cliente, vendedor=request.user,
                 status=PedidoProducao.Status.ORCAMENTO,
@@ -1143,7 +1144,7 @@ class Op2HistoricoClienteView(ModaBaseView):
             return JsonResponse({'ok': False, 'erro': 'Selecione ao menos um item da OP anterior.'}, status=400)
 
         try:
-            with transaction.atomic():
+            with tenant_atomic():
                 destino_id = (request.POST.get('destino_id') or '').strip()
                 if not destino_id:
                     destino = _nova_op_aproveitada(
@@ -1573,7 +1574,7 @@ class Op2ActionView(ModaBaseView):
             messages.error(request, 'Ação inválida.')
             return _voltar(pedido)
         try:
-            with transaction.atomic():
+            with tenant_atomic():
                 resposta = handler(request, pedido)
         except (TypeError, ValueError, DomainError) as erro:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':

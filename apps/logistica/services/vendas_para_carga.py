@@ -20,9 +20,9 @@ retaguarda.
 """
 from decimal import Decimal
 
-from django.db import transaction
 from django.db.models import Q
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.fiscal.models import NaturezaOperacao
 from apps.logistica.models import ItemCarga, Viagem
@@ -148,7 +148,7 @@ class VendasParaCargaService:
     # ── Carregar ─────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def adicionar_vendas(cls, viagem: Viagem, pedidos, natureza=None) -> int:
         """
         Põe os itens das vendas escolhidas na carga. Devolve quantos entraram.

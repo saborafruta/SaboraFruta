@@ -33,8 +33,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
 
+from apps.core.tenant_context import tenant_atomic
 from apps.logistica.models import ItemRomaneioCarga
 
 ZERO = Decimal('0')
@@ -60,7 +60,7 @@ class RomaneioDoPedidoService:
         )
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar(cls, pedido) -> dict:
         """
         Põe, move ou tira a entrega do pedido, conforme o romaneio dele.

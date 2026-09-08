@@ -31,9 +31,9 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.qualidade.constants.enums import ResultadoAnalise, TipoAnalise
 from apps.qualidade.models import (
@@ -65,7 +65,7 @@ class ChecklistService:
         )
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def abrir(cls, filial, produto, etapa, responsavel,
               lote=None, ordem_producao=None) -> AnaliseQualidade:
         """
@@ -110,7 +110,7 @@ class ChecklistService:
     # ── Preencher ────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def preencher(cls, analise: AnaliseQualidade, respostas: dict,
                   usuario=None) -> list[ItemAnalise]:
         """
@@ -229,7 +229,7 @@ class ChecklistService:
         return [i for i in analise.itens.all() if i.pendente_obrigatorio]
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def concluir(cls, analise: AnaliseQualidade, usuario=None,
                  acao_reprovacao: str = '', observacao: str = '') -> AnaliseQualidade:
         """

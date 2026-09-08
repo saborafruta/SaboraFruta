@@ -32,9 +32,9 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.estoque.models import Estoque
 from apps.polpa.models import (
@@ -164,7 +164,7 @@ class CompraService:
     # ── Requisição ───────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def gerar_requisicao(cls, filial, linhas: list[Necessidade],
                          usuario=None, observacao: str = '') -> RequisicaoInsumo:
         """
@@ -205,7 +205,7 @@ class CompraService:
     # ── Pedido de compra ─────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def gerar_pedido_compra(cls, requisicao: RequisicaoInsumo,
                             fornecedor, usuario=None):
         """

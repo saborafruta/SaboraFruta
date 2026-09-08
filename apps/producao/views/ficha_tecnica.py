@@ -1,12 +1,13 @@
 """CRUD de Ficha Técnica com formset de itens."""
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db import connection, transaction
+from django.db import connection
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views import View
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.produtos.services.replicacao_service import ReplicacaoProdutoService
 from apps.producao.forms import FichaTecnicaForm, ItemFichaTecnicaFormSet
@@ -76,7 +77,7 @@ class FichaTecnicaCreateView(PermissaoRequiredMixin, View):
             'cancel_url': reverse_lazy('producao:ficha-list'),
         })
 
-    @transaction.atomic
+    @tenant_atomic
     def post(self, request):
         form = FichaTecnicaForm(request.POST)
         formset = ItemFichaTecnicaFormSet(request.POST)
@@ -112,7 +113,7 @@ class FichaTecnicaUpdateView(PermissaoRequiredMixin, View):
             'cancel_url': reverse_lazy('producao:ficha-list'),
         })
 
-    @transaction.atomic
+    @tenant_atomic
     def post(self, request, pk):
         ficha = get_object_or_404(FichaTecnica.objects.for_filial(request.filial_ativa), pk=pk)
         form = FichaTecnicaForm(request.POST, instance=ficha)

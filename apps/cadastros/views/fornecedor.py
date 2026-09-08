@@ -3,7 +3,6 @@ import csv
 
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db import transaction
 from django.db.models import IntegerField, OuterRef, Q, Subquery
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,6 +16,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
+from apps.core.tenant_context import tenant_atomic
 from apps.cadastros.forms import FornecedorForm, FornecedorRapidoForm
 from apps.cadastros.models import Fornecedor
 from apps.cadastros.services.replicacao_service import ReplicacaoCadastrosService
@@ -251,7 +251,7 @@ class FornecedorInlineEditView(PermissaoRequiredMixin, View):
         except ValueError as exc:
             return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
 
-        with transaction.atomic():
+        with tenant_atomic():
             for campo, valor in dados.items():
                 setattr(fornecedor, campo, valor)
             fornecedor.save()
@@ -303,7 +303,7 @@ class FornecedorCreateView(PermissaoRequiredMixin, View):
     def post(self, request):
         form = FornecedorForm(request.POST)
         if form.is_valid():
-            with transaction.atomic():
+            with tenant_atomic():
                 fornecedor = form.save(commit=False)
                 fornecedor.filial = request.filial_ativa
                 fornecedor.save()
@@ -350,7 +350,7 @@ class FornecedorAjaxCreateView(PermissaoRequiredMixin, View):
                 status=400,
             )
 
-        with transaction.atomic():
+        with tenant_atomic():
             fornecedor = form.save(commit=False)
             fornecedor.filial = filial
             fornecedor.save()
@@ -408,7 +408,7 @@ class FornecedorUpdateView(PermissaoRequiredMixin, View):
         )
         form = FornecedorForm(request.POST, instance=fornecedor)
         if form.is_valid():
-            with transaction.atomic():
+            with tenant_atomic():
                 fornecedor = form.save()
                 ReplicacaoCadastrosService.sincronizar_fornecedor(fornecedor)
             messages.success(request, 'Fornecedor atualizado.')
@@ -457,7 +457,7 @@ class FornecedorToggleAtivoView(PermissaoRequiredMixin, View):
         fornecedor = get_object_or_404(
             Fornecedor.objects.for_filial(request.filial_ativa), pk=pk,
         )
-        with transaction.atomic():
+        with tenant_atomic():
             fornecedor.ativo = not fornecedor.ativo
             fornecedor.save(update_fields=['ativo', 'updated_at'])
             ReplicacaoCadastrosService.sincronizar_fornecedor(fornecedor)

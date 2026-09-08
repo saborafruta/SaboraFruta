@@ -4,7 +4,6 @@ import logging
 
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db import transaction
 from django.db.models import Case, CharField, IntegerField, OuterRef, Q, Subquery, When
 from django.db.models.functions import Lower
 from django.http import HttpResponse, JsonResponse
@@ -19,6 +18,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
+from apps.core.tenant_context import tenant_atomic
 from apps.cadastros.forms import ClienteForm
 from apps.cadastros.models import Cliente
 from apps.cadastros.services.cep_service import CepService
@@ -442,7 +442,7 @@ class ClienteToggleAtivoView(PermissaoRequiredMixin, View):
         cliente = get_object_or_404(
             Cliente.objects.for_filial(request.filial_ativa), pk=pk,
         )
-        with transaction.atomic():
+        with tenant_atomic():
             cliente.ativo = not cliente.ativo
             cliente.save(update_fields=['ativo', 'updated_at'])
             ReplicacaoCadastrosService.sincronizar_cliente(cliente)

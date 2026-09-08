@@ -12,7 +12,7 @@ from django.contrib import messages
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.paginator import Paginator
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError
 from django.db.models import Case, DecimalField, F, FilteredRelation, IntegerField, Max, OuterRef, Q, Subquery, Sum, Value, When
 from django.db.models.functions import Cast, Coalesce
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
@@ -29,6 +29,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.services.search import filter_queryset_by_terms
 from apps.cadastros.models import Fornecedor
@@ -1612,7 +1613,7 @@ class ProdutoCreateView(PermissaoRequiredMixin, View):
             estoque_atual=0,
         )
         if form.is_valid():
-            with transaction.atomic():
+            with tenant_atomic():
                 ativo_filial = form.cleaned_data.get('ativo', True)
                 produto = form.save(commit=False)
                 produto.filial = request.filial_ativa
@@ -1682,7 +1683,7 @@ class ProdutoDuplicarView(ProdutoCreateView):
             estoque_atual=0,
         )
         if form.is_valid():
-            with transaction.atomic():
+            with tenant_atomic():
                 ativo_filial = form.cleaned_data.get('ativo', True)
                 produto = form.save(commit=False)
                 produto.filial = request.filial_ativa
@@ -1859,7 +1860,7 @@ class ProdutoUpdateView(PermissaoRequiredMixin, View):
         )
         if form.is_valid():
             try:
-                with transaction.atomic():
+                with tenant_atomic():
                     ativo_filial = form.cleaned_data.get('ativo', True)
                     produto = form.save(commit=False)
                     produto.ativo = True
@@ -1990,7 +1991,7 @@ class ProdutoToggleAtivoView(PermissaoRequiredMixin, View):
             if str(filial_id).isdigit()
         ]
         novo_status = not estava_ativo
-        with transaction.atomic():
+        with tenant_atomic():
             if not produto.ativo:
                 produto.ativo = True
                 produto.save(update_fields=['ativo', 'updated_at'])

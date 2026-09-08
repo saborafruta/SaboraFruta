@@ -17,10 +17,10 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import ROUND_DOWN, Decimal
 
-from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.financeiro.constants.enums import StatusContaReceber
 from apps.financeiro.models.receber_pagar import ContaReceber
@@ -75,7 +75,7 @@ class FinanceiroPedidoService:
         )
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_valor_total(cls, pedido, usuario=None):
         """Faz os títulos válidos somarem exatamente o novo total da OP.
 
@@ -252,7 +252,7 @@ class FinanceiroPedidoService:
     # ── Geração ──────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def gerar(
         cls, pedido, usuario=None, *, vencimento_saldo=None, parcelas_saldo=None,
         pagadores_entrada=None, devedores_saldo=None,
@@ -383,7 +383,7 @@ class FinanceiroPedidoService:
     # ── Cancelamento ─────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def cancelar(cls, pedido, usuario, motivo: str = '') -> int:
         """
         Desfaz o financeiro do pedido para poder gerar de novo.

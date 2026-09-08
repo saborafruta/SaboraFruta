@@ -21,9 +21,9 @@ consumir o saldo em poder da viagem.
 """
 from decimal import Decimal
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.logistica.models import (
     ItemVendaViagem, SaldoCarga, VendaViagem, Viagem,
@@ -82,7 +82,7 @@ class VendaViagemService:
     # ── Registrar ────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def registrar(cls, viagem: Viagem, dados: dict, usuario=None) -> VendaViagem:
         """
         Registra uma venda e baixa o saldo da carga.
@@ -191,7 +191,7 @@ class VendaViagemService:
         return venda
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def adicionar_item(cls, venda: VendaViagem, dados: dict) -> ItemVendaViagem:
         """Mais um produto na mesma venda — um cliente costuma levar vários."""
         cls._exigir_viagem_na_rua(venda.viagem)
@@ -223,7 +223,7 @@ class VendaViagemService:
         return item
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def cancelar(cls, venda: VendaViagem, motivo: str = '') -> VendaViagem:
         """
         Cancela a venda e devolve a mercadoria ao saldo da viagem.

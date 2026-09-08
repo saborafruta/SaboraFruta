@@ -4,9 +4,9 @@ from __future__ import annotations
 from decimal import Decimal, ROUND_HALF_UP
 import unicodedata
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.produtos.models import DIAS_SEMANA_TODOS, ItemTabelaPreco, Produto, ProdutoFilial, TabelaPreco
 
@@ -768,7 +768,7 @@ class PrecoService:
         return preco
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def recalcular_custo_medio(
         produto: Produto, quantidade_entrada: Decimal, custo_entrada: Decimal,
     ) -> Decimal:

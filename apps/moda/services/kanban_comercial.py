@@ -37,10 +37,10 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
-from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.moda.models import PedidoProducao
 from apps.moda.services.financeiro import FinanceiroPedidoService
@@ -243,7 +243,7 @@ class KanbanComercialService:
     # ── Movimentação ─────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def mover(cls, pedido: PedidoProducao, chave_coluna: str, usuario) -> dict:
         """
         Leva o pedido para a coluna indicada e devolve o que mudou.

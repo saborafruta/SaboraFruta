@@ -1,11 +1,11 @@
 """Views de Categorias Financeiras."""
 from django.contrib import messages
-from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.models import RegistroAuditoria
 from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
@@ -59,7 +59,7 @@ class PlanoContasQuickCreateView(PermissaoRequiredMixin, View):
     permissao_modulo = 'financeiro'
     permissao_acao = 'criar'
 
-    @transaction.atomic
+    @tenant_atomic
     def post(self, request):
         empresa = _get_empresa(request)
         try:

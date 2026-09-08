@@ -35,9 +35,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
 from django.db.models import Sum
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.logistica.models import ItemPedidoExpedicao, PedidoExpedicao
 
@@ -97,7 +97,7 @@ class ItensDaVendaService:
     # ── Escrita ──────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def trazer(cls, pedido, usuario=None) -> dict:
         """
         Cria na expedição as linhas que faltam da venda.

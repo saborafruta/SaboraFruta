@@ -4,11 +4,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
-from django.db import transaction
 from django.db.models import DecimalField, F, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.compras.models import EntradaNF
 from apps.compras.services.entrada_custo_service import EntradaCustoService
 from apps.estoque.models import Estoque
@@ -301,7 +301,7 @@ class AtualizacaoPrecoService:
         return cenarios
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def aplicar_atualizacao(cls, *, request, entrada, linhas, regra: dict) -> AtualizacaoPrecoLote:
         lote = AtualizacaoPrecoLote.objects.create(
             filial=request.filial_ativa,
@@ -349,7 +349,7 @@ class AtualizacaoPrecoService:
         return lote
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def aplicar_precos_manuais(cls, *, request, entrada, linhas, precos_por_produto: dict) -> AtualizacaoPrecoLote:
         linhas_para_gravar = [
             linha for linha in linhas

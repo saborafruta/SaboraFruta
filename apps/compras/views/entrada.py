@@ -4,7 +4,6 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db import transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -12,6 +11,7 @@ from django.utils.dateparse import parse_date
 from django.utils import timezone
 from django.views import View
 
+from apps.core.tenant_context import tenant_atomic
 from apps.cadastros.models import Fornecedor
 from apps.compras.forms import (
     AdicionarItemEntradaForm, ConsultarChaveForm, EntradaNFForm, EntradaNFParcelaForm,
@@ -1034,7 +1034,7 @@ class EntradaNFVincularSugestoesView(PermissaoRequiredMixin, View):
 
         vinculados = 0
         ignorados = 0
-        with transaction.atomic():
+        with tenant_atomic():
             itens = (
                 entrada.itens
                 .filter(pk__in=item_ids, produto__isnull=True)
@@ -1196,7 +1196,7 @@ class EntradaNFFornecedorPendenteView(EntradaNFDetailView):
         if acao == 'criar_xml':
             try:
                 antes = snapshot_modelo(entrada)
-                with transaction.atomic():
+                with tenant_atomic():
                     fornecedor = _criar_fornecedor_do_xml(entrada)
                     entrada.fornecedor = fornecedor
                     entrada.fornecedor_pendente = False
@@ -1228,7 +1228,7 @@ class EntradaNFFornecedorPendenteView(EntradaNFDetailView):
                 pk=fornecedor_id,
             )
             antes = snapshot_modelo(entrada)
-            with transaction.atomic():
+            with tenant_atomic():
                 entrada.fornecedor = fornecedor
                 entrada.fornecedor_pendente = False
                 entrada.save(update_fields=['fornecedor', 'fornecedor_pendente', 'updated_at'])

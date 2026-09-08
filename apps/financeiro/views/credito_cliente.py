@@ -5,13 +5,13 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db import transaction
 from django.db.models import Q, Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 
+from apps.core.tenant_context import tenant_atomic
 from apps.cadastros.models import Cliente
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.financeiro.models.credito_cliente import CreditoCliente
@@ -93,7 +93,7 @@ class CreditoClienteDetailView(PermissaoRequiredMixin, View):
             'user_is_admin': _is_admin(request),
         })
 
-    @transaction.atomic
+    @tenant_atomic
     def post(self, request, pk):
         if not _is_admin(request):
             messages.error(request, 'Apenas administradores podem cancelar créditos.')
@@ -131,7 +131,7 @@ class CreditoClienteCreateView(PermissaoRequiredMixin, View):
             ],
         })
 
-    @transaction.atomic
+    @tenant_atomic
     def post(self, request):
         filial = _filial(request)
         cliente_id = request.POST.get('cliente_id')
@@ -218,7 +218,7 @@ class CreditoClienteEditView(PermissaoRequiredMixin, View):
             'motivo_choices': _MOTIVO_CHOICES,
         })
 
-    @transaction.atomic
+    @tenant_atomic
     def post(self, request, pk):
         filial = _filial(request)
         credito = get_object_or_404(CreditoCliente, pk=pk, filial=filial)

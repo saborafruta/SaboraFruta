@@ -2,9 +2,9 @@
 import hashlib
 import logging
 from datetime import datetime, timedelta
-from django.db import transaction
 from django.utils import timezone
 from django.conf import settings
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.financeiro.models import (
     DocumentoFiscal, IdempotenciaFiscal, LogIntegracaoFiscal,
@@ -39,7 +39,7 @@ class FiscalService:
         return hashlib.sha256(raw.encode()).hexdigest()
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def reservar_idempotencia(filial, chave, tipo_doc):
         idemp, created = IdempotenciaFiscal.objects.select_for_update().get_or_create(
             filial=filial, chave=chave,

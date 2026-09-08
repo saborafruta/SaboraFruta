@@ -29,8 +29,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.polpa.models import EtapaReceita, FichaProduto, Receita
 from apps.producao.models import FichaTecnica, ItemFichaTecnica, OrdemProducao
@@ -45,7 +45,7 @@ class ReceitaService:
     # ── Criação e versões ────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar(filial, produto, dados: dict) -> Receita:
         """Abre a receita e a ficha técnica do ERP juntas."""
         ficha = FichaTecnica.objects.create(
@@ -70,7 +70,7 @@ class ReceitaService:
         )
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def nova_versao(receita: Receita, versao: str = '') -> Receita:
         """
         Copia a receita inteira numa versão nova, em rascunho.
@@ -140,7 +140,7 @@ class ReceitaService:
             return f'{atual}-nova'
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def ativar(receita: Receita) -> Receita:
         """
         Põe esta versão em uso e tira a anterior.

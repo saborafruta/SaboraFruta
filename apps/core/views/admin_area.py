@@ -1369,7 +1369,7 @@ def limpar_documentos_fiscais(request):
     n_filiais = filiais_qs.count()
 
     if request.method == "POST":
-        with transaction.atomic():
+        with transaction.atomic(using='default'):
             log_del, _ = logs_qs.delete()
             doc_del, _ = docs_qs.delete()
             for f in filiais_qs:

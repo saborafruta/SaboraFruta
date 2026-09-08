@@ -21,9 +21,9 @@ from __future__ import annotations
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.estoque.models import LoteProduto
 from apps.polpa.models import Camara, FichaProduto, LoteArmazenado
@@ -41,7 +41,7 @@ class ArmazenagemService:
     # ── Guardar ──────────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def guardar(lote: LoteProduto, camara: Camara, dados: dict | None = None):
         """
         Diz em que câmara e endereço o lote está.
@@ -229,7 +229,7 @@ class ArmazenagemService:
         return resultado
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def bloquear(lote: LoteProduto, motivo: str):
         """
         Tira o lote do jogo sem apagá-lo.

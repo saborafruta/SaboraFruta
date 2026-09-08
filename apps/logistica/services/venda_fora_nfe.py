@@ -52,9 +52,9 @@ caixa.
 from decimal import Decimal
 from typing import Any, Dict, List
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.financeiro.constants.enums import (
     StatusDocumentoFiscal, TipoDocumentoFiscal,
@@ -397,7 +397,7 @@ class VendaForaNFeService:
     # ── Emitir ───────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def emitir(cls, venda: VendaViagem, usuario=None) -> DocumentoFiscal:
         """
         Reserva número, grava o documento e o amarra à venda.

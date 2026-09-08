@@ -32,8 +32,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.logistica.models import Viagem
 from apps.logistica.services.viagem import ViagemService
@@ -86,7 +86,7 @@ class RetornoViagemService:
     # ── A conferência ────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def registrar(cls, viagem, quantidades: dict, usuario=None) -> dict:
         """
         Registra o retorno conferido, linha a linha.

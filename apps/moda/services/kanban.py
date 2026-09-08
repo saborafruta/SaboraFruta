@@ -22,9 +22,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.moda.models import EtapaOrdem, OrdemProducao
 
@@ -158,7 +158,7 @@ class KanbanService:
     # ── Movimentação ─────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def mover(cls, ordem: OrdemProducao, chave_coluna: str, usuario) -> dict:
         """
         Leva a ordem para a coluna indicada e devolve o que mudou.

@@ -16,10 +16,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
-from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import (
     DadosInvalidosError, EstoqueInsuficienteError, LoteVencidoError,
 )
@@ -111,7 +111,7 @@ class MovimentacaoService:
     # ----------------------------------------------------------------------
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def registrar_movimentacao(
         cls,
         produto_id: int,
@@ -272,7 +272,7 @@ class MovimentacaoService:
         return mov
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def registrar_saida_fefo(
         cls,
         produto_id: int,
@@ -362,7 +362,7 @@ class MovimentacaoService:
     # ----------------------------------------------------------------------
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def transferir_entre_filiais(
         cls,
         produto_id: int,
@@ -472,7 +472,7 @@ class MovimentacaoService:
     # ----------------------------------------------------------------------
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def registrar_entrada_compra(
         cls,
         produto_id: int,
@@ -542,7 +542,7 @@ class MovimentacaoService:
     # ----------------------------------------------------------------------
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def ajustar_manual(
         cls,
         produto_id: int,
@@ -610,7 +610,7 @@ class MovimentacaoService:
         )
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def baixar_lote_por_validade(
         cls,
         lote_id: int,
@@ -659,7 +659,7 @@ class MovimentacaoService:
     # ----------------------------------------------------------------------
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def reservar_estoque(
         cls,
         produto_id: int,
@@ -702,7 +702,7 @@ class MovimentacaoService:
         return estoque
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def liberar_reserva(
         cls,
         produto_id: int,

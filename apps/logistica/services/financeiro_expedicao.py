@@ -30,9 +30,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.financeiro.constants.enums import StatusContaReceber
 from apps.financeiro.models.receber_pagar import ContaReceber
@@ -142,7 +142,7 @@ class FinanceiroExpedicaoService:
     # ── Escrita ──────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def gerar_titulos(cls, pedido, usuario=None, antecipado: bool = False) -> list:
         """
         Abre as contas a receber desta carga avulsa.
@@ -229,7 +229,7 @@ class FinanceiroExpedicaoService:
             )
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def receber(cls, pedido, forma=None, usuario=None) -> list:
         """
         Registra o recebimento dos títulos em aberto desta carga.
@@ -255,7 +255,7 @@ class FinanceiroExpedicaoService:
         return abertos
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def refazer(cls, pedido) -> int:
         """
         Desfaz a cobrança para ela ser lançada de novo.
@@ -290,7 +290,7 @@ class FinanceiroExpedicaoService:
         )
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def estornar_recebimentos(cls, pedido, motivo: str, usuario) -> int:
         """
         Desfaz TODO recebimento já lançado nesta expedição, uma baixa de

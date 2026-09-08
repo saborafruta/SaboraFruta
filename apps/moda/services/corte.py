@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.moda.models import ItemCorte, RegistroCorte
 
@@ -24,7 +24,7 @@ class CorteService:
     # ── Grade ────────────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def salvar_grade(corte: RegistroCorte, quantidades: dict) -> int:
         """
         Grava as quantidades por tamanho e sincroniza o total.

@@ -13,9 +13,9 @@ fiscal primeiro (apps.estoque.services.transferencia_nfe.cancelar_nfe_transferen
 """
 from __future__ import annotations
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.estoque.models import LoteProduto, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
@@ -64,7 +64,7 @@ def _bloquear_se_nota_autorizada(movs_saida, acao: str) -> None:
         )
 
 
-@transaction.atomic
+@tenant_atomic
 def cancelar_transferencia(documento_numero: str, filial_origem, usuario) -> list[MovimentacaoEstoque]:
     """
     Estorna a transferência: devolve a quantidade para a filial de origem e
@@ -148,7 +148,7 @@ def cancelar_transferencia(documento_numero: str, filial_origem, usuario) -> lis
     return movs_reversao
 
 
-@transaction.atomic
+@tenant_atomic
 def reativar_transferencia(documento_numero: str, filial_origem, usuario) -> list[MovimentacaoEstoque]:
     """
     Refaz no estoque uma transferência anteriormente estornada.
@@ -241,7 +241,7 @@ def reativar_transferencia(documento_numero: str, filial_origem, usuario) -> lis
     return movs_reativacao
 
 
-@transaction.atomic
+@tenant_atomic
 def excluir_transferencia(documento_numero: str, filial_origem, usuario) -> None:
     """
     Exclui definitivamente uma transferência. Restrito a administradores

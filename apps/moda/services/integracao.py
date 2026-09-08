@@ -39,9 +39,9 @@ import logging
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 
 logger = logging.getLogger(__name__)
@@ -74,7 +74,7 @@ class IntegracaoService:
     # ── Requisição → Pedido de compra ────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def gerar_pedido_compra(cls, requisicao, fornecedor, usuario):
         """
         Transforma a requisição num pedido de compra de verdade.
@@ -218,7 +218,7 @@ class IntegracaoService:
         return material.produto_estoque, quantidade, ''
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def baixar_estoque_do_corte(cls, corte, usuario) -> BaixaDoCorte:
         """
         Dá baixa no tecido que o corte consumiu, POR FEFO.
@@ -357,7 +357,7 @@ class IntegracaoService:
             return None
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def estornar_estoque_do_corte(cls, corte, usuario) -> BaixaDoCorte:
         """
         Devolve ao estoque o que a baixa tirou, PARA OS MESMOS LOTES.

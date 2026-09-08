@@ -6,7 +6,6 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db import transaction
 from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -14,6 +13,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views import View
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.models import RegistroAuditoria
 from apps.core.services.auditoria import auditoria_para_objeto, auditoria_relacionada, registrar_auditoria, snapshot_modelo
@@ -711,7 +711,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
             "items": sorted(itens, key=lambda item: (item.data, item.origem), reverse=True),
         }
 
-    @transaction.atomic
+    @tenant_atomic
     def _direcionar_pendencia(self, request, filial, origem, registro_id, conta):
         if not registro_id or not str(registro_id).isdigit():
             raise ValueError("Movimentacao invalida.")
@@ -757,7 +757,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
         self._atualizar_saldo_conta(conta)
         return conta
 
-    @transaction.atomic
+    @tenant_atomic
     def _alterar_conta_movimento(self, request, filial, origem, registro_id, nova_conta, justificativa):
         item = self._buscar_movimento_origem(filial, origem, registro_id)
         conta_anterior = getattr(item, "conta_bancaria", None)
@@ -796,7 +796,7 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
         self._atualizar_saldo_conta(nova_conta)
         return nova_conta
 
-    @transaction.atomic
+    @tenant_atomic
     def _editar_movimento_manual(self, request, movimento, dados):
         conta_anterior = movimento.conta_bancaria
         campos = [

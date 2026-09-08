@@ -6,9 +6,9 @@ recalcular o total do item na mesma transação. Espalhar isso pelas views
 deixaria um caminho sem recálculo — e é exatamente aí que a divergência
 entre grade e total apareceria.
 """
-from django.db import transaction
 from django.db.models import Max, Sum
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 
 from ..models import ItemGradePedido, ItemPedidoProducao, Tamanho
@@ -47,7 +47,7 @@ class GradePedidoService:
     # ── Edição ───────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def salvar_quantidades(cls, pedido, quantidades: dict) -> int:
         """
         Grava a tabela inteira de uma vez.
@@ -69,7 +69,7 @@ class GradePedidoService:
         return cls.recalcular_pedido(pedido)
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def adicionar_tamanho(cls, pedido, tamanho) -> int:
         """
         Acrescenta uma coluna à tabela.
@@ -86,7 +86,7 @@ class GradePedidoService:
         return criadas
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def remover_tamanho(cls, pedido, tamanho) -> int:
         """Remove a coluna do pedido inteiro e ressincroniza os totais."""
         apagadas, _ = ItemGradePedido.objects.filter(
@@ -96,7 +96,7 @@ class GradePedidoService:
         return apagadas
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def aplicar_grade_do_produto(cls, item) -> int:
         """
         Monta as colunas a partir da grade cadastrada do produto.
@@ -122,7 +122,7 @@ class GradePedidoService:
     # ── Cópia e duplicação ───────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def copiar_grade(cls, origem, destino) -> int:
         """
         Copia as quantidades de um item para outro.
@@ -145,7 +145,7 @@ class GradePedidoService:
         return destino.grade.count()
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def duplicar_item(cls, item):
         """
         Clona o item com as especificações e a grade.

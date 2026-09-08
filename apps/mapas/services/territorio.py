@@ -11,8 +11,8 @@ from __future__ import annotations
 import logging
 from decimal import Decimal
 
-from django.db import transaction
 
+from apps.core.tenant_context import tenant_atomic
 from apps.financeiro.services.receita import ajuste_total
 
 from apps.mapas.managers import na_area
@@ -31,7 +31,7 @@ class TerritorioService:
 
     # ------------------------------------------------------------ atribuição
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def recalcular_praca(cls, praca) -> int:
         """
         Refaz a atribuição de clientes de uma praça. Devolve quantos entraram.

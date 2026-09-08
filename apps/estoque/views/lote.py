@@ -4,7 +4,6 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db import transaction
 from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -15,6 +14,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.auditoria import auditoria_para_objeto, registrar_auditoria, snapshot_modelo
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
@@ -283,7 +283,7 @@ class LoteCreateView(PermissaoRequiredMixin, View):
         form = LoteProdutoForm(request.POST, filial=request.filial_ativa)
         if form.is_valid():
             try:
-                with transaction.atomic():
+                with tenant_atomic():
                     lote = form.save(commit=False)
                     lote.filial = request.filial_ativa
                     quantidade_inicial = lote.quantidade_inicial or Decimal('0')

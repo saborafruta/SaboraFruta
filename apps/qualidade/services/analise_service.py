@@ -1,5 +1,5 @@
 """Serviço de análises de qualidade — bloqueia/aprova lote conforme resultado."""
-from django.db import transaction
+from apps.core.tenant_context import tenant_atomic
 from apps.qualidade.models import AnaliseQualidade
 from apps.qualidade.constants.enums import ResultadoAnalise, AcaoReprovacao
 from apps.estoque.models import LoteProduto
@@ -161,7 +161,7 @@ class NaoConformidadeService:
 class AnaliseQualidadeService:
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def registrar(filial, lote, tipo_analise, parametros, responsavel,
                    resultado=ResultadoAnalise.PENDENTE,
                    acao_reprovacao="", observacao=""):
@@ -179,7 +179,7 @@ class AnaliseQualidadeService:
         return analise
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def aprovar(analise: AnaliseQualidade):
         analise.resultado = ResultadoAnalise.APROVADO
         analise.save(update_fields=["resultado"])
@@ -187,7 +187,7 @@ class AnaliseQualidadeService:
         return analise
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def reprovar(analise: AnaliseQualidade,
                  acao=AcaoReprovacao.BLOQUEIO, motivo=""):
         analise.resultado = ResultadoAnalise.REPROVADO

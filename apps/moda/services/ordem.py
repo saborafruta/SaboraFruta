@@ -23,9 +23,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 
 from .validacao import ValidacaoProducao
@@ -80,7 +80,7 @@ class OrdemProducaoService:
     # ── Emissão ──────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def gerar_do_pedido(cls, pedido, usuario=None, forcar=False) -> list[OrdemProducao]:
         """
         Emite uma OP para cada item do pedido que ainda não tem uma aberta.
@@ -185,7 +185,7 @@ class OrdemProducaoService:
     # ── Edição ───────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def aplicar(cls, ordem: OrdemProducao, usuario, dados: dict) -> list[str]:
         """
         Grava apenas os campos que o perfil autoriza. Devolve o que mudou.
@@ -249,7 +249,7 @@ class OrdemProducaoService:
     # ── Fluxo ────────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def mudar_status(cls, ordem: OrdemProducao, novo: str, usuario) -> OrdemProducao:
         if novo not in OrdemProducao.Status.values:
             raise DomainError('Status inválido.')

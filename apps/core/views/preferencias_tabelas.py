@@ -2,10 +2,10 @@ import json
 import math
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import transaction
 from django.http import JsonResponse
 from django.views import View
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.models import Usuario
 
 
@@ -78,7 +78,7 @@ class TabelaPreferenciasView(LoginRequiredMixin, View):
         if chave is None or preferencia is None:
             return JsonResponse({'ok': False, 'erro': 'Preferencia invalida.'}, status=400)
 
-        with transaction.atomic():
+        with tenant_atomic():
             usuario = Usuario.objects.select_for_update().get(pk=request.user.pk)
             preferencias = dict(usuario.preferencias_tabelas or {})
             if chave not in preferencias and len(preferencias) >= MAX_TABELAS:

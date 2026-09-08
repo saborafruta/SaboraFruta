@@ -8,11 +8,11 @@ pode depender de quem contou onde ele está.
 """
 from __future__ import annotations
 
-from django.db import transaction
 from django.db.models import F, Window
 from django.db.models.functions import RowNumber
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.mapas.services.otimizacao import distancia_haversine_m
 
 # Margem de saída: entra ao cruzar o raio, mas só sai depois de se afastar mais
@@ -107,7 +107,7 @@ class GeofenceService:
         }
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def processar_posicao(cls, *, filial, motorista, latitude, longitude,
                           momento=None):
         """

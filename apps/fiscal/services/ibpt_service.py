@@ -5,9 +5,9 @@ from decimal import Decimal, InvalidOperation
 
 import requests
 from django.conf import settings
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.fiscal.models import AliquotaIBPT
 
@@ -75,7 +75,7 @@ def _normalizar_registro(dados: dict, uf: str) -> dict:
 def _salvar_registros(registros: list[dict]) -> int:
     agora = timezone.now()
     objetos = [AliquotaIBPT(**registro, updated_at=agora) for registro in registros]
-    with transaction.atomic():
+    with tenant_atomic():
         AliquotaIBPT.objects.bulk_create(
             objetos,
             batch_size=1000,

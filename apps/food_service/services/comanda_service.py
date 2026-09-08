@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.food_service.models import Comanda, ComplementoItemComanda, ItemComanda, Mesa
 from apps.food_service.services.ficha_tecnica_service import FichaTecnicaService
@@ -20,7 +20,7 @@ class ComandaService:
     """
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def abrir(
         cls,
         *,
@@ -111,7 +111,7 @@ class ComandaService:
         return item
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def unir_comandas(cls, *, origem: Comanda, destino: Comanda):
         if origem.pk == destino.pk:
             raise DadosInvalidosError('Selecione comandas diferentes para unir.')
@@ -121,7 +121,7 @@ class ComandaService:
         origem.save(update_fields=['status'])
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def cancelar(cls, *, comanda: Comanda):
         """
         Cancela uma comanda aberta sem gerar venda (nenhum item foi pago,
@@ -142,7 +142,7 @@ class ComandaService:
                 mesa.save(update_fields=['status'])
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def separar(cls, *, comanda: Comanda) -> Comanda:
         """
         Abre uma comanda-irmã vazia nas mesmas mesas, pronta para receber
@@ -161,7 +161,7 @@ class ComandaService:
         return nova
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def transferir_mesa(cls, *, comanda: Comanda, mesa_origem: Mesa, mesa_destino: Mesa):
         comanda.mesas.remove(mesa_origem)
         comanda.mesas.add(mesa_destino)
@@ -172,13 +172,13 @@ class ComandaService:
             mesa_origem.save(update_fields=['status'])
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def unir_mesas(cls, *, comanda: Comanda, mesas_adicionais: list[Mesa]):
         comanda.mesas.add(*mesas_adicionais)
         Mesa.objects.filter(pk__in=[m.pk for m in mesas_adicionais]).update(status=Mesa.Status.OCUPADA)
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def liberar_mesa(cls, *, comanda: Comanda, mesa: Mesa):
         """
         "Dividir mesas": separa uma mesa de uma comanda que cobre várias
@@ -193,7 +193,7 @@ class ComandaService:
             mesa.save(update_fields=['status'])
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def fechar(
         cls,
         *,
@@ -331,7 +331,7 @@ class ComandaService:
         return itens
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def fechar_apos_pdv(cls, *, comanda: Comanda, venda, usuario):
         """
         Fecha a comanda depois que o pagamento foi feito direto no PDV (fluxo

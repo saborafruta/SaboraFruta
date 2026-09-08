@@ -7,7 +7,7 @@ define as cores, e o produto cruza as duas para gerar as variantes.
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
-from django.db import models, transaction
+from django.db import models
 from django.db.models.deletion import ProtectedError
 from django.core.paginator import Paginator
 from django.db.models import Count, Prefetch, Q
@@ -15,6 +15,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 
 from apps.core.services.exceptions import DomainError
@@ -1074,7 +1075,7 @@ class PedidoValoresView(ModaBaseView):
             messages.error(request, f'Valores não salvos — {erros}')
             return redirect(reverse('moda:pedido-detail', args=[pedido.pk]))
 
-        with transaction.atomic():
+        with tenant_atomic():
             form.save()
             self._salvar_precos(request, pedido)
 

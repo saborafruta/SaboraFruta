@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from django.core.exceptions import ObjectDoesNotExist
-from django.db import transaction
 
+from apps.core.tenant_context import tenant_atomic
 from apps.cadastros.models import (
     Representante, RepresentanteFilial, Transportadora, TransportadoraFilial,
 )
@@ -50,7 +50,7 @@ def _vincular(vinculo_modelo, campo_objeto, objeto, filial):
 
 class CompartilhamentoCadastrosService:
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_transportadora(transportadora):
         politica = _politica(transportadora.filial)
         filiais = _filiais_destino(transportadora.filial, 'replicar_transportadoras') if (
@@ -62,7 +62,7 @@ class CompartilhamentoCadastrosService:
             _vincular(TransportadoraFilial, 'transportadora', transportadora, filial)
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_transportadoras_da_filial(filial):
         politica = _politica(filial)
         if (
@@ -78,7 +78,7 @@ class CompartilhamentoCadastrosService:
         return total
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_representante(representante):
         politica = _politica(representante.filial)
         filiais = _filiais_destino(representante.filial, 'replicar_representantes') if (
@@ -90,7 +90,7 @@ class CompartilhamentoCadastrosService:
             _vincular(RepresentanteFilial, 'representante', representante, filial)
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def sincronizar_representantes_da_filial(filial):
         politica = _politica(filial)
         if (

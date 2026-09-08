@@ -11,9 +11,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.moda.models import Inspecao, ItemInspecao, OrdemProducao
 
@@ -30,7 +30,7 @@ class QualidadeService:
     # ── Criação ──────────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar(filial, ordem, usuario=None, quantidade=None) -> Inspecao:
         """
         Abre a inspeção com os nove pontos já criados, todos pendentes.
@@ -61,7 +61,7 @@ class QualidadeService:
     # ── Checklist ────────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def avaliar(inspecao: Inspecao, dados: dict) -> int:
         """
         Grava o resultado de cada ponto. Devolve quantos mudaram.
@@ -97,7 +97,7 @@ class QualidadeService:
     # ── Decisão ──────────────────────────────────────────────────────────
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def decidir(cls, inspecao: Inspecao, status: str, dados: dict, usuario) -> Inspecao:
         """Fecha a inspeção com aprovado, reprovado ou retrabalho."""
         if status not in (S.APROVADO, S.REPROVADO, S.RETRABALHO):
@@ -160,7 +160,7 @@ class QualidadeService:
     # ── Fluxo ────────────────────────────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def aplicar_no_fluxo(inspecao: Inspecao, usuario) -> str:
         """
         Leva o resultado para a etapa de Qualidade da ordem.
