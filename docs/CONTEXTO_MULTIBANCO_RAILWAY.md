@@ -1,6 +1,6 @@
 # Contexto e runbook do multibanco no Railway
 
-> Atualizado em 07/09/2026. Este documento registra o estado deixado em
+> Atualizado em 08/09/2026. Este documento registra o estado deixado em
 > produção, as decisões tomadas e o caminho de recuperação. Antes de qualquer
 > alteração relacionada a Railway, bancos por empresa, Central Administrativa,
 > domínios ou armazenamento, leia este arquivo inteiro e confirme o estado ao
@@ -29,11 +29,11 @@ originais não foram apagados.
 
 ## Regra de segurança principal
 
-Nunca trate o nome de um serviço como prova de sua função atual. O serviço
-chamado `eureka-50649395000126` é, no momento, o aplicativo central que atende
-`ited.app.br`. Ele deixou de usar o banco da Eureka como `default` e passou a
-usar o Banco Gerencial. A Eureka continua como tenant no banco
-`Banco LR Sports`.
+Nunca trate o nome de um serviço como prova de sua função atual. O serviço hoje
+chamado `Sitema Ited Produção` (antes `eureka-50649395000126`) é o aplicativo
+central que atende `ited.app.br`. Ele deixou de usar o banco da Eureka como
+`default` e passou a usar o Banco Gerencial. A Eureka continua como tenant no
+banco `Banco LR Sports`.
 
 Antes de mudar variáveis, domínios ou bancos:
 
@@ -81,7 +81,8 @@ Serviços:
 
 | Função | Nome no Railway | Service ID |
 |---|---|---|
-| App que atende `ited.app.br` | `eureka-50649395000126` | `80d40f12-cc9e-4e10-a145-f4ce08b25193` |
+| App que atende `ited.app.br` | `Sitema Ited Produção` | `80d40f12-cc9e-4e10-a145-f4ce08b25193` |
+| Worker da separação de filial | `Worker Separacao` | `f8228b97-715a-4ee7-9803-4eb7d48dcda2` |
 | Banco operacional da iTed | `Banco iTed` | `1e1a0552-ac7e-4907-b8c6-e489f1f64c19` |
 | Banco Gerencial | `Banco Gerencial` | `5e7f91de-3710-4c88-bb2b-6af43c324490` |
 | Banco operacional da L&R Sports/Eureka | `Banco LR Sports` | `89221c0e-ad62-4e89-82fb-626ccab14a81` |
@@ -106,7 +107,7 @@ mudar com novos cadastros.
 ## Domínios
 
 - `https://ited.app.br`: produção principal. Está anexado ao serviço
-  `eureka-50649395000126`, que foi configurado como app central;
+  `Sitema Ited Produção`, que foi configurado como app central;
 - `https://eureka-50649395000126-production.up.railway.app`: domínio Railway do
   mesmo app que atende `ited.app.br`;
 - `eureka.ited.app.br`: cadastro existe no Railway, mas o DNS estava sem
@@ -250,7 +251,7 @@ ficar `ATIVO` e confirme um login de usuário comum.
 
 ### Aplicativo central consolidado
 
-Existe apenas um app central no projeto: o serviço `eureka-50649395000126`, que
+Existe apenas um app central no projeto: o serviço `Sitema Ited Produção`, que
 atende `ited.app.br`. O provisionador grava a variável do novo tenant nesse
 serviço, identificado por `RAILWAY_SERVICE_ID`. Depois de criar um tenant,
 valide o banco, o login e a seleção de empresa pelo domínio canônico.
@@ -378,17 +379,17 @@ Use os IDs acima em vez de depender do projeto ligado no diretório local.
 railway deployment list `
   --project a3fb123c-a49b-45bd-aece-8d9b75bb03d9 `
   --environment 8a26d482-10af-4e14-abf1-1c5c2965b0c9 `
-  --service "eureka-50649395000126" --json
+  --service "Sitema Ited Produção" --json
 
 railway logs `
   --project a3fb123c-a49b-45bd-aece-8d9b75bb03d9 `
   --environment 8a26d482-10af-4e14-abf1-1c5c2965b0c9 `
-  --service "eureka-50649395000126" --lines 200 --json
+  --service "Sitema Ited Produção" --lines 200 --json
 
 railway ssh `
   --project a3fb123c-a49b-45bd-aece-8d9b75bb03d9 `
   --environment 8a26d482-10af-4e14-abf1-1c5c2965b0c9 `
-  --service "eureka-50649395000126" `
+  --service "Sitema Ited Produção" `
   python manage.py check_tenant_databases
 ```
 
@@ -419,6 +420,12 @@ curl.exe https://saborafruta-production.up.railway.app/health/
   a remoção do app redundante;
 - os aliases da iTed e da L&R Sports foram novamente validados após a
   renomeação dos serviços de banco.
+- em 08/09/2026, o `Worker Separacao` entrou em `SUCCESS`, conectou ao Redis,
+  registrou `apps.core.tasks.executar_separacao_filial`, carregou as duas URLs
+  atuais de tenant pelo app de controle e confirmou `S3Storage` no bucket;
+- o app iTed aplicou `core.0062_separacao_filial_segura`, validou as migrations
+  dos tenants iTed/Eureka e respondeu 200 em `/health/`; o Sabor a Fruta também
+  aplicou a migration e respondeu 200, permanecendo em infraestrutura separada.
 
 ## Central visual de infraestrutura (08/09/2026)
 
