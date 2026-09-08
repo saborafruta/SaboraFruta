@@ -20,7 +20,7 @@ from apps.core.services.auth_service import AuthService
 from apps.core.services.railway_provisioner import RailwayProvisioner
 from apps.core.services.tenant_public_link_service import TenantPublicLinkService
 from apps.core.services.tenant_task_service import TenantTaskService
-from apps.core.tenant_context import get_current_tenant_db, tenant_db
+from apps.core.tenant_context import get_current_tenant_db, tenant_atomic, tenant_db
 from apps.core.views.auth import SelecionarFilialView
 
 
@@ -65,6 +65,17 @@ class MultitenancyFoundationTests(TestCase):
         with tenant_db(self.banco.db_alias):
             self.assertIsNone(router.db_for_read(Empresa))
             self.assertIsNone(router.db_for_write(Empresa))
+
+    def test_tenant_atomic_usa_a_mesma_conexao_do_router(self):
+        callback = Mock(return_value='ok')
+
+        with patch('apps.core.tenant_context.transaction.atomic') as atomic:
+            with tenant_db(self.banco.db_alias):
+                resultado = tenant_atomic(callback)()
+
+        self.assertEqual(resultado, 'ok')
+        atomic.assert_called_once_with(using=self.banco.db_alias)
+        callback.assert_called_once_with()
 
     @override_settings(
         TENANT_DATABASE_ROUTING_ENABLED=True,

@@ -45,3 +45,12 @@ class ContaPagarTemplateRegressionTests(SimpleTestCase):
         self.assertIn('name="escopo_edicao" value="restantes"', template)
         self.assertIn('name="escopo_recorrencia" value="restantes"', template)
         self.assertIn("Este e todos os próximos", template)
+
+    def test_exclusao_trata_resposta_html_sem_tentar_ler_como_json(self):
+        template = Path(
+            "apps/financeiro/templates/financeiro/pagar/_editar_valor_script.html"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("tipo.includes('application/json')", template)
+        self.assertIn("Sua sessão expirou ou você não possui permissão", template)
+        self.assertIn("Recarregue a página e tente novamente", template)

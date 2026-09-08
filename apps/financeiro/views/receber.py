@@ -5,7 +5,6 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -21,6 +20,7 @@ from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.models import RegistroAuditoria
 from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
+from apps.core.tenant_context import tenant_atomic
 from apps.financeiro.constants.enums import StatusContaReceber
 from apps.financeiro.forms.receber import (
     BaixaContaReceberForm, ContaReceberEditForm, ContaReceberForm,
@@ -821,7 +821,7 @@ class ContaReceberExcluirView(PermissaoRequiredMixin, View):
     permissao_modulo = 'financeiro'
     permissao_acao = 'editar'
 
-    @transaction.atomic
+    @tenant_atomic
     def post(self, request, pk):
         filial = _filial(request)
         conta = get_object_or_404(ContaReceber.all_objects.for_filial(filial), pk=pk)

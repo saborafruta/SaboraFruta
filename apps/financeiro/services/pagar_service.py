@@ -6,7 +6,6 @@ from datetime import date, timedelta
 from decimal import Decimal
 import uuid
 
-from django.db import transaction
 from django.utils import timezone
 from dateutil.relativedelta import relativedelta
 
@@ -16,6 +15,7 @@ from apps.core.services.calendario import (
     proximo_dia_util,
 )
 from apps.core.services.exceptions import DomainError
+from apps.core.tenant_context import tenant_atomic
 from apps.financeiro.constants.enums import StatusContaPagar
 from apps.financeiro.models.receber_pagar import ContaPagar, PagamentoContaPagar
 
@@ -40,7 +40,7 @@ class ContaPagarService:
         )
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar(
         filial,
         valor_original: Decimal,
@@ -125,7 +125,7 @@ class ContaPagarService:
         return conta
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar_e_quitar(
         *, data_pagamento: date, forma_pagamento_utilizada,
         conta_bancaria_pagamento=None, comprovante_pagamento=None,
@@ -145,7 +145,7 @@ class ContaPagarService:
         )
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar_recorrencia(
         *, quantidade: int, frequencia: str, data_vencimento: date,
         intervalo_dias: int | None = None,
@@ -291,7 +291,7 @@ class ContaPagarService:
         return resultados
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def reprogramar_recorrencia(
         *, conta: ContaPagar, quantidade: int, frequencia: str,
         data_vencimento: date, data_competencia: date | None = None,
@@ -446,7 +446,7 @@ class ContaPagarService:
         return atualizadas
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def registrar_pagamento(
         conta: ContaPagar,
         data_pagamento: date,
@@ -550,7 +550,7 @@ class ContaPagarService:
         return conta
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def corrigir_valor(conta: ContaPagar, novo_valor: Decimal, pagamento=None):
         """Corrige o valor do titulo e mantem baixa e saldo coerentes."""
         conta = ContaPagar.objects.select_for_update().get(pk=conta.pk)
@@ -602,7 +602,7 @@ class ContaPagarService:
         return conta, pagamento_ajustado
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def cancelar(conta: ContaPagar, motivo: str, usuario) -> ContaPagar:
         """Cancela uma conta a pagar ainda não paga."""
         if conta.status == StatusContaPagar.PAGO:

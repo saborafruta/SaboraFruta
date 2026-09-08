@@ -24,6 +24,7 @@ from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.models import RegistroAuditoria
 from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
+from apps.core.tenant_context import get_current_database_alias, tenant_atomic
 from apps.financeiro.constants.enums import StatusContaPagar
 from apps.financeiro.forms.pagar import (
     ContaPagarBulkEditForm,
@@ -1096,7 +1097,7 @@ class ContaPagarBulkActionView(PermissaoRequiredMixin, View):
         url = reverse('financeiro:pagar_list')
         return redirect(f'{url}?{query}' if query else url)
 
-    @transaction.atomic
+    @tenant_atomic
     def post(self, request):
         filial = _filial(request)
         acao = request.POST.get('acao_lote')
@@ -1352,7 +1353,7 @@ class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
     permissao_modulo = 'financeiro'
     permissao_acao = 'editar'
 
-    @transaction.atomic
+    @tenant_atomic
     def post(self, request, pk):
         if not _usuario_admin(request):
             return JsonResponse({'ok': False, 'erro': 'Somente administradores podem editar lancamentos.'}, status=403)
@@ -1393,7 +1394,7 @@ class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
                 )
                 pagamento = pagamento_ajustado or pagamento
         except DomainError as exc:
-            transaction.set_rollback(True)
+            transaction.set_rollback(True, using=get_current_database_alias())
             return JsonResponse({'ok': False, 'erro': str(exc)}, status=400)
 
         if conta.tipo_lancamento == ContaPagar.TipoLancamento.FORNECEDOR:
@@ -1449,7 +1450,7 @@ class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
                     usuario=request.user,
                 )
             except DomainError as exc:
-                transaction.set_rollback(True)
+                transaction.set_rollback(True, using=get_current_database_alias())
                 return JsonResponse({'ok': False, 'erro': str(exc)}, status=400)
         conta.refresh_from_db()
         depois = _snapshot_edicao_lancamento(conta, pagamento)
@@ -1641,7 +1642,7 @@ class ContaPagarExcluirView(PermissaoRequiredMixin, View):
     permissao_modulo = 'financeiro'
     permissao_acao = 'editar'
 
-    @transaction.atomic
+    @tenant_atomic
     def post(self, request, pk):
         if not _usuario_admin(request):
             return JsonResponse({'ok': False, 'erro': 'Somente administradores podem excluir títulos.'}, status=403)
@@ -1700,7 +1701,7 @@ class ContaPagarRestaurarView(PermissaoRequiredMixin, View):
     permissao_modulo = 'financeiro'
     permissao_acao = 'editar'
 
-    @transaction.atomic
+    @tenant_atomic
     def post(self, request, pk):
         if not _usuario_admin(request):
             return JsonResponse({'ok': False, 'erro': 'Somente administradores podem restaurar títulos.'}, status=403)

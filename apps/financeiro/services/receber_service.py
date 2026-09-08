@@ -4,11 +4,11 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from apps.core.services.exceptions import DomainError
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.calendario import adicionar_dias_uteis_bancarios
 from apps.financeiro.constants.enums import StatusContaReceber
 from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaReceber
@@ -42,7 +42,7 @@ class ContaReceberService:
                                conta.previsao_entrega_complemento)
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def editar_referencia(*, conta, dados, usuario):
         conta = ContaReceber.objects.select_for_update().get(pk=conta.pk)
         if conta.status == StatusContaReceber.CANCELADO:
@@ -64,7 +64,7 @@ class ContaReceberService:
         return conta
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def editar(*, conta, dados, usuario):
         """Atualiza o título e recalcula os valores derivados com segurança."""
         conta = (
@@ -141,7 +141,7 @@ class ContaReceberService:
         return conta
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def criar(
         filial,
         cliente,
@@ -197,7 +197,7 @@ class ContaReceberService:
         return conta
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def registrar_baixa(
         conta: ContaReceber,
         data_pagamento: date,
@@ -384,7 +384,7 @@ class ContaReceberService:
         return conta
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def editar_baixa(
         pagamento: PagamentoContaReceber,
         data_pagamento: date,
@@ -428,7 +428,7 @@ class ContaReceberService:
         return ContaReceberService._recalcular_resumo(conta)
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def excluir_baixa(
         pagamento: PagamentoContaReceber,
         motivo: str,
@@ -448,7 +448,7 @@ class ContaReceberService:
         return ContaReceberService._recalcular_resumo(conta)
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def cancelar(conta: ContaReceber, motivo: str, usuario) -> ContaReceber:
         """Cancela uma conta a receber ainda não paga."""
         conta = ContaReceber.objects.select_for_update().get(pk=conta.pk)
@@ -471,7 +471,7 @@ class ContaReceberService:
         return conta
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def excluir(conta: ContaReceber, motivo: str, usuario) -> ContaReceber:
         """Exclusão lógica: remove da operação sem apagar o histórico."""
         conta = ContaReceber.all_objects.select_for_update().get(pk=conta.pk)
@@ -486,7 +486,7 @@ class ContaReceberService:
         return conta
 
     @staticmethod
-    @transaction.atomic
+    @tenant_atomic
     def alterar_prazo(
         conta: ContaReceber,
         nova_data_vencimento: date,

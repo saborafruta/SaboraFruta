@@ -131,8 +131,16 @@
     try {
       const resposta = await fetch(formulario.action, {
         method: 'POST', body: new FormData(formulario),
-        headers: {'X-Requested-With': 'XMLHttpRequest'}
+        headers: {'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json'}
       });
+      const tipo = resposta.headers.get('content-type') || '';
+      if (!tipo.includes('application/json')) {
+        throw new Error(
+          resposta.status === 401 || resposta.status === 403
+            ? 'Sua sessão expirou ou você não possui permissão para esta ação.'
+            : 'Não foi possível concluir a ação. Recarregue a página e tente novamente.'
+        );
+      }
       const dados = await resposta.json();
       if (!resposta.ok || !dados.ok) throw new Error(dados.erro || 'Não foi possível concluir a ação.');
       window.location.reload();
