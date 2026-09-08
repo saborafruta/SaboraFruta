@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django import forms
 from django.db.models import Q
 
@@ -246,6 +248,14 @@ class EditarMovimentoBancarioForm(forms.Form):
 
 class EditarEntradaFinanceiraForm(forms.Form):
     valor = forms.DecimalField(max_digits=14, decimal_places=2, min_value=0.01, label="Valor bruto")
+    valor_taxa = forms.DecimalField(
+        max_digits=14, decimal_places=2, min_value=0, required=False,
+        label="Taxa efetivamente cobrada",
+    )
+    valor_liquido = forms.DecimalField(
+        max_digits=14, decimal_places=2, min_value=0, required=False,
+        label="Valor final após a taxa",
+    )
     forma_pagamento = forms.ModelChoiceField(
         queryset=FormaPagamento.objects.none(), label="Forma de pagamento",
     )
@@ -290,6 +300,13 @@ class EditarEntradaFinanceiraForm(forms.Form):
                 .order_by("codigo")
             )
         self.fields["valor"].widget.attrs.update({"step": "0.01", "inputmode": "decimal"})
+        self.fields["valor"].widget.attrs["data-edicao-bruto"] = ""
+        self.fields["valor_taxa"].widget.attrs.update({
+            "step": "0.01", "inputmode": "decimal", "data-edicao-taxa": "",
+        })
+        self.fields["valor_liquido"].widget.attrs.update({
+            "step": "0.01", "inputmode": "decimal", "data-edicao-liquido": "",
+        })
         if origem != "manual":
             self.fields.pop("descricao")
         if origem == "venda":
@@ -299,7 +316,28 @@ class EditarEntradaFinanceiraForm(forms.Form):
         cleaned = super().clean()
         if "plano_contas" in self.fields and self.fields["plano_contas"].queryset.exists() and not cleaned.get("plano_contas"):
             self.add_error("plano_contas", "Escolha a classificacao da entrada.")
-        return limpar_dados_cartao(self, cleaned)
+        cleaned = limpar_dados_cartao(self, cleaned)
+        bruto = cleaned.get("valor")
+        taxa = cleaned.get("valor_taxa")
+        liquido = cleaned.get("valor_liquido")
+        cleaned["valores_taxa_informados"] = taxa is not None or liquido is not None
+        if bruto is None or not cleaned["valores_taxa_informados"]:
+            return cleaned
+        if taxa is None:
+            taxa = bruto - liquido
+        if liquido is None:
+            liquido = bruto - taxa
+        if taxa < 0:
+            self.add_error("valor_liquido", "O valor final não pode ser maior que o valor bruto.")
+        elif taxa > bruto:
+            self.add_error("valor_taxa", "A taxa não pode ser maior que o valor bruto.")
+        elif abs((bruto - taxa) - liquido) > Decimal("0.01"):
+            raise forms.ValidationError(
+                "Os valores não conferem: o valor final deve ser o bruto menos a taxa."
+            )
+        cleaned["valor_taxa"] = taxa
+        cleaned["valor_liquido"] = liquido
+        return cleaned
 
 
 class CentroCustoForm(forms.ModelForm):

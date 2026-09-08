@@ -917,6 +917,8 @@
           {% if editar_entrada_form.non_field_errors %}<div class="rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700">{{ editar_entrada_form.non_field_errors|join:', ' }}</div>{% endif %}
           <div class="grid gap-4 sm:grid-cols-2">
             <label class="block text-sm font-semibold">Valor bruto recebido (R$) <span class="text-rose-500">*</span>{{ editar_entrada_form.valor|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.valor.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>
+            <label class="block text-sm font-semibold">Taxa efetivamente cobrada (R$){{ editar_entrada_form.valor_taxa|add_class:'form-input mt-1 w-full' }}<span class="mt-1 block text-xs font-normal opacity-60">Ao alterar a taxa, o valor final é atualizado.</span>{% for erro in editar_entrada_form.valor_taxa.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>
+            <label class="block text-sm font-semibold">Valor final após a taxa (R$){{ editar_entrada_form.valor_liquido|add_class:'form-input mt-1 w-full' }}<span class="mt-1 block text-xs font-normal opacity-60">Também pode ser informado diretamente.</span>{% for erro in editar_entrada_form.valor_liquido.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>
             <label class="block text-sm font-semibold">Data da entrada <span class="text-rose-500">*</span>{{ editar_entrada_form.data_entrada|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.data_entrada.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>
             <label class="block text-sm font-semibold">Forma de pagamento <span class="text-rose-500">*</span>{{ editar_entrada_form.forma_pagamento|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.forma_pagamento.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>
             <label class="block text-sm font-semibold">Conta de destino <span class="text-rose-500">*</span>{{ editar_entrada_form.conta_bancaria|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.conta_bancaria.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>
@@ -925,7 +927,7 @@
           </div>
           {% if detalhe.origem_codigo == 'manual' %}<label class="block text-sm font-semibold">Descrição {{ editar_entrada_form.descricao|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.descricao.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>{% endif %}
           <label class="block text-sm font-semibold">Motivo da alteração <span class="text-rose-500">*</span>{{ editar_entrada_form.justificativa|add_class:'form-input mt-1 w-full' }}{% for erro in editar_entrada_form.justificativa.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label>
-          {% if detalhe.origem_codigo != 'manual' %}<p class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">O valor líquido e a taxa serão recalculados conforme a forma de pagamento. O título ou a venda de origem será atualizado sem gerar outra movimentação.</p>{% endif %}
+          <p class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">A taxa e o valor final informados têm prioridade sobre o cálculo padrão da forma de pagamento. O lançamento de origem e a despesa da taxa serão atualizados sem gerar duplicidade.</p>
           <div class="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end"><button type="button" class="btn-secondary" @click="entradaEdicao=false; detalheModal=true">Cancelar</button><button type="submit" class="btn-primary">Salvar correção</button></div>
         </form>
       </div>
@@ -954,6 +956,37 @@ function comprovantePosicaoDiaria() {
 {% include "financeiro/pagar/_editar_valor_script.html" %}
 <script>
   document.addEventListener('DOMContentLoaded', function () {
+    const formEntradaEdicao = document.querySelector(
+      'form input[name="acao"][value="editar_entrada"]'
+    )?.closest('form');
+    if (formEntradaEdicao) {
+      const bruto = formEntradaEdicao.querySelector('[data-edicao-bruto]');
+      const taxa = formEntradaEdicao.querySelector('[data-edicao-taxa]');
+      const liquido = formEntradaEdicao.querySelector('[data-edicao-liquido]');
+      const numero = function (campo) {
+        const valor = parseFloat(String(campo.value || '').replace(',', '.'));
+        return Number.isFinite(valor) ? valor : null;
+      };
+      const preencher = function (campo, valor) {
+        campo.value = Math.max(0, valor).toFixed(2);
+      };
+      taxa.addEventListener('input', function () {
+        const valorBruto = numero(bruto);
+        const valorTaxa = numero(taxa);
+        if (valorBruto !== null && valorTaxa !== null) preencher(liquido, valorBruto - valorTaxa);
+      });
+      liquido.addEventListener('input', function () {
+        const valorBruto = numero(bruto);
+        const valorLiquido = numero(liquido);
+        if (valorBruto !== null && valorLiquido !== null) preencher(taxa, valorBruto - valorLiquido);
+      });
+      bruto.addEventListener('input', function () {
+        const valorBruto = numero(bruto);
+        const valorTaxa = numero(taxa);
+        if (valorBruto !== null && valorTaxa !== null) preencher(liquido, valorBruto - valorTaxa);
+      });
+    }
+
     const inserirCartaoAposForma = function (formSelector, templateId) {
       const marcador = document.querySelector(formSelector);
       const form = marcador && marcador.closest('form');

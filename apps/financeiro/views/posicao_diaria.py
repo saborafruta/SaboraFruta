@@ -34,6 +34,27 @@ from apps.financeiro.views.contas_bancarias import ContaBancariaListView, _usuar
 from apps.financeiro.views.pagar import _contexto_meta_despesa_pessoal
 
 
+def _calculo_taxa_edicao(dados):
+    if not dados.get("valores_taxa_informados"):
+        return dados["forma_pagamento"].calcular_taxa_recebimento(
+            dados["valor"],
+            dados.get("numero_parcelas") or 1,
+            dados.get("bandeira", ""),
+        )
+    bruto = dados["valor"]
+    taxa = dados["valor_taxa"]
+    percentual = (
+        (taxa * Decimal("100") / bruto).quantize(Decimal("0.0001"))
+        if bruto else Decimal("0")
+    )
+    return {
+        "percentual": percentual,
+        "fixa": Decimal("0"),
+        "taxa": taxa,
+        "liquido": dados["valor_liquido"],
+    }
+
+
 def _taxas_consolidadas_relatorio(recebimentos, pagamentos, data_movimento):
     movimentos = [*recebimentos, *pagamentos]
     return SimpleNamespace(
@@ -323,6 +344,8 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             )
             if detalhe.origem_codigo == "manual":
                 valor = item.valor
+                valor_taxa = item.valor_taxa if item.taxa_calculada_em else Decimal("0")
+                valor_liquido = item.valor_entrada_liquida
                 forma = item.forma_pagamento
                 conta = item.conta_bancaria
                 data_entrada = item.data_lancamento
@@ -332,6 +355,8 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 numero_parcelas = item.numero_parcelas
             elif detalhe.origem_codigo == "receber":
                 valor = item.valor_pago
+                valor_taxa = item.valor_taxa_recebimento if item.taxa_calculada_em else Decimal("0")
+                valor_liquido = item.valor_entrada_liquida
                 forma = item.forma_pagamento
                 conta = item.conta_bancaria
                 data_entrada = item.data_liquidacao_prevista or item.data_pagamento
@@ -341,6 +366,8 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 numero_parcelas = item.parcelas_recebimento
             else:
                 valor = item.valor_bruto_recebido
+                valor_taxa = item.valor_taxa if item.taxa_calculada_em else Decimal("0")
+                valor_liquido = item.valor_entrada_liquida
                 forma = item.forma_pagamento
                 conta = item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao
                 data_entrada = item.data_liquidacao_prevista or timezone.localdate()
@@ -351,7 +378,8 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             editar_entrada_form = EditarEntradaFinanceiraForm(
                 filial=request.filial_ativa, origem=detalhe.origem_codigo,
                 initial={
-                    "valor": valor, "forma_pagamento": forma, "conta_bancaria": conta,
+                    "valor": valor, "valor_taxa": valor_taxa, "valor_liquido": valor_liquido,
+                    "forma_pagamento": forma, "conta_bancaria": conta,
                     "data_entrada": data_entrada, "descricao": descricao,
                     "plano_contas": plano_contas,
                     "bandeira": bandeira, "numero_parcelas": numero_parcelas,
@@ -374,8 +402,10 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 if categoria_edicao_id else None
             )
             if categoria_selecionada:
-                subgrupo_edicao_id = str(categoria_selecionada.conta_pai_id)
-                grupo_edicao_id = str(categoria_selecionada.conta_pai.conta_pai_id)
+                subgrupo = categoria_selecionada.conta_pai
+                grupo = subgrupo.conta_pai if subgrupo else None
+                subgrupo_edicao_id = str(subgrupo.pk) if subgrupo else ""
+                grupo_edicao_id = str(grupo.pk) if grupo else ""
         meta_contexto = _contexto_meta_despesa_pessoal(request.filial_ativa, data_fim)
         grupo_despesa_pessoal = PlanoContas.objects.filter(
             empresa=request.filial_ativa.empresa, tipo='D', nivel=1, despesa_pessoal=True, ativo=True,
@@ -456,7 +486,14 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             item.historico = dados.get("descricao") or item.historico
             item.bandeira = dados.get("bandeira", "")
             item.numero_parcelas = dados.get("numero_parcelas")
-            item.recalcular_recebimento()
+            calculo = _calculo_taxa_edicao(dados)
+            item.taxa_percentual_aplicada = calculo["percentual"]
+            item.taxa_fixa_aplicada = calculo["fixa"]
+            item.valor_taxa = calculo["taxa"]
+            item.valor_liquido = calculo["liquido"]
+            item.taxa_calculada_em = timezone.now()
+            item.prazo_compensacao_aplicado = 0
+            item.data_credito = item.data_lancamento
             item.save(update_fields=campos)
         elif origem == "receber":
             campos += [
@@ -468,9 +505,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 "prazo_compensacao_aplicado",
             ]
             antes = snapshot_modelo(item, campos)
-            calculo = dados["forma_pagamento"].calcular_taxa_recebimento(
-                dados["valor"], dados.get("numero_parcelas") or 1, dados.get("bandeira", ""),
-            )
+            calculo = _calculo_taxa_edicao(dados)
             item.conta_bancaria = dados["conta_bancaria"]
             item.forma_pagamento = dados["forma_pagamento"]
             item.plano_contas = dados.get("plano_contas")
@@ -497,9 +532,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 "bandeira", "numero_parcelas", "prazo_compensacao_aplicado",
             ]
             antes = snapshot_modelo(item, campos)
-            calculo = dados["forma_pagamento"].calcular_taxa_recebimento(
-                dados["valor"], dados.get("numero_parcelas") or 1, dados.get("bandeira", ""),
-            )
+            calculo = _calculo_taxa_edicao(dados)
             item.conta_bancaria = dados["conta_bancaria"]
             item.forma_pagamento = dados["forma_pagamento"]
             item.valor = dados["valor"] + (item.troco or 0)

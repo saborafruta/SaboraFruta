@@ -1746,6 +1746,38 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(movimento.bandeira, "visa")
         self.assertEqual(movimento.numero_parcelas, 1)
 
+    def test_corrige_taxa_e_valor_liquido_de_entrada_manual(self):
+        categoria = self._categoria_receita("Venda com taxa ajustada")
+        movimento = ExtratoBancario.objects.create(
+            filial=self.filial, conta_bancaria=self.banco, forma_pagamento=self.forma,
+            plano_contas=categoria, data_lancamento=date(2026, 8, 22),
+            historico="Entrada com taxa variável", valor=Decimal("100.00"), origem="manual",
+        )
+
+        tela = self.client.get(reverse("financeiro:posicao_diaria"), {
+            "data": "2026-08-22", "origem": "manual", "movimento": movimento.pk,
+        })
+        self.assertContains(tela, 'name="valor_taxa"')
+        self.assertContains(tela, 'name="valor_liquido"')
+
+        response = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_entrada", "origem": "manual", "movimento_id": movimento.pk,
+            "data_referencia": "2026-08-22", "valor": "100.00",
+            "valor_taxa": "7.35", "valor_liquido": "92.65",
+            "forma_pagamento": self.forma.pk, "conta_bancaria": self.banco.pk,
+            "data_entrada": "2026-08-22", "descricao": "Entrada com taxa variável",
+            "plano_contas": categoria.pk, "justificativa": "Taxa real da operação",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        movimento.refresh_from_db()
+        self.assertEqual(movimento.valor, Decimal("100.00"))
+        self.assertEqual(movimento.valor_taxa, Decimal("7.35"))
+        self.assertEqual(movimento.valor_liquido, Decimal("92.65"))
+        self.assertEqual(movimento.taxa_percentual_aplicada, Decimal("7.3500"))
+        taxa = ContaPagar.objects.get(documento_tipo="taxa_extrato", documento_id=movimento.pk)
+        self.assertEqual(taxa.valor_pago, Decimal("7.35"))
+
     def test_saida_manual_nao_pode_ser_corrigida_como_entrada(self):
         movimento = ExtratoBancario.objects.create(
             filial=self.filial, conta_bancaria=self.banco, forma_pagamento=self.forma,
@@ -1832,6 +1864,36 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(conta.conta_bancaria, self.caixa)
         self.assertEqual(conta.data_liquidacao_prevista, date(2026, 8, 22))
 
+    def test_corrige_recebimento_com_taxa_e_liquido_informados(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente taxa variável", tipo_pessoa="F",
+            cpf_cnpj="88765432100",
+        )
+        conta = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente, valor_original=Decimal("100.00"),
+            valor_final=Decimal("100.00"), valor_pago=Decimal("50.00"),
+            valor_saldo=Decimal("50.00"), data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 21), data_pagamento=date(2026, 8, 21),
+            data_liquidacao_prevista=date(2026, 8, 21), forma_pagamento=self.forma,
+            conta_bancaria=self.banco,
+        )
+
+        response = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_entrada", "origem": "receber", "movimento_id": conta.pk,
+            "data_referencia": "2026-08-21", "valor": "80.00",
+            "valor_taxa": "3.47", "valor_liquido": "76.53",
+            "forma_pagamento": self.forma.pk, "conta_bancaria": self.caixa.pk,
+            "data_entrada": "2026-08-22", "justificativa": "Taxa negociada",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        conta.refresh_from_db()
+        self.assertEqual(conta.valor_pago, Decimal("80.00"))
+        self.assertEqual(conta.valor_taxa_recebimento, Decimal("3.47"))
+        self.assertEqual(conta.valor_liquido_recebido, Decimal("76.53"))
+        taxa = ContaPagar.objects.get(documento_tipo="taxa_receber", documento_id=conta.pk)
+        self.assertEqual(taxa.valor_pago, Decimal("3.47"))
+
     def test_corrige_entrada_de_venda_sem_duplicar_pagamento(self):
         self.forma.taxa_administrativa = Decimal("1.00")
         self.forma.save(update_fields=["taxa_administrativa"])
@@ -1861,3 +1923,45 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(pagamento.valor_liquido, Decimal("99.00"))
         self.assertEqual(pagamento.conta_bancaria, self.caixa)
         self.assertEqual(venda.valor_pago, Decimal("100.00"))
+
+    def test_corrige_venda_com_valor_final_informado(self):
+        venda = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=89, status="finalizada",
+            valor_total=Decimal("120.00"), valor_pago=Decimal("80.00"), usuario=self.usuario,
+            data_venda=datetime(2026, 8, 21, 12, tzinfo=timezone.get_current_timezone()),
+        )
+        pagamento = PagamentoVendaPDV.objects.create(
+            venda_pdv=venda, forma_pagamento=self.forma, conta_bancaria=self.banco,
+            valor=Decimal("80.00"),
+        )
+
+        response = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_entrada", "origem": "venda", "movimento_id": pagamento.pk,
+            "data_referencia": "2026-08-21", "valor": "100.00",
+            "valor_liquido": "94.73",
+            "forma_pagamento": self.forma.pk, "conta_bancaria": self.caixa.pk,
+            "data_entrada": "2026-08-22", "justificativa": "Valor líquido do comprovante",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        pagamento.refresh_from_db()
+        self.assertEqual(pagamento.valor_bruto_recebido, Decimal("100.00"))
+        self.assertEqual(pagamento.valor_taxa, Decimal("5.27"))
+        self.assertEqual(pagamento.valor_liquido, Decimal("94.73"))
+        taxa = ContaPagar.objects.get(documento_tipo="taxa_pdv", documento_id=pagamento.pk)
+        self.assertEqual(taxa.valor_pago, Decimal("5.27"))
+
+    def test_correcao_rejeita_taxa_e_liquido_inconsistentes(self):
+        from apps.financeiro.forms import EditarEntradaFinanceiraForm
+
+        categoria = self._categoria_receita("Venda inconsistente")
+        form = EditarEntradaFinanceiraForm({
+            "valor": "100.00",
+            "valor_taxa": "10.00", "valor_liquido": "95.00",
+            "forma_pagamento": self.forma.pk, "conta_bancaria": self.banco.pk,
+            "data_entrada": "2026-08-22", "descricao": "Entrada inconsistente",
+            "plano_contas": categoria.pk, "justificativa": "Teste inconsistente",
+        }, filial=self.filial, origem="manual")
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("Os valores não conferem", form.non_field_errors()[0])
