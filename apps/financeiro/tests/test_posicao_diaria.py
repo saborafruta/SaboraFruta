@@ -174,7 +174,8 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, reverse("financeiro:despesa_paga_criar") + "?modal=1")
         self.assertContains(response, "Transferir entre contas")
         self.assertNotContains(response, "Transferencia para caixa")
-        self.assertNotContains(response, "Transferencia do banco")
+        self.assertContains(response, "Transferencia do banco")
+        self.assertContains(response, "Editar despesa da taxa")
         self.assertEqual(len(response.context["dias_mes"]), 31)
         self.assertContains(response, 'aria-label="Ver dias anteriores"')
         self.assertContains(response, 'aria-label="Ver dias posteriores"')
@@ -1965,3 +1966,133 @@ class PosicaoDiariaCaixaTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn("Os valores não conferem", form.non_field_errors()[0])
+
+    def _criar_transferencia_taxada_para_edicao(self):
+        self.forma.taxa_administrativa = Decimal("2.00")
+        self.forma.taxa_fixa = Decimal("0.50")
+        self.forma.save(update_fields=["taxa_administrativa", "taxa_fixa"])
+        resposta = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "lancar_movimento",
+            "tipo": "transferencia",
+            "conta_origem": self.banco.pk,
+            "conta_destino": self.caixa.pk,
+            "data_lancamento": "2026-08-21",
+            "valor": "100.00",
+            "forma_pagamento": self.forma.pk,
+            "historico": "Transferência com tarifa variável",
+        })
+        self.assertEqual(resposta.status_code, 302)
+        return ExtratoBancario.objects.get(
+            tipo_lancamento="transferencia", valor=Decimal("100.00"),
+        )
+
+    def test_taxa_da_transferencia_pode_ser_editada_no_detalhamento(self):
+        movimento = self._criar_transferencia_taxada_para_edicao()
+
+        tela = self.client.get(reverse("financeiro:posicao_diaria"), {
+            "data": "2026-08-21",
+        })
+
+        self.assertContains(tela, "Editar despesa da taxa")
+        self.assertContains(tela, 'name="acao" value="editar_taxa_transferencia"')
+        self.assertContains(tela, f'data-movimento-id="{movimento.pk}"')
+        self.assertContains(tela, "Despesa separada da transferência")
+
+    def test_transferencia_sem_forma_tambem_aparece_para_informar_taxa_real(self):
+        ExtratoBancario.objects.create(
+            filial=self.filial, conta_bancaria=self.banco,
+            data_lancamento=date(2026, 8, 21), historico="Transferência sem forma",
+            valor=Decimal("-30.00"), origem="manual", tipo_lancamento="transferencia",
+        )
+        entrada = ExtratoBancario.objects.create(
+            filial=self.filial, conta_bancaria=self.caixa,
+            data_lancamento=date(2026, 8, 21), historico="Transferência sem forma",
+            valor=Decimal("30.00"), origem="manual", tipo_lancamento="transferencia",
+        )
+
+        tela = self.client.get(reverse("financeiro:posicao_diaria"), {
+            "data": "2026-08-21",
+        })
+
+        self.assertContains(tela, f'data-movimento-id="{entrada.pk}"')
+        self.assertContains(tela, "Transferência sem forma")
+
+    def test_edicao_atualiza_liquido_saldo_e_uma_unica_despesa_da_transferencia(self):
+        movimento = self._criar_transferencia_taxada_para_edicao()
+        taxa_original = ContaPagar.objects.get(
+            documento_tipo="taxa_extrato", documento_id=movimento.pk,
+        )
+        self.assertEqual(taxa_original.valor_pago, Decimal("2.50"))
+
+        resposta = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_taxa_transferencia",
+            "movimento_id": movimento.pk,
+            "data_referencia": "2026-08-21",
+            "valor_taxa": "7.25",
+            "valor_liquido": "92.75",
+            "justificativa": "Tarifa confirmada no extrato bancário",
+        })
+
+        self.assertRedirects(
+            resposta,
+            reverse("financeiro:posicao_diaria") + "?data=2026-08-21&taxas=1",
+            fetch_redirect_response=False,
+        )
+        movimento.refresh_from_db()
+        self.caixa.refresh_from_db()
+        self.assertEqual(movimento.valor, Decimal("100.00"))
+        self.assertEqual(movimento.valor_taxa, Decimal("7.25"))
+        self.assertEqual(movimento.valor_liquido, Decimal("92.75"))
+        self.assertEqual(movimento.taxa_percentual_aplicada, Decimal("7.2500"))
+        self.assertEqual(self.caixa.saldo_atual, Decimal("142.75"))
+
+        despesas = ContaPagar.objects.filter(
+            documento_tipo="taxa_extrato", documento_id=movimento.pk,
+        )
+        self.assertEqual(despesas.count(), 1)
+        despesa = despesas.get()
+        self.assertEqual(despesa.valor_original, Decimal("7.25"))
+        self.assertEqual(despesa.valor_pago, Decimal("7.25"))
+        self.assertEqual(despesa.pagamentos.get().valor_pago, Decimal("7.25"))
+
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
+        self.assertEqual(posicao["total_taxas_transferencias"], Decimal("7.25"))
+        self.assertEqual(posicao["variacao_dia"], Decimal("-7.25"))
+        self.assertEqual(posicao["total_fechamento"], Decimal("142.75"))
+
+    def test_edicao_inconsistente_nao_altera_taxa_da_transferencia(self):
+        movimento = self._criar_transferencia_taxada_para_edicao()
+
+        resposta = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_taxa_transferencia",
+            "movimento_id": movimento.pk,
+            "data_referencia": "2026-08-21",
+            "valor_taxa": "10.00",
+            "valor_liquido": "95.00",
+            "justificativa": "Valores divergentes",
+        }, follow=True)
+
+        movimento.refresh_from_db()
+        self.assertEqual(movimento.valor_taxa, Decimal("2.50"))
+        self.assertEqual(movimento.valor_liquido, Decimal("97.50"))
+        self.assertContains(resposta, "Os valores não conferem")
+
+    def test_zerar_taxa_remove_somente_a_despesa_vinculada(self):
+        movimento = self._criar_transferencia_taxada_para_edicao()
+
+        resposta = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_taxa_transferencia",
+            "movimento_id": movimento.pk,
+            "data_referencia": "2026-08-21",
+            "valor_taxa": "0.00",
+            "valor_liquido": "100.00",
+            "justificativa": "Banco estornou a tarifa",
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        movimento.refresh_from_db()
+        self.assertEqual(movimento.valor_taxa, Decimal("0.00"))
+        self.assertEqual(movimento.valor_liquido, Decimal("100.00"))
+        self.assertFalse(ContaPagar.all_objects.filter(
+            documento_tipo="taxa_extrato", documento_id=movimento.pk,
+        ).exists())

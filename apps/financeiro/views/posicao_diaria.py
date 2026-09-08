@@ -21,6 +21,7 @@ from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.financeiro.forms import (
     EditarEntradaFinanceiraForm,
     EditarMovimentoBancarioForm,
+    EditarTaxaTransferenciaForm,
     MovimentoContaBancariaForm,
 )
 from apps.financeiro.constants.enums import StatusContaPagar
@@ -122,6 +123,32 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         if not _usuario_admin(request):
             messages.error(request, "Apenas administradores podem editar, excluir ou restaurar movimentos.")
             return redirect(destino)
+        if acao == "editar_taxa_transferencia":
+            movimento = get_object_or_404(
+                ExtratoBancario.objects.filter(
+                    filial=filial,
+                    origem="manual",
+                    tipo_lancamento=MovimentoContaBancariaForm.TIPO_TRANSFERENCIA,
+                    valor__gt=0,
+                ).exclude(status="excluido"),
+                pk=request.POST.get("movimento_id"),
+            )
+            form = EditarTaxaTransferenciaForm(request.POST, valor_bruto=movimento.valor)
+            destino_taxas = f"{destino}&taxas=1"
+            if form.is_valid():
+                self._editar_taxa_transferencia(request, movimento, form.cleaned_data, auxiliar)
+                messages.success(
+                    request,
+                    "Taxa da transferência atualizada. A despesa separada e o valor líquido foram sincronizados.",
+                )
+                return redirect(destino_taxas)
+            erros = "; ".join(
+                str(erro)
+                for lista_erros in form.errors.values()
+                for erro in lista_erros
+            )
+            messages.error(request, erros or "Revise a taxa e o valor final da transferência.")
+            return redirect(destino_taxas)
         if acao == "editar_entrada":
             origem = request.POST.get("origem")
             registro_id = request.POST.get("movimento_id")
@@ -428,6 +455,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             "movimento_form": movimento_form, "movimento_modal": movimento_modal,
             "editar_movimento": editar_movimento, "editar_form": editar_form, "detalhe": detalhe,
             "editar_entrada_form": editar_entrada_form,
+            "abrir_taxas_modal": request.GET.get("taxas") == "1",
             "user_is_admin": _usuario_admin(request), "mostrar_excluidos": mostrar_excluidos,
             "mostrar_previstos": mostrar_previstos,
             "periodo": periodo, "data_inicio": data_inicio, "data_fim": data_fim,
@@ -461,6 +489,44 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         if request.GET.get("partial") == "previsoes":
             return render(request, "financeiro/partials/previsoes_posicao_diaria.html", context)
         return render(request, self.template_name, context)
+
+    @staticmethod
+    def _editar_taxa_transferencia(request, movimento, dados, auxiliar):
+        campos = [
+            "taxa_percentual_aplicada", "taxa_fixa_aplicada", "valor_taxa",
+            "valor_liquido", "taxa_calculada_em", "prazo_compensacao_aplicado",
+            "data_credito",
+        ]
+        antes = snapshot_modelo(movimento, campos)
+        taxa = dados["valor_taxa"]
+        movimento.taxa_percentual_aplicada = (
+            (taxa * Decimal("100") / movimento.valor).quantize(Decimal("0.0001"))
+            if movimento.valor else Decimal("0")
+        )
+        movimento.taxa_fixa_aplicada = Decimal("0")
+        movimento.valor_taxa = taxa
+        movimento.valor_liquido = dados["valor_liquido"]
+        movimento.taxa_calculada_em = timezone.now()
+        movimento.prazo_compensacao_aplicado = 0
+        movimento.data_credito = movimento.data_lancamento
+        movimento.save(update_fields=campos)
+        registrar_auditoria(
+            request=request,
+            modulo=RegistroAuditoria.Modulo.FINANCEIRO,
+            acao=RegistroAuditoria.Acao.AJUSTAR,
+            objeto=movimento,
+            relacionado=movimento.conta_bancaria,
+            descricao="Taxa da transferência ajustada na posição diária",
+            justificativa=dados["justificativa"],
+            antes=antes,
+            depois=snapshot_modelo(movimento, campos),
+            metadados={
+                "contas_envolvidas": [movimento.conta_bancaria_id],
+                "origem_movimento": "transferencia",
+                "despesa_taxa": f"taxa_extrato:{movimento.pk}",
+            },
+        )
+        auxiliar._atualizar_saldo_conta(movimento.conta_bancaria)
 
     @staticmethod
     def _editar_entrada_financeira(request, filial, origem, registro_id, dados, auxiliar):

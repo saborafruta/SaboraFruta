@@ -239,7 +239,10 @@ class PosicaoDiariaCaixaService:
         total_liquido_entradas = total_entradas
         transacoes_taxas = [
             movimento for movimento in entradas_com_taxa
-            if movimento.forma_pagamento != "Sem forma vinculada"
+            if (
+                movimento.forma_pagamento != "Sem forma vinculada"
+                or movimento.transferencia
+            )
         ]
         taxas_pagamentos = [movimento for movimento in saidas if movimento.taxa_em_pagamento]
         detalhes_taxas = transacoes_taxas + taxas_pagamentos
@@ -289,6 +292,7 @@ class PosicaoDiariaCaixaService:
             "total_fechamento": total_fechamento,
             "total_despesas_pessoais": total_despesas_pessoais,
             "total_taxas_entradas": total_taxas_entradas,
+            "total_taxas_transferencias": total_taxas_transferencias,
             "total_taxas_pagamentos": total_taxas_pagamentos,
             "total_taxas_transacoes": total_taxas_transacoes,
             "transacoes_taxas": transacoes_taxas,

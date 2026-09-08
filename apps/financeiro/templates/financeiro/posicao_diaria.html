@@ -230,7 +230,29 @@
   contasAbertas: window.innerWidth >= 640,
   entradasExpandidas:false,
   saidasExpandidas:false,
-  taxasModal: false,
+  taxasModal: {{ abrir_taxas_modal|yesno:'true,false' }},
+  taxaTransferenciaModal: false,
+  taxaTransferencia: {id:'', descricao:'', bruto:'0.00', taxa:'0.00', liquido:'0.00'},
+  abrirTaxaTransferencia(elemento) {
+    this.taxaTransferencia = {
+      id: elemento.dataset.movimentoId || '',
+      descricao: elemento.dataset.descricao || 'Transferência entre contas',
+      bruto: String(elemento.dataset.bruto || '0').replace(',', '.'),
+      taxa: String(elemento.dataset.taxa || '0').replace(',', '.'),
+      liquido: String(elemento.dataset.liquido || '0').replace(',', '.')
+    };
+    this.taxaTransferenciaModal = true;
+  },
+  recalcularLiquidoTransferencia() {
+    const bruto = Number(this.taxaTransferencia.bruto || 0);
+    const taxa = Number(this.taxaTransferencia.taxa || 0);
+    this.taxaTransferencia.liquido = Math.max(0, bruto - taxa).toFixed(2);
+  },
+  recalcularTaxaTransferencia() {
+    const bruto = Number(this.taxaTransferencia.bruto || 0);
+    const liquido = Number(this.taxaTransferencia.liquido || 0);
+    this.taxaTransferencia.taxa = Math.max(0, bruto - liquido).toFixed(2);
+  },
   relatoriosModal: false,
   relatorioPeriodo: 'hoje',
   relatorioDataBase: '{{ hoje|date:"Y-m-d" }}',
@@ -816,7 +838,7 @@
         <div class="pc-fee-grid pc-fee-table-head"><span>Transação</span><span class="text-right">Valor principal</span><span class="text-right">Taxa</span><span class="text-right">Valor líquido</span></div>
         {% for mov in posicao.detalhes_taxas %}
           <div class="pc-fee-grid pc-fee-transaction">
-            <div class="pc-fee-main"><strong>{{ mov.descricao }}</strong><span>{{ mov.data|date:'d/m/Y' }} às {{ mov.hora }} · {{ mov.forma_pagamento }}{% if mov.bandeira %} · {{ mov.bandeira|title }}{% endif %}{% if mov.numero_parcelas %} · {{ mov.numero_parcelas }}x{% endif %} · {{ mov.conta.descricao|default:mov.conta.banco_nome|default:"Conta não definida" }}</span></div>
+            <div class="pc-fee-main"><strong>{{ mov.descricao }}</strong><span>{{ mov.data|date:'d/m/Y' }} às {{ mov.hora }} · {{ mov.forma_pagamento }}{% if mov.bandeira %} · {{ mov.bandeira|title }}{% endif %}{% if mov.numero_parcelas %} · {{ mov.numero_parcelas }}x{% endif %} · {{ mov.conta.descricao|default:mov.conta.banco_nome|default:"Conta não definida" }}</span>{% if mov.transferencia and user_is_admin %}<button type="button" class="btn-secondary mt-2 px-2 py-1 text-[11px]" data-movimento-id="{{ mov.registro_id }}" data-descricao="{{ mov.descricao|escape }}" data-bruto="{{ mov.valor_bruto|stringformat:'s' }}" data-taxa="{{ mov.valor_taxa|stringformat:'s' }}" data-liquido="{{ mov.valor_final_taxa|stringformat:'s' }}" @click="abrirTaxaTransferencia($el)">Editar despesa da taxa</button>{% endif %}</div>
             <div class="pc-fee-number"><span>{% if mov.taxa_em_pagamento %}Principal{% else %}Bruto{% endif %}</span><strong class="pc-sensitive">R$ {{ mov.valor_bruto|floatformat:2 }}</strong></div>
             <div class="pc-fee-number"><span>Taxa</span><strong class="pc-sensitive text-rose-600">R$ {{ mov.valor_taxa|floatformat:2 }}</strong><small>{{ mov.taxa_percentual|floatformat:2 }}%{% if mov.taxa_fixa > 0 %} + R$ {{ mov.taxa_fixa|floatformat:2 }}{% endif %}</small></div>
             <div class="pc-fee-number"><span>{% if mov.taxa_em_pagamento %}Pago{% else %}Líquido{% endif %}</span><strong class="pc-sensitive text-emerald-600">R$ {{ mov.valor_final_taxa|floatformat:2 }}</strong>{% if not mov.taxa_descontada and not mov.taxa_em_pagamento %}<small class="pc-fee-informative">Informativa</small>{% endif %}</div>
@@ -825,6 +847,29 @@
           <div class="p-8 text-center text-sm text-gray-500">Nenhuma transação com forma de pagamento no período.</div>
         {% endfor %}
       </div>
+    </div>
+  </div></template>
+
+  <template x-teleport="body"><div x-show="taxaTransferenciaModal" x-cloak class="fixed inset-0 z-[210] flex items-center justify-center overflow-y-auto p-3 sm:p-6" style="background:rgba(15,23,42,.86);backdrop-filter:blur(10px)" @keydown.escape.window="taxaTransferenciaModal=false" @click.self="taxaTransferenciaModal=false" role="dialog" aria-modal="true" aria-label="Editar taxa da transferência">
+    <div class="card my-auto w-full max-w-lg p-5" @click.stop>
+      <div class="flex items-start justify-between gap-3">
+        <div><span class="text-[11px] font-bold uppercase text-rose-500">Despesa separada da transferência</span><h3 class="mt-1 text-lg font-semibold">Editar taxa desta transação</h3><p class="mt-1 text-xs text-gray-500" x-text="taxaTransferencia.descricao"></p></div>
+        <button type="button" class="btn-secondary px-3" @click="taxaTransferenciaModal=false" aria-label="Fechar">×</button>
+      </div>
+      <form method="post" class="mt-5 space-y-4">
+        {% csrf_token %}
+        <input type="hidden" name="acao" value="editar_taxa_transferencia">
+        <input type="hidden" name="movimento_id" :value="taxaTransferencia.id">
+        <input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}">
+        <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-zinc-800"><span class="block text-xs text-gray-500">Valor transferido</span><strong class="pc-sensitive mt-1 block text-base">R$ <span x-text="Number(taxaTransferencia.bruto || 0).toFixed(2).replace('.', ',')"></span></strong></div>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="block text-sm font-semibold">Taxa efetivamente cobrada (R$)<input type="number" name="valor_taxa" min="0" step="0.01" inputmode="decimal" class="form-input mt-1 w-full" x-model="taxaTransferencia.taxa" :max="taxaTransferencia.bruto" @input="recalcularLiquidoTransferencia()" required><span class="mt-1 block text-xs font-normal opacity-60">Altera apenas a taxa desta transferência.</span></label>
+          <label class="block text-sm font-semibold">Valor final no destino (R$)<input type="number" name="valor_liquido" min="0" step="0.01" inputmode="decimal" class="form-input mt-1 w-full" x-model="taxaTransferencia.liquido" :max="taxaTransferencia.bruto" @input="recalcularTaxaTransferencia()" required><span class="mt-1 block text-xs font-normal opacity-60">Ao alterar, a taxa é recalculada.</span></label>
+        </div>
+        <label class="block text-sm font-semibold">Motivo da alteração <span class="text-rose-500">*</span><textarea name="justificativa" rows="2" maxlength="300" class="form-input mt-1 w-full" required></textarea></label>
+        <p class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">A despesa financeira vinculada será criada ou atualizada sem duplicidade, e o saldo da conta de destino passará a usar o novo valor líquido.</p>
+        <div class="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end"><button type="button" class="btn-secondary" @click="taxaTransferenciaModal=false">Cancelar</button><button type="submit" class="btn-primary">Salvar taxa da transferência</button></div>
+      </form>
     </div>
   </div></template>
   <template id="cartao-movimento-manual">
