@@ -48,6 +48,7 @@ class VendaPDVService:
         observacao: str = "",
         request=None,
         bonificacao: bool = False,
+        venda_fora_estabelecimento: bool = False,
     ) -> VendaPDV:
         if not sessao:
             raise DadosInvalidosError("Nenhuma sessao de caixa aberta.")
@@ -80,6 +81,14 @@ class VendaPDVService:
             raise DadosInvalidosError(
                 "Selecione um cliente para a bonificação — ela não sai para o consumidor final."
             )
+        # NATUREZAS QUE SE EXCLUEM: uma muda o CFOP pra "sem cobrança"
+        # (5910/6910), a outra pra "fora do estabelecimento" (5103/6103) --
+        # não existe as duas ao mesmo tempo na mesma nota. A tela já
+        # desmarca uma ao escolher a outra; isto é só o cinto de segurança.
+        if bonificacao and venda_fora_estabelecimento:
+            raise DadosInvalidosError(
+                "Bonificação e Venda Fora do Estabelecimento não podem estar marcadas juntas."
+            )
         venda = VendaPDV.objects.create(
             sessao_pdv=sessao,
             filial=filial,
@@ -88,6 +97,7 @@ class VendaPDVService:
             status="finalizada",
             delivery=delivery,
             bonificacao=bonificacao,
+            venda_fora_estabelecimento=venda_fora_estabelecimento,
             endereco_entrega=endereco_entrega or {},
             valor_desconto=desconto,
             valor_acrescimo=acrescimo,

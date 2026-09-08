@@ -36,6 +36,12 @@ class VendaPDV(TimestampedModel):
     # normalmente e sai com CFOP de bonificação (5910/6910) na nota, em vez
     # do CFOP de venda.
     bonificacao = models.BooleanField(default=False)
+    # Venda normal (mesmo pagamento, mesmo caixa, mesmo contas a receber) --
+    # só muda o CFOP da nota: 5103/6103 ("venda de produção do
+    # estabelecimento, efetuada fora do estabelecimento") em vez do CFOP de
+    # venda comum, porque a mercadoria saiu pra ser vendida ambulante/fora
+    # do balcão em vez de presencial no estabelecimento.
+    venda_fora_estabelecimento = models.BooleanField(default=False)
     endereco_entrega = models.JSONField(default=dict, blank=True)
     # Rascunho das formas de pagamento selecionadas antes de salvar como
     # pendente -- NAO sao pagamentos de verdade (isso e' PagamentoVendaPDV,

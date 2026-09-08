@@ -1173,6 +1173,7 @@ def api_venda_finalizar(request):
     credito_valor = Decimal(str(body.get("credito_valor", "0")))
     forcar_estoque_negativo = True
     bonificacao = bool(body.get("bonificacao", False))
+    venda_fora_estabelecimento = bool(body.get("venda_fora_estabelecimento", False))
 
     try:
         data_venda = _data_venda_retroativa(request, body)
@@ -1203,6 +1204,7 @@ def api_venda_finalizar(request):
                 observacao=body.get("observacao", ""),
                 request=request,
                 bonificacao=bonificacao,
+                venda_fora_estabelecimento=venda_fora_estabelecimento,
             )
             if comanda_id:
                 _fechar_comanda_origem(comanda_id, request, venda)
@@ -1261,6 +1263,7 @@ def api_venda_finalizar_forcado(request):
     delivery = bool(body.get("delivery", False))
     endereco_entrega = body.get("endereco_entrega", {})
     credito_valor = Decimal(str(body.get("credito_valor", "0")))
+    venda_fora_estabelecimento = bool(body.get("venda_fora_estabelecimento", False))
 
     try:
         data_venda = _data_venda_retroativa(request, body)
@@ -1290,6 +1293,7 @@ def api_venda_finalizar_forcado(request):
                 data_venda=data_venda,
                 observacao=body.get("observacao", ""),
                 request=request,
+                venda_fora_estabelecimento=venda_fora_estabelecimento,
             )
             if comanda_id:
                 _fechar_comanda_origem(comanda_id, request, venda)
@@ -1327,6 +1331,7 @@ def api_venda_pendente(request):
     delivery = bool(body.get("delivery", False))
     endereco_entrega = body.get("endereco_entrega", {})
     pagamentos_rascunho = body.get("pagamentos", [])
+    venda_fora_estabelecimento = bool(body.get("venda_fora_estabelecimento", False))
 
     try:
         with transaction.atomic():
@@ -1339,6 +1344,7 @@ def api_venda_pendente(request):
                 cliente_id=cliente_id or None,
                 status="aberta",
                 delivery=delivery,
+                venda_fora_estabelecimento=venda_fora_estabelecimento,
                 endereco_entrega=endereco_entrega,
                 pagamentos_rascunho=pagamentos_rascunho,
                 observacao=body.get("observacao", ""),
@@ -1515,6 +1521,7 @@ def api_pendente_detalhe(request, pk):
         "acrescimo": float(venda.valor_acrescimo),
         "delivery": venda.delivery,
         "endereco_entrega": venda.endereco_entrega or {},
+        "venda_fora_estabelecimento": venda.venda_fora_estabelecimento,
         "pagamentos": venda.pagamentos_rascunho or [],
         "observacao": venda.observacao or "",
         "itens": itens,

@@ -155,6 +155,37 @@ def _cfop_bonificacao_destino(local_destino: str) -> str:
     return "5910"
 
 
+def _presenca_comprador(venda) -> str:
+    """
+    Indicador de presença do comprador (indPres da SEFAZ):
+    1=presencial, 4=entrega a domicílio, 5=presencial fora do
+    estabelecimento (ambulante) -- é justamente o código pensado pra venda
+    de remessa fora do estabelecimento, então usar "1" aqui declararia uma
+    venda de balcão que não aconteceu no balcão.
+    """
+    if venda.delivery:
+        return "4"
+    if getattr(venda, "venda_fora_estabelecimento", False):
+        return "5"
+    return "1"
+
+
+def _cfop_venda_fora_destino(local_destino: str) -> str:
+    """
+    CFOP de "Venda de produção do estabelecimento, efetuada fora do
+    estabelecimento" -- 5103 dentro do estado, 6103 fora. A SaboraFruta
+    produz a própria polpa; não é 5104/6104 (mercadoria de terceiros).
+    Mesmo grupo fiscal pra qualquer item, igual à bonificação: o que muda
+    a classificação é o canal da venda (ambulante/fora do balcão), não a
+    mercadoria em si.
+    """
+    if local_destino == "3":
+        return "7103"
+    if local_destino == "2":
+        return "6103"
+    return "5103"
+
+
 def _base_reduzida(base: Decimal, reducao: Any) -> Decimal:
     percentual = min(max(_decimal(reducao), Decimal("0")), Decimal("100"))
     return _dinheiro(base * (Decimal("1") - percentual / Decimal("100")))
@@ -368,6 +399,7 @@ def _montar_item_fiscal(
     desconto_rateado: Decimal,
     acrescimo_rateado: Decimal,
     bonificacao: bool = False,
+    venda_fora_estabelecimento: bool = False,
 ) -> dict:
     produto = item_venda.produto
     quantidade = _decimal(item_venda.quantidade)
@@ -388,6 +420,8 @@ def _montar_item_fiscal(
         "cfop": (
             _cfop_bonificacao_destino(local_destino)
             if bonificacao
+            else _cfop_venda_fora_destino(local_destino)
+            if venda_fora_estabelecimento
             else _cfop_item_destino(produto, local_destino)
         ),
         "unidade_comercial": unidade,
@@ -453,6 +487,7 @@ def _montar_itens(venda, itens: list, local_destino: str) -> list[dict]:
             descontos[i],
             acrescimos[i],
             bonificacao=venda.bonificacao,
+            venda_fora_estabelecimento=getattr(venda, "venda_fora_estabelecimento", False),
         )
         for i, item in enumerate(itens)
     ]
@@ -800,7 +835,11 @@ class NfcePayloadBuilder:
             # ── Identificação do emitente (topo, formato v2) ────────────────
             "cnpj_emitente": cnpj,
             # ── Dados da nota ───────────────────────────────────────────────
-            "natureza_operacao": "BONIFICAÇÃO" if venda.bonificacao else "VENDA AO CONSUMIDOR",
+            "natureza_operacao": (
+                "BONIFICAÇÃO" if venda.bonificacao
+                else "VENDA FORA DO ESTABELECIMENTO" if venda.venda_fora_estabelecimento
+                else "VENDA AO CONSUMIDOR"
+            ),
             "numero": numero_nfce,
             "serie": str(serie_nfce),
             "data_emissao": data_emissao,
@@ -808,7 +847,7 @@ class NfcePayloadBuilder:
             "consumidor_final": 1,
             # ── Campos obrigatórios NFC-e v2 ────────────────────────────────
             "local_destino": local_destino,
-            "presenca_comprador": "4" if venda.delivery else "1",
+            "presenca_comprador": _presenca_comprador(venda),
             "modalidade_frete": "9",      # 9=sem frete
             # ── Itens e pagamentos ──────────────────────────────────────────
             "items": items,
@@ -863,7 +902,11 @@ class NfePayloadBuilder:
 
         payload: Dict[str, Any] = {
             "cnpj_emitente": cnpj,
-            "natureza_operacao": "BONIFICAÇÃO" if venda.bonificacao else "VENDA DE MERCADORIAS",
+            "natureza_operacao": (
+                "BONIFICAÇÃO" if venda.bonificacao
+                else "VENDA FORA DO ESTABELECIMENTO" if venda.venda_fora_estabelecimento
+                else "VENDA DE MERCADORIAS"
+            ),
             "numero": numero_nfe,
             "serie": str(serie_nfe),
             "data_emissao": data_emissao,
@@ -871,7 +914,7 @@ class NfePayloadBuilder:
             "tipo_documento": "1",
             "finalidade_emissao": "1",
             "consumidor_final": _indicador_consumidor_final(cliente),
-            "presenca_comprador": "4" if venda.delivery else "1",
+            "presenca_comprador": _presenca_comprador(venda),
             "local_destino": local_destino,
             "modalidade_frete": "9",
             "items": items,

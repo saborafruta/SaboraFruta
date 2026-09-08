@@ -179,6 +179,7 @@
   .mode-btn.act-delivery { background:linear-gradient(135deg,#1d4ed8,#3b82f6); color:#fff; box-shadow:0 2px 10px rgba(37,99,235,.45); }
   .mode-btn.act-orcamento { background:linear-gradient(135deg,#a16207,#ca8a04); color:#fff; box-shadow:0 2px 10px rgba(161,98,7,.45); }
   .mode-btn.act-bonificacao { background:linear-gradient(135deg,#7c3aed,#a855f7); color:#fff; box-shadow:0 2px 10px rgba(124,58,237,.45); }
+  .mode-btn.act-venda-fora { background:linear-gradient(135deg,#0d9488,#14b8a6); color:#fff; box-shadow:0 2px 10px rgba(13,148,136,.45); }
 
   /* Botões de ação do rodapé do catálogo */
   .cat-action-btn {
@@ -969,18 +970,19 @@
   .pdv-topbar .mode-seg { background:var(--pdv-header-control-bg);border-color:var(--pdv-header-control-border); }
   .pdv-topbar .mode-btn { color:var(--pdv-header-muted); }
   .pdv-topbar .mode-btn:hover { background:var(--pdv-header-control-hover);color:var(--pdv-header-text); }
-  .pdv-topbar .mode-btn.act-venda,.pdv-topbar .mode-btn.act-delivery,.pdv-topbar .mode-btn.act-orcamento,.pdv-topbar .mode-btn.act-bonificacao {
+  .pdv-topbar .mode-btn.act-venda,.pdv-topbar .mode-btn.act-delivery,.pdv-topbar .mode-btn.act-orcamento,.pdv-topbar .mode-btn.act-bonificacao,.pdv-topbar .mode-btn.act-venda-fora {
     background:#fff;color:#173b8f;box-shadow:none;
   }
   html.tema-claro .pdv-topbar .mode-btn.act-venda,
   html.tema-claro .pdv-topbar .mode-btn.act-delivery,
   html.tema-claro .pdv-topbar .mode-btn.act-orcamento,
-  html.tema-claro .pdv-topbar .mode-btn.act-bonificacao { background:#fff3e8;color:#c2410c; }
+  html.tema-claro .pdv-topbar .mode-btn.act-bonificacao,
+  html.tema-claro .pdv-topbar .mode-btn.act-venda-fora { background:#fff3e8;color:#c2410c; }
   html.tema-claro #pdv-app > .pdv-topbar { position:relative;background:#c2410c !important;border-radius:0;box-shadow:0 12px 30px rgba(241,90,36,.16); }
   html.tema-claro #pdv-app > .pdv-topbar::before { content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:var(--pdv-header-bg);border-radius:0 0 18px 0; }
   html.tema-claro #pdv-app > .pdv-topbar > * { position:relative;z-index:1; }
   html.tema-claro .pdv-topbar .mode-seg { background:rgba(194,65,12,.42);border-color:rgba(255,255,255,.34);box-shadow:none; }
-  html.tema-claro .pdv-topbar .mode-btn:not(.act-venda):not(.act-delivery):not(.act-orcamento):not(.act-bonificacao),
+  html.tema-claro .pdv-topbar .mode-btn:not(.act-venda):not(.act-delivery):not(.act-orcamento):not(.act-bonificacao):not(.act-venda-fora),
   html.tema-claro .pdv-topbar .topbar-btn { background:rgba(194,65,12,.36) !important;border-color:rgba(255,231,213,.36) !important;color:#fff !important; }
   html.tema-claro .pdv-topbar .topbar-btn:hover { background:rgba(194,65,12,.50) !important; }
   .brand-switch {
@@ -1256,16 +1258,16 @@
 
     <!-- Modos (seletor segmentado) -->
     <div class="mode-seg">
-      <button @click="modo='venda';venda.delivery=false;venda.endereco_entrega={}"
-              :class="(modo==='venda'&&!venda.delivery) ? 'mode-btn act-venda' : 'mode-btn'">
+      <button @click="modo='venda';venda.delivery=false;venda.endereco_entrega={};venda.fora_estabelecimento=false"
+              :class="(modo==='venda'&&!venda.delivery&&!venda.fora_estabelecimento) ? 'mode-btn act-venda' : 'mode-btn'">
         <span style="font-size:14px;font-weight:800;">$</span> Venda
       </button>
-      <button @click="modo='venda';solicitarDelivery()"
+      <button @click="modo='venda';venda.fora_estabelecimento=false;solicitarDelivery()"
               :class="(modo==='venda'&&venda.delivery) ? 'mode-btn act-delivery' : 'mode-btn'">
         <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 001 1h1m-1-1V8h4l3 3v5a1 1 0 01-1 1h-1"/></svg>
         Delivery
       </button>
-      <button @click="modo='orcamento';venda.delivery=false"
+      <button @click="modo='orcamento';venda.delivery=false;venda.fora_estabelecimento=false"
               :class="modo==='orcamento' ? 'mode-btn act-orcamento' : 'mode-btn'">
         <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         Orçamento
@@ -1277,10 +1279,23 @@
         forma de pagamento isolada, só que sem o operador precisar
         selecionar nada na tela de pagamento.
       {% endcomment %}
-      <button @click="modo='bonificacao';venda.delivery=false"
+      <button @click="modo='bonificacao';venda.delivery=false;venda.fora_estabelecimento=false"
               :class="modo==='bonificacao' ? 'mode-btn act-bonificacao' : 'mode-btn'">
         <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.59 13.41L11 3.83A2 2 0 009.59 3.24L4 3a1 1 0 00-1 1l.24 5.59a2 2 0 00.59 1.41l9.58 9.58a2 2 0 002.83 0l4.35-4.35a2 2 0 000-2.82z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7.5 7.5h.01"/></svg>
         Bonificação
+      </button>
+      {% comment %}
+        VENDA FORA DO ESTABELECIMENTO: venda normal (mesmo pagamento, mesmo
+        caixa, mesmo contas a receber) -- só muda o CFOP da nota, 5103/6103
+        em vez do CFOP de venda comum (5102/6102), porque a mercadoria saiu
+        pra ser vendida ambulante/fora do balcão em vez de presencial no
+        estabelecimento. Fica no mesmo `modo='venda'`, mesma lógica do
+        Delivery: um flag a mais na venda, não um fluxo à parte.
+      {% endcomment %}
+      <button @click="modo='venda';venda.delivery=false;venda.endereco_entrega={};venda.fora_estabelecimento=true"
+              :class="(modo==='venda'&&venda.fora_estabelecimento) ? 'mode-btn act-venda-fora' : 'mode-btn'">
+        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16V4m0 0L4 8m4-4l4 4m4 4v12m0 0l4-4m-4 4l-4-4"/></svg>
+        Venda Fora
       </button>
     </div>
 
@@ -3775,7 +3790,7 @@ function pdv() {
       itens: [], pagamentos: [],
       subtotal: 0, desconto: 0, acrescimo: 0,
       total: 0, valor_pago: 0, restante: 0,
-      delivery: false, endereco_entrega: {},
+      delivery: false, endereco_entrega: {}, fora_estabelecimento: false,
       observacao: '', comanda_id_origem: null,
     },
 
@@ -4668,6 +4683,7 @@ function pdv() {
           acrescimo: this.venda.acrescimo,
           delivery: this.venda.delivery,
           endereco_entrega: this.venda.endereco_entrega,
+          venda_fora_estabelecimento: this.venda.fora_estabelecimento || false,
           credito_valor: this.creditoAplicado || 0,
           data_venda: (this.usuarioEhAdmin && this.dataVendaRetroativa) ? this.dataVendaRetroativa : null,
           observacao: this.venda.observacao || '',
@@ -4714,6 +4730,7 @@ function pdv() {
           acrescimo: this.venda.acrescimo,
           delivery: this.venda.delivery,
           endereco_entrega: this.venda.endereco_entrega,
+          venda_fora_estabelecimento: this.venda.fora_estabelecimento || false,
           credito_valor: this.creditoAplicado || 0,
           data_venda: (this.usuarioEhAdmin && this.dataVendaRetroativa) ? this.dataVendaRetroativa : null,
           observacao: this.venda.observacao || '',
@@ -4806,6 +4823,7 @@ function pdv() {
             itens:this.venda.itens,desconto:this.venda.desconto,
             acrescimo:this.venda.acrescimo,observacao:this.venda.observacao||'',
             delivery:this.venda.delivery,endereco_entrega:this.venda.endereco_entrega,
+            venda_fora_estabelecimento:this.venda.fora_estabelecimento||false,
             pagamentos:this.venda.pagamentos})});
         const d=await r.json();
         if (d.ok) { this.toast_('Venda salva como pendente','ok'); this.novaVenda(); await this.carregarPendentes(); }
@@ -5739,7 +5757,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
 
     novaVenda() {
       this.venda={id:null,numero:null,cliente:{id:null,nome:'Consumidor Final',cpf_cnpj:''},
-        itens:[],pagamentos:[],subtotal:0,desconto:0,acrescimo:0,total:0,valor_pago:0,restante:0,delivery:false,endereco_entrega:{},observacao:''};
+        itens:[],pagamentos:[],subtotal:0,desconto:0,acrescimo:0,total:0,valor_pago:0,restante:0,delivery:false,endereco_entrega:{},fora_estabelecimento:false,observacao:''};
       this.creditoDisponivel=0; this.creditoAplicado=0; this.cashbackDisponivel=0;
       this.buscaQuery=''; this.produtos=[]; this.formaPgtoSelecionada=null;
       this.dataVendaRetroativa='';
@@ -6229,6 +6247,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         this.venda.acrescimo = d.acrescimo || 0;
         this.venda.delivery = d.delivery || false;
         this.venda.endereco_entrega = d.endereco_entrega || {};
+        this.venda.fora_estabelecimento = d.venda_fora_estabelecimento || false;
         this.venda.observacao = d.observacao || '';
         // Restaura as formas de pagamento selecionadas antes de salvar como
         // pendente (_id novo pra nao colidir com o :key do Alpine).
