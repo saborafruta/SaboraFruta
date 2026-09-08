@@ -58,7 +58,7 @@ class ExtratoBancario(models.Model):
         indexes = [models.Index(fields=["conta_bancaria", "data_lancamento"])]
 
     def recalcular_recebimento(self):
-        """Congela taxa e prazo usados por uma entrada manual."""
+        """Congela a taxa e mantém uma entrada manual na data informada."""
         if (self.valor or 0) <= 0 or not self.forma_pagamento_id:
             self.taxa_percentual_aplicada = 0
             self.taxa_fixa_aplicada = 0
@@ -78,13 +78,11 @@ class ExtratoBancario(models.Model):
         self.valor_taxa = calculo["taxa"]
         self.valor_liquido = calculo["liquido"]
         self.taxa_calculada_em = timezone.now()
-        self.prazo_compensacao_aplicado = self.forma_pagamento.prazo_compensacao_dias_uteis or 0
-        from apps.core.services.calendario import adicionar_dias_uteis_bancarios
-        self.data_credito = adicionar_dias_uteis_bancarios(
-            self.data_lancamento,
-            self.prazo_compensacao_aplicado,
-            self.filial,
-        )
+        # O prazo bancário pertence à origem comercial (venda/OP). Em um
+        # lançamento manual o operador informa o dia em que o dinheiro
+        # efetivamente entrou, portanto não há compensação a projetar.
+        self.prazo_compensacao_aplicado = 0
+        self.data_credito = self.data_lancamento
 
     @property
     def valor_entrada_liquida(self):

@@ -58,8 +58,21 @@ class MenuFavoritosView(LoginRequiredMixin, View):
         if caminho is None or not isinstance(favorito, bool):
             return JsonResponse({'ok': False, 'erro': 'Favorito invalido.'}, status=400)
 
-        with transaction.atomic():
-            usuario = Usuario.objects.select_for_update().get(pk=request.user.pk)
+        # Um superadministrador autenticado no Banco Gerencial pode estar
+        # operando dentro de um tenant no momento do clique. Nesse caso o
+        # router aponta para o tenant, mas as preferências pertencem ao
+        # usuário que autenticou a sessão. Gravar explicitamente no banco do
+        # objeto evita procurar o PK central no banco operacional.
+        banco_usuario = (
+            getattr(getattr(request.user, '_state', None), 'db', None)
+            or 'default'
+        )
+        with transaction.atomic(using=banco_usuario):
+            usuario = (
+                Usuario.objects.using(banco_usuario)
+                .select_for_update()
+                .get(pk=request.user.pk)
+            )
             favoritos = []
             for item in usuario.menu_favoritos or []:
                 item_normalizado = normalizar_caminho_favorito(item)

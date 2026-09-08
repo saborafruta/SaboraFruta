@@ -17,26 +17,56 @@ class MenuFavoritosViewTests(SimpleTestCase):
         self.factory = RequestFactory()
         self.usuario = SimpleNamespace(pk=7, menu_favoritos=[], save=Mock())
 
-    def _post(self, caminho, favorito, *, autenticado=True):
+    def _post(self, caminho, favorito, *, autenticado=True, banco_usuario='default'):
         request = self.factory.post(
             reverse('core:menu-favoritos'),
             data=json.dumps({'caminho': caminho, 'favorito': favorito}),
             content_type='application/json',
         )
         request.user = (
-            SimpleNamespace(is_authenticated=True, pk=self.usuario.pk)
+            SimpleNamespace(
+                is_authenticated=True,
+                pk=self.usuario.pk,
+                _state=SimpleNamespace(db=banco_usuario),
+            )
             if autenticado else AnonymousUser()
         )
         selecionado = Mock()
         selecionado.get.return_value = self.usuario
+        manager_banco = Mock()
+        manager_banco.select_for_update.return_value = selecionado
         with patch(
-            'apps.core.views.menu_favoritos.Usuario.objects.select_for_update',
-            return_value=selecionado,
-        ), patch(
+            'apps.core.views.menu_favoritos.Usuario.objects.using',
+            return_value=manager_banco,
+        ) as usar_banco, patch(
             'apps.core.views.menu_favoritos.transaction.atomic',
             return_value=nullcontext(),
-        ):
-            return MenuFavoritosView.as_view()(request)
+        ) as transacao:
+            response = MenuFavoritosView.as_view()(request)
+        if usar_banco.called:
+            usar_banco.assert_called_once_with(banco_usuario)
+            transacao.assert_called_once_with(using=banco_usuario)
+        return response
+
+    def test_superadmin_salva_favorito_no_banco_da_autenticacao(self):
+        response = self._post(
+            '/financeiro/posicao-diaria/',
+            True,
+            banco_usuario='default',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.usuario.menu_favoritos, ['/financeiro/posicao-diaria/'])
+
+    def test_usuario_tenant_salva_favorito_no_proprio_banco(self):
+        response = self._post(
+            '/financeiro/posicao-diaria/',
+            True,
+            banco_usuario='empresa_eureka_50649395000126',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.usuario.menu_favoritos, ['/financeiro/posicao-diaria/'])
 
     def test_adiciona_e_remove_favorito(self):
         response = self._post('/financeiro/pagar/?status=pendente', True)

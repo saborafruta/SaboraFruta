@@ -1410,7 +1410,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(conta.valor_liquido_recebido, Decimal("96.78"))
         self.assertEqual(conta.data_liquidacao_prevista, date(2026, 8, 24))
 
-    def test_entrada_manual_debito_calcula_taxa_da_bandeira_e_compensacao(self):
+    def test_entrada_manual_debito_calcula_taxa_sem_mover_data_pelo_prazo(self):
         self.forma.tipo = TipoFormaPagamento.CARTAO_DEBITO
         self.forma.prazo_compensacao_dias_uteis = 1
         self.forma.save(update_fields=["tipo", "prazo_compensacao_dias_uteis"])
@@ -1428,28 +1428,28 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(movimento.taxa_percentual_aplicada, Decimal("1.11"))
         self.assertEqual(movimento.valor_taxa, Decimal("1.11"))
         self.assertEqual(movimento.valor_liquido, Decimal("98.89"))
-        self.assertEqual(movimento.data_credito, date(2026, 8, 24))
+        self.assertEqual(movimento.prazo_compensacao_aplicado, 0)
+        self.assertEqual(movimento.data_credito, date(2026, 8, 21))
         taxa_paga = ContaPagar.objects.get(
             documento_tipo="taxa_extrato", documento_id=movimento.pk,
         )
         self.assertEqual(taxa_paga.valor_pago, Decimal("1.11"))
-        self.assertEqual(taxa_paga.data_pagamento, date(2026, 8, 24))
+        self.assertEqual(taxa_paga.data_pagamento, date(2026, 8, 21))
         self.assertEqual(taxa_paga.plano_contas.descricao, "Taxas por transacao")
         self.assertEqual(taxa_paga.conta_bancaria_id, self.banco.pk)
         pagamento_taxa = taxa_paga.pagamentos.get()
         self.assertEqual(pagamento_taxa.conta_bancaria_id, self.banco.pk)
 
-        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
         self.assertNotIn(taxa_paga.descricao_despesa, [item.descricao for item in posicao["saidas"]])
         self.assertFalse(posicao["sem_conta"])
         sexta = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
-        self.assertEqual(sexta["total_entradas"], Decimal("0"))
-        self.assertFalse(any(m.registro_id == movimento.pk for m in sexta["entradas"]))
-        self.assertEqual(sexta["total_fechamento"], Decimal("150.00"))
+        self.assertEqual(sexta["total_entradas"], Decimal("98.89"))
+        self.assertTrue(any(m.registro_id == movimento.pk for m in sexta["entradas"]))
+        self.assertEqual(sexta["total_fechamento"], Decimal("248.89"))
         segunda = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 24)).gerar()
-        self.assertEqual(segunda["total_entradas"], Decimal("98.89"))
-        entrada = next(m for m in segunda["entradas"] if m.registro_id == movimento.pk)
-        self.assertEqual(entrada.data, date(2026, 8, 24))
+        self.assertEqual(segunda["total_entradas"], Decimal("0"))
+        self.assertFalse(any(m.registro_id == movimento.pk for m in segunda["entradas"]))
         self.assertEqual(segunda["total_fechamento"], Decimal("248.89"))
 
     def test_recebimento_previsto_atrasado_aparece_em_vermelho(self):
