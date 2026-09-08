@@ -1,61 +1,218 @@
 {% extends "_list_base.html" %}
+{% load erp_extras %}
 
 {% block list_title %}Empresas{% endblock %}
 {% block page_title %}Central Administrativa{% endblock %}
 {% block header_title %}Empresas{% endblock %}
 
+{% block extra_head %}
+{{ block.super }}
+<style>
+  .company-list-container .overflow-x-auto { overflow-x: auto; }
+  .company-list-container table { table-layout: fixed; min-width: 920px; }
+  .company-list-container th,
+  .company-list-container td { padding: .82rem .72rem; font-size: .78rem; vertical-align: middle; }
+  .company-list-container th:nth-child(1) { width: 27%; }
+  .company-list-container th:nth-child(2) { width: 16%; }
+  .company-list-container th:nth-child(3) { width: 12%; }
+  .company-list-container th:nth-child(4) { width: 15%; }
+  .company-list-container th:nth-child(5) { width: 14%; }
+  .company-list-container th:nth-child(6) { width: 9%; }
+  .company-list-container th:nth-child(7) { width: 7%; }
+  .company-name-cell { text-align: left !important; white-space: normal; }
+  .company-name-primary { color: #f8fafc; font-size: .84rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+  .company-name-secondary { margin-top: .2rem; color: #8f9bad; font-size: .69rem; line-height: 1.3; overflow-wrap: anywhere; }
+  body.tema-claro .company-name-primary { color: #111827; }
+  body.tema-claro .company-name-secondary { color: #64748b; }
+  .company-cell-nowrap { white-space: nowrap; }
+  .company-bank-button,
+  .company-icon-button {
+    display: inline-flex; align-items: center; justify-content: center; gap: .38rem;
+    border: 1px solid rgba(147,197,253,.28); background: rgba(148,163,184,.1);
+    color: #bfdbfe; cursor: pointer;
+  }
+  .company-bank-button { min-height: 31px; padding: 0 .62rem; border-radius: 6px; font-size: .72rem; font-weight: 700; }
+  .company-icon-button { width: 32px; height: 32px; border-radius: 6px; }
+  .company-bank-button:hover,
+  .company-icon-button:hover { border-color: rgba(96,165,250,.65); background: rgba(59,130,246,.14); color: #eff6ff; }
+  body.tema-claro .company-bank-button,
+  body.tema-claro .company-icon-button { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+  .company-actions { display: flex; justify-content: flex-end; align-items: center; gap: .38rem; }
+  .company-empty { color: #768196; font-size: .72rem; }
+  .company-modal {
+    position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 1rem;
+    background: rgba(2,6,23,.72); backdrop-filter: blur(3px);
+  }
+  .company-dialog { width: min(100%, 520px); max-height: calc(100vh - 2rem); overflow: auto; border: 1px solid #343945; border-radius: 8px; background: #1f2024; box-shadow: 0 24px 70px rgba(0,0,0,.48); }
+  body.tema-claro .company-dialog { border-color: #dbe2ea; background: #fff; }
+  .company-dialog-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding: 1rem 1.1rem; border-bottom: 1px solid #30343c; }
+  body.tema-claro .company-dialog-head { border-color: #e5e7eb; }
+  .company-dialog-title { color: #f8fafc; font-size: .98rem; font-weight: 750; }
+  .company-dialog-subtitle { margin-top: .22rem; color: #929cab; font-size: .73rem; }
+  body.tema-claro .company-dialog-title { color: #111827; }
+  body.tema-claro .company-dialog-subtitle { color: #64748b; }
+  .company-dialog-close { display: grid; width: 31px; height: 31px; place-items: center; border-radius: 6px; color: #aab2bf; }
+  .company-dialog-close:hover { background: rgba(148,163,184,.12); color: #fff; }
+  body.tema-claro .company-dialog-close:hover { color: #111827; }
+  .company-dialog-body { padding: 1.05rem 1.1rem 1.15rem; }
+  .company-detail-label { margin-bottom: .34rem; color: #8e98a8; font-size: .66rem; font-weight: 750; text-transform: uppercase; }
+  .company-copy-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .5rem; }
+  .company-code { min-width: 0; padding: .68rem .75rem; border: 1px solid #353a43; border-radius: 6px; background: #17181b; color: #e5e7eb; font-family: ui-monospace, monospace; font-size: .72rem; overflow: hidden; text-overflow: ellipsis; }
+  body.tema-claro .company-code { border-color: #dbe2ea; background: #f8fafc; color: #1f2937; }
+  .company-copy-button { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; gap: .35rem; padding: 0 .72rem; border-radius: 6px; background: #2563eb; color: #fff; font-size: .71rem; font-weight: 750; }
+  .company-meta-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .65rem; margin-top: .9rem; }
+  .company-meta-item { padding: .72rem; border: 1px solid #30343c; border-radius: 6px; }
+  body.tema-claro .company-meta-item { border-color: #e5e7eb; }
+  .company-meta-value { color: #f3f4f6; font-size: .78rem; font-weight: 650; overflow-wrap: anywhere; }
+  body.tema-claro .company-meta-value { color: #1f2937; }
+  .company-menu { display: grid; gap: .45rem; }
+  .company-menu-link,
+  .company-menu-button { display: flex; width: 100%; min-height: 40px; align-items: center; gap: .65rem; padding: 0 .75rem; border: 1px solid #343945; border-radius: 6px; color: #e5e7eb; font-size: .75rem; font-weight: 650; text-align: left; }
+  .company-menu-link:hover,
+  .company-menu-button:hover { border-color: #4b6b9b; background: rgba(59,130,246,.1); }
+  .company-menu-button.is-danger { border-color: rgba(248,113,113,.35); color: #fca5a5; }
+  body.tema-claro .company-menu-link,
+  body.tema-claro .company-menu-button { border-color: #dbe2ea; color: #334155; }
+  body.tema-claro .company-menu-button.is-danger { color: #b91c1c; }
+  @media (max-width: 700px) {
+    .company-copy-row, .company-meta-grid { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block table_container_classes %}table-container company-list-container rounded-lg overflow-hidden{% endblock %}
+
 {% block list_subtitle %}
-<p class="text-sm mt-1" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">{{ total }} empresa{{ total|pluralize }} cadastrada{{ total|pluralize }}.</p>
+<p class="text-sm mt-1" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Cadastre e acompanhe as empresas disponíveis no ambiente.</p>
 {% endblock %}
 
 {% block list_actions %}
-  <a href="{{ central_url }}" class="btn-secondary">← Voltar à Central</a>
-  <a href="{% url 'core:admin_empresa_banco_list' %}" class="btn-secondary">Bancos das empresas</a>
 {% if can_manage_structure %}
+  <a href="{% url 'core:admin_empresa_banco_list' %}" class="btn-secondary">Bancos</a>
   <a href="{% url 'core:admin_empresa_create' %}" class="btn-primary">+ Nova empresa</a>
 {% endif %}
 {% endblock %}
 
 {% block list_filters %}
-<form method="get" class="card p-4 flex flex-col sm:flex-row gap-3">
-  <input type="text" name="q" value="{{ busca }}" placeholder="Razao social, fantasia ou CNPJ..." class="form-input flex-1">
-  <button type="submit" class="btn-primary">Filtrar</button>
-  {% if busca %}<a href="{% url 'core:admin_empresa_list' %}" class="btn-secondary">Limpar</a>{% endif %}
+<form method="get" class="card p-4" x-data="{ moreFilters: {% if filtros.cidade or filtros.regime %}true{% else %}false{% endif %} }">
+  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[1.4fr_1fr_1fr_.7fr_auto] gap-3">
+    <input type="text" name="nome" value="{{ filtros.nome }}" placeholder="Nome ou fantasia" class="form-input">
+    <input type="text" name="cnpj" value="{{ filtros.cnpj }}" placeholder="CNPJ ou CPF" class="form-input">
+    <select name="banco" class="form-input">
+      <option value="">Todos os bancos</option>
+      {% for value, label in banco_status_filters %}<option value="{{ value }}" {% if filtros.banco == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <select name="uf" class="form-input">
+      <option value="">UF</option>
+      {% for value, label in uf_choices %}<option value="{{ value }}" {% if filtros.uf == value %}selected{% endif %}>{{ value }}</option>{% endfor %}
+    </select>
+    <button type="button" class="btn-secondary" @click="moreFilters = !moreFilters" :aria-expanded="moreFilters.toString()">Mais filtros</button>
+  </div>
+  <div x-show="moreFilters" x-cloak class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+    <input type="text" name="cidade" value="{{ filtros.cidade }}" placeholder="Cidade" class="form-input">
+    <select name="regime" class="form-input">
+      <option value="">Todos os regimes</option>
+      {% for value, label in regime_choices %}<option value="{{ value }}" {% if filtros.regime == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="mt-3 flex flex-wrap gap-2">
+    <button type="submit" class="btn-primary">Filtrar</button>
+    <input type="hidden" name="ocultar_inativas" value="0">
+    <label class="btn-secondary cursor-pointer inline-flex items-center gap-2">
+      <input type="checkbox" name="ocultar_inativas" value="1" class="accent-blue-600" {% if ocultar_inativas %}checked{% endif %}>
+      Ocultar empresas inativas
+    </label>
+    {% if tem_filtro %}<a href="{% url 'core:admin_empresa_list' %}" class="btn-secondary">Limpar</a>{% endif %}
+  </div>
 </form>
 {% endblock %}
 
 {% block table_head %}
-<th class="px-4 py-3 text-left">Empresa</th>
-<th class="px-4 py-3 text-left">CNPJ</th>
-<th class="px-4 py-3 text-left">Cidade/UF</th>
-<th class="px-4 py-3 text-left">Regime</th>
-<th class="px-4 py-3 text-left">Status</th>
-{% if can_manage_structure %}<th class="px-4 py-3 text-right">Acoes</th>{% endif %}
+<th class="text-left">Empresa</th>
+<th class="text-left">CNPJ/CPF</th>
+<th class="text-left">Cidade/UF</th>
+<th class="text-left">Regime</th>
+<th class="text-left">Banco</th>
+<th class="text-left">Status</th>
+{% if can_manage_structure %}<th class="text-right"><span class="sr-only">Ações</span></th>{% endif %}
 {% endblock %}
 
 {% block table_body %}
-{% for empresa in page_obj %}
-  <tr class="table-row-hover">
-    <td class="px-4 py-3">
-      <div class="font-medium">{{ empresa.razao_social }}</div>
-      {% if empresa.nome_fantasia %}<div class="text-xs text-gray-400">{{ empresa.nome_fantasia }}</div>{% endif %}
-      <a href="{% url 'core:admin_filial_list' %}?empresa={{ empresa.pk }}" class="text-xs font-semibold text-blue-500 mt-1 inline-block">Ver filiais</a>
+{% for row in page_obj %}
+  {% with empresa=row.empresa banco=row.banco %}
+  <tr class="table-row-hover{% if not empresa.ativo %} is-inactive-row{% endif %}"
+      x-data="{ bankOpen: false, actionsOpen: false, copied: false }">
+    <td class="company-name-cell">
+      <div class="company-name-primary">{{ empresa.nome_fantasia|default:empresa.razao_social }}</div>
+      {% if empresa.nome_fantasia and empresa.nome_fantasia != empresa.razao_social %}<div class="company-name-secondary">{{ empresa.razao_social }}</div>{% endif %}
     </td>
-    <td class="px-4 py-3 font-mono text-xs">{{ empresa.cnpj }}</td>
-    <td class="px-4 py-3">{% if empresa.cidade %}{{ empresa.cidade }}/{{ empresa.uf }}{% else %}-{% endif %}</td>
-    <td class="px-4 py-3"><span class="soft-pill no-dot is-purple">{{ empresa.get_regime_tributario_display }}</span></td>
-    <td class="px-4 py-3">{% if empresa.ativo %}<span class="soft-pill is-green">Ativa</span>{% else %}<span class="soft-pill is-red">Inativa</span>{% endif %}</td>
+    <td class="font-mono text-xs company-cell-nowrap">{{ empresa.cnpj|cpf_cnpj }}</td>
+    <td class="company-cell-nowrap">{% if empresa.cidade %}{{ empresa.cidade }}/{{ empresa.uf }}{% else %}<span class="company-empty">—</span>{% endif %}</td>
+    <td><span class="soft-pill no-dot is-purple">{{ empresa.get_regime_tributario_display }}</span></td>
+    <td>
+      {% if banco %}
+        <button type="button" class="company-bank-button" @click="bankOpen = true" title="Visualizar banco">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>
+          Ver banco
+        </button>
+      {% else %}
+        <span class="soft-pill no-dot is-slate">Sem banco</span>
+      {% endif %}
+    </td>
+    <td>{% if empresa.ativo %}<span class="soft-pill is-green">Ativa</span>{% else %}<span class="soft-pill no-dot is-slate">Inativa</span>{% endif %}</td>
     {% if can_manage_structure %}
-      <td class="px-4 py-3 text-right whitespace-nowrap">
-        <a href="{% url 'core:admin_empresa_edit' empresa.pk %}" class="btn-table btn-table-blue">Editar</a>
-        <form method="post" action="{% url 'core:admin_empresa_toggle' empresa.pk %}" class="inline-block ml-2">
-          {% csrf_token %}
-          <button type="submit" class="btn-table {% if empresa.ativo %}btn-table-red{% else %}btn-table-blue{% endif %}">{% if empresa.ativo %}Desativar{% else %}Ativar{% endif %}</button>
-        </form>
-      </td>
+    <td>
+      <div class="company-actions">
+        <button type="button" class="company-icon-button" @click="actionsOpen = true" title="Ações da empresa" aria-label="Ações da empresa">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="19" cy="12" r="1.7"></circle></svg>
+        </button>
+      </div>
+
+      {% if banco %}
+      <div x-show="bankOpen" x-cloak x-transition.opacity class="company-modal" role="dialog" aria-modal="true" aria-labelledby="company-bank-title-{{ banco.pk }}" @click.self="bankOpen = false" @keydown.escape.window="bankOpen = false">
+        <div class="company-dialog" @click.stop>
+          <div class="company-dialog-head">
+            <div><h2 id="company-bank-title-{{ banco.pk }}" class="company-dialog-title">Banco de {{ empresa.nome_fantasia|default:empresa.razao_social }}</h2><p class="company-dialog-subtitle">Identificação técnica do banco dedicado.</p></div>
+            <button type="button" class="company-dialog-close" @click="bankOpen = false" aria-label="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18"></path></svg></button>
+          </div>
+          <div class="company-dialog-body">
+            <div class="company-detail-label">Nome do banco</div>
+            <div class="company-copy-row">
+              <input type="text" readonly x-ref="bankName" class="company-code w-full" value="{{ banco.nome_banco }}" aria-label="Nome do banco">
+              <button type="button" class="company-copy-button" @click="copied = true; setTimeout(() => copied = false, 1600); navigator.clipboard && navigator.clipboard.writeText($refs.bankName.value).catch(() => {})">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                <span x-text="copied ? 'Copiado' : 'Copiar'"></span>
+              </button>
+            </div>
+            <div class="company-meta-grid">
+              <div class="company-meta-item"><div class="company-detail-label">Status do banco</div><div class="company-meta-value">{{ banco.get_status_display }}</div></div>
+              <div class="company-meta-item"><div class="company-detail-label">Criado em</div><div class="company-meta-value">{{ banco.created_at|date:"d/m/Y H:i" }}</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div x-show="actionsOpen" x-cloak x-transition.opacity class="company-modal" role="dialog" aria-modal="true" aria-labelledby="company-actions-title-{{ empresa.pk }}" @click.self="actionsOpen = false" @keydown.escape.window="actionsOpen = false">
+        <div class="company-dialog" @click.stop>
+          <div class="company-dialog-head">
+            <div><h2 id="company-actions-title-{{ empresa.pk }}" class="company-dialog-title">Ações da empresa</h2><p class="company-dialog-subtitle">{{ empresa.nome_fantasia|default:empresa.razao_social }}</p></div>
+            <button type="button" class="company-dialog-close" @click="actionsOpen = false" aria-label="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18"></path></svg></button>
+          </div>
+          <div class="company-dialog-body company-menu">
+            <a href="{% url 'core:admin_filial_list' %}?empresa={{ empresa.pk }}" class="company-menu-link">Ver filiais</a>
+            <a href="{% url 'core:admin_empresa_edit' empresa.pk %}" class="company-menu-link">Editar empresa</a>
+            {% if banco %}<a href="{% url 'core:admin_empresa_banco_list' %}?cnpj={{ empresa.cnpj }}" class="company-menu-link">Gerenciar banco</a>{% endif %}
+            {% if not banco and empresa.ativo %}<form method="post" action="{% url 'core:admin_empresa_banco_create' empresa.pk %}">{% csrf_token %}<button type="submit" class="company-menu-button">Criar banco dedicado</button></form>{% endif %}
+            <form method="post" action="{% url 'core:admin_empresa_toggle' empresa.pk %}">{% csrf_token %}<button type="submit" class="company-menu-button {% if empresa.ativo %}is-danger{% endif %}">{% if empresa.ativo %}Desativar empresa{% else %}Ativar empresa{% endif %}</button></form>
+          </div>
+        </div>
+      </div>
+    </td>
     {% endif %}
   </tr>
+  {% endwith %}
 {% empty %}
-  <tr><td colspan="{% if can_manage_structure %}6{% else %}5{% endif %}" class="px-4 py-10 text-center text-gray-400">Nenhuma empresa encontrada.</td></tr>
+  <tr><td colspan="{% if can_manage_structure %}7{% else %}6{% endif %}" class="px-4 py-10 text-center text-gray-400">Nenhuma empresa encontrada.</td></tr>
 {% endfor %}
 {% endblock %}

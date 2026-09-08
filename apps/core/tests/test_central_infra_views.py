@@ -67,11 +67,15 @@ class CentralInfraViewsTests(TestCase):
     def test_rotas_usam_nomes_e_urls_da_central(self):
         self.assertEqual(
             reverse('core:admin_empresa_banco_list'),
-            '/gestao/central/bancos-empresas/',
+            '/gestao/empresas/bancos/',
         )
         self.assertEqual(
             reverse('core:admin_railway_pool_list'),
             '/gestao/central/gestao-railway/',
+        )
+        self.assertEqual(
+            reverse('core:admin_empresa_banco_detail', args=[self.banco.pk]),
+            f'/gestao/empresas/bancos/{self.banco.pk}/',
         )
         self.assertEqual(
             reverse('core:admin_railway_pool_create'),
@@ -113,12 +117,10 @@ class CentralInfraViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         context = render_mock.call_args.args[2]
-        empresa = list(context['page_obj'])[0]
-        self.assertEqual(empresa, self.empresa)
-        self.assertEqual(empresa.total_filiais, 1)
-        self.assertEqual(context['total_bancos'], 1)
-        self.assertEqual(context['total_ativos'], 1)
-        self.assertEqual(context['total_sem_banco'], 0)
+        row = list(context['page_obj'])[0]
+        self.assertEqual(row['empresa'], self.empresa)
+        self.assertEqual(row['banco'], self.banco)
+        self.assertEqual(context['total'], 1)
 
     @patch('apps.core.views.admin_area.render', return_value=HttpResponse('ok'))
     def test_detalhe_do_banco_lista_so_filiais_da_empresa(self, render_mock):

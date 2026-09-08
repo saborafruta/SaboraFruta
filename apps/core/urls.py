@@ -51,11 +51,21 @@ urlpatterns = [
         name='admin_railway_pool_legacy',
     ),
     path(
-        'gestao/central/bancos-empresas/', admin_area.empresa_banco_list,
+        'gestao/empresas/bancos/', admin_area.empresa_banco_list,
         name='admin_empresa_banco_list',
     ),
     path(
-        'gestao/central/bancos-empresas/<int:pk>/', admin_area.empresa_banco_detail,
+        'gestao/central/bancos-empresas/',
+        RedirectView.as_view(pattern_name='core:admin_empresa_banco_list', permanent=False),
+        name='admin_empresa_banco_legacy',
+    ),
+    path(
+        'gestao/empresas/<int:empresa_id>/banco/criar/',
+        admin_area.empresa_banco_create,
+        name='admin_empresa_banco_create',
+    ),
+    path(
+        'gestao/empresas/bancos/<int:pk>/', admin_area.empresa_banco_detail,
         name='admin_empresa_banco_detail',
     ),
     path('gestao/parametros/', parametros_views.parametros_sistema, name='admin_parametros'),

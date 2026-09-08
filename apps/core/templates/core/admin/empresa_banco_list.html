@@ -1,99 +1,578 @@
 {% extends "_list_base.html" %}
+{% load erp_extras %}
 
-{% block list_title %}Bancos das empresas{% endblock %}
-{% block page_title %}Bancos das empresas{% endblock %}
-{% block header_title %}Bancos das empresas{% endblock %}
+{% block list_title %}Bancos por empresa{% endblock %}
+{% block page_title %}Central Administrativa{% endblock %}
+{% block header_title %}Bancos por empresa{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<style>
+  .tenant-bank-table-container .overflow-x-auto { overflow-x: auto; }
+  .tenant-bank-table-container table { table-layout: fixed; min-width: 980px; }
+  .tenant-bank-table-container th,
+  .tenant-bank-table-container td {
+    padding: .8rem .7rem;
+    font-size: .78rem;
+    vertical-align: middle;
+  }
+  .tenant-bank-table-container th:nth-child(1) { width: 27%; }
+  .tenant-bank-table-container th:nth-child(2) { width: 15%; }
+  .tenant-bank-table-container th:nth-child(3) { width: 10%; }
+  .tenant-bank-table-container th:nth-child(4) { width: 14%; }
+  .tenant-bank-table-container th:nth-child(5) { width: 10%; }
+  .tenant-bank-table-container th:nth-child(6) { width: 15%; }
+  .tenant-bank-table-container th:nth-child(7) { width: 9%; }
+  .tenant-bank-company-cell { text-align: left !important; white-space: normal; }
+  .tenant-bank-company-name {
+    color: #f8fafc;
+    font-size: .84rem;
+    font-weight: 700;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  .tenant-bank-company-legal {
+    margin-top: .22rem;
+    color: #8f9bad;
+    font-size: .7rem;
+    font-weight: 500;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+  body.tema-claro .tenant-bank-company-name { color: #111827; }
+  body.tema-claro .tenant-bank-company-legal { color: #64748b; }
+  .tenant-bank-row-cell { white-space: nowrap; }
+  .tenant-bank-view-button,
+  .tenant-bank-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(147, 197, 253, .28);
+    background: rgba(148, 163, 184, .10);
+    color: #bfdbfe;
+    cursor: pointer;
+  }
+  .tenant-bank-view-button {
+    gap: .4rem;
+    min-height: 30px;
+    padding: 0 .65rem;
+    border-radius: 6px;
+    font-size: .72rem;
+    font-weight: 700;
+  }
+  .tenant-bank-icon-button {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+  }
+  .tenant-bank-view-button:hover,
+  .tenant-bank-icon-button:hover { background: rgba(37, 99, 235, .18); }
+  body.tema-claro .tenant-bank-view-button,
+  body.tema-claro .tenant-bank-icon-button {
+    border-color: #bfdbfe;
+    background: #f8fafc;
+    color: #1d4ed8;
+  }
+  body.tema-claro .tenant-bank-view-button:hover,
+  body.tema-claro .tenant-bank-icon-button:hover { background: #eff6ff; }
+  .tenant-bank-primary-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 0 .7rem;
+    border-radius: 6px;
+    border: 1px solid #1e40af;
+    background: #1d4ed8;
+    color: #fff;
+    font-size: .72rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .tenant-bank-primary-action:hover { background: #1e40af; }
+  .tenant-bank-actions-cell {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: .4rem;
+  }
+  .tenant-bank-empty { color: #6b7280; font-size: .76rem; }
+  body.tema-claro .tenant-bank-empty { color: #94a3b8; }
+  .tenant-bank-table-container .soft-pill { padding: .18rem .48rem; font-size: .7rem; }
+  .tenant-bank-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 130;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgba(4, 8, 15, .72);
+    backdrop-filter: blur(4px);
+  }
+  .tenant-bank-dialog {
+    position: relative;
+    width: min(94vw, 500px);
+    max-height: min(88vh, 720px);
+    overflow-y: auto;
+    border: 1px solid #33383f;
+    border-radius: 8px;
+    background: #202225;
+    color: #f8fafc;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, .42);
+  }
+  body.tema-claro .tenant-bank-dialog {
+    border-color: #e2e8f0;
+    background: #fff;
+    color: #111827;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, .18);
+  }
+  .tenant-bank-dialog-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.1rem 1.2rem;
+    border-bottom: 1px solid #30343a;
+  }
+  body.tema-claro .tenant-bank-dialog-head { border-bottom-color: #e5e7eb; }
+  .tenant-bank-dialog-title { margin: 0; font-size: 1rem; font-weight: 750; }
+  .tenant-bank-dialog-subtitle { margin-top: .25rem; color: #9ca3af; font-size: .78rem; }
+  body.tema-claro .tenant-bank-dialog-subtitle { color: #64748b; }
+  .tenant-bank-dialog-close {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 6px;
+    color: #9ca3af;
+  }
+  .tenant-bank-dialog-close:hover { background: rgba(148, 163, 184, .12); color: #fff; }
+  body.tema-claro .tenant-bank-dialog-close:hover { color: #111827; }
+  .tenant-bank-dialog-body { padding: 1.2rem; }
+  .tenant-bank-detail-label {
+    margin-bottom: .38rem;
+    color: #9ca3af;
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  body.tema-claro .tenant-bank-detail-label { color: #64748b; }
+  .tenant-bank-copy-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; }
+  .tenant-bank-code {
+    min-width: 0;
+    padding: .72rem .8rem;
+    overflow: hidden;
+    border: 1px solid #363b43;
+    border-radius: 6px;
+    background: #17191c;
+    color: #dbeafe;
+    font: 500 .76rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  body.tema-claro .tenant-bank-code {
+    border-color: #dbe3ed;
+    background: #f8fafc;
+    color: #1e3a5f;
+  }
+  .tenant-bank-copy-button {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    min-height: 40px;
+    padding: 0 .8rem;
+    border-radius: 6px;
+    background: #2563eb;
+    color: #fff;
+    font-size: .74rem;
+    font-weight: 700;
+  }
+  .tenant-bank-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .65rem;
+    margin-top: 1rem;
+  }
+  .tenant-bank-meta-item {
+    min-width: 0;
+    padding: .7rem .75rem;
+    border: 1px solid #30343a;
+    border-radius: 6px;
+  }
+  body.tema-claro .tenant-bank-meta-item { border-color: #e5e7eb; }
+  .tenant-bank-meta-value { margin-top: .18rem; font-size: .78rem; overflow-wrap: anywhere; }
+  .tenant-bank-action-list { display: grid; gap: .55rem; }
+  .tenant-bank-action-list a,
+  .tenant-bank-action-list button {
+    display: flex;
+    width: 100%;
+    min-height: 42px;
+    align-items: center;
+    gap: .7rem;
+    padding: 0 .8rem;
+    border: 1px solid #343942;
+    border-radius: 6px;
+    background: rgba(148, 163, 184, .06);
+    color: #e5e7eb;
+    font-size: .8rem;
+    font-weight: 650;
+    text-align: left;
+  }
+  .tenant-bank-action-list a:hover,
+  .tenant-bank-action-list button:hover { background: rgba(37, 99, 235, .14); }
+  body.tema-claro .tenant-bank-action-list a,
+  body.tema-claro .tenant-bank-action-list button {
+    border-color: #e2e8f0;
+    background: #fff;
+    color: #334155;
+  }
+  body.tema-claro .tenant-bank-action-list a:hover,
+  body.tema-claro .tenant-bank-action-list button:hover { background: #f8fafc; }
+  .tenant-bank-action-list .is-danger { color: #fca5a5; border-color: rgba(239, 68, 68, .30); }
+  body.tema-claro .tenant-bank-action-list .is-danger { color: #dc2626; border-color: #fecaca; }
+  .tenant-bank-warning {
+    margin-bottom: 1rem;
+    padding: .8rem;
+    border: 1px solid rgba(239, 68, 68, .28);
+    border-radius: 6px;
+    background: rgba(239, 68, 68, .08);
+    color: #fecaca;
+    font-size: .78rem;
+    line-height: 1.5;
+  }
+  body.tema-claro .tenant-bank-warning { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+  .tenant-bank-reactivation-note { margin-bottom: .9rem; color: #aab2bf; font-size: .76rem; line-height: 1.5; }
+  body.tema-claro .tenant-bank-reactivation-note { color: #64748b; }
+  .tenant-bank-branch-list { display: grid; gap: .5rem; }
+  .tenant-bank-branch-option { display: grid; grid-template-columns: auto minmax(0,1fr); gap: .7rem; align-items: flex-start; padding: .75rem; border: 1px solid #343942; border-radius: 6px; cursor: pointer; }
+  .tenant-bank-branch-option:hover { border-color: #4b6b9b; background: rgba(59,130,246,.08); }
+  body.tema-claro .tenant-bank-branch-option { border-color: #dbe2ea; }
+  .tenant-bank-branch-name { color: #f3f4f6; font-size: .79rem; font-weight: 700; }
+  .tenant-bank-branch-meta { margin-top: .18rem; color: #929cab; font-size: .68rem; }
+  body.tema-claro .tenant-bank-branch-name { color: #1f2937; }
+  body.tema-claro .tenant-bank-branch-meta { color: #64748b; }
+  .tenant-bank-reactivation-actions { display: flex; justify-content: flex-end; gap: .55rem; margin-top: 1rem; }
+  .tenant-bank-reactivation-actions button { min-height: 38px; padding: 0 .85rem; border-radius: 6px; font-size: .75rem; font-weight: 750; }
+  .tenant-bank-delete-fields { display: grid; gap: .7rem; }
+  .tenant-bank-delete-actions { display: flex; justify-content: flex-end; gap: .55rem; margin-top: 1rem; }
+  .tenant-bank-delete-actions button { min-height: 36px; padding: 0 .9rem; border-radius: 6px; font-size: .76rem; font-weight: 750; }
+  .tenant-bank-delete-cancel { border: 1px solid #3b414a; color: #d1d5db; }
+  .tenant-bank-delete-confirm { background: #dc2626; color: #fff; }
+  body.tema-claro .tenant-bank-delete-cancel { border-color: #cbd5e1; color: #334155; }
+  @media (max-width: 700px) {
+    .tenant-bank-meta-grid { grid-template-columns: 1fr; }
+    .tenant-bank-copy-row { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block table_container_classes %}table-container tenant-bank-table-container rounded-lg overflow-hidden{% endblock %}
 
 {% block list_subtitle %}
-<p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#9ca3af;'">
-  Cada empresa opera em seu PostgreSQL dedicado; as filiais da mesma empresa compartilham esse banco.
+<p class="text-sm mt-1" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">
+  Acompanhe o banco dedicado de cada empresa.
 </p>
 {% endblock %}
 
 {% block list_actions %}
-  <a href="{{ central_url }}" class="btn-secondary">← Voltar à Central</a>
-  <a href="{% url 'core:admin_railway_pool_list' %}" class="btn-secondary">Gestão Railway</a>
-  <a href="{% url 'core:admin_empresa_create' %}" class="btn-primary">+ Nova empresa</a>
+<a href="{% url 'core:admin_central' %}" class="btn-secondary">Central</a>
+<a href="{% url 'core:admin_empresa_list' %}" class="btn-secondary">Empresas</a>
+<a href="{% url 'core:admin_empresa_create' %}" class="btn-primary">+ Nova empresa</a>
 {% endblock %}
 
 {% block list_filters %}
-<div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
-  <div class="card p-4"><div class="text-xs uppercase tracking-wide text-gray-500">Empresas</div><div class="text-2xl font-semibold mt-1">{{ total_empresas }}</div></div>
-  <div class="card p-4"><div class="text-xs uppercase tracking-wide text-gray-500">Bancos cadastrados</div><div class="text-2xl font-semibold mt-1">{{ total_bancos }}</div></div>
-  <div class="card p-4"><div class="text-xs uppercase tracking-wide text-gray-500">Ativos</div><div class="text-2xl font-semibold mt-1 text-green-500">{{ total_ativos }}</div></div>
-  <div class="card p-4"><div class="text-xs uppercase tracking-wide text-gray-500">Com erro</div><div class="text-2xl font-semibold mt-1 {% if total_erros %}text-red-500{% endif %}">{{ total_erros }}</div></div>
-  <div class="card p-4 col-span-2 lg:col-span-1"><div class="text-xs uppercase tracking-wide text-gray-500">Sem banco</div><div class="text-2xl font-semibold mt-1 {% if total_sem_banco %}text-amber-500{% endif %}">{{ total_sem_banco }}</div></div>
-</div>
-
-<form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_1fr_1fr_auto] gap-3">
-  <input type="search" name="q" value="{{ busca }}" placeholder="Empresa, CNPJ, banco ou alias..." class="form-input">
-  <select name="status" class="form-input">
-    <option value="">Todos os estados</option>
-    {% for value, label in status_choices %}<option value="{{ value }}" {% if status_filtro == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-    <option value="sem_banco" {% if status_filtro == 'sem_banco' %}selected{% endif %}>Sem banco cadastrado</option>
-  </select>
-  <select name="pool" class="form-input">
-    <option value="">Todos os projetos</option>
-    {% for pool in pools %}<option value="{{ pool.pk }}" {% if pool_id == pool.pk|stringformat:"s" %}selected{% endif %}>{{ pool.nome }}</option>{% endfor %}
-  </select>
-  <div class="flex gap-2">
+<form method="get" class="card p-4" x-data="{ moreFilters: {% if filtros.cidade or filtros.regime %}true{% else %}false{% endif %} }">
+  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[1.4fr_1fr_1fr_.7fr_auto] gap-3">
+    <input type="text" name="nome" value="{{ filtros.nome }}" placeholder="Empresa ou nome do banco" class="form-input">
+    <input type="text" name="cnpj" value="{{ filtros.cnpj }}" placeholder="CNPJ ou CPF" class="form-input">
+    <select name="banco" class="form-input">
+      <option value="">Todos os bancos</option>
+      {% for value, label in banco_status_filters %}
+        <option value="{{ value }}" {% if filtros.banco == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select name="uf" class="form-input">
+      <option value="">UF</option>
+      {% for value, label in uf_choices %}
+        <option value="{{ value }}" {% if filtros.uf == value %}selected{% endif %}>{{ value }}</option>
+      {% endfor %}
+    </select>
+    <button type="button" class="btn-secondary" @click="moreFilters = !moreFilters" :aria-expanded="moreFilters.toString()">
+      Mais filtros
+    </button>
+  </div>
+  <div x-show="moreFilters" x-cloak class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+    <input type="text" name="cidade" value="{{ filtros.cidade }}" placeholder="Cidade" class="form-input">
+    <select name="regime" class="form-input">
+      <option value="">Todos os regimes</option>
+      {% for value, label in regime_choices %}
+        <option value="{{ value }}" {% if filtros.regime == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="mt-3 flex flex-wrap gap-2">
     <button type="submit" class="btn-primary">Filtrar</button>
-    {% if busca or status_filtro or pool_id %}<a href="{% url 'core:admin_empresa_banco_list' %}" class="btn-secondary">Limpar</a>{% endif %}
+    <input type="hidden" name="ocultar_sem_banco" value="0">
+    <label class="btn-secondary cursor-pointer inline-flex items-center gap-2">
+      <input type="checkbox" name="ocultar_sem_banco" value="1" class="accent-blue-600"
+             {% if ocultar_sem_banco %}checked{% endif %}>
+      Ocultar empresas sem banco
+    </label>
+    {% if tem_filtro %}<a href="{% url 'core:admin_empresa_banco_list' %}" class="btn-secondary">Limpar</a>{% endif %}
   </div>
 </form>
 {% endblock %}
 
 {% block table_head %}
-<th class="px-4 py-3 text-left">Empresa</th>
-<th class="px-4 py-3 text-left">Filiais</th>
-<th class="px-4 py-3 text-left">Banco dedicado</th>
-<th class="px-4 py-3 text-left">Projeto Railway</th>
-<th class="px-4 py-3 text-left">Estado</th>
-<th class="px-4 py-3 text-left">Última verificação</th>
-<th class="px-4 py-3 text-right">Ações</th>
+<th class="text-left">Empresa</th>
+<th class="text-left">CNPJ/CPF</th>
+<th class="text-left">Cidade/UF</th>
+<th class="text-left">Banco</th>
+<th class="text-left">Status</th>
+<th class="text-left">Banco criado em</th>
+<th class="text-right"><span class="sr-only">Ações</span></th>
 {% endblock %}
 
 {% block table_body %}
-{% for empresa in page_obj %}
-  {% with banco=empresa.banco_dedicado %}
-  <tr class="table-row-hover">
-    <td class="px-4 py-3">
-      <div class="font-semibold">{{ empresa.nome_fantasia|default:empresa.razao_social }}</div>
-      <div class="text-xs text-gray-500 mt-1">{{ empresa.cnpj }}</div>
-    </td>
-    <td class="px-4 py-3">
-      <a href="{% url 'core:admin_filial_list' %}?empresa={{ empresa.pk }}" class="font-semibold text-blue-500">{{ empresa.total_filiais }}</a>
-    </td>
-    <td class="px-4 py-3">
+{% for row in page_obj %}
+  {% with empresa=row.empresa banco=row.banco %}
+    <tr class="table-row-hover{% if not empresa.ativo %} is-inactive-row{% endif %}"
+        x-data="{ bankOpen: false, actionsOpen: false, deleteOpen: false, reactivateOpen: false, copied: false }">
+      <td class="tenant-bank-company-cell">
+        <div class="tenant-bank-company-name">{{ empresa.nome_fantasia|default:empresa.razao_social }}</div>
+        {% if empresa.nome_fantasia and empresa.nome_fantasia != empresa.razao_social %}
+          <div class="tenant-bank-company-legal">{{ empresa.razao_social }}</div>
+        {% endif %}
+      </td>
+      <td class="font-mono text-xs tenant-bank-row-cell">{{ empresa.cnpj|cpf_cnpj }}</td>
+      <td class="tenant-bank-row-cell">{% if empresa.cidade %}{{ empresa.cidade }}/{{ empresa.uf }}{% else %}—{% endif %}</td>
+      <td class="tenant-bank-row-cell">
+        {% if banco %}
+          <button type="button" class="tenant-bank-view-button" @click="bankOpen = true" title="Visualizar banco">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
+              <circle cx="12" cy="12" r="2.5"></circle>
+            </svg>
+            Ver banco
+          </button>
+        {% else %}
+          <span class="tenant-bank-empty">Não criado</span>
+        {% endif %}
+      </td>
+      <td class="tenant-bank-row-cell">
+        {% if banco %}
+          {% if banco.status == "ativo" or banco.status == "configurado" %}
+            <span class="soft-pill is-green">{{ banco.get_status_display }}</span>
+          {% elif banco.status == "erro" %}
+            <span class="soft-pill is-red">{{ banco.get_status_display }}</span>
+          {% elif banco.status == "aguardando_configuracao" %}
+            <span class="soft-pill is-amber">{{ banco.get_status_display }}</span>
+          {% else %}
+            <span class="soft-pill no-dot is-slate">{{ banco.get_status_display }}</span>
+          {% endif %}
+        {% else %}
+          <span class="soft-pill no-dot is-slate">Sem banco</span>
+        {% endif %}
+      </td>
+      <td class="tenant-bank-row-cell">
+        {% if banco %}{{ banco.created_at|date:"d/m/Y H:i" }}{% else %}<span class="tenant-bank-empty">—</span>{% endif %}
+      </td>
+      <td>
+        <div class="tenant-bank-actions-cell">
+          {% if banco %}
+            {% if banco.status != "ativo" %}
+              <a href="{% url 'core:admin_empresa_banco_detail' banco.pk %}" class="tenant-bank-primary-action">
+                {% if banco.status == "erro" %}Ver erro{% else %}Continuar{% endif %}
+              </a>
+            {% endif %}
+            <button type="button" class="tenant-bank-icon-button" @click="actionsOpen = true" title="Ações do banco" aria-label="Ações do banco">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="5" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="19" cy="12" r="1.7"></circle>
+              </svg>
+            </button>
+          {% else %}
+            {% if empresa.ativo %}
+              <form method="post" action="{% url 'core:admin_empresa_banco_create' empresa.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="tenant-bank-primary-action">Criar banco</button>
+              </form>
+            {% else %}
+              <button type="button" class="tenant-bank-primary-action" @click="reactivateOpen = true">Recriar banco</button>
+            {% endif %}
+            <a href="{% url 'core:admin_filial_list' %}?empresa={{ empresa.pk }}" class="tenant-bank-icon-button" title="Ver filiais" aria-label="Ver filiais">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <path d="M3 21h18M5 21V7l7-4 7 4v14M9 10h2m2 0h2M9 14h2m2 0h2M9 18h2m2 0h2"></path>
+              </svg>
+            </a>
+          {% endif %}
+        </div>
+
+      {% if not banco and not empresa.ativo %}
+        <div x-show="reactivateOpen" x-cloak x-transition.opacity class="tenant-bank-modal" role="dialog" aria-modal="true"
+             aria-labelledby="reactivate-title-{{ empresa.pk }}" @click.self="reactivateOpen = false" @keydown.escape.window="reactivateOpen = false">
+          <div class="tenant-bank-dialog" @click.stop>
+            <div class="tenant-bank-dialog-head">
+              <div>
+                <h2 id="reactivate-title-{{ empresa.pk }}" class="tenant-bank-dialog-title">Recriar banco e reativar empresa</h2>
+                <p class="tenant-bank-dialog-subtitle">{{ empresa.nome_fantasia|default:empresa.razao_social }}</p>
+              </div>
+              <button type="button" class="tenant-bank-dialog-close" @click="reactivateOpen = false" aria-label="Fechar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+              </button>
+            </div>
+            <div class="tenant-bank-dialog-body">
+              <p class="tenant-bank-reactivation-note">Escolha quais filiais devem voltar a operar. As demais continuarao inativas.</p>
+              <form method="post" action="{% url 'core:admin_empresa_banco_create' empresa.pk %}">
+                {% csrf_token %}
+                <div class="tenant-bank-branch-list">
+                  {% for filial in empresa.filiais.all %}
+                    <label class="tenant-bank-branch-option">
+                      <input type="checkbox" name="filiais_reativar" value="{{ filial.pk }}" class="accent-blue-600" {% if filial.is_matriz %}checked{% endif %}>
+                      <span>
+                        <span class="tenant-bank-branch-name">{{ filial.nome_fantasia|default:filial.razao_social }}</span>
+                        <span class="tenant-bank-branch-meta">{% if filial.is_matriz %}Matriz · {% endif %}{{ filial.cnpj|cpf_cnpj }}{% if filial.cidade %} · {{ filial.cidade }}/{{ filial.uf }}{% endif %}</span>
+                      </span>
+                    </label>
+                  {% empty %}
+                    <div class="tenant-bank-reactivation-note">A unidade matriz sera recriada e ativada quando o banco estiver pronto.</div>
+                  {% endfor %}
+                </div>
+                <div class="tenant-bank-reactivation-actions">
+                  <button type="button" class="tenant-bank-delete-cancel" @click="reactivateOpen = false">Cancelar</button>
+                  <button type="submit" class="tenant-bank-copy-button">Recriar banco</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
       {% if banco %}
-        <div class="font-semibold">{{ banco.nome_banco }}</div>
-        <div class="text-xs font-mono text-gray-500 mt-1">{{ banco.db_alias }}</div>
-      {% else %}<span class="text-amber-500 font-semibold">Não cadastrado</span>{% endif %}
-    </td>
-    <td class="px-4 py-3">
-      {% if banco.railway_project_pool %}
-        <div>{{ banco.railway_project_pool.nome }}</div>
-        <div class="text-xs text-gray-500 mt-1">{{ banco.railway_project_pool.get_connection_mode_display }}</div>
-      {% else %}<span class="text-gray-500">Projeto principal / manual</span>{% endif %}
-    </td>
-    <td class="px-4 py-3">
-      {% if not banco %}<span class="soft-pill no-dot is-amber">Sem banco</span>
-      {% elif banco.status == 'ativo' and banco.ativo %}<span class="soft-pill is-green">Ativo</span>
-      {% elif banco.status == 'erro' %}<span class="soft-pill is-red">Erro</span>
-      {% elif banco.status == 'inativo' or not banco.ativo %}<span class="soft-pill no-dot is-red">Inativo</span>
-      {% else %}<span class="soft-pill no-dot is-amber">{{ banco.get_status_display }}</span>{% endif %}
-    </td>
-    <td class="px-4 py-3 text-sm">
-      {% if banco.ultima_verificacao_em %}{{ banco.ultima_verificacao_em|date:"d/m/Y H:i" }}{% else %}<span class="text-gray-500">Ainda não verificado</span>{% endif %}
-    </td>
-    <td class="px-4 py-3 text-right whitespace-nowrap">
-      {% if banco %}<a href="{% url 'core:admin_empresa_banco_detail' banco.pk %}" class="btn-table btn-table-blue">Detalhes</a>{% endif %}
-      <a href="{% url 'core:admin_empresa_edit' empresa.pk %}" class="btn-table btn-table-blue ml-2">Empresa</a>
-    </td>
-  </tr>
+        <div x-show="bankOpen" x-cloak x-transition.opacity class="tenant-bank-modal" role="dialog" aria-modal="true"
+             aria-labelledby="bank-title-{{ banco.pk }}" @click.self="bankOpen = false" @keydown.escape.window="bankOpen = false">
+          <div class="tenant-bank-dialog" @click.stop>
+            <div class="tenant-bank-dialog-head">
+              <div>
+                <h2 id="bank-title-{{ banco.pk }}" class="tenant-bank-dialog-title">Banco de {{ empresa.nome_fantasia|default:empresa.razao_social }}</h2>
+                <p class="tenant-bank-dialog-subtitle">Identificação técnica do banco dedicado.</p>
+              </div>
+              <button type="button" class="tenant-bank-dialog-close" @click="bankOpen = false" aria-label="Fechar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+              </button>
+            </div>
+            <div class="tenant-bank-dialog-body">
+              <div class="tenant-bank-detail-label">Nome do banco</div>
+              <div class="tenant-bank-copy-row">
+                <input type="text" readonly x-ref="bankName" class="tenant-bank-code w-full"
+                       value="{{ banco.nome_banco }}" title="{{ banco.nome_banco }}" aria-label="Nome do banco">
+                <button type="button" class="tenant-bank-copy-button"
+                        @click="copied = true; setTimeout(() => copied = false, 1600); navigator.clipboard && navigator.clipboard.writeText($refs.bankName.value).catch(() => {})">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  <span x-text="copied ? 'Copiado' : 'Copiar'"></span>
+                </button>
+              </div>
+              <div class="tenant-bank-meta-grid">
+                <div class="tenant-bank-meta-item">
+                  <div class="tenant-bank-detail-label">Status</div>
+                  <div class="tenant-bank-meta-value">{{ banco.get_status_display }}</div>
+                </div>
+                <div class="tenant-bank-meta-item">
+                  <div class="tenant-bank-detail-label">Criado em</div>
+                  <div class="tenant-bank-meta-value">{{ banco.created_at|date:"d/m/Y H:i" }}</div>
+                </div>
+                <div class="tenant-bank-meta-item">
+                  <div class="tenant-bank-detail-label">Última migração</div>
+                  <div class="tenant-bank-meta-value">{{ banco.ultima_migracao_em|date:"d/m/Y H:i"|default:"Não registrada" }}</div>
+                </div>
+                <div class="tenant-bank-meta-item">
+                  <div class="tenant-bank-detail-label">Última verificação</div>
+                  <div class="tenant-bank-meta-value">{{ banco.ultima_verificacao_em|date:"d/m/Y H:i"|default:"Não registrada" }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div x-show="actionsOpen" x-cloak x-transition.opacity class="tenant-bank-modal" role="dialog" aria-modal="true"
+             aria-labelledby="actions-title-{{ banco.pk }}" @click.self="actionsOpen = false" @keydown.escape.window="actionsOpen = false">
+          <div class="tenant-bank-dialog" @click.stop>
+            <div class="tenant-bank-dialog-head">
+              <div>
+                <h2 id="actions-title-{{ banco.pk }}" class="tenant-bank-dialog-title">Ações do banco</h2>
+                <p class="tenant-bank-dialog-subtitle">{{ empresa.nome_fantasia|default:empresa.razao_social }}</p>
+              </div>
+              <button type="button" class="tenant-bank-dialog-close" @click="actionsOpen = false" aria-label="Fechar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+              </button>
+            </div>
+            <div class="tenant-bank-dialog-body tenant-bank-action-list">
+              <a href="{% url 'core:admin_filial_list' %}?empresa={{ empresa.pk }}">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 10h2m2 0h2M9 14h2m2 0h2M9 18h2m2 0h2"></path></svg>
+                Ver filiais
+              </a>
+              {% if banco.status != "ativo" %}
+                <a href="{% url 'core:admin_empresa_banco_detail' banco.pk %}">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a9 9 0 1 0 9 9M12 7v5l3 2"></path></svg>
+                  {% if banco.status == "erro" %}Ver erro e tentar novamente{% else %}Continuar configuração{% endif %}
+                </a>
+              {% endif %}
+              {% if False %}<form method="post" action="{% url 'core:admin_empresa_banco_backup' banco.pk %}">
+                {% csrf_token %}
+                <button type="submit">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"></path></svg>
+                  Gerar backup completo (SQL + CSV)
+                </button>
+              </form>{% endif %}
+              {% if False %}<button type="button" class="is-danger" @click="actionsOpen = false; deleteOpen = true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3m-9 0 1 14h10l1-14M10 11v6m4-6v6"></path></svg>
+                Excluir banco dedicado
+              </button>{% endif %}
+            </div>
+          </div>
+        </div>
+
+        {% if False %}<div x-show="deleteOpen" x-cloak x-transition.opacity class="tenant-bank-modal" role="dialog" aria-modal="true"
+             aria-labelledby="delete-title-{{ banco.pk }}" @click.self="deleteOpen = false" @keydown.escape.window="deleteOpen = false">
+          <div class="tenant-bank-dialog" @click.stop>
+            <div class="tenant-bank-dialog-head">
+              <div>
+                <h2 id="delete-title-{{ banco.pk }}" class="tenant-bank-dialog-title">Excluir banco dedicado</h2>
+                <p class="tenant-bank-dialog-subtitle">Esta ação remove o banco físico e seus dados.</p>
+              </div>
+              <button type="button" class="tenant-bank-dialog-close" @click="deleteOpen = false" aria-label="Fechar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+              </button>
+            </div>
+            <div class="tenant-bank-dialog-body">
+              <div class="tenant-bank-warning">
+                A empresa e as filiais permanecerão cadastradas. O sistema gerará um pacote ZIP com SQL e CSVs antes de remover o banco dedicado.
+              </div>
+              <form method="post" action="{% url 'core:admin_empresa_banco_excluir' banco.pk %}" autocomplete="off">
+                {% csrf_token %}
+                <div class="tenant-bank-delete-fields">
+                  <label class="text-sm">
+                    <span class="block mb-2">Digite <strong>{{ empresa.razao_social }}</strong> para confirmar</span>
+                    <input type="text" name="confirmacao" class="form-input text-sm" autocomplete="off">
+                  </label>
+                  <label class="text-sm">
+                    <span class="block mb-2">Senha master</span>
+                    <input type="password" name="senha_master" class="form-input text-sm" autocomplete="new-password">
+                  </label>
+                </div>
+                <div class="tenant-bank-delete-actions">
+                  <button type="button" class="tenant-bank-delete-cancel" @click="deleteOpen = false">Cancelar</button>
+                  <button type="submit" class="tenant-bank-delete-confirm">Excluir banco dedicado</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>{% endif %}
+      {% endif %}
+      </td>
+    </tr>
   {% endwith %}
 {% empty %}
   <tr><td colspan="7" class="px-4 py-10 text-center text-gray-400">Nenhuma empresa encontrada.</td></tr>
 {% endfor %}
 {% endblock %}
-

@@ -1,67 +1,156 @@
 {% extends "_list_base.html" %}
+{% load erp_extras %}
 
 {% block list_title %}Filiais{% endblock %}
 {% block page_title %}Central Administrativa{% endblock %}
 {% block header_title %}Filiais{% endblock %}
 
+{% block extra_head %}
+{{ block.super }}
+<style>
+  .branch-list-container .overflow-x-auto { overflow-x: auto; }
+  .branch-list-container table { table-layout: fixed; min-width: 940px; }
+  .branch-list-container th,
+  .branch-list-container td { padding: .82rem .72rem; font-size: .78rem; vertical-align: middle; }
+  .branch-list-container th:nth-child(1) { width: 24%; }
+  .branch-list-container th:nth-child(2) { width: 20%; }
+  .branch-list-container th:nth-child(3) { width: 16%; }
+  .branch-list-container th:nth-child(4) { width: 13%; }
+  .branch-list-container th:nth-child(5) { width: 10%; }
+  .branch-list-container th:nth-child(6) { width: 10%; }
+  .branch-list-container th:nth-child(7) { width: 7%; }
+  .branch-name-cell { text-align: left !important; white-space: normal; }
+  .branch-name-primary { color: #f8fafc; font-size: .84rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+  .branch-name-secondary { margin-top: .2rem; color: #8f9bad; font-size: .69rem; line-height: 1.3; overflow-wrap: anywhere; }
+  body.tema-claro .branch-name-primary { color: #111827; }
+  body.tema-claro .branch-name-secondary { color: #64748b; }
+  .branch-cell-nowrap { white-space: nowrap; }
+  .branch-empty { color: #768196; font-size: .72rem; }
+  .branch-actions { display: flex; justify-content: flex-end; align-items: center; }
+  .branch-icon-button {
+    display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center;
+    border: 1px solid rgba(147,197,253,.28); border-radius: 6px;
+    background: rgba(148,163,184,.1); color: #bfdbfe; cursor: pointer;
+  }
+  .branch-icon-button:hover { border-color: rgba(96,165,250,.65); background: rgba(59,130,246,.14); color: #eff6ff; }
+  body.tema-claro .branch-icon-button { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+  .branch-modal {
+    position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 1rem;
+    background: rgba(2,6,23,.72); backdrop-filter: blur(3px);
+  }
+  .branch-dialog { width: min(100%, 520px); max-height: calc(100vh - 2rem); overflow: auto; border: 1px solid #343945; border-radius: 8px; background: #1f2024; box-shadow: 0 24px 70px rgba(0,0,0,.48); }
+  body.tema-claro .branch-dialog { border-color: #dbe2ea; background: #fff; }
+  .branch-dialog-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding: 1rem 1.1rem; border-bottom: 1px solid #30343c; }
+  body.tema-claro .branch-dialog-head { border-color: #e5e7eb; }
+  .branch-dialog-title { color: #f8fafc; font-size: .98rem; font-weight: 750; }
+  .branch-dialog-subtitle { margin-top: .22rem; color: #929cab; font-size: .73rem; }
+  body.tema-claro .branch-dialog-title { color: #111827; }
+  body.tema-claro .branch-dialog-subtitle { color: #64748b; }
+  .branch-dialog-close { display: grid; width: 31px; height: 31px; place-items: center; border-radius: 6px; color: #aab2bf; }
+  .branch-dialog-close:hover { background: rgba(148,163,184,.12); color: #fff; }
+  body.tema-claro .branch-dialog-close:hover { color: #111827; }
+  .branch-dialog-body { display: grid; gap: .45rem; padding: 1.05rem 1.1rem 1.15rem; }
+  .branch-menu-link,
+  .branch-menu-button { display: flex; width: 100%; min-height: 40px; align-items: center; gap: .65rem; padding: 0 .75rem; border: 1px solid #343945; border-radius: 6px; color: #e5e7eb; font-size: .75rem; font-weight: 650; text-align: left; }
+  .branch-menu-link:hover,
+  .branch-menu-button:hover { border-color: #4b6b9b; background: rgba(59,130,246,.1); }
+  .branch-menu-button.is-danger { border-color: rgba(248,113,113,.35); color: #fca5a5; }
+  body.tema-claro .branch-menu-link,
+  body.tema-claro .branch-menu-button { border-color: #dbe2ea; color: #334155; }
+  body.tema-claro .branch-menu-button.is-danger { color: #b91c1c; }
+</style>
+{% endblock %}
+
+{% block table_container_classes %}table-container branch-list-container rounded-lg overflow-hidden{% endblock %}
+
 {% block list_subtitle %}
-<p class="text-sm mt-1" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">{{ total }} unidade{{ total|pluralize }} cadastrada{{ total|pluralize }}.</p>
+<p class="text-sm mt-1" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Cadastre e acompanhe as filiais disponíveis no ambiente.</p>
 {% endblock %}
 
 {% block list_actions %}
-  <a href="{{ central_url }}" class="btn-secondary">← Voltar à Central</a>
-  <a href="{% url 'core:admin_empresa_list' %}" class="btn-secondary">Empresas</a>
-{% if can_manage_structure %}
-  <a href="{% url 'core:admin_filial_create' %}" class="btn-primary">+ Nova filial</a>
-{% endif %}
+{% if can_manage_structure %}<a href="{% url 'core:admin_filial_create' %}" class="btn-primary">+ Nova filial</a>{% endif %}
 {% endblock %}
 
 {% block list_filters %}
-<form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
-  <input type="text" name="q" value="{{ busca }}" placeholder="Razao social, CNPJ ou cidade..." class="form-input md:col-span-2">
-  <select name="empresa" class="form-input">
-    <option value="">Todas as empresas</option>
-    {% for empresa in empresas %}
-      <option value="{{ empresa.pk }}" {% if empresa_id == empresa.pk|stringformat:"s" %}selected{% endif %}>{{ empresa.razao_social }}</option>
-    {% endfor %}
-  </select>
-  <div class="flex gap-2">
+<form method="get" class="card p-4" x-data="{ moreFilters: {% if filtros.cidade or filtros.tipo %}true{% else %}false{% endif %} }">
+  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[1.35fr_1fr_1.15fr_.65fr_auto] gap-3">
+    <input type="text" name="nome" value="{{ filtros.nome }}" placeholder="Nome ou fantasia" class="form-input">
+    <input type="text" name="cnpj" value="{{ filtros.cnpj }}" placeholder="CNPJ ou CPF" class="form-input">
+    <select name="empresa" class="form-input">
+      <option value="">Todas as empresas</option>
+      {% for empresa in empresas %}<option value="{{ empresa.pk }}" {% if filtros.empresa == empresa.pk|stringformat:"s" %}selected{% endif %}>{{ empresa.nome_fantasia|default:empresa.razao_social }}</option>{% endfor %}
+    </select>
+    <select name="uf" class="form-input">
+      <option value="">UF</option>
+      {% for value, label in uf_choices %}<option value="{{ value }}" {% if filtros.uf == value %}selected{% endif %}>{{ value }}</option>{% endfor %}
+    </select>
+    <button type="button" class="btn-secondary" @click="moreFilters = !moreFilters" :aria-expanded="moreFilters.toString()">Mais filtros</button>
+  </div>
+  <div x-show="moreFilters" x-cloak class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+    <input type="text" name="cidade" value="{{ filtros.cidade }}" placeholder="Cidade" class="form-input">
+    <select name="tipo" class="form-input">
+      <option value="">Matrizes e filiais</option>
+      <option value="matriz" {% if filtros.tipo == 'matriz' %}selected{% endif %}>Somente matrizes</option>
+      <option value="filial" {% if filtros.tipo == 'filial' %}selected{% endif %}>Somente filiais</option>
+    </select>
+  </div>
+  <div class="mt-3 flex flex-wrap gap-2">
     <button type="submit" class="btn-primary">Filtrar</button>
-    {% if busca or empresa_id %}<a href="{% url 'core:admin_filial_list' %}" class="btn-secondary">Limpar</a>{% endif %}
+    <input type="hidden" name="ocultar_inativas" value="0">
+    <label class="btn-secondary cursor-pointer inline-flex items-center gap-2">
+      <input type="checkbox" name="ocultar_inativas" value="1" class="accent-blue-600" {% if ocultar_inativas %}checked{% endif %}>
+      Ocultar filiais inativas
+    </label>
+    {% if tem_filtro %}<a href="{% url 'core:admin_filial_list' %}" class="btn-secondary">Limpar</a>{% endif %}
   </div>
 </form>
 {% endblock %}
 
 {% block table_head %}
-<th class="px-4 py-3 text-left">Filial</th>
-<th class="px-4 py-3 text-left">Empresa</th>
-<th class="px-4 py-3 text-left">CNPJ</th>
-<th class="px-4 py-3 text-left">Cidade/UF</th>
-<th class="px-4 py-3 text-left">Tipo</th>
-<th class="px-4 py-3 text-left">Status</th>
-    {% if can_manage_structure %}<th class="px-4 py-3 text-right">Acoes</th>{% endif %}
+<th class="text-left">Filial</th>
+<th class="text-left">Empresa</th>
+<th class="text-left">CNPJ/CPF</th>
+<th class="text-left">Cidade/UF</th>
+<th class="text-left">Tipo</th>
+<th class="text-left">Status</th>
+{% if can_manage_structure %}<th class="text-right"><span class="sr-only">Ações</span></th>{% endif %}
 {% endblock %}
 
 {% block table_body %}
 {% for filial in page_obj %}
-  <tr class="table-row-hover">
-    <td class="px-4 py-3">
-      <div class="font-medium">{{ filial.razao_social }}</div>
-      {% if filial.nome_fantasia %}<div class="text-xs text-gray-400">{{ filial.nome_fantasia }}</div>{% endif %}
+  <tr class="table-row-hover{% if not filial.ativo %} is-inactive-row{% endif %}" x-data="{ actionsOpen: false }">
+    <td class="branch-name-cell">
+      <div class="branch-name-primary">{{ filial.nome_fantasia|default:filial.razao_social }}</div>
+      {% if filial.nome_fantasia and filial.nome_fantasia != filial.razao_social %}<div class="branch-name-secondary">{{ filial.razao_social }}</div>{% endif %}
     </td>
-    <td class="px-4 py-3">{{ filial.empresa.razao_social }}</td>
-    <td class="px-4 py-3 font-mono text-xs">{{ filial.cnpj }}</td>
-    <td class="px-4 py-3">{{ filial.cidade }}/{{ filial.uf }}</td>
-    <td class="px-4 py-3">{% if filial.is_matriz %}<span class="soft-pill no-dot is-amber">Matriz</span>{% else %}<span class="soft-pill no-dot is-blue">Filial</span>{% endif %}</td>
-    <td class="px-4 py-3">{% if filial.ativo %}<span class="soft-pill is-green">Ativa</span>{% else %}<span class="soft-pill is-red">Inativa</span>{% endif %}</td>
+    <td class="branch-name-cell">
+      <div class="branch-name-primary">{{ filial.empresa.nome_fantasia|default:filial.empresa.razao_social }}</div>
+      {% if filial.empresa.nome_fantasia and filial.empresa.nome_fantasia != filial.empresa.razao_social %}<div class="branch-name-secondary">{{ filial.empresa.razao_social }}</div>{% endif %}
+    </td>
+    <td class="font-mono text-xs branch-cell-nowrap">{{ filial.cnpj|cpf_cnpj }}</td>
+    <td class="branch-cell-nowrap">{% if filial.cidade %}{{ filial.cidade }}/{{ filial.uf }}{% else %}<span class="branch-empty">—</span>{% endif %}</td>
+    <td>{% if filial.is_matriz %}<span class="soft-pill no-dot is-amber">Matriz</span>{% else %}<span class="soft-pill no-dot is-blue">Filial</span>{% endif %}</td>
+    <td>{% if filial.ativo %}<span class="soft-pill is-green">Ativa</span>{% else %}<span class="soft-pill no-dot is-slate">Inativa</span>{% endif %}</td>
     {% if can_manage_structure %}
-      <td class="px-4 py-3 text-right whitespace-nowrap">
-        <a href="{% url 'core:admin_filial_edit' filial.pk %}" class="btn-table btn-table-blue">Editar</a>
-        <form method="post" action="{% url 'core:admin_filial_toggle' filial.pk %}" class="inline-block ml-2">
-          {% csrf_token %}
-          <button type="submit" class="btn-table {% if filial.ativo %}btn-table-red{% else %}btn-table-blue{% endif %}">{% if filial.ativo %}Desativar{% else %}Ativar{% endif %}</button>
-        </form>
-      </td>
+    <td>
+      <div class="branch-actions">
+        <button type="button" class="branch-icon-button" @click="actionsOpen = true" title="Ações da filial" aria-label="Ações da filial">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="19" cy="12" r="1.7"></circle></svg>
+        </button>
+      </div>
+      <div x-show="actionsOpen" x-cloak x-transition.opacity class="branch-modal" role="dialog" aria-modal="true" aria-labelledby="branch-actions-title-{{ filial.pk }}" @click.self="actionsOpen = false" @keydown.escape.window="actionsOpen = false">
+        <div class="branch-dialog" @click.stop>
+          <div class="branch-dialog-head">
+            <div><h2 id="branch-actions-title-{{ filial.pk }}" class="branch-dialog-title">Ações da filial</h2><p class="branch-dialog-subtitle">{{ filial.nome_fantasia|default:filial.razao_social }}</p></div>
+            <button type="button" class="branch-dialog-close" @click="actionsOpen = false" aria-label="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18"></path></svg></button>
+          </div>
+          <div class="branch-dialog-body">
+            <a href="{% url 'core:admin_filial_edit' filial.pk %}" class="branch-menu-link">Editar filial</a>
+            <form method="post" action="{% url 'core:admin_filial_toggle' filial.pk %}">{% csrf_token %}<button type="submit" class="branch-menu-button {% if filial.ativo %}is-danger{% endif %}">{% if filial.ativo %}Desativar filial{% else %}Ativar filial{% endif %}</button></form>
+          </div>
+        </div>
+      </div>
+    </td>
     {% endif %}
   </tr>
 {% empty %}

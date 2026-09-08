@@ -21,6 +21,7 @@ from apps.core.forms.admin_forms import (
     UsuarioAdminForm,
 )
 from apps.core.constants.segmentos import SEGMENTOS
+from apps.core.constants.choices import UF
 from apps.core.services.modulos import (
     modulos_de_verticais, modulos_disponiveis, modulos_para_admin,
 )
@@ -28,16 +29,81 @@ from apps.core.models import (
     Empresa, EmpresaBanco, Filial, PerfilAcesso, Permissao, RailwayProjectPool, Usuario,
 )
 from apps.core.services.imagem_filial import preparar_imagem_filial
+from apps.core.services.empresa_banco_service import EmpresaBancoService
 from apps.core.views.audit import core_log_context
 from apps.core.views._admin import admin_area_required, superuser_required
 from apps.produtos.services.replicacao_service import ReplicacaoProdutoService
 
 
-PER_PAGE = 25
+PER_PAGE = 10
+
+BANCO_STATUS_FILTERS = [('sem_banco', 'Sem banco')] + list(EmpresaBanco.Status.choices)
 
 
 def _paginate(request, queryset):
-    return Paginator(queryset, PER_PAGE).get_page(request.GET.get('page', 1))
+    if request.GET.get('all') == '1':
+        per_page = queryset.count() if hasattr(queryset, 'model') else len(queryset)
+    else:
+        per_page = PER_PAGE
+    return Paginator(queryset, per_page or PER_PAGE).get_page(request.GET.get('page', 1))
+
+
+def _page_querystring(request):
+    params = request.GET.copy()
+    params.pop('page', None)
+    params.pop('all', None)
+    return params.urlencode()
+
+
+def _empresa_filtros(request):
+    return {
+        'nome': request.GET.get('nome', '').strip(),
+        'cnpj': request.GET.get('cnpj', '').strip(),
+        'banco': request.GET.get('banco', '').strip(),
+        'cidade': request.GET.get('cidade', '').strip(),
+        'uf': request.GET.get('uf', '').strip().upper(),
+        'regime': request.GET.get('regime', '').strip(),
+    }
+
+
+def _aplicar_empresa_filtros(queryset, filtros):
+    nome = filtros.get('nome')
+    documento = ''.join(ch for ch in filtros.get('cnpj', '') if ch.isdigit())
+    banco = filtros.get('banco')
+    cidade = filtros.get('cidade')
+    uf = filtros.get('uf')
+    regime = filtros.get('regime')
+    if nome:
+        queryset = queryset.filter(
+            Q(razao_social__icontains=nome)
+            | Q(nome_fantasia__icontains=nome)
+            | Q(banco_dedicado__railway_database_service_name__icontains=nome)
+            | Q(banco_dedicado__db_alias__icontains=nome)
+            | Q(banco_dedicado__slug__icontains=nome)
+        )
+    if documento:
+        queryset = queryset.filter(cnpj__icontains=documento)
+    if banco == 'sem_banco':
+        queryset = queryset.filter(banco_dedicado__isnull=True)
+    elif banco in EmpresaBanco.Status.values:
+        queryset = queryset.filter(banco_dedicado__status=banco)
+    if cidade:
+        queryset = queryset.filter(cidade__icontains=cidade)
+    if uf:
+        queryset = queryset.filter(uf=uf)
+    if regime:
+        queryset = queryset.filter(regime_tributario=regime)
+    return queryset
+
+
+def _empresa_filtros_context(filtros):
+    return {
+        'filtros': filtros,
+        'tem_filtro': any(filtros.values()),
+        'banco_status_filters': BANCO_STATUS_FILTERS,
+        'regime_choices': Empresa.RegimeTributario.choices,
+        'uf_choices': UF.choices,
+    }
 
 
 def _toggle(request, model, pk, redirect_name):
@@ -306,47 +372,30 @@ def railway_pool_form(request, pk=None):
 
 @superuser_required
 def empresa_banco_list(request):
-    """Visão operacional dos bancos dedicados, sem expor o Django Admin."""
-    busca = request.GET.get('q', '').strip()
-    status = request.GET.get('status', '').strip()
-    pool_id = request.GET.get('pool', '').strip()
-    queryset = Empresa.objects.select_related(
-        'banco_dedicado',
-        'banco_dedicado__railway_project_pool',
-    ).annotate(total_filiais=Count('filiais', distinct=True)).order_by('razao_social')
-
-    if busca:
-        queryset = queryset.filter(
-            Q(razao_social__icontains=busca)
-            | Q(nome_fantasia__icontains=busca)
-            | Q(cnpj__icontains=busca)
-            | Q(banco_dedicado__db_alias__icontains=busca)
-            | Q(banco_dedicado__railway_database_service_name__icontains=busca)
-        )
-    if status == 'sem_banco':
-        queryset = queryset.filter(banco_dedicado__isnull=True)
-    elif status in EmpresaBanco.Status.values:
-        queryset = queryset.filter(banco_dedicado__status=status)
-    if pool_id.isdigit():
-        queryset = queryset.filter(banco_dedicado__railway_project_pool_id=int(pool_id))
-
-    bancos = EmpresaBanco.objects.all()
-    total_empresas = Empresa.objects.count()
-    return render(request, 'core/admin/empresa_banco_list.html', {
-        'page_obj': _paginate(request, queryset),
-        'busca': busca,
-        'status_filtro': status,
-        'pool_id': pool_id,
-        'status_choices': EmpresaBanco.Status.choices,
-        'pools': RailwayProjectPool.objects.order_by('prioridade', 'nome'),
-        'total_empresas': total_empresas,
-        'total_bancos': bancos.count(),
-        'total_ativos': bancos.filter(status=EmpresaBanco.Status.ATIVO, ativo=True).count(),
-        'total_erros': bancos.filter(status=EmpresaBanco.Status.ERRO).count(),
-        'total_sem_banco': total_empresas - bancos.count(),
-        'page_title': 'Bancos das empresas',
+    filtros = _empresa_filtros(request)
+    ocultar_sem_banco = request.GET.get('ocultar_sem_banco', '1') != '0'
+    if filtros.get('banco') == 'sem_banco':
+        ocultar_sem_banco = False
+    empresas = _aplicar_empresa_filtros(
+        Empresa.objects.select_related(
+            'banco_dedicado', 'banco_dedicado__railway_project_pool',
+        ).prefetch_related('filiais').order_by('id'),
+        filtros,
+    )
+    if ocultar_sem_banco:
+        empresas = empresas.filter(banco_dedicado__isnull=False)
+    bancos = {banco.empresa_id: banco for banco in EmpresaBanco.objects.select_related('empresa')}
+    rows = [{'empresa': empresa, 'banco': bancos.get(empresa.pk)} for empresa in empresas]
+    context = {
+        'page_obj': _paginate(request, rows),
+        'total': len(rows),
         'central_url': reverse('core:admin_central'),
-    })
+        'ocultar_sem_banco': ocultar_sem_banco,
+        'page_title': 'Bancos das empresas',
+        'page_querystring': _page_querystring(request),
+    }
+    context.update(_empresa_filtros_context(filtros))
+    return render(request, 'core/admin/empresa_banco_list.html', context)
 
 
 @superuser_required
@@ -361,6 +410,23 @@ def empresa_banco_detail(request, pk):
         'page_title': 'Banco da empresa',
         'central_url': reverse('core:admin_central'),
     })
+
+
+@superuser_required
+@require_POST
+def empresa_banco_create(request, empresa_id):
+    """Registra o banco e leva o administrador ao fluxo seguro de detalhes.
+
+    O provisionamento físico continua sob controle da Gestão Railway, que
+    escolhe o projeto com capacidade antes de criar qualquer volume.
+    """
+    empresa = get_object_or_404(Empresa, pk=empresa_id)
+    banco, created = EmpresaBancoService.ensure_for_empresa(empresa)
+    if created:
+        messages.success(request, f'Banco dedicado preparado para {empresa}.')
+    else:
+        messages.info(request, f'{empresa} já possui banco dedicado registrado.')
+    return redirect('core:admin_empresa_banco_detail', pk=banco.pk)
 
 
 @superuser_required
@@ -529,22 +595,36 @@ def modulos_update(request, filial_id):
 
 @superuser_required
 def empresa_list(request):
-    busca = request.GET.get('q', '').strip()
-    queryset = Empresa.objects.order_by('razao_social')
-    if busca:
-        queryset = queryset.filter(
-            Q(razao_social__icontains=busca)
-            | Q(nome_fantasia__icontains=busca)
-            | Q(cnpj__icontains=busca)
+    filtros = _empresa_filtros(request)
+    ocultar_inativas = request.GET.get('ocultar_inativas', '1') != '0'
+    queryset = _aplicar_empresa_filtros(
+        Empresa.objects.select_related('banco_dedicado').order_by('id'), filtros,
+    )
+    if ocultar_inativas:
+        queryset = queryset.filter(ativo=True)
+    total = queryset.count()
+    page_obj = _paginate(request, queryset)
+    bancos = {
+        banco.empresa_id: banco
+        for banco in EmpresaBanco.objects.filter(
+            empresa_id__in=[empresa.pk for empresa in page_obj.object_list]
         )
-    return render(request, 'core/admin/empresa_list.html', {
-        'page_obj': _paginate(request, queryset),
-        'busca': busca,
-        'total': queryset.count(),
+    }
+    page_obj.object_list = [
+        {'empresa': empresa, 'banco': bancos.get(empresa.pk)}
+        for empresa in page_obj.object_list
+    ]
+    context = {
+        'page_obj': page_obj,
+        'total': total,
+        'page_querystring': _page_querystring(request),
         'can_manage_structure': True,
         'central_url': reverse('core:admin_central'),
         'page_title': 'Central Administrativa',
-    })
+        'ocultar_inativas': ocultar_inativas,
+    }
+    context.update(_empresa_filtros_context(filtros))
+    return render(request, 'core/admin/empresa_list.html', context)
 
 
 @superuser_required
@@ -580,28 +660,54 @@ def empresa_toggle(request, pk):
 
 @superuser_required
 def filial_list(request):
-    busca = request.GET.get('q', '').strip()
-    empresa_id = request.GET.get('empresa', '').strip()
-    queryset = _filiais_scope(request.user).select_related('empresa').order_by(
-        'empresa__razao_social',
-        'razao_social',
-    )
-    if busca:
+    filtros = {
+        'nome': request.GET.get('nome', '').strip(),
+        'cnpj': request.GET.get('cnpj', '').strip(),
+        'empresa': request.GET.get('empresa', '').strip(),
+        'cidade': request.GET.get('cidade', '').strip(),
+        'uf': request.GET.get('uf', '').strip().upper(),
+        'tipo': request.GET.get('tipo', '').strip(),
+    }
+    busca_legada = request.GET.get('q', '').strip()
+    ocultar_inativas = request.GET.get('ocultar_inativas', '1') != '0'
+    queryset = _filiais_scope(request.user).select_related('empresa').order_by('id')
+    if filtros['nome']:
         queryset = queryset.filter(
-            Q(razao_social__icontains=busca)
-            | Q(nome_fantasia__icontains=busca)
-            | Q(cnpj__icontains=busca)
-            | Q(cidade__icontains=busca)
+            Q(razao_social__icontains=filtros['nome'])
+            | Q(nome_fantasia__icontains=filtros['nome'])
         )
-    if empresa_id.isdigit():
-        queryset = queryset.filter(empresa_id=int(empresa_id))
+    elif busca_legada:
+        queryset = queryset.filter(
+            Q(razao_social__icontains=busca_legada)
+            | Q(nome_fantasia__icontains=busca_legada)
+            | Q(cnpj__icontains=busca_legada)
+            | Q(cidade__icontains=busca_legada)
+        )
+    documento = ''.join(ch for ch in filtros['cnpj'] if ch.isdigit())
+    if documento:
+        queryset = queryset.filter(cnpj__icontains=documento)
+    if filtros['empresa'].isdigit():
+        queryset = queryset.filter(empresa_id=int(filtros['empresa']))
+    if filtros['cidade']:
+        queryset = queryset.filter(cidade__icontains=filtros['cidade'])
+    if filtros['uf']:
+        queryset = queryset.filter(uf=filtros['uf'])
+    if filtros['tipo'] == 'matriz':
+        queryset = queryset.filter(is_matriz=True)
+    elif filtros['tipo'] == 'filial':
+        queryset = queryset.filter(is_matriz=False)
+    if ocultar_inativas:
+        queryset = queryset.filter(ativo=True)
 
     return render(request, 'core/admin/filial_list.html', {
         'page_obj': _paginate(request, queryset),
-        'busca': busca,
-        'empresa_id': empresa_id,
-        'empresas': Empresa.objects.order_by('razao_social'),
+        'filtros': filtros,
+        'ocultar_inativas': ocultar_inativas,
+        'tem_filtro': bool(busca_legada or any(filtros.values())),
+        'empresas': Empresa.objects.order_by('id'),
+        'uf_choices': UF.choices,
         'total': queryset.count(),
+        'page_querystring': _page_querystring(request),
         'can_manage_structure': True,
         'central_url': reverse('core:admin_central'),
         'page_title': 'Central Administrativa',

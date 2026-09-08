@@ -437,7 +437,7 @@ Admin. A Central Administrativa passou a organizar quatro áreas próprias:
 
 Rotas principais:
 
-- `/gestao/central/bancos-empresas/`;
+- `/gestao/empresas/bancos/`;
 - `/gestao/central/gestao-railway/`;
 - `/gestao/empresas/`;
 - `/gestao/filiais/`.
@@ -445,6 +445,25 @@ Rotas principais:
 A URL antiga `/gestao/central/projetos-bancos/` apenas redireciona para Gestão
 Railway para preservar favoritos. O Django Admin continua disponível como
 ferramenta de emergência técnica, mas não é o fluxo normal da Central.
+
+## Portabilidade das telas do Dev Edu (08/09/2026)
+
+- Referência confirmada em produção: projeto Railway **Dev Edu**, serviço
+  **iTed**, repositório `epalhetta/ited`, commit
+  `5c04503ebfde1ded819140a2f97650c99d9fbaeb`.
+- As telas de **Empresas**, **Filiais** e **Bancos das empresas** foram portadas
+  desse commit para manter o visual, filtros, paginação, modais de consulta e
+  menus compactos usados em `ited2.up.railway.app`.
+- A URL canônica dos bancos é `/gestao/empresas/bancos/`. A URL anterior
+  `/gestao/central/bancos-empresas/` redireciona para ela.
+- O backend mais novo de `RailwayProjectPool` e o provisionamento multiprojeto
+  foram preservados. Não substituir esses serviços pelos arquivos antigos do
+  Dev Edu, pois isso removeria a seleção automática de projetos e o TCP Proxy
+  usado pelos bancos hospedados fora do projeto principal.
+- A operação destrutiva **Separar filial** e os comandos de exclusão/backup
+  físico do banco não devem ser habilitados apenas copiando HTML. No Dev Edu,
+  dependem de um modelo e de um orquestrador antigo extenso; precisam de uma
+  adaptação e auditoria próprias antes de voltarem a aparecer em produção.
 
 ## Pendências e melhorias futuras
 

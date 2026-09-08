@@ -24,7 +24,7 @@ class CentralAdminTemplateTests(SimpleTestCase):
             self.assertIn(label, self.source)
         self.assertEqual(
             reverse('core:admin_empresa_banco_list'),
-            '/gestao/central/bancos-empresas/',
+            '/gestao/empresas/bancos/',
         )
         self.assertNotIn("admin:core_empresabanco_changelist", self.source)
 
