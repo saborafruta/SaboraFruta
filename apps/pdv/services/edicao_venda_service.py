@@ -11,12 +11,12 @@ from __future__ import annotations
 
 import logging
 
-from django.db import transaction
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
 from apps.core.services.exceptions import DadosInvalidosError
+from apps.core.tenant_context import tenant_atomic
 from apps.estoque.models import MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.financeiro.constants.enums import StatusContaReceber, StatusDocumentoFiscal
@@ -67,7 +67,7 @@ def validar_venda_editavel(venda: VendaPDV) -> None:
         )
 
 
-@transaction.atomic
+@tenant_atomic
 def estornar_venda_para_edicao(venda: VendaPDV, usuario, *, justificativa=None) -> None:
     """
     Reverte por completo uma venda (estoque + conta a receber vinculada)

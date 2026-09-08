@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import logging
 
-from django.db import transaction
 from django.db.models import Case, IntegerField, Value, When
 from django.utils import timezone
 
 from apps.core.services.exceptions import DadosInvalidosError
+from apps.core.tenant_context import tenant_atomic
 from apps.financeiro.constants.enums import StatusDocumentoFiscal
 from apps.financeiro.models.fiscal import DocumentoFiscal
 from apps.fiscal.integrations.focusnfe import FocusNFeClient
@@ -49,7 +49,7 @@ def _focus_service_para_filial(filial) -> FocusNFeService:
     return FocusNFeService(client=FocusNFeClient(config=config))
 
 
-@transaction.atomic
+@tenant_atomic
 def cancelar_venda_e_documento(venda, usuario, justificativa: str, *, autorizado_por=None):
     justificativa = (justificativa or "").strip()
     if len(justificativa) < 5:

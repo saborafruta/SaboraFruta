@@ -1,4 +1,3 @@
-from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
@@ -6,6 +5,7 @@ from django.views.decorators.debug import sensitive_variables
 from apps.core.models import Usuario
 from apps.core.services.auth_service import AuthService
 from apps.core.services.exceptions import DadosInvalidosError
+from apps.core.tenant_context import tenant_atomic
 
 
 @sensitive_variables('senha')
@@ -13,7 +13,7 @@ def validar_administrador(request, email, senha):
     """Autoriza uma operação sem trocar o usuário da sessão do operador."""
     autorizado = None
     if isinstance(email, str) and isinstance(senha, str) and email.strip() and senha:
-        with transaction.atomic():
+        with tenant_atomic():
             admin = Usuario.objects.select_for_update().filter(
                 Q(empresa_id=request.filial_ativa.empresa_id) | Q(is_superuser=True),
                 email__iexact=email.strip(), ativo=True,

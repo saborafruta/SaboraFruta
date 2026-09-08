@@ -6,13 +6,13 @@ invalida o documento público, assim como a retomada da venda para edição.
 """
 import secrets
 
-from django.db import transaction
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.core.services.permissions import requer_permissao
+from apps.core.tenant_context import tenant_atomic
 from apps.pdv.models import VendaPDV
 from apps.pdv.services.comprovante_service import dados_comprovante, gerar_pdf
 
@@ -27,7 +27,7 @@ def privado(response):
 @requer_permissao('pdv', 'ver')
 @require_POST
 def criar_link(request, pk):
-    with transaction.atomic():
+    with tenant_atomic():
         venda = get_object_or_404(
             VendaPDV.objects.for_filial(request.filial_ativa).select_for_update(),
             pk=pk, status='finalizada',

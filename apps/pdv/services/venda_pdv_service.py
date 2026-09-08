@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.db import transaction
 from django.utils import timezone
 
 from apps.cadastros.models import Cliente
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
+from apps.core.tenant_context import tenant_atomic
 from apps.estoque.models import MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.financeiro.constants.enums import StatusContaReceber, TipoFormaPagamento
@@ -28,7 +28,7 @@ class VendaPDVService:
     UNIT = Decimal("0.0001")
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def finalizar_venda(
         cls,
         *,

@@ -23,9 +23,9 @@ from typing import Any, Dict, Optional
 
 from zoneinfo import ZoneInfo
 
-from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.fiscal.services.ibpt_service import obter_aliquota_ibpt
 
@@ -965,7 +965,7 @@ class NfePayloadBuilder:
         return payload
 
 
-@transaction.atomic
+@tenant_atomic
 def emitir_nfce_para_venda(
     venda: VendaPDV, usuario, *, contingencia: bool = False,
     informacoes_adicionais: str = "",
@@ -1070,7 +1070,7 @@ def emitir_nfce_para_venda(
     return documento
 
 
-@transaction.atomic
+@tenant_atomic
 def emitir_nfe_para_venda(venda: VendaPDV, usuario, *, informacoes_adicionais: str = "") -> DocumentoFiscal:
     """
     Wrapper de alto nível: constrói payload NF-e, cria DocumentoFiscal e dispara emissão.

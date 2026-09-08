@@ -3,7 +3,6 @@ import json
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
-from django.db import transaction
 from django.db.models import Max, Q, Sum
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
@@ -15,6 +14,7 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 
 from apps.cadastros.models import Cliente
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.permissions import requer_permissao
 from apps.core.services.search import (
     filter_queryset_by_terms,
@@ -1185,7 +1185,7 @@ def api_venda_finalizar(request):
     comanda_id = body.get("comanda_id")
 
     try:
-        with transaction.atomic():
+        with tenant_atomic():
             if venda_edicao_origem:
                 estornar_venda_para_edicao(venda_edicao_origem, request.user)
             venda = VendaPDVService.finalizar_venda(
@@ -1277,7 +1277,7 @@ def api_venda_finalizar_forcado(request):
     comanda_id = body.get("comanda_id")
 
     try:
-        with transaction.atomic():
+        with tenant_atomic():
             if venda_edicao_origem:
                 estornar_venda_para_edicao(venda_edicao_origem, request.user)
             venda = VendaPDVService.finalizar_venda(
@@ -1381,7 +1381,7 @@ def api_venda_pendente(request):
     viagem_id = body.get("viagem_id")
 
     try:
-        with transaction.atomic():
+        with tenant_atomic():
             numero = _proximo_numero_venda(request.filial_ativa)
 
             venda = VendaPDV.objects.create(
@@ -1467,7 +1467,7 @@ def api_pre_venda_criar(request):
         return JsonResponse({"erro": "Selecione o cliente da pré-venda."}, status=400)
 
     try:
-        with transaction.atomic():
+        with tenant_atomic():
             numero = _proximo_numero_venda(request.filial_ativa)
             venda = VendaPDV.objects.create(
                 sessao_pdv=None,
@@ -1938,7 +1938,7 @@ def api_cliente_criar(request):
     cpf_cnpj = (body.get("cpf_cnpj") or "").replace(".", "").replace("-", "").replace("/", "").strip()
 
     try:
-        with transaction.atomic():
+        with tenant_atomic():
             cliente = Cliente.objects.create(
                 filial=request.filial_ativa,
                 tipo_pessoa=tipo_pessoa,
@@ -2009,7 +2009,7 @@ def api_venda_orcamento(request):
     endereco_entrega = body.get("endereco_entrega", {})
 
     try:
-        with transaction.atomic():
+        with tenant_atomic():
             numero = _proximo_numero_venda(request.filial_ativa)
 
             venda = VendaPDV.objects.create(
@@ -2281,7 +2281,7 @@ def api_caixa_fechar(request):
     esperado = Decimal(str(resumo["caixa"]["esperado_dinheiro"]))
     diferenca = valor_contado - esperado
 
-    with transaction.atomic():
+    with tenant_atomic():
         sessao.status = "fechado"
         sessao.data_fechamento = timezone.now()
         sessao.valor_fechamento_informado = valor_contado
@@ -2341,7 +2341,7 @@ def api_caixa_movimentacao(request):
     if valor <= 0:
         return JsonResponse({"erro": "O valor deve ser maior que zero."}, status=400)
 
-    with transaction.atomic():
+    with tenant_atomic():
         MovimentacaoCaixa.objects.create(
             sessao_pdv=sessao,
             filial=request.filial_ativa,
