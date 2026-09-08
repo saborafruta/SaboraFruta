@@ -2,16 +2,18 @@ from django.db import migrations
 from django.db.models import F
 
 
-def normalizar_entradas_manuais(apps, schema_editor):
+def reaplicar_data_entradas_manuais(apps, schema_editor):
     ExtratoBancario = apps.get_model('financeiro', 'ExtratoBancario')
     ContaPagar = apps.get_model('financeiro', 'ContaPagar')
     PagamentoContaPagar = apps.get_model('financeiro', 'PagamentoContaPagar')
     banco = schema_editor.connection.alias
 
     entradas = list(
-        ExtratoBancario.objects.using(banco).filter(origem='manual', valor__gt=0)
-        .exclude(data_credito=F('data_lancamento'))
-        .values_list('pk', 'data_lancamento')
+        ExtratoBancario.objects.using(banco).filter(
+            origem='manual', valor__gt=0,
+        ).exclude(
+            data_credito=F('data_lancamento'),
+        ).values_list('pk', 'data_lancamento')
     )
     for movimento_id, data_lancamento in entradas:
         contas_taxa = ContaPagar.objects.using(banco).filter(
@@ -20,9 +22,7 @@ def normalizar_entradas_manuais(apps, schema_editor):
         )
         PagamentoContaPagar.objects.using(banco).filter(
             conta_pagar__in=contas_taxa,
-        ).update(
-            data_pagamento=data_lancamento,
-        )
+        ).update(data_pagamento=data_lancamento)
         contas_taxa.update(
             data_emissao=data_lancamento,
             data_vencimento=data_lancamento,
@@ -39,8 +39,11 @@ def normalizar_entradas_manuais(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-    dependencies = [('financeiro', '0065_classificar_vendas_e_marcar_pdv_entregue')]
+    dependencies = [('financeiro', '0066_normalizar_data_entradas_manuais')]
 
     operations = [
-        migrations.RunPython(normalizar_entradas_manuais, migrations.RunPython.noop),
+        migrations.RunPython(
+            reaplicar_data_entradas_manuais,
+            migrations.RunPython.noop,
+        ),
     ]
