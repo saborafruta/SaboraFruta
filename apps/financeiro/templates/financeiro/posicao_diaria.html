@@ -160,6 +160,7 @@
   .pc-fee-grid { display:grid; grid-template-columns:minmax(0,1fr) 108px 108px 108px; gap:16px; align-items:center; }
   .pc-fee-table-head { padding:.55rem 1.25rem; border-bottom:1px solid #e2e8f0; color:#64748b; font-size:10px; font-weight:800; text-transform:uppercase; }
   .pc-fee-transaction { padding:1rem 1.25rem; border-bottom:1px solid #e2e8f0; }
+  .pc-fee-transaction.pc-fee-transfer { background:#fffbeb; box-shadow:inset 4px 0 0 #f59e0b; }
   .pc-fee-transaction:last-child { border-bottom:0; }
   .pc-fee-main strong { display:block; font-size:14px; }
   .pc-fee-main span { display:block; margin-top:.2rem; color:#64748b; font-size:11px; }
@@ -185,6 +186,7 @@
   .tema-escuro .pc-fee-close:hover { background:#27272a; color:#fff; }
   .tema-escuro .pc-fee-totals { border-color:#3f3f46; background:#202024; }
   .tema-escuro .pc-fee-total + .pc-fee-total, .tema-escuro .pc-fee-table-head, .tema-escuro .pc-fee-transaction { border-color:#3f3f46; }
+  .tema-escuro .pc-fee-transaction.pc-fee-transfer { background:#2b2112; }
   .pc-month-strip { scrollbar-width:thin; scrollbar-color:#94a3b8 transparent; }
   .pc-day-today { border-color:#3b82f6; background:#eff6ff; color:#1d4ed8; box-shadow:0 0 0 2px #bfdbfe; }
   .tema-escuro .pc-day-today { background:rgba(30,58,138,.34); color:#dbeafe; box-shadow:0 0 0 2px #1d4ed8; }
@@ -232,26 +234,38 @@
   saidasExpandidas:false,
   taxasModal: {{ abrir_taxas_modal|yesno:'true,false' }},
   taxaTransferenciaModal: false,
-  taxaTransferencia: {id:'', descricao:'', bruto:'0.00', taxa:'0.00', liquido:'0.00'},
+  taxaTransferencia: {id:'', origem:'', descricao:'', bruto:'0.00', taxa:'0.00', liquido:'0.00', somarTaxa:false},
   abrirTaxaTransferencia(elemento) {
+    const bruto = String(elemento.dataset.bruto || '0').replace(',', '.');
+    const taxa = String(elemento.dataset.taxa || '0').replace(',', '.');
+    const somarTaxa = elemento.dataset.somarTaxa === '1';
     this.taxaTransferencia = {
       id: elemento.dataset.movimentoId || '',
+      origem: elemento.dataset.origem || '',
       descricao: elemento.dataset.descricao || 'Transferência entre contas',
-      bruto: String(elemento.dataset.bruto || '0').replace(',', '.'),
-      taxa: String(elemento.dataset.taxa || '0').replace(',', '.'),
-      liquido: String(elemento.dataset.liquido || '0').replace(',', '.')
+      bruto: bruto,
+      taxa: taxa,
+      liquido: somarTaxa
+        ? (Number(bruto || 0) + Number(taxa || 0)).toFixed(2)
+        : String(elemento.dataset.liquido || '0').replace(',', '.'),
+      somarTaxa: somarTaxa
     };
+    this.taxasModal = false;
     this.taxaTransferenciaModal = true;
   },
   recalcularLiquidoTransferencia() {
     const bruto = Number(this.taxaTransferencia.bruto || 0);
     const taxa = Number(this.taxaTransferencia.taxa || 0);
-    this.taxaTransferencia.liquido = Math.max(0, bruto - taxa).toFixed(2);
+    this.taxaTransferencia.liquido = Math.max(
+      0, this.taxaTransferencia.somarTaxa ? bruto + taxa : bruto - taxa
+    ).toFixed(2);
   },
   recalcularTaxaTransferencia() {
     const bruto = Number(this.taxaTransferencia.bruto || 0);
     const liquido = Number(this.taxaTransferencia.liquido || 0);
-    this.taxaTransferencia.taxa = Math.max(0, bruto - liquido).toFixed(2);
+    this.taxaTransferencia.taxa = Math.max(
+      0, this.taxaTransferencia.somarTaxa ? liquido - bruto : bruto - liquido
+    ).toFixed(2);
   },
   relatoriosModal: false,
   relatorioPeriodo: 'hoje',
@@ -835,12 +849,15 @@
         <div class="pc-fee-total"><span>Total de taxas</span><strong class="pc-sensitive text-rose-600">R$ {{ posicao.total_taxas_transacoes|floatformat:2 }}</strong></div>
       </div>
       <div class="max-h-[62vh] overflow-auto">
+        {% if posicao.detalhes_taxas_transferencias %}
+          <div class="flex items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-5 py-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"><div><strong class="block text-sm">Taxas de transferências</strong><span>Despesas separadas e editáveis por transação.</span></div><span class="rounded-full border border-amber-400 px-2 py-1 font-bold">{{ posicao.detalhes_taxas_transferencias|length }}</span></div>
+        {% endif %}
         <div class="pc-fee-grid pc-fee-table-head"><span>Transação</span><span class="text-right">Valor principal</span><span class="text-right">Taxa</span><span class="text-right">Valor líquido</span></div>
         {% for mov in posicao.detalhes_taxas %}
-          <div class="pc-fee-grid pc-fee-transaction">
-            <div class="pc-fee-main"><strong>{{ mov.descricao }}</strong><span>{{ mov.data|date:'d/m/Y' }} às {{ mov.hora }} · {{ mov.forma_pagamento }}{% if mov.bandeira %} · {{ mov.bandeira|title }}{% endif %}{% if mov.numero_parcelas %} · {{ mov.numero_parcelas }}x{% endif %} · {{ mov.conta.descricao|default:mov.conta.banco_nome|default:"Conta não definida" }}</span>{% if mov.transferencia and user_is_admin %}<button type="button" class="btn-secondary mt-2 px-2 py-1 text-[11px]" data-movimento-id="{{ mov.registro_id }}" data-descricao="{{ mov.descricao|escape }}" data-bruto="{{ mov.valor_bruto|stringformat:'s' }}" data-taxa="{{ mov.valor_taxa|stringformat:'s' }}" data-liquido="{{ mov.valor_final_taxa|stringformat:'s' }}" @click="abrirTaxaTransferencia($el)">Editar despesa da taxa</button>{% endif %}</div>
+          <div class="pc-fee-grid pc-fee-transaction{% if mov.transferencia %} pc-fee-transfer{% endif %}">
+            <div class="pc-fee-main"><strong>{{ mov.descricao }}</strong>{% if mov.transferencia %}<span class="mt-1 inline-flex rounded border border-amber-400 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-700 dark:text-amber-300">Transferência · despesa separada</span>{% endif %}<span>{{ mov.data|date:'d/m/Y' }} às {{ mov.hora }} · {{ mov.forma_pagamento }}{% if mov.bandeira %} · {{ mov.bandeira|title }}{% endif %}{% if mov.numero_parcelas %} · {{ mov.numero_parcelas }}x{% endif %} · {{ mov.conta.descricao|default:mov.conta.banco_nome|default:"Conta não definida" }}</span></div>
             <div class="pc-fee-number"><span>{% if mov.taxa_em_pagamento %}Principal{% else %}Bruto{% endif %}</span><strong class="pc-sensitive">R$ {{ mov.valor_bruto|floatformat:2 }}</strong></div>
-            <div class="pc-fee-number"><span>Taxa</span><strong class="pc-sensitive text-rose-600">R$ {{ mov.valor_taxa|floatformat:2 }}</strong><small>{{ mov.taxa_percentual|floatformat:2 }}%{% if mov.taxa_fixa > 0 %} + R$ {{ mov.taxa_fixa|floatformat:2 }}{% endif %}</small></div>
+            <div class="pc-fee-number"><span>Taxa</span><strong class="pc-sensitive text-rose-600">R$ {{ mov.valor_taxa|floatformat:2 }}</strong><small>{{ mov.taxa_percentual|floatformat:2 }}%{% if mov.taxa_fixa > 0 %} + R$ {{ mov.taxa_fixa|floatformat:2 }}{% endif %}</small>{% if user_is_admin %}<button type="button" class="btn-primary mt-2 px-2 py-1 text-[11px]" data-movimento-id="{{ mov.taxa_registro_id|default:mov.registro_id }}" data-origem="{{ mov.origem_codigo }}" data-descricao="{{ mov.descricao|escape }}" data-bruto="{{ mov.valor_bruto|stringformat:'s' }}" data-taxa="{{ mov.valor_taxa|stringformat:'s' }}" data-liquido="{{ mov.valor_final_taxa|stringformat:'s' }}" data-somar-taxa="{% if mov.taxa_em_pagamento %}1{% else %}0{% endif %}" @click="abrirTaxaTransferencia($el)">Editar taxa</button>{% endif %}</div>
             <div class="pc-fee-number"><span>{% if mov.taxa_em_pagamento %}Pago{% else %}Líquido{% endif %}</span><strong class="pc-sensitive text-emerald-600">R$ {{ mov.valor_final_taxa|floatformat:2 }}</strong>{% if not mov.taxa_descontada and not mov.taxa_em_pagamento %}<small class="pc-fee-informative">Informativa</small>{% endif %}</div>
           </div>
         {% empty %}
@@ -850,25 +867,26 @@
     </div>
   </div></template>
 
-  <template x-teleport="body"><div x-show="taxaTransferenciaModal" x-cloak class="fixed inset-0 z-[210] flex items-center justify-center overflow-y-auto p-3 sm:p-6" style="background:rgba(15,23,42,.86);backdrop-filter:blur(10px)" @keydown.escape.window="taxaTransferenciaModal=false" @click.self="taxaTransferenciaModal=false" role="dialog" aria-modal="true" aria-label="Editar taxa da transferência">
+  <template x-teleport="body"><div x-show="taxaTransferenciaModal" x-cloak class="fixed inset-0 flex items-center justify-center overflow-y-auto p-3 sm:p-6" style="z-index:260;background:rgba(15,23,42,.90);backdrop-filter:blur(10px)" @keydown.escape.window="taxaTransferenciaModal=false" @click.self="taxaTransferenciaModal=false" role="dialog" aria-modal="true" aria-label="Editar taxa da transação">
     <div class="card my-auto w-full max-w-lg p-5" @click.stop>
       <div class="flex items-start justify-between gap-3">
-        <div><span class="text-[11px] font-bold uppercase text-rose-500">Despesa separada da transferência</span><h3 class="mt-1 text-lg font-semibold">Editar taxa desta transação</h3><p class="mt-1 text-xs text-gray-500" x-text="taxaTransferencia.descricao"></p></div>
+        <div><span class="text-[11px] font-bold uppercase text-rose-500">Despesa separada da transação</span><h3 class="mt-1 text-lg font-semibold">Editar taxa desta transação</h3><p class="mt-1 text-xs text-gray-500" x-text="taxaTransferencia.descricao"></p></div>
         <button type="button" class="btn-secondary px-3" @click="taxaTransferenciaModal=false" aria-label="Fechar">×</button>
       </div>
       <form method="post" class="mt-5 space-y-4">
         {% csrf_token %}
-        <input type="hidden" name="acao" value="editar_taxa_transferencia">
+        <input type="hidden" name="acao" value="editar_taxa_transacao">
         <input type="hidden" name="movimento_id" :value="taxaTransferencia.id">
+        <input type="hidden" name="origem" :value="taxaTransferencia.origem">
         <input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}">
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-zinc-800"><span class="block text-xs text-gray-500">Valor transferido</span><strong class="pc-sensitive mt-1 block text-base">R$ <span x-text="Number(taxaTransferencia.bruto || 0).toFixed(2).replace('.', ',')"></span></strong></div>
         <div class="grid gap-3 sm:grid-cols-2">
-          <label class="block text-sm font-semibold">Taxa efetivamente cobrada (R$)<input type="number" name="valor_taxa" min="0" step="0.01" inputmode="decimal" class="form-input mt-1 w-full" x-model="taxaTransferencia.taxa" :max="taxaTransferencia.bruto" @input="recalcularLiquidoTransferencia()" required><span class="mt-1 block text-xs font-normal opacity-60">Altera apenas a taxa desta transferência.</span></label>
-          <label class="block text-sm font-semibold">Valor final no destino (R$)<input type="number" name="valor_liquido" min="0" step="0.01" inputmode="decimal" class="form-input mt-1 w-full" x-model="taxaTransferencia.liquido" :max="taxaTransferencia.bruto" @input="recalcularTaxaTransferencia()" required><span class="mt-1 block text-xs font-normal opacity-60">Ao alterar, a taxa é recalculada.</span></label>
+          <label class="block text-sm font-semibold">Taxa efetivamente cobrada (R$)<input type="number" name="valor_taxa" min="0" step="0.01" inputmode="decimal" class="form-input mt-1 w-full" x-model="taxaTransferencia.taxa" :max="taxaTransferencia.somarTaxa ? null : taxaTransferencia.bruto" @input="recalcularLiquidoTransferencia()" required><span class="mt-1 block text-xs font-normal opacity-60">Altera somente a transação escolhida.</span></label>
+          <label class="block text-sm font-semibold"><span x-text="taxaTransferencia.somarTaxa ? 'Valor total debitado (R$)' : 'Valor final após a taxa (R$)'"></span><input type="number" name="valor_liquido" min="0" step="0.01" inputmode="decimal" class="form-input mt-1 w-full" x-model="taxaTransferencia.liquido" :max="taxaTransferencia.somarTaxa ? null : taxaTransferencia.bruto" @input="recalcularTaxaTransferencia()" required><span class="mt-1 block text-xs font-normal opacity-60">Ao alterar, a taxa é recalculada.</span></label>
         </div>
         <label class="block text-sm font-semibold">Motivo da alteração <span class="text-rose-500">*</span><textarea name="justificativa" rows="2" maxlength="300" class="form-input mt-1 w-full" required></textarea></label>
         <p class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">A despesa financeira vinculada será criada ou atualizada sem duplicidade, e o saldo da conta de destino passará a usar o novo valor líquido.</p>
-        <div class="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end"><button type="button" class="btn-secondary" @click="taxaTransferenciaModal=false">Cancelar</button><button type="submit" class="btn-primary">Salvar taxa da transferência</button></div>
+        <div class="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end"><button type="button" class="btn-secondary" @click="taxaTransferenciaModal=false">Cancelar</button><button type="submit" class="btn-primary">Salvar taxa da transação</button></div>
       </form>
     </div>
   </div></template>

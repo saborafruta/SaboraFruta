@@ -246,7 +246,7 @@ class EditarMovimentoBancarioForm(forms.Form):
         return limpar_dados_cartao(self, cleaned)
 
 
-class EditarTaxaTransferenciaForm(forms.Form):
+class EditarTaxaTransacaoForm(forms.Form):
     valor_taxa = forms.DecimalField(
         max_digits=14, decimal_places=2, min_value=0,
         label="Taxa efetivamente cobrada",
@@ -260,9 +260,10 @@ class EditarTaxaTransferenciaForm(forms.Form):
         widget=forms.Textarea(attrs={"rows": 2}),
     )
 
-    def __init__(self, *args, valor_bruto, **kwargs):
+    def __init__(self, *args, valor_bruto, somar_taxa=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.valor_bruto = valor_bruto
+        self.somar_taxa = somar_taxa
         self.fields["valor_taxa"].widget.attrs.update({"step": "0.01", "inputmode": "decimal"})
         self.fields["valor_liquido"].widget.attrs.update({"step": "0.01", "inputmode": "decimal"})
 
@@ -272,13 +273,14 @@ class EditarTaxaTransferenciaForm(forms.Form):
         liquido = cleaned.get("valor_liquido")
         if taxa is None or liquido is None:
             return cleaned
-        if taxa > self.valor_bruto:
+        if not self.somar_taxa and taxa > self.valor_bruto:
             self.add_error("valor_taxa", "A taxa não pode ser maior que o valor transferido.")
-        elif liquido > self.valor_bruto:
+        elif not self.somar_taxa and liquido > self.valor_bruto:
             self.add_error("valor_liquido", "O valor final não pode ser maior que o valor transferido.")
-        elif abs((self.valor_bruto - taxa) - liquido) > Decimal("0.01"):
+        esperado = self.valor_bruto + taxa if self.somar_taxa else self.valor_bruto - taxa
+        if not self.errors and abs(esperado - liquido) > Decimal("0.01"):
             raise forms.ValidationError(
-                "Os valores não conferem: o valor final deve ser o valor transferido menos a taxa."
+                "Os valores não conferem com o principal e a taxa informados."
             )
         return cleaned
 

@@ -175,7 +175,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "Transferir entre contas")
         self.assertNotContains(response, "Transferencia para caixa")
         self.assertContains(response, "Transferencia do banco")
-        self.assertContains(response, "Editar despesa da taxa")
+        self.assertContains(response, "Editar taxa")
         self.assertEqual(len(response.context["dias_mes"]), 31)
         self.assertContains(response, 'aria-label="Ver dias anteriores"')
         self.assertContains(response, 'aria-label="Ver dias posteriores"')
@@ -183,6 +183,11 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "abrirPagamentoTitulo")
         self.assertContains(response, "enviarPagamentoTitulo")
         self.assertContains(response, "pc-reconcile")
+        self.assertContains(
+            response,
+            '@click="abrirTaxaTransferencia($el)"',
+            count=len(response.context["posicao"]["detalhes_taxas"]),
+        )
         self.assertContains(response, "Agrupar por forma de pagamento")
         self.assertContains(
             response,
@@ -1993,10 +1998,10 @@ class PosicaoDiariaCaixaTests(TestCase):
             "data": "2026-08-21",
         })
 
-        self.assertContains(tela, "Editar despesa da taxa")
-        self.assertContains(tela, 'name="acao" value="editar_taxa_transferencia"')
+        self.assertContains(tela, "Editar taxa")
+        self.assertContains(tela, 'name="acao" value="editar_taxa_transacao"')
         self.assertContains(tela, f'data-movimento-id="{movimento.pk}"')
-        self.assertContains(tela, "Despesa separada da transferência")
+        self.assertContains(tela, "Transferência · despesa separada")
 
     def test_transferencia_sem_forma_tambem_aparece_para_informar_taxa_real(self):
         ExtratoBancario.objects.create(
@@ -2025,7 +2030,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(taxa_original.valor_pago, Decimal("2.50"))
 
         resposta = self.client.post(reverse("financeiro:posicao_diaria"), {
-            "acao": "editar_taxa_transferencia",
+            "acao": "editar_taxa_transacao", "origem": "manual",
             "movimento_id": movimento.pk,
             "data_referencia": "2026-08-21",
             "valor_taxa": "7.25",
@@ -2064,7 +2069,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         movimento = self._criar_transferencia_taxada_para_edicao()
 
         resposta = self.client.post(reverse("financeiro:posicao_diaria"), {
-            "acao": "editar_taxa_transferencia",
+            "acao": "editar_taxa_transacao", "origem": "manual",
             "movimento_id": movimento.pk,
             "data_referencia": "2026-08-21",
             "valor_taxa": "10.00",
@@ -2081,7 +2086,7 @@ class PosicaoDiariaCaixaTests(TestCase):
         movimento = self._criar_transferencia_taxada_para_edicao()
 
         resposta = self.client.post(reverse("financeiro:posicao_diaria"), {
-            "acao": "editar_taxa_transferencia",
+            "acao": "editar_taxa_transacao", "origem": "manual",
             "movimento_id": movimento.pk,
             "data_referencia": "2026-08-21",
             "valor_taxa": "0.00",
@@ -2096,3 +2101,101 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertFalse(ContaPagar.all_objects.filter(
             documento_tipo="taxa_extrato", documento_id=movimento.pk,
         ).exists())
+
+    def test_edicao_direta_da_taxa_funciona_em_venda(self):
+        venda = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=901, status="finalizada",
+            valor_total=Decimal("100.00"), valor_pago=Decimal("100.00"),
+            usuario=self.usuario,
+            data_venda=datetime(2026, 8, 21, 12, tzinfo=timezone.get_current_timezone()),
+        )
+        pagamento = PagamentoVendaPDV.objects.create(
+            venda_pdv=venda, forma_pagamento=self.forma,
+            conta_bancaria=self.banco, valor=Decimal("100.00"),
+        )
+
+        resposta = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_taxa_transacao", "origem": "venda",
+            "movimento_id": pagamento.pk, "data_referencia": "2026-08-21",
+            "valor_taxa": "6.00", "valor_liquido": "94.00",
+            "justificativa": "Taxa real da venda",
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        pagamento.refresh_from_db()
+        self.assertEqual(pagamento.valor_taxa, Decimal("6.00"))
+        self.assertEqual(pagamento.valor_liquido, Decimal("94.00"))
+        self.assertEqual(
+            ContaPagar.objects.get(
+                documento_tipo="taxa_pdv", documento_id=pagamento.pk,
+            ).valor_pago,
+            Decimal("6.00"),
+        )
+
+    def test_edicao_direta_da_taxa_funciona_em_baixa_a_receber(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente taxa direta",
+            tipo_pessoa="F", cpf_cnpj="76765432100",
+        )
+        titulo = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente,
+            valor_original=Decimal("100.00"), valor_final=Decimal("100.00"),
+            valor_pago=Decimal("100.00"), valor_saldo=Decimal("0.00"),
+            data_emissao=date(2026, 8, 20), data_vencimento=date(2026, 8, 21),
+            data_pagamento=date(2026, 8, 21), status=StatusContaReceber.PAGO,
+            forma_pagamento=self.forma, conta_bancaria=self.banco,
+        )
+        pagamento = PagamentoContaReceber.objects.create(
+            filial=self.filial, conta_receber=titulo,
+            data_pagamento=date(2026, 8, 21), valor_pago=Decimal("100.00"),
+            valor_liquido=Decimal("100.00"), forma_pagamento=self.forma,
+            conta_bancaria=self.banco, usuario=self.usuario,
+        )
+
+        resposta = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_taxa_transacao", "origem": "receber",
+            "movimento_id": pagamento.pk, "data_referencia": "2026-08-21",
+            "valor_taxa": "3.20", "valor_liquido": "96.80",
+            "justificativa": "Taxa real da baixa",
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        pagamento.refresh_from_db()
+        titulo.refresh_from_db()
+        self.assertEqual(pagamento.valor_taxa, Decimal("3.20"))
+        self.assertEqual(pagamento.valor_liquido, Decimal("96.80"))
+        self.assertEqual(titulo.valor_taxa_recebimento, Decimal("3.20"))
+        self.assertEqual(titulo.valor_liquido_recebido, Decimal("96.80"))
+
+    def test_edicao_direta_da_tarifa_funciona_em_pagamento(self):
+        titulo = ContaPagar.objects.create(
+            filial=self.filial, valor_original=Decimal("100.00"),
+            valor_final=Decimal("100.00"), valor_pago=Decimal("100.00"),
+            valor_saldo=Decimal("0.00"), descricao_despesa="Pagamento com tarifa",
+            data_emissao=date(2026, 8, 21), data_vencimento=date(2026, 8, 21),
+            data_pagamento=date(2026, 8, 21), status=StatusContaPagar.PAGO,
+            usuario=self.usuario,
+        )
+        pagamento = PagamentoContaPagar.objects.create(
+            filial=self.filial, conta_pagar=titulo,
+            data_pagamento=date(2026, 8, 21), valor_pago=Decimal("100.00"),
+            forma_pagamento=self.forma, conta_bancaria=self.banco,
+            usuario=self.usuario,
+        )
+
+        resposta = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_taxa_transacao", "origem": "pagar",
+            "movimento_id": pagamento.pk, "data_referencia": "2026-08-21",
+            "valor_taxa": "4.00", "valor_liquido": "104.00",
+            "justificativa": "Tarifa confirmada no banco",
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        pagamento.refresh_from_db()
+        self.assertEqual(pagamento.tarifa_bancaria, Decimal("4.00"))
+        self.assertEqual(
+            ContaPagar.objects.get(
+                documento_tipo="taxa_pagamento", documento_id=pagamento.pk,
+            ).valor_pago,
+            Decimal("4.00"),
+        )

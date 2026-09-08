@@ -28,6 +28,7 @@ class MovimentoDiario:
     origem: str
     origem_codigo: str
     registro_id: int
+    taxa_registro_id: int | None = None
     documento: str = ""
     forma_pagamento: str = "Sem forma vinculada"
     entrada: Decimal = ZERO
@@ -245,7 +246,13 @@ class PosicaoDiariaCaixaService:
             )
         ]
         taxas_pagamentos = [movimento for movimento in saidas if movimento.taxa_em_pagamento]
-        detalhes_taxas = transacoes_taxas + taxas_pagamentos
+        detalhes_taxas_base = transacoes_taxas + taxas_pagamentos
+        detalhes_taxas_transferencias = [
+            movimento for movimento in detalhes_taxas_base if movimento.transferencia
+        ]
+        detalhes_taxas = detalhes_taxas_transferencias + [
+            movimento for movimento in detalhes_taxas_base if not movimento.transferencia
+        ]
         total_taxas_pagamentos = sum((m.valor_taxa for m in taxas_pagamentos), ZERO)
         total_taxas_transacoes = total_taxas_entradas + total_taxas_pagamentos
         total_bruto_transacoes_taxas = sum((m.entrada_bruta for m in transacoes_taxas), ZERO)
@@ -299,6 +306,7 @@ class PosicaoDiariaCaixaService:
             "movimentos_taxas_entradas": movimentos_taxas_entradas,
             "taxas_pagamentos": taxas_pagamentos,
             "detalhes_taxas": detalhes_taxas,
+            "detalhes_taxas_transferencias": detalhes_taxas_transferencias,
             "taxas_por_forma": taxas_por_forma,
             # Taxas de recebimentos ja foram abatidas das entradas liquidas.
             # Tarifas de pagamentos sao cobrancas adicionais e reduzem o caixa.
@@ -469,6 +477,7 @@ class PosicaoDiariaCaixaService:
                 data=data_movimento, conta=conta,
                 descricao=contexto_titulo["descricao"], contraparte=str(titulo.cliente),
                 origem=contexto_titulo["origem"], origem_codigo="receber", registro_id=titulo.pk,
+                taxa_registro_id=item.pk,
                 documento=titulo.documento_numero,
                 forma_pagamento=forma.descricao if forma else "Sem forma vinculada",
                 entrada=liquido, valor_bruto=bruto, valor_taxa=taxa,

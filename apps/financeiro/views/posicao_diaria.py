@@ -21,11 +21,14 @@ from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.financeiro.forms import (
     EditarEntradaFinanceiraForm,
     EditarMovimentoBancarioForm,
-    EditarTaxaTransferenciaForm,
+    EditarTaxaTransacaoForm,
     MovimentoContaBancariaForm,
 )
 from apps.financeiro.constants.enums import StatusContaPagar
-from apps.financeiro.models import ContaPagar, ContaReceber, PlanoContas
+from apps.financeiro.models import (
+    ContaPagar, ContaReceber, PagamentoContaPagar, PagamentoContaReceber,
+    PlanoContas,
+)
 from apps.financeiro.models.extrato import ExtratoBancario
 from apps.financeiro.models.caixa_historico import DiaCaixaHistorico
 from apps.financeiro.services.caixa_historico_service import consultar_historico
@@ -123,23 +126,27 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         if not _usuario_admin(request):
             messages.error(request, "Apenas administradores podem editar, excluir ou restaurar movimentos.")
             return redirect(destino)
-        if acao == "editar_taxa_transferencia":
-            movimento = get_object_or_404(
-                ExtratoBancario.objects.filter(
-                    filial=filial,
-                    origem="manual",
-                    tipo_lancamento=MovimentoContaBancariaForm.TIPO_TRANSFERENCIA,
-                    valor__gt=0,
-                ).exclude(status="excluido"),
-                pk=request.POST.get("movimento_id"),
+        if acao == "editar_taxa_transacao":
+            origem_taxa = request.POST.get("origem")
+            registro_taxa = request.POST.get("movimento_id")
+            if origem_taxa not in {"manual", "receber", "venda", "pagar"} or not str(registro_taxa).isdigit():
+                messages.error(request, "Transação financeira inválida.")
+                return redirect(f"{destino}&taxas=1")
+            item_taxa, bruto_taxa, somar_taxa = self._buscar_transacao_taxa(
+                filial, origem_taxa, registro_taxa,
             )
-            form = EditarTaxaTransferenciaForm(request.POST, valor_bruto=movimento.valor)
+            form = EditarTaxaTransacaoForm(
+                request.POST, valor_bruto=bruto_taxa, somar_taxa=somar_taxa,
+            )
             destino_taxas = f"{destino}&taxas=1"
             if form.is_valid():
-                self._editar_taxa_transferencia(request, movimento, form.cleaned_data, auxiliar)
+                self._editar_taxa_transacao(
+                    request, origem_taxa, item_taxa, bruto_taxa,
+                    form.cleaned_data, auxiliar,
+                )
                 messages.success(
                     request,
-                    "Taxa da transferência atualizada. A despesa separada e o valor líquido foram sincronizados.",
+                    "Taxa da transação atualizada. A despesa separada e o valor final foram sincronizados.",
                 )
                 return redirect(destino_taxas)
             erros = "; ".join(
@@ -147,7 +154,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 for lista_erros in form.errors.values()
                 for erro in lista_erros
             )
-            messages.error(request, erros or "Revise a taxa e o valor final da transferência.")
+            messages.error(request, erros or "Revise a taxa e o valor final da transação.")
             return redirect(destino_taxas)
         if acao == "editar_entrada":
             origem = request.POST.get("origem")
@@ -491,42 +498,134 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         return render(request, self.template_name, context)
 
     @staticmethod
-    def _editar_taxa_transferencia(request, movimento, dados, auxiliar):
-        campos = [
-            "taxa_percentual_aplicada", "taxa_fixa_aplicada", "valor_taxa",
-            "valor_liquido", "taxa_calculada_em", "prazo_compensacao_aplicado",
-            "data_credito",
-        ]
-        antes = snapshot_modelo(movimento, campos)
+    def _buscar_transacao_taxa(filial, origem, registro_id):
+        if not str(registro_id).isdigit():
+            raise ValueError("Transação financeira inválida.")
+        if origem == "manual":
+            item = get_object_or_404(
+                ExtratoBancario.objects.filter(
+                    filial=filial, origem="manual", valor__gt=0,
+                ).exclude(status="excluido"),
+                pk=registro_id,
+            )
+            return item, item.valor, False
+        if origem == "receber":
+            item = get_object_or_404(
+                PagamentoContaReceber.objects.filter(
+                    filial=filial, conta_receber__excluido_em__isnull=True,
+                ),
+                pk=registro_id,
+            )
+            return item, item.valor_pago, False
+        if origem == "venda":
+            from apps.pdv.models import PagamentoVendaPDV
+            item = get_object_or_404(
+                PagamentoVendaPDV.objects.filter(
+                    venda_pdv__filial=filial,
+                ).exclude(venda_pdv__status="cancelada"),
+                pk=registro_id,
+            )
+            return item, item.valor_bruto_recebido, False
+        if origem == "pagar":
+            item = get_object_or_404(
+                PagamentoContaPagar.objects.filter(
+                    filial=filial, conta_pagar__excluido_em__isnull=True,
+                ).exclude(conta_pagar__documento_tipo__startswith="taxa_"),
+                pk=registro_id,
+            )
+            return item, item.valor_pago, True
+        raise ValueError("Origem da transação financeira inválida.")
+
+    @staticmethod
+    def _editar_taxa_transacao(request, origem, item, bruto, dados, auxiliar):
         taxa = dados["valor_taxa"]
-        movimento.taxa_percentual_aplicada = (
-            (taxa * Decimal("100") / movimento.valor).quantize(Decimal("0.0001"))
-            if movimento.valor else Decimal("0")
+        percentual = (
+            (taxa * Decimal("100") / bruto).quantize(Decimal("0.0001"))
+            if bruto else Decimal("0")
         )
-        movimento.taxa_fixa_aplicada = Decimal("0")
-        movimento.valor_taxa = taxa
-        movimento.valor_liquido = dados["valor_liquido"]
-        movimento.taxa_calculada_em = timezone.now()
-        movimento.prazo_compensacao_aplicado = 0
-        movimento.data_credito = movimento.data_lancamento
-        movimento.save(update_fields=campos)
+        conta = getattr(item, "conta_bancaria", None)
+        if origem == "manual":
+            campos = [
+                "taxa_percentual_aplicada", "taxa_fixa_aplicada", "valor_taxa",
+                "valor_liquido", "taxa_calculada_em", "prazo_compensacao_aplicado",
+                "data_credito",
+            ]
+            antes = snapshot_modelo(item, campos)
+            item.taxa_percentual_aplicada = percentual
+            item.taxa_fixa_aplicada = Decimal("0")
+            item.valor_taxa = taxa
+            item.valor_liquido = dados["valor_liquido"]
+            item.taxa_calculada_em = timezone.now()
+            item.prazo_compensacao_aplicado = 0
+            item.data_credito = item.data_lancamento
+            item.save(update_fields=campos)
+        elif origem == "receber":
+            campos = ["valor_taxa", "valor_liquido"]
+            antes = snapshot_modelo(item, campos)
+            item.valor_taxa = taxa
+            item.valor_liquido = dados["valor_liquido"]
+            item.save(update_fields=campos)
+            titulo = item.conta_receber
+            pagamentos = titulo.pagamentos.all()
+            total_bruto = sum((pagamento.valor_pago for pagamento in pagamentos), Decimal("0"))
+            titulo.valor_taxa_recebimento = sum(
+                (pagamento.valor_taxa for pagamento in pagamentos), Decimal("0")
+            )
+            titulo.valor_liquido_recebido = sum(
+                (
+                    pagamento.valor_liquido
+                    if (pagamento.valor_liquido or pagamento.valor_taxa)
+                    else pagamento.valor_pago
+                    for pagamento in pagamentos
+                ),
+                Decimal("0"),
+            )
+            titulo.taxa_percentual_aplicada = (
+                (titulo.valor_taxa_recebimento * Decimal("100") / total_bruto).quantize(Decimal("0.0001"))
+                if total_bruto else Decimal("0")
+            )
+            titulo.taxa_fixa_aplicada = Decimal("0")
+            titulo.taxa_calculada_em = timezone.now()
+            titulo.save(update_fields=[
+                "valor_taxa_recebimento", "valor_liquido_recebido",
+                "taxa_percentual_aplicada", "taxa_fixa_aplicada",
+                "taxa_calculada_em", "updated_at",
+            ])
+        elif origem == "venda":
+            campos = [
+                "taxa_percentual_aplicada", "taxa_fixa_aplicada", "valor_taxa",
+                "valor_liquido", "taxa_calculada_em",
+            ]
+            antes = snapshot_modelo(item, campos)
+            item.taxa_percentual_aplicada = percentual
+            item.taxa_fixa_aplicada = Decimal("0")
+            item.valor_taxa = taxa
+            item.valor_liquido = dados["valor_liquido"]
+            item.taxa_calculada_em = timezone.now()
+            item.save(update_fields=campos)
+            conta = item.conta_bancaria or item.forma_pagamento.conta_bancaria_padrao
+        else:
+            campos = ["tarifa_bancaria"]
+            antes = snapshot_modelo(item, campos)
+            item.tarifa_bancaria = taxa
+            item.save(update_fields=["tarifa_bancaria", "updated_at"])
         registrar_auditoria(
             request=request,
             modulo=RegistroAuditoria.Modulo.FINANCEIRO,
             acao=RegistroAuditoria.Acao.AJUSTAR,
-            objeto=movimento,
-            relacionado=movimento.conta_bancaria,
-            descricao="Taxa da transferência ajustada na posição diária",
+            objeto=item,
+            relacionado=conta,
+            descricao=f"Taxa de {origem} ajustada na posição diária",
             justificativa=dados["justificativa"],
             antes=antes,
-            depois=snapshot_modelo(movimento, campos),
+            depois=snapshot_modelo(item, campos),
             metadados={
-                "contas_envolvidas": [movimento.conta_bancaria_id],
-                "origem_movimento": "transferencia",
-                "despesa_taxa": f"taxa_extrato:{movimento.pk}",
+                "contas_envolvidas": [conta.pk] if conta else [],
+                "origem_movimento": origem,
             },
         )
-        auxiliar._atualizar_saldo_conta(movimento.conta_bancaria)
+        if conta:
+            auxiliar._atualizar_saldo_conta(conta)
 
     @staticmethod
     def _editar_entrada_financeira(request, filial, origem, registro_id, dados, auxiliar):
