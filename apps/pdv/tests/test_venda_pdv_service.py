@@ -11,8 +11,8 @@ from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficien
 from apps.estoque.models import Estoque, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.financeiro.constants.enums import TipoFormaPagamento
-from apps.financeiro.models import FormaPagamento
-from apps.pdv.models import Caixa, ItemVendaPDV, SessaoPDV, VendaPDV
+from apps.financeiro.models import FormaPagamento, TaxaParcelamento
+from apps.pdv.models import Caixa, ItemVendaPDV, PagamentoVendaPDV, SessaoPDV, VendaPDV
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
 from apps.pdv.services.venda_pdv_service import VendaPDVService
 from apps.produtos.models import (
@@ -126,6 +126,56 @@ class VendaPDVServiceTests(TestCase):
                 pagamentos=[{'forma_id': self.forma.pk, 'valor': '10.00'}],
             )
         self.assertFalse(VendaPDV.objects.filter(sessao_pdv=self.sessao).exists())
+
+    def test_cartao_com_taxa_por_bandeira_nao_pode_finalizar_sem_bandeira(self):
+        produto = self.criar_produto()
+        self.abastecer(produto, "10")
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            filial=self.filial,
+            descricao="Cartão crédito à vista",
+            tipo=TipoFormaPagamento.CARTAO_CREDITO,
+        )
+        TaxaParcelamento.objects.create(
+            forma_pagamento=forma,
+            parcelas=1,
+            bandeira="visa",
+            taxa=Decimal("1.10"),
+        )
+        TaxaParcelamento.objects.create(
+            forma_pagamento=forma,
+            parcelas=1,
+            bandeira="mastercard",
+            taxa=Decimal("3.20"),
+        )
+        dados = {
+            "sessao": self.sessao,
+            "filial": self.filial,
+            "usuario": self.usuario,
+            "itens": [{"produto_id": produto.pk, "quantidade": "1"}],
+        }
+
+        with self.assertRaisesMessage(DadosInvalidosError, "Informe a bandeira"):
+            VendaPDVService.finalizar_venda(
+                **dados,
+                pagamentos=[{"forma_id": forma.pk, "valor": "10.00"}],
+            )
+        self.assertFalse(VendaPDV.objects.filter(sessao_pdv=self.sessao).exists())
+
+        venda = VendaPDVService.finalizar_venda(
+            **dados,
+            pagamentos=[{
+                "forma_id": forma.pk,
+                "valor": "10.00",
+                "bandeira": "Visa",
+                "numero_parcelas": 1,
+            }],
+        )
+        pagamento = PagamentoVendaPDV.objects.get(venda_pdv=venda)
+        self.assertEqual(pagamento.bandeira, "Visa")
+        self.assertEqual(pagamento.taxa_percentual_aplicada, Decimal("1.10"))
+        self.assertEqual(pagamento.valor_taxa, Decimal("0.11"))
+        self.assertEqual(pagamento.valor_liquido, Decimal("9.89"))
 
     def test_busca_produtos_permite_carregar_resultados_apos_os_primeiros_vinte(self):
         for indice in range(21):

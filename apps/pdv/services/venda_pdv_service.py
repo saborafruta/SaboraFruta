@@ -763,6 +763,9 @@ class VendaPDVService:
             else:
                 numero_parcelas = 1
                 bandeira = ""
+            erro_taxa = forma.erro_parametros_taxa_recebimento(numero_parcelas, bandeira)
+            if erro_taxa:
+                raise DadosInvalidosError(erro_taxa[1])
             PagamentoVendaPDV.objects.create(
                 venda_pdv=venda,
                 forma_pagamento=forma,

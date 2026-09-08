@@ -127,6 +127,9 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertNotIn('background:#', entrada)
         self.assertNotIn('onmouseover=', entrada)
         self.assertIn('<select x-model="bandeiraPgto">', entrada)
+        self.assertIn('Selecione a bandeira', entrada)
+        self.assertIn('parcelasDisponiveis(formaPgtoSelecionada)', entrada)
+        self.assertIn("if (cartao && !this.bandeiraPgto)", template)
 
     def test_tema_claro_tem_paleta_de_pagamento_propria(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')

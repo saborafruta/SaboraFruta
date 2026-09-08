@@ -240,6 +240,12 @@ class ContaReceberService:
 
         bandeira = forma_pagamento.normalizar_bandeira(bandeira)
         parcelas_operacao = numero_parcelas or 1
+        erro_taxa = forma_pagamento.erro_parametros_taxa_recebimento(
+            parcelas_operacao,
+            bandeira,
+        )
+        if erro_taxa:
+            raise ValidationError(erro_taxa[1])
         calculo = forma_pagamento.calcular_taxa_recebimento(
             conta.valor_pago,
             parcelas_operacao,
@@ -406,6 +412,12 @@ class ContaReceberService:
 
         bandeira = forma_pagamento.normalizar_bandeira(bandeira)
         parcelas_operacao = numero_parcelas or 1
+        erro_taxa = forma_pagamento.erro_parametros_taxa_recebimento(
+            parcelas_operacao,
+            bandeira,
+        )
+        if erro_taxa:
+            raise ValidationError(erro_taxa[1])
         calculo = forma_pagamento.calcular_taxa_recebimento(
             valor_pago,
             parcelas_operacao,

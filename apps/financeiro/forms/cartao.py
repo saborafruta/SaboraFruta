@@ -82,6 +82,12 @@ def limpar_dados_cartao(form, cleaned):
     cleaned["bandeira"] = forma.normalizar_bandeira(cleaned.get("bandeira", ""))
     if forma.tipo == TipoFormaPagamento.CARTAO_DEBITO:
         cleaned["numero_parcelas"] = 1
+    parcelas = cleaned.get("numero_parcelas") or 1
+    erro_taxa = forma.erro_parametros_taxa_recebimento(parcelas, cleaned["bandeira"])
+    if erro_taxa:
+        campo, mensagem = erro_taxa
+        form.add_error(campo, mensagem)
+    if forma.tipo == TipoFormaPagamento.CARTAO_DEBITO:
         return cleaned
 
     parcelas = cleaned.get("numero_parcelas")

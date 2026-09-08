@@ -1,4 +1,5 @@
 """Extrato bancário, conciliação e agenda de pagamentos."""
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from apps.core.models import Filial, Usuario
@@ -68,6 +69,12 @@ class ExtratoBancario(models.Model):
             self.prazo_compensacao_aplicado = 0
             self.data_credito = None
             return
+        erro_taxa = self.forma_pagamento.erro_parametros_taxa_recebimento(
+            self.numero_parcelas or 1,
+            self.bandeira,
+        )
+        if erro_taxa:
+            raise ValidationError({erro_taxa[0]: erro_taxa[1]})
         calculo = self.forma_pagamento.calcular_taxa_recebimento(
             self.valor,
             self.numero_parcelas or 1,

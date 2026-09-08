@@ -104,6 +104,45 @@ class FormaPagamento(ActiveModel):
             taxa_parcela = taxas.filter(bandeira="").values_list("taxa", flat=True).first()
         return Decimal(taxa_parcela if taxa_parcela is not None else self.taxa_administrativa or 0)
 
+    def erro_parametros_taxa_recebimento(self, parcelas=1, bandeira=""):
+        """Impede que uma taxa por bandeira/parcela seja ignorada silenciosamente."""
+        if self.tipo not in {
+            TipoFormaPagamento.CARTAO_DEBITO,
+            TipoFormaPagamento.CARTAO_CREDITO,
+        }:
+            return None
+
+        parcelas = max(int(parcelas or 1), 1)
+        bandeira = self.normalizar_bandeira(bandeira)
+        taxas = list(self.taxas_parcelamento.all())
+        if not taxas:
+            return None
+
+        taxas_parcela = [taxa for taxa in taxas if taxa.parcelas == parcelas]
+        if not taxas_parcela:
+            if Decimal(self.taxa_administrativa or 0) > 0:
+                return None
+            return (
+                "numero_parcelas",
+                f"Não há taxa cadastrada para {parcelas}x nesta forma de pagamento.",
+            )
+
+        if bandeira and any(taxa.bandeira == bandeira for taxa in taxas_parcela):
+            return None
+        if any(not taxa.bandeira for taxa in taxas_parcela):
+            return None
+        if Decimal(self.taxa_administrativa or 0) > 0:
+            return None
+        if not bandeira:
+            return (
+                "bandeira",
+                "Informe a bandeira do cartão para aplicar a taxa cadastrada.",
+            )
+        return (
+            "bandeira",
+            f"Não há taxa cadastrada para a bandeira {bandeira} em {parcelas}x.",
+        )
+
     @staticmethod
     def calcular_valores_taxa(valor_bruto, percentual=0, taxa_fixa=0):
         centavos = Decimal("0.01")

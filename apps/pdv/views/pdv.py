@@ -3,7 +3,7 @@ import json
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
-from django.db.models import Max, Q, Sum
+from django.db.models import Max, Min, Q, Sum
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import render
@@ -934,10 +934,13 @@ def api_estado(request):
                 empresa=request.filial_ativa.empresa, ativo=True, exibir_no_pdv=True,
             ).filter(
                 Q(filial=request.filial_ativa) | Q(filial__isnull=True)
-            ).annotate(maximo_parcelas=Max('taxas_parcelamento__parcelas')).values(
+            ).annotate(
+                minimo_parcelas=Min('taxas_parcelamento__parcelas'),
+                maximo_parcelas=Max('taxas_parcelamento__parcelas'),
+            ).values(
                 'id', 'descricao', 'tipo', 'requer_tef', 'gera_parcelas',
                 'prazo_liquidacao_dias', 'prazo_compensacao_dias_uteis', 'movimenta_caixa',
-                'maximo_parcelas',
+                'minimo_parcelas', 'maximo_parcelas',
             )
         )
     except Exception:
@@ -1831,11 +1834,14 @@ def api_formas_pagamento(request):
     if request.method == 'GET':
         formas = list(
             FormaPagamento.objects.filter(empresa=empresa, filial=filial)
-            .annotate(maximo_parcelas=Max('taxas_parcelamento__parcelas'))
+            .annotate(
+                minimo_parcelas=Min('taxas_parcelamento__parcelas'),
+                maximo_parcelas=Max('taxas_parcelamento__parcelas'),
+            )
             .values(
                 'id', 'descricao', 'tipo', 'ativo', 'taxa_administrativa', 'taxa_fixa',
                 'gera_parcelas', 'prazo_liquidacao_dias', 'prazo_compensacao_dias_uteis',
-                'maximo_parcelas',
+                'minimo_parcelas', 'maximo_parcelas',
             )
             .order_by('descricao')
         )

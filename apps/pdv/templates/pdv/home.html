@@ -2088,12 +2088,12 @@
               <div class="payment-entry-section" style="display:grid;grid-template-columns:1fr 110px;gap:8px;">
                 <label>Bandeira
                   <select x-model="bandeiraPgto">
-                    <option value="">Não informar</option><option value="mastercard">Mastercard</option><option value="visa">Visa</option><option value="elo">Elo</option><option value="amex">Amex</option><option value="hiper">Hiper</option>
+                    <option value="">Selecione a bandeira</option><option value="mastercard">Mastercard</option><option value="visa">Visa</option><option value="elo">Elo</option><option value="amex">Amex</option><option value="hiper">Hiper</option>
                   </select>
                 </label>
                 <label x-show="formaPgtoSelecionada.tipo === 'cartao_credito'">Parcelas
                   <select x-model="parcelasPgto">
-                    <template x-for="n in Math.max(parseInt(formaPgtoSelecionada.maximo_parcelas || 1), 1)" :key="n"><option :value="n" x-text="n === 1 ? 'A vista (1x)' : n + 'x'"></option></template>
+                    <template x-for="n in parcelasDisponiveis(formaPgtoSelecionada)" :key="n"><option :value="n" x-text="n === 1 ? 'A vista (1x)' : n + 'x'"></option></template>
                   </select>
                 </label>
               </div>
@@ -4661,6 +4661,12 @@ function pdv() {
       return !!forma?.requer_tef || texto.includes('cart') || texto.includes('credito') || texto.includes('débito') || texto.includes('debito');
     },
 
+    parcelasDisponiveis(forma) {
+      const minimo = Math.max(parseInt(forma?.minimo_parcelas || 1), 1);
+      const maximo = Math.max(parseInt(forma?.maximo_parcelas || minimo), minimo);
+      return Array.from({length:maximo-minimo+1}, (_, indice) => minimo+indice);
+    },
+
     selecionarFormaPgto(forma) {
       if (this.formaPgtoSelecionada?.id===forma.id) { this.formaPgtoSelecionada=null; return; }
       if (this.venda.pagamentos.length>0 && this.venda.restante<=0.001) {
@@ -4671,7 +4677,7 @@ function pdv() {
       this.valorPgto=this.venda.restante>0.001?this.fmt2(this.venda.restante):'';
       this.prazoDiasPgto=this.ehFormaAPrazo(forma) ? String(forma.prazo_liquidacao_dias||30) : '';
       this.bandeiraPgto='';
-      this.parcelasPgto=1;
+      this.parcelasPgto=this.parcelasDisponiveis(forma)[0] || 1;
       this.$nextTick(()=>this.$refs.inputValorPgto?.select());
     },
 
@@ -4681,6 +4687,10 @@ function pdv() {
       if (valor<=0) return;
       const aPrazo = this.ehFormaAPrazo(this.formaPgtoSelecionada);
       const cartao = this.ehFormaCartao(this.formaPgtoSelecionada);
+      if (cartao && !this.bandeiraPgto) {
+        this.toast_('Informe a bandeira do cartão para aplicar a taxa.','erro');
+        return;
+      }
       if (aPrazo) {
         if (!this.venda.cliente.id) { this.toast_('Selecione um cliente para vendas no '+this.formaPgtoSelecionada.descricao+'.','erro'); return; }
         if (this.prazoDiasPgto==='' || parseInt(this.prazoDiasPgto)<0 || isNaN(parseInt(this.prazoDiasPgto))) { this.toast_('Informe o prazo em dias.','erro'); return; }

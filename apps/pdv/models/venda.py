@@ -234,12 +234,19 @@ class PagamentoVendaPDV(models.Model):
 
     def save(self, *args, **kwargs):
         if self._state.adding and self.forma_pagamento_id and self.taxa_calculada_em is None:
+            from django.core.exceptions import ValidationError
             from django.utils import timezone
             from apps.financeiro.models import FormaPagamento
 
             # A forma pode ter sido alterada durante uma venda ainda aberta. Consulte
             # novamente para aplicar taxa e prazo que estao efetivamente salvos.
             forma_pagamento = FormaPagamento.objects.get(pk=self.forma_pagamento_id)
+            erro_taxa = forma_pagamento.erro_parametros_taxa_recebimento(
+                self.numero_parcelas,
+                self.bandeira,
+            )
+            if erro_taxa:
+                raise ValidationError({erro_taxa[0]: erro_taxa[1]})
             calculo = forma_pagamento.calcular_taxa_recebimento(
                 (self.valor or 0) - (self.troco or 0),
                 self.numero_parcelas,
