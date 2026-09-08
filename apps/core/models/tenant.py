@@ -51,8 +51,8 @@ class RailwayProjectPool(TimestampedModel):
     class Meta:
         db_table = 'railway_project_pools'
         ordering = ['prioridade', 'nome']
-        verbose_name = 'Projeto Railway de bancos'
-        verbose_name_plural = 'Projetos Railway de bancos'
+        verbose_name = 'Projeto da Gestão Railway'
+        verbose_name_plural = 'Gestão Railway'
 
     def clean(self):
         super().clean()

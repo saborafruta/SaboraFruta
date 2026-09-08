@@ -2,7 +2,7 @@ from django import forms
 
 from apps.core.models import (
     Empresa, Filial, PerfilAcesso, Permissao, PoliticaReplicacao, Usuario,
-    PoliticaReplicacaoFilial, UsuarioFilialAcesso,
+    PoliticaReplicacaoFilial, RailwayProjectPool, UsuarioFilialAcesso,
 )
 
 
@@ -54,6 +54,43 @@ def get_or_create_politica_filial(filial):
         defaults=defaults,
     )
     return politica
+
+
+class RailwayProjectPoolAdminForm(forms.ModelForm):
+    """Configura um projeto Railway sem expor o Django Admin ao operador."""
+
+    class Meta:
+        model = RailwayProjectPool
+        fields = [
+            'nome',
+            'railway_project_id',
+            'railway_environment_id',
+            'token_env_var',
+            'connection_mode',
+            'prioridade',
+            'max_volumes',
+            'volumes_reservados',
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs['class'] = 'form-input w-full'
+        self.fields['nome'].label = 'Nome do projeto'
+        self.fields['railway_project_id'].label = 'ID do projeto Railway'
+        self.fields['railway_environment_id'].label = 'ID do ambiente Railway'
+        self.fields['token_env_var'].label = 'Variável que contém o Project Token'
+        self.fields['connection_mode'].label = 'Modo de conexão'
+        self.fields['prioridade'].label = 'Prioridade de uso'
+        self.fields['max_volumes'].label = 'Limite de volumes'
+        self.fields['volumes_reservados'].label = 'Volumes reservados'
+        self.fields['token_env_var'].help_text = (
+            'Informe somente o nome da variável protegida do app central. '
+            'O token nunca é exibido nem salvo nesta tela.'
+        )
+        self.fields['prioridade'].help_text = (
+            'Projetos com número menor são escolhidos primeiro no provisionamento automático.'
+        )
 
 
 class EmpresaAdminForm(forms.ModelForm):

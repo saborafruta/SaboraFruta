@@ -9,6 +9,8 @@
 {% endblock %}
 
 {% block list_actions %}
+  <a href="{{ central_url }}" class="btn-secondary">← Voltar à Central</a>
+  <a href="{% url 'core:admin_empresa_banco_list' %}" class="btn-secondary">Bancos das empresas</a>
 {% if can_manage_structure %}
   <a href="{% url 'core:admin_empresa_create' %}" class="btn-primary">+ Nova empresa</a>
 {% endif %}
@@ -37,6 +39,7 @@
     <td class="px-4 py-3">
       <div class="font-medium">{{ empresa.razao_social }}</div>
       {% if empresa.nome_fantasia %}<div class="text-xs text-gray-400">{{ empresa.nome_fantasia }}</div>{% endif %}
+      <a href="{% url 'core:admin_filial_list' %}?empresa={{ empresa.pk }}" class="text-xs font-semibold text-blue-500 mt-1 inline-block">Ver filiais</a>
     </td>
     <td class="px-4 py-3 font-mono text-xs">{{ empresa.cnpj }}</td>
     <td class="px-4 py-3">{% if empresa.cidade %}{{ empresa.cidade }}/{{ empresa.uf }}{% else %}-{% endif %}</td>

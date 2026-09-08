@@ -1,17 +1,26 @@
 {% extends "_base.html" %}
 
-{% block title %}Projetos de Bancos - ERP iNoovaTed{% endblock %}
-{% block page_title %}Projetos de Bancos{% endblock %}
+{% block title %}Gestão Railway — ERP iNoovaTed{% endblock %}
+{% block page_title %}Gestão Railway{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
   <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
     <div>
       <a href="{{ central_url }}" class="text-sm font-semibold text-blue-500">← Voltar à Central</a>
-      <h1 class="text-2xl font-bold mt-2">Projetos Railway de bancos</h1>
-      <p class="text-sm text-gray-500 mt-1">Capacidade e localização dos PostgreSQL dedicados por empresa.</p>
+      <h1 class="text-2xl font-bold mt-2">Gestão Railway</h1>
+      <p class="text-sm text-gray-500 mt-1">Projetos, capacidade e localização dos PostgreSQL dedicados por empresa.</p>
     </div>
-    <a href="{% url 'admin:core_railwayprojectpool_add' %}" class="btn-primary">+ Cadastrar projeto</a>
+    <div class="flex gap-2 flex-wrap">
+      <a href="{% url 'core:admin_empresa_banco_list' %}" class="btn-secondary">Bancos das empresas</a>
+      <a href="{% url 'core:admin_railway_pool_create' %}" class="btn-primary">+ Cadastrar projeto</a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <div class="card p-4"><div class="text-xs uppercase tracking-wide text-gray-500">Projetos cadastrados</div><div class="text-2xl font-semibold mt-1">{{ total_projetos }}</div></div>
+    <div class="card p-4"><div class="text-xs uppercase tracking-wide text-gray-500">Projetos ativos</div><div class="text-2xl font-semibold mt-1 text-green-500">{{ total_ativos }}</div></div>
+    <div class="card p-4"><div class="text-xs uppercase tracking-wide text-gray-500">Bancos vinculados</div><div class="text-2xl font-semibold mt-1">{{ total_bancos }}</div></div>
   </div>
 
   {% if multi_project_enabled %}
@@ -54,7 +63,7 @@
             <td class="p-4">{{ pool.get_status_display }}</td>
             <td class="p-4">
               <div class="flex justify-end gap-2">
-                <a href="{% url 'admin:core_railwayprojectpool_change' pool.pk %}" class="btn-secondary">Editar</a>
+                <a href="{% url 'core:admin_railway_pool_edit' pool.pk %}" class="btn-secondary">Editar</a>
                 <form method="post">
                   {% csrf_token %}
                   <input type="hidden" name="pool_id" value="{{ pool.pk }}">

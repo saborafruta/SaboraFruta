@@ -17,14 +17,16 @@ class CentralAdminTemplateTests(SimpleTestCase):
     def test_cabecalho_expoe_acessos_globais(self):
         for label in (
             'Bancos das empresas',
+            'Gestão Railway',
             'Usuários e acessos',
             'Perfis e permissões',
         ):
             self.assertIn(label, self.source)
         self.assertEqual(
-            reverse('admin:core_empresabanco_changelist'),
-            '/admin/core/empresabanco/',
+            reverse('core:admin_empresa_banco_list'),
+            '/gestao/central/bancos-empresas/',
         )
+        self.assertNotIn("admin:core_empresabanco_changelist", self.source)
 
     def test_template_compila(self):
         self.assertIsNotNone(get_template('core/admin/central.html'))

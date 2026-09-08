@@ -17,6 +17,7 @@ from apps.core.forms.admin_forms import (
     PerfilAcessoAdminForm,
     PermissaoMatrix,
     PoliticaReplicacaoForm,
+    RailwayProjectPoolAdminForm,
     UsuarioAdminForm,
 )
 from apps.core.constants.segmentos import SEGMENTOS
@@ -24,7 +25,7 @@ from apps.core.services.modulos import (
     modulos_de_verticais, modulos_disponiveis, modulos_para_admin,
 )
 from apps.core.models import (
-    Empresa, Filial, PerfilAcesso, Permissao, RailwayProjectPool, Usuario,
+    Empresa, EmpresaBanco, Filial, PerfilAcesso, Permissao, RailwayProjectPool, Usuario,
 )
 from apps.core.services.imagem_filial import preparar_imagem_filial
 from apps.core.views.audit import core_log_context
@@ -271,7 +272,93 @@ def railway_pool_list(request):
     return render(request, 'core/admin/railway_pool_list.html', {
         'pools': pools,
         'multi_project_enabled': settings.RAILWAY_MULTI_PROJECT_ENABLED,
-        'page_title': 'Projetos de Bancos',
+        'total_projetos': pools.count(),
+        'total_ativos': pools.filter(ativo=True, status=RailwayProjectPool.Status.ATIVO).count(),
+        'total_bancos': EmpresaBanco.objects.count(),
+        'page_title': 'Gestão Railway',
+        'central_url': reverse('core:admin_central'),
+    })
+
+
+@superuser_required
+def railway_pool_form(request, pk=None):
+    pool = get_object_or_404(RailwayProjectPool, pk=pk) if pk else None
+    form = RailwayProjectPoolAdminForm(request.POST or None, instance=pool)
+    if request.method == 'POST' and form.is_valid():
+        obj = form.save()
+        if pool:
+            messages.success(request, f'Projeto Railway atualizado: {obj.nome}.')
+        else:
+            messages.success(
+                request,
+                f'Projeto Railway cadastrado: {obj.nome}. Valide antes de ativá-lo.',
+            )
+        return redirect('core:admin_railway_pool_list')
+
+    return render(request, 'core/admin/railway_pool_form.html', {
+        'form': form,
+        'pool': pool,
+        'page_title': 'Gestão Railway',
+        'central_url': reverse('core:admin_central'),
+        'cancel_url': reverse('core:admin_railway_pool_list'),
+    })
+
+
+@superuser_required
+def empresa_banco_list(request):
+    """Visão operacional dos bancos dedicados, sem expor o Django Admin."""
+    busca = request.GET.get('q', '').strip()
+    status = request.GET.get('status', '').strip()
+    pool_id = request.GET.get('pool', '').strip()
+    queryset = Empresa.objects.select_related(
+        'banco_dedicado',
+        'banco_dedicado__railway_project_pool',
+    ).annotate(total_filiais=Count('filiais', distinct=True)).order_by('razao_social')
+
+    if busca:
+        queryset = queryset.filter(
+            Q(razao_social__icontains=busca)
+            | Q(nome_fantasia__icontains=busca)
+            | Q(cnpj__icontains=busca)
+            | Q(banco_dedicado__db_alias__icontains=busca)
+            | Q(banco_dedicado__railway_database_service_name__icontains=busca)
+        )
+    if status == 'sem_banco':
+        queryset = queryset.filter(banco_dedicado__isnull=True)
+    elif status in EmpresaBanco.Status.values:
+        queryset = queryset.filter(banco_dedicado__status=status)
+    if pool_id.isdigit():
+        queryset = queryset.filter(banco_dedicado__railway_project_pool_id=int(pool_id))
+
+    bancos = EmpresaBanco.objects.all()
+    total_empresas = Empresa.objects.count()
+    return render(request, 'core/admin/empresa_banco_list.html', {
+        'page_obj': _paginate(request, queryset),
+        'busca': busca,
+        'status_filtro': status,
+        'pool_id': pool_id,
+        'status_choices': EmpresaBanco.Status.choices,
+        'pools': RailwayProjectPool.objects.order_by('prioridade', 'nome'),
+        'total_empresas': total_empresas,
+        'total_bancos': bancos.count(),
+        'total_ativos': bancos.filter(status=EmpresaBanco.Status.ATIVO, ativo=True).count(),
+        'total_erros': bancos.filter(status=EmpresaBanco.Status.ERRO).count(),
+        'total_sem_banco': total_empresas - bancos.count(),
+        'page_title': 'Bancos das empresas',
+        'central_url': reverse('core:admin_central'),
+    })
+
+
+@superuser_required
+def empresa_banco_detail(request, pk):
+    banco = get_object_or_404(
+        EmpresaBanco.objects.select_related('empresa', 'railway_project_pool'),
+        pk=pk,
+    )
+    return render(request, 'core/admin/empresa_banco_detail.html', {
+        'banco': banco,
+        'filiais': banco.empresa.filiais.order_by('-is_matriz', 'razao_social'),
+        'page_title': 'Banco da empresa',
         'central_url': reverse('core:admin_central'),
     })
 

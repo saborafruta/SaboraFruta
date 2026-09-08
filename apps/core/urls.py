@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import RedirectView
 
 from apps.core.views import admin_area
 from apps.core.views import parametros as parametros_views
@@ -33,8 +34,29 @@ urlpatterns = [
 
     path('gestao/central/', admin_area.central_administrativa, name='admin_central'),
     path(
-        'gestao/central/projetos-bancos/', admin_area.railway_pool_list,
+        'gestao/central/gestao-railway/', admin_area.railway_pool_list,
         name='admin_railway_pool_list',
+    ),
+    path(
+        'gestao/central/gestao-railway/novo/', admin_area.railway_pool_form,
+        name='admin_railway_pool_create',
+    ),
+    path(
+        'gestao/central/gestao-railway/<int:pk>/editar/', admin_area.railway_pool_form,
+        name='admin_railway_pool_edit',
+    ),
+    path(
+        'gestao/central/projetos-bancos/',
+        RedirectView.as_view(pattern_name='core:admin_railway_pool_list', permanent=False),
+        name='admin_railway_pool_legacy',
+    ),
+    path(
+        'gestao/central/bancos-empresas/', admin_area.empresa_banco_list,
+        name='admin_empresa_banco_list',
+    ),
+    path(
+        'gestao/central/bancos-empresas/<int:pk>/', admin_area.empresa_banco_detail,
+        name='admin_empresa_banco_detail',
     ),
     path('gestao/parametros/', parametros_views.parametros_sistema, name='admin_parametros'),
     path('gestao/parametros/sincronizar-focus/', parametros_views.api_sincronizar_focus, name='admin_parametros_sincronizar_focus'),

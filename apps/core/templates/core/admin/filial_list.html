@@ -5,10 +5,12 @@
 {% block header_title %}Filiais{% endblock %}
 
 {% block list_subtitle %}
-<p class="text-sm mt-1" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">{{ total }} filiais cadastradas.</p>
+<p class="text-sm mt-1" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">{{ total }} unidade{{ total|pluralize }} cadastrada{{ total|pluralize }}.</p>
 {% endblock %}
 
 {% block list_actions %}
+  <a href="{{ central_url }}" class="btn-secondary">← Voltar à Central</a>
+  <a href="{% url 'core:admin_empresa_list' %}" class="btn-secondary">Empresas</a>
 {% if can_manage_structure %}
   <a href="{% url 'core:admin_filial_create' %}" class="btn-primary">+ Nova filial</a>
 {% endif %}

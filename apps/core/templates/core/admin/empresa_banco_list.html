@@ -1,0 +1,99 @@
+{% extends "_list_base.html" %}
+
+{% block list_title %}Bancos das empresas{% endblock %}
+{% block page_title %}Bancos das empresas{% endblock %}
+{% block header_title %}Bancos das empresas{% endblock %}
+
+{% block list_subtitle %}
+<p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#9ca3af;'">
+  Cada empresa opera em seu PostgreSQL dedicado; as filiais da mesma empresa compartilham esse banco.
+</p>
+{% endblock %}
+
+{% block list_actions %}
+  <a href="{{ central_url }}" class="btn-secondary">← Voltar à Central</a>
+  <a href="{% url 'core:admin_railway_pool_list' %}" class="btn-secondary">Gestão Railway</a>
+  <a href="{% url 'core:admin_empresa_create' %}" class="btn-primary">+ Nova empresa</a>
+{% endblock %}
+
+{% block list_filters %}
+<div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+  <div class="card p-4"><div class="text-xs uppercase tracking-wide text-gray-500">Empresas</div><div class="text-2xl font-semibold mt-1">{{ total_empresas }}</div></div>
+  <div class="card p-4"><div class="text-xs uppercase tracking-wide text-gray-500">Bancos cadastrados</div><div class="text-2xl font-semibold mt-1">{{ total_bancos }}</div></div>
+  <div class="card p-4"><div class="text-xs uppercase tracking-wide text-gray-500">Ativos</div><div class="text-2xl font-semibold mt-1 text-green-500">{{ total_ativos }}</div></div>
+  <div class="card p-4"><div class="text-xs uppercase tracking-wide text-gray-500">Com erro</div><div class="text-2xl font-semibold mt-1 {% if total_erros %}text-red-500{% endif %}">{{ total_erros }}</div></div>
+  <div class="card p-4 col-span-2 lg:col-span-1"><div class="text-xs uppercase tracking-wide text-gray-500">Sem banco</div><div class="text-2xl font-semibold mt-1 {% if total_sem_banco %}text-amber-500{% endif %}">{{ total_sem_banco }}</div></div>
+</div>
+
+<form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_1fr_1fr_auto] gap-3">
+  <input type="search" name="q" value="{{ busca }}" placeholder="Empresa, CNPJ, banco ou alias..." class="form-input">
+  <select name="status" class="form-input">
+    <option value="">Todos os estados</option>
+    {% for value, label in status_choices %}<option value="{{ value }}" {% if status_filtro == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    <option value="sem_banco" {% if status_filtro == 'sem_banco' %}selected{% endif %}>Sem banco cadastrado</option>
+  </select>
+  <select name="pool" class="form-input">
+    <option value="">Todos os projetos</option>
+    {% for pool in pools %}<option value="{{ pool.pk }}" {% if pool_id == pool.pk|stringformat:"s" %}selected{% endif %}>{{ pool.nome }}</option>{% endfor %}
+  </select>
+  <div class="flex gap-2">
+    <button type="submit" class="btn-primary">Filtrar</button>
+    {% if busca or status_filtro or pool_id %}<a href="{% url 'core:admin_empresa_banco_list' %}" class="btn-secondary">Limpar</a>{% endif %}
+  </div>
+</form>
+{% endblock %}
+
+{% block table_head %}
+<th class="px-4 py-3 text-left">Empresa</th>
+<th class="px-4 py-3 text-left">Filiais</th>
+<th class="px-4 py-3 text-left">Banco dedicado</th>
+<th class="px-4 py-3 text-left">Projeto Railway</th>
+<th class="px-4 py-3 text-left">Estado</th>
+<th class="px-4 py-3 text-left">Última verificação</th>
+<th class="px-4 py-3 text-right">Ações</th>
+{% endblock %}
+
+{% block table_body %}
+{% for empresa in page_obj %}
+  {% with banco=empresa.banco_dedicado %}
+  <tr class="table-row-hover">
+    <td class="px-4 py-3">
+      <div class="font-semibold">{{ empresa.nome_fantasia|default:empresa.razao_social }}</div>
+      <div class="text-xs text-gray-500 mt-1">{{ empresa.cnpj }}</div>
+    </td>
+    <td class="px-4 py-3">
+      <a href="{% url 'core:admin_filial_list' %}?empresa={{ empresa.pk }}" class="font-semibold text-blue-500">{{ empresa.total_filiais }}</a>
+    </td>
+    <td class="px-4 py-3">
+      {% if banco %}
+        <div class="font-semibold">{{ banco.nome_banco }}</div>
+        <div class="text-xs font-mono text-gray-500 mt-1">{{ banco.db_alias }}</div>
+      {% else %}<span class="text-amber-500 font-semibold">Não cadastrado</span>{% endif %}
+    </td>
+    <td class="px-4 py-3">
+      {% if banco.railway_project_pool %}
+        <div>{{ banco.railway_project_pool.nome }}</div>
+        <div class="text-xs text-gray-500 mt-1">{{ banco.railway_project_pool.get_connection_mode_display }}</div>
+      {% else %}<span class="text-gray-500">Projeto principal / manual</span>{% endif %}
+    </td>
+    <td class="px-4 py-3">
+      {% if not banco %}<span class="soft-pill no-dot is-amber">Sem banco</span>
+      {% elif banco.status == 'ativo' and banco.ativo %}<span class="soft-pill is-green">Ativo</span>
+      {% elif banco.status == 'erro' %}<span class="soft-pill is-red">Erro</span>
+      {% elif banco.status == 'inativo' or not banco.ativo %}<span class="soft-pill no-dot is-red">Inativo</span>
+      {% else %}<span class="soft-pill no-dot is-amber">{{ banco.get_status_display }}</span>{% endif %}
+    </td>
+    <td class="px-4 py-3 text-sm">
+      {% if banco.ultima_verificacao_em %}{{ banco.ultima_verificacao_em|date:"d/m/Y H:i" }}{% else %}<span class="text-gray-500">Ainda não verificado</span>{% endif %}
+    </td>
+    <td class="px-4 py-3 text-right whitespace-nowrap">
+      {% if banco %}<a href="{% url 'core:admin_empresa_banco_detail' banco.pk %}" class="btn-table btn-table-blue">Detalhes</a>{% endif %}
+      <a href="{% url 'core:admin_empresa_edit' empresa.pk %}" class="btn-table btn-table-blue ml-2">Empresa</a>
+    </td>
+  </tr>
+  {% endwith %}
+{% empty %}
+  <tr><td colspan="7" class="px-4 py-10 text-center text-gray-400">Nenhuma empresa encontrada.</td></tr>
+{% endfor %}
+{% endblock %}
+

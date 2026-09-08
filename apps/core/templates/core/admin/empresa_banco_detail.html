@@ -1,0 +1,69 @@
+{% extends "_base.html" %}
+
+{% block title %}Banco de {{ banco.empresa }} — ERP iNoovaTed{% endblock %}
+{% block page_title %}Banco da empresa{% endblock %}
+
+{% block content %}
+<div class="space-y-5 max-w-6xl mx-auto">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <a href="{% url 'core:admin_empresa_banco_list' %}" class="text-sm font-semibold text-blue-500">← Bancos das empresas</a>
+      <h2 class="text-2xl font-semibold mt-2">{{ banco.empresa.nome_fantasia|default:banco.empresa.razao_social }}</h2>
+      <p class="text-sm text-gray-500 mt-1">Visão técnica do banco dedicado, sem exibir senha ou URL de conexão.</p>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+      <a href="{% url 'core:admin_empresa_edit' banco.empresa.pk %}" class="btn-secondary">Editar empresa</a>
+      <a href="{% url 'core:admin_filial_list' %}?empresa={{ banco.empresa.pk }}" class="btn-primary">Ver filiais</a>
+    </div>
+  </div>
+
+  {% if banco.ultimo_erro %}
+  <div class="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+    <div class="font-semibold text-red-500">Último erro registrado</div>
+    <div class="text-sm mt-1 break-words">{{ banco.ultimo_erro }}</div>
+  </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <section class="card p-5 lg:col-span-2">
+      <div class="flex items-center justify-between gap-3 border-b border-gray-500/20 pb-4 mb-4">
+        <h3 class="font-semibold text-lg">Banco PostgreSQL</h3>
+        {% if banco.status == 'ativo' and banco.ativo %}<span class="soft-pill is-green">Ativo</span>
+        {% elif banco.status == 'erro' %}<span class="soft-pill is-red">Erro</span>
+        {% else %}<span class="soft-pill no-dot is-amber">{{ banco.get_status_display }}</span>{% endif %}
+      </div>
+      <dl class="grid grid-cols-1 md:grid-cols-2 gap-5 text-sm">
+        <div><dt class="text-gray-500">Nome do serviço</dt><dd class="font-semibold mt-1">{{ banco.railway_database_service_name|default:"Não informado" }}</dd></div>
+        <div><dt class="text-gray-500">Alias interno</dt><dd class="font-mono mt-1 break-all">{{ banco.db_alias }}</dd></div>
+        <div><dt class="text-gray-500">Variável de conexão</dt><dd class="font-mono mt-1 break-all">{{ banco.database_url_env_var|default:"Não informada" }}</dd></div>
+        <div><dt class="text-gray-500">Modo de provisionamento</dt><dd class="font-semibold mt-1">{{ banco.provisionamento_modo|title }}</dd></div>
+        <div><dt class="text-gray-500">Projeto Railway</dt><dd class="font-semibold mt-1">{{ banco.railway_project_pool.nome|default:"Projeto principal / manual" }}</dd></div>
+        <div><dt class="text-gray-500">Conexão</dt><dd class="font-semibold mt-1">{% if banco.railway_project_pool %}{{ banco.railway_project_pool.get_connection_mode_display }}{% else %}Rede privada do projeto principal{% endif %}</dd></div>
+      </dl>
+    </section>
+
+    <aside class="card p-5">
+      <h3 class="font-semibold text-lg border-b border-gray-500/20 pb-4 mb-4">Histórico</h3>
+      <dl class="space-y-4 text-sm">
+        <div><dt class="text-gray-500">Provisionado em</dt><dd class="font-semibold mt-1">{{ banco.provisionado_em|date:"d/m/Y H:i"|default:"—" }}</dd></div>
+        <div><dt class="text-gray-500">Última migração</dt><dd class="font-semibold mt-1">{{ banco.ultima_migracao_em|date:"d/m/Y H:i"|default:"—" }}</dd></div>
+        <div><dt class="text-gray-500">Última verificação</dt><dd class="font-semibold mt-1">{{ banco.ultima_verificacao_em|date:"d/m/Y H:i"|default:"—" }}</dd></div>
+      </dl>
+    </aside>
+  </div>
+
+  <section class="card overflow-hidden">
+    <div class="p-5 border-b border-gray-500/20 flex items-center justify-between">
+      <div><h3 class="font-semibold text-lg">Filiais neste banco</h3><p class="text-sm text-gray-500 mt-1">Todas pertencem à mesma empresa e usam o mesmo banco dedicado.</p></div>
+      <span class="soft-pill no-dot is-blue">{{ filiais|length }} unidade{{ filiais|length|pluralize }}</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm min-w-[680px]">
+        <thead><tr class="table-header border-b border-gray-500/20"><th class="p-4 text-left">Filial</th><th class="p-4 text-left">CNPJ</th><th class="p-4 text-left">Cidade/UF</th><th class="p-4 text-left">Tipo</th><th class="p-4 text-left">Estado</th></tr></thead>
+        <tbody>{% for filial in filiais %}<tr class="table-row-hover"><td class="p-4 font-semibold">{{ filial.nome_fantasia|default:filial.razao_social }}</td><td class="p-4 font-mono text-xs">{{ filial.cnpj }}</td><td class="p-4">{{ filial.cidade }}/{{ filial.uf }}</td><td class="p-4">{% if filial.is_matriz %}Matriz{% else %}Filial{% endif %}</td><td class="p-4">{% if filial.ativo %}<span class="soft-pill is-green">Ativa</span>{% else %}<span class="soft-pill is-red">Inativa</span>{% endif %}</td></tr>{% empty %}<tr><td colspan="5" class="p-8 text-center text-gray-500">Nenhuma filial cadastrada.</td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}
+

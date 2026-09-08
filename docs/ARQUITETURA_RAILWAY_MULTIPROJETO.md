@@ -121,7 +121,7 @@ Não execute estes passos até existir necessidade real e uma janela de teste:
 3. criar um Project Token restrito ao novo projeto;
 4. adicionar o token como variável protegida no serviço canônico do
    `ited.app.br`, por exemplo `RAILWAY_PROJECT_TOKEN_BANCOS_02`;
-5. na Central, abrir **Projetos de bancos** e cadastrar:
+5. na Central, abrir **Gestão Railway** e cadastrar:
    - nome `Bancos 02`;
    - IDs exatos do projeto e ambiente;
    - `token_env_var=RAILWAY_PROJECT_TOKEN_BANCOS_02`;

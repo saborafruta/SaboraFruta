@@ -420,6 +420,32 @@ curl.exe https://saborafruta-production.up.railway.app/health/
 - os aliases da iTed e da L&R Sports foram novamente validados após a
   renomeação dos serviços de banco.
 
+## Central visual de infraestrutura (08/09/2026)
+
+A administração cotidiana não deve mais depender das telas cruas do Django
+Admin. A Central Administrativa passou a organizar quatro áreas próprias:
+
+- **Listar empresas**: cadastro, edição, estado e acesso às filiais;
+- **Listar filiais**: filtro obrigatório por empresa quando desejado, cadastro
+  e edição das unidades;
+- **Bancos das empresas**: visão de cada empresa, número de filiais, alias,
+  serviço PostgreSQL, projeto Railway, estado e última verificação, além do
+  detalhe do banco sem exibir senha nem URL de conexão;
+- **Gestão Railway**: novo nome da antiga tela “Projetos de bancos”, reservada
+  à capacidade dos projetos, modo de conexão, Project Token por variável e
+  validação/ativação. Cadastro e edição também usam telas próprias.
+
+Rotas principais:
+
+- `/gestao/central/bancos-empresas/`;
+- `/gestao/central/gestao-railway/`;
+- `/gestao/empresas/`;
+- `/gestao/filiais/`.
+
+A URL antiga `/gestao/central/projetos-bancos/` apenas redireciona para Gestão
+Railway para preservar favoritos. O Django Admin continua disponível como
+ferramenta de emergência técnica, mas não é o fluxo normal da Central.
+
 ## Pendências e melhorias futuras
 
 Estas pendências não bloqueiam o uso atual de `ited.app.br`, mas devem ser
