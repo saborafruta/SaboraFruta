@@ -2,7 +2,7 @@
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="space-y-5">
+<div class="space-y-5" x-data="{ excluir: null }">
 
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
@@ -35,6 +35,7 @@
               <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ rotulo }}</th>
             {% endfor %}
             <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
+            <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ações</th>
           </tr>
         </thead>
         <tbody>
@@ -55,6 +56,46 @@
                 {% if linha.obj.ativo %}<span class="soft-pill is-green text-xs">Ativo</span>
                 {% else %}<span class="soft-pill is-slate text-xs">Inativo</span>{% endif %}
               </td>
+              <td class="px-4 py-3">
+                <div class="flex items-center justify-end gap-0.5">
+                  <!-- Editar -->
+                  <a href="{% url 'moda:apoio-update' cadastro.grupo cadastro.slug linha.obj.pk %}"
+                     class="p-1.5 rounded" :style="temaClaro ? 'color:#555;' : 'color:#888;'"
+                     onmouseover="this.style.background=temaClaro?'#f0f0f0':'#1a1a1a'" onmouseout="this.style.background=''"
+                     title="Editar">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                    </svg>
+                  </a>
+                  <!-- Ativar / Inativar -->
+                  <form method="post" action="{% url 'moda:apoio-toggle-ativo' cadastro.grupo cadastro.slug linha.obj.pk %}" class="inline">
+                    {% csrf_token %}
+                    <button type="submit" class="p-1.5 rounded" style="{% if linha.obj.ativo %}color:#f59e0b;{% else %}color:#22c55e;{% endif %}"
+                            onmouseover="this.style.background=temaClaro?'#f0f0f0':'#1a1a1a'" onmouseout="this.style.background=''"
+                            title="{% if linha.obj.ativo %}Inativar{% else %}Ativar{% endif %}">
+                      {% if linha.obj.ativo %}
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M18.364 5.636A9 9 0 105.636 18.364 9 9 0 0018.364 5.636zM5.636 5.636l12.728 12.728"/>
+                        </svg>
+                      {% else %}
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                      {% endif %}
+                    </button>
+                  </form>
+                  <!-- Excluir -->
+                  <button type="button"
+                          class="p-1.5 rounded" style="color:#f87171;"
+                          onmouseover="this.style.background=temaClaro?'#fef2f2':'#2a1a1a'" onmouseout="this.style.background=''"
+                          title="Excluir"
+                          @click="excluir = { url: '{% url 'moda:apoio-delete' cadastro.grupo cadastro.slug linha.obj.pk %}', nome: '{{ linha.obj|escapejs }}' }">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                  </button>
+                </div>
+              </td>
             </tr>
           {% empty %}
             <tr>
@@ -68,6 +109,44 @@
           {% endfor %}
         </tbody>
       </table>
+    </div>
+  </div>
+
+  {% comment %}
+    Modal em vez de confirm() do navegador: exclusao pode esbarrar em
+    PROTECT (cadastro em uso) -- a mensagem de erro sai depois do clique,
+    mas pelo menos a confirmacao evita o clique acidental.
+  {% endcomment %}
+  <div x-show="excluir" x-cloak @keydown.escape.window="excluir = null"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4"
+       style="background:rgba(0,0,0,.6);" @click.self="excluir = null">
+    <div class="card p-6 w-full max-w-md space-y-4">
+      <div class="flex items-start gap-3">
+        <div class="shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
+             style="background:rgba(248,113,113,.14); color:#f87171;">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+            Excluir {{ cadastro.singular|lower }} <span x-text="excluir?.nome"></span>?
+          </h3>
+          <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Se já estiver em uso (produto, corte, pedido...) o sistema recusa e
+            sugere inativar em vez de excluir. Esta ação não pode ser desfeita.
+          </p>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn-secondary text-sm" @click="excluir = null">Cancelar</button>
+        <form method="post" :action="excluir?.url">
+          {% csrf_token %}
+          <button type="submit" class="btn-primary text-sm" style="background:#dc2626; border-color:#dc2626;">
+            Excluir
+          </button>
+        </form>
+      </div>
     </div>
   </div>
 

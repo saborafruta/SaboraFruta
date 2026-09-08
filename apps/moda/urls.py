@@ -333,6 +333,8 @@ ROTAS_PRONTAS: list = [
     # sai do placeholder. Só criar e editar precisam de rota.
     path('<slug:grupo>/<slug:slug>/novo/', va.CadastroApoioFormView.as_view(), name='apoio-create'),
     path('<slug:grupo>/<slug:slug>/<int:pk>/editar/', va.CadastroApoioFormView.as_view(), name='apoio-update'),
+    path('<slug:grupo>/<slug:slug>/<int:pk>/toggle-ativo/', va.CadastroApoioToggleAtivoView.as_view(), name='apoio-toggle-ativo'),
+    path('<slug:grupo>/<slug:slug>/<int:pk>/excluir/', va.CadastroApoioDeleteView.as_view(), name='apoio-delete'),
 ]
 
 urlpatterns = [

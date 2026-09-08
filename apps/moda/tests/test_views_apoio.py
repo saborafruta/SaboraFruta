@@ -1,0 +1,217 @@
+"""
+Ativar/inativar e excluir nos cadastros de apoio (Tamanhos, Tecidos,
+Marcas...) — as duas ações que a tela genérica de cadastro só mostrava
+(o selo Ativo/Inativo), sem dar jeito de mudar.
+
+O QUE ESTES TESTES CERCAM:
+
+  · INATIVAR/ATIVAR é toggle, nunca apaga — a saída pra tirar de
+    circulação um cadastro já usado sem quebrar quem aponta pra ele;
+
+  · EXCLUIR APAGA DE VERDADE, mas só quando dá: todo FK que aponta pra um
+    cadastro de apoio é PROTECT, então excluir um tecido em uso (produto,
+    corte, pedido) tem que recusar com uma mensagem, não estourar 500;
+
+  · `next` volta pra onde o botão foi clicado (a tela de Estoque › Tecidos,
+    por exemplo), não sempre pro cadastro genérico -- e só um `next`
+    seguro (mesmo host) é aceito, senão cai no padrão.
+"""
+from decimal import Decimal
+
+from django.test import TestCase
+from django.urls import reverse
+
+from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.moda.models import Tamanho, Tecido
+from apps.produtos.models import Produto, UnidadeMedida
+
+
+class ApoioBase(TestCase):
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.empresa = Empresa.objects.create(
+            razao_social='Confeccao Apoio LTDA', nome_fantasia='Apoio',
+            cnpj='63345678000191', segmento='moda_confeccao',
+            regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        cls.filial = Filial.objects.create(
+            empresa=cls.empresa, razao_social='Confeccao Apoio LTDA',
+            cnpj='63345678000272', uf='RN', cidade='Natal', is_matriz=True,
+        )
+        perfil = PerfilAcesso.objects.create(
+            empresa=cls.empresa, nome='Admin', is_admin=True,
+        )
+        cls.usuario = Usuario.objects.create_user(
+            email='apoio@teste.local', nome='Apoio', password='x' * 12,
+            empresa=cls.empresa, perfil=perfil, filial=cls.filial,
+        )
+
+    def setUp(self):
+        self.client.force_login(self.usuario)
+
+
+class ToggleAtivoTests(ApoioBase):
+
+    def test_inativa_um_cadastro_ativo(self):
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', nome='Médio', ativo=True)
+
+        self.client.post(
+            reverse('moda:apoio-toggle-ativo', args=['produtos', 'tamanhos', tamanho.pk])
+        )
+
+        tamanho.refresh_from_db()
+        self.assertFalse(tamanho.ativo)
+
+    def test_ativa_um_cadastro_inativo(self):
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', nome='Médio', ativo=False)
+
+        self.client.post(
+            reverse('moda:apoio-toggle-ativo', args=['produtos', 'tamanhos', tamanho.pk])
+        )
+
+        tamanho.refresh_from_db()
+        self.assertTrue(tamanho.ativo)
+
+    def test_redireciona_para_o_next_quando_seguro(self):
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', nome='Médio')
+        destino = reverse('moda:estoque-tecidos')
+
+        resposta = self.client.post(
+            reverse('moda:apoio-toggle-ativo', args=['produtos', 'tamanhos', tamanho.pk]),
+            {'next': destino},
+        )
+
+        self.assertRedirects(resposta, destino)
+
+    def test_ignora_next_de_outro_site(self):
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', nome='Médio')
+
+        resposta = self.client.post(
+            reverse('moda:apoio-toggle-ativo', args=['produtos', 'tamanhos', tamanho.pk]),
+            {'next': 'https://evil.example.com/roubado/'},
+        )
+
+        self.assertRedirects(resposta, reverse('moda:item', args=['produtos', 'tamanhos']))
+
+    def test_nao_mexe_em_cadastro_de_outra_filial(self):
+        outra_filial = Filial.objects.create(
+            empresa=self.empresa, razao_social='Outra', cnpj='63345678000273',
+            uf='RN', cidade='Mossoró',
+        )
+        tamanho = Tamanho.objects.create(filial=outra_filial, sigla='M', nome='Médio', ativo=True)
+
+        resposta = self.client.post(
+            reverse('moda:apoio-toggle-ativo', args=['produtos', 'tamanhos', tamanho.pk])
+        )
+
+        self.assertEqual(resposta.status_code, 404)
+        tamanho.refresh_from_db()
+        self.assertTrue(tamanho.ativo)
+
+
+class ExcluirTests(ApoioBase):
+
+    def test_exclui_cadastro_sem_uso(self):
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', nome='Médio')
+
+        self.client.post(
+            reverse('moda:apoio-delete', args=['produtos', 'tamanhos', tamanho.pk])
+        )
+
+        self.assertFalse(Tamanho.objects.filter(pk=tamanho.pk).exists())
+
+    def test_recusa_excluir_tecido_em_uso_por_produto(self):
+        from apps.moda.models import ProdutoModa
+
+        tecido = Tecido.objects.create(filial=self.filial, nome='Malha Dry')
+        ProdutoModa.objects.create(
+            filial=self.filial, codigo='PM001', nome='Camisa Dry', tecido=tecido,
+        )
+
+        resposta = self.client.post(
+            reverse('moda:apoio-delete', args=['engenharia', 'materiais', tecido.pk]),
+            follow=True,
+        )
+
+        self.assertTrue(Tecido.objects.filter(pk=tecido.pk).exists())
+        avisos = [str(m) for m in resposta.context['messages']]
+        self.assertTrue(any('está em uso' in a for a in avisos), avisos)
+
+    def test_redireciona_para_o_next_quando_seguro(self):
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', nome='Médio')
+        destino = reverse('moda:estoque-tecidos')
+
+        resposta = self.client.post(
+            reverse('moda:apoio-delete', args=['produtos', 'tamanhos', tamanho.pk]),
+            {'next': destino},
+        )
+
+        self.assertRedirects(resposta, destino)
+
+
+class AcoesNaTelaDeCadastroTests(ApoioBase):
+
+    def test_lista_mostra_os_botoes_de_acao(self):
+        tamanho = Tamanho.objects.create(filial=self.filial, sigla='M', nome='Médio')
+
+        html = self.client.get(
+            reverse('moda:item', args=['produtos', 'tamanhos'])
+        ).content.decode()
+
+        self.assertIn(
+            reverse('moda:apoio-toggle-ativo', args=['produtos', 'tamanhos', tamanho.pk]), html,
+        )
+        self.assertIn(
+            reverse('moda:apoio-delete', args=['produtos', 'tamanhos', tamanho.pk]), html,
+        )
+
+
+class AcoesNaTelaDeEstoqueTecidosTests(ApoioBase):
+
+    def test_lista_mostra_editar_inativar_excluir(self):
+        tecido = Tecido.objects.create(filial=self.filial, nome='Malha Dry')
+
+        html = self.client.get(reverse('moda:estoque-tecidos')).content.decode()
+
+        self.assertIn(
+            reverse('moda:apoio-update', args=['engenharia', 'materiais', tecido.pk]), html,
+        )
+        self.assertIn(
+            reverse('moda:apoio-toggle-ativo', args=['engenharia', 'materiais', tecido.pk]), html,
+        )
+        self.assertIn(
+            reverse('moda:apoio-delete', args=['engenharia', 'materiais', tecido.pk]), html,
+        )
+
+    def test_mostra_adicionar_estoque_so_quando_ligado(self):
+        metro = UnidadeMedida.objects.create(
+            empresa=self.empresa, sigla='M', descricao='Metro',
+            tipo=UnidadeMedida.Tipo.COMPRIMENTO,
+        )
+        produto = Produto.objects.create(
+            filial=self.filial, codigo='TEC001', descricao='Malha Dry 1,60',
+            unidade_medida=metro,
+        )
+        ligado = Tecido.objects.create(
+            filial=self.filial, nome='Malha Ligada', produto_estoque=produto,
+        )
+        Tecido.objects.create(filial=self.filial, nome='Malha Solta')
+
+        html = self.client.get(reverse('moda:estoque-tecidos')).content.decode()
+
+        self.assertIn(f'movimentacoes/nova/?produto={produto.pk}', html)
+
+    def test_inativar_a_partir_da_tela_de_estoque_volta_pra_ela(self):
+        tecido = Tecido.objects.create(filial=self.filial, nome='Malha Dry')
+        destino = reverse('moda:estoque-tecidos')
+
+        resposta = self.client.post(
+            reverse('moda:apoio-toggle-ativo', args=['engenharia', 'materiais', tecido.pk]),
+            {'next': destino},
+        )
+
+        self.assertRedirects(resposta, destino)
+        tecido.refresh_from_db()
+        self.assertFalse(tecido.ativo)

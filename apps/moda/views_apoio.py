@@ -12,9 +12,10 @@ sem rota nova escritos à mão.
 from dataclasses import dataclass, field
 
 from django.contrib import messages
-from django.db.models import Q
+from django.db.models import ProtectedError, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from . import forms as f
 from . import models as m
@@ -186,3 +187,64 @@ class CadastroApoioFormView(ModaBaseView):
         obj.save()
         messages.success(request, f'{cadastro.singular} "{obj}" salvo(a).')
         return redirect(reverse('moda:item', args=[cadastro.grupo, cadastro.slug]))
+
+
+def _redirecionar(request, cadastro):
+    """
+    Volta pra onde o botão foi clicado, quando é seguro -- inativar/excluir
+    tecido a partir da tela de Estoque › Tecidos deveria devolver pra lá, e
+    não sempre pro cadastro genérico, senão quem usou o atalho perde o
+    lugar de onde saiu.
+    """
+    destino = request.POST.get('next', '')
+    if destino and url_has_allowed_host_and_scheme(destino, allowed_hosts={request.get_host()}):
+        return redirect(destino)
+    return redirect(reverse('moda:item', args=[cadastro.grupo, cadastro.slug]))
+
+
+class CadastroApoioToggleAtivoView(ModaBaseView):
+    """Ativa/inativa sem apagar -- é a saída pra tirar de circulação um
+    cadastro que já foi usado (tecido descontinuado, tamanho que saiu de
+    linha) sem quebrar o histórico que aponta pra ele."""
+
+    permissao_acao = 'editar'
+
+    def post(self, request, slug, pk, grupo=None):
+        cadastro = _cadastro(slug)
+        obj = get_object_or_404(
+            cadastro.model.objects.for_filial(request.filial_ativa), pk=pk,
+        )
+        obj.ativo = not obj.ativo
+        obj.save(update_fields=['ativo'])
+        acao = 'ativado(a)' if obj.ativo else 'inativado(a)'
+        messages.success(request, f'{cadastro.singular} "{obj}" {acao}.')
+        return _redirecionar(request, cadastro)
+
+
+class CadastroApoioDeleteView(ModaBaseView):
+    """
+    Exclui de verdade -- só quando dá. Todo FK que aponta pra um cadastro
+    de apoio (tecido no produto, no corte, no encaixe, no item de pedido...)
+    é PROTECT, então o próprio banco recusa apagar o que já está em uso; o
+    caminho pra esses é inativar, não excluir.
+    """
+
+    permissao_acao = 'excluir'
+
+    def post(self, request, slug, pk, grupo=None):
+        cadastro = _cadastro(slug)
+        obj = get_object_or_404(
+            cadastro.model.objects.for_filial(request.filial_ativa), pk=pk,
+        )
+        nome = str(obj)
+        try:
+            obj.delete()
+        except ProtectedError:
+            messages.error(
+                request,
+                f'{cadastro.singular} "{nome}" está em uso e não pode ser excluído(a). '
+                'Inative em vez de excluir.',
+            )
+        else:
+            messages.success(request, f'{cadastro.singular} "{nome}" excluído(a).')
+        return _redirecionar(request, cadastro)
