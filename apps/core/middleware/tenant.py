@@ -68,6 +68,12 @@ class TenantContextMiddleware:
                     )
                 return HttpResponseRedirect('/auth/login/')
 
+        # Rotas centrais consultam o Banco Gerencial, mas ainda precisam saber
+        # qual tenant estava selecionado. O ID da filial nao pode ser usado
+        # diretamente no gerencial: bancos independentes reutilizam PKs e uma
+        # filial da ERK pode ter o mesmo ID da MATRIZ da iTed.
+        request.selected_tenant_db_alias = requested_alias
+
         # A sessão sempre referencia o diretório central. Force sua resolução
         # antes de ativar o router do tenant; depois substituímos o objeto pelo
         # usuário homônimo do banco operacional.

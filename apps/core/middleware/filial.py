@@ -11,8 +11,9 @@ from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse
 
-from apps.core.models import Filial
+from apps.core.models import EmpresaBanco, Filial
 from apps.core.services.modulos import modulo_da_url, modulos_ativos
+from apps.core.tenant_registry import register_tenant_database
 
 
 class FilialMiddleware:
@@ -35,6 +36,39 @@ class FilialMiddleware:
 
     def __init__(self, get_response):
         self.get_response = get_response
+
+    @staticmethod
+    def _filial_central_do_tenant(request, filial_id):
+        """Traduz a filial do tenant para a copia do diretorio central.
+
+        Retorna ``(filial, tentou_mapear)``. Quando existe tenant selecionado,
+        uma falha de mapeamento nunca pode cair no lookup comum por PK, pois
+        esse mesmo numero pode identificar outra empresa no Banco Gerencial.
+        """
+        alias = getattr(request, 'selected_tenant_db_alias', None)
+        if not alias or getattr(request, 'tenant_db_alias', None):
+            return None, False
+        try:
+            banco = EmpresaBanco.objects.using('default').get(
+                db_alias=alias,
+                ativo=True,
+                status=EmpresaBanco.Status.ATIVO,
+            )
+            if not register_tenant_database(banco):
+                return None, True
+            filial_tenant = Filial.objects.using(alias).get(pk=filial_id, ativo=True)
+            filial_central = (
+                Filial.objects.using('default')
+                .select_related('empresa')
+                .get(
+                    empresa_id=banco.empresa_id,
+                    cnpj=filial_tenant.cnpj,
+                    ativo=True,
+                )
+            )
+            return filial_central, True
+        except (EmpresaBanco.DoesNotExist, Filial.DoesNotExist):
+            return None, True
 
     def __call__(self, request):
         request.filial_ativa = None
@@ -60,8 +94,14 @@ class FilialMiddleware:
                 return redirect('core:selecionar-filial')
             return self.get_response(request)
 
+        filial, tentou_mapear = self._filial_central_do_tenant(request, filial_id)
         try:
-            filial = Filial.objects.select_related('empresa').get(pk=filial_id, ativo=True)
+            if tentou_mapear and filial is None:
+                raise Filial.DoesNotExist
+            if not tentou_mapear:
+                filial = Filial.objects.select_related('empresa').get(
+                    pk=filial_id, ativo=True,
+                )
         except Filial.DoesNotExist:
             request.session.pop('filial_ativa_id', None)
             return redirect('core:selecionar-filial')

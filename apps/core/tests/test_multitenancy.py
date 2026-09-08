@@ -10,6 +10,7 @@ from django.test import RequestFactory, TestCase, override_settings
 from django.utils.functional import SimpleLazyObject
 
 from apps.core.db_router import TenantDatabaseRouter
+from apps.core.middleware.filial import FilialMiddleware
 from apps.core.middleware.tenant import TenantContextMiddleware
 from apps.core.models import (
     Empresa, EmpresaBanco, Filial, PerfilAcesso, TenantPublicLink, Usuario,
@@ -302,6 +303,110 @@ class MultitenancyFoundationTests(TestCase):
 
         self.assertIsNone(response)
         self.assertEqual(request.session['tenant_db_alias'], self.banco.db_alias)
+        self.assertEqual(request.selected_tenant_db_alias, self.banco.db_alias)
+
+    @override_settings(
+        TENANT_DATABASE_ROUTING_ENABLED=True,
+        TENANT_PUBLIC_LINK_ROUTING_READY=True,
+        TENANT_BACKGROUND_TASKS_READY=True,
+    )
+    def test_gestao_preserva_qual_tenant_estava_selecionado(self):
+        request = RequestFactory().get('/gestao/usuarios/')
+        request.session = {
+            'tenant_db_alias': self.banco.db_alias,
+            'filial_ativa_id': 1,
+        }
+        request.user = self.usuario
+
+        response = TenantContextMiddleware(
+            lambda req: (
+                req.tenant_db_alias,
+                req.selected_tenant_db_alias,
+            ),
+        )(request)
+
+        self.assertEqual(response, (None, self.banco.db_alias))
+
+    @patch('apps.core.middleware.filial.register_tenant_database', return_value=True)
+    def test_filial_central_e_mapeada_por_empresa_e_cnpj(self, _register):
+        request = SimpleNamespace(
+            selected_tenant_db_alias=self.banco.db_alias,
+            tenant_db_alias=None,
+        )
+        tenant_filial = SimpleNamespace(cnpj=self.filial.cnpj)
+        tenant_manager = Mock()
+        tenant_manager.get.return_value = tenant_filial
+        central_manager = Mock()
+        central_manager.select_related.return_value.get.return_value = self.filial
+        banco_manager = Mock()
+        banco_manager.get.return_value = self.banco
+
+        with (
+            patch.object(EmpresaBanco.objects, 'using', return_value=banco_manager),
+            patch.object(
+                Filial.objects,
+                'using',
+                side_effect=lambda alias: (
+                    tenant_manager if alias == self.banco.db_alias else central_manager
+                ),
+            ),
+        ):
+            filial, tentou_mapear = FilialMiddleware._filial_central_do_tenant(
+                request, 1,
+            )
+
+        self.assertTrue(tentou_mapear)
+        self.assertEqual(filial, self.filial)
+        central_manager.select_related.return_value.get.assert_called_once_with(
+            empresa_id=self.empresa.pk,
+            cnpj=self.filial.cnpj,
+            ativo=True,
+        )
+
+    def test_usuarios_e_perfis_usam_filial_central_mapeada(self):
+        user = Mock(is_authenticated=True, is_superuser=True, filial_id=None)
+        user.pode_acessar_filial.return_value = True
+        user.perfil_para_filial.return_value = self.perfil
+
+        for path in ('/gestao/usuarios/', '/gestao/perfis/'):
+            with self.subTest(path=path):
+                request = RequestFactory().get(path)
+                request.session = {
+                    'tenant_db_alias': self.banco.db_alias,
+                    'filial_ativa_id': 1,
+                }
+                request.user = user
+                request.tenant_db_alias = None
+                request.selected_tenant_db_alias = self.banco.db_alias
+
+                with patch.object(
+                    FilialMiddleware,
+                    '_filial_central_do_tenant',
+                    return_value=(self.filial, True),
+                ):
+                    response = FilialMiddleware(lambda req: req.filial_ativa)(request)
+
+                self.assertEqual(response, self.filial)
+
+    def test_falha_no_mapeamento_nao_cai_em_filial_de_mesmo_id(self):
+        request = RequestFactory().get('/gestao/usuarios/')
+        request.session = {
+            'tenant_db_alias': self.banco.db_alias,
+            'filial_ativa_id': self.filial.pk,
+        }
+        request.user = Mock(is_authenticated=True, is_superuser=True, filial_id=None)
+        request.tenant_db_alias = None
+        request.selected_tenant_db_alias = self.banco.db_alias
+
+        with patch.object(
+            FilialMiddleware,
+            '_filial_central_do_tenant',
+            return_value=(None, True),
+        ):
+            response = FilialMiddleware(lambda _request: None)(request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertNotIn('filial_ativa_id', request.session)
 
     @override_settings(TENANT_DATABASE_ROUTING_ENABLED=True)
     def test_login_tenant_mantem_sessao_no_usuario_do_diretorio_central(self):

@@ -204,6 +204,31 @@ obteve:
 - 4 filiais;
 - 2 empresas.
 
+### Correção do contexto ERK nas telas de gestão (07/09/2026)
+
+Foi identificado em produção que, após selecionar a ERK/L&R Sports, abrir
+`/gestao/usuarios/` mostrava a filial `MATRIZ` e usuários da iTed. Os bancos não
+misturaram dados: a rota continuava corretamente no Banco Gerencial, mas usava
+diretamente o PK da filial salvo no banco ERK. Como bancos independentes podem
+reutilizar o mesmo PK, o número da filial ERK coincidia com a MATRIZ no
+gerencial.
+
+A resolução passou a preservar o alias do tenant selecionado nas rotas
+centrais e traduzir a filial por três chaves: projeto lógico (`EmpresaBanco`),
+empresa e CNPJ da filial. Nunca se usa apenas o PK entre bancos. Se a
+correspondência não puder ser comprovada, a sessão volta para a seleção de
+empresa/filial em vez de abrir dados de outra empresa. A regressão cobre
+Usuários, Perfis e o caso explícito de PK coincidente.
+
+Na auditoria que encontrou o problema:
+
+- o deployment estava em `SUCCESS`;
+- 1.966 requisições em seis horas tiveram zero respostas 5xx;
+- todos os três bancos estavam sem migrations pendentes;
+- as conexões iTed e Eureka foram validadas;
+- as 82 referências de arquivos da Eureka foram verificadas e nenhuma estava
+  ausente (42 arquivos de pedidos, 37 imagens visuais, logo e duas fotos).
+
 ## Provisionamento automático de nova empresa
 
 O modo `railway_api` está ativo. O fluxo esperado é:
