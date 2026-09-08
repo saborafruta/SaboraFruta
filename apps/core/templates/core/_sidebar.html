@@ -1198,20 +1198,18 @@
         apps/moda/menu.py, então acrescentar um grupo é uma linha lá, e não
         mais um bloco de HTML aqui.
       {% endcomment %}
-      <button type="button" @click="!collapsed && toggleSecao('moda')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" x-cloak style="background:none;border:none;cursor:pointer;">
+      <button type="button" @click="toggleSecao('moda')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" style="background:none;border:none;cursor:pointer;">
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Moda e Confecção</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.moda ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
-      <div class="my-2 mx-3" x-show="collapsed" x-cloak :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
-      <div x-show="collapsed || secoes.moda">
+      <div x-show="secoes.moda">
       {% for grupo in moda_grupos %}
       <a href="{% url 'moda:grupo' grupo.slug %}"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
-         :class="collapsed ? 'justify-center' : ''"
          :style="'{{ request.path }}'.startsWith('/moda/{{ grupo.slug }}/') ? (temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;') : (temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;')"
          title="{{ grupo.label }}">
         {% include "moda/_icones.html" with icone=grupo.icone classe="w-5 h-5 flex-shrink-0" %}
-        <span x-show="!collapsed">{{ grupo.label }}</span>
+        <span>{{ grupo.label }}</span>
       </a>
       {% endfor %}
       </div><!-- /moda -->
@@ -1223,20 +1221,18 @@
         apps/polpa/menu.py, então acrescentar um grupo é uma linha lá, e não
         mais um bloco de HTML aqui.
       {% endcomment %}
-      <button type="button" @click="!collapsed && toggleSecao('polpa')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" x-cloak style="background:none;border:none;cursor:pointer;">
+      <button type="button" @click="toggleSecao('polpa')" class="w-full flex items-center justify-between pt-4 pb-1 px-3" style="background:none;border:none;cursor:pointer;">
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Polpa de Frutas</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.polpa ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
-      <div class="my-2 mx-3" x-show="collapsed" x-cloak :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
-      <div x-show="collapsed || secoes.polpa">
+      <div x-show="secoes.polpa">
       {% for grupo in polpa_grupos %}
       <a href="{% url 'polpa:grupo' grupo.slug %}"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
-         :class="collapsed ? 'justify-center' : ''"
          :style="'{{ request.path }}'.startsWith('/polpa/{{ grupo.slug }}/') ? (temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;') : (temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;')"
          title="{{ grupo.label }}">
         {% include "polpa/_icones.html" with icone=grupo.icone classe="w-5 h-5 flex-shrink-0" %}
-        <span x-show="!collapsed">{{ grupo.label }}</span>
+        <span>{{ grupo.label }}</span>
       </a>
       {% endfor %}
       </div><!-- /polpa -->

@@ -57,6 +57,10 @@ class MenuFavoritosViewTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.usuario.menu_favoritos, ['/financeiro/posicao-diaria/'])
+        self.usuario.save.assert_called_once_with(
+            using='default',
+            update_fields=['menu_favoritos', 'updated_at'],
+        )
 
     def test_usuario_tenant_salva_favorito_no_proprio_banco(self):
         response = self._post(
@@ -67,6 +71,10 @@ class MenuFavoritosViewTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.usuario.menu_favoritos, ['/financeiro/posicao-diaria/'])
+        self.usuario.save.assert_called_once_with(
+            using='empresa_eureka_50649395000126',
+            update_fields=['menu_favoritos', 'updated_at'],
+        )
 
     def test_adiciona_e_remove_favorito(self):
         response = self._post('/financeiro/pagar/?status=pendente', True)
@@ -160,3 +168,14 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
             template.count("request.resolver_match.namespace == 'produtos'"),
             2,
         )
+
+    def test_verticais_do_menu_mobile_nao_herdam_sidebar_recolhida(self):
+        raiz = Path(__file__).resolve().parents[1]
+        template = (raiz / 'templates' / 'core' / '_sidebar.html').read_text(encoding='utf-8')
+        drawer_mobile = template.split('<!-- DRAWER MOBILE -->', 1)[1]
+
+        self.assertIn("@click=\"toggleSecao('moda')\"", drawer_mobile)
+        self.assertIn("@click=\"toggleSecao('polpa')\"", drawer_mobile)
+        self.assertNotIn("@click=\"!collapsed && toggleSecao('moda')\"", drawer_mobile)
+        self.assertNotIn("@click=\"!collapsed && toggleSecao('polpa')\"", drawer_mobile)
+        self.assertNotIn('<span x-show="!collapsed">{{ grupo.label }}</span>', drawer_mobile)

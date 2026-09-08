@@ -90,7 +90,14 @@ class MenuFavoritosView(LoginRequiredMixin, View):
                 favoritos.remove(caminho)
 
             usuario.menu_favoritos = favoritos
-            usuario.save(update_fields=['menu_favoritos', 'updated_at'])
+            # O router operacional privilegia o tenant ativo. Para um
+            # superadministrador central navegando dentro desse tenant, isso
+            # sobrescreveria o alias do objeto e tentaria atualizar o mesmo PK
+            # no banco errado. O ``using`` precisa acompanhar o lock acima.
+            usuario.save(
+                using=banco_usuario,
+                update_fields=['menu_favoritos', 'updated_at'],
+            )
 
         return JsonResponse({'ok': True, 'favoritos': favoritos})
 
