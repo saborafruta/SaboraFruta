@@ -415,6 +415,7 @@
       {% url 'financeiro:conciliacao_list' as conciliacao_url %}
       {% url 'produtos:tabela-list' as tabela_preco_url %}
       {% url 'logistica:romaneio-list' as romaneio_url %}
+      {% url 'logistica:viagem-list' as viagem_url %}
       {% url 'logistica:ordem-coleta-list' as ordem_coleta_url %}
       {% url 'logistica:manifesto-list' as manifesto_url %}
       {% url 'logistica:cte-list' as cte_url %}
@@ -669,6 +670,18 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7h11v10H3V7zm11 3h3l4 4v3h-7v-7zM8 17h8M5 17h.01M19 17h.01"/>
         </svg>
         <span x-show="!collapsed">Romaneio de Carga</span>
+      </a>
+      <a href="{{ viagem_url }}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="{% if '/logistica/viagens' in request.path or '/logistica/estoque-em-transito' in request.path or '/logistica/rastreabilidade' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
+         {% if '/logistica/viagens' not in request.path and '/logistica/estoque-em-transito' not in request.path and '/logistica/rastreabilidade' not in request.path %}@mouseenter="$el.style.background=temaClaro?'#eff6ff':'#242426'; $el.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" @mouseleave="$el.style.background='transparent'; $el.style.color=temaClaro?'#6b7280':'#f8fafc'; $el.style.fontWeight='';"{% endif %}
+         title="Viagens — venda fora do estabelecimento">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8 0H9m10 0h1a1 1 0 001-1v-4.586a1 1 0 00-.293-.707l-2.414-2.414A1 1 0 0016.586 8H13m0 8V8"/>
+        </svg>
+        <span x-show="!collapsed">Viagens</span>
       </a>
       <a href="{{ ordem_coleta_url }}"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
