@@ -350,3 +350,66 @@ class AtalhoDeCriarProdutoNoFormularioDeTecidoTests(ApoioBase):
 
         tecido.refresh_from_db()
         self.assertIsNone(tecido.produto_estoque_id)
+
+
+class ListaDeMateriaisCentralizadaTests(ApoioBase):
+    """
+    Composição, Gramatura, Fornecedor e Estoque ganharam alinhamento
+    centralizado -- só a primeira coluna (Nome, que é o link de edição)
+    continua alinhada à esquerda.
+    """
+
+    def test_cabecalho_das_colunas_alem_da_primeira_fica_centralizado(self):
+        Tecido.objects.create(filial=self.filial, nome='Active Air')
+
+        html = self.client.get(
+            reverse('moda:item', args=['engenharia', 'materiais'])
+        ).content.decode()
+
+        cabecalho = html[html.index('<thead>'):html.index('</thead>')]
+        corpo = html[html.index('<tbody>'):html.index('</tbody>')]
+
+        # 5 colunas do cadastro (Nome, Composição, Gramatura, Fornecedor,
+        # Estoque (m)); só a primeira (Nome, o link de edição) fica à
+        # esquerda -- as outras 4 centralizadas, no cabeçalho e na linha.
+        self.assertEqual(cabecalho.count('text-center'), 4)
+        self.assertEqual(corpo.count('text-center'), 4)
+        self.assertIn('text-left', cabecalho)
+
+
+class EdicaoRapidaDeEstoqueNaListaTests(ApoioBase):
+    """
+    "Quero conseguir digitar a quantidade de estoque": duplo clique na
+    célula de Estoque abre um campo de texto que grava via o mesmo
+    endpoint de ajuste manual que a tela de Estoque usa -- o saldo nunca
+    é escrito cru, sempre passa por uma movimentação de verdade.
+    """
+
+    def test_tecido_ligado_ganha_celula_editavel_apontando_pro_produto(self):
+        metro = UnidadeMedida.objects.create(
+            empresa=self.empresa, sigla='M', descricao='Metro',
+            tipo=UnidadeMedida.Tipo.COMPRIMENTO,
+        )
+        produto = Produto.objects.create(
+            filial=self.filial, codigo='TEC006', descricao='Malha Dry',
+            unidade_medida=metro,
+        )
+        Tecido.objects.create(filial=self.filial, nome='Malha Ligada', produto_estoque=produto)
+
+        html = self.client.get(
+            reverse('moda:item', args=['engenharia', 'materiais'])
+        ).content.decode()
+
+        self.assertIn('data-field="estoque_atual"', html)
+        self.assertIn(
+            reverse('estoque:estoque-inline-edit', args=[produto.pk]), html,
+        )
+
+    def test_tecido_sem_vinculo_nao_ganha_celula_editavel(self):
+        Tecido.objects.create(filial=self.filial, nome='Malha Solta')
+
+        html = self.client.get(
+            reverse('moda:item', args=['engenharia', 'materiais'])
+        ).content.decode()
+
+        self.assertNotIn('data-field="estoque_atual"', html)

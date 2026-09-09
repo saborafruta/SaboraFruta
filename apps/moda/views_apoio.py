@@ -152,7 +152,14 @@ class CadastroApoioListView(ModaBaseView):
         linhas = [
             {
                 'obj': obj,
-                'valores': [_valor(obj, attr) for _rot, attr in cadastro.colunas],
+                # `attr` viaja junto do valor pra tela reconhecer a coluna
+                # de estoque e oferecer a edição rápida só nela -- as
+                # outras colunas (nome, composição...) não têm produto de
+                # estoque nenhum atrás pra editar.
+                'valores': [
+                    {'attr': attr, 'valor': _valor(obj, attr)}
+                    for _rot, attr in cadastro.colunas
+                ],
             }
             for obj in qs
         ]

@@ -32,7 +32,7 @@
         <thead>
           <tr class="border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
             {% for rotulo, _attr in cadastro.colunas %}
-              <th class="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ rotulo }}</th>
+              <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide {% if forloop.first %}text-left{% else %}text-center{% endif %}" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ rotulo }}</th>
             {% endfor %}
             <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Situação</th>
             <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Ações</th>
@@ -41,14 +41,25 @@
         <tbody>
           {% for linha in linhas %}
             <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#1e1e22;'">
-              {% for valor in linha.valores %}
-                <td class="px-4 py-3">
+              {% for campo in linha.valores %}
+                <td class="px-4 py-3 {% if not forloop.first %}text-center{% endif %}">
                   {% if forloop.first %}
                     {# Primeira coluna e' o link de edicao: e' o identificador da linha. #}
                     <a href="{% url 'moda:apoio-update' cadastro.grupo cadastro.slug linha.obj.pk %}" class="font-medium"
-                       :style="temaClaro ? 'color:#1d4ed8;' : 'color:#60a5fa;'">{{ valor|default:"—" }}</a>
+                       :style="temaClaro ? 'color:#1d4ed8;' : 'color:#60a5fa;'">{{ campo.valor|default:"—" }}</a>
+                  {% elif campo.attr == 'estoque_atual' and linha.obj.produto_estoque_id %}
+                    {# Coluna de estoque com produto vinculado: dá pra digitar a quantidade
+                       direto daqui -- duplo clique abre o campo, Enter grava (mesmo
+                       endpoint de ajuste manual que a tela de Estoque usa, então o saldo
+                       sempre passa por uma movimentação de verdade, nunca um valor cru). #}
+                    <span class="apoio-inline-cell" data-field="estoque_atual"
+                          data-inline-url="{% url 'estoque:estoque-inline-edit' linha.obj.produto_estoque_id %}"
+                          data-value="{{ campo.valor|default_if_none:'' }}"
+                          title="Duplo clique para lançar a quantidade">
+                      <span class="inline-display" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ campo.valor|default:"—" }}</span>
+                    </span>
                   {% else %}
-                    <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ valor|default:"—" }}</span>
+                    <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ campo.valor|default:"—" }}</span>
                   {% endif %}
                 </td>
               {% endfor %}
@@ -151,4 +162,75 @@
   </div>
 
 </div>
+
+{% comment %}
+  Edição rápida da coluna de estoque: duplo clique troca o número por um
+  campo de texto, Enter grava. Passa pelo mesmo endpoint de ajuste manual
+  que a tela de Estoque usa (`MovimentacaoService.ajustar_manual`) -- o
+  saldo sempre nasce de uma movimentação de verdade, nunca de um UPDATE
+  cru no cadastro. Só existe célula pra editar (`.apoio-inline-cell`)
+  quando o registro já tem produto de estoque vinculado -- sem produto
+  não há em que Estoque gravar.
+{% endcomment %}
+<style>
+  .apoio-inline-cell { cursor: pointer; display: inline-block; min-width: 2.5rem; }
+  .apoio-inline-editor {
+    width: 5.5rem; text-align: center; border-radius: 7px; padding: .28rem .4rem;
+    font-size: .84rem;
+  }
+</style>
+<script>
+  (function () {
+    function csrfToken() {
+      return document.cookie.split('; ').find((row) => row.startsWith('csrftoken='))?.split('=')[1] || '';
+    }
+    function startInline(cell) {
+      if (cell.querySelector('.apoio-inline-editor')) return;
+      const display = cell.querySelector('.inline-display');
+      const editor = document.createElement('input');
+      editor.type = 'text';
+      editor.className = 'apoio-inline-editor form-input';
+      editor.value = cell.dataset.value || '';
+      display.hidden = true;
+      cell.appendChild(editor);
+      editor.focus();
+      editor.select();
+      let finished = false;
+      const finish = (salvar) => {
+        if (finished) return;
+        finished = true;
+        const novoValor = editor.value;
+        editor.remove();
+        display.hidden = false;
+        if (salvar && String(novoValor).trim() !== String(cell.dataset.value || '').trim()) {
+          salvarInline(cell, display, novoValor);
+        }
+      };
+      editor.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') finish(true);
+        if (event.key === 'Escape') finish(false);
+      });
+      editor.addEventListener('blur', () => finish(true), { once: true });
+    }
+    function salvarInline(cell, display, valor) {
+      const body = new FormData();
+      body.append('field', cell.dataset.field);
+      body.append('value', String(valor || '').trim());
+      cell.style.opacity = '.6';
+      fetch(cell.dataset.inlineUrl, { method: 'POST', headers: { 'X-CSRFToken': csrfToken() }, body })
+        .then((response) => response.json().then((data) => ({ response, data })))
+        .then(({ response, data }) => {
+          if (!response.ok || !data.ok) throw new Error(data.error || 'Não foi possível salvar.');
+          cell.dataset.value = data.value !== undefined ? data.value : valor;
+          display.textContent = data.display || '—';
+        })
+        .catch((error) => alert(error.message))
+        .finally(() => { cell.style.opacity = ''; });
+    }
+    document.addEventListener('dblclick', function (event) {
+      const cell = event.target.closest('.apoio-inline-cell');
+      if (cell) startInline(cell);
+    });
+  })();
+</script>
 {% endblock %}
