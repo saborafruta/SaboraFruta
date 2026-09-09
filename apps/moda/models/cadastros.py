@@ -184,6 +184,26 @@ class Tecido(CadastroApoio):
             return f'{self.nome} ({self.gramatura} g/m²)'
         return self.nome
 
+    def estoque_atual(self):
+        """
+        Quantidade em metros do saldo consolidado, para quem só quer o
+        número na lista do cadastro sem abrir a tela de Estoque › Tecidos
+        (que ainda soma cobertura, consumo e o vínculo deduzido pela
+        ficha). Sem vínculo direto com o estoque, o saldo é desconhecido
+        -- não é zero -- então volta `None`, igual ao resto da tela faz
+        com "—".
+        """
+        if not self.produto_estoque_id:
+            return None
+        from decimal import Decimal
+        from apps.estoque.models.estoque import Estoque
+        estoque = Estoque.objects.filter(
+            produto_id=self.produto_estoque_id, filial_id=self.filial_id,
+        ).first()
+        if not estoque:
+            return None
+        return estoque.quantidade_atual.quantize(Decimal('0.01'))
+
 
 class Aviamento(CadastroApoio):
     """

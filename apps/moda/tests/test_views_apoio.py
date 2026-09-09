@@ -215,3 +215,50 @@ class AcoesNaTelaDeEstoqueTecidosTests(ApoioBase):
         self.assertRedirects(resposta, destino)
         tecido.refresh_from_db()
         self.assertFalse(tecido.ativo)
+
+
+class ColunaDeEstoqueNoCadastroDeMateriaisTests(ApoioBase):
+    """
+    A lista de Tecidos e Malhas (Engenharia › Materiais) ganhou uma coluna
+    de saldo -- pra não precisar abrir a tela de Estoque › Tecidos só pra
+    ver quanto ainda tem de um rolo.
+    """
+
+    def test_mostra_o_saldo_do_tecido_ligado_ao_estoque(self):
+        from apps.estoque.models.estoque import Estoque
+
+        metro = UnidadeMedida.objects.create(
+            empresa=self.empresa, sigla='M', descricao='Metro',
+            tipo=UnidadeMedida.Tipo.COMPRIMENTO,
+        )
+        produto = Produto.objects.create(
+            filial=self.filial, codigo='TEC002', descricao='Malha Dry 1,60',
+            unidade_medida=metro,
+        )
+        Estoque.objects.create(
+            produto=produto, filial=self.filial, quantidade_atual=Decimal('150.5'),
+        )
+        Tecido.objects.create(
+            filial=self.filial, nome='Malha Ligada', produto_estoque=produto,
+        )
+
+        html = self.client.get(
+            reverse('moda:item', args=['engenharia', 'materiais'])
+        ).content.decode()
+
+        self.assertIn('150,50', html)
+
+    def test_sem_vinculo_mostra_travessao_em_vez_de_zero(self):
+        """
+        Sem ligação com o estoque o saldo é desconhecido, não zero --
+        mostrar 0 sugeriria "acabou" quando na verdade ninguém cadastrou
+        o vínculo ainda.
+        """
+        Tecido.objects.create(filial=self.filial, nome='Malha Solta')
+
+        html = self.client.get(
+            reverse('moda:item', args=['engenharia', 'materiais'])
+        ).content.decode()
+
+        self.assertIn('Malha Solta', html)
+        self.assertIn('—</span>', html)

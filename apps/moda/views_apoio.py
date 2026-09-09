@@ -100,6 +100,7 @@ CADASTROS: dict[str, Cadastro] = {
         colunas=(
             ('Nome', 'nome'), ('Composição', 'composicao'),
             ('Gramatura', 'gramatura'), ('Fornecedor', 'fornecedor'),
+            ('Estoque (m)', 'estoque_atual'),
         ),
         busca_em=('nome', 'composicao'),
         ajuda='Composição e gramatura ficam aqui, não no produto — o produto lê daqui.',
