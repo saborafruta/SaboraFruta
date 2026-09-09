@@ -137,37 +137,64 @@
       Como a viagem anda depois disso
     </h3>
     <p class="text-xs mt-1 mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      A ordem é a da operação. Dentro da viagem, o bloco <strong>Fluxo da viagem</strong>
-      mostra em que ponto você está e qual é o próximo passo.
+      A ordem é a da operação — clique em cada passo para ir direto à tela.
+      {% if ultima_viagem %}
+        Os passos abrem a <strong>viagem #{{ ultima_viagem.numero|stringformat:"06d" }}</strong>, em andamento.
+      {% else %}
+        Como ainda não há viagem aberta, todos começam em <strong>Nova viagem</strong>.
+      {% endif %}
+      Dentro da viagem, o bloco <strong>Fluxo da viagem</strong> mostra em que ponto você está.
     </p>
+    {% if ultima_viagem %}
+      {% url 'logistica:viagem-detail' ultima_viagem.pk as passo_carga_url %}
+      {% url 'logistica:viagem-detail' ultima_viagem.pk as passo_remessa_url %}
+      {% url 'logistica:viagem-vendas' ultima_viagem.pk as passo_vendas_url %}
+      {% url 'logistica:viagem-retorno' ultima_viagem.pk as passo_retorno_url %}
+      {% url 'logistica:viagem-acerto' ultima_viagem.pk as passo_acerto_url %}
+    {% else %}
+      {% url 'logistica:viagem-create' as passo_carga_url %}
+      {% url 'logistica:viagem-create' as passo_remessa_url %}
+      {% url 'logistica:viagem-create' as passo_vendas_url %}
+      {% url 'logistica:viagem-create' as passo_retorno_url %}
+      {% url 'logistica:viagem-create' as passo_acerto_url %}
+    {% endif %}
     <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 text-xs">
-      <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
-        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">📦 Montar e fechar a carga</p>
+      <a href="{{ passo_carga_url }}" class="rounded-lg p-3 block transition-all duration-150"
+         :style="temaClaro ? 'background:#f8fafc;border:1px solid #e2e8f0;' : 'background:#18181b;border:1px solid #2a2a2e;'"
+         @mouseenter="$el.style.borderColor='#3b82f6'" @mouseleave="$el.style.borderColor = temaClaro ? '#e2e8f0' : '#2a2a2e'">
+        <p class="font-semibold flex items-center justify-between gap-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"><span>1 · 📦 Montar e fechar a carga</span><span aria-hidden="true">→</span></p>
         <p class="mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Uma linha por produto, com a natureza de cada operação. Fechar tira do estoque.</p>
-      </div>
-      <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
-        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">🧾 Remessa e MDF-e</p>
+      </a>
+      <a href="{{ passo_remessa_url }}" class="rounded-lg p-3 block transition-all duration-150"
+         :style="temaClaro ? 'background:#f8fafc;border:1px solid #e2e8f0;' : 'background:#18181b;border:1px solid #2a2a2e;'"
+         @mouseenter="$el.style.borderColor='#3b82f6'" @mouseleave="$el.style.borderColor = temaClaro ? '#e2e8f0' : '#2a2a2e'">
+        <p class="font-semibold flex items-center justify-between gap-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"><span>2 · 🧾 Remessa e MDF-e</span><span aria-hidden="true">→</span></p>
         <p class="mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">A nota do que sai sem comprador, transmitida à SEFAZ, e o manifesto da carga.</p>
-      </div>
-      <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
-        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">🛣️ Vendas e bonificações na rua</p>
+      </a>
+      <a href="{{ passo_vendas_url }}" class="rounded-lg p-3 block transition-all duration-150"
+         :style="temaClaro ? 'background:#f8fafc;border:1px solid #e2e8f0;' : 'background:#18181b;border:1px solid #2a2a2e;'"
+         @mouseenter="$el.style.borderColor='#3b82f6'" @mouseleave="$el.style.borderColor = temaClaro ? '#e2e8f0' : '#2a2a2e'">
+        <p class="font-semibold flex items-center justify-between gap-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"><span>3 · 🛣️ Vendas e bonificações na rua</span><span aria-hidden="true">→</span></p>
         <p class="mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">O saldo do caminhão é o limite. Venda a prazo abre cobrança na hora.</p>
-      </div>
-      <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
-        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">↩️ Retorno conferido</p>
+      </a>
+      <a href="{{ passo_retorno_url }}" class="rounded-lg p-3 block transition-all duration-150"
+         :style="temaClaro ? 'background:#f8fafc;border:1px solid #e2e8f0;' : 'background:#18181b;border:1px solid #2a2a2e;'"
+         @mouseenter="$el.style.borderColor='#3b82f6'" @mouseleave="$el.style.borderColor = temaClaro ? '#e2e8f0' : '#2a2a2e'">
+        <p class="font-semibold flex items-center justify-between gap-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"><span>4 · ↩️ Retorno conferido</span><span aria-hidden="true">→</span></p>
         <p class="mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">O sistema calcula o previsto; a contagem física corrige. Divergência vira aviso.</p>
-      </div>
-      <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
-        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">🏁 Acerto e encerramento</p>
+      </a>
+      <a href="{{ passo_acerto_url }}" class="rounded-lg p-3 block transition-all duration-150"
+         :style="temaClaro ? 'background:#f8fafc;border:1px solid #e2e8f0;' : 'background:#18181b;border:1px solid #2a2a2e;'"
+         @mouseenter="$el.style.borderColor='#3b82f6'" @mouseleave="$el.style.borderColor = temaClaro ? '#e2e8f0' : '#2a2a2e'">
+        <p class="font-semibold flex items-center justify-between gap-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"><span>5 · 🏁 Acerto e encerramento</span><span aria-hidden="true">→</span></p>
         <p class="mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Carga inicial = vendas + bonificações + retornos. Sem fechar, não encerra.</p>
-      </div>
-      <div class="rounded-lg p-3" :style="temaClaro ? 'background:#f8fafc;' : 'background:#18181b;'">
-        <p class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">🔎 Depois</p>
-        <p class="mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-          <a href="{% url 'logistica:rastreabilidade' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Rastreabilidade</a>
-          mostra por onde cada produto passou, viagem a viagem.
-        </p>
-      </div>
+      </a>
+      <a href="{% url 'logistica:rastreabilidade' %}" class="rounded-lg p-3 block transition-all duration-150"
+         :style="temaClaro ? 'background:#f8fafc;border:1px solid #e2e8f0;' : 'background:#18181b;border:1px solid #2a2a2e;'"
+         @mouseenter="$el.style.borderColor='#3b82f6'" @mouseleave="$el.style.borderColor = temaClaro ? '#e2e8f0' : '#2a2a2e'">
+        <p class="font-semibold flex items-center justify-between gap-2" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'"><span>6 · 🔎 Depois: Rastreabilidade</span><span aria-hidden="true">→</span></p>
+        <p class="mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Mostra por onde cada produto passou, viagem a viagem.</p>
+      </a>
     </div>
   </div>
 

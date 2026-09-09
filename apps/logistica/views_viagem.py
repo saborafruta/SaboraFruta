@@ -1304,9 +1304,20 @@ class ViagemPrimeirosPassosView(PermissaoRequiredMixin, View):
                 grupos.append({'nome': checagem['grupo'], 'itens': []})
             grupos[-1]['itens'].append(checagem)
 
+        # A viagem em andamento, para os cartões "o que vem depois" levarem
+        # direto ao passo. Sem nenhuma aberta, cada cartão aponta para a
+        # criação -- é lá que o passo a passo começa.
+        ultima_viagem = (
+            Viagem.objects.for_filial(filial)
+            .exclude(status__in=Viagem.STATUS_ENCERRADOS)
+            .order_by('-data_saida', '-numero')
+            .first()
+        )
+
         return render(request, self.template_name, {
             'title': 'Primeiros passos da viagem',
             'grupos': grupos,
             'resumo': resumo,
             'pode_criar': request.user.tem_permissao('logistica', 'criar'),
+            'ultima_viagem': ultima_viagem,
         })
