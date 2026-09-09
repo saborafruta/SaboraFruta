@@ -248,11 +248,12 @@ class ColunaDeEstoqueNoCadastroDeMateriaisTests(ApoioBase):
 
         self.assertIn('150,50', html)
 
-    def test_sem_vinculo_mostra_travessao_em_vez_de_zero(self):
+    def test_sem_vinculo_mostra_atalho_pra_lancar_em_vez_de_zero(self):
         """
         Sem ligação com o estoque o saldo é desconhecido, não zero --
         mostrar 0 sugeriria "acabou" quando na verdade ninguém cadastrou
-        o vínculo ainda.
+        o vínculo ainda. Em vez de um "—" mudo, a coluna já oferece o
+        atalho pra criar o produto e lançar a quantidade.
         """
         Tecido.objects.create(filial=self.filial, nome='Malha Solta')
 
@@ -261,7 +262,8 @@ class ColunaDeEstoqueNoCadastroDeMateriaisTests(ApoioBase):
         ).content.decode()
 
         self.assertIn('Malha Solta', html)
-        self.assertIn('—</span>', html)
+        self.assertIn('+ Lançar', html)
+        self.assertIn(reverse('produtos:produto-create'), html)
 
 
 class AtalhoDeCriarProdutoNoFormularioDeTecidoTests(ApoioBase):

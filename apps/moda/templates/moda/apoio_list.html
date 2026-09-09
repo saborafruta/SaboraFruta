@@ -58,6 +58,16 @@
                           title="Duplo clique para lançar a quantidade">
                       <span class="inline-display" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ campo.valor|default:"—" }}</span>
                     </span>
+                  {% elif campo.attr == 'estoque_atual' %}
+                    {# Ainda sem produto de estoque vinculado: não há onde lançar
+                       quantidade nenhuma, então o "—" já leva direto pra criar o
+                       produto (com a quantidade inicial no próprio formulário) em
+                       vez de ficar mudo esperando um duplo clique que não faz nada. #}
+                    <a href="{% url 'produtos:produto-create' %}?nome={{ linha.obj.nome|urlencode }}&codigo={{ linha.obj.codigo|default:''|urlencode }}&next={% url 'moda:apoio-update' cadastro.grupo cadastro.slug linha.obj.pk %}"
+                       class="text-xs font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'"
+                       title="Vincular um produto de estoque para lançar quantidade">
+                      + Lançar
+                    </a>
                   {% else %}
                     <span :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ campo.valor|default:"—" }}</span>
                   {% endif %}
