@@ -13,7 +13,7 @@
     accent-color: #e8824a; cursor: pointer;
   }
 </style>
-<div class="apoio-form max-w-2xl mx-auto space-y-5">
+<div class="apoio-form w-full space-y-5">
 
   <div class="flex items-center gap-3">
     <a href="{% url 'moda:item' cadastro.grupo cadastro.slug %}"
@@ -60,7 +60,7 @@
           Dados do {{ cadastro.singular|lower }}
         </h3>
       </div>
-      <div class="p-6 grid gap-x-4 gap-y-5 sm:grid-cols-2">
+      <div class="p-6 grid gap-x-5 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
         {% include "moda/_form_campos.html" %}
       </div>
     </div>

@@ -10,7 +10,7 @@
 {% endcomment %}
 {% for campo in form %}
   {% if campo.field.widget.input_type == 'checkbox' %}
-    <div class="{{ campo.css_classes|default:'' }} sm:col-span-2">
+    <div class="{{ campo.css_classes|default:'' }} sm:col-span-2 lg:col-span-3">
       <label class="flex items-center gap-2.5 rounded-lg px-3.5 py-3 cursor-pointer transition-colors"
              :style="temaClaro ? 'background:#f8fafc; border:1px solid #e2e8f0;' : 'background:#1c1c1e; border:1px solid #2a2a2e;'">
         {{ campo }}
@@ -24,7 +24,7 @@
       {% endfor %}
     </div>
   {% else %}
-    <div class="{{ campo.css_classes|default:'' }}">
+    <div class="{{ campo.css_classes|default:'' }}{% if campo.name == 'observacao' %} sm:col-span-2 lg:col-span-3{% endif %}">
       <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
         {{ campo.label }}{% if campo.field.required %} <span style="color:#e8824a;">*</span>{% endif %}
       </label>
