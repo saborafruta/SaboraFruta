@@ -190,6 +190,19 @@ test('tipo de peça desconhecido é recusado', () => {
   assert.match(validarModeloOp2({ ...completo(), estrutura_tipo: '' }, grupos), /tipo de peça válido/);
 });
 
+test('tipo de peça Outro exige o nome livre', () => {
+  const opcoes = {
+    outro: {label: 'Outro', campos: {tipo_impressao: ['N/A'], malha: ['N/A']}},
+  };
+  const draft = {
+    valor_unitario: '10', estrutura_tipo: 'outro', estrutura_tipo_outro: '',
+    tipo_impressao: ['N/A'], estrutura: {malha: 'N/A'},
+  };
+  assert.match(validarModeloOp2(draft, opcoes), /informe qual é o outro tipo/);
+  draft.estrutura_tipo_outro = 'Mochila térmica';
+  assert.equal(validarModeloOp2(draft, opcoes), '');
+});
+
 test('impressão e acabamento aceitam múltiplas opções válidas', () => {
   const gruposMultiplos = {
     calcao: {label: 'Calção', campos: {tipo_impressao: ['SILK', 'RELEVO'], acabamentos: ['RECORTE', 'FORRO']}},

@@ -226,6 +226,17 @@ def _ordenar_tipos(grupos):
     ))
 
 
+def _incluir_tipo_outro(grupos):
+    """Acrescenta o tipo livre sem materializá-lo no cadastro da filial."""
+    resultado = deepcopy(grupos)
+    base = resultado.get('camisa') or next(iter(resultado.values()), {'campos': {}})
+    resultado['outro'] = {
+        'label': 'Outro',
+        'campos': deepcopy(base.get('campos', {})),
+    }
+    return _ordenar_tipos(resultado)
+
+
 def _na_primeiro(valores):
     """Remove duplicatas preservando a ordem, sempre com N/A no topo."""
     unicos = []
@@ -369,6 +380,8 @@ def validar_estrutura_item(post, grupos):
     grupo = grupos.get(tipo)
     if not grupo:
         raise ValueError('Selecione um tipo de peça válido.')
+    if tipo == 'outro' and not tipo_peca_outro(post):
+        raise ValueError('Tipo de peça: informe qual é o outro tipo.')
     for campo, opcoes in grupo['campos'].items():
         valores = valores_estrutura_campo(post, campo)
         rotulo = campo.replace('_', ' ').capitalize()
@@ -409,7 +422,7 @@ def validar_valor_unitario(valor):
 def opcoes_estrutura_filial(filial, incluir_inativas=False):
     """Devolve as opções editáveis no mesmo formato usado pela OP."""
     if filial is None:
-        return _ordenar_tipos(OP2_ESTRUTURA_OPCOES)
+        return _incluir_tipo_outro(OP2_ESTRUTURA_OPCOES)
     from apps.moda.models import OpcaoEstruturaOP2
 
     sincronizar_opcoes_padrao(filial)
@@ -417,7 +430,7 @@ def opcoes_estrutura_filial(filial, incluir_inativas=False):
         tipo_peca__in=TIPOS_PECA_REMOVIDOS,
     )
     if not todas.exists():
-        return _ordenar_tipos(OP2_ESTRUTURA_OPCOES)
+        return _incluir_tipo_outro(OP2_ESTRUTURA_OPCOES)
     qs = todas
     if not incluir_inativas:
         qs = qs.filter(ativo=True)
@@ -449,17 +462,27 @@ def opcoes_estrutura_filial(filial, incluir_inativas=False):
         grupo['campos'] = {
             campo: list(valores) for campo, valores in catalogo_filial.items()
         }
-    return _ordenar_tipos(grupos)
+    return _incluir_tipo_outro(grupos)
+
+
+def tipo_peca_outro(post):
+    """Normaliza o nome livre do tipo para uma única linha de até 80 caracteres."""
+    return ' '.join(
+        str(post.get('estrutura_tipo_outro') or '').split()
+    )[:80].strip()
 
 
 def estrutura_resumo(post, grupos=None) -> str:
     """Monta um resumo legível das escolhas de estrutura enviadas pelo form."""
     tipo = (post.get('estrutura_tipo') or '').strip()
-    grupos = grupos or OP2_ESTRUTURA_OPCOES
+    grupos = grupos or _incluir_tipo_outro(OP2_ESTRUTURA_OPCOES)
     grupo = grupos.get(tipo)
     if not grupo:
         return ''
-    linhas = [f"Tipo de peça: {grupo['label']}"]
+    tipo_label = tipo_peca_outro(post) if tipo == 'outro' else grupo['label']
+    if not tipo_label:
+        return ''
+    linhas = [f'Tipo de peça: {tipo_label}']
     for chave in grupo['campos']:
         valores = valores_estrutura_campo(post, chave)
         if valores:

@@ -263,6 +263,7 @@ def _dados_modal_item(item, estrutura_opcoes):
     observacoes = texto
     estrutura_tipo = next(iter(estrutura_opcoes), 'camisa')
     estrutura = {}
+    estrutura_tipo_outro = ''
     cor_personalizada = ''
     estrutura_outros = {}
     estrutura_observacoes = {}
@@ -279,7 +280,12 @@ def _dados_modal_item(item, estrutura_opcoes):
                 continue
             chave, valor = (parte.strip() for parte in linha.split(':', 1))
             if chave.casefold() == 'tipo de peça':
-                estrutura_tipo = rotulos.get(valor.casefold(), estrutura_tipo)
+                tipo_salvo = rotulos.get(valor.casefold())
+                if tipo_salvo and tipo_salvo != 'outro':
+                    estrutura_tipo = tipo_salvo
+                else:
+                    estrutura_tipo = 'outro'
+                    estrutura_tipo_outro = valor
                 continue
             if chave.casefold().startswith('observação de '):
                 campo_observado = '_'.join(chave[14:].casefold().split())
@@ -337,6 +343,7 @@ def _dados_modal_item(item, estrutura_opcoes):
             rotulo.upper() for rotulo in tipos_impressao_item(item)
         ],
         'estrutura_tipo': estrutura_tipo,
+        'estrutura_tipo_outro': estrutura_tipo_outro,
         'estrutura': estrutura,
         'cor_personalizada': cor_personalizada,
         'estrutura_outros': estrutura_outros,

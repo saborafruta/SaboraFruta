@@ -89,6 +89,8 @@ class Op2Tests(TestCase):
         grupos = opcoes_estrutura_filial(self.filial)
         for tipo, grupo in grupos.items():
             dados = {'estrutura_tipo': tipo}
+            if tipo == 'outro':
+                dados['estrutura_tipo_outro'] = 'Mochila térmica'
             dados.update({f'estrutura_{campo}': 'N/A' for campo in grupo['campos']})
             validar_estrutura_item(dados, grupos)
             for campo in grupo['campos']:
@@ -158,6 +160,72 @@ class Op2Tests(TestCase):
         resumo = juntar_observacoes_item('', dados, grupos)
         self.assertIn('Malha: Neoprene leve', resumo)
         self.assertIn('Observação de Malha: Usar somente no painel frontal', resumo)
+
+    def test_tipo_de_peca_outro_exige_nome_livre_e_preserva_na_edicao(self):
+        from apps.moda.services.op2_estrutura import validar_estrutura_item
+        from apps.moda.views_op2 import _dados_modal_item
+
+        grupos = opcoes_estrutura_filial(self.filial)
+        self.assertEqual(grupos['outro']['label'], 'Outro')
+        dados = {
+            'estrutura_tipo': 'outro',
+            **{
+                f'estrutura_{campo}': 'N/A'
+                for campo in grupos['outro']['campos']
+            },
+        }
+        with self.assertRaisesMessage(ValueError, 'informe qual é o outro tipo'):
+            validar_estrutura_item(dados, grupos)
+
+        dados['estrutura_tipo_outro'] = '  Mochila   térmica  '
+        validar_estrutura_item(dados, grupos)
+        resumo = juntar_observacoes_item('', dados, grupos)
+        self.assertIn('Tipo de peça: Mochila térmica', resumo)
+
+        item = self._item(quantidade=1)
+        item.observacoes = resumo
+        item.save(update_fields=['observacoes'])
+        modal = _dados_modal_item(item, grupos)
+        self.assertEqual(modal['estrutura_tipo'], 'outro')
+        self.assertEqual(modal['estrutura_tipo_outro'], 'Mochila térmica')
+
+    def test_editores_exibem_tipo_de_peca_outro_com_campo_livre(self):
+        self._login_op2()
+        for url in (
+            reverse('moda:op2-create'),
+            reverse('moda:op2-detail', args=[self.pedido.pk]),
+        ):
+            resposta = self.client.get(url)
+            self.assertContains(resposta, '<option value="outro">Outro</option>', html=True)
+            self.assertContains(resposta, 'placeholder="Digite o tipo de peça"')
+            self.assertContains(resposta, "draft.estrutura_tipo==='outro'")
+
+    def test_nova_op_salva_o_nome_livre_do_tipo_de_peca(self):
+        self._login_op2()
+        campos = opcoes_estrutura_filial(self.filial)['outro']['campos']
+        dados = {
+            'cliente': str(self.cliente.pk),
+            'item_0_produto_id': str(self.produto.pk),
+            'item_0_estrutura_tipo': 'outro',
+            'item_0_estrutura_tipo_outro': 'Mochila térmica',
+            'item_0_quantidade': '1',
+            'item_0_valor_unitario': '50.00',
+            **{
+                f'item_0_estrutura_{campo}': 'N/A'
+                for campo in campos
+            },
+            'pagamento_0_forma': 'nao_informado',
+            'pagamento_0_valor': '50.00',
+        }
+
+        resposta = self.client.post(reverse('moda:op2-create'), dados)
+
+        self.assertEqual(resposta.status_code, 302)
+        novo = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        self.assertIn(
+            'Tipo de peça: Mochila térmica',
+            novo.itens.get().observacoes,
+        )
 
     def test_rascunho_salva_acabamento_e_reabre_outro_com_observacao(self):
         from apps.moda.views_op2 import _dados_modal_item
