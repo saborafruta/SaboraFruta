@@ -1,4 +1,16 @@
+{% load widget_tweaks %}
 <div data-transferencia-taxa-preview hidden class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
-  <strong class="block">Taxa automática da transferência</strong>
+  <strong class="block" data-transferencia-taxa-titulo>Taxa da entrada</strong>
   <span data-transferencia-taxa-text class="mt-1 block"></span>
+  <div class="mt-3 grid gap-3 sm:grid-cols-2">
+    <label class="block font-semibold">Taxa efetivamente cobrada (R$)
+      {{ movimento_form.valor_taxa|add_class:'form-input mt-1 w-full' }}
+      {% for erro in movimento_form.valor_taxa.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}
+    </label>
+    <label class="block font-semibold">Valor final após a taxa (R$)
+      {{ movimento_form.valor_liquido|add_class:'form-input mt-1 w-full' }}
+      {% for erro in movimento_form.valor_liquido.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}
+    </label>
+  </div>
+  <span class="mt-2 block opacity-75">Você pode corrigir qualquer um dos dois valores antes de registrar.</span>
 </div>

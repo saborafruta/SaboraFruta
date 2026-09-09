@@ -417,6 +417,14 @@ class DespesaPagaForm(forms.Form):
         max_digits=14, decimal_places=2, min_value=Decimal('0.01'),
         label='Valor pago (R$)', widget=VALOR_WIDGET,
     )
+    tarifa_bancaria = forms.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal('0'), required=False,
+        label='Taxa efetivamente cobrada (R$)', widget=VALOR_WIDGET,
+    )
+    valor_total_debitado = forms.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal('0.01'), required=False,
+        label='Valor final após a taxa (R$)', widget=VALOR_WIDGET,
+    )
     plano_contas = CategoriaFinanceiraChoiceField(
         queryset=PlanoContas.objects.none(), required=True,
         label='Categoria especifica',
@@ -498,6 +506,30 @@ class DespesaPagaForm(forms.Form):
             cleaned['funcionario'] = None
             if not cleaned.get('fornecedor'):
                 self.add_error('fornecedor', 'Selecione o fornecedor que recebeu o pagamento.')
+        bruto = cleaned.get('valor_original')
+        tarifa = cleaned.get('tarifa_bancaria')
+        total = cleaned.get('valor_total_debitado')
+        valores_informados = tarifa is not None or total is not None
+        if bruto is not None:
+            if not valores_informados:
+                tarifa = forma.tarifa_pagamento_fixa if forma else Decimal('0')
+                total = bruto + tarifa
+            else:
+                if tarifa is None:
+                    tarifa = total - bruto
+                if total is None:
+                    total = bruto + tarifa
+                if tarifa < 0:
+                    self.add_error(
+                        'valor_total_debitado',
+                        'O valor final não pode ser menor que o valor da despesa.',
+                    )
+                elif abs((bruto + tarifa) - total) > Decimal('0.01'):
+                    raise forms.ValidationError(
+                        'Os valores não conferem: o valor final deve ser a despesa mais a taxa.'
+                    )
+            cleaned['tarifa_bancaria'] = tarifa
+            cleaned['valor_total_debitado'] = total
         return cleaned
 
 

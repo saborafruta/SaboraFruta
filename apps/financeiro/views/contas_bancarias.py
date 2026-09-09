@@ -869,6 +869,9 @@ class ContaBancariaListView(PermissaoRequiredMixin, View):
                 ),
             )
             movimento.recalcular_recebimento()
+            if valor_movimento > 0 and dados.get("valores_taxa_informados"):
+                movimento.valor_taxa = dados["valor_taxa"]
+                movimento.valor_liquido = dados["valor_liquido"]
             movimento.save()
             conta.saldo_atual = self._saldo_calculado(conta)
             conta.save(update_fields=["saldo_atual", "updated_at"])

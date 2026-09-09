@@ -1052,6 +1052,7 @@ class DespesaPagaCreateView(PermissaoRequiredMixin, View):
                 forma_pagamento_utilizada=d['forma_pagamento_utilizada'],
                 conta_bancaria_pagamento=d.get('conta_bancaria_pagamento'),
                 comprovante_pagamento=d.get('comprovante_pagamento'),
+                tarifa_bancaria=d.get('tarifa_bancaria'),
                 usuario=request.user,
             )
             registrar_auditoria(

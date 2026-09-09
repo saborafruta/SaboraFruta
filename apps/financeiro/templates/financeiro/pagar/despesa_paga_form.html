@@ -79,7 +79,7 @@
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
           <label class="mb-1 block text-sm font-medium">Valor pago (R$) *</label>
-          {{ form.valor_original|add_class:"form-input"|attr:"placeholder:0,00" }}
+          {{ form.valor_original|add_class:"form-input"|attr:"placeholder:0,00"|attr:"x-model:valorPago"|attr:"@input:atualizarTotalPorTaxa()" }}
           {% if form.valor_original.errors %}<p class="mt-1 text-xs text-red-500">{{ form.valor_original.errors|join:", " }}</p>{% endif %}
         </div>
         <div>
@@ -91,6 +91,25 @@
           <label class="mb-1 block text-sm font-medium">Conta usada</label>
           {{ form.conta_bancaria_pagamento|add_class:"form-input" }}
           <p class="mt-1 text-xs opacity-55">Pode ser direcionada depois.</p>
+        </div>
+      </div>
+      <div class="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
+        <div class="mb-3">
+          <strong class="block text-sm text-amber-900 dark:text-amber-100">Taxa desta despesa</strong>
+          <p class="mt-1 text-xs text-amber-800/80 dark:text-amber-100/70">A tarifa cadastrada é preenchida ao selecionar a forma de pagamento. Corrija se o banco cobrar outro valor.</p>
+        </div>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label class="mb-1 block text-sm font-medium">Taxa efetivamente cobrada (R$)</label>
+            {{ form.tarifa_bancaria|add_class:"form-input"|attr:"x-model:tarifa"|attr:"@input:atualizarTotalPorTaxa()" }}
+            {% if form.tarifa_bancaria.errors %}<p class="mt-1 text-xs text-red-500">{{ form.tarifa_bancaria.errors|join:", " }}</p>{% endif %}
+          </div>
+          <div>
+            <label class="mb-1 block text-sm font-medium">Valor final após a taxa (R$)</label>
+            {{ form.valor_total_debitado|add_class:"form-input font-semibold"|attr:"x-model:valorTotal"|attr:"@input:atualizarTaxaPorTotal()" }}
+            <p class="mt-1 text-xs opacity-60">Total que será debitado da conta.</p>
+            {% if form.valor_total_debitado.errors %}<p class="mt-1 text-xs text-red-500">{{ form.valor_total_debitado.errors|join:", " }}</p>{% endif %}
+          </div>
         </div>
       </div>
     </section>
@@ -230,13 +249,29 @@ function despesaPagaPage() {
     grupoId:'', subgrupoId:'', categoriaId:'{{ form.plano_contas.value|default_if_none:""|escapejs }}',
     categoriaModal:false, categoriaNivel:1, categoriaNome:'', categoriaContaContabil:'', categoriaErro:'', categoriaSalvando:false,
     fornecedorModal:false, fornecedorSalvando:false, fornecedorErro:'', fornecedorTipo:'J', cepConsultando:false,
+    valorPago:'{{ form.valor_original.value|default_if_none:""|escapejs }}',
+    tarifa:'{{ form.tarifa_bancaria.value|default_if_none:""|escapejs }}',
+    valorTotal:'{{ form.valor_total_debitado.value|default_if_none:""|escapejs }}',
+    tarifasPorForma:{
+      {% for forma in form.fields.forma_pagamento_utilizada.queryset %}'{{ forma.pk }}':'{{ forma.tarifa_pagamento_fixa|default:0|escapejs }}',{% endfor %}
+    },
     init(){
       this.grupos=JSON.parse(document.getElementById('despesa-grupos-data').textContent);
       this.subgrupos=JSON.parse(document.getElementById('despesa-subgrupos-data').textContent);
       this.categorias=JSON.parse(document.getElementById('despesa-categorias-data').textContent);
       this.contasContabeis=JSON.parse(document.getElementById('despesa-contas-data').textContent);
       if(this.categoriaId){const categoria=this.categorias.find(item=>String(item.id)===String(this.categoriaId));const subgrupo=categoria&&this.subgrupos.find(item=>item.id===categoria.pai_id);if(categoria&&subgrupo){this.subgrupoId=String(subgrupo.id);this.grupoId=String(subgrupo.pai_id);}}
+      const forma=document.getElementById('{{ form.forma_pagamento_utilizada.id_for_label }}');
+      if(forma){
+        forma.addEventListener('change',()=>this.aplicarTarifaForma(forma.value));
+        if(!{{ form.is_bound|yesno:"true,false" }})this.aplicarTarifaForma(forma.value);
+      }
     },
+    numero(valor){return Number(String(valor||'0').replace(',','.'))||0;},
+    decimal(valor){return Math.max(0,Math.round((valor+Number.EPSILON)*100)/100).toFixed(2);},
+    atualizarTotalPorTaxa(){this.valorTotal=this.decimal(this.numero(this.valorPago)+this.numero(this.tarifa));},
+    atualizarTaxaPorTotal(){this.tarifa=this.decimal(this.numero(this.valorTotal)-this.numero(this.valorPago));},
+    aplicarTarifaForma(formaId){this.tarifa=this.tarifasPorForma[String(formaId)]||'0';this.atualizarTotalPorTaxa();},
     get subgruposFiltrados(){return this.subgrupos.filter(item=>String(item.pai_id)===String(this.grupoId));},
     get categoriasFiltradas(){return this.categorias.filter(item=>String(item.pai_id)===String(this.subgrupoId));},
     get tituloCategoria(){return this.categoriaNivel===1?'Novo grupo da despesa':(this.categoriaNivel===2?'Novo tipo de gasto':'Nova categoria específica');},

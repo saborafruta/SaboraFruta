@@ -29,6 +29,9 @@ class FormaPagamentoCartaoSelect(forms.Select):
         )
         option["attrs"]["data-taxa-percentual"] = str(forma.taxa_administrativa or 0)
         option["attrs"]["data-taxa-fixa"] = str(forma.taxa_fixa or 0)
+        option["attrs"]["data-tarifa-pagamento"] = str(
+            forma.tarifa_pagamento_fixa or 0
+        )
         option["attrs"]["data-taxas-parcelamento"] = json.dumps({
             f"{taxa.parcelas}|{taxa.bandeira}": str(taxa.taxa)
             for taxa in forma.taxas_parcelamento.all()

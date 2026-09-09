@@ -273,6 +273,6 @@
   });
   </script>
   {% if editar_movimento_form %}<template id="cartao-editar-ajuste"><div class="rounded-md border border-slate-200 p-3 dark:border-slate-700"><span class="mb-2 block text-xs font-semibold">Dados do cartao <span class="font-normal opacity-60">(opcional)</span></span><div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><label class="block text-xs font-medium">Bandeira {{ editar_movimento_form.bandeira|add_class:"form-input mt-1 w-full" }}</label><label class="block text-xs font-medium">Parcelas da operacao {{ editar_movimento_form.numero_parcelas|add_class:"form-input mt-1 w-full" }}</label></div></div></template><script>document.addEventListener('DOMContentLoaded',function(){const marcador=document.querySelector('input[name="acao"][value="editar_movimento"]');const form=marcador&&marcador.closest('form');const forma=form&&form.querySelector('select[name="forma_pagamento"]');const template=document.getElementById('cartao-editar-ajuste');if(forma&&template)forma.closest('label').insertAdjacentElement('afterend',template.content.firstElementChild.cloneNode(true));});</script>{% endif %}
-  <script src="{% static 'js/transferencia_taxa_preview.js' %}"></script>
+  <script src="{% static 'js/transferencia_taxa_preview.js' %}?v=20260909-1"></script>
 </div>
 {% endblock %}

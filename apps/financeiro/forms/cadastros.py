@@ -105,6 +105,14 @@ class MovimentoContaBancariaForm(forms.Form):
     conta_destino = forms.ModelChoiceField(queryset=ContaBancaria.objects.none(), required=False)
     data_lancamento = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     valor = forms.DecimalField(max_digits=14, decimal_places=2, min_value=0.01)
+    valor_taxa = forms.DecimalField(
+        max_digits=14, decimal_places=2, min_value=0, required=False,
+        label="Taxa efetivamente cobrada",
+    )
+    valor_liquido = forms.DecimalField(
+        max_digits=14, decimal_places=2, min_value=0, required=False,
+        label="Valor final após a taxa",
+    )
     historico = forms.CharField(max_length=200, required=False)
     documento = forms.CharField(max_length=30, required=False)
     forma_pagamento = forms.ModelChoiceField(
@@ -137,6 +145,12 @@ class MovimentoContaBancariaForm(forms.Form):
         self.fields["conta_destino"].queryset = qs
         self.fields["valor"].widget.attrs.setdefault("step", "0.01")
         self.fields["valor"].widget.attrs.setdefault("inputmode", "decimal")
+        self.fields["valor_taxa"].widget.attrs.update({
+            "step": "0.01", "inputmode": "decimal", "data-lancamento-taxa": "",
+        })
+        self.fields["valor_liquido"].widget.attrs.update({
+            "step": "0.01", "inputmode": "decimal", "data-lancamento-liquido": "",
+        })
 
     def clean(self):
         cleaned = super().clean()
@@ -161,7 +175,34 @@ class MovimentoContaBancariaForm(forms.Form):
                 self.add_error("conta_destino", "Escolha a conta de destino.")
             if origem and destino and origem.pk == destino.pk:
                 self.add_error("conta_destino", "A conta de destino deve ser diferente da origem.")
-        return limpar_dados_cartao(self, cleaned)
+        cleaned = limpar_dados_cartao(self, cleaned)
+        forma = cleaned.get("forma_pagamento")
+        bruto = cleaned.get("valor")
+        taxa = cleaned.get("valor_taxa")
+        liquido = cleaned.get("valor_liquido")
+        aplica_taxa = tipo in {self.TIPO_CREDITO, self.TIPO_TRANSFERENCIA} and forma
+        cleaned["valores_taxa_informados"] = bool(
+            aplica_taxa and (taxa is not None or liquido is not None)
+        )
+        if not cleaned["valores_taxa_informados"] or bruto is None:
+            cleaned["valor_taxa"] = None
+            cleaned["valor_liquido"] = None
+            return cleaned
+        if taxa is None:
+            taxa = bruto - liquido
+        if liquido is None:
+            liquido = bruto - taxa
+        if taxa < 0:
+            self.add_error("valor_liquido", "O valor final não pode ser maior que o valor bruto.")
+        elif taxa > bruto:
+            self.add_error("valor_taxa", "A taxa não pode ser maior que o valor bruto.")
+        elif abs((bruto - taxa) - liquido) > Decimal("0.01"):
+            raise forms.ValidationError(
+                "Os valores não conferem: o valor final deve ser o bruto menos a taxa."
+            )
+        cleaned["valor_taxa"] = taxa
+        cleaned["valor_liquido"] = liquido
+        return cleaned
 
 
 class ContaBancariaChoiceField(forms.ModelChoiceField):

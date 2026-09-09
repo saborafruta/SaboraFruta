@@ -129,7 +129,7 @@ class ContaPagarService:
     def criar_e_quitar(
         *, data_pagamento: date, forma_pagamento_utilizada,
         conta_bancaria_pagamento=None, comprovante_pagamento=None,
-        usuario=None, **dados,
+        tarifa_bancaria: Decimal | None = None, usuario=None, **dados,
     ) -> ContaPagar:
         """Cria um título único e registra sua quitação integral na mesma transação."""
         conta = ContaPagarService.criar(usuario=usuario, **dados)
@@ -140,6 +140,7 @@ class ContaPagarService:
             forma_pagamento=forma_pagamento_utilizada,
             conta_bancaria=conta_bancaria_pagamento,
             comprovante=comprovante_pagamento,
+            tarifa_bancaria=tarifa_bancaria,
             observacao='Quitado no lançamento do título.',
             usuario=usuario,
         )

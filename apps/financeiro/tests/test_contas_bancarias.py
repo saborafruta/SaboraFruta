@@ -191,6 +191,56 @@ class ContasBancariasViewTests(TestCase):
         self.assertContains(lista, "Taxa por transacao - Transferencia tarifada")
         self.assertContains(lista, "R$ 2,50")
 
+    def test_entrada_manual_permite_corrigir_taxa_e_valor_final_antes_de_lancar(self):
+        conta = ContaBancaria.objects.create(
+            filial=self.filial, descricao="Destino da entrada", saldo_inicial=Decimal("0.00"),
+            saldo_atual=Decimal("0.00"),
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="PIX com taxa variável",
+            tipo=TipoFormaPagamento.PIX, taxa_administrativa=Decimal("1.00"),
+        )
+
+        tela = self.client.get(reverse("financeiro:contas_bancarias"))
+        self.assertContains(tela, 'name="valor_taxa"')
+        self.assertContains(tela, 'name="valor_liquido"')
+        self.assertContains(tela, 'data-taxa-percentual="1.00"')
+
+        response = self.client.post(reverse("financeiro:contas_bancarias"), {
+            "acao": "lancar_movimento", "tipo": "credito",
+            "conta_destino": conta.pk, "data_lancamento": "2026-08-20",
+            "valor": "100.00", "forma_pagamento": forma.pk,
+            "valor_taxa": "3.47", "valor_liquido": "96.53",
+            "historico": "Entrada conferida no extrato",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        movimento = ExtratoBancario.objects.get(
+            conta_bancaria=conta, historico="Entrada conferida no extrato",
+        )
+        self.assertEqual(movimento.valor_taxa, Decimal("3.47"))
+        self.assertEqual(movimento.valor_liquido, Decimal("96.53"))
+        conta.refresh_from_db()
+        self.assertEqual(conta.saldo_atual, Decimal("96.53"))
+
+    def test_entrada_manual_rejeita_taxa_e_valor_final_incoerentes(self):
+        from apps.financeiro.forms.cadastros import MovimentoContaBancariaForm
+
+        conta = ContaBancaria.objects.create(filial=self.filial, descricao="Conta validação")
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa, filial=self.filial, descricao="PIX validação",
+            tipo=TipoFormaPagamento.PIX,
+        )
+        form = MovimentoContaBancariaForm({
+            "tipo": "credito", "conta_destino": conta.pk,
+            "data_lancamento": "2026-08-20", "valor": "100.00",
+            "forma_pagamento": forma.pk, "valor_taxa": "5.00",
+            "valor_liquido": "80.00",
+        }, filial=self.filial)
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("Os valores não conferem", form.non_field_errors()[0])
+
     def test_lista_venda_pdv_quando_forma_tem_conta_padrao(self):
         conta = ContaBancaria.objects.create(
             filial=self.filial,

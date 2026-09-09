@@ -721,6 +721,8 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertIn('valor_original', form.fields)
         self.assertIn('forma_pagamento_utilizada', form.fields)
         self.assertIn('data_pagamento', form.fields)
+        self.assertIn('tarifa_bancaria', form.fields)
+        self.assertIn('valor_total_debitado', form.fields)
 
         invalido = DespesaPagaForm({
             'tipo_lancamento': 'funcionario',
@@ -730,6 +732,67 @@ class FuncionarioContaPagarTests(TestCase):
         }, filial=self.filial)
         self.assertFalse(invalido.is_valid())
         self.assertIn('funcionario', invalido.errors)
+
+    def test_despesa_paga_mostra_e_persiste_tarifa_corrigida_antes_do_lancamento(self):
+        perfil = PerfilAcesso.objects.create(
+            empresa=self.empresa, nome='Admin tarifa despesa', is_admin=True,
+        )
+        usuario = Usuario.objects.create_user(
+            email='tarifa-despesa@teste.com', nome='Admin', password='teste',
+            empresa=self.empresa, filial=self.filial, perfil=perfil,
+        )
+        self.forma_pix.tarifa_pagamento_fixa = Decimal('0.50')
+        self.forma_pix.save(update_fields=['tarifa_pagamento_fixa'])
+
+        get_request = RequestFactory().get('/financeiro/pagar/despesa-paga/nova/?modal=1')
+        get_request.user = usuario
+        get_request.filial_ativa = self.filial
+        get_response = DespesaPagaCreateView.as_view()(get_request)
+        self.assertContains(get_response, 'Taxa desta despesa')
+        self.assertContains(get_response, 'name="tarifa_bancaria"')
+        self.assertContains(get_response, 'name="valor_total_debitado"')
+        self.assertContains(get_response, "'0.50'")
+
+        request = RequestFactory().post('/financeiro/pagar/despesa-paga/nova/?modal=1', {
+            'descricao_despesa': 'Despesa com tarifa variável',
+            'data_pagamento': '2026-08-20',
+            'tipo_lancamento': 'funcionario',
+            'funcionario': self.funcionario.pk,
+            'valor_original': '100.00',
+            'plano_contas': self.categoria.pk,
+            'forma_pagamento_utilizada': self.forma_pix.pk,
+            'tarifa_bancaria': '2.35',
+            'valor_total_debitado': '102.35',
+        })
+        request.user = usuario
+        request.filial_ativa = self.filial
+        request.session = {}
+        request._messages = FallbackStorage(request)
+
+        response = DespesaPagaCreateView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        conta = ContaPagar.objects.get(descricao_despesa='Despesa com tarifa variável')
+        pagamento = conta.pagamentos.get()
+        self.assertEqual(pagamento.tarifa_bancaria, Decimal('2.35'))
+        taxa = ContaPagar.objects.get(documento_tipo='taxa_pagamento', documento_id=pagamento.pk)
+        self.assertEqual(taxa.valor_pago, Decimal('2.35'))
+
+    def test_despesa_paga_rejeita_total_que_nao_confere_com_a_tarifa(self):
+        form = DespesaPagaForm({
+            'descricao_despesa': 'Despesa inválida',
+            'data_pagamento': '2026-08-20',
+            'tipo_lancamento': 'funcionario',
+            'funcionario': self.funcionario.pk,
+            'valor_original': '100.00',
+            'plano_contas': self.categoria.pk,
+            'forma_pagamento_utilizada': self.forma_pix.pk,
+            'tarifa_bancaria': '2.00',
+            'valor_total_debitado': '110.00',
+        }, filial=self.filial)
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('Os valores não conferem', form.non_field_errors()[0])
 
     def test_despesa_paga_permite_escolher_data_anterior(self):
         perfil = PerfilAcesso.objects.create(

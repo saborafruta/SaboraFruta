@@ -28,29 +28,65 @@
     const valor = form.querySelector('[name="valor"]');
     const painel = form.querySelector("[data-transferencia-taxa-preview]");
     const texto = painel && painel.querySelector("[data-transferencia-taxa-text]");
-    if (!tipo || !forma || !valor || !painel || !texto) return;
+    const titulo = painel && painel.querySelector("[data-transferencia-taxa-titulo]");
+    const campoTaxa = form.querySelector('[name="valor_taxa"]');
+    const campoLiquido = form.querySelector('[name="valor_liquido"]');
+    if (!tipo || !forma || !valor || !painel || !texto || !campoTaxa || !campoLiquido) return;
     form.dataset.transferenciaTaxaPreparada = "1";
 
-    function atualizar() {
+    function escrever(campo, valorCalculado) {
+      campo.value = arredondar(Math.max(valorCalculado, 0)).toFixed(2);
+    }
+
+    function mostrarResumo(taxa, liquido) {
+      titulo.textContent = tipo.value === "transferencia" ? "Taxa da transferência" : "Taxa da entrada manual";
+      texto.textContent = taxa > 0
+        ? `${moeda(taxa)} será descontado. A conta de destino receberá ${moeda(liquido)}.`
+        : "Esta forma não possui taxa informada. A conta de destino receberá o valor integral.";
+    }
+
+    function atualizarAutomatico() {
       const opcao = forma.selectedOptions[0];
       const bandeira = form.querySelector('[name="bandeira"]');
       const parcelas = form.querySelector('[name="numero_parcelas"]');
-      const ehTransferencia = tipo.value === "transferencia";
-      painel.hidden = !ehTransferencia || !forma.value;
-      if (painel.hidden || !opcao) return;
+      const recebeValor = tipo.value === "credito" || tipo.value === "transferencia";
+      painel.hidden = !recebeValor || !forma.value;
+      if (painel.hidden || !opcao) {
+        campoTaxa.value = "";
+        campoLiquido.value = "";
+        return;
+      }
       const bruto = numero(valor.value);
       const qtdParcelas = numero(parcelas && parcelas.value) || 1;
       const percentual = taxaPercentual(opcao, qtdParcelas, (bandeira && bandeira.value) || "");
       const fixa = numero(opcao.dataset.taxaFixa);
       const taxa = Math.min(arredondar((bruto * percentual / 100) + fixa), bruto);
       const liquido = arredondar(bruto - taxa);
-      texto.textContent = taxa > 0
-        ? `${moeda(taxa)} será descontado automaticamente. A conta de destino receberá ${moeda(liquido)}.`
-        : "Esta forma não possui taxa configurada. A conta de destino receberá o valor integral.";
+      escrever(campoTaxa, taxa);
+      escrever(campoLiquido, liquido);
+      mostrarResumo(taxa, liquido);
     }
-    form.addEventListener("input", atualizar);
-    form.addEventListener("change", atualizar);
-    atualizar();
+    function atualizarPorTaxa() {
+      const bruto = numero(valor.value);
+      const taxa = Math.min(numero(campoTaxa.value), bruto);
+      escrever(campoLiquido, bruto - taxa);
+      mostrarResumo(taxa, bruto - taxa);
+    }
+    function atualizarPorLiquido() {
+      const bruto = numero(valor.value);
+      const liquido = Math.min(numero(campoLiquido.value), bruto);
+      escrever(campoTaxa, bruto - liquido);
+      mostrarResumo(bruto - liquido, liquido);
+    }
+    form.addEventListener("input", function (event) {
+      if (event.target === campoTaxa) atualizarPorTaxa();
+      else if (event.target === campoLiquido) atualizarPorLiquido();
+      else atualizarAutomatico();
+    });
+    form.addEventListener("change", function (event) {
+      if (event.target !== campoTaxa && event.target !== campoLiquido) atualizarAutomatico();
+    });
+    atualizarAutomatico();
   }
 
   function iniciar() {
