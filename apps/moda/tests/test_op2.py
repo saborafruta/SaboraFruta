@@ -1240,7 +1240,7 @@ class Op2Tests(TestCase):
 
         self.assertIn('GRADE - Adulto', texto)
 
-    def test_pdf_conjunto_extenso_move_grade_para_linha_compacta(self):
+    def test_pdf_conjunto_mostra_grade_completa_abaixo_da_descricao(self):
         from reportlab.lib.units import mm
 
         from apps.moda.services.pedido_pdf import PedidoPdfService, _estilos
@@ -1251,13 +1251,16 @@ class Op2Tests(TestCase):
                 (f'Campo {indice}', 'Descrição técnica longa para a produção')
                 for indice in range(12)
             ],
-            'grades': [{
-                'nome': 'Adulto',
-                'tamanhos': [
-                    {'sigla': 'P', 'quantidade': 2},
-                    {'sigla': 'M', 'quantidade': 4},
-                ],
-            }],
+            'grades': [
+                {
+                    'nome': 'Adulto',
+                    'tamanhos': [{'sigla': 'P', 'quantidade': 2, 'ordem': 10}],
+                },
+                {
+                    'nome': 'Infantil',
+                    'tamanhos': [{'sigla': 'M', 'quantidade': 4, 'ordem': 20}],
+                },
+            ],
             'total': 6,
         }
         item = type('ItemConjunto', (), {
@@ -1270,9 +1273,20 @@ class Op2Tests(TestCase):
 
         self.assertEqual(len(tabela._cellvalues), 2)
         self.assertIn(('SPAN', (0, 0), (0, 1)), tabela._spanCmds)
-        self.assertIn(('SPAN', (1, 0), (3, 0)), tabela._spanCmds)
+        grade = tabela._cellvalues[1][1]
+        cabecalho = [
+            getattr(celula, 'text', str(celula))
+            for celula in grade._cellvalues[0]
+        ]
+        adulto = [str(celula) for celula in grade._cellvalues[1]]
+        infantil = [str(celula) for celula in grade._cellvalues[2]]
+        totais = [str(celula) for celula in grade._cellvalues[3]]
+        self.assertEqual(cabecalho, ['GRADE', 'P', 'M', 'TOTAL'])
+        self.assertEqual(adulto[1:], ['2', '0', '2'])
+        self.assertEqual(infantil[1:], ['0', '4', '4'])
+        self.assertEqual(totais[1:], ['2', '4', '6'])
 
-    def test_pdf_conjunto_curto_preserva_composicao_em_uma_linha(self):
+    def test_pdf_conjunto_destaca_rotulos_tecnicos_por_categoria(self):
         from reportlab.lib.units import mm
 
         from apps.moda.services.pedido_pdf import PedidoPdfService, _estilos
@@ -1293,7 +1307,8 @@ class Op2Tests(TestCase):
             item, _estilos(), 120 * mm,
         )[-1]
 
-        self.assertEqual(len(tabela._cellvalues), 1)
+        especificacoes = tabela._cellvalues[0][1].text
+        self.assertIn('<font color="#c2410c"><b>Cor:</b></font> Azul', especificacoes)
 
     def test_saldo_pendente_gera_conta_mesmo_sem_forma_informada(self):
         from apps.financeiro.models import ContaReceber

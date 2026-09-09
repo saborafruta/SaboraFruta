@@ -45,6 +45,15 @@ PAGINA = landscape(A4)
 MARGEM = 9 * mm
 LARGURA_UTIL = PAGINA[0] - 2 * MARGEM
 
+CORES_ROTULOS_COMPONENTE = (
+    (('impressão', 'impressao'), '#1d4ed8'),
+    (('malha', 'tecido'), '#15803d'),
+    (('gola', 'manga', 'punho', 'gorro', 'ombro'), '#7c3aed'),
+    (('galão', 'galao', 'viés', 'vies', 'friso', 'recorte', 'acabamento',
+      'abertura', 'barra', 'regata', 'tamanho'), '#0f766e'),
+    (('cor', 'etiqueta'), '#c2410c'),
+)
+
 # O QUE O PDF CONSEGUE DESENHAR. Não é a mesma lista de `pode_pre_visualizar`,
 # que é do NAVEGADOR: o SVG entra lá e não aqui, porque o `Image` do reportlab
 # lê bitmap pelo PIL. Sem esta lista o SVG caía na exceção de `_imagem` e
@@ -237,6 +246,24 @@ def _estrutura_item(item):
     else:
         campos.insert(0, impressao)
     return livre.strip(), campos
+
+
+def _especificacoes_componente_coloridas(estrutura):
+    """Destaca rótulos por categoria sem tirar contraste dos valores."""
+    partes = []
+    for rotulo, valor in estrutura:
+        chave = rotulo.casefold()
+        if chave.startswith('observação de '):
+            chave = chave.removeprefix('observação de ')
+        cor = next((
+            cor
+            for termos, cor in CORES_ROTULOS_COMPONENTE
+            if any(termo in chave for termo in termos)
+        ), '#173f7f')
+        partes.append(
+            f'<font color="{cor}"><b>{esc(rotulo)}:</b></font> {esc(valor)}'
+        )
+    return ' · '.join(partes) or 'Sem especificações adicionais'
 
 
 def whatsapp_numero(pedido) -> str:
@@ -944,71 +971,114 @@ class PedidoPdfService:
     def _componentes_conjunto(item, e, largura_util):
         blocos = []
         for componente in item.componentes_conjunto:
-            linhas_grade = []
-            for grade in componente['grades']:
-                resumo = ' | '.join(
-                    f'{tamanho["sigla"]} {tamanho["quantidade"]}'
-                    for tamanho in grade['tamanhos']
-                )
-                linhas_grade.append(f'{grade["nome"]}: {resumo}')
-            especificacoes = ' · '.join(
-                f'{rotulo}: {valor}' for rotulo, valor in componente['estrutura']
-            ) or 'Sem especificações adicionais'
-            resumo_grade = ' / '.join(linhas_grade) or 'Sem grade informada'
-
-            def celulas():
-                # Cada tabela precisa dos próprios Paragraphs: ``wrap`` guarda
-                # internamente as quebras calculadas para a largura recebida.
-                return (
-                    Paragraph(f'<b>{esc(componente["label"])}</b>', e['celula']),
-                    Paragraph(esc(especificacoes), e['celula']),
-                    Paragraph(esc(resumo_grade), e['celula']),
-                    Paragraph(f'<b>{componente["total"]}</b>', e['celula']),
-                )
-
-            # Na composição compacta a ficha técnica usa só 42% da coluna.
-            # Quando ela quebra em muitas linhas, a grade curta deixa um vazio
-            # alto ao lado (e todo o bloco rouba espaço da personalização por
-            # atleta). Nesse caso, a ficha ocupa a largura restante e a grade
-            # desce para uma segunda linha curta.
-            larguras_compactas = [
-                largura_util * .16, largura_util * .42,
-                largura_util * .32, largura_util * .10,
-            ]
-            rotulo, texto_especificacoes, texto_grade, total = celulas()
-            tabela_compacta = _tabela(
-                [[rotulo, texto_especificacoes, texto_grade, total]],
-                larguras_compactas, cabecalho=False,
+            especificacoes = _especificacoes_componente_coloridas(
+                componente['estrutura'],
             )
-            larguras_empilhadas = [
-                largura_util * .16, largura_util * .14,
-                largura_util * .60, largura_util * .10,
+            largura_conteudo = largura_util * .84
+            largura_grade = largura_conteudo - 8
+            grades = componente['grades']
+            tamanhos_encontrados = []
+            vistos = set()
+            for grade in grades:
+                for tamanho in grade['tamanhos']:
+                    if tamanho['sigla'] not in vistos:
+                        vistos.add(tamanho['sigla'])
+                        tamanhos_encontrados.append((
+                            tamanho.get('ordem', 999),
+                            len(tamanhos_encontrados),
+                            tamanho['sigla'],
+                        ))
+            tamanhos = [
+                sigla
+                for _, _, sigla in sorted(tamanhos_encontrados)
             ]
-            rotulo, texto_especificacoes, texto_grade, total = celulas()
-            tabela_empilhada = Table([
-                [rotulo, texto_especificacoes, '', ''],
-                ['', Paragraph('<b>Grade</b>', e['pequeno']), texto_grade, total],
-            ], colWidths=larguras_empilhadas)
-            tabela_empilhada.setStyle(TableStyle([
+
+            if grades and tamanhos:
+                estilo_grade = ParagraphStyle(
+                    'grade_componente_conjunto', parent=e['pequeno'],
+                    fontName='Helvetica-Bold', fontSize=6, leading=7,
+                    textColor=colors.white, alignment=1,
+                )
+                dados_grade = [[
+                    Paragraph('GRADE', estilo_grade),
+                    *[Paragraph(esc(sigla), estilo_grade) for sigla in tamanhos],
+                    Paragraph('TOTAL', estilo_grade),
+                ]]
+                for grade in grades:
+                    quantidades = {
+                        tamanho['sigla']: tamanho['quantidade']
+                        for tamanho in grade['tamanhos']
+                    }
+                    dados_grade.append([
+                        Paragraph(f'<b>{esc(grade["nome"])}</b>', e['pequeno']),
+                        *[str(quantidades.get(sigla, 0)) for sigla in tamanhos],
+                        str(sum(quantidades.values())),
+                    ])
+                if len(grades) > 1:
+                    totais_tamanhos = {
+                        sigla: sum(
+                            tamanho['quantidade']
+                            for grade in grades
+                            for tamanho in grade['tamanhos']
+                            if tamanho['sigla'] == sigla
+                        )
+                        for sigla in tamanhos
+                    }
+                    dados_grade.append([
+                        Paragraph('<b>TOTAL</b>', e['pequeno']),
+                        *[str(totais_tamanhos[sigla]) for sigla in tamanhos],
+                        str(componente['total']),
+                    ])
+                largura_nome = min(23 * mm, largura_grade * .24)
+                largura_total = min(12 * mm, largura_grade * .13)
+                largura_tamanho = (
+                    largura_grade - largura_nome - largura_total
+                ) / len(tamanhos)
+                grade_completa = Table(
+                    dados_grade,
+                    colWidths=[largura_nome]
+                    + [largura_tamanho] * len(tamanhos)
+                    + [largura_total],
+                    repeatRows=1,
+                )
+                grade_completa.setStyle(TableStyle([
+                    ('GRID', (0, 0), (-1, -1), .35, BORDA),
+                    ('BACKGROUND', (0, 0), (-1, 0), AZUL),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, FUNDO]),
+                    ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('FONTNAME', (-1, 1), (-1, -1), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 6.2),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 2),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+                    ('TOPPADDING', (0, 0), (-1, -1), 2),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                ]))
+                if len(grades) > 1:
+                    grade_completa.setStyle(TableStyle([
+                        ('BACKGROUND', (0, -1), (-1, -1), AZUL_CLARO),
+                        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                    ]))
+            else:
+                grade_completa = Paragraph('Sem grade informada', e['pequeno'])
+
+            tabela = Table([
+                [
+                    Paragraph(f'<b>{esc(componente["label"])}</b>', e['celula']),
+                    Paragraph(especificacoes, e['celula']),
+                ],
+                ['', grade_completa],
+            ], colWidths=[largura_util * .16, largura_conteudo])
+            tabela.setStyle(TableStyle([
                 ('GRID', (0, 0), (-1, -1), .35, BORDA),
                 ('SPAN', (0, 0), (0, 1)),
-                ('SPAN', (1, 0), (3, 0)),
                 ('BACKGROUND', (0, 0), (0, 1), FUNDO),
-                ('BACKGROUND', (1, 1), (1, 1), FUNDO),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('LEFTPADDING', (0, 0), (-1, -1), 4),
                 ('RIGHTPADDING', (0, 0), (-1, -1), 4),
                 ('TOPPADDING', (0, 0), (-1, -1), e.get('padding_tabela', 3)),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), e.get('padding_tabela', 3)),
-                ('ALIGN', (3, 1), (3, 1), 'CENTER'),
             ]))
-            altura_compacta = tabela_compacta.wrap(largura_util, 10000)[1]
-            altura_empilhada = tabela_empilhada.wrap(largura_util, 10000)[1]
-            tabela = (
-                tabela_empilhada
-                if altura_empilhada + e['celula'].leading < altura_compacta
-                else tabela_compacta
-            )
             blocos += [Spacer(1, 3), tabela]
         return [Spacer(1, 3), _barra_secao(
             3, 'COMPONENTES E GRADES DO CONJUNTO', e, largura_util,
