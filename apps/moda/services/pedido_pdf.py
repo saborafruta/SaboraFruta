@@ -954,16 +954,60 @@ class PedidoPdfService:
             especificacoes = ' · '.join(
                 f'{rotulo}: {valor}' for rotulo, valor in componente['estrutura']
             ) or 'Sem especificações adicionais'
-            dados = [[
-                Paragraph(f'<b>{esc(componente["label"])}</b>', e['celula']),
-                Paragraph(esc(especificacoes), e['celula']),
-                Paragraph(esc(' / '.join(linhas_grade)), e['celula']),
-                Paragraph(f'<b>{componente["total"]}</b>', e['celula']),
-            ]]
-            tabela = _tabela(
-                dados,
-                [largura_util * .16, largura_util * .42, largura_util * .32, largura_util * .10],
-                cabecalho=False,
+            resumo_grade = ' / '.join(linhas_grade) or 'Sem grade informada'
+
+            def celulas():
+                # Cada tabela precisa dos próprios Paragraphs: ``wrap`` guarda
+                # internamente as quebras calculadas para a largura recebida.
+                return (
+                    Paragraph(f'<b>{esc(componente["label"])}</b>', e['celula']),
+                    Paragraph(esc(especificacoes), e['celula']),
+                    Paragraph(esc(resumo_grade), e['celula']),
+                    Paragraph(f'<b>{componente["total"]}</b>', e['celula']),
+                )
+
+            # Na composição compacta a ficha técnica usa só 42% da coluna.
+            # Quando ela quebra em muitas linhas, a grade curta deixa um vazio
+            # alto ao lado (e todo o bloco rouba espaço da personalização por
+            # atleta). Nesse caso, a ficha ocupa a largura restante e a grade
+            # desce para uma segunda linha curta.
+            larguras_compactas = [
+                largura_util * .16, largura_util * .42,
+                largura_util * .32, largura_util * .10,
+            ]
+            rotulo, texto_especificacoes, texto_grade, total = celulas()
+            tabela_compacta = _tabela(
+                [[rotulo, texto_especificacoes, texto_grade, total]],
+                larguras_compactas, cabecalho=False,
+            )
+            larguras_empilhadas = [
+                largura_util * .16, largura_util * .14,
+                largura_util * .60, largura_util * .10,
+            ]
+            rotulo, texto_especificacoes, texto_grade, total = celulas()
+            tabela_empilhada = Table([
+                [rotulo, texto_especificacoes, '', ''],
+                ['', Paragraph('<b>Grade</b>', e['pequeno']), texto_grade, total],
+            ], colWidths=larguras_empilhadas)
+            tabela_empilhada.setStyle(TableStyle([
+                ('GRID', (0, 0), (-1, -1), .35, BORDA),
+                ('SPAN', (0, 0), (0, 1)),
+                ('SPAN', (1, 0), (3, 0)),
+                ('BACKGROUND', (0, 0), (0, 1), FUNDO),
+                ('BACKGROUND', (1, 1), (1, 1), FUNDO),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                ('TOPPADDING', (0, 0), (-1, -1), e.get('padding_tabela', 3)),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), e.get('padding_tabela', 3)),
+                ('ALIGN', (3, 1), (3, 1), 'CENTER'),
+            ]))
+            altura_compacta = tabela_compacta.wrap(largura_util, 10000)[1]
+            altura_empilhada = tabela_empilhada.wrap(largura_util, 10000)[1]
+            tabela = (
+                tabela_empilhada
+                if altura_empilhada + e['celula'].leading < altura_compacta
+                else tabela_compacta
             )
             blocos += [Spacer(1, 3), tabela]
         return [Spacer(1, 3), _barra_secao(

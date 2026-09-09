@@ -1240,6 +1240,61 @@ class Op2Tests(TestCase):
 
         self.assertIn('GRADE - Adulto', texto)
 
+    def test_pdf_conjunto_extenso_move_grade_para_linha_compacta(self):
+        from reportlab.lib.units import mm
+
+        from apps.moda.services.pedido_pdf import PedidoPdfService, _estilos
+
+        componente = {
+            'label': 'Camisa',
+            'estrutura': [
+                (f'Campo {indice}', 'Descrição técnica longa para a produção')
+                for indice in range(12)
+            ],
+            'grades': [{
+                'nome': 'Adulto',
+                'tamanhos': [
+                    {'sigla': 'P', 'quantidade': 2},
+                    {'sigla': 'M', 'quantidade': 4},
+                ],
+            }],
+            'total': 6,
+        }
+        item = type('ItemConjunto', (), {
+            'componentes_conjunto': [componente],
+        })()
+
+        tabela = PedidoPdfService._componentes_conjunto(
+            item, _estilos(), 120 * mm,
+        )[-1]
+
+        self.assertEqual(len(tabela._cellvalues), 2)
+        self.assertIn(('SPAN', (0, 0), (0, 1)), tabela._spanCmds)
+        self.assertIn(('SPAN', (1, 0), (3, 0)), tabela._spanCmds)
+
+    def test_pdf_conjunto_curto_preserva_composicao_em_uma_linha(self):
+        from reportlab.lib.units import mm
+
+        from apps.moda.services.pedido_pdf import PedidoPdfService, _estilos
+
+        item = type('ItemConjunto', (), {
+            'componentes_conjunto': [{
+                'label': 'Camisa',
+                'estrutura': [('Cor', 'Azul')],
+                'grades': [{
+                    'nome': 'Adulto',
+                    'tamanhos': [{'sigla': 'M', 'quantidade': 4}],
+                }],
+                'total': 4,
+            }],
+        })()
+
+        tabela = PedidoPdfService._componentes_conjunto(
+            item, _estilos(), 120 * mm,
+        )[-1]
+
+        self.assertEqual(len(tabela._cellvalues), 1)
+
     def test_saldo_pendente_gera_conta_mesmo_sem_forma_informada(self):
         from apps.financeiro.models import ContaReceber
 
