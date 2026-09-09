@@ -6,9 +6,6 @@ function validarModeloOp2(draft, grupos) {
   }
   const grupo = grupos[draft.estrutura_tipo];
   if (!grupo) return 'Selecione um tipo de peça válido.';
-  if (draft.estrutura_tipo === 'outro' && !String(draft.estrutura_tipo_outro || '').trim()) {
-    return 'Tipo de peça: informe qual é o outro tipo.';
-  }
   for (const [campo, opcoes] of Object.entries(grupo.campos)) {
     const valorCampo = campo === 'tipo_impressao' ? draft.tipo_impressao : draft.estrutura?.[campo];
     const valores = op2ListaMultisselecao(valorCampo);

@@ -380,8 +380,6 @@ def validar_estrutura_item(post, grupos):
     grupo = grupos.get(tipo)
     if not grupo:
         raise ValueError('Selecione um tipo de peça válido.')
-    if tipo == 'outro' and not tipo_peca_outro(post):
-        raise ValueError('Tipo de peça: informe qual é o outro tipo.')
     for campo, opcoes in grupo['campos'].items():
         valores = valores_estrutura_campo(post, campo)
         rotulo = campo.replace('_', ' ').capitalize()
@@ -466,10 +464,11 @@ def opcoes_estrutura_filial(filial, incluir_inativas=False):
 
 
 def tipo_peca_outro(post):
-    """Normaliza o nome livre do tipo para uma única linha de até 80 caracteres."""
-    return ' '.join(
+    """Normaliza o nome livre e usa ``Outro`` quando ele não foi informado."""
+    nome = ' '.join(
         str(post.get('estrutura_tipo_outro') or '').split()
     )[:80].strip()
+    return nome or 'Outro'
 
 
 def estrutura_resumo(post, grupos=None) -> str:
