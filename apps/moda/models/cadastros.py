@@ -14,7 +14,7 @@ class CadastroApoio(FilialScopedModel, ActiveModel):
     """Base dos cadastros simples — só nome e observação."""
 
     nome = models.CharField(max_length=80)
-    observacao = models.TextField(blank=True)
+    observacao = models.TextField(blank=True, verbose_name='Observação')
 
     objects = FilialManager()
     all_objects = models.Manager()

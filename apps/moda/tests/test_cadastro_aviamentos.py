@@ -157,6 +157,52 @@ class CadastroViaTelaGenericaTests(AviamentoBase):
         self.assertIn('Etiqueta', html)
 
 
+class FormularioComRotulosCertosTests(AviamentoBase):
+    """
+    Sem `label` explícito, o Django tira o rótulo do nome do campo Python
+    (`codigo` -> "Codigo", sem acento) e insere "---------" na frente de
+    todo select obrigatório sem `default` no model -- os dois casos deste
+    formulário. Aqui garantimos o texto amigável, não só que a tela abre.
+    """
+
+    def test_rotulos_saem_com_acento(self):
+        html = self.client.get(
+            reverse('moda:apoio-create', args=['engenharia', 'cadastro-aviamentos'])
+        ).content.decode()
+
+        self.assertIn('Código', html)
+        self.assertIn('Observação', html)
+        self.assertNotIn('>Codigo<', html)
+        self.assertNotIn('>Observacao<', html)
+
+    def test_select_de_tipo_no_lugar_do_tracejado_generico(self):
+        html = self.client.get(
+            reverse('moda:apoio-create', args=['engenharia', 'cadastro-aviamentos'])
+        ).content.decode()
+
+        self.assertIn('Selecione o tipo do aviamento', html)
+        self.assertNotIn('---------<', html)
+
+    def test_select_de_fornecedor_com_texto_amigavel(self):
+        html = self.client.get(
+            reverse('moda:apoio-create', args=['engenharia', 'cadastro-aviamentos'])
+        ).content.decode()
+
+        self.assertIn('Sem fornecedor cadastrado', html)
+
+    def test_checkbox_ativo_nao_herda_largura_de_campo_de_texto(self):
+        """
+        `.form-input` é `width:100%`, feito pra texto/select -- sem o
+        reset específico de checkbox, "Ativo" virava uma barra esticada
+        em vez de uma caixa de marcar.
+        """
+        html = self.client.get(
+            reverse('moda:apoio-create', args=['engenharia', 'cadastro-aviamentos'])
+        ).content.decode()
+
+        self.assertIn('input.form-input[type="checkbox"]', html)
+
+
 class BotaoNaTelaDeUsoTests(AviamentoBase):
     """A tela de Aviamentos (uso, leitura) ganha o atalho pro cadastro."""
 

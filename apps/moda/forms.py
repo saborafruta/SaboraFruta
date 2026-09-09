@@ -555,10 +555,16 @@ class TecidoForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
             'nome', 'composicao', 'gramatura', 'largura_cm',
             'fornecedor', 'produto_estoque', 'observacao', 'ativo',
         ]
+        labels = {
+            'composicao': 'Composição',
+            'largura_cm': 'Largura do rolo (cm)',
+            'observacao': 'Observação',
+            'produto_estoque': 'Produto no estoque',
+        }
         widgets = {
             'nome': forms.TextInput(attrs={'placeholder': 'Ex.: Dry'}),
             'composicao': forms.TextInput(attrs={'placeholder': 'Ex.: 100% Poliéster'}),
-            'observacao': forms.Textarea(attrs={'rows': 2}),
+            'observacao': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Detalhes que não cabem nos campos acima (opcional).'}),
         }
 
     def __init__(self, *args, filial=None, **kwargs):
@@ -566,6 +572,7 @@ class TecidoForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
         from apps.produtos.models import Produto
         super().__init__(*args, filial=filial, **kwargs)
         self.fields['fornecedor'].required = False
+        self.fields['fornecedor'].empty_label = 'Sem fornecedor cadastrado'
         self.fields['fornecedor'].queryset = (
             Fornecedor.objects.for_filial(filial).filter(ativo=True).order_by('razao_social')
             if filial else Fornecedor.objects.none()
@@ -574,7 +581,7 @@ class TecidoForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
         # produto de estoque e' do catalogo da empresa, e o saldo e' que e'
         # por filial.
         self.fields['produto_estoque'].required = False
-        self.fields['produto_estoque'].empty_label = 'sem ligacao com estoque'
+        self.fields['produto_estoque'].empty_label = 'Sem ligação com o estoque'
         self.fields['produto_estoque'].queryset = Produto.objects.filter(
             ativo=True,
         ).order_by('descricao')
@@ -588,17 +595,32 @@ class AviamentoForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
             'nome', 'tipo', 'codigo', 'unidade',
             'fornecedor', 'produto_estoque', 'observacao', 'ativo',
         ]
+        labels = {
+            'codigo': 'Código',
+            'observacao': 'Observação',
+            'produto_estoque': 'Produto no estoque',
+        }
         widgets = {
             'nome': forms.TextInput(attrs={'placeholder': 'Ex.: Zíper nylon nº 5 preto'}),
             'codigo': forms.TextInput(attrs={'placeholder': 'Código no estoque ou no fornecedor'}),
-            'observacao': forms.Textarea(attrs={'rows': 2}),
+            'observacao': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Detalhes que não cabem nos campos acima (opcional).'}),
         }
 
     def __init__(self, *args, filial=None, **kwargs):
         from apps.cadastros.models import Fornecedor
         from apps.produtos.models import Produto
+        from .models import Aviamento
         super().__init__(*args, filial=filial, **kwargs)
+        # SEM ISSO, O DJANGO INSERE "---------" NA FRENTE: campo obrigatório
+        # sem `default` no model sempre ganha uma opção em branco forçada,
+        # pra' obrigar uma escolha explícita -- só que o texto genérico não
+        # diz o que fazer. Substituir a lista inteira troca só o rótulo,
+        # sem abrir mão da obrigatoriedade.
+        self.fields['tipo'].choices = [
+            ('', 'Selecione o tipo do aviamento'), *Aviamento.Tipo.choices,
+        ]
         self.fields['fornecedor'].required = False
+        self.fields['fornecedor'].empty_label = 'Sem fornecedor cadastrado'
         self.fields['fornecedor'].queryset = (
             Fornecedor.objects.for_filial(filial).filter(ativo=True).order_by('razao_social')
             if filial else Fornecedor.objects.none()
@@ -606,7 +628,7 @@ class AviamentoForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
         # Sem escopo de filial, mesmo motivo do Tecido: o produto de estoque
         # e' do catalogo da empresa, o saldo e' que e' por filial.
         self.fields['produto_estoque'].required = False
-        self.fields['produto_estoque'].empty_label = 'sem ligacao com estoque'
+        self.fields['produto_estoque'].empty_label = 'Sem ligação com o estoque'
         self.fields['produto_estoque'].queryset = Produto.objects.filter(
             ativo=True,
         ).order_by('descricao')

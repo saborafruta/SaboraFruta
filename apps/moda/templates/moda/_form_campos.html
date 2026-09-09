@@ -1,18 +1,45 @@
 {% comment %}
   Renderiza os campos de um form no padrão visual das outras telas.
-  Num arquivo só para os 3 formulários do vertical não divergirem.
+  Num arquivo só para os cadastros de apoio não divergirem entre si.
+
+  BOOLEANFIELD (o "Ativo" de todo cadastro) tem tratamento à parte: como
+  checkbox solto, herdando `.form-input` (`width:100%; padding:9px 12px`),
+  ele virava uma caixinha apertada boiando ao lado de um select comprido --
+  sem relação visual nenhuma com "isto liga/desliga o registro". Aqui vira
+  uma linha própria, com a caixa do tamanho de uma caixa de verdade.
 {% endcomment %}
 {% for campo in form %}
-  <div class="{{ campo.css_classes|default:'' }}">
-    <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
-      {{ campo.label }}{% if campo.field.required %} <span class="text-red-500">*</span>{% endif %}
-    </label>
-    {{ campo }}
-    {% if campo.help_text %}
-      <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ campo.help_text }}</p>
-    {% endif %}
-    {% for erro in campo.errors %}
-      <p class="text-xs mt-1" style="color:#f87171;">{{ erro }}</p>
-    {% endfor %}
-  </div>
+  {% if campo.field.widget.input_type == 'checkbox' %}
+    <div class="{{ campo.css_classes|default:'' }} sm:col-span-2">
+      <label class="flex items-center gap-2.5 rounded-lg px-3.5 py-3 cursor-pointer transition-colors"
+             :style="temaClaro ? 'background:#f8fafc; border:1px solid #e2e8f0;' : 'background:#1c1c1e; border:1px solid #2a2a2e;'">
+        {{ campo }}
+        <span class="text-sm font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ campo.label }}</span>
+      </label>
+      {% if campo.help_text %}
+        <p class="text-xs mt-1 ml-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ campo.help_text }}</p>
+      {% endif %}
+      {% for erro in campo.errors %}
+        <p class="text-xs mt-1 ml-1" style="color:#f87171;">{{ erro }}</p>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="{{ campo.css_classes|default:'' }}">
+      <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+        {{ campo.label }}{% if campo.field.required %} <span style="color:#e8824a;">*</span>{% endif %}
+      </label>
+      {{ campo }}
+      {% if campo.help_text %}
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ campo.help_text }}</p>
+      {% endif %}
+      {% for erro in campo.errors %}
+        <p class="text-xs mt-1 flex items-center gap-1" style="color:#f87171;">
+          <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+          </svg>
+          {{ erro }}
+        </p>
+      {% endfor %}
+    </div>
+  {% endif %}
 {% endfor %}
