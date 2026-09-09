@@ -537,6 +537,7 @@
 
   <form method="post" enctype="multipart/form-data" novalidate x-data="{ loading: false }" @submit="loading = true">
     {% csrf_token %}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
 
     <nav class="produto-stepper mb-4" aria-label="Etapas do produto">
       <template x-for="item in steps" :key="item.id">

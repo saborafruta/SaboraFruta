@@ -29,6 +29,31 @@
         {{ campo.label }}{% if campo.field.required %} <span style="color:#e8824a;">*</span>{% endif %}
       </label>
       {{ campo }}
+      {% if campo.name == 'produto_estoque' and obj %}
+        {% comment %}
+          Editar aqui e' só ligar/trocar o produto -- a quantidade em si
+          nunca se mexe neste formulário (ela mora na movimentação de
+          estoque, senão viraria um segundo lugar gravando o mesmo saldo).
+          Sem produto vinculado ainda não há onde lançar quantidade
+          nenhuma, daí o atalho pra criar um -- já com nome/código
+          sugeridos e a quantidade inicial no próprio formulário do
+          produto -- em vez de mandar o usuário procurar sozinho no
+          módulo de Produtos.
+        {% endcomment %}
+        <div class="mt-1.5">
+          {% if obj.produto_estoque_id %}
+            <a href="{% url 'estoque:movimentacao-create' %}?produto={{ obj.produto_estoque_id }}"
+               class="text-xs font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">
+              + Adicionar estoque
+            </a>
+          {% else %}
+            <a href="{% url 'produtos:produto-create' %}?nome={{ obj.nome|urlencode }}&codigo={{ obj.codigo|default:''|urlencode }}&next={{ request.path|urlencode }}"
+               class="text-xs font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">
+              + Novo produto
+            </a>
+          {% endif %}
+        </div>
+      {% endif %}
       {% if campo.help_text %}
         <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ campo.help_text }}</p>
       {% endif %}

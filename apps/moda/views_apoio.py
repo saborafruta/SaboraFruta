@@ -179,12 +179,38 @@ class CadastroApoioFormView(ModaBaseView):
     def get(self, request, slug, pk=None, grupo=None):
         cadastro = _cadastro(slug)
         obj = self._obter(request, cadastro, pk)
+
+        produto_criado_id = request.GET.get('produto_criado')
+        if obj is not None and produto_criado_id and hasattr(obj, 'produto_estoque_id'):
+            self._vincular_produto_criado(request, obj, produto_criado_id)
+            # Redireciona pra a mesma tela sem o `produto_criado` na URL --
+            # senão um F5 tentaria vincular de novo o mesmo produto.
+            return redirect(reverse('moda:apoio-update', args=[cadastro.grupo, cadastro.slug, obj.pk]))
+
         return render(request, 'moda/apoio_form.html', {
             'title': str(obj) if obj else f'Novo(a) {cadastro.singular}',
             'cadastro': cadastro,
             'obj': obj,
             'form': cadastro.form(instance=obj, filial=request.filial_ativa),
         })
+
+    @staticmethod
+    def _vincular_produto_criado(request, obj, produto_id):
+        """
+        Volta do "+ Novo produto": o produto acabou de nascer no módulo de
+        Produtos (com a quantidade inicial já lançada por lá) e falta só
+        ligar ao cadastro -- sem isso o usuário teria que reabrir o
+        formulário e escolher da lista de novo.
+        """
+        from apps.produtos.models import Produto
+        try:
+            produto = Produto.objects.get(pk=produto_id, filial=request.filial_ativa)
+        except (Produto.DoesNotExist, ValueError, TypeError):
+            messages.error(request, 'Não foi possível vincular o produto criado.')
+            return
+        obj.produto_estoque = produto
+        obj.save(update_fields=['produto_estoque'])
+        messages.success(request, f'Produto "{produto}" criado e vinculado.')
 
     def post(self, request, slug, pk=None, grupo=None):
         cadastro = _cadastro(slug)

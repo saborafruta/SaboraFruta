@@ -6,6 +6,7 @@ import logging
 import re
 import uuid
 from decimal import Decimal
+from urllib.parse import urlencode
 from urllib.request import urlopen
 
 from django.contrib import messages
@@ -21,6 +22,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.decorators import method_decorator
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.decorators.gzip import gzip_page
 from PIL import Image, ImageOps
@@ -1556,6 +1558,21 @@ class ProdutoFiscalListView(PermissaoRequiredMixin, View):
         })
 
 
+def _next_seguro(request):
+    """
+    `next` de volta pra quem mandou o usuário criar o produto por aqui --
+    por exemplo, o cadastro de Tecido que precisava de um produto de
+    estoque pra vincular. Só aceito quando aponta pro próprio site: um
+    `next` de fora seria um redirecionamento aberto.
+    """
+    valor = request.GET.get('next') or request.POST.get('next') or ''
+    if valor and url_has_allowed_host_and_scheme(
+        valor, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
+    ):
+        return valor
+    return ''
+
+
 class ProdutoCreateView(PermissaoRequiredMixin, View):
     permissao_modulo = 'produtos'
     permissao_acao = 'criar'
@@ -1599,10 +1616,24 @@ class ProdutoCreateView(PermissaoRequiredMixin, View):
             'error_steps_json': error_steps_json,
             'imagem_preview_url': imagem_preview_url,
             'subcategorias_form_json': _subcategorias_form_json(request.user.empresa, request.filial_ativa) if request else '{}',
+            'next': _next_seguro(request) if request else '',
         }
 
     def get(self, request):
-        form = ProdutoForm(empresa=request.user.empresa, filial=request.filial_ativa, estoque_atual=0)
+        # `nome`/`codigo` na URL chegam de quem mandou criar o produto pra
+        # já vincular a outra coisa -- o cadastro de Tecido, por exemplo --
+        # e não faz sentido pedir pra digitar de novo o que já estava lá.
+        initial = {}
+        nome = (request.GET.get('nome') or '').strip()
+        codigo = (request.GET.get('codigo') or '').strip()
+        if nome:
+            initial['descricao'] = nome
+        if codigo:
+            initial['codigo'] = codigo
+        form = ProdutoForm(
+            empresa=request.user.empresa, filial=request.filial_ativa, estoque_atual=0,
+            initial=initial,
+        )
         return render(request, self.template_name, self.get_context(form, request=request))
 
     def post(self, request):
@@ -1636,6 +1667,14 @@ class ProdutoCreateView(PermissaoRequiredMixin, View):
                 self.ajustar_estoque(request, produto, form.cleaned_data.get('estoque_quantidade'))
             _sincronizar_produto_sem_quebrar(request, produto)
             messages.success(request, f'Produto "{produto}" criado.')
+            destino = _next_seguro(request)
+            if destino:
+                # `produto_criado` é o contrato com quem mandou pra cá: a
+                # tela de origem (ex.: o cadastro de Tecido) lê esse id na
+                # volta e vincula sozinha -- este app não sabe, e não
+                # precisa saber, o que existe do outro lado do `next`.
+                separador = '&' if '?' in destino else '?'
+                return redirect(f'{destino}{separador}{urlencode({"produto_criado": produto.pk})}')
             return redirect('produtos:produto-update', pk=produto.pk)
         return render(request, self.template_name, self.get_context(form, request=request))
 

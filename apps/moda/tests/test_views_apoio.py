@@ -262,3 +262,91 @@ class ColunaDeEstoqueNoCadastroDeMateriaisTests(ApoioBase):
 
         self.assertIn('Malha Solta', html)
         self.assertIn('—</span>', html)
+
+
+class AtalhoDeCriarProdutoNoFormularioDeTecidoTests(ApoioBase):
+    """
+    "Ao clicar para editar, não consigo inserir a quantidade de estoque":
+    o formulário do tecido nunca grava saldo direto (só a movimentação
+    grava, senão viraria um segundo lugar guardando o mesmo número) -- o
+    que faltava era um jeito de sair daqui, criar o produto de estoque com
+    a quantidade inicial já no próprio cadastro de Produto, e voltar com
+    o vínculo pronto sem escolher de novo numa lista.
+    """
+
+    def test_form_mostra_novo_produto_quando_nao_ha_vinculo(self):
+        tecido = Tecido.objects.create(filial=self.filial, nome='Active Air')
+
+        html = self.client.get(
+            reverse('moda:apoio-update', args=['engenharia', 'materiais', tecido.pk])
+        ).content.decode()
+
+        self.assertIn('+ Novo produto', html)
+        self.assertIn(reverse('produtos:produto-create'), html)
+        self.assertIn('nome=Active', html)
+
+    def test_form_mostra_adicionar_estoque_quando_ja_ha_vinculo(self):
+        metro = UnidadeMedida.objects.create(
+            empresa=self.empresa, sigla='M', descricao='Metro',
+            tipo=UnidadeMedida.Tipo.COMPRIMENTO,
+        )
+        produto = Produto.objects.create(
+            filial=self.filial, codigo='TEC003', descricao='Malha Dry',
+            unidade_medida=metro,
+        )
+        tecido = Tecido.objects.create(
+            filial=self.filial, nome='Malha Ligada', produto_estoque=produto,
+        )
+
+        html = self.client.get(
+            reverse('moda:apoio-update', args=['engenharia', 'materiais', tecido.pk])
+        ).content.decode()
+
+        self.assertIn('+ Adicionar estoque', html)
+        self.assertIn(f'movimentacoes/nova/?produto={produto.pk}', html)
+        self.assertNotIn('+ Novo produto', html)
+
+    def test_volta_do_produto_criado_vincula_sozinho(self):
+        """
+        `?produto_criado=<id>` é o contrato de volta: o módulo de Produtos
+        acabou de criar o produto (com a quantidade inicial) e devolve o
+        id na URL -- o cadastro do tecido liga sozinho, sem o usuário
+        escolher de novo.
+        """
+        metro = UnidadeMedida.objects.create(
+            empresa=self.empresa, sigla='M', descricao='Metro',
+            tipo=UnidadeMedida.Tipo.COMPRIMENTO,
+        )
+        produto = Produto.objects.create(
+            filial=self.filial, codigo='TEC004', descricao='Malha Nova',
+            unidade_medida=metro,
+        )
+        tecido = Tecido.objects.create(filial=self.filial, nome='Active Air')
+        url_edicao = reverse('moda:apoio-update', args=['engenharia', 'materiais', tecido.pk])
+
+        resposta = self.client.get(url_edicao, {'produto_criado': produto.pk})
+
+        self.assertRedirects(resposta, url_edicao)
+        tecido.refresh_from_db()
+        self.assertEqual(tecido.produto_estoque_id, produto.pk)
+
+    def test_produto_de_outra_filial_nao_vincula(self):
+        outra_filial = Filial.objects.create(
+            empresa=self.empresa, razao_social='Outra', cnpj='63345678000273',
+            uf='RN', cidade='Mossoró',
+        )
+        metro = UnidadeMedida.objects.create(
+            empresa=self.empresa, sigla='M', descricao='Metro',
+            tipo=UnidadeMedida.Tipo.COMPRIMENTO,
+        )
+        produto_de_fora = Produto.objects.create(
+            filial=outra_filial, codigo='TEC005', descricao='Produto de fora',
+            unidade_medida=metro,
+        )
+        tecido = Tecido.objects.create(filial=self.filial, nome='Active Air')
+        url_edicao = reverse('moda:apoio-update', args=['engenharia', 'materiais', tecido.pk])
+
+        self.client.get(url_edicao, {'produto_criado': produto_de_fora.pk})
+
+        tecido.refresh_from_db()
+        self.assertIsNone(tecido.produto_estoque_id)
