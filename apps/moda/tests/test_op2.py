@@ -1286,7 +1286,18 @@ class Op2Tests(TestCase):
         self.assertEqual(infantil[1:], ['0', '4', '4'])
         self.assertEqual(totais[1:], ['2', '4', '6'])
 
-    def test_pdf_conjunto_destaca_rotulos_tecnicos_por_categoria(self):
+    def test_pdf_conjunto_deixa_adulto_e_infantil_somente_nas_grades(self):
+        from apps.moda.services.pedido_pdf import _nome_item_pdf
+
+        item = type('ItemConjunto', (), {
+            'eh_conjunto': True,
+            'nome_base_op': 'CONJUNTO',
+            'nome_exibicao': 'CONJUNTO — Adulto',
+        })()
+
+        self.assertEqual(_nome_item_pdf(item), 'CONJUNTO')
+
+    def test_pdf_conjunto_destaca_rotulos_tecnicos_em_preto_e_negrito(self):
         from reportlab.lib.units import mm
 
         from apps.moda.services.pedido_pdf import PedidoPdfService, _estilos
@@ -1308,7 +1319,8 @@ class Op2Tests(TestCase):
         )[-1]
 
         especificacoes = tabela._cellvalues[0][1].text
-        self.assertIn('<font color="#c2410c"><b>Cor:</b></font> Azul', especificacoes)
+        self.assertIn('<font color="#000000"><b>Cor:</b></font> Azul', especificacoes)
+        self.assertNotIn('#c2410c', especificacoes)
 
     def test_saldo_pendente_gera_conta_mesmo_sem_forma_informada(self):
         from apps.financeiro.models import ContaReceber

@@ -656,6 +656,11 @@ class ArteNoPdfTests(TestCase):
                     legenda = next(p for p in paragrafos(layout) if 'Escudo' in p.getPlainText() or 'Detalhe' in p.getPlainText())
                     self.assertEqual(legenda.style.fontName, 'Helvetica-Bold')
                     self.assertEqual(legenda.style.textColor, colors.black)
+                legenda_op = next(
+                    p for p in paragrafos(tabela)
+                    if 'Escudo' in p.getPlainText() or 'Detalhe' in p.getPlainText()
+                )
+                self.assertTrue(legenda_op.text.startswith('<b>OBSERVAÇÃO:</b> '))
             for servico in (PedidoPdfService, OrcamentoPdfService):
                 self.assertTrue(servico.gerar(pedido).startswith(b'%PDF'))
 

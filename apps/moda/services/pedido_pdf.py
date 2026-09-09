@@ -45,15 +45,6 @@ PAGINA = landscape(A4)
 MARGEM = 9 * mm
 LARGURA_UTIL = PAGINA[0] - 2 * MARGEM
 
-CORES_ROTULOS_COMPONENTE = (
-    (('impressão', 'impressao'), '#1d4ed8'),
-    (('malha', 'tecido'), '#15803d'),
-    (('gola', 'manga', 'punho', 'gorro', 'ombro'), '#7c3aed'),
-    (('galão', 'galao', 'viés', 'vies', 'friso', 'recorte', 'acabamento',
-      'abertura', 'barra', 'regata', 'tamanho'), '#0f766e'),
-    (('cor', 'etiqueta'), '#c2410c'),
-)
-
 # O QUE O PDF CONSEGUE DESENHAR. Não é a mesma lista de `pode_pre_visualizar`,
 # que é do NAVEGADOR: o SVG entra lá e não aqui, porque o `Image` do reportlab
 # lê bitmap pelo PIL. Sem esta lista o SVG caía na exceção de `_imagem` e
@@ -248,22 +239,25 @@ def _estrutura_item(item):
     return livre.strip(), campos
 
 
-def _especificacoes_componente_coloridas(estrutura):
-    """Destaca rótulos por categoria sem tirar contraste dos valores."""
-    partes = []
-    for rotulo, valor in estrutura:
-        chave = rotulo.casefold()
-        if chave.startswith('observação de '):
-            chave = chave.removeprefix('observação de ')
-        cor = next((
-            cor
-            for termos, cor in CORES_ROTULOS_COMPONENTE
-            if any(termo in chave for termo in termos)
-        ), '#173f7f')
-        partes.append(
-            f'<font color="{cor}"><b>{esc(rotulo)}:</b></font> {esc(valor)}'
-        )
+def _especificacoes_componente_destacadas(estrutura):
+    """Mantém os rótulos técnicos fáceis de localizar, em preto e negrito."""
+    partes = [
+        f'<font color="#000000"><b>{esc(rotulo)}:</b></font> {esc(valor)}'
+        for rotulo, valor in estrutura
+    ]
     return ' · '.join(partes) or 'Sem especificações adicionais'
+
+
+def _nome_item_pdf(item):
+    """No conjunto, deixa adulto/infantil apenas nas grades dos componentes."""
+    if not item.eh_conjunto:
+        return item.nome_exibicao
+    return (
+        getattr(item, 'nome_base_op', '')
+        or (item.produto.nome if getattr(item, 'produto_id', None) else '')
+        or item.descricao
+        or 'Conjunto'
+    )
 
 
 def whatsapp_numero(pedido) -> str:
@@ -888,14 +882,18 @@ class PedidoPdfService:
                 width='100%', thickness=0.5, color=BORDA, spaceAfter=6,
             ))
 
+        nome_item = _nome_item_pdf(item)
         blocos.append(_barra_secao(
-            2, titulo or f'PRODUTO - {item.nome_exibicao}', e, largura_util,
+            2, titulo or f'PRODUTO - {nome_item}', e, largura_util,
             cor=cor, cor_clara=cor_clara,
         ))
         blocos.append(Spacer(1, 3))
 
         observacao, estrutura = _estrutura_item(item)
-        nome_produto = item.nome_base_op if titulo else item.nome_exibicao
+        nome_produto = (
+            (getattr(item, 'nome_base_op', '') or nome_item)
+            if titulo else nome_item
+        )
         if item.eh_conjunto:
             # Cor, malha, acabamento e impressão pertencem a cada componente.
             # O resumo textual do conjunto também contém esses campos, mas
@@ -971,7 +969,7 @@ class PedidoPdfService:
     def _componentes_conjunto(item, e, largura_util):
         blocos = []
         for componente in item.componentes_conjunto:
-            especificacoes = _especificacoes_componente_coloridas(
+            especificacoes = _especificacoes_componente_destacadas(
                 componente['estrutura'],
             )
             largura_conteudo = largura_util * .84
@@ -1109,7 +1107,7 @@ class PedidoPdfService:
 
         blocos = [
             _barra_secao(
-                4, titulo or f'IMAGENS E IMPRESSÃO - {item.nome_exibicao}', e, largura_util,
+                4, titulo or f'IMAGENS E IMPRESSÃO - {_nome_item_pdf(item)}', e, largura_util,
                 cor=cor, cor_clara=cor_clara, arredondada=arredondada,
             ),
             Spacer(1, 4),
@@ -1130,7 +1128,10 @@ class PedidoPdfService:
             fontName='Helvetica-Bold', textColor=colors.black,
         )
         descricoes = [
-            Paragraph(esc(texto).replace('\n', '<br/>'), estilo_descricao) if texto else ''
+            Paragraph(
+                f'<b>OBSERVAÇÃO:</b> {esc(texto).replace(chr(10), "<br/>")}',
+                estilo_descricao,
+            ) if texto else ''
             for _, texto in imagens_descritas
         ]
         alturas_descricoes = [
