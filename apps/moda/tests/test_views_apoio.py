@@ -415,3 +415,28 @@ class EdicaoRapidaDeEstoqueNaListaTests(ApoioBase):
         ).content.decode()
 
         self.assertNotIn('data-field="estoque_atual"', html)
+
+    def test_comentarios_do_template_nao_vazam_pra_tela(self):
+        """
+        `{# ... #}` de mais de uma linha não é comentário pro Django --
+        ele renderiza o texto cru na tela em vez de sumir. Guarda contra
+        essa armadilha especificamente nas duas colunas de estoque
+        (ligada e sem vínculo), onde ela já mordeu uma vez.
+        """
+        metro = UnidadeMedida.objects.create(
+            empresa=self.empresa, sigla='M', descricao='Metro',
+            tipo=UnidadeMedida.Tipo.COMPRIMENTO,
+        )
+        produto = Produto.objects.create(
+            filial=self.filial, codigo='TEC007', descricao='Malha Dry',
+            unidade_medida=metro,
+        )
+        Tecido.objects.create(filial=self.filial, nome='Malha Ligada', produto_estoque=produto)
+        Tecido.objects.create(filial=self.filial, nome='Malha Solta')
+
+        html = self.client.get(
+            reverse('moda:item', args=['engenharia', 'materiais'])
+        ).content.decode()
+
+        self.assertNotIn('{#', html)
+        self.assertNotIn('#}', html)

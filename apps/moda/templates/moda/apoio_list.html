@@ -48,10 +48,12 @@
                     <a href="{% url 'moda:apoio-update' cadastro.grupo cadastro.slug linha.obj.pk %}" class="font-medium"
                        :style="temaClaro ? 'color:#1d4ed8;' : 'color:#60a5fa;'">{{ campo.valor|default:"—" }}</a>
                   {% elif campo.attr == 'estoque_atual' and linha.obj.produto_estoque_id %}
-                    {# Coluna de estoque com produto vinculado: dá pra digitar a quantidade
-                       direto daqui -- duplo clique abre o campo, Enter grava (mesmo
-                       endpoint de ajuste manual que a tela de Estoque usa, então o saldo
-                       sempre passa por uma movimentação de verdade, nunca um valor cru). #}
+                    {% comment %}
+                      Coluna de estoque com produto vinculado: dá pra digitar a quantidade
+                      direto daqui -- duplo clique abre o campo, Enter grava (mesmo
+                      endpoint de ajuste manual que a tela de Estoque usa, então o saldo
+                      sempre passa por uma movimentação de verdade, nunca um valor cru).
+                    {% endcomment %}
                     <span class="apoio-inline-cell" data-field="estoque_atual"
                           data-inline-url="{% url 'estoque:estoque-inline-edit' linha.obj.produto_estoque_id %}"
                           data-value="{{ campo.valor|default_if_none:'' }}"
@@ -59,10 +61,12 @@
                       <span class="inline-display" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">{{ campo.valor|default:"—" }}</span>
                     </span>
                   {% elif campo.attr == 'estoque_atual' %}
-                    {# Ainda sem produto de estoque vinculado: não há onde lançar
-                       quantidade nenhuma, então o "—" já leva direto pra criar o
-                       produto (com a quantidade inicial no próprio formulário) em
-                       vez de ficar mudo esperando um duplo clique que não faz nada. #}
+                    {% comment %}
+                      Ainda sem produto de estoque vinculado: não há onde lançar
+                      quantidade nenhuma, então o "—" já leva direto pra criar o
+                      produto (com a quantidade inicial no próprio formulário) em
+                      vez de ficar mudo esperando um duplo clique que não faz nada.
+                    {% endcomment %}
                     <a href="{% url 'produtos:produto-create' %}?nome={{ linha.obj.nome|urlencode }}&codigo={{ linha.obj.codigo|default:''|urlencode }}&next={% url 'moda:apoio-update' cadastro.grupo cadastro.slug linha.obj.pk %}"
                        class="text-xs font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'"
                        title="Vincular um produto de estoque para lançar quantidade">
