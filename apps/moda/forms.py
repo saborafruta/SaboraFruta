@@ -1180,3 +1180,38 @@ class EncaixeForm(_FilialFormMixin, forms.ModelForm):
                 f'({utilizada} m2). Confira comprimento, largura e a area do CAD.',
             )
         return dados
+
+
+class NovoProdutoEstoqueForm(forms.Form):
+    """
+    Cadastro enxuto de produto de estoque pra matéria-prima (tecido,
+    aviamento) -- o cadastro completo de Produto tem CFOP, preço de
+    venda, NCM, categoria fiscal... pensado pra quem vende ao cliente
+    final, e matéria-prima nunca sai direto por uma nota de venda. Aqui
+    só o que decide o saldo: nome, código, unidade e quantidade inicial.
+    """
+    nome = forms.CharField(
+        max_length=150, label='Nome',
+        widget=forms.TextInput(attrs={'placeholder': 'Ex.: Zíper nylon nº 5 preto'}),
+    )
+    codigo = forms.CharField(
+        max_length=30, required=False, label='Código',
+        widget=forms.TextInput(attrs={'placeholder': 'Código no estoque ou no fornecedor (opcional)'}),
+    )
+    unidade_medida = forms.ModelChoiceField(
+        queryset=None, label='Unidade', empty_label='Selecione a unidade',
+    )
+    quantidade_inicial = forms.DecimalField(
+        max_digits=12, decimal_places=3, required=False, min_value=0,
+        label='Quantidade inicial em estoque',
+        widget=forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '0'}),
+    )
+
+    def __init__(self, *args, empresa=None, **kwargs):
+        from apps.produtos.models import UnidadeMedida
+
+        super().__init__(*args, **kwargs)
+        self.fields['unidade_medida'].queryset = (
+            UnidadeMedida.objects.filter(empresa=empresa).order_by('sigla')
+            if empresa else UnidadeMedida.objects.none()
+        )

@@ -186,38 +186,12 @@ class CadastroApoioFormView(ModaBaseView):
     def get(self, request, slug, pk=None, grupo=None):
         cadastro = _cadastro(slug)
         obj = self._obter(request, cadastro, pk)
-
-        produto_criado_id = request.GET.get('produto_criado')
-        if obj is not None and produto_criado_id and hasattr(obj, 'produto_estoque_id'):
-            self._vincular_produto_criado(request, obj, produto_criado_id)
-            # Redireciona pra a mesma tela sem o `produto_criado` na URL --
-            # senão um F5 tentaria vincular de novo o mesmo produto.
-            return redirect(reverse('moda:apoio-update', args=[cadastro.grupo, cadastro.slug, obj.pk]))
-
         return render(request, 'moda/apoio_form.html', {
             'title': str(obj) if obj else f'Novo(a) {cadastro.singular}',
             'cadastro': cadastro,
             'obj': obj,
             'form': cadastro.form(instance=obj, filial=request.filial_ativa),
         })
-
-    @staticmethod
-    def _vincular_produto_criado(request, obj, produto_id):
-        """
-        Volta do "+ Novo produto": o produto acabou de nascer no módulo de
-        Produtos (com a quantidade inicial já lançada por lá) e falta só
-        ligar ao cadastro -- sem isso o usuário teria que reabrir o
-        formulário e escolher da lista de novo.
-        """
-        from apps.produtos.models import Produto
-        try:
-            produto = Produto.objects.get(pk=produto_id, filial=request.filial_ativa)
-        except (Produto.DoesNotExist, ValueError, TypeError):
-            messages.error(request, 'Não foi possível vincular o produto criado.')
-            return
-        obj.produto_estoque = produto
-        obj.save(update_fields=['produto_estoque'])
-        messages.success(request, f'Produto "{produto}" criado e vinculado.')
 
     def post(self, request, slug, pk=None, grupo=None):
         cadastro = _cadastro(slug)
@@ -296,3 +270,93 @@ class CadastroApoioDeleteView(ModaBaseView):
         else:
             messages.success(request, f'{cadastro.singular} "{nome}" excluído(a).')
         return _redirecionar(request, cadastro)
+
+
+class NovoProdutoEstoqueView(ModaBaseView):
+    """
+    Cadastro enxuto de produto de estoque pra matéria-prima (tecido,
+    aviamento) ligada ao cadastro de apoio -- não o cadastro completo de
+    Produto, que tem CFOP, preço de venda, NCM, categoria fiscal... feito
+    pra quem vende ao cliente final. Matéria-prima nunca sai numa nota de
+    venda; a pergunta aqui é só "quanto tem no rolo", não "por quanto
+    vende". Mesma tabela de Produto por trás (é dela que Estoque, PDV e
+    Ficha Técnica leem o saldo), só que com o mínimo de campos e os
+    demais preenchidos com valores neutros, marcados como rascunho
+    comercial pra nunca aparecer pronto pra venda por engano.
+    """
+
+    permissao_acao = 'editar'
+
+    def _obter(self, request, cadastro, pk):
+        return get_object_or_404(
+            cadastro.model.objects.for_filial(request.filial_ativa), pk=pk,
+        )
+
+    def get(self, request, slug, pk, grupo=None):
+        cadastro = _cadastro(slug)
+        obj = self._obter(request, cadastro, pk)
+        form = f.NovoProdutoEstoqueForm(
+            initial={'nome': obj.nome, 'codigo': getattr(obj, 'codigo', '')},
+            empresa=request.user.empresa,
+        )
+        return render(request, 'moda/apoio_produto_estoque_form.html', {
+            'cadastro': cadastro, 'obj': obj, 'form': form,
+        })
+
+    def post(self, request, slug, pk, grupo=None):
+        cadastro = _cadastro(slug)
+        obj = self._obter(request, cadastro, pk)
+        form = f.NovoProdutoEstoqueForm(request.POST, empresa=request.user.empresa)
+        if not form.is_valid():
+            return render(request, 'moda/apoio_produto_estoque_form.html', {
+                'cadastro': cadastro, 'obj': obj, 'form': form,
+            })
+
+        produto = self._criar_produto(request, form, cadastro)
+        quantidade = form.cleaned_data.get('quantidade_inicial')
+        if quantidade:
+            self._lancar_quantidade_inicial(request, produto, quantidade)
+
+        obj.produto_estoque = produto
+        obj.save(update_fields=['produto_estoque'])
+        messages.success(request, f'Produto de estoque "{produto}" criado e vinculado.')
+        return redirect(reverse('moda:apoio-update', args=[cadastro.grupo, cadastro.slug, obj.pk]))
+
+    def _criar_produto(self, request, form, cadastro):
+        from apps.produtos.models import Produto
+        from apps.produtos.views.produto import _definir_status_produto_filial
+
+        produto = Produto(
+            filial=request.filial_ativa,
+            unidade_medida=form.cleaned_data['unidade_medida'],
+            codigo=form.cleaned_data.get('codigo') or '',
+            descricao=form.cleaned_data['nome'][:150],
+            # NCM/CFOP de verdade só importam pra quem sai numa nota --
+            # matéria-prima não sai. O placeholder + rascunho_comercial é
+            # o mesmo par usado quando o produto nasce de uma entrada de
+            # NF-e sem revisão comercial ainda (apps/compras).
+            ncm='00000000',
+            permite_venda_sem_estoque=False,
+            rascunho_comercial=True,
+            observacao=(
+                f'Matéria-prima do cadastro de {cadastro.plural}. '
+                'Sem dados fiscais/comerciais -- não deve ser vendida.'
+            ),
+            ativo=True,
+        )
+        produto.calcular_margem()
+        produto.save()
+        _definir_status_produto_filial(produto, request.filial_ativa, True)
+        return produto
+
+    @staticmethod
+    def _lancar_quantidade_inicial(request, produto, quantidade):
+        from apps.estoque.services.movimentacao_service import MovimentacaoService
+
+        MovimentacaoService.ajustar_manual(
+            produto_id=produto.pk,
+            filial_id=request.filial_ativa.pk,
+            quantidade_nova=quantidade,
+            usuario_id=request.user.pk,
+            justificativa='Quantidade inicial informada ao cadastrar o produto de estoque.',
+        )

@@ -335,6 +335,10 @@ ROTAS_PRONTAS: list = [
     path('<slug:grupo>/<slug:slug>/<int:pk>/editar/', va.CadastroApoioFormView.as_view(), name='apoio-update'),
     path('<slug:grupo>/<slug:slug>/<int:pk>/toggle-ativo/', va.CadastroApoioToggleAtivoView.as_view(), name='apoio-toggle-ativo'),
     path('<slug:grupo>/<slug:slug>/<int:pk>/excluir/', va.CadastroApoioDeleteView.as_view(), name='apoio-delete'),
+    path(
+        '<slug:grupo>/<slug:slug>/<int:pk>/novo-produto-estoque/',
+        va.NovoProdutoEstoqueView.as_view(), name='apoio-novo-produto-estoque',
+    ),
 ]
 
 urlpatterns = [
