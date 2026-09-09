@@ -13,13 +13,41 @@ from django.urls import reverse
 
 from .forms import FichaTecnicaForm, ImagemFichaForm, MaterialFichaForm
 from .models import (
-    FichaTecnica, Grade, ImagemFicha, ItemGrade, MaterialFicha, PesoTamanhoFicha,
+    Aviamento, FichaTecnica, Grade, ImagemFicha, ItemGrade, MaterialFicha,
+    PesoTamanhoFicha,
 )
 from .views import ModaBaseView
 
 
 def _filial(request):
     return request.filial_ativa
+
+
+def _aviamentos_do_cadastro(filial) -> list[dict]:
+    """
+    Os aviamentos cadastrados, prontos pra' o atalho de "escolher do
+    cadastro" preencher o formulário sozinho -- mesmo dado que
+    `AviamentoForm` já grava, só que aqui em JSON pro JavaScript ler.
+
+    Sem esse atalho, cada ficha reescreve descrição, código e vínculo de
+    estoque do zero, mesmo quando o aviamento já foi cadastrado uma vez.
+    """
+    return [
+        {
+            'id': a.pk,
+            'nome': a.nome,
+            'tipo': a.tipo,
+            'tipo_label': a.get_tipo_display(),
+            'codigo': a.codigo,
+            'unidade': a.unidade,
+            'produto_estoque_id': a.produto_estoque_id,
+        }
+        for a in (
+            Aviamento.objects.for_filial(filial)
+            .filter(ativo=True)
+            .order_by('tipo', 'nome')
+        )
+    ]
 
 
 def _ficha_da_filial(request, pk) -> FichaTecnica:
@@ -241,6 +269,7 @@ class FichaDetailView(ModaBaseView):
             'imagens': ficha.imagens.all(),
             'custo_por_tipo': ficha.custo_por_tipo,
             'form_material': form_material or MaterialFichaForm(),
+            'aviamentos_json': _aviamentos_do_cadastro(_filial(request)),
             'form_imagem': ImagemFichaForm(),
             'grades_sem_peso': _grades_sem_peso(_filial(request), ficha),
             'existe_grade_cadastrada': Grade.objects.for_filial(

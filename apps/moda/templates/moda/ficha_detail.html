@@ -204,6 +204,34 @@
           {% for campo, erros in form_material.errors.items %}{{ erros|join:" " }}<br>{% endfor %}
         </div>
       {% endif %}
+      {% comment %}
+        ESCOLHER DO CADASTRO é atalho, não campo do form -- por isso sem
+        `name`, não vai no POST. Selecionar preenche Tipo/Descrição/Código/
+        Unidade e o produto de estoque (campo oculto, mesmo vínculo que o
+        cadastro de Aviamento já tem) sozinho; a pessoa ainda pode editar
+        qualquer um deles depois de preenchido. Sem isto, cada ficha
+        reescrevia tudo do zero mesmo pra um aviamento já cadastrado.
+      {% endcomment %}
+      {% if aviamentos_json %}
+        <div>
+          <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+            Escolher do cadastro <span class="opacity-60 font-normal">(opcional — preenche os campos abaixo)</span>
+          </label>
+          <select class="form-input" onchange="modaPreencherMaterialDoAviamento(this)">
+            <option value="">Digitar manualmente…</option>
+            {% regroup aviamentos_json by tipo_label as aviamentos_por_tipo %}
+            {% for grupo in aviamentos_por_tipo %}
+              <optgroup label="{{ grupo.grouper }}">
+                {% for a in grupo.list %}
+                  <option value="{{ a.id }}">{{ a.nome }}{% if a.codigo %} ({{ a.codigo }}){% endif %}</option>
+                {% endfor %}
+              </optgroup>
+            {% endfor %}
+          </select>
+        </div>
+      {% endif %}
+      {{ aviamentos_json|json_script:"aviamentos-data" }}
+      <input type="hidden" name="produto_estoque" id="id_produto_estoque" value="">
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div class="lg:col-span-1">
           <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Tipo</label>
@@ -483,4 +511,35 @@
   </div>
 
 </div>
+
+<script>
+  // ATALHO "ESCOLHER DO CADASTRO" no formulário de material da ficha.
+  // Lê o JSON embutido pelo `json_script` (mesmo dado de `AviamentoForm`,
+  // só que pronto pra o navegador) e preenche Tipo/Descrição/Código/
+  // Unidade/produto de estoque -- a pessoa continua podendo editar
+  // qualquer um deles depois, o atalho só poupa digitar tudo de novo pra
+  // um aviamento que já foi cadastrado uma vez.
+  function modaPreencherMaterialDoAviamento(select) {
+    const id = select.value;
+    const campoTipo = document.getElementById('id_tipo');
+    const campoDescricao = document.getElementById('id_descricao');
+    const campoCodigo = document.getElementById('id_codigo');
+    const campoUnidade = document.getElementById('id_unidade');
+    const campoProdutoEstoque = document.getElementById('id_produto_estoque');
+    if (!id) {
+      if (campoProdutoEstoque) campoProdutoEstoque.value = '';
+      return;
+    }
+    const dadosEl = document.getElementById('aviamentos-data');
+    if (!dadosEl) return;
+    const aviamentos = JSON.parse(dadosEl.textContent);
+    const aviamento = aviamentos.find((a) => String(a.id) === id);
+    if (!aviamento) return;
+    if (campoTipo) campoTipo.value = aviamento.tipo;
+    if (campoDescricao) campoDescricao.value = aviamento.nome;
+    if (campoCodigo) campoCodigo.value = aviamento.codigo || '';
+    if (campoUnidade) campoUnidade.value = aviamento.unidade;
+    if (campoProdutoEstoque) campoProdutoEstoque.value = aviamento.produto_estoque_id || '';
+  }
+</script>
 {% endblock %}
