@@ -670,6 +670,8 @@ class ContaReceberBaixaView(PermissaoRequiredMixin, View):
                 observacao=d.get('observacao', ''),
                 bandeira=d.get('bandeira', ''),
                 numero_parcelas=d.get('numero_parcelas'),
+                valor_taxa=d.get('valor_taxa'),
+                valor_liquido=d.get('valor_liquido'),
             )
             if conta.status == StatusContaReceber.PAGO:
                 messages.success(request, f'Conta #{pk} recebida integralmente. ✓')
@@ -763,6 +765,8 @@ class ContaReceberPagamentoEditView(PermissaoRequiredMixin, View):
                 observacao=d.get('observacao', ''),
                 bandeira=d.get('bandeira', ''),
                 numero_parcelas=d.get('numero_parcelas'),
+                valor_taxa=d.get('valor_taxa'),
+                valor_liquido=d.get('valor_liquido'),
             )
             messages.success(request, 'Recebimento atualizado.')
         except DomainError as exc:

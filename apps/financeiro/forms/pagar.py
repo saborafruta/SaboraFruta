@@ -656,6 +656,14 @@ class ContaPagarEdicaoAdminForm(forms.Form):
         queryset=ContaBancaria.objects.none(), required=False,
         label='Conta bancaria',
     )
+    tarifa_bancaria = forms.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal('0'), required=False,
+        label='Tarifa cobrada pelo banco (R$)', widget=VALOR_WIDGET,
+    )
+    valor_total_debitado = forms.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal('0'), required=False,
+        label='Valor total debitado (R$)', widget=VALOR_WIDGET,
+    )
     observacao = forms.CharField(
         required=False, label='Observacao',
         widget=forms.Textarea(attrs={'rows': 3}),
@@ -707,6 +715,11 @@ class ContaPagarEdicaoAdminForm(forms.Form):
                 'data_pagamento': self.pagamento.data_pagamento if self.pagamento else None,
                 'forma_pagamento': self.pagamento.forma_pagamento_id if self.pagamento else conta.forma_pagamento_id,
                 'conta_bancaria': self.pagamento.conta_bancaria_id if self.pagamento else conta.conta_bancaria_id,
+                'tarifa_bancaria': self.pagamento.tarifa_bancaria if self.pagamento else None,
+                'valor_total_debitado': (
+                    self.pagamento.valor_pago + (self.pagamento.tarifa_bancaria or Decimal('0'))
+                    if self.pagamento else None
+                ),
                 'observacao': conta.observacao,
             })
         super().__init__(*args, **kwargs)
@@ -762,7 +775,10 @@ class ContaPagarEdicaoAdminForm(forms.Form):
             )
 
         if self.pagamento is None:
-            for nome in ('data_pagamento', 'forma_pagamento', 'conta_bancaria'):
+            for nome in (
+                'data_pagamento', 'forma_pagamento', 'conta_bancaria',
+                'tarifa_bancaria', 'valor_total_debitado',
+            ):
                 self.fields.pop(nome)
 
     def clean(self):
@@ -800,6 +816,31 @@ class ContaPagarEdicaoAdminForm(forms.Form):
                 self.add_error('dia_vencimento_mensal', 'Informe o dia do mês.')
         if self.pagamento and not cleaned.get('data_pagamento'):
             self.add_error('data_pagamento', 'Informe a data em que o pagamento ocorreu.')
+        if self.pagamento:
+            tarifa = cleaned.get('tarifa_bancaria')
+            total = cleaned.get('valor_total_debitado')
+            bruto = self.pagamento.valor_pago
+            if tarifa is None and total is None:
+                tarifa = self.pagamento.tarifa_bancaria or Decimal('0')
+                total = bruto + tarifa
+            elif tarifa is None:
+                tarifa = total - bruto
+            elif total is None:
+                total = bruto + tarifa
+            if tarifa < Decimal('0'):
+                self.add_error('tarifa_bancaria', 'A tarifa bancária não pode ser negativa.')
+            if total < bruto:
+                self.add_error(
+                    'valor_total_debitado',
+                    'O valor total debitado não pode ser menor que o valor do pagamento.',
+                )
+            if abs((bruto + tarifa) - total) > Decimal('0.01'):
+                self.add_error(
+                    'valor_total_debitado',
+                    'O total debitado deve corresponder ao pagamento mais a tarifa.',
+                )
+            cleaned['tarifa_bancaria'] = tarifa.quantize(Decimal('0.01'))
+            cleaned['valor_total_debitado'] = total.quantize(Decimal('0.01'))
         return cleaned
 
 
@@ -864,6 +905,15 @@ class PagamentoContaPagarForm(forms.Form):
         help_text='Confirme pelo comprovante ou extrato. Informe zero quando o banco não cobrar.',
         widget=VALOR_WIDGET,
     )
+    valor_total_debitado = forms.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        min_value=Decimal('0'),
+        required=False,
+        label='Valor total debitado (R$)',
+        help_text='Valor do pagamento somado à tarifa bancária.',
+        widget=VALOR_WIDGET,
+    )
     referencia_pagamento = forms.CharField(
         max_length=100,
         required=False,
@@ -905,6 +955,10 @@ class PagamentoContaPagarForm(forms.Form):
                 self.fields['tarifa_bancaria'].initial = (
                     forma_inicial.tarifa_pagamento_fixa if forma_inicial else Decimal('0')
                 )
+                self.fields['valor_total_debitado'].initial = (
+                    conta.valor_saldo
+                    + (forma_inicial.tarifa_pagamento_fixa if forma_inicial else Decimal('0'))
+                )
             if conta.conta_bancaria_id:
                 self.fields['conta_bancaria'].initial = conta.conta_bancaria_id
             elif forma_inicial and forma_inicial.conta_bancaria_padrao_id:
@@ -929,6 +983,22 @@ class PagamentoContaPagarForm(forms.Form):
                 'A data do pagamento não pode ser anterior à emissão.',
             )
         valor_pago = cleaned.get('valor_pago')
+        tarifa = cleaned.get('tarifa_bancaria') or Decimal('0')
+        total_debitado = cleaned.get('valor_total_debitado')
+        if valor_pago is not None:
+            if total_debitado is None:
+                total_debitado = valor_pago + tarifa
+            if total_debitado < valor_pago:
+                self.add_error(
+                    'valor_total_debitado',
+                    'O valor total debitado não pode ser menor que o valor do pagamento.',
+                )
+            if abs((valor_pago + tarifa) - total_debitado) > Decimal('0.01'):
+                self.add_error(
+                    'valor_total_debitado',
+                    'O total debitado deve corresponder ao pagamento mais a tarifa.',
+                )
+            cleaned['valor_total_debitado'] = total_debitado.quantize(Decimal('0.01'))
         juros = cleaned.get('valor_juros') or Decimal('0')
         multa = cleaned.get('valor_multa') or Decimal('0')
         desconto = cleaned.get('valor_desconto') or Decimal('0')

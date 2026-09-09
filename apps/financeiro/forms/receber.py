@@ -343,6 +343,22 @@ class BaixaContaReceberForm(forms.Form):
         label='Valor recebido (R$)',
         widget=VALOR_WIDGET,
     )
+    valor_taxa = forms.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        min_value=Decimal('0'),
+        required=False,
+        label='Taxa efetivamente cobrada (R$)',
+        widget=VALOR_WIDGET,
+    )
+    valor_liquido = forms.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        min_value=Decimal('0'),
+        required=False,
+        label='Valor final após a taxa (R$)',
+        widget=VALOR_WIDGET,
+    )
     valor_juros = forms.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -428,6 +444,8 @@ class BaixaContaReceberForm(forms.Form):
             self.fields['bandeira'].initial = pagamento.bandeira
             self.fields['numero_parcelas'].initial = pagamento.numero_parcelas
             self.fields['observacao'].initial = pagamento.observacao
+            self.fields['valor_taxa'].initial = pagamento.valor_taxa
+            self.fields['valor_liquido'].initial = pagamento.valor_liquido
 
     def clean(self):
         cleaned = super().clean()
@@ -436,6 +454,34 @@ class BaixaContaReceberForm(forms.Form):
         cleaned.setdefault('valor_desconto', Decimal('0'))
         cleaned = limpar_dados_cartao(self, cleaned)
         valor_pago = cleaned.get('valor_pago')
+        forma = cleaned.get('forma_pagamento')
+        valor_taxa = cleaned.get('valor_taxa')
+        valor_liquido = cleaned.get('valor_liquido')
+        if valor_pago is not None and forma:
+            if valor_taxa is None and valor_liquido is None:
+                calculo = forma.calcular_taxa_recebimento(
+                    valor_pago,
+                    cleaned.get('numero_parcelas') or 1,
+                    cleaned.get('bandeira') or '',
+                )
+                valor_taxa = calculo['taxa']
+                valor_liquido = calculo['liquido']
+            elif valor_taxa is None:
+                valor_taxa = valor_pago - valor_liquido
+            elif valor_liquido is None:
+                valor_liquido = valor_pago - valor_taxa
+
+            if valor_taxa < Decimal('0') or valor_taxa > valor_pago:
+                self.add_error('valor_taxa', 'A taxa deve estar entre zero e o valor recebido.')
+            if valor_liquido < Decimal('0') or valor_liquido > valor_pago:
+                self.add_error('valor_liquido', 'O valor final deve estar entre zero e o valor recebido.')
+            if abs((valor_pago - valor_taxa) - valor_liquido) > Decimal('0.01'):
+                self.add_error(
+                    'valor_liquido',
+                    'O valor final deve corresponder ao valor recebido menos a taxa.',
+                )
+            cleaned['valor_taxa'] = valor_taxa.quantize(Decimal('0.01'))
+            cleaned['valor_liquido'] = valor_liquido.quantize(Decimal('0.01'))
         if self.conta and valor_pago:
             disponivel = self.conta.valor_saldo or Decimal('0')
             if self.pagamento:

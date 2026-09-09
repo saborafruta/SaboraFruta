@@ -73,6 +73,36 @@
     });
   };
 
+  window.inicializarTaxaPagamentoEdicao = function (raiz) {
+    (raiz || document).querySelectorAll('[data-taxa-pagamento-edicao]').forEach(function (bloco) {
+      if (bloco.dataset.inicializado === '1') return;
+      bloco.dataset.inicializado = '1';
+      const forma = bloco.querySelector('[name="forma_pagamento"]');
+      const tarifa = bloco.querySelector('[data-tarifa-pagamento-input]');
+      const total = bloco.querySelector('[data-total-debitado-input]');
+      const bruto = Number(String(bloco.dataset.valorPagamento || '0').replace(',', '.')) || 0;
+      if (!tarifa || !total) return;
+      const numero = function (valor) {
+        const texto = String(valor || '0').trim();
+        const normalizado = texto.includes(',') ? texto.replace(/\./g, '').replace(',', '.') : texto;
+        const resultado = Number.parseFloat(normalizado);
+        return Number.isFinite(resultado) ? resultado : 0;
+      };
+      const atualizarTotal = function () {
+        total.value = (bruto + numero(tarifa.value)).toFixed(2);
+      };
+      const atualizarTarifa = function () {
+        tarifa.value = Math.max(0, numero(total.value) - bruto).toFixed(2);
+      };
+      tarifa.addEventListener('input', atualizarTotal);
+      total.addEventListener('input', atualizarTarifa);
+      if (forma) forma.addEventListener('change', function () {
+        tarifa.value = forma.selectedOptions[0]?.dataset?.tarifaPagamento || '0';
+        atualizarTotal();
+      });
+    });
+  };
+
   window.toggleEditarLancamento = function (elemento) {
     const detalhe = elemento.closest('[data-conta-detail]');
     const painel = detalhe && detalhe.querySelector('[data-editar-lancamento-panel]');
@@ -81,6 +111,7 @@
     if (!painel.hidden) {
       window.inicializarClassificacaoEdicao(painel);
       window.inicializarRecorrenciaEdicao(painel);
+      window.inicializarTaxaPagamentoEdicao(painel);
       painel.scrollIntoView({behavior: 'smooth', block: 'nearest'});
       painel.querySelector('select, input, textarea')?.focus();
     }

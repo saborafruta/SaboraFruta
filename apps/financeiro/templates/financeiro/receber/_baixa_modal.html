@@ -6,6 +6,8 @@
        modo:'integral',
        saldo:'{{ conta.valor_saldo|floatformat:2|escapejs }}',
        valor:'{{ form.valor_pago.value|default:conta.valor_saldo|escapejs }}',
+       taxa:'{{ form.valor_taxa.value|default_if_none:""|escapejs }}',
+       liquido:'{{ form.valor_liquido.value|default_if_none:""|escapejs }}',
        num(valor) {
          const raw = String(valor ?? '').trim();
          if (!raw) return 0;
@@ -17,8 +19,38 @@
          this.modo = novoModo;
          if (novoModo === 'integral') this.valor = this.num(this.saldo).toFixed(2);
          if (novoModo === 'metade') this.valor = (this.num(this.saldo) / 2).toFixed(2);
+         this.atualizarTaxaAutomatica();
        },
-       atualizarCartao() {
+       arredondar(valor) { return Math.round((valor + Number.EPSILON) * 100) / 100; },
+       percentualSelecionado(opcao) {
+         let taxas = {};
+         try { taxas = JSON.parse(opcao?.dataset?.taxasParcelamento || '{}'); } catch (_) { taxas = {}; }
+         const parcelas = this.num(this.$refs.parcelas?.value) || 1;
+         const bandeira = this.$refs.bandeira?.value || '';
+         if (Object.prototype.hasOwnProperty.call(taxas, `${parcelas}|${bandeira}`)) return this.num(taxas[`${parcelas}|${bandeira}`]);
+         if (Object.prototype.hasOwnProperty.call(taxas, `${parcelas}|`)) return this.num(taxas[`${parcelas}|`]);
+         return this.num(opcao?.dataset?.taxaPercentual);
+       },
+       atualizarTaxaAutomatica() {
+         const opcao = this.$refs.forma?.selectedOptions?.[0];
+         const bruto = this.num(this.valor);
+         const percentual = this.percentualSelecionado(opcao);
+         const fixa = this.num(opcao?.dataset?.taxaFixa);
+         const taxa = Math.min(this.arredondar((bruto * percentual / 100) + fixa), bruto);
+         this.taxa = taxa.toFixed(2);
+         this.liquido = this.arredondar(bruto - taxa).toFixed(2);
+       },
+       atualizarPorTaxa() {
+         const bruto = this.num(this.valor);
+         const taxa = Math.min(this.num(this.taxa), bruto);
+         this.liquido = this.arredondar(bruto - taxa).toFixed(2);
+       },
+       atualizarPorLiquido() {
+         const bruto = this.num(this.valor);
+         const liquido = Math.min(this.num(this.liquido), bruto);
+         this.taxa = this.arredondar(bruto - liquido).toFixed(2);
+       },
+       atualizarCartao(preservarTaxa=false) {
          const forma = this.$refs.forma;
          const tipo = forma?.selectedOptions?.[0]?.dataset?.tipo || '';
          const cartao = tipo === 'cartao_debito' || tipo === 'cartao_credito';
@@ -35,8 +67,9 @@
            const numero = parseInt(item.value || '0', 10);
            item.hidden = numero > maximo; item.disabled = numero > maximo;
          });
+         if (!preservarTaxa) this.atualizarTaxaAutomatica();
        },
-       init() { this.$nextTick(() => this.atualizarCartao()); }
+       init() { this.$nextTick(() => this.atualizarCartao({% if editando_pagamento or form.is_bound %}true{% else %}false{% endif %})); }
      }">
   <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
     <div>
@@ -91,7 +124,7 @@
               {% if form.data_pagamento.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.data_pagamento.errors|join:", " }}</span>{% endif %}
             </label>
             <label class="block text-sm font-medium">Valor recebido (R$) *
-              {{ form.valor_pago|add_class:"form-input mt-1 w-full text-lg font-semibold"|attr:"x-model:valor"|attr:"@input:modo='parcial'" }}
+              {{ form.valor_pago|add_class:"form-input mt-1 w-full text-lg font-semibold"|attr:"x-model:valor"|attr:"@input:modo='parcial'; atualizarTaxaAutomatica()" }}
               {% if form.valor_pago.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.valor_pago.errors|join:", " }}</span>{% endif %}
             </label>
           </div>
@@ -123,13 +156,27 @@
               {% if form.conta_bancaria.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.conta_bancaria.errors|join:", " }}</span>{% endif %}
             </label>
             <label class="block text-sm font-medium" x-ref="campoBandeira">Bandeira do cartão
-              {{ form.bandeira|add_class:"form-input mt-1 w-full"|attr:"x-ref:bandeira" }}
+              {{ form.bandeira|add_class:"form-input mt-1 w-full"|attr:"x-ref:bandeira"|attr:"@change:atualizarTaxaAutomatica()" }}
               {% if form.bandeira.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.bandeira.errors|join:", " }}</span>{% endif %}
             </label>
             <label class="block text-sm font-medium" x-ref="campoParcelas">Parcelas
-              {{ form.numero_parcelas|add_class:"form-input mt-1 w-full"|attr:"x-ref:parcelas" }}
+              {{ form.numero_parcelas|add_class:"form-input mt-1 w-full"|attr:"x-ref:parcelas"|attr:"@change:atualizarTaxaAutomatica()" }}
               {% if form.numero_parcelas.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.numero_parcelas.errors|join:", " }}</span>{% endif %}
             </label>
+          </div>
+          <div class="mt-4 rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-blue-600">Taxa desta transação</p>
+            <div class="mt-3 grid gap-4 sm:grid-cols-2">
+              <label class="block text-sm font-medium">Taxa efetivamente cobrada (R$)
+                {{ form.valor_taxa|add_class:"form-input mt-1 w-full"|attr:"x-model:taxa"|attr:"@input:atualizarPorTaxa()" }}
+                {% if form.valor_taxa.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.valor_taxa.errors|join:", " }}</span>{% endif %}
+              </label>
+              <label class="block text-sm font-medium">Valor final após a taxa (R$)
+                {{ form.valor_liquido|add_class:"form-input mt-1 w-full"|attr:"x-model:liquido"|attr:"@input:atualizarPorLiquido()" }}
+                {% if form.valor_liquido.errors %}<span class="mt-1 block text-xs text-red-500">{{ form.valor_liquido.errors|join:", " }}</span>{% endif %}
+              </label>
+            </div>
+            <p class="mt-2 text-xs text-gray-500">A taxa configurada é sugerida automaticamente. Você pode corrigir qualquer um dos dois valores antes de registrar.</p>
           </div>
         </section>
 
@@ -148,6 +195,8 @@
           <div class="flex justify-between gap-3"><span class="text-gray-500">Valor restante</span><strong>R$ {{ conta.valor_saldo|floatformat:2 }}</strong></div>
           <div class="flex justify-between gap-3"><span class="text-gray-500">Forma prevista</span><strong class="text-right">{{ conta.forma_pagamento.descricao|default:"Não definida" }}</strong></div>
           <div class="flex justify-between gap-3"><span class="text-gray-500">Conta prevista</span><strong class="text-right">{{ conta.conta_bancaria.descricao|default:"Não definida" }}</strong></div>
+          <div class="flex justify-between gap-3"><span class="text-gray-500">Taxa descontada</span><strong class="text-red-600" x-text="'R$ ' + num(taxa).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})"></strong></div>
+          <div class="flex justify-between gap-3"><span class="text-gray-500">Líquido no caixa</span><strong class="text-emerald-600" x-text="'R$ ' + num(liquido).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})"></strong></div>
         </div>
         <button type="submit" class="btn-primary mt-5 min-h-11 w-full justify-center" :disabled="enviando">
           <span x-show="!enviando">{% if editando_pagamento %}Salvar recebimento{% else %}Confirmar recebimento{% endif %}</span>

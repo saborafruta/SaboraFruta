@@ -211,6 +211,8 @@ class ContaReceberService:
         observacao: str = '',
         bandeira: str = '',
         numero_parcelas: int | None = None,
+        valor_taxa: Decimal | None = None,
+        valor_liquido: Decimal | None = None,
     ) -> ContaReceber:
         """Registra o recebimento (total ou parcial) de uma conta a receber."""
         conta = ContaReceber.objects.select_for_update().get(pk=conta.pk)
@@ -256,6 +258,21 @@ class ContaReceberService:
             parcelas_operacao,
             bandeira,
         )
+        if valor_taxa is not None or valor_liquido is not None:
+            taxa_baixa = (
+                Decimal(valor_taxa) if valor_taxa is not None
+                else Decimal(valor_pago) - Decimal(valor_liquido)
+            ).quantize(Decimal('0.01'))
+            liquido_baixa = (
+                Decimal(valor_liquido) if valor_liquido is not None
+                else Decimal(valor_pago) - taxa_baixa
+            ).quantize(Decimal('0.01'))
+            if taxa_baixa < 0 or liquido_baixa < 0 or taxa_baixa > valor_pago:
+                raise DomainError('A taxa e o valor final do recebimento são inválidos.')
+            if abs((Decimal(valor_pago) - taxa_baixa) - liquido_baixa) > Decimal('0.01'):
+                raise DomainError('O valor final deve corresponder ao valor recebido menos a taxa.')
+            calculo_baixa['taxa'] = taxa_baixa
+            calculo_baixa['liquido'] = liquido_baixa
         conta.bandeira_recebimento = bandeira
         conta.parcelas_recebimento = numero_parcelas or None
         conta.taxa_percentual_aplicada = calculo['percentual']
@@ -404,6 +421,8 @@ class ContaReceberService:
         observacao: str = '',
         bandeira: str = '',
         numero_parcelas: int | None = None,
+        valor_taxa: Decimal | None = None,
+        valor_liquido: Decimal | None = None,
     ) -> ContaReceber:
         """Atualiza uma baixa individual e refaz o resumo do título."""
         conta = pagamento.conta_receber
@@ -423,6 +442,21 @@ class ContaReceberService:
             parcelas_operacao,
             bandeira,
         )
+        if valor_taxa is not None or valor_liquido is not None:
+            taxa = (
+                Decimal(valor_taxa) if valor_taxa is not None
+                else Decimal(valor_pago) - Decimal(valor_liquido)
+            ).quantize(Decimal('0.01'))
+            liquido = (
+                Decimal(valor_liquido) if valor_liquido is not None
+                else Decimal(valor_pago) - taxa
+            ).quantize(Decimal('0.01'))
+            if taxa < 0 or liquido < 0 or taxa > valor_pago:
+                raise DomainError('A taxa e o valor final do recebimento são inválidos.')
+            if abs((Decimal(valor_pago) - taxa) - liquido) > Decimal('0.01'):
+                raise DomainError('O valor final deve corresponder ao valor recebido menos a taxa.')
+            calculo['taxa'] = taxa
+            calculo['liquido'] = liquido
         pagamento.data_pagamento = data_pagamento
         pagamento.valor_pago = valor_pago
         pagamento.valor_juros = valor_juros or Decimal('0')

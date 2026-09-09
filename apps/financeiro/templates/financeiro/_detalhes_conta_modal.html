@@ -109,13 +109,21 @@
       </div>
       {% endif %}
       {% if conta.valor_pago > 0 %}
-      <div class="border-t pt-4" style="border-color:rgba(148,163,184,.24)">
+      <div class="border-t pt-4" style="border-color:rgba(148,163,184,.24)" data-taxa-pagamento-edicao data-valor-pagamento="{{ pagamento_selecionado.valor_pago|default:0|escapejs }}">
         <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-500">Dados da baixa selecionada</p>
         {% if pagamento_selecionado %}<p class="mb-3 text-xs opacity-60">Pagamento de {{ pagamento_selecionado.data_pagamento|date:"d/m/Y" }} no valor de R$ {{ pagamento_selecionado.valor_pago|floatformat:2 }}.</p>{% endif %}
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <label class="text-xs font-medium">Data do pagamento{{ edicao_lancamento_form.data_pagamento|add_class:"form-input mt-1 w-full" }}</label>
           <label class="text-xs font-medium">Forma utilizada{{ edicao_lancamento_form.forma_pagamento|add_class:"form-input mt-1 w-full"|attr:"data-conta-alvo:conta_bancaria" }}</label>
           <label class="text-xs font-medium">Conta bancária{{ edicao_lancamento_form.conta_bancaria|add_class:"form-input mt-1 w-full" }}</label>
+        </div>
+        <div class="mt-3 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
+          <p class="text-xs font-semibold uppercase tracking-wide text-blue-500">Tarifa desta baixa</p>
+          <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label class="text-xs font-medium">Tarifa cobrada pelo banco (R$){{ edicao_lancamento_form.tarifa_bancaria|add_class:"form-input mt-1 w-full"|attr:"data-tarifa-pagamento-input" }}{% if edicao_lancamento_form.tarifa_bancaria.errors %}<span class="mt-1 block text-rose-500">{{ edicao_lancamento_form.tarifa_bancaria.errors|striptags }}</span>{% endif %}</label>
+            <label class="text-xs font-medium">Valor total debitado (R$){{ edicao_lancamento_form.valor_total_debitado|add_class:"form-input mt-1 w-full"|attr:"data-total-debitado-input" }}{% if edicao_lancamento_form.valor_total_debitado.errors %}<span class="mt-1 block text-rose-500">{{ edicao_lancamento_form.valor_total_debitado.errors|striptags }}</span>{% endif %}</label>
+          </div>
+          <p class="mt-2 text-xs opacity-60">A alteração vale somente para o pagamento selecionado e atualiza a despesa de tarifa vinculada.</p>
         </div>
       </div>
       {% endif %}

@@ -77,6 +77,8 @@ CAMPOS_EDICAO_LANCAMENTO = {
     'data_pagamento': 'Data do pagamento',
     'forma_pagamento': 'Forma utilizada',
     'conta_bancaria': 'Conta bancaria',
+    'tarifa_bancaria': 'Tarifa bancária',
+    'valor_total_debitado': 'Valor total debitado',
     'observacao': 'Observacao',
     'status': 'Status',
     'excluido_em': 'Excluído em',
@@ -114,6 +116,11 @@ def _snapshot_edicao_lancamento(conta, pagamento=None):
         'data_pagamento': pagamento.data_pagamento.isoformat() if pagamento else 'Nao informado',
         'forma_pagamento': _nome_objeto(pagamento.forma_pagamento if pagamento else conta.forma_pagamento),
         'conta_bancaria': _nome_objeto(pagamento.conta_bancaria if pagamento else conta.conta_bancaria),
+        'tarifa_bancaria': str(pagamento.tarifa_bancaria or Decimal('0')) if pagamento else 'Nao informado',
+        'valor_total_debitado': (
+            str(pagamento.valor_pago + (pagamento.tarifa_bancaria or Decimal('0')))
+            if pagamento else 'Nao informado'
+        ),
         'observacao': conta.observacao or 'Nao informado',
         'status': conta.get_status_display(),
     }
@@ -1413,8 +1420,10 @@ class ContaPagarEditarValorView(PermissaoRequiredMixin, View):
             pagamento.data_pagamento = dados['data_pagamento']
             pagamento.forma_pagamento = dados.get('forma_pagamento')
             pagamento.conta_bancaria = dados.get('conta_bancaria')
+            pagamento.tarifa_bancaria = dados.get('tarifa_bancaria') or Decimal('0')
             pagamento.save(update_fields=[
-                'data_pagamento', 'forma_pagamento', 'conta_bancaria', 'updated_at',
+                'data_pagamento', 'forma_pagamento', 'conta_bancaria',
+                'tarifa_bancaria', 'updated_at',
             ])
             ultima_baixa = conta.pagamentos.order_by(
                 '-data_pagamento', '-created_at', '-pk',

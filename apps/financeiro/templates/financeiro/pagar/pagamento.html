@@ -13,6 +13,7 @@
        multa: '{{ form.valor_multa.value|default:0|escapejs }}',
        desconto: '{{ form.valor_desconto.value|default:0|escapejs }}',
        tarifa: '{{ form.tarifa_bancaria.value|default:0|escapejs }}',
+       totalDebitado: '{{ form.valor_total_debitado.value|default_if_none:""|escapejs }}',
        contasPorForma: {
          {% for forma in form.fields.forma_pagamento.queryset %}'{{ forma.pk }}': '{{ forma.conta_bancaria_padrao_id|default_if_none:"" }}',{% endfor %}
        },
@@ -111,7 +112,7 @@
             </div>
             <div>
               <label for="{{ form.valor_pago.id_for_label }}" class="mb-1 block text-sm font-medium">Valor do pagamento (R$) *</label>
-              {{ form.valor_pago|add_class:"form-input text-lg font-semibold"|attr:"x-model:valor"|attr:"@input:modo='parcial'" }}
+              {{ form.valor_pago|add_class:"form-input text-lg font-semibold"|attr:"x-model:valor"|attr:"@input:modo='parcial'; atualizarTotal()" }}
               <p class="mt-1 text-xs opacity-60" x-show="modo==='parcial'">Informe quanto foi pago nesta baixa.</p>
               {% if form.valor_pago.errors %}<p class="mt-1 text-xs text-red-500">{{ form.valor_pago.errors|join:", " }}</p>{% endif %}
             </div>
@@ -169,9 +170,15 @@
             </div>
             <div>
               <label for="{{ form.tarifa_bancaria.id_for_label }}" class="mb-1 block text-sm font-medium">Tarifa cobrada pelo banco (R$)</label>
-              {{ form.tarifa_bancaria|add_class:"form-input"|attr:"x-model:tarifa" }}
+              {{ form.tarifa_bancaria|add_class:"form-input"|attr:"x-model:tarifa"|attr:"@input:atualizarTotal()" }}
               <p class="mt-1 text-xs opacity-60">Confirme no extrato. Use 0,00 quando não houver cobrança.</p>
               {% if form.tarifa_bancaria.errors %}<p class="mt-1 text-xs text-red-500">{{ form.tarifa_bancaria.errors|join:", " }}</p>{% endif %}
+            </div>
+            <div>
+              <label for="{{ form.valor_total_debitado.id_for_label }}" class="mb-1 block text-sm font-medium">Valor total debitado (R$)</label>
+              {{ form.valor_total_debitado|add_class:"form-input"|attr:"x-model:totalDebitado"|attr:"@input:atualizarTarifa()" }}
+              <p class="mt-1 text-xs opacity-60">Ao alterar este valor, a tarifa desta transação é recalculada.</p>
+              {% if form.valor_total_debitado.errors %}<p class="mt-1 text-xs text-red-500">{{ form.valor_total_debitado.errors|join:", " }}</p>{% endif %}
             </div>
             <div>
               <label for="{{ form.referencia_pagamento.id_for_label }}" class="mb-1 block text-sm font-medium">Referência da transação <span class="text-xs font-normal opacity-55">(opcional)</span></label>
@@ -254,6 +261,7 @@ function paymentForm(initial) {
     multa: initial.multa || '0',
     desconto: initial.desconto || '0',
     tarifa: initial.tarifa || '0',
+    totalDebitado: initial.totalDebitado || '',
     contasPorForma: initial.contasPorForma || {},
     tarifasPorForma: initial.tarifasPorForma || {},
     arquivoNome: '',
@@ -266,6 +274,7 @@ function paymentForm(initial) {
         forma.addEventListener('change', () => {
           this.preencherContaVinculada(forma.value);
           this.tarifa = this.tarifasPorForma[String(forma.value)] || '0';
+          this.atualizarTotal();
         });
         this.preencherContaVinculada(forma.value, false);
       });
@@ -286,12 +295,19 @@ function paymentForm(initial) {
     restante() {
       return Math.max(0, this.totalAtualizado() - this.num(this.valor));
     },
+    atualizarTotal() {
+      this.totalDebitado = (this.num(this.valor) + this.num(this.tarifa)).toFixed(2);
+    },
+    atualizarTarifa() {
+      this.tarifa = Math.max(0, this.num(this.totalDebitado) - this.num(this.valor)).toFixed(2);
+    },
     excede() {
       return this.num(this.valor) > this.totalAtualizado() + 0.009;
     },
     syncIntegral() {
       if (this.modo === 'integral') this.valor = this.totalAtualizado().toFixed(2);
       if (this.modo === 'metade') this.valor = (this.totalAtualizado() / 2).toFixed(2);
+      this.atualizarTotal();
     },
     preencherContaVinculada(formaId, substituir = true) {
       const contaId = this.contasPorForma[String(formaId)] || '';

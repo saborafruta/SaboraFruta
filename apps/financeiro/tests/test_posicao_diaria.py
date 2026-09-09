@@ -2199,3 +2199,103 @@ class PosicaoDiariaCaixaTests(TestCase):
             ).valor_pago,
             Decimal("4.00"),
         )
+
+    def test_baixa_a_receber_exibe_e_grava_taxa_e_valor_final(self):
+        self.forma.taxa_administrativa = Decimal("2.00")
+        self.forma.save(update_fields=["taxa_administrativa"])
+        cliente = Cliente.objects.create(
+            filial=self.filial, razao_social="Cliente baixa ajustável",
+            tipo_pessoa="F", cpf_cnpj="74765432100",
+        )
+        titulo = ContaReceber.objects.create(
+            filial=self.filial, cliente=cliente,
+            valor_original=Decimal("100.00"), valor_final=Decimal("100.00"),
+            valor_saldo=Decimal("100.00"), data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 21), forma_pagamento=self.forma,
+        )
+        url = reverse("financeiro:receber_baixar", args=[titulo.pk])
+
+        original = self.client.get(url)
+        modal = self.client.get(url + "?modal=1")
+        for resposta in (original, modal):
+            self.assertEqual(resposta.status_code, 200)
+            self.assertContains(resposta, 'name="valor_taxa"')
+            self.assertContains(resposta, 'name="valor_liquido"')
+            self.assertContains(resposta, "Taxa desta transação")
+
+        resposta = self.client.post(url, {
+            "data_pagamento": "2026-08-21", "valor_pago": "100.00",
+            "valor_juros": "0", "valor_multa": "0", "valor_desconto": "0",
+            "forma_pagamento": self.forma.pk, "conta_bancaria": self.banco.pk,
+            "valor_taxa": "3.47", "valor_liquido": "96.53",
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        pagamento = titulo.pagamentos.get()
+        titulo.refresh_from_db()
+        self.assertEqual(pagamento.valor_taxa, Decimal("3.47"))
+        self.assertEqual(pagamento.valor_liquido, Decimal("96.53"))
+        self.assertEqual(titulo.valor_taxa_recebimento, Decimal("3.47"))
+        self.assertEqual(titulo.valor_liquido_recebido, Decimal("96.53"))
+
+    def test_pagamento_exibe_tarifa_e_total_nas_duas_telas(self):
+        titulo = ContaPagar.objects.create(
+            filial=self.filial, valor_original=Decimal("100.00"),
+            valor_final=Decimal("100.00"), valor_saldo=Decimal("100.00"),
+            descricao_despesa="Título com tarifa ajustável",
+            data_emissao=date(2026, 8, 20), data_vencimento=date(2026, 8, 21),
+            forma_pagamento_prevista=self.forma, usuario=self.usuario,
+        )
+        url = reverse("financeiro:pagar_pagar", args=[titulo.pk])
+
+        for resposta in (self.client.get(url), self.client.get(url + "?modal=1")):
+            self.assertEqual(resposta.status_code, 200)
+            self.assertContains(resposta, 'name="tarifa_bancaria"')
+            self.assertContains(resposta, 'name="valor_total_debitado"')
+            self.assertContains(resposta, "Valor total debitado")
+
+    def test_conta_paga_permite_editar_tarifa_da_baixa(self):
+        titulo = ContaPagar.objects.create(
+            filial=self.filial, valor_original=Decimal("100.00"),
+            valor_final=Decimal("100.00"), valor_pago=Decimal("100.00"),
+            valor_saldo=Decimal("0.00"), descricao_despesa="Conta já paga",
+            data_emissao=date(2026, 8, 20), data_vencimento=date(2026, 8, 21),
+            data_pagamento=date(2026, 8, 21), status=StatusContaPagar.PAGO,
+            forma_pagamento=self.forma, conta_bancaria=self.banco,
+            usuario=self.usuario,
+        )
+        pagamento = PagamentoContaPagar.objects.create(
+            filial=self.filial, conta_pagar=titulo,
+            data_pagamento=date(2026, 8, 21), valor_pago=Decimal("100.00"),
+            forma_pagamento=self.forma, conta_bancaria=self.banco,
+            usuario=self.usuario,
+        )
+        detalhe = self.client.get(
+            reverse("financeiro:pagar_detail", args=[titulo.pk]),
+            {"pagamento": pagamento.pk},
+        )
+        self.assertContains(detalhe, 'name="tarifa_bancaria"')
+        self.assertContains(detalhe, 'name="valor_total_debitado"')
+
+        resposta = self.client.post(
+            reverse("financeiro:pagar_editar_valor", args=[titulo.pk]),
+            {
+                "pagamento_id": pagamento.pk,
+                "descricao_despesa": titulo.descricao_despesa,
+                "valor_original": "100.00", "data_vencimento": "2026-08-21",
+                "data_competencia": "", "forma_pagamento_prevista": "",
+                "plano_contas": "", "data_pagamento": "2026-08-21",
+                "forma_pagamento": self.forma.pk,
+                "conta_bancaria": self.banco.pk,
+                "tarifa_bancaria": "4.25", "valor_total_debitado": "104.25",
+                "observacao": "", "motivo": "Tarifa conferida no extrato.",
+            },
+        )
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        pagamento.refresh_from_db()
+        self.assertEqual(pagamento.tarifa_bancaria, Decimal("4.25"))
+        taxa = ContaPagar.objects.get(
+            documento_tipo="taxa_pagamento", documento_id=pagamento.pk,
+        )
+        self.assertEqual(taxa.valor_pago, Decimal("4.25"))
