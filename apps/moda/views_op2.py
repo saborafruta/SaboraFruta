@@ -230,6 +230,47 @@ def _dinheiro_post(request, nome):
         raise ValueError('Confira o valor informado.')
 
 
+def _ajuste_financeiro_post(request, pedido):
+    """Transforma o ajuste explícito da tela em desconto, acréscimo e total."""
+    base = (pedido.subtotal + (pedido.frete or Decimal('0'))).quantize(
+        Decimal('0.01')
+    )
+
+    # Mantém compatibilidade com integrações e formulários anteriores que
+    # enviavam apenas o valor final. A tela atual sempre envia ``tipo_ajuste``.
+    if 'tipo_ajuste' not in request.POST:
+        total = _dinheiro_post(request, 'valor_total')
+        motivo = ' '.join((request.POST.get('motivo_ajuste') or '').split())
+        desconto = max(base - total, Decimal('0'))
+        acrescimo = max(total - base, Decimal('0'))
+    else:
+        tipo = (request.POST.get('tipo_ajuste') or '').strip()
+        if tipo not in {'nenhum', 'desconto', 'acrescimo'}:
+            raise ValueError('Selecione um tipo de ajuste válido.')
+        valor = (
+            Decimal('0') if tipo == 'nenhum'
+            else _dinheiro_post(request, 'valor_ajuste')
+        )
+        if tipo != 'nenhum' and valor <= 0:
+            raise ValueError('Informe um valor maior que zero para o ajuste.')
+        desconto = valor if tipo == 'desconto' else Decimal('0')
+        acrescimo = valor if tipo == 'acrescimo' else Decimal('0')
+        total = base - desconto + acrescimo
+        motivo = ' '.join((request.POST.get('motivo_ajuste') or '').split())
+
+    if total < 0:
+        raise ValueError('O desconto não pode ser maior que o valor da OP.')
+    if total > Decimal('9999999999.99'):
+        raise ValueError('O valor final informado é muito alto.')
+    if (desconto or acrescimo) and not motivo:
+        raise ValueError('Justifique o motivo do desconto ou acréscimo.')
+    if len(motivo) > 500:
+        raise ValueError('A justificativa deve ter até 500 caracteres.')
+    if not (desconto or acrescimo):
+        motivo = ''
+    return total, desconto, acrescimo, motivo
+
+
 def _redimensionar_previsao_pagamento(previsao, total_novo):
     """Mantém as formas e redistribui seus valores para o novo total."""
     linhas = [dict(linha) for linha in (previsao or []) if linha.get('forma')]
@@ -1663,24 +1704,24 @@ class Op2ActionView(ModaBaseView):
             messages.success(request, 'Rascunho salvo.')
 
     def _acao_valor_final(self, request, pedido):
-        valor_total = _dinheiro_post(request, 'valor_total')
-        if valor_total < 0:
-            raise ValueError('O valor final não pode ser negativo.')
-        if valor_total > Decimal('9999999999.99'):
-            raise ValueError('O valor final informado é muito alto.')
+        valor_total, desconto, acrescimo, motivo = _ajuste_financeiro_post(
+            request, pedido,
+        )
         if valor_total < (pedido.entrada or Decimal('0')):
             raise ValueError(
                 'O valor final não pode ficar abaixo do adiantamento já informado.'
             )
 
         base = pedido.subtotal + (pedido.frete or Decimal('0'))
-        pedido.desconto = max(base - valor_total, Decimal('0'))
-        pedido.acrescimo = max(valor_total - base, Decimal('0'))
+        pedido.desconto = desconto
+        pedido.acrescimo = acrescimo
+        pedido.motivo_ajuste_financeiro = motivo
         pedido.previsao_pagamento = _redimensionar_previsao_pagamento(
             pedido.previsao_pagamento, valor_total,
         )
         pedido.save(update_fields=[
-            'desconto', 'acrescimo', 'previsao_pagamento', 'updated_at',
+            'desconto', 'acrescimo', 'motivo_ajuste_financeiro',
+            'previsao_pagamento', 'updated_at',
         ])
 
         contas_existem = FinanceiroPedidoService.contas_do_pedido(pedido).exists()
@@ -1702,10 +1743,10 @@ class Op2ActionView(ModaBaseView):
         messages.success(request, f'Valor final atualizado para R$ {valor_total:.2f}. {detalhe}')
 
     def _acao_financeiro(self, request, pedido):
-        valor_total = _dinheiro_post(request, 'valor_total')
+        valor_total, desconto, acrescimo, motivo = _ajuste_financeiro_post(
+            request, pedido,
+        )
         entrada = _dinheiro_post(request, 'entrada')
-        if valor_total < 0:
-            raise ValueError('O valor total não pode ser negativo.')
         if entrada < 0 or entrada > valor_total:
             raise ValueError('O adiantamento deve ficar entre zero e o valor total.')
         if valor_total == 0:
@@ -1715,6 +1756,9 @@ class Op2ActionView(ModaBaseView):
             pedido.entrada = Decimal('0')
             pedido.forma_pagamento = None
             pedido.conta_bancaria_entrada = None
+            pedido.desconto = desconto
+            pedido.acrescimo = acrescimo
+            pedido.motivo_ajuste_financeiro = motivo
             pedido.previsao_pagamento = [{
                 'forma': PedidoProducao.FormaPagamentoPrevista.NAO_INFORMADO,
                 'valor': '0.00',
@@ -1722,6 +1766,7 @@ class Op2ActionView(ModaBaseView):
             pedido.financeiro_gerado_em = timezone.now()
             pedido.save(update_fields=[
                 'entrada', 'forma_pagamento', 'conta_bancaria_entrada',
+                'desconto', 'acrescimo', 'motivo_ajuste_financeiro',
                 'previsao_pagamento', 'financeiro_gerado_em', 'updated_at',
             ])
             messages.success(
@@ -1765,14 +1810,15 @@ class Op2ActionView(ModaBaseView):
         pagadores_entrada = responsaveis('responsavel_entrada', 'Pagamento recebido')
         devedores_saldo = responsaveis('responsavel_saldo', 'Valor fiado')
 
-        base = pedido.subtotal + (pedido.frete or Decimal('0'))
-        pedido.desconto = max(base - valor_total, Decimal('0'))
-        pedido.acrescimo = max(valor_total - base, Decimal('0'))
+        pedido.desconto = desconto
+        pedido.acrescimo = acrescimo
+        pedido.motivo_ajuste_financeiro = motivo
         pedido.entrada = entrada
         pedido.forma_pagamento = forma
         pedido.conta_bancaria_entrada = conta
         pedido.save(update_fields=[
-            'desconto', 'acrescimo', 'entrada', 'forma_pagamento',
+            'desconto', 'acrescimo', 'motivo_ajuste_financeiro',
+            'entrada', 'forma_pagamento',
             'conta_bancaria_entrada', 'updated_at',
         ])
         contas = FinanceiroPedidoService.gerar(

@@ -118,6 +118,14 @@ class PedidoProducao(ComCodigoQr, FilialScopedModel):
     # que um pedido sem subtotal.
     desconto = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
     acrescimo = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
+    motivo_ajuste_financeiro = models.TextField(
+        blank=True,
+        verbose_name='Justificativa do ajuste financeiro',
+        help_text=(
+            'Motivo comercial obrigatório quando o pedido recebe desconto '
+            'ou acréscimo. As alterações ficam disponíveis no histórico da OP.'
+        ),
+    )
     frete = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
     entrada = models.DecimalField(
         max_digits=12, decimal_places=2, default=Decimal('0'),

@@ -28,6 +28,7 @@ from apps.moda.services.op2_estrutura import (
     OP2_ESTRUTURA_OPCOES, juntar_observacoes_item, opcoes_estrutura_filial,
 )
 from apps.moda.services.conjunto import validar_configuracao_conjunto
+from apps.moda.services.historico import HistoricoService
 from apps.moda.services.kanban_comercial import COLUNAS
 from apps.moda.views_op2 import Op2CreateView, _sincronizar_status
 
@@ -1191,7 +1192,10 @@ class Op2Tests(TestCase):
             resposta,
             "Number(JSON.parse(document.getElementById('op2-valor-total').textContent)||0)",
         )
-        self.assertContains(resposta, 'O valor atual da OP já vem preenchido e pode ser editado.')
+        self.assertContains(
+            resposta,
+            'Aplique desconto ou acréscimo com justificativa antes de gerar os lançamentos.',
+        )
         self.assertContains(resposta, 'name="valor_total"')
 
     def test_valor_final_clicavel_aplica_desconto_e_atualiza_conta_receber(self):
@@ -1221,12 +1225,18 @@ class Op2Tests(TestCase):
 
         resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
             'acao': 'valor_final', 'valor_total': '450.00',
+            'tipo_ajuste': 'desconto', 'valor_ajuste': '50.00',
+            'motivo_ajuste': 'Condição comercial autorizada',
         })
 
         self.assertEqual(resposta.status_code, 302)
         self.pedido.refresh_from_db()
         conta.refresh_from_db()
         self.assertEqual(self.pedido.desconto, Decimal('50.00'))
+        self.assertEqual(
+            self.pedido.motivo_ajuste_financeiro,
+            'Condição comercial autorizada',
+        )
         self.assertEqual(self.pedido.valor_total, Decimal('450.00'))
         self.assertEqual(self.pedido.previsao_pagamento[0]['valor'], '450.00')
         self.assertEqual(conta.valor_final, Decimal('450.00'))
@@ -1253,12 +1263,70 @@ class Op2Tests(TestCase):
 
         self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
             'acao': 'valor_final', 'valor_total': '250.00',
+            'tipo_ajuste': 'desconto', 'valor_ajuste': '250.00',
+            'motivo_ajuste': 'Desconto negociado',
         })
 
         self.pedido.refresh_from_db()
         conta.refresh_from_db()
         self.assertEqual(self.pedido.valor_total, Decimal('500.00'))
         self.assertEqual(conta.valor_final, Decimal('500.00'))
+
+    def test_ajuste_financeiro_exige_justificativa_e_registra_acrescimo(self):
+        item = self._item(quantidade=10)
+        item.valor_unitario = Decimal('50.00')
+        item.save(update_fields=['valor_unitario'])
+        self._login_op2()
+        url = reverse('moda:op2-action', args=[self.pedido.pk])
+
+        sem_motivo = self.client.post(url, {
+            'acao': 'valor_final', 'tipo_ajuste': 'acrescimo',
+            'valor_ajuste': '25.00', 'motivo_ajuste': '',
+        })
+
+        self.assertEqual(sem_motivo.status_code, 302)
+        self.pedido.refresh_from_db()
+        self.assertEqual(self.pedido.acrescimo, Decimal('0.00'))
+
+        resposta = self.client.post(url, {
+            'acao': 'valor_final', 'tipo_ajuste': 'acrescimo',
+            'valor_ajuste': '25.00',
+            'motivo_ajuste': '  Pedido urgente   com entrega antecipada  ',
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        self.pedido.refresh_from_db()
+        self.assertEqual(self.pedido.acrescimo, Decimal('25.00'))
+        self.assertEqual(self.pedido.desconto, Decimal('0.00'))
+        self.assertEqual(self.pedido.valor_total, Decimal('525.00'))
+        self.assertEqual(
+            self.pedido.motivo_ajuste_financeiro,
+            'Pedido urgente com entrega antecipada',
+        )
+        eventos = HistoricoService.do_pedido(self.pedido)
+        mudancas = [mudanca for evento in eventos for mudanca in evento.mudancas]
+        self.assertTrue(any(
+            mudanca.campo == 'Justificativa do ajuste financeiro'
+            and mudanca.depois == 'Pedido urgente com entrega antecipada'
+            for mudanca in mudancas
+        ))
+
+        pagina = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+        self.assertContains(pagina, 'Ajuste financeiro registrado')
+        self.assertContains(pagina, 'Acréscimo de R$ 25,00')
+        self.assertContains(pagina, 'Pedido urgente com entrega antecipada')
+
+    def test_modal_financeiro_exibe_campos_explicitos_de_ajuste(self):
+        self._item(quantidade=1)
+        self._login_op2()
+
+        resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+
+        self.assertContains(resposta, 'name="tipo_ajuste"', count=2)
+        self.assertContains(resposta, 'name="valor_ajuste"', count=2)
+        self.assertContains(resposta, 'name="motivo_ajuste"', count=2)
+        self.assertContains(resposta, 'Justificativa do ajuste')
+        self.assertContains(resposta, 'ficarão registrados no Histórico da OP')
 
     def test_historico_do_cliente_cria_rascunho_com_itens_selecionados(self):
         escolhido = self._item(quantidade=3)
@@ -1411,6 +1479,36 @@ class Op2Tests(TestCase):
         )
         self.assertEqual(conta.valor_saldo, Decimal('100.00'))
         self.assertIsNone(conta.forma_pagamento)
+
+    def test_gerar_financeiro_aplica_desconto_com_justificativa(self):
+        from apps.financeiro.models import ContaReceber
+
+        item = self._item(quantidade=1)
+        item.valor_unitario = Decimal('100.00')
+        item.save(update_fields=['valor_unitario'])
+        self._login_op2()
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'financeiro', 'entrada': '0',
+            'tipo_ajuste': 'desconto', 'valor_ajuste': '10.00',
+            'motivo_ajuste': 'Desconto para pagamento à vista',
+            'forma_pagamento': 'nao_informado',
+            'responsavel_entrada': str(self.cliente.pk),
+            'responsavel_saldo': str(self.cliente.pk),
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        self.pedido.refresh_from_db()
+        conta = ContaReceber.objects.get(
+            documento_tipo='pedido_moda', documento_id=self.pedido.pk,
+        )
+        self.assertEqual(self.pedido.desconto, Decimal('10.00'))
+        self.assertEqual(self.pedido.valor_total, Decimal('90.00'))
+        self.assertEqual(
+            self.pedido.motivo_ajuste_financeiro,
+            'Desconto para pagamento à vista',
+        )
+        self.assertEqual(conta.valor_saldo, Decimal('90.00'))
 
     def test_op_mostra_extrato_e_atalho_para_quitar_titulo(self):
         from datetime import date
