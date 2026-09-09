@@ -580,6 +580,38 @@ class TecidoForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
         ).order_by('descricao')
 
 
+class AviamentoForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
+    class Meta:
+        from .models import Aviamento
+        model = Aviamento
+        fields = [
+            'nome', 'tipo', 'codigo', 'unidade',
+            'fornecedor', 'produto_estoque', 'observacao', 'ativo',
+        ]
+        widgets = {
+            'nome': forms.TextInput(attrs={'placeholder': 'Ex.: Zíper nylon nº 5 preto'}),
+            'codigo': forms.TextInput(attrs={'placeholder': 'Código no estoque ou no fornecedor'}),
+            'observacao': forms.Textarea(attrs={'rows': 2}),
+        }
+
+    def __init__(self, *args, filial=None, **kwargs):
+        from apps.cadastros.models import Fornecedor
+        from apps.produtos.models import Produto
+        super().__init__(*args, filial=filial, **kwargs)
+        self.fields['fornecedor'].required = False
+        self.fields['fornecedor'].queryset = (
+            Fornecedor.objects.for_filial(filial).filter(ativo=True).order_by('razao_social')
+            if filial else Fornecedor.objects.none()
+        )
+        # Sem escopo de filial, mesmo motivo do Tecido: o produto de estoque
+        # e' do catalogo da empresa, o saldo e' que e' por filial.
+        self.fields['produto_estoque'].required = False
+        self.fields['produto_estoque'].empty_label = 'sem ligacao com estoque'
+        self.fields['produto_estoque'].queryset = Produto.objects.filter(
+            ativo=True,
+        ).order_by('descricao')
+
+
 class CategoriaForm(_FilialFormMixin, forms.ModelForm):
     class Meta:
         from .models import Categoria

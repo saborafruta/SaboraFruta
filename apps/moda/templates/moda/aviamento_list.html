@@ -3,17 +3,28 @@
 {% block page_title %}{{ title }}{% endblock %}
 {% block content %}
 <div class="space-y-5">
-  <div>
-    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      <a href="{% url 'moda:grupo' 'engenharia' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Engenharia</a>
-      <span class="mx-1">›</span> Aviamentos
-    </p>
-    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Aviamentos</h2>
-    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      Linhas, botões, zíperes e etiquetas usados nas fichas técnicas, reunidos
-      por aviamento. A ficha responde <em>o que entra nesta peça</em>; esta
-      tela responde o outro lado — <em>onde este aviamento é usado</em>.
-    </p>
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'moda:grupo' 'engenharia' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Engenharia</a>
+        <span class="mx-1">›</span> Aviamentos
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Aviamentos</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Linhas, botões, zíperes e etiquetas usados nas fichas técnicas, reunidos
+        por aviamento. A ficha responde <em>o que entra nesta peça</em>; esta
+        tela responde o outro lado — <em>onde este aviamento é usado</em>.
+      </p>
+    </div>
+    {% comment %}
+      Aviamento nao se cadastra AQUI -- e' `MaterialFicha`, que exige uma
+      ficha por tras. O botao leva pro CADASTRO (novo modelo, reutilizavel
+      entre fichas), nao pra um form fantasma que criaria um registro sem
+      pra onde ir.
+    {% endcomment %}
+    <a href="{% url 'moda:apoio-create' 'engenharia' 'cadastro-aviamentos' %}" class="btn-primary flex-shrink-0">
+      + Novo Aviamento
+    </a>
   </div>
 
   {% comment %}
@@ -135,10 +146,15 @@
             Nenhum aviamento lançado ainda.
           </p>
           <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-            Aviamento não se cadastra aqui: ele entra na <strong>ficha técnica</strong>
-            da peça, com consumo e custo. Esta tela reúne o que já foi lançado.
+            Esta tela reúne o que já foi lançado nas fichas técnicas — o uso,
+            não o catálogo. Cadastre o aviamento primeiro (nome, tipo, vínculo
+            de estoque) e depois escolha-o na <strong>ficha técnica</strong> da
+            peça, com o consumo e a perda daquela peça.
           </p>
-          <a href="{% url 'moda:ficha-list' %}" class="btn-primary text-sm mt-4 inline-block">Ir para Ficha Técnica</a>
+          <div class="flex flex-wrap gap-2 justify-center mt-4">
+            <a href="{% url 'moda:apoio-create' 'engenharia' 'cadastro-aviamentos' %}" class="btn-primary text-sm">+ Novo Aviamento</a>
+            <a href="{% url 'moda:ficha-list' %}" class="btn-secondary text-sm">Ir para Ficha Técnica</a>
+          </div>
         {% endif %}
       </div>
     {% endfor %}

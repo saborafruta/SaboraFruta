@@ -104,6 +104,20 @@ CADASTROS: dict[str, Cadastro] = {
         busca_em=('nome', 'composicao'),
         ajuda='Composição e gramatura ficam aqui, não no produto — o produto lê daqui.',
     ),
+    'cadastro-aviamentos': Cadastro(
+        slug='cadastro-aviamentos', model=m.Aviamento, form=f.AviamentoForm,
+        singular='Aviamento', plural='Cadastro de Aviamentos', grupo='engenharia',
+        colunas=(
+            ('Nome', 'nome'), ('Tipo', 'get_tipo_display'),
+            ('Código', 'codigo'), ('Fornecedor', 'fornecedor'),
+        ),
+        busca_em=('nome', 'codigo'),
+        ordem=('tipo', 'nome'),
+        ajuda=(
+            'Cadastre uma vez — linha, elástico, zíper, botão... — e a ficha '
+            'técnica escolhe daqui em vez de digitar tudo de novo em cada peça.'
+        ),
+    ),
 }
 
 

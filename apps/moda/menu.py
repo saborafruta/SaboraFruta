@@ -81,6 +81,7 @@ GRUPOS: tuple[Grupo, ...] = (
             Item('estrutura-produto', 'Estrutura do Produto', 'Composição em níveis.'),
             Item('materiais', 'Materiais', 'Tecidos e insumos que entram na peça.'),
             Item('aviamentos', 'Aviamentos', 'Linhas, botões, zíperes, etiquetas.'),
+            Item('cadastro-aviamentos', 'Cadastro de Aviamentos', 'Linha, elástico, zíper, botão... prontos pra usar na ficha.'),
             Item('operacoes', 'Operações', 'Cada passo executável no chão de fábrica.'),
             Item('sequencia-producao', 'Sequência de Produção', 'A ordem em que as operações acontecem.'),
             Item('custos', 'Custos', 'Custo calculado a partir da ficha.'),

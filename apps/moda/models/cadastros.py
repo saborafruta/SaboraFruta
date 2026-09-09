@@ -185,6 +185,80 @@ class Tecido(CadastroApoio):
         return self.nome
 
 
+class Aviamento(CadastroApoio):
+    """
+    Linha, elástico, zíper, botão, etiqueta, tag, embalagem — cadastrado uma
+    vez, para a ficha técnica escolher em vez de digitar tudo de novo em
+    cada peça.
+
+    ANTES, O AVIAMENTO SÓ EXISTIA DENTRO DA FICHA (`MaterialFicha`), que
+    exige uma peça por trás -- não havia onde cadastrar o zíper nº 5 preto
+    antes de ele aparecer na primeira ficha que o usa, e cada ficha reescrevia
+    descrição, código e vínculo de estoque do zero. Este cadastro é o
+    catálogo; `MaterialFicha` continua sendo o lançamento na peça, com seu
+    próprio consumo e perda -- só que agora pode nascer com os dados já
+    preenchidos, puxados daqui.
+    """
+
+    # Mesmo subconjunto de `MaterialFicha.Tipo` usado nas telas de
+    # Aviamentos (`estoque_aviamento.py`, `views_insumos.py`) -- sem
+    # Tecido/Forro, que têm cadastro e tela própria.
+    class Tipo(models.TextChoices):
+        LINHA = 'linha', 'Linha'
+        ELASTICO = 'elastico', 'Elástico'
+        ZIPER = 'ziper', 'Zíper'
+        BOTAO = 'botao', 'Botão'
+        ETIQUETA = 'etiqueta', 'Etiqueta'
+        TAG = 'tag', 'Tag'
+        EMBALAGEM = 'embalagem', 'Embalagem'
+        AVIAMENTO = 'aviamento', 'Outro aviamento'
+
+    class Unidade(models.TextChoices):
+        METRO = 'm', 'm'
+        CENTIMETRO = 'cm', 'cm'
+        QUILO = 'kg', 'kg'
+        GRAMA = 'g', 'g'
+        UNIDADE = 'un', 'un'
+        PAR = 'par', 'par'
+        PECA = 'pc', 'pç'
+        ROLO = 'rolo', 'rolo'
+        CONE = 'cone', 'cone'
+
+    tipo = models.CharField(max_length=20, choices=Tipo.choices)
+    codigo = models.CharField(
+        max_length=40, blank=True,
+        help_text='Código no estoque ou no fornecedor.',
+    )
+    unidade = models.CharField(max_length=6, choices=Unidade.choices, default=Unidade.UNIDADE)
+    fornecedor = models.ForeignKey(
+        'cadastros.Fornecedor', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='aviamentos_moda',
+    )
+
+    # Mesma ponte que o Tecido já tem: sem ela o aviamento é só um nome de
+    # catálogo, e a ficha que o usa não consegue conferir saldo nem reservar.
+    produto_estoque = models.ForeignKey(
+        'produtos.Produto', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='aviamentos_moda',
+        verbose_name='Produto no estoque',
+        help_text=(
+            'Ligue para o sistema conferir saldo e permitir reserva. A '
+            'unidade precisa ser a mesma — não há conversão.'
+        ),
+    )
+
+    class Meta(CadastroApoio.Meta):
+        abstract = False
+        db_table = 'moda_aviamentos'
+        ordering = ['tipo', 'nome']
+        unique_together = [('filial', 'nome')]
+        verbose_name = 'Aviamento'
+        verbose_name_plural = 'Aviamentos'
+
+    def __str__(self):
+        return f'{self.nome} ({self.get_tipo_display()})'
+
+
 class Modelo(CadastroApoio):
     """
     Modelagem base reaproveitada entre produtos (ex.: Camisa gola careca
