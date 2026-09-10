@@ -23,7 +23,7 @@ from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import (
     DadosInvalidosError, EstoqueInsuficienteError, LoteVencidoError,
 )
-from apps.estoque.models import Estoque, LoteProduto, MovimentacaoEstoque
+from apps.estoque.models import Deposito, Estoque, LoteProduto, MovimentacaoEstoque
 
 
 @dataclass
@@ -130,6 +130,7 @@ class MovimentacaoService:
         permitir_sem_lote: bool = False,
         cliente_id: int | None = None,
         documento_fiscal_id: int | None = None,
+        deposito_id: int | None = None,
     ) -> MovimentacaoEstoque:
         """
         Registra UMA movimentação de estoque atomicamente.
@@ -137,11 +138,19 @@ class MovimentacaoService:
 
         Para SAÍDAS com múltiplos lotes, chame múltiplas vezes (uma por lote).
         Para SAÍDAS simples: use `registrar_saida()` que encapsula FEFO.
+
+        `deposito_id` indica o local de estoque dentro da filial. Quando não
+        informado, cai no depósito padrão da filial — hoje o único, então o
+        comportamento não muda. As fases seguintes vão passar o depósito
+        explícito na produção e na venda.
         """
         from apps.produtos.models import Produto
 
         if quantidade <= 0:
             raise DadosInvalidosError('Quantidade deve ser positiva.')
+
+        if not deposito_id:
+            deposito_id = Deposito.padrao_id(filial_id)
 
         if (
             cls._produto_controla_lote(produto_id)
@@ -157,7 +166,7 @@ class MovimentacaoService:
 
         # Lock pessimista na linha de estoque
         estoque, created = Estoque.objects.select_for_update().get_or_create(
-            produto_id=produto_id, filial_id=filial_id,
+            produto_id=produto_id, filial_id=filial_id, deposito_id=deposito_id,
             defaults={'quantidade_atual': 0, 'quantidade_reservada': 0,
                       'quantidade_disponivel': 0},
         )
@@ -247,6 +256,7 @@ class MovimentacaoService:
         mov = MovimentacaoEstoque.objects.create(
             produto_id=produto_id,
             filial_id=filial_id,
+            deposito_id=deposito_id,
             lote=lote,
             tipo_operacao=tipo_operacao,
             documento_tipo=documento_tipo,
@@ -587,6 +597,7 @@ class MovimentacaoService:
 
         estoque, _ = Estoque.objects.select_for_update().get_or_create(
             produto_id=produto_id, filial_id=filial_id,
+            deposito_id=Deposito.padrao_id(filial_id),
         )
         diferenca = quantidade_nova - estoque.quantidade_atual
         if diferenca == 0:
@@ -680,6 +691,7 @@ class MovimentacaoService:
         estoque, _ = Estoque.objects.select_for_update().get_or_create(
             produto_id=produto_id,
             filial_id=filial_id,
+            deposito_id=Deposito.padrao_id(filial_id),
             defaults={
                 'quantidade_atual': 0,
                 'quantidade_reservada': 0,
@@ -753,6 +765,7 @@ class MovimentacaoService:
             MovimentacaoEstoque.TipoOperacao.AJUSTE_MAIS,
             MovimentacaoEstoque.TipoOperacao.DEVOLUCAO_CLIENTE,
             MovimentacaoEstoque.TipoOperacao.PRODUCAO_ENTRADA,
+            MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_INTERNA_ENTRADA,
         }
         return tipo_operacao in entradas
 

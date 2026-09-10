@@ -1,9 +1,20 @@
 from django.contrib import admin
 
 from apps.estoque.models import (
-    AlertaVencimento, Estoque, Inventario, ItemInventario, LoteProduto,
-    MovimentacaoEstoque,
+    AlertaVencimento, Deposito, Estoque, Inventario, ItemInventario,
+    LoteProduto, MovimentacaoEstoque,
 )
+
+
+@admin.register(Deposito)
+class DepositoAdmin(admin.ModelAdmin):
+    list_display = [
+        'nome', 'filial', 'tipo', 'is_padrao', 'permite_venda',
+        'permite_producao', 'ativo',
+    ]
+    list_filter = ['filial', 'tipo', 'is_padrao', 'ativo']
+    search_fields = ['nome', 'filial__razao_social', 'filial__nome_fantasia']
+    autocomplete_fields = ['filial']
 
 
 @admin.register(LoteProduto)
@@ -21,10 +32,10 @@ class LoteProdutoAdmin(admin.ModelAdmin):
 @admin.register(Estoque)
 class EstoqueAdmin(admin.ModelAdmin):
     list_display = [
-        'produto', 'filial', 'quantidade_atual', 'quantidade_reservada',
-        'quantidade_disponivel', 'custo_medio',
+        'produto', 'filial', 'deposito', 'quantidade_atual',
+        'quantidade_reservada', 'quantidade_disponivel', 'custo_medio',
     ]
-    list_filter = ['filial']
+    list_filter = ['filial', 'deposito']
     search_fields = ['produto__descricao', 'produto__codigo']
     readonly_fields = [
         'quantidade_atual', 'quantidade_reservada', 'quantidade_disponivel',
@@ -41,10 +52,10 @@ class EstoqueAdmin(admin.ModelAdmin):
 @admin.register(MovimentacaoEstoque)
 class MovimentacaoEstoqueAdmin(admin.ModelAdmin):
     list_display = [
-        'data_movimentacao', 'tipo_operacao', 'produto', 'filial',
+        'data_movimentacao', 'tipo_operacao', 'produto', 'filial', 'deposito',
         'quantidade', 'usuario',
     ]
-    list_filter = ['tipo_operacao', 'documento_tipo', 'filial']
+    list_filter = ['tipo_operacao', 'documento_tipo', 'filial', 'deposito']
     search_fields = ['produto__descricao', 'documento_numero', 'observacao']
     readonly_fields = [f.name for f in MovimentacaoEstoque._meta.fields]
     date_hierarchy = 'data_movimentacao'

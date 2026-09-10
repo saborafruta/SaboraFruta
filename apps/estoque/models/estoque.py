@@ -21,6 +21,10 @@ class Estoque(models.Model):
     filial = models.ForeignKey(
         'core.Filial', on_delete=models.PROTECT, related_name='estoques',
     )
+    deposito = models.ForeignKey(
+        'estoque.Deposito', on_delete=models.PROTECT, related_name='estoques',
+        help_text='Local de estoque dentro da filial.',
+    )
     quantidade_atual = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     quantidade_reservada = models.DecimalField(
         max_digits=12, decimal_places=3, default=0,
@@ -37,15 +41,27 @@ class Estoque(models.Model):
 
     class Meta:
         db_table = 'estoque'
-        unique_together = [('produto', 'filial')]
+        unique_together = [('produto', 'filial', 'deposito')]
         indexes = [
             models.Index(fields=['filial', 'quantidade_disponivel']),
+            models.Index(fields=['deposito', 'quantidade_disponivel']),
         ]
         verbose_name = 'Estoque'
         verbose_name_plural = 'Estoques'
 
     def __str__(self):
         return f'{self.produto} @ {self.filial}: {self.quantidade_disponivel}'
+
+    def save(self, *args, **kwargs):
+        # Rede de segurança da fase 1: quem gravar um saldo sem indicar o
+        # depósito cai no padrão da filial. `MovimentacaoService` já resolve
+        # isso explicitamente; isto cobre gravações diretas (fixtures de
+        # teste, scripts) sem espalhar `Deposito.padrao_id(...)` por toda
+        # parte.
+        if self.deposito_id is None and self.filial_id is not None:
+            from apps.estoque.models.deposito import Deposito
+            self.deposito_id = Deposito.padrao_id(self.filial_id)
+        super().save(*args, **kwargs)
 
     def atualizar_disponivel(self):
         """Recalcula quantidade_disponivel. Chamar após alterar atual ou reservada."""
@@ -63,6 +79,8 @@ class MovimentacaoEstoque(FilialScopedModel):
         SAIDA = 'saida', 'Saída'
         TRANSFERENCIA_SAIDA = 'transferencia_saida', 'Transferência (saída)'
         TRANSFERENCIA_ENTRADA = 'transferencia_entrada', 'Transferência (entrada)'
+        TRANSFERENCIA_INTERNA_SAIDA = 'transf_interna_saida', 'Transferência interna (saída)'
+        TRANSFERENCIA_INTERNA_ENTRADA = 'transf_interna_entrada', 'Transferência interna (entrada)'
         AJUSTE_MAIS = 'ajuste_mais', 'Ajuste +'
         AJUSTE_MENOS = 'ajuste_menos', 'Ajuste -'
         INVENTARIO = 'inventario', 'Inventário'
@@ -87,12 +105,22 @@ class MovimentacaoEstoque(FilialScopedModel):
         INVENTARIO = 'inventario', 'Inventário'
         TRANSFERENCIA = 'transferencia', 'Transferência'
         AJUSTE_MANUAL = 'ajuste_manual', 'Ajuste Manual'
+        TRANSFERENCIA_INTERNA = 'transferencia_interna', 'Transferência Interna'
         ORDEM_PRODUCAO = 'ordem_producao', 'Ordem de Produção'
         ESTORNO_ENTRADA = 'estorno_entrada', 'Estorno de Entrada'
         COMANDA = 'comanda', 'Comanda (Food Service)'
 
     produto = models.ForeignKey(
         'produtos.Produto', on_delete=models.PROTECT, related_name='movimentacoes',
+    )
+    deposito = models.ForeignKey(
+        'estoque.Deposito', on_delete=models.PROTECT, related_name='movimentacoes',
+        help_text='Depósito movimentado.',
+    )
+    deposito_destino = models.ForeignKey(
+        'estoque.Deposito', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='+',
+        help_text='Para transferência interna entre depósitos da mesma filial.',
     )
     lote = models.ForeignKey(
         'estoque.LoteProduto', on_delete=models.PROTECT, null=True, blank=True,
@@ -177,3 +205,12 @@ class MovimentacaoEstoque(FilialScopedModel):
         ]
         verbose_name = 'Movimentação de Estoque'
         verbose_name_plural = 'Movimentações de Estoque'
+
+    def save(self, *args, **kwargs):
+        # Mesma rede de segurança do `Estoque`: sem depósito indicado, usa o
+        # padrão da filial. Na prática só `MovimentacaoService` grava aqui, e
+        # ele já resolve o depósito — isto protege fixtures e scripts.
+        if self.deposito_id is None and self.filial_id is not None:
+            from apps.estoque.models.deposito import Deposito
+            self.deposito_id = Deposito.padrao_id(self.filial_id)
+        super().save(*args, **kwargs)

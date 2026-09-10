@@ -33,7 +33,9 @@ from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE, PermissaoRequiredMixin
 from apps.core.services.search import filter_queryset_by_terms
 from apps.estoque.forms import AjusteEstoqueForm, MovimentacaoManualForm, TransferenciaForm
-from apps.estoque.models import Estoque, Inventario, LoteProduto, MovimentacaoEstoque
+from apps.estoque.models import (
+    Deposito, Estoque, Inventario, LoteProduto, MovimentacaoEstoque,
+)
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.estoque.views.permissoes import (
     bloquear_exportacao_sem_permissao,
@@ -2045,6 +2047,7 @@ class AjusteRapidoEstoqueAtualizarView(AjusteRapidoEstoqueView):
         # quando o saldo ainda não existe. O service mantém o mesmo lock.
         estoque, _ = Estoque.objects.select_for_update().get_or_create(
             produto=produto, filial=request.filial_ativa,
+            deposito_id=Deposito.padrao_id(request.filial_ativa.pk),
             defaults={'quantidade_atual': 0, 'quantidade_reservada': 0, 'quantidade_disponivel': 0},
         )
         quantidade_atual = estoque.quantidade_atual

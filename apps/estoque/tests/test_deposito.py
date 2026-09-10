@@ -1,0 +1,151 @@
+"""
+Fase 1 do estoque por depósito.
+
+Cobre o model `Deposito`, a resolução do depósito padrão da filial e o
+fato de que toda movimentação de estoque passa a carimbar o depósito —
+sem que nada mude no comportamento, já que cada filial tem um único
+depósito nesta fase.
+"""
+from decimal import Decimal
+
+from django.db import IntegrityError, transaction
+from django.test import TestCase
+
+from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.estoque.models import Deposito, Estoque, MovimentacaoEstoque
+from apps.estoque.services.movimentacao_service import MovimentacaoService
+from apps.produtos.models import (
+    Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial,
+)
+
+
+class DepositoBase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.empresa = Empresa.objects.create(
+            razao_social='Estoque Depósito LTDA', nome_fantasia='Depósito',
+            cnpj='19345678000101',
+            regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        cls.filial = Filial.objects.create(
+            empresa=cls.empresa, razao_social='Filial Depósito',
+            nome_fantasia='Matriz', cnpj='19345678000102', uf='RN',
+        )
+        cls.perfil = PerfilAcesso.objects.create(
+            empresa=cls.empresa, nome='Admin', is_admin=True,
+        )
+        cls.usuario = Usuario.objects.create_user(
+            email='deposito@teste.local', nome='Dep', password='x' * 12,
+            empresa=cls.empresa, filial=cls.filial, perfil=cls.perfil,
+        )
+        cls.unidade = UnidadeMedida.objects.create(
+            empresa=cls.empresa, sigla='UN', descricao='Unidade',
+            tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        UnidadeMedidaFilial.objects.create(unidade=cls.unidade, filial=cls.filial)
+
+    def _produto(self, descricao='Produto Dep'):
+        produto = Produto.objects.create(
+            filial=self.filial, unidade_medida=self.unidade, descricao=descricao,
+            ncm='20089900', permite_venda_sem_estoque=False,
+        )
+        ProdutoFilial.objects.create(produto=produto, filial=self.filial)
+        return produto
+
+
+class DepositoModelTests(DepositoBase):
+
+    def test_padrao_id_cria_sob_demanda_e_reusa(self):
+        pk = Deposito.padrao_id(self.filial.pk)
+        deposito = Deposito.objects.get(pk=pk)
+        self.assertTrue(deposito.is_padrao)
+        self.assertEqual(deposito.filial_id, self.filial.pk)
+        # segunda chamada devolve o mesmo, não cria outro
+        self.assertEqual(Deposito.padrao_id(self.filial.pk), pk)
+        self.assertEqual(
+            Deposito.objects.filter(filial=self.filial).count(), 1,
+        )
+
+    def test_so_um_padrao_por_filial(self):
+        Deposito.padrao_id(self.filial.pk)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Deposito.objects.create(
+                    filial=self.filial, nome='Fábrica', is_padrao=True,
+                )
+
+    def test_nome_unico_por_filial(self):
+        Deposito.objects.create(filial=self.filial, nome='Fábrica')
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Deposito.objects.create(filial=self.filial, nome='Fábrica')
+
+    def test_mesmo_nome_em_filiais_diferentes_e_permitido(self):
+        outra = Filial.objects.create(
+            empresa=self.empresa, razao_social='Outra', nome_fantasia='Outra',
+            cnpj='19345678000188', uf='RN',
+        )
+        Deposito.objects.create(filial=self.filial, nome='Fábrica')
+        Deposito.objects.create(filial=outra, nome='Fábrica')  # não levanta
+
+
+class DepositoNaMovimentacaoTests(DepositoBase):
+
+    def test_entrada_carimba_deposito_padrao_no_saldo_e_na_movimentacao(self):
+        produto = self._produto()
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=produto.pk,
+            filial_id=self.filial.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('10'),
+            usuario_id=self.usuario.pk,
+            valor_unitario=Decimal('3'),
+        )
+        padrao_id = Deposito.padrao_id(self.filial.pk)
+
+        estoque = Estoque.objects.get(produto=produto, filial=self.filial)
+        self.assertEqual(estoque.deposito_id, padrao_id)
+
+        mov = MovimentacaoEstoque.objects.get(produto=produto)
+        self.assertEqual(mov.deposito_id, padrao_id)
+
+    def test_deposito_explicito_e_respeitado(self):
+        produto = self._produto()
+        fabrica = Deposito.objects.create(
+            filial=self.filial, nome='Fábrica', tipo=Deposito.Tipo.PRODUCAO,
+        )
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=produto.pk,
+            filial_id=self.filial.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('4'),
+            usuario_id=self.usuario.pk,
+            valor_unitario=Decimal('2'),
+            deposito_id=fabrica.pk,
+        )
+        # saldo foi para o depósito da fábrica, não para o padrão
+        self.assertTrue(
+            Estoque.objects.filter(
+                produto=produto, filial=self.filial, deposito=fabrica,
+                quantidade_atual=Decimal('4'),
+            ).exists()
+        )
+        self.assertFalse(
+            Estoque.objects.filter(
+                produto=produto, deposito_id=Deposito.padrao_id(self.filial.pk),
+            ).exists()
+        )
+
+    def test_ajuste_manual_sem_lote_cria_saldo_com_deposito(self):
+        produto = self._produto()
+        MovimentacaoService.ajustar_manual(
+            produto_id=produto.pk,
+            filial_id=self.filial.pk,
+            quantidade_nova=Decimal('7'),
+            usuario_id=self.usuario.pk,
+            justificativa='Contagem inicial.',
+        )
+        estoque = Estoque.objects.get(produto=produto, filial=self.filial)
+        self.assertEqual(estoque.quantidade_atual, Decimal('7'))
+        self.assertEqual(estoque.deposito_id, Deposito.padrao_id(self.filial.pk))
