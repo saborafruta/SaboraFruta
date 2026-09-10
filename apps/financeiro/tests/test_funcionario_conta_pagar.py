@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from django.apps import apps as django_apps
 from django.contrib.messages.storage.fallback import FallbackStorage
@@ -44,6 +45,7 @@ from apps.financeiro.views.pagar import (
     DespesaPagaCreateView,
     ContaPagarEditarValorView,
     ContaPagarExcluirView,
+    ContaPagarRestaurarView,
     ContaPagarListView,
     ContaPagarNotaFiscalLookupView,
     ContaPagarPagamentoView,
@@ -1584,3 +1586,82 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertIsNone(contas[0].excluido_em)
         self.assertIsNotNone(contas[1].excluido_em)
         self.assertIsNotNone(contas[2].excluido_em)
+
+    def test_excecao_ao_excluir_devolve_json_em_vez_de_pagina_de_erro(self):
+        """
+        Usuário reportou "não está deixando excluir o título" -- o botão só
+        mostrava um alerta genérico, porque uma exceção não tratada aqui
+        virava a página HTML de erro 500 do Django, e o JS só sabe ler
+        JSON. O motivo de verdade tem que chegar na tela, não só no log.
+        """
+        perfil = PerfilAcesso.objects.create(
+            empresa=self.empresa, nome="Admin exclusão com falha", is_admin=True,
+        )
+        usuario = Usuario.objects.create_user(
+            email="admin-excecao-exclusao@eureka.com", nome="Admin exceção",
+            password="teste1234", empresa=self.empresa, filial=self.filial, perfil=perfil,
+        )
+        conta = ContaPagarService.criar_recorrencia(
+            filial=self.filial, funcionario=self.funcionario,
+            tipo_lancamento="funcionario", descricao_despesa="DIÁRIA ÚNICA",
+            valor_original=Decimal("100.00"), data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 24), plano_contas=self.categoria,
+            frequencia="semanal", quantidade=2, dias_semana=["0"],
+        )[0]
+        request = RequestFactory().post(
+            f"/financeiro/pagar/{conta.pk}/excluir/",
+            {"motivo": "Lançamento duplicado.", "escopo_recorrencia": "somente"},
+        )
+        request.user = usuario
+        request.filial_ativa = self.filial
+
+        with patch(
+            "apps.financeiro.views.pagar.registrar_auditoria",
+            side_effect=RuntimeError("Falha simulada no log de auditoria."),
+        ):
+            response = ContaPagarExcluirView.as_view()(request, pk=conta.pk)
+
+        self.assertEqual(response.status_code, 500)
+        dados = json.loads(response.content)
+        self.assertFalse(dados["ok"])
+        self.assertEqual(dados["erro"], "Falha simulada no log de auditoria.")
+        # A exceção interrompeu a transação -- o título continua não
+        # excluído, e não meio excluído.
+        conta.refresh_from_db()
+        self.assertIsNone(conta.excluido_em)
+
+    def test_excecao_ao_restaurar_devolve_json_em_vez_de_pagina_de_erro(self):
+        perfil = PerfilAcesso.objects.create(
+            empresa=self.empresa, nome="Admin restauração com falha", is_admin=True,
+        )
+        usuario = Usuario.objects.create_user(
+            email="admin-excecao-restauracao@eureka.com", nome="Admin exceção 2",
+            password="teste1234", empresa=self.empresa, filial=self.filial, perfil=perfil,
+        )
+        conta = ContaPagarService.criar_recorrencia(
+            filial=self.filial, funcionario=self.funcionario,
+            tipo_lancamento="funcionario", descricao_despesa="DIÁRIA ÚNICA 2",
+            valor_original=Decimal("100.00"), data_emissao=date(2026, 8, 20),
+            data_vencimento=date(2026, 8, 24), plano_contas=self.categoria,
+            frequencia="semanal", quantidade=2, dias_semana=["0"],
+        )[0]
+        conta.excluido_em = timezone.now()
+        conta.motivo_exclusao = "Para testar a restauração."
+        conta.save(update_fields=["excluido_em", "motivo_exclusao"])
+
+        request = RequestFactory().post(f"/financeiro/pagar/{conta.pk}/restaurar/")
+        request.user = usuario
+        request.filial_ativa = self.filial
+
+        with patch(
+            "apps.financeiro.views.pagar.registrar_auditoria",
+            side_effect=RuntimeError("Falha simulada no log de auditoria."),
+        ):
+            response = ContaPagarRestaurarView.as_view()(request, pk=conta.pk)
+
+        self.assertEqual(response.status_code, 500)
+        dados = json.loads(response.content)
+        self.assertFalse(dados["ok"])
+        self.assertEqual(dados["erro"], "Falha simulada no log de auditoria.")
+        conta.refresh_from_db()
+        self.assertIsNotNone(conta.excluido_em)

@@ -1652,8 +1652,23 @@ class ContaPagarExcluirView(PermissaoRequiredMixin, View):
     permissao_modulo = 'financeiro'
     permissao_acao = 'editar'
 
-    @tenant_atomic
     def post(self, request, pk):
+        # A tela chama isto via fetch() e só sabe mostrar erro quando a
+        # resposta é JSON (ver `alterarExclusaoLancamento` no template) --
+        # uma exceção não tratada aqui vira a página de erro 500 padrão do
+        # Django (HTML), e o botão só mostra "Não foi possível concluir a
+        # ação", sem dizer por quê. Devolver o motivo de verdade em JSON
+        # não é só depuração: sem isso o admin nunca sabe se tenta de novo,
+        # muda o motivo, ou chama o suporte.
+        try:
+            return self._excluir(request, pk)
+        except Http404:
+            raise
+        except Exception as erro:
+            return JsonResponse({'ok': False, 'erro': str(erro) or erro.__class__.__name__}, status=500)
+
+    @tenant_atomic
+    def _excluir(self, request, pk):
         if not _usuario_admin(request):
             return JsonResponse({'ok': False, 'erro': 'Somente administradores podem excluir títulos.'}, status=403)
         conta = get_object_or_404(ContaPagar.all_objects.for_filial(_filial(request)), pk=pk)
@@ -1711,8 +1726,19 @@ class ContaPagarRestaurarView(PermissaoRequiredMixin, View):
     permissao_modulo = 'financeiro'
     permissao_acao = 'editar'
 
-    @tenant_atomic
     def post(self, request, pk):
+        # Mesmo motivo do `ContaPagarExcluirView`: sem isto, uma exceção
+        # aqui vira HTML e o botão só mostra "Não foi possível concluir a
+        # ação", sem dizer por quê.
+        try:
+            return self._restaurar(request, pk)
+        except Http404:
+            raise
+        except Exception as erro:
+            return JsonResponse({'ok': False, 'erro': str(erro) or erro.__class__.__name__}, status=500)
+
+    @tenant_atomic
+    def _restaurar(self, request, pk):
         if not _usuario_admin(request):
             return JsonResponse({'ok': False, 'erro': 'Somente administradores podem restaurar títulos.'}, status=403)
         conta = get_object_or_404(ContaPagar.all_objects.for_filial(_filial(request)), pk=pk)
