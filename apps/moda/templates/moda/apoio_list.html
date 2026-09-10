@@ -231,8 +231,17 @@
       body.append('field', cell.dataset.field);
       body.append('value', String(valor || '').trim());
       cell.style.opacity = '.6';
-      fetch(cell.dataset.inlineUrl, { method: 'POST', headers: { 'X-CSRFToken': csrfToken() }, body })
-        .then((response) => response.json().then((data) => ({ response, data })))
+      fetch(cell.dataset.inlineUrl, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken(), 'Accept': 'application/json' },
+        body,
+      })
+        .then((response) => {
+          if (!(response.headers.get('content-type') || '').includes('json')) {
+            throw new Error('Sessão expirada ou sem permissão. Recarregue a página.');
+          }
+          return response.json().then((data) => ({ response, data }));
+        })
         .then(({ response, data }) => {
           if (!response.ok || !data.ok) throw new Error(data.error || 'Não foi possível salvar.');
           cell.dataset.value = data.value !== undefined ? data.value : valor;

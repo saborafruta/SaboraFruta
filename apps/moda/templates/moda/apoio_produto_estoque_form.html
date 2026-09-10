@@ -182,9 +182,16 @@
     body.append('sigla', sigla);
     body.append('descricao', descricao);
     fetch("{% url 'produtos:unidade-inline-create' %}", {
-      method: 'POST', headers: { 'X-CSRFToken': csrfTokenModaUnidade() }, body,
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfTokenModaUnidade(), 'Accept': 'application/json' },
+      body,
     })
-      .then((response) => response.json().then((data) => ({ response, data })))
+      .then((response) => {
+        if (!(response.headers.get('content-type') || '').includes('json')) {
+          throw new Error('Sessão expirada ou sem permissão pra criar unidade. Recarregue a página.');
+        }
+        return response.json().then((data) => ({ response, data }));
+      })
       .then(({ response, data }) => {
         if (!response.ok || !data.ok) throw new Error(data.error || 'Não foi possível criar a unidade.');
         const select = document.getElementById('id_unidade_medida');
