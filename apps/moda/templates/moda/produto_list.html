@@ -1,6 +1,7 @@
 {% extends "_base.html" %}
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
+{% block largura_conteudo %}max-w-none{% endblock %}
 {% block content %}
 <div class="space-y-5">
   <div class="flex flex-wrap items-start justify-between gap-3">
@@ -23,7 +24,7 @@
     </div>
   </form>
 
-  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
     {% for p in produtos %}
       <a href="{% url 'moda:produto-detail' p.pk %}" class="card p-4 block transition-transform hover:-translate-y-0.5">
         <div class="flex items-start justify-between gap-2">
