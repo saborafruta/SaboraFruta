@@ -149,6 +149,10 @@ ROTAS_PRONTAS: list = [
     # Controle de corte. A lista fica no endereço do menu (producao/corte).
     path('producao/corte/', vco.CorteListView.as_view(), name='corte-list'),
     path('producao/corte/novo/', vco.CorteFormView.as_view(), name='corte-create'),
+    path(
+        'producao/corte/ordem-material/', vco.OrdemMaterialSugeridoView.as_view(),
+        name='corte-ordem-material',
+    ),
     path('producao/corte/<int:pk>/', vco.CorteDetailView.as_view(), name='corte-detail'),
     path('producao/corte/<int:pk>/editar/', vco.CorteFormView.as_view(), name='corte-update'),
     path('producao/corte/<int:pk>/grade/', vco.CorteGradeView.as_view(), name='corte-grade'),

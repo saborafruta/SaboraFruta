@@ -107,4 +107,42 @@
     </div>
   </form>
 </div>
+{% comment %}
+  Ao trocar a ordem, sugere o tecido e a cor que a OP pediu -- lidos da
+  malha/cor gravadas na estrutura da peça (ver
+  `services/op2_estrutura.py`), casados por nome com o cadastro de
+  Tecido/Cor. Só marca quando o nome bate exato: sem isso o corte
+  arriscaria começar com o tecido errado selecionado, o que pesa mais
+  que não sugerir nada.
+{% endcomment %}
+<script>
+  (function () {
+    const campoOrdem = document.getElementById('id_ordem');
+    const campoTecido = document.getElementById('id_tecido');
+    const campoCor = document.getElementById('id_cor');
+    if (!campoOrdem || campoOrdem.disabled) return;
+
+    campoOrdem.addEventListener('change', function () {
+      const ordemId = campoOrdem.value;
+      if (!ordemId) return;
+      fetch("{% url 'moda:corte-ordem-material' %}?ordem=" + encodeURIComponent(ordemId), {
+        headers: { 'Accept': 'application/json' },
+      })
+        .then((response) => {
+          if (!(response.headers.get('content-type') || '').includes('json')) return null;
+          return response.json();
+        })
+        .then((dados) => {
+          if (!dados) return;
+          if (dados.tecido_id && campoTecido) {
+            campoTecido.value = String(dados.tecido_id);
+          }
+          if (dados.cor_id && campoCor) {
+            campoCor.value = String(dados.cor_id);
+          }
+        })
+        .catch(() => {});
+    });
+  })();
+</script>
 {% endblock %}

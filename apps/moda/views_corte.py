@@ -7,6 +7,7 @@ e utilizado. Os números vêm do mesmo serviço que a tela de cada corte usa —
 duas contas para a mesma pergunta é como uma delas passa a mentir.
 """
 from django.contrib import messages
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -129,6 +130,55 @@ class CorteFormView(ModaBaseView):
             'title': 'Editar corte' if corte else 'Novo corte',
             'form': form,
             'corte': corte,
+        })
+
+
+class OrdemMaterialSugeridoView(ModaBaseView):
+    """
+    Malha e cor que a OP pede, pra sugerir Tecido/Cor ao escolher a ordem
+    no Novo Corte -- sem obrigar quem corta a abrir a OP numa segunda aba
+    só pra copiar o que já foi combinado com o cliente.
+
+    A OP 2.0 ainda não tem coluna própria pra malha/cor: elas ficam em
+    texto dentro das observações do item (ver `services/op2_estrutura.py`).
+    Esse texto não é o mesmo cadastro de Tecido/Cor que o corte usa, então
+    só sugere quando o nome bate exato (sem diferenciar maiúsculas) com um
+    cadastro já existente -- sem isso, chutar o tecido errado por um nome
+    parecido pesaria mais que não sugerir nada.
+    """
+
+    def get(self, request):
+        from .models import OrdemProducao
+        from .models import Cor as CorModel
+        from .models import Tecido
+        from .services.op2_estrutura import parse_estrutura_campos
+
+        ordem_id = (request.GET.get('ordem') or '').strip()
+        vazio = {'tecido_id': None, 'cor_id': None}
+        if not ordem_id:
+            return JsonResponse(vazio)
+
+        ordem = OrdemProducao.objects.filter(
+            pk=ordem_id, filial=_filial(request),
+        ).select_related('item').first()
+        if not ordem:
+            return JsonResponse(vazio)
+
+        campos = parse_estrutura_campos(ordem.item.observacoes)
+        malha = (campos.get('malha') or '').strip()
+        cor = (campos.get('cor') or '').strip()
+
+        tecido = (
+            Tecido.objects.for_filial(_filial(request)).filter(nome__iexact=malha).first()
+            if malha else None
+        )
+        cor_obj = (
+            CorModel.objects.for_filial(_filial(request)).filter(nome__iexact=cor).first()
+            if cor else None
+        )
+        return JsonResponse({
+            'tecido_id': tecido.pk if tecido else None,
+            'cor_id': cor_obj.pk if cor_obj else None,
         })
 
 

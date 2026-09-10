@@ -506,3 +506,37 @@ def juntar_observacoes_item(observacoes: str, post, grupos=None) -> str:
     if estrutura:
         partes.append('Estrutura da peça:\n' + estrutura)
     return '\n\n'.join(parte for parte in partes if parte)
+
+
+MARCADOR_ESTRUTURA = 'Estrutura da peça:'
+
+
+def parse_estrutura_campos(observacoes: str) -> dict[str, str]:
+    """
+    Lê de volta os campos que `juntar_observacoes_item` gravou (malha, cor,
+    gola...) -- o mesmo texto que a OP 2.0 ainda não tem coluna própria
+    pra guardar. Quando a cor foi "COR PERSONALIZADA", o texto salvo já é
+    o nome livre digitado (`estrutura_resumo` troca um pelo outro antes de
+    gravar), então aqui não precisa desfazer nada.
+
+    Usado pelo Corte pra sugerir Tecido/Cor a partir do que a OP pediu --
+    não pra reabrir o formulário de edição da OP (isso é
+    `_dados_modal_item`, em `views_op2.py`, que também soma "Tipo de peça"
+    e observações por campo e por isso não dá pra reaproveitar aqui).
+    """
+    texto = observacoes or ''
+    if MARCADOR_ESTRUTURA not in texto:
+        return {}
+    _, bloco = texto.split(MARCADOR_ESTRUTURA, 1)
+    campos: dict[str, str] = {}
+    for linha in bloco.splitlines():
+        linha = linha.strip()
+        if ':' not in linha:
+            continue
+        chave, valor = (parte.strip() for parte in linha.split(':', 1))
+        chave_normalizada = chave.casefold()
+        if chave_normalizada == 'tipo de peça' or chave_normalizada.startswith('observação de '):
+            continue
+        campo = '_'.join(chave_normalizada.split())
+        campos.setdefault(campo, valor)
+    return campos
