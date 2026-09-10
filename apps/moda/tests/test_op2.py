@@ -1222,7 +1222,7 @@ class Op2Tests(TestCase):
         )
         self.assertContains(
             resposta,
-            'Aplique desconto ou acréscimo com justificativa antes de gerar os lançamentos.',
+            'Confira o valor da OP e informe desconto ou valor extra, se necessário.',
         )
         self.assertContains(resposta, 'name="valor_total"')
 
@@ -1253,7 +1253,7 @@ class Op2Tests(TestCase):
 
         resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
             'acao': 'valor_final', 'valor_total': '450.00',
-            'tipo_ajuste': 'desconto', 'valor_ajuste': '50.00',
+            'desconto': '50.00', 'acrescimo': '0',
             'motivo_ajuste': 'Condição comercial autorizada',
         })
 
@@ -1308,8 +1308,8 @@ class Op2Tests(TestCase):
         url = reverse('moda:op2-action', args=[self.pedido.pk])
 
         sem_motivo = self.client.post(url, {
-            'acao': 'valor_final', 'tipo_ajuste': 'acrescimo',
-            'valor_ajuste': '25.00', 'motivo_ajuste': '',
+            'acao': 'valor_final', 'desconto': '0',
+            'acrescimo': '25.00', 'motivo_ajuste': '',
         })
 
         self.assertEqual(sem_motivo.status_code, 302)
@@ -1317,8 +1317,7 @@ class Op2Tests(TestCase):
         self.assertEqual(self.pedido.acrescimo, Decimal('0.00'))
 
         resposta = self.client.post(url, {
-            'acao': 'valor_final', 'tipo_ajuste': 'acrescimo',
-            'valor_ajuste': '25.00',
+            'acao': 'valor_final', 'desconto': '0', 'acrescimo': '25.00',
             'motivo_ajuste': '  Pedido urgente   com entrega antecipada  ',
         })
 
@@ -1350,11 +1349,33 @@ class Op2Tests(TestCase):
 
         resposta = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
 
-        self.assertContains(resposta, 'name="tipo_ajuste"', count=2)
-        self.assertContains(resposta, 'name="valor_ajuste"', count=2)
+        self.assertNotContains(resposta, 'name="tipo_ajuste"')
+        self.assertNotContains(resposta, 'name="valor_ajuste"')
+        self.assertContains(resposta, 'name="desconto"', count=2)
+        self.assertContains(resposta, 'name="acrescimo"', count=2)
         self.assertContains(resposta, 'name="motivo_ajuste"', count=2)
+        self.assertContains(resposta, 'Valor da OP', count=2)
+        self.assertContains(resposta, 'Valor final', count=2)
+        self.assertContains(resposta, 'Valor extra (R$)', count=2)
         self.assertContains(resposta, 'Justificativa do ajuste')
         self.assertContains(resposta, 'ficarão registrados no Histórico da OP')
+
+    def test_ajuste_direto_calcula_desconto_e_valor_extra(self):
+        item = self._item(quantidade=10)
+        item.valor_unitario = Decimal('50.00')
+        item.save(update_fields=['valor_unitario'])
+        self._login_op2()
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'valor_final', 'desconto': '50.00', 'acrescimo': '25.00',
+            'motivo_ajuste': 'Condição comercial e entrega urgente',
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        self.pedido.refresh_from_db()
+        self.assertEqual(self.pedido.desconto, Decimal('50.00'))
+        self.assertEqual(self.pedido.acrescimo, Decimal('25.00'))
+        self.assertEqual(self.pedido.valor_total, Decimal('475.00'))
 
     def test_historico_do_cliente_cria_rascunho_com_itens_selecionados(self):
         escolhido = self._item(quantidade=3)
@@ -1518,7 +1539,7 @@ class Op2Tests(TestCase):
 
         resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
             'acao': 'financeiro', 'entrada': '0',
-            'tipo_ajuste': 'desconto', 'valor_ajuste': '10.00',
+            'desconto': '10.00', 'acrescimo': '0',
             'motivo_ajuste': 'Desconto para pagamento à vista',
             'forma_pagamento': 'nao_informado',
             'responsavel_entrada': str(self.cliente.pk),

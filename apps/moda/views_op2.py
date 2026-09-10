@@ -236,9 +236,16 @@ def _ajuste_financeiro_post(request, pedido):
         Decimal('0.01')
     )
 
-    # Mantém compatibilidade com integrações e formulários anteriores que
-    # enviavam apenas o valor final. A tela atual sempre envia ``tipo_ajuste``.
-    if 'tipo_ajuste' not in request.POST:
+    # A tela atual envia desconto e acréscimo diretamente. Mantemos os dois
+    # formatos anteriores para não quebrar integrações nem formulários abertos.
+    if 'desconto' in request.POST or 'acrescimo' in request.POST:
+        desconto = _dinheiro_post(request, 'desconto')
+        acrescimo = _dinheiro_post(request, 'acrescimo')
+        if desconto < 0 or acrescimo < 0:
+            raise ValueError('Desconto e valor extra não podem ser negativos.')
+        total = base - desconto + acrescimo
+        motivo = ' '.join((request.POST.get('motivo_ajuste') or '').split())
+    elif 'tipo_ajuste' not in request.POST:
         total = _dinheiro_post(request, 'valor_total')
         motivo = ' '.join((request.POST.get('motivo_ajuste') or '').split())
         desconto = max(base - total, Decimal('0'))
