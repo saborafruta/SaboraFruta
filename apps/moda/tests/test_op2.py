@@ -3237,6 +3237,56 @@ class Op2Tests(TestCase):
         self.assertFalse(VisualItemPedido.objects.filter(pk=visual.pk).exists())
         self.assertFalse(ArquivoPedido.objects.filter(pedido=self.pedido).exists())
 
+    def test_galeria_gira_imagem_e_atualiza_arquivo_usado_pelos_pdfs(self):
+        from PIL import Image
+
+        item = self._item(quantidade=1)
+        self._login_op2()
+        conteudo = BytesIO()
+        Image.new('RGB', (12, 7), '#2563eb').save(conteudo, format='PNG')
+        self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'visual_item', 'item_id': str(item.pk),
+            'imagens': SimpleUploadedFile(
+                'horizontal.png', conteudo.getvalue(), content_type='image/png',
+            ),
+        })
+        visual = VisualItemPedido.objects.get(item=item)
+        anexo = ArquivoPedido.objects.get(pedido=self.pedido)
+        nome_original = visual.imagem.name
+        storage = visual.imagem.storage
+
+        detalhe = self.client.get(reverse('moda:op2-detail', args=[self.pedido.pk]))
+        self.assertContains(detalhe, 'value="girar_visual"', count=2)
+        self.assertContains(detalhe, 'aria-label="Girar imagem para a esquerda"')
+        self.assertContains(detalhe, 'aria-label="Girar imagem para a direita"')
+
+        resposta = self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'girar_visual', 'visual_id': str(visual.pk), 'sentido': 'direita',
+        })
+
+        self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
+        visual.refresh_from_db()
+        anexo.refresh_from_db()
+        self.assertNotEqual(visual.imagem.name, nome_original)
+        self.assertEqual(anexo.arquivo.name, visual.imagem.name)
+        self.assertFalse(storage.exists(nome_original))
+        visual.imagem.open('rb')
+        with Image.open(visual.imagem) as girada:
+            self.assertEqual(girada.size, (7, 12))
+        visual.imagem.close()
+        nome_girado = visual.imagem.name
+
+        self.client.post(reverse('moda:op2-action', args=[self.pedido.pk]), {
+            'acao': 'girar_visual', 'visual_id': str(visual.pk), 'sentido': 'esquerda',
+        })
+        visual.refresh_from_db()
+        visual.imagem.open('rb')
+        with Image.open(visual.imagem) as restaurada:
+            self.assertEqual(restaurada.size, (12, 7))
+        visual.imagem.close()
+        self.assertFalse(storage.exists(nome_girado))
+        visual.imagem.delete(save=False)
+
     def test_cadastro_rapido_cria_modelo_ativo_so_com_nome(self):
         self.client.force_login(self._usuario())
         session = self.client.session

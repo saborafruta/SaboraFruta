@@ -10,12 +10,14 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from django.contrib import messages
 from django.core.files import File
+from django.core.files.base import ContentFile
 from django.db import IntegrityError
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from apps.core.tenant_context import tenant_atomic
 from apps.cadastros.models import Cliente
@@ -1681,6 +1683,62 @@ class Op2ActionView(ModaBaseView):
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return JsonResponse({'ok': True, 'descricao': descricao})
         messages.success(request, 'Descrição da imagem salva. Os PDFs já usarão este texto.')
+
+    def _acao_girar_visual(self, request, pedido):
+        visual = get_object_or_404(
+            VisualItemPedido.objects.filter(item__pedido=pedido),
+            pk=request.POST.get('visual_id'),
+        )
+        sentido = (request.POST.get('sentido') or '').strip()
+        if sentido not in {'esquerda', 'direita'}:
+            raise ValueError('Escolha se deseja girar a imagem para a esquerda ou direita.')
+        if not visual.imagem:
+            raise ValueError('Esta imagem pertence ao catálogo e não pode ser alterada nesta OP.')
+
+        campo = visual.imagem
+        nome_antigo = campo.name
+        storage = campo.storage
+        extensao = nome_antigo.rsplit('.', 1)[-1].lower() if '.' in nome_antigo else 'png'
+        buffer = BytesIO()
+        arquivo_aberto = False
+        try:
+            campo.open('rb')
+            arquivo_aberto = True
+            with Image.open(campo) as original:
+                formato = (original.format or extensao).upper()
+                if getattr(original, 'is_animated', False):
+                    raise ValueError('Não é possível girar uma imagem animada.')
+                imagem = ImageOps.exif_transpose(original)
+                girada = imagem.rotate(90 if sentido == 'esquerda' else -90, expand=True)
+                opcoes = {}
+                if original.info.get('icc_profile'):
+                    opcoes['icc_profile'] = original.info['icc_profile']
+                if formato in {'JPEG', 'JPG'}:
+                    formato = 'JPEG'
+                    if girada.mode not in {'RGB', 'L'}:
+                        girada = girada.convert('RGB')
+                    opcoes.update(quality=95, optimize=True)
+                elif formato == 'PNG':
+                    opcoes['optimize'] = True
+                elif formato == 'WEBP':
+                    opcoes['quality'] = 95
+                girada.save(buffer, format=formato, **opcoes)
+        except (OSError, UnidentifiedImageError) as erro:
+            raise ValueError('Não foi possível abrir essa imagem para girá-la.') from erro
+        finally:
+            if arquivo_aberto:
+                campo.close()
+
+        base = nome_antigo.rsplit('/', 1)[-1].rsplit('.', 1)[0]
+        novo_nome = f'{base}-girada-{uuid4().hex[:8]}.{extensao}'
+        visual.imagem.save(novo_nome, ContentFile(buffer.getvalue()), save=False)
+        visual.save(update_fields=['imagem'])
+        pedido.arquivos.filter(arquivo=nome_antigo).update(arquivo=visual.imagem.name)
+        storage.delete(nome_antigo)
+        messages.success(
+            request,
+            f'Imagem girada para a {sentido}. A alteração também aparecerá nos PDFs.',
+        )
 
     def _acao_cabecalho(self, request, pedido):
         cliente_id = request.POST.get('cliente')
