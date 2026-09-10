@@ -60,10 +60,56 @@
           Identificação
         </h3>
       </div>
-      <div class="p-6 grid gap-x-5 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+      <div class="p-6 grid gap-x-5 gap-y-5 sm:grid-cols-2 lg:grid-cols-3" x-data="{ novaUnidade: false }"
+           @nova-unidade-criada.window="novaUnidade = false">
         {% with campo=form.nome %}{% include "moda/_campo_apoio.html" %}{% endwith %}
         {% with campo=form.codigo %}{% include "moda/_campo_apoio.html" %}{% endwith %}
-        {% with campo=form.unidade_medida %}{% include "moda/_campo_apoio.html" %}{% endwith %}
+        <div>
+          <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+            {{ form.unidade_medida.label }} <span style="color:#e8824a;">*</span>
+          </label>
+          <div class="flex gap-2 items-start">
+            <div class="flex-1">{{ form.unidade_medida }}</div>
+            <button type="button" @click="novaUnidade = true" class="btn-secondary text-xs whitespace-nowrap flex-shrink-0" style="padding:9px 10px;">
+              + Nova unidade
+            </button>
+          </div>
+          {% if form.unidade_medida.help_text %}
+            <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ form.unidade_medida.help_text }}</p>
+          {% endif %}
+          {% for erro in form.unidade_medida.errors %}
+            <p class="text-xs mt-1" style="color:#f87171;">{{ erro }}</p>
+          {% endfor %}
+        </div>
+
+        {% comment %}
+          Modal pra criar a unidade sem sair da tela -- navegar pro cadastro
+          completo de Produtos perderia nome, código e tudo o mais já
+          digitado aqui. Cria via `unidade-inline-create` (JSON em vez de
+          redirect) e insere a opção nova no próprio select.
+        {% endcomment %}
+        <div x-show="novaUnidade" x-cloak @keydown.escape.window="novaUnidade = false"
+             class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:col-span-2 lg:col-span-3"
+             style="background:rgba(0,0,0,.6);" @click.self="novaUnidade = false">
+          <div class="card p-6 w-full max-w-md space-y-4">
+            <h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Nova unidade de medida</h3>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Sigla *</label>
+                <input type="text" id="nova-unidade-sigla" class="form-input" placeholder="Ex.: M" maxlength="6">
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">Descrição *</label>
+                <input type="text" id="nova-unidade-descricao" class="form-input" placeholder="Ex.: Metro" maxlength="40">
+              </div>
+            </div>
+            <p id="nova-unidade-erro" class="text-sm" style="color:#f87171; display:none;"></p>
+            <div class="flex justify-end gap-2">
+              <button type="button" class="btn-secondary text-sm" @click="novaUnidade = false">Cancelar</button>
+              <button type="button" class="btn-primary text-sm" onclick="modaCriarUnidadeMedida()">Criar</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -118,4 +164,43 @@
   </form>
 
 </div>
+<script>
+  function csrfTokenModaUnidade() {
+    return document.cookie.split('; ').find((row) => row.startsWith('csrftoken='))?.split('=')[1] || '';
+  }
+  function modaCriarUnidadeMedida() {
+    const sigla = document.getElementById('nova-unidade-sigla').value.trim();
+    const descricao = document.getElementById('nova-unidade-descricao').value.trim();
+    const erroEl = document.getElementById('nova-unidade-erro');
+    erroEl.style.display = 'none';
+    if (!sigla || !descricao) {
+      erroEl.textContent = 'Preencha sigla e descrição.';
+      erroEl.style.display = 'block';
+      return;
+    }
+    const body = new FormData();
+    body.append('sigla', sigla);
+    body.append('descricao', descricao);
+    fetch("{% url 'produtos:unidade-inline-create' %}", {
+      method: 'POST', headers: { 'X-CSRFToken': csrfTokenModaUnidade() }, body,
+    })
+      .then((response) => response.json().then((data) => ({ response, data })))
+      .then(({ response, data }) => {
+        if (!response.ok || !data.ok) throw new Error(data.error || 'Não foi possível criar a unidade.');
+        const select = document.getElementById('id_unidade_medida');
+        const option = document.createElement('option');
+        option.value = data.id;
+        option.textContent = data.label;
+        select.appendChild(option);
+        select.value = data.id;
+        document.getElementById('nova-unidade-sigla').value = '';
+        document.getElementById('nova-unidade-descricao').value = '';
+        window.dispatchEvent(new CustomEvent('nova-unidade-criada'));
+      })
+      .catch((error) => {
+        erroEl.textContent = error.message;
+        erroEl.style.display = 'block';
+      });
+  }
+</script>
 {% endblock %}

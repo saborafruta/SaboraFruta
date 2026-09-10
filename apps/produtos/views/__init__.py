@@ -12,7 +12,7 @@ from .marca import (
     MarcaListView, MarcaCreateView, MarcaUpdateView,
 )
 from .unidade import (
-    UnidadeListView, UnidadeCreateView, UnidadeUpdateView,
+    UnidadeListView, UnidadeCreateView, UnidadeUpdateView, UnidadeInlineCreateView,
 )
 from .tabela_preco import (
     TabelaPrecoListView, TabelaPrecoCreateView, TabelaPrecoUpdateView,

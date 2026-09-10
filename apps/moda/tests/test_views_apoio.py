@@ -385,6 +385,12 @@ class NovoProdutoEstoqueViewTests(ApoioBase):
         self.assertNotIn('preco_venda', campos)
         self.assertNotIn('cfop_venda_interna', campos)
 
+    def test_form_mostra_atalho_pra_criar_unidade_sem_sair_da_tela(self):
+        html = self.client.get(self.url).content.decode()
+
+        self.assertIn('+ Nova unidade', html)
+        self.assertIn(reverse('produtos:unidade-inline-create'), html)
+
     def test_cria_produto_enxuto_e_vincula_ao_tecido(self):
         resposta = self.client.post(self.url, {
             'nome': 'Active Air', 'codigo': 'ACT-01',

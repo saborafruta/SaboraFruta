@@ -47,6 +47,7 @@ urlpatterns = [
     # Unidades
     path('unidades/', views.UnidadeListView.as_view(), name='unidade-list'),
     path('unidades/novo/', views.UnidadeCreateView.as_view(), name='unidade-create'),
+    path('unidades/novo/inline/', views.UnidadeInlineCreateView.as_view(), name='unidade-inline-create'),
     path('unidades/<int:pk>/', views.UnidadeUpdateView.as_view(), name='unidade-update'),
 
     # Tabelas de Preço

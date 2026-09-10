@@ -1,6 +1,8 @@
 """CRUD de Unidade de Medida."""
 from django.contrib import messages
 from django.core.paginator import Paginator
+from django.db import IntegrityError, transaction
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views import View
@@ -52,6 +54,51 @@ class UnidadeCreateView(PermissaoRequiredMixin, View):
             'title': 'Nova Unidade',
             'cancel_url': reverse_lazy('produtos:unidade-list'),
         })
+
+
+class UnidadeInlineCreateView(PermissaoRequiredMixin, View):
+    """
+    Mesma criação de `UnidadeCreateView`, só que sem sair da tela que
+    pediu -- um formulário de produto no meio do preenchimento (nome,
+    quantidade...) não deveria perder tudo isso só porque a unidade que
+    faltava ainda não existia. Devolve JSON em vez de redirecionar,
+    pra quem chamou inserir a opção nova no próprio `<select>` e seguir
+    preenchendo.
+    """
+
+    permissao_modulo = 'produtos'
+    permissao_acao = 'criar'
+
+    def post(self, request):
+        dados = request.POST.copy()
+        # O modal enxuto só pede sigla e descrição -- os demais campos do
+        # form completo (tipo, ativo) já são opcionais, mas
+        # `fator_conversao_base` é obrigatório no model (`default=1` não
+        # dispensa o form de pedir o valor) e não tem widget nenhum aqui.
+        dados.setdefault('fator_conversao_base', '1')
+        form = UnidadeMedidaForm(dados)
+        if not form.is_valid():
+            erro = ' '.join(
+                f'{campo}: {", ".join(erros)}' for campo, erros in form.errors.items()
+            )
+            return JsonResponse({'ok': False, 'error': erro or 'Dados inválidos.'}, status=400)
+
+        obj = form.save(commit=False)
+        obj.empresa = request.user.empresa
+        # `empresa` não é campo do form (só é atribuído aqui), então a
+        # validação automática de `unique_together` do ModelForm não pega
+        # sigla repetida -- só o banco pega, no save. Sem o try/except essa
+        # tela quebraria com 500 em vez de devolver o erro pro modal.
+        try:
+            with transaction.atomic():
+                obj.save()
+        except IntegrityError:
+            return JsonResponse(
+                {'ok': False, 'error': f'Já existe uma unidade com a sigla "{obj.sigla}".'},
+                status=400,
+            )
+        ReplicacaoProdutoService.sincronizar_unidade(obj, request.filial_ativa)
+        return JsonResponse({'ok': True, 'id': obj.pk, 'label': str(obj)})
 
 
 class UnidadeUpdateView(PermissaoRequiredMixin, View):
