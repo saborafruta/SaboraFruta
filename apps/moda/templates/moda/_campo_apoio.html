@@ -1,0 +1,23 @@
+{% comment %}
+  Um campo só, no padrão visual dos formulários de apoio -- extraído de
+  `_form_campos.html` pra telas que precisam agrupar os campos em seções
+  (várias `<div class="card">`) em vez de um grid único. Espera `campo`
+  (um `BoundField`) no contexto.
+{% endcomment %}
+<div>
+  <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+    {{ campo.label }}{% if campo.field.required %} <span style="color:#e8824a;">*</span>{% endif %}
+  </label>
+  {{ campo }}
+  {% if campo.help_text %}
+    <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ campo.help_text }}</p>
+  {% endif %}
+  {% for erro in campo.errors %}
+    <p class="text-xs mt-1 flex items-center gap-1" style="color:#f87171;">
+      <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+      </svg>
+      {{ erro }}
+    </p>
+  {% endfor %}
+</div>

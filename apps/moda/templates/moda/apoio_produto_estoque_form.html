@@ -35,9 +35,10 @@
     </svg>
     <p class="text-sm" :style="temaClaro ? 'color:#1e40af;' : 'color:#93c5fd;'">
       Matéria-prima não sai numa nota de venda, então este cadastro é enxuto —
-      só nome, código, unidade e quantidade. Sem CFOP, preço de venda ou NCM:
-      esses campos ficam com valores neutros e o produto nasce marcado como
-      "rascunho comercial", pra nunca aparecer pronto pra venda no PDV por engano.
+      só o que decide o saldo e quando reabastecer. Sem CFOP, preço de venda ou
+      NCM: esses campos ficam com valores neutros e o produto nasce marcado
+      como "rascunho comercial", pra nunca aparecer pronto pra venda no PDV
+      por engano.
     </p>
   </div>
 
@@ -55,11 +56,47 @@
     <div class="card overflow-hidden">
       <div class="px-6 py-4 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
         <h3 class="text-sm font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-          Dados do produto de estoque
+          Identificação
         </h3>
       </div>
       <div class="p-6 grid gap-x-5 gap-y-5 sm:grid-cols-2">
-        {% include "moda/_form_campos.html" %}
+        {% with campo=form.nome %}{% include "moda/_campo_apoio.html" %}{% endwith %}
+        {% with campo=form.codigo %}{% include "moda/_campo_apoio.html" %}{% endwith %}
+        {% with campo=form.unidade_medida %}{% include "moda/_campo_apoio.html" %}{% endwith %}
+      </div>
+    </div>
+
+    <div class="card overflow-hidden">
+      <div class="px-6 py-4 border-b" :style="temaClaro ? 'border-color:#e2e8f0;' : 'border-color:#2a2a2e;'">
+        <h3 class="text-sm font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Saldo e reposição
+        </h3>
+      </div>
+      <div class="p-6 space-y-5">
+        <div class="rounded-lg p-4"
+             :style="temaClaro ? 'background:#eff6ff; border:1px solid #bfdbfe;' : 'background:rgba(59,130,246,.08); border:1px solid rgba(59,130,246,.25);'">
+          <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#1e40af;' : 'color:#93c5fd;'">
+            {{ form.quantidade_inicial.label }}
+          </label>
+          {{ form.quantidade_inicial }}
+          <p class="text-xs mt-1" :style="temaClaro ? 'color:#1e40af;' : 'color:#93c5fd;'">
+            Produto novo — o saldo nasce direto com esta quantidade, sem
+            precisar de uma movimentação separada depois.
+          </p>
+          {% for erro in form.quantidade_inicial.errors %}
+            <p class="text-xs mt-1" style="color:#f87171;">{{ erro }}</p>
+          {% endfor %}
+        </div>
+
+        <div class="grid gap-x-5 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
+          {% with campo=form.estoque_minimo %}{% include "moda/_campo_apoio.html" %}{% endwith %}
+          {% with campo=form.estoque_maximo %}{% include "moda/_campo_apoio.html" %}{% endwith %}
+          {% with campo=form.ponto_reposicao %}{% include "moda/_campo_apoio.html" %}{% endwith %}
+          {% with campo=form.estoque_seguranca %}{% include "moda/_campo_apoio.html" %}{% endwith %}
+          {% with campo=form.lead_time_reposicao_dias %}{% include "moda/_campo_apoio.html" %}{% endwith %}
+          {% with campo=form.localizacao_estoque %}{% include "moda/_campo_apoio.html" %}{% endwith %}
+          {% with campo=form.metodo_saida %}{% include "moda/_campo_apoio.html" %}{% endwith %}
+        </div>
       </div>
     </div>
 

@@ -339,7 +339,17 @@ class NovoProdutoEstoqueViewTests(ApoioBase):
 
         self.assertEqual(resposta.context['form'].initial.get('nome'), 'Active Air')
         campos = set(resposta.context['form'].fields)
-        self.assertEqual(campos, {'nome', 'codigo', 'unidade_medida', 'quantidade_inicial'})
+        self.assertEqual(campos, {
+            'nome', 'codigo', 'unidade_medida', 'quantidade_inicial',
+            'estoque_minimo', 'estoque_maximo', 'ponto_reposicao',
+            'estoque_seguranca', 'lead_time_reposicao_dias',
+            'localizacao_estoque', 'metodo_saida',
+        })
+        # Nada de CFOP, preço de venda, NCM ou categoria fiscal -- os campos
+        # continuam só identificação + saldo/reposição.
+        self.assertNotIn('ncm', campos)
+        self.assertNotIn('preco_venda', campos)
+        self.assertNotIn('cfop_venda_interna', campos)
 
     def test_cria_produto_enxuto_e_vincula_ao_tecido(self):
         resposta = self.client.post(self.url, {
@@ -362,6 +372,40 @@ class NovoProdutoEstoqueViewTests(ApoioBase):
         from apps.estoque.models.estoque import Estoque
         estoque = Estoque.objects.get(produto=produto, filial=self.filial)
         self.assertEqual(estoque.quantidade_atual, Decimal('150.500'))
+
+    def test_grava_minimo_maximo_reposicao_e_metodo_de_saida(self):
+        from apps.produtos.models import Produto
+
+        self.client.post(self.url, {
+            'nome': 'Active Air', 'codigo': '', 'unidade_medida': self.unidade.pk,
+            'quantidade_inicial': '', 'estoque_minimo': '10', 'estoque_maximo': '200',
+            'ponto_reposicao': '30', 'estoque_seguranca': '5',
+            'lead_time_reposicao_dias': '7', 'localizacao_estoque': 'A1-03',
+            'metodo_saida': Produto.MetodoSaida.FIFO,
+        })
+
+        self.tecido.refresh_from_db()
+        produto = self.tecido.produto_estoque
+        self.assertEqual(produto.estoque_minimo, Decimal('10.000'))
+        self.assertEqual(produto.estoque_maximo, Decimal('200.000'))
+        self.assertEqual(produto.ponto_reposicao, Decimal('30.000'))
+        self.assertEqual(produto.estoque_seguranca, Decimal('5.000'))
+        self.assertEqual(produto.lead_time_reposicao_dias, 7)
+        self.assertEqual(produto.localizacao_estoque, 'A1-03')
+        self.assertEqual(produto.metodo_saida, Produto.MetodoSaida.FIFO)
+
+    def test_sem_preencher_nada_alem_do_obrigatorio_usa_padroes_neutros(self):
+        from apps.produtos.models import Produto
+
+        self.client.post(self.url, {
+            'nome': 'Active Air', 'codigo': '', 'unidade_medida': self.unidade.pk,
+            'quantidade_inicial': '',
+        })
+
+        self.tecido.refresh_from_db()
+        produto = self.tecido.produto_estoque
+        self.assertEqual(produto.estoque_minimo, Decimal('0'))
+        self.assertEqual(produto.metodo_saida, Produto.MetodoSaida.FEFO)
 
     def test_sem_quantidade_inicial_nasce_com_saldo_zero(self):
         self.client.post(self.url, {

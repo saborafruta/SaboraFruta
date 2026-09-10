@@ -326,11 +326,12 @@ class NovoProdutoEstoqueView(ModaBaseView):
         from apps.produtos.models import Produto
         from apps.produtos.views.produto import _definir_status_produto_filial
 
+        dados = form.cleaned_data
         produto = Produto(
             filial=request.filial_ativa,
-            unidade_medida=form.cleaned_data['unidade_medida'],
-            codigo=form.cleaned_data.get('codigo') or '',
-            descricao=form.cleaned_data['nome'][:150],
+            unidade_medida=dados['unidade_medida'],
+            codigo=dados.get('codigo') or '',
+            descricao=dados['nome'][:150],
             # NCM/CFOP de verdade só importam pra quem sai numa nota --
             # matéria-prima não sai. O placeholder + rascunho_comercial é
             # o mesmo par usado quando o produto nasce de uma entrada de
@@ -342,6 +343,13 @@ class NovoProdutoEstoqueView(ModaBaseView):
                 f'Matéria-prima do cadastro de {cadastro.plural}. '
                 'Sem dados fiscais/comerciais -- não deve ser vendida.'
             ),
+            estoque_minimo=dados.get('estoque_minimo') or 0,
+            estoque_maximo=dados.get('estoque_maximo') or 0,
+            ponto_reposicao=dados.get('ponto_reposicao') or 0,
+            estoque_seguranca=dados.get('estoque_seguranca') or 0,
+            lead_time_reposicao_dias=dados.get('lead_time_reposicao_dias') or 0,
+            localizacao_estoque=dados.get('localizacao_estoque') or '',
+            metodo_saida=dados.get('metodo_saida') or Produto.MetodoSaida.FEFO,
             ativo=True,
         )
         produto.calcular_margem()

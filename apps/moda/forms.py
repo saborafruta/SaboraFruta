@@ -1188,7 +1188,10 @@ class NovoProdutoEstoqueForm(forms.Form):
     aviamento) -- o cadastro completo de Produto tem CFOP, preço de
     venda, NCM, categoria fiscal... pensado pra quem vende ao cliente
     final, e matéria-prima nunca sai direto por uma nota de venda. Aqui
-    só o que decide o saldo: nome, código, unidade e quantidade inicial.
+    fica só o que decide o saldo e quando reabastecer: identificação
+    (nome, código, unidade) e saldo/reposição (quantidade inicial,
+    mínimo, máximo, ponto de reposição, segurança, lead time, local e
+    método de saída) -- nada fiscal ou comercial.
     """
     nome = forms.CharField(
         max_length=150, label='Nome',
@@ -1206,12 +1209,52 @@ class NovoProdutoEstoqueForm(forms.Form):
         label='Quantidade inicial em estoque',
         widget=forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '0'}),
     )
+    estoque_minimo = forms.DecimalField(
+        max_digits=12, decimal_places=3, required=False, min_value=0,
+        label='Estoque mínimo',
+        help_text='Abaixo disso, o produto entra na fila de comprar.',
+        widget=forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '0'}),
+    )
+    estoque_maximo = forms.DecimalField(
+        max_digits=12, decimal_places=3, required=False, min_value=0,
+        label='Estoque máximo',
+        widget=forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '0'}),
+    )
+    ponto_reposicao = forms.DecimalField(
+        max_digits=12, decimal_places=3, required=False, min_value=0,
+        label='Ponto de reposição',
+        help_text='Saldo em que já vale disparar uma nova compra.',
+        widget=forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '0'}),
+    )
+    estoque_seguranca = forms.DecimalField(
+        max_digits=12, decimal_places=3, required=False, min_value=0,
+        label='Estoque de segurança',
+        widget=forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '0'}),
+    )
+    lead_time_reposicao_dias = forms.IntegerField(
+        required=False, min_value=0, label='Lead time de reposição (dias)',
+        help_text='Quantos dias o fornecedor leva pra entregar.',
+        widget=forms.NumberInput(attrs={'placeholder': '0'}),
+    )
+    localizacao_estoque = forms.CharField(
+        max_length=30, required=False, label='Localização no estoque',
+        widget=forms.TextInput(attrs={'placeholder': 'Corredor/Prateleira/Posição (opcional)'}),
+    )
+    metodo_saida = forms.ChoiceField(
+        required=False, label='Método de saída',
+    )
 
     def __init__(self, *args, empresa=None, **kwargs):
-        from apps.produtos.models import UnidadeMedida
+        from apps.produtos.models import Produto, UnidadeMedida
 
         super().__init__(*args, **kwargs)
         self.fields['unidade_medida'].queryset = (
             UnidadeMedida.objects.filter(empresa=empresa).order_by('sigla')
             if empresa else UnidadeMedida.objects.none()
         )
+        self.fields['metodo_saida'].choices = Produto.MetodoSaida.choices
+        self.fields['metodo_saida'].initial = Produto.MetodoSaida.FEFO
+        for campo in self.fields.values():
+            css = campo.widget.attrs.get('class', '')
+            if 'form-input' not in css:
+                campo.widget.attrs['class'] = (css + ' form-input').strip()
