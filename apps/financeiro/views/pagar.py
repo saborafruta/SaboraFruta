@@ -1172,7 +1172,9 @@ class ContaPagarBulkActionView(PermissaoRequiredMixin, View):
             for conta in contas:
                 antes = snapshot_modelo(conta, ['excluido_em', 'excluido_por', 'motivo_exclusao'])
                 conta.excluido_em = timezone.now()
-                conta.excluido_por = request.user
+                # Mesmo motivo do `ContaPagarExcluirView`: `_id`, não a
+                # instância, pra não esbarrar no roteamento por tenant.
+                conta.excluido_por_id = request.user.pk
                 conta.motivo_exclusao = motivo
                 conta.save(update_fields=['excluido_em', 'excluido_por', 'motivo_exclusao', 'updated_at'])
                 registrar_auditoria(
@@ -1697,7 +1699,14 @@ class ContaPagarExcluirView(PermissaoRequiredMixin, View):
         for titulo in contas:
             antes = snapshot_modelo(titulo, campos)
             titulo.excluido_em = excluido_em
-            titulo.excluido_por = request.user
+            # `_id` em vez da instância: `request.user` é um `SimpleLazyObject`
+            # que pode resolver noutro alias de banco do que `titulo` (roteamento
+            # por tenant, `apps/core/db_router.py`) -- atribuir a instância
+            # dispara `allow_relation()` e estoura "the current database router
+            # prevents this relation" quando os dois não batem. Atribuir só o id
+            # nunca passa por essa checagem, e é o padrão já usado no resto do
+            # código pra isto (`usuario_id=request.user.pk`).
+            titulo.excluido_por_id = request.user.pk
             titulo.motivo_exclusao = motivo
             titulo.save(update_fields=[*campos, 'updated_at'])
             registrar_auditoria(

@@ -1586,6 +1586,8 @@ class FuncionarioContaPagarTests(TestCase):
         self.assertIsNone(contas[0].excluido_em)
         self.assertIsNotNone(contas[1].excluido_em)
         self.assertIsNotNone(contas[2].excluido_em)
+        self.assertEqual(contas[1].excluido_por_id, usuario.pk)
+        self.assertEqual(contas[2].excluido_por_id, usuario.pk)
 
     def test_excecao_ao_excluir_devolve_json_em_vez_de_pagina_de_erro(self):
         """
