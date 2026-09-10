@@ -1650,7 +1650,11 @@ class PedidoArquivoAddView(ModaBaseView):
                 continue
             anexo = individual.save(commit=False)
             anexo.pedido = pedido
-            anexo.enviado_por = request.user
+            # `_id`, não a instância: `request.user` é um `SimpleLazyObject` que
+            # pode resolver noutro alias de banco do que `anexo` (roteamento por
+            # tenant, `apps/core/db_router.py`) e disparar "the current database
+            # router prevents this relation" em `allow_relation()`.
+            anexo.enviado_por_id = request.user.pk
             anexo.save()
             criados.append(anexo)
 

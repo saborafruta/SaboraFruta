@@ -203,7 +203,11 @@ class RecebimentoFormView(PolpaBaseView):
 
         novo = form.save(commit=False)
         if not novo.pk:
-            novo.criado_por = request.user
+            # `_id`, não a instância: `request.user` é um `SimpleLazyObject` que
+            # pode resolver noutro alias de banco do que `novo` (roteamento por
+            # tenant, `apps/core/db_router.py`) e disparar "the current database
+            # router prevents this relation" em `allow_relation()`.
+            novo.criado_por_id = request.user.pk
         novo.save()
 
         messages.success(

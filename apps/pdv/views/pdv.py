@@ -2293,7 +2293,11 @@ def api_caixa_fechar(request):
         sessao.valor_fechamento_informado = valor_contado
         sessao.valor_fechamento_sistema = esperado
         sessao.diferenca_caixa = diferenca
-        sessao.conferido_por = request.user
+        # `_id`, não a instância: `request.user` é um `SimpleLazyObject` que pode
+        # resolver noutro alias de banco do que `sessao` (roteamento por tenant,
+        # `apps/core/db_router.py`) e disparar "the current database router
+        # prevents this relation" em `allow_relation()`.
+        sessao.conferido_por_id = request.user.pk
         sessao.conferido_em = timezone.now()
         sessao.observacao_conferencia = body.get("observacao", "")
         sessao.save(update_fields=[

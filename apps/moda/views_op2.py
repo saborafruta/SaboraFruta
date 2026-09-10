@@ -2069,7 +2069,11 @@ class Op2ActionView(ModaBaseView):
     def _acao_remover_item(self, request, pedido):
         item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
         item.excluido_em = timezone.now()
-        item.excluido_por = request.user
+        # `_id`, não a instância: `request.user` é um `SimpleLazyObject` que pode
+        # resolver noutro alias de banco do que `item` (roteamento por tenant,
+        # `apps/core/db_router.py`) e disparar "the current database router
+        # prevents this relation" em `allow_relation()`.
+        item.excluido_por_id = request.user.pk
         item.save(update_fields=['excluido_em', 'excluido_por'])
         GradePedidoService.recalcular_pedido(pedido)
         _sincronizar_status(pedido)
