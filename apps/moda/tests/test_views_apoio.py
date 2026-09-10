@@ -312,6 +312,40 @@ class AtalhoDeCriarProdutoNoFormularioDeTecidoTests(ApoioBase):
         self.assertIn(f'movimentacoes/nova/?produto={produto.pk}', html)
         self.assertNotIn('+ Novo produto', html)
 
+    def test_form_mostra_saldo_atual_quando_ja_ha_vinculo(self):
+        from apps.estoque.models.estoque import Estoque
+
+        metro = UnidadeMedida.objects.create(
+            empresa=self.empresa, sigla='M', descricao='Metro',
+            tipo=UnidadeMedida.Tipo.COMPRIMENTO,
+        )
+        produto = Produto.objects.create(
+            filial=self.filial, codigo='TEC006', descricao='Malha Dry',
+            unidade_medida=metro,
+        )
+        Estoque.objects.create(
+            produto=produto, filial=self.filial, quantidade_atual=Decimal('87.5'),
+        )
+        tecido = Tecido.objects.create(
+            filial=self.filial, nome='Malha Ligada', produto_estoque=produto,
+        )
+
+        html = self.client.get(
+            reverse('moda:apoio-update', args=['engenharia', 'materiais', tecido.pk])
+        ).content.decode()
+
+        self.assertIn('Saldo atual', html)
+        self.assertIn('87,50', html)
+
+    def test_form_sem_vinculo_nao_mostra_saldo_atual(self):
+        tecido = Tecido.objects.create(filial=self.filial, nome='Active Air')
+
+        html = self.client.get(
+            reverse('moda:apoio-update', args=['engenharia', 'materiais', tecido.pk])
+        ).content.decode()
+
+        self.assertNotIn('Saldo atual', html)
+
 
 class NovoProdutoEstoqueViewTests(ApoioBase):
     """

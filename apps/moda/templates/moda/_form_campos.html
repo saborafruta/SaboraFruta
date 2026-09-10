@@ -23,24 +23,40 @@
         <p class="text-xs mt-1 ml-1" style="color:#f87171;">{{ erro }}</p>
       {% endfor %}
     </div>
-  {% else %}
-    <div class="{{ campo.css_classes|default:'' }}{% if campo.name == 'observacao' %} sm:col-span-2 lg:col-span-3{% endif %}">
-      <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
-        {{ campo.label }}{% if campo.field.required %} <span style="color:#e8824a;">*</span>{% endif %}
-      </label>
-      {{ campo }}
-      {% if campo.name == 'produto_estoque' and obj %}
-        {% comment %}
-          Editar aqui e' só ligar/trocar o produto -- a quantidade em si
-          nunca se mexe neste formulário (ela mora na movimentação de
-          estoque, senão viraria um segundo lugar gravando o mesmo saldo).
-          Sem produto vinculado ainda não há onde lançar quantidade
-          nenhuma, daí o atalho pra criar um -- cadastro enxuto (nome,
-          código, unidade, quantidade inicial), sem os campos fiscais/
-          comerciais do cadastro completo de Produto, que não fazem
-          sentido pra matéria-prima.
-        {% endcomment %}
-        <div class="mt-1.5">
+  {% elif campo.name == 'produto_estoque' and obj %}
+    {% comment %}
+      Vínculo com o estoque ganha destaque à parte (não é só mais um campo
+      do cadastro) -- é a ponte com o saldo real, e editar aqui é só
+      ligar/trocar o produto: a quantidade em si nunca se mexe neste
+      formulário (mora na movimentação de estoque, senão viraria um
+      segundo lugar gravando o mesmo saldo). Já ligado, mostra o saldo
+      atual pra não precisar abrir outra tela só pra conferir; sem
+      vínculo, o atalho pra criar um produto -- cadastro enxuto (nome,
+      código, unidade, quantidade inicial, saldo/reposição), sem os
+      campos fiscais/comerciais do cadastro completo de Produto, que não
+      fazem sentido pra matéria-prima.
+    {% endcomment %}
+    <div class="{{ campo.css_classes|default:'' }} sm:col-span-2 lg:col-span-3">
+      <div class="rounded-lg p-4"
+           :style="temaClaro ? 'background:#eff6ff; border:1px solid #bfdbfe;' : 'background:rgba(59,130,246,.08); border:1px solid rgba(59,130,246,.25);'">
+        <div class="flex flex-wrap items-end gap-4 justify-between">
+          <div class="flex-1 min-w-[220px]">
+            <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#1e40af;' : 'color:#93c5fd;'">
+              {{ campo.label }}
+            </label>
+            {{ campo }}
+            {% if campo.help_text %}
+              <p class="text-xs mt-1" :style="temaClaro ? 'color:#1e40af;' : 'color:#93c5fd;'">{{ campo.help_text }}</p>
+            {% endif %}
+          </div>
+          {% if obj.produto_estoque_id %}
+            <div class="text-right pb-1">
+              <p class="text-xs font-medium" :style="temaClaro ? 'color:#1e40af;' : 'color:#93c5fd;'">Saldo atual</p>
+              <p class="text-2xl font-semibold leading-tight" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ obj.estoque_atual|default:"—" }}</p>
+            </div>
+          {% endif %}
+        </div>
+        <div class="mt-2.5">
           {% if obj.produto_estoque_id %}
             <a href="{% url 'estoque:movimentacao-create' %}?produto={{ obj.produto_estoque_id }}"
                class="text-xs font-semibold" :style="temaClaro ? 'color:#2563eb;' : 'color:#60a5fa;'">
@@ -53,7 +69,17 @@
             </a>
           {% endif %}
         </div>
-      {% endif %}
+        {% for erro in campo.errors %}
+          <p class="text-xs mt-1.5" style="color:#f87171;">{{ erro }}</p>
+        {% endfor %}
+      </div>
+    </div>
+  {% else %}
+    <div class="{{ campo.css_classes|default:'' }}{% if campo.name == 'observacao' %} sm:col-span-2 lg:col-span-3{% endif %}">
+      <label class="block text-sm font-medium mb-1.5" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+        {{ campo.label }}{% if campo.field.required %} <span style="color:#e8824a;">*</span>{% endif %}
+      </label>
+      {{ campo }}
       {% if campo.help_text %}
         <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ campo.help_text }}</p>
       {% endif %}

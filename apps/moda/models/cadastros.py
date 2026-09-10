@@ -26,6 +26,28 @@ class CadastroApoio(FilialScopedModel, ActiveModel):
     def __str__(self):
         return self.nome
 
+    def estoque_atual(self):
+        """
+        Saldo consolidado do produto de estoque vinculado (Tecido e
+        Aviamento têm `produto_estoque`; os demais cadastros de apoio, não
+        -- daí o `getattr` em vez de assumir o campo). Serve pra quem só
+        quer o número no cadastro sem abrir a tela de Estoque › Tecidos
+        (que ainda soma cobertura, consumo e o vínculo deduzido pela
+        ficha). Sem vínculo, o saldo é desconhecido -- não é zero --
+        então volta `None`, igual ao resto da tela faz com "—".
+        """
+        produto_id = getattr(self, 'produto_estoque_id', None)
+        if not produto_id:
+            return None
+        from decimal import Decimal
+        from apps.estoque.models.estoque import Estoque
+        estoque = Estoque.objects.filter(
+            produto_id=produto_id, filial_id=self.filial_id,
+        ).first()
+        if not estoque:
+            return None
+        return estoque.quantidade_atual.quantize(Decimal('0.01'))
+
 
 class Marca(CadastroApoio):
     class Meta(CadastroApoio.Meta):
@@ -183,26 +205,6 @@ class Tecido(CadastroApoio):
         if self.gramatura:
             return f'{self.nome} ({self.gramatura} g/m²)'
         return self.nome
-
-    def estoque_atual(self):
-        """
-        Quantidade em metros do saldo consolidado, para quem só quer o
-        número na lista do cadastro sem abrir a tela de Estoque › Tecidos
-        (que ainda soma cobertura, consumo e o vínculo deduzido pela
-        ficha). Sem vínculo direto com o estoque, o saldo é desconhecido
-        -- não é zero -- então volta `None`, igual ao resto da tela faz
-        com "—".
-        """
-        if not self.produto_estoque_id:
-            return None
-        from decimal import Decimal
-        from apps.estoque.models.estoque import Estoque
-        estoque = Estoque.objects.filter(
-            produto_id=self.produto_estoque_id, filial_id=self.filial_id,
-        ).first()
-        if not estoque:
-            return None
-        return estoque.quantidade_atual.quantize(Decimal('0.01'))
 
 
 class Aviamento(CadastroApoio):
