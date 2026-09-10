@@ -1203,6 +1203,12 @@ class NovoProdutoEstoqueForm(forms.Form):
     )
     unidade_medida = forms.ModelChoiceField(
         queryset=None, label='Unidade', empty_label='Selecione a unidade',
+        help_text=(
+            'Em que o saldo é contado -- metro, quilo, unidade... Mesma '
+            'unidade em que a quantidade abaixo é lançada; se depois o '
+            'estoque real vier em rolo ou em pacote, é aqui que se define '
+            'o que cada movimentação significa. Sem conversão automática.'
+        ),
     )
     quantidade_inicial = forms.DecimalField(
         max_digits=12, decimal_places=3, required=False, min_value=0,

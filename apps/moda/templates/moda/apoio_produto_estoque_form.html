@@ -1,6 +1,7 @@
 {% extends "_base.html" %}
 {% block title %}Novo produto de estoque{% endblock %}
 {% block page_title %}Novo produto de estoque{% endblock %}
+{% block largura_conteudo %}max-w-none{% endblock %}
 {% block content %}
 <style>
   .apoio-form input.form-input[type="checkbox"] {
@@ -59,7 +60,7 @@
           Identificação
         </h3>
       </div>
-      <div class="p-6 grid gap-x-5 gap-y-5 sm:grid-cols-2">
+      <div class="p-6 grid gap-x-5 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
         {% with campo=form.nome %}{% include "moda/_campo_apoio.html" %}{% endwith %}
         {% with campo=form.codigo %}{% include "moda/_campo_apoio.html" %}{% endwith %}
         {% with campo=form.unidade_medida %}{% include "moda/_campo_apoio.html" %}{% endwith %}
