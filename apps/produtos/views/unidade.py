@@ -1,13 +1,14 @@
 """CRUD de Unidade de Medida."""
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views import View
 
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.tenant_context import tenant_atomic
 from apps.produtos.forms import UnidadeMedidaForm
 from apps.produtos.models import UnidadeMedida
 from apps.produtos.services.replicacao_service import ReplicacaoProdutoService
@@ -90,7 +91,7 @@ class UnidadeInlineCreateView(PermissaoRequiredMixin, View):
         # sigla repetida -- só o banco pega, no save. Sem o try/except essa
         # tela quebraria com 500 em vez de devolver o erro pro modal.
         try:
-            with transaction.atomic():
+            with tenant_atomic():
                 obj.save()
         except IntegrityError:
             return JsonResponse(

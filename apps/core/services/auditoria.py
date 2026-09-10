@@ -59,9 +59,16 @@ def registrar_auditoria(
         relacionado_id = getattr(relacionado, 'pk', None)
     if not objeto_id:
         return None
+    # `_id`, não a instância: `usuario` (quase sempre `request.user`, um
+    # `SimpleLazyObject`) e `filial` podem resolver num alias de banco
+    # diferente do de `RegistroAuditoria` quando o roteamento por tenant
+    # está ativo -- atribuir a instância dispara `allow_relation()`
+    # (`apps/core/db_router.py`) e estoura "the current database router
+    # prevents this relation" se os dois lados não baterem. Atribuir só o
+    # id nunca passa por essa checagem.
     return RegistroAuditoria.objects.create(
-        filial=filial,
-        usuario=usuario if getattr(usuario, 'is_authenticated', False) else None,
+        filial_id=getattr(filial, 'pk', None),
+        usuario_id=usuario.pk if getattr(usuario, 'is_authenticated', False) else None,
         modulo=modulo,
         acao=acao,
         objeto_tipo=objeto_tipo,
