@@ -1,8 +1,9 @@
 {% extends "_base.html" %}
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
+{% block largura_conteudo %}max-w-none{% endblock %}
 {% block content %}
-<div class="max-w-3xl mx-auto space-y-5">
+<div class="w-full space-y-5">
   <div>
     <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
       <a href="{% url 'moda:produto-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Modelos de Produção</a>
@@ -15,7 +16,7 @@
   </div>
   <form method="post" enctype="multipart/form-data" novalidate class="space-y-5">
     {% csrf_token %}
-    <div class="card p-6 grid gap-4 sm:grid-cols-2">
+    <div class="card p-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {% include "moda/_form_campos.html" %}
     </div>
     <div class="flex gap-3 justify-end">
