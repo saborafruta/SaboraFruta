@@ -183,14 +183,33 @@ class OrdemProducao(ComCodigoQr, FilialScopedModel):
         A conta fica aqui e não no template porque `{% widthratio %}`
         arredonda para inteiro: 1,296 m × 40 peças viraria 52 m em vez de
         51,84 m, e a diferença some direto na requisição ao estoque.
+
+        O tecido principal tenta primeiro o consumo pelo peso da grade
+        (malha pedida na OP × peso de cada tamanho, ver
+        `services/consumo_tecido.py`); sem os dados pra essa conta, cai no
+        consumo fixo da ficha, que é como sempre funcionou.
         """
-        return [
-            {
-                'material': m,
-                'total': (m.consumo_bruto * self.quantidade).quantize(Decimal('0.0001')),
-            }
-            for m in self.materiais
-        ]
+        from apps.moda.models.ficha import MaterialFicha
+        from apps.moda.services.consumo_tecido import (
+            consumo_tecido_principal, tecido_da_malha,
+        )
+
+        ficha = self.ficha
+        tecido = tecido_da_malha(self.filial, self.item.observacoes) if ficha else None
+        quantidades = (
+            {g.tamanho_id: g.quantidade for g in self.item.grade.all()}
+            if tecido else {}
+        )
+
+        linhas = []
+        for m in self.materiais:
+            total = None
+            if tecido is not None and m.tipo == MaterialFicha.Tipo.TECIDO_PRINCIPAL:
+                total = consumo_tecido_principal(ficha, self.produto, tecido, quantidades)
+            if total is None:
+                total = (m.consumo_bruto * self.quantidade).quantize(Decimal('0.0001'))
+            linhas.append({'material': m, 'total': total})
+        return linhas
 
     @property
     def operacoes_da_ordem(self) -> list[dict]:

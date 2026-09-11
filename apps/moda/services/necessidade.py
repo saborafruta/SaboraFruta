@@ -142,6 +142,10 @@ class NecessidadeService:
     @classmethod
     def calcular(cls, filial, ordens=None) -> list[Necessidade]:
         from apps.estoque.models.estoque import Estoque
+        from apps.moda.models.ficha import MaterialFicha
+        from apps.moda.services.consumo_tecido import (
+            consumo_tecido_principal, tecido_da_malha,
+        )
 
         ordens = list(ordens if ordens is not None else cls.ordens_abertas(filial))
         linhas: dict[str, Necessidade] = {}
@@ -152,8 +156,18 @@ class NecessidadeService:
             if ficha is None:
                 continue
 
+            tecido = tecido_da_malha(filial, ordem.item.observacoes)
+            quantidades = (
+                {g.tamanho_id: g.quantidade for g in ordem.item.grade.all()}
+                if tecido else {}
+            )
+
             for material in ficha.materiais.all():
-                consumo = material.consumo_bruto * ordem.quantidade
+                consumo = None
+                if tecido is not None and material.tipo == MaterialFicha.Tipo.TECIDO_PRINCIPAL:
+                    consumo = consumo_tecido_principal(ficha, produto, tecido, quantidades)
+                if consumo is None:
+                    consumo = material.consumo_bruto * ordem.quantidade
                 if not consumo:
                     continue
 
@@ -337,6 +351,10 @@ class NecessidadeService:
         """
         from apps.estoque.models import Deposito, Estoque
         from apps.estoque.services.movimentacao_service import MovimentacaoService
+        from apps.moda.models.ficha import MaterialFicha
+        from apps.moda.services.consumo_tecido import (
+            consumo_tecido_principal, tecido_da_malha,
+        )
 
         ficha = ordem.ficha
         if ficha is None:
@@ -348,9 +366,19 @@ class NecessidadeService:
         ):
             ja_reservado[reserva.produto_id] += reserva.quantidade
 
+        tecido = tecido_da_malha(ordem.filial, ordem.item.observacoes)
+        quantidades = (
+            {g.tamanho_id: g.quantidade for g in ordem.item.grade.all()}
+            if tecido else {}
+        )
+
         criadas = []
         for material in ficha.materiais.exclude(produto_estoque__isnull=True):
-            precisa = (material.consumo or ZERO) * ordem.quantidade
+            precisa = None
+            if tecido is not None and material.tipo == MaterialFicha.Tipo.TECIDO_PRINCIPAL:
+                precisa = consumo_tecido_principal(ficha, ordem.produto, tecido, quantidades)
+            if precisa is None:
+                precisa = (material.consumo or ZERO) * ordem.quantidade
             falta = precisa - ja_reservado[material.produto_estoque_id]
             if falta <= ZERO:
                 continue

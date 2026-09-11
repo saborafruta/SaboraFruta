@@ -260,6 +260,11 @@ class RegistroCorte(ComCodigoQr, FilialScopedModel):
         Só o tecido principal: forro, linha e aviamentos não saem do rolo
         que está sendo cortado, e somá-los inflaria o planejado contra o
         qual o consumo real é comparado.
+
+        Tenta primeiro o consumo pelo peso da grade deste corte (peso de
+        cada tamanho × gramatura/largura do tecido efetivo, ver
+        `services/consumo_tecido.py`); sem os dados pra essa conta, cai no
+        consumo fixo da ficha, que é como sempre funcionou.
         """
         produto = self.produto
         ficha = getattr(produto, 'ficha', None) if produto else None
@@ -267,6 +272,19 @@ class RegistroCorte(ComCodigoQr, FilialScopedModel):
             return Decimal('0')
 
         from .ficha import MaterialFicha
+        from apps.moda.services.consumo_tecido import consumo_tecido_principal
+
+        tecido = self.tecido_efetivo
+        quantidades = (
+            {g.tamanho_id: g.quantidade for g in self.grade.all()}
+            if tecido else {}
+        )
+        por_peso = (
+            consumo_tecido_principal(ficha, produto, tecido, quantidades)
+            if tecido is not None else None
+        )
+        if por_peso is not None:
+            return por_peso
 
         principais = [
             m for m in ficha.materiais.all()

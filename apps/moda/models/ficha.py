@@ -154,6 +154,49 @@ class FichaTecnica(ComCodigoQr, FilialScopedModel):
         """O desenho da ficha; sem ele, o do produto."""
         return self.desenho_tecnico or self.produto.desenho_tecnico
 
+    def consumo_tecido_por_peso(self, tecido, grade_id, quantidades_por_tamanho):
+        """
+        Metros do tecido principal para uma grade de tamanhos, pelo peso
+        cadastrado (`PesoTamanhoFicha`) e a gramatura/largura do tecido.
+
+        O peso é da PEÇA (tamanho): não muda com a malha. Gramatura e
+        largura são do TECIDO: por isso ele entra como parâmetro em vez de
+        vir de `self.produto` — a mesma ficha é cortada em malhas
+        diferentes, e são os metros que mudam com a malha, não o peso.
+
+        `grade_id` filtra `pesos_tamanho`: o mesmo tamanho pode pesar
+        diferente em duas grades da ficha (a versão solta e a oversized),
+        e sem o filtro a conta arriscaria pegar o peso da grade errada.
+
+        Falta peso de algum tamanho pedido, ou o tecido não informa
+        gramatura/largura: devolve `None`, e quem chamou usa o consumo
+        fixo da ficha — melhor não arriscar um número que já se sabe
+        incompleto.
+        """
+        if not tecido or not tecido.gramatura or not tecido.largura_cm or not grade_id:
+            return None
+        pesos = {
+            p.tamanho_id: p.peso_g
+            for p in self.pesos_tamanho.filter(grade_id=grade_id)
+            if p.peso_g is not None
+        }
+        if not pesos:
+            return None
+        total_g = Decimal('0')
+        for tamanho_id, quantidade in quantidades_por_tamanho.items():
+            if not quantidade:
+                continue
+            peso = pesos.get(tamanho_id)
+            if peso is None:
+                return None
+            total_g += peso * quantidade
+        if not total_g:
+            return None
+        largura_m = tecido.largura_cm / Decimal('100')
+        if not largura_m:
+            return None
+        return (total_g / Decimal(tecido.gramatura) / largura_m).quantize(Decimal('0.0001'))
+
 
 class ImagemFicha(models.Model):
     """
