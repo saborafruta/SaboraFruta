@@ -190,9 +190,13 @@ class NecessidadeService:
         if not ids:
             return
 
+        from apps.estoque.models import Deposito
+        deposito_id = Deposito.producao_id(filial.pk)
         saldos = {
             e.produto_id: e for e in
-            Estoque.objects.filter(produto_id__in=ids, filial=filial)
+            Estoque.objects.filter(
+                produto_id__in=ids, filial=filial, deposito_id=deposito_id,
+            )
         }
         reservas = defaultdict(Decimal)
         for r in ReservaMaterial.objects.for_filial(filial).filter(
@@ -236,6 +240,7 @@ class NecessidadeService:
         Quem mexe em `quantidade_reservada` é o `MovimentacaoService` — este
         serviço só decide quanto e para quem.
         """
+        from apps.estoque.models import Deposito
         from apps.estoque.services.movimentacao_service import MovimentacaoService
 
         if not linha.ligado:
@@ -272,6 +277,7 @@ class NecessidadeService:
 
         MovimentacaoService.reservar_estoque(
             produto_id=linha.produto.pk, filial_id=filial.pk, quantidade=total,
+            deposito_id=Deposito.producao_id(filial.pk),
         )
         ReservaMaterial.objects.bulk_create(criadas)
         return criadas
@@ -279,6 +285,7 @@ class NecessidadeService:
     @classmethod
     @tenant_atomic
     def cancelar_reserva(cls, reserva: ReservaMaterial, usuario) -> None:
+        from apps.estoque.models import Deposito
         from apps.estoque.services.movimentacao_service import MovimentacaoService
 
         if reserva.status != ReservaMaterial.Status.ATIVA:
@@ -287,6 +294,7 @@ class NecessidadeService:
         MovimentacaoService.liberar_reserva(
             produto_id=reserva.produto_id, filial_id=reserva.filial_id,
             quantidade=reserva.quantidade, tolerar_ausente=True,
+            deposito_id=Deposito.producao_id(reserva.filial_id),
         )
         reserva.status = ReservaMaterial.Status.CANCELADA
         reserva.save(update_fields=['status'])
@@ -315,12 +323,13 @@ class NecessidadeService:
 
         Idempotente pelo carimbo: apontar a segunda etapa não reserva de novo.
         """
-        from apps.estoque.models import Estoque
+        from apps.estoque.models import Deposito, Estoque
         from apps.estoque.services.movimentacao_service import MovimentacaoService
 
         ficha = ordem.ficha
         if ficha is None:
             return []
+        deposito_id = Deposito.producao_id(ordem.filial_id)
 
         ja_reservado: dict[int, Decimal] = defaultdict(lambda: ZERO)
         for reserva in ReservaMaterial.all_objects.filter(
@@ -337,6 +346,7 @@ class NecessidadeService:
 
             disponivel = Estoque.objects.filter(
                 produto_id=material.produto_estoque_id, filial_id=ordem.filial_id,
+                deposito_id=deposito_id,
             ).values_list('quantidade_disponivel', flat=True).first() or ZERO
             fatia = min(falta, disponivel)
             if fatia <= ZERO:
@@ -346,6 +356,7 @@ class NecessidadeService:
                 produto_id=material.produto_estoque_id,
                 filial_id=ordem.filial_id,
                 quantidade=fatia,
+                deposito_id=deposito_id,
             )
             criadas.append(ReservaMaterial.objects.create(
                 filial_id=ordem.filial_id, ordem=ordem,

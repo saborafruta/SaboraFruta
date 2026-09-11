@@ -241,6 +241,7 @@ class IntegracaoService:
 
         Idempotente pelo carimbo: dois cliques não tiram o tecido duas vezes.
         """
+        from apps.estoque.models import Deposito
         from apps.estoque.models.estoque import MovimentacaoEstoque
         from apps.estoque.services.movimentacao_service import MovimentacaoService
         from apps.moda.models import ConsumoLoteCorte
@@ -266,6 +267,7 @@ class IntegracaoService:
         comum = {
             'produto_id': produto.pk,
             'filial_id': corte.filial_id,
+            'deposito_id': Deposito.producao_id(corte.filial_id),
             'tipo_operacao': MovimentacaoEstoque.TipoOperacao.PRODUCAO_SAIDA,
             'usuario_id': usuario.pk,
             'documento_tipo': MovimentacaoEstoque.DocumentoTipo.ORDEM_PRODUCAO,
@@ -376,6 +378,7 @@ class IntegracaoService:
         trocado. Sem estorno, a saída seria um ajuste manual — exatamente a
         redigitação que este trabalho veio eliminar.
         """
+        from apps.estoque.models import Deposito
         from apps.estoque.models.estoque import MovimentacaoEstoque
         from apps.estoque.services.movimentacao_service import MovimentacaoService
 
@@ -390,6 +393,7 @@ class IntegracaoService:
         comum = {
             'produto_id': produto.pk,
             'filial_id': corte.filial_id,
+            'deposito_id': Deposito.producao_id(corte.filial_id),
             'tipo_operacao': MovimentacaoEstoque.TipoOperacao.PRODUCAO_ENTRADA,
             'usuario_id': usuario.pk,
             'documento_tipo': MovimentacaoEstoque.DocumentoTipo.ORDEM_PRODUCAO,

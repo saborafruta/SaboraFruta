@@ -92,3 +92,29 @@ class Deposito(FilialScopedModel):
             deposito.is_padrao = True
             deposito.save(update_fields=['is_padrao', 'updated_at'])
         return deposito.pk
+
+    @classmethod
+    def producao_id(cls, filial_id: int) -> int:
+        """
+        Depósito onde a produção consome insumo e dá entrada/estorno.
+
+        Se a filial tem um depósito do tipo "produção" ativo (o "Fábrica"
+        típico), é ele. Senão, cai no padrão — então a produção de quem não
+        separou estoque continua exatamente como era.
+
+        Com mais de um depósito de produção, escolhe de forma determinística
+        (nome, depois id); o refinamento de escolher qual fica para quando
+        alguém precisar de dois.
+        """
+        pk = (
+            cls.objects.filter(
+                filial_id=filial_id,
+                tipo=cls.Tipo.PRODUCAO,
+                ativo=True,
+                permite_producao=True,
+            )
+            .order_by('nome', 'pk')
+            .values_list('pk', flat=True)
+            .first()
+        )
+        return pk or cls.padrao_id(filial_id)

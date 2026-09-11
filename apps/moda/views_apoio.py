@@ -359,6 +359,7 @@ class NovoProdutoEstoqueView(ModaBaseView):
 
     @staticmethod
     def _lancar_quantidade_inicial(request, produto, quantidade):
+        from apps.estoque.models import Deposito
         from apps.estoque.services.movimentacao_service import MovimentacaoService
 
         MovimentacaoService.ajustar_manual(
@@ -367,4 +368,7 @@ class NovoProdutoEstoqueView(ModaBaseView):
             quantidade_nova=quantidade,
             usuario_id=request.user.pk,
             justificativa='Quantidade inicial informada ao cadastrar o produto de estoque.',
+            # Matéria-prima entra no depósito de produção (a "Fábrica"),
+            # quando a filial tem um; senão, no padrão.
+            deposito_id=Deposito.producao_id(request.filial_ativa.pk),
         )

@@ -228,3 +228,81 @@ class TransferenciaInternaTests(DepositoBase):
                 deposito_origem_id=self.loja_id, deposito_destino_id=dep_outra.pk,
                 quantidade=Decimal('1'), usuario_id=self.usuario.pk,
             )
+
+
+class ProducaoNoDepositoTests(DepositoBase):
+    """Fase 3: a produção consome/reserva no depósito de fábrica."""
+
+    def setUp(self):
+        self.produto = self._produto('Tecido')
+        self.padrao_id = Deposito.padrao_id(self.filial.pk)
+
+    def test_producao_id_cai_no_padrao_sem_deposito_de_fabrica(self):
+        self.assertEqual(
+            Deposito.producao_id(self.filial.pk), self.padrao_id,
+        )
+
+    def test_producao_id_usa_o_deposito_tipo_producao(self):
+        fabrica = Deposito.objects.create(
+            filial=self.filial, nome='Fábrica', tipo=Deposito.Tipo.PRODUCAO,
+        )
+        self.assertEqual(Deposito.producao_id(self.filial.pk), fabrica.pk)
+
+    def test_producao_id_ignora_fabrica_inativa_ou_sem_producao(self):
+        Deposito.objects.create(
+            filial=self.filial, nome='Fábrica velha', tipo=Deposito.Tipo.PRODUCAO,
+            ativo=False,
+        )
+        Deposito.objects.create(
+            filial=self.filial, nome='Showroom', tipo=Deposito.Tipo.PRODUCAO,
+            permite_producao=False,
+        )
+        self.assertEqual(Deposito.producao_id(self.filial.pk), self.padrao_id)
+
+    def test_reserva_e_liberacao_no_deposito_de_fabrica(self):
+        fabrica = Deposito.objects.create(
+            filial=self.filial, nome='Fábrica', tipo=Deposito.Tipo.PRODUCAO,
+        )
+        # tecido entra na fábrica
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=self.produto.pk, filial_id=self.filial.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('30'), usuario_id=self.usuario.pk,
+            valor_unitario=Decimal('4'), deposito_id=fabrica.pk,
+        )
+        MovimentacaoService.reservar_estoque(
+            produto_id=self.produto.pk, filial_id=self.filial.pk,
+            quantidade=Decimal('12'), deposito_id=fabrica.pk,
+        )
+        est = Estoque.objects.get(
+            produto=self.produto, filial=self.filial, deposito=fabrica,
+        )
+        self.assertEqual(est.quantidade_reservada, Decimal('12'))
+
+        MovimentacaoService.liberar_reserva(
+            produto_id=self.produto.pk, filial_id=self.filial.pk,
+            quantidade=Decimal('5'), deposito_id=fabrica.pk,
+        )
+        est.refresh_from_db()
+        self.assertEqual(est.quantidade_reservada, Decimal('7'))
+
+    def test_liberar_reserva_nao_quebra_com_dois_depositos(self):
+        """Regressão: antes da Fase 3, .get(produto, filial) estourava
+        MultipleObjectsReturned quando o produto tinha saldo em 2 depósitos."""
+        fabrica = Deposito.objects.create(filial=self.filial, nome='Fábrica')
+        for dep in (self.padrao_id, fabrica.pk):
+            MovimentacaoService.registrar_movimentacao(
+                produto_id=self.produto.pk, filial_id=self.filial.pk,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+                quantidade=Decimal('10'), usuario_id=self.usuario.pk,
+                valor_unitario=Decimal('4'), deposito_id=dep,
+            )
+        MovimentacaoService.reservar_estoque(
+            produto_id=self.produto.pk, filial_id=self.filial.pk,
+            quantidade=Decimal('3'), deposito_id=fabrica.pk,
+        )
+        # sem deposito_id explícito cai no padrão — não pode estourar
+        MovimentacaoService.liberar_reserva(
+            produto_id=self.produto.pk, filial_id=self.filial.pk,
+            quantidade=Decimal('1'), tolerar_ausente=True,
+        )

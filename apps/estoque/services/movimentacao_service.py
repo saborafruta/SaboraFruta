@@ -294,6 +294,7 @@ class MovimentacaoService:
         documento_id: int | None = None,
         documento_numero: str = '',
         forcar_estoque_negativo: bool = False,
+        deposito_id: int | None = None,
     ) -> list[MovimentacaoEstoque]:
         """
         Saída automática respeitando FEFO.
@@ -301,13 +302,17 @@ class MovimentacaoService:
         Quando forcar_estoque_negativo=True, ignora a verificação de saldo
         e permite que o estoque fique negativo (venda autorizada pelo operador).
         """
+        if not deposito_id:
+            deposito_id = Deposito.padrao_id(filial_id)
+
         controla_lote = cls._produto_controla_lote(produto_id)
         if not controla_lote or forcar_estoque_negativo:
             # Verificar saldo apenas se NÃO estiver forçando
             if not forcar_estoque_negativo:
                 from apps.estoque.models import Estoque
                 estoque_atual = Estoque.objects.filter(
-                    produto_id=produto_id, filial_id=filial_id
+                    produto_id=produto_id, filial_id=filial_id,
+                    deposito_id=deposito_id,
                 ).values_list('quantidade_atual', flat=True).first() or 0
                 if estoque_atual < quantidade:
                     raise EstoqueInsuficienteError(
@@ -345,6 +350,7 @@ class MovimentacaoService:
                     documento_numero=documento_numero,
                     observacao='Saida sem controle de lote.' if not forcar_estoque_negativo else 'Venda com estoque negativo autorizada pelo operador.',
                     forcar_estoque_negativo=forcar_estoque_negativo,
+                    deposito_id=deposito_id,
                 )
             ]
 
@@ -359,6 +365,7 @@ class MovimentacaoService:
                 usuario_id=usuario_id,
                 lote_id=c.lote_id,
                 valor_unitario=c.custo_unitario,
+                deposito_id=deposito_id,
                 documento_tipo=documento_tipo,
                 documento_id=documento_id,
                 documento_numero=documento_numero,
@@ -666,10 +673,14 @@ class MovimentacaoService:
         documento_tipo: str = MovimentacaoEstoque.DocumentoTipo.AJUSTE_MANUAL,
         documento_id: int | None = None,
         documento_numero: str = '',
+        deposito_id: int | None = None,
     ) -> MovimentacaoEstoque:
         """Define a quantidade como X (faz ajuste para mais ou menos)."""
         if not justificativa.strip():
             raise DadosInvalidosError('Ajuste manual requer justificativa.')
+
+        if not deposito_id:
+            deposito_id = Deposito.padrao_id(filial_id)
 
         if lote_id:
             lote = LoteProduto.objects.select_for_update().get(
@@ -695,11 +706,12 @@ class MovimentacaoService:
                 documento_id=documento_id,
                 documento_numero=documento_numero,
                 observacao=justificativa,
+                deposito_id=deposito_id,
             )
 
         estoque, _ = Estoque.objects.select_for_update().get_or_create(
             produto_id=produto_id, filial_id=filial_id,
-            deposito_id=Deposito.padrao_id(filial_id),
+            deposito_id=deposito_id,
         )
         diferenca = quantidade_nova - estoque.quantidade_atual
         if diferenca == 0:
@@ -720,6 +732,7 @@ class MovimentacaoService:
             documento_id=documento_id,
             documento_numero=documento_numero,
             observacao=justificativa,
+            deposito_id=deposito_id,
         )
 
     @classmethod
@@ -779,12 +792,16 @@ class MovimentacaoService:
         filial_id: int,
         quantidade: Decimal,
         permitir_sem_estoque: bool = False,
+        deposito_id: int | None = None,
     ) -> Estoque:
         """Reserva quantidade sem baixar saldo fisico."""
         if quantidade <= 0:
             raise DadosInvalidosError('Quantidade deve ser positiva.')
 
         cls._validar_bloqueio_inventario(filial_id, '')
+
+        if not deposito_id:
+            deposito_id = Deposito.padrao_id(filial_id)
 
         controla_lote = cls._produto_controla_lote(produto_id)
         if controla_lote and not permitir_sem_estoque:
@@ -793,7 +810,7 @@ class MovimentacaoService:
         estoque, _ = Estoque.objects.select_for_update().get_or_create(
             produto_id=produto_id,
             filial_id=filial_id,
-            deposito_id=Deposito.padrao_id(filial_id),
+            deposito_id=deposito_id,
             defaults={
                 'quantidade_atual': 0,
                 'quantidade_reservada': 0,
@@ -823,15 +840,20 @@ class MovimentacaoService:
         filial_id: int,
         quantidade: Decimal,
         tolerar_ausente: bool = False,
+        deposito_id: int | None = None,
     ) -> Estoque | None:
         """Libera quantidade reservada sem alterar saldo fisico."""
         if quantidade <= 0:
             raise DadosInvalidosError('Quantidade deve ser positiva.')
 
+        if not deposito_id:
+            deposito_id = Deposito.padrao_id(filial_id)
+
         try:
             estoque = Estoque.objects.select_for_update().get(
                 produto_id=produto_id,
                 filial_id=filial_id,
+                deposito_id=deposito_id,
             )
         except Estoque.DoesNotExist:
             if tolerar_ausente:
