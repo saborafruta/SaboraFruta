@@ -97,6 +97,8 @@ def estornar_venda_para_edicao(venda: VendaPDV, usuario, *, justificativa=None) 
                 documento_numero=str(venda.numero_venda),
                 observacao=f"Estorno da venda #{venda.numero_venda}: {motivo}",
                 permitir_sem_lote=True,
+                # Devolve para o MESMO depósito de onde a venda tirou.
+                deposito_id=mov.deposito_id,
             )
 
     contas = ContaReceber.objects.filter(

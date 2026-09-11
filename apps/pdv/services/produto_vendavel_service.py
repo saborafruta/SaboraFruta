@@ -4,7 +4,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django.utils import timezone
 
-from apps.estoque.models import Estoque, LoteProduto
+from apps.estoque.models import Deposito, Estoque, LoteProduto
 from apps.produtos.models import BrindeProduto, KitProduto, Produto, PromocaoQuantidade
 from apps.produtos.services.preco_service import PrecoService
 from apps.produtos.services.prontidao_comercial_service import avaliar_produto_para_venda, custo_referencia
@@ -29,7 +29,10 @@ class ProdutoVendavelService:
         tabela_preco=None,
     ) -> dict:
         quantidade = cls._decimal(quantidade, Decimal("0.001"))
-        estoque = Estoque.objects.filter(produto=produto, filial=filial).first()
+        estoque = Estoque.objects.filter(
+            produto=produto, filial=filial,
+            deposito_id=Deposito.venda_id(filial.pk),
+        ).first()
         saldo_disponivel = estoque.quantidade_disponivel if estoque else Decimal("0")
         custo_atual = cls._decimal(custo_referencia(produto), cls.UNIT)
         preco_info = PrecoService.preco_cliente_detalhado(

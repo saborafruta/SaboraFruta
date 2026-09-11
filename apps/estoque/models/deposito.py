@@ -118,3 +118,28 @@ class Deposito(FilialScopedModel):
             .first()
         )
         return pk or cls.padrao_id(filial_id)
+
+    @classmethod
+    def venda_id(cls, filial_id: int) -> int:
+        """
+        Depósito de onde a venda (PDV e pedido) tira mercadoria.
+
+        Prefere o padrão quando ele mesmo permite venda — o caso de quem
+        não separou nada. Senão, o primeiro depósito ativo com
+        `permite_venda`. Em último caso, o padrão: a venda nunca fica sem
+        rota, nem que seja a errada, para não travar o caixa.
+        """
+        padrao = cls.padrao_id(filial_id)
+        if cls.objects.filter(
+            pk=padrao, permite_venda=True, ativo=True,
+        ).exists():
+            return padrao
+        pk = (
+            cls.objects.filter(
+                filial_id=filial_id, permite_venda=True, ativo=True,
+            )
+            .order_by('nome', 'pk')
+            .values_list('pk', flat=True)
+            .first()
+        )
+        return pk or padrao

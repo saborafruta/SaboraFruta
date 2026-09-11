@@ -21,7 +21,7 @@ from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import (
     DadosInvalidosError, EstoqueInsuficienteError, PermissaoNegadaError,
 )
-from apps.estoque.models import MovimentacaoEstoque
+from apps.estoque.models import Deposito, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
 from apps.produtos.services.preco_service import PrecoService
@@ -168,6 +168,7 @@ class VendaService:
                     filial_id=pedido.filial_id,
                     quantidade=item.quantidade,
                     permitir_sem_estoque=item.produto.permite_venda_sem_estoque,
+                    deposito_id=Deposito.venda_id(pedido.filial_id),
                 )
                 item.quantidade_reservada = item.quantidade
                 item.save(update_fields=['quantidade_reservada', 'updated_at'])
@@ -268,6 +269,7 @@ class VendaService:
                 produto_id=item.produto_id,
                 filial_id=pedido.filial_id,
                 quantidade=item.quantidade,
+                deposito_id=Deposito.venda_id(pedido.filial_id),
             )
 
             # A MERCADORIA JA' EMBARCADA NAO BAIXA DE NOVO. Quando o pedido foi
@@ -306,6 +308,7 @@ class VendaService:
                         documento_tipo=MovimentacaoEstoque.DocumentoTipo.PEDIDO_VENDA,
                         documento_id=pedido.pk,
                         documento_numero=pedido.numero_pedido,
+                        deposito_id=Deposito.venda_id(pedido.filial_id),
                     )
                     falta -= quantidade_lote
             else:
@@ -319,6 +322,7 @@ class VendaService:
                     documento_tipo=MovimentacaoEstoque.DocumentoTipo.PEDIDO_VENDA,
                     documento_id=pedido.pk,
                     documento_numero=pedido.numero_pedido,
+                    deposito_id=Deposito.venda_id(pedido.filial_id),
                 )
 
             item.quantidade_atendida = item.quantidade
@@ -366,6 +370,7 @@ class VendaService:
                     filial_id=pedido.filial_id,
                     quantidade=item.quantidade,
                     tolerar_ausente=True,
+                    deposito_id=Deposito.venda_id(pedido.filial_id),
                 )
                 item.quantidade_reservada = Decimal('0')
                 item.save(update_fields=['quantidade_reservada', 'updated_at'])

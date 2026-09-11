@@ -286,6 +286,23 @@ class ProducaoNoDepositoTests(DepositoBase):
         est.refresh_from_db()
         self.assertEqual(est.quantidade_reservada, Decimal('7'))
 
+    def test_venda_id_prefere_o_padrao_quando_ele_vende(self):
+        # padrão nasce com permite_venda=True
+        self.assertEqual(Deposito.venda_id(self.filial.pk), self.padrao_id)
+
+    def test_venda_id_cai_no_deposito_de_venda_quando_padrao_nao_vende(self):
+        Deposito.objects.filter(pk=self.padrao_id).update(permite_venda=False)
+        loja = Deposito.objects.create(
+            filial=self.filial, nome='Loja', tipo=Deposito.Tipo.REVENDA,
+            permite_venda=True,
+        )
+        self.assertEqual(Deposito.venda_id(self.filial.pk), loja.pk)
+
+    def test_venda_id_nunca_fica_sem_rota(self):
+        # nenhum depósito permite venda -> ainda assim devolve o padrão
+        Deposito.objects.filter(pk=self.padrao_id).update(permite_venda=False)
+        self.assertEqual(Deposito.venda_id(self.filial.pk), self.padrao_id)
+
     def test_liberar_reserva_nao_quebra_com_dois_depositos(self):
         """Regressão: antes da Fase 3, .get(produto, filial) estourava
         MultipleObjectsReturned quando o produto tinha saldo em 2 depósitos."""

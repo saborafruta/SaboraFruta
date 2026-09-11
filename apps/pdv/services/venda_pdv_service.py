@@ -8,7 +8,7 @@ from django.utils import timezone
 from apps.cadastros.models import Cliente
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
 from apps.core.tenant_context import tenant_atomic
-from apps.estoque.models import MovimentacaoEstoque
+from apps.estoque.models import Deposito, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.financeiro.constants.enums import StatusContaReceber, TipoFormaPagamento
 from apps.financeiro.models import ContaReceber, FormaPagamento
@@ -682,6 +682,7 @@ class VendaPDVService:
             documento_id=venda.pk,
             documento_numero=str(venda.numero_venda),
             forcar_estoque_negativo=forcar_estoque_negativo,
+            deposito_id=Deposito.venda_id(filial.pk),
         )
 
     @classmethod

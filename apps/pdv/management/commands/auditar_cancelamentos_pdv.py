@@ -266,6 +266,7 @@ class Command(BaseCommand):
                         documento_numero=str(venda.numero_venda),
                         observacao=f"Estorno da venda #{venda.numero_venda}: {motivo}",
                         permitir_sem_lote=True,
+                        deposito_id=origem.deposito_id,
                     )
                     movimentos_criados.append(movimento.pk)
 
