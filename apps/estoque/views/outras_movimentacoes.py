@@ -429,12 +429,14 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
             produtos = list(
                 qs.select_related('unidade_medida').order_by('descricao').distinct()[:40]
             )
+        # Soma os depósitos: um `.values_list()` direto guardaria só a
+        # última linha de cada produto quando há mais de um depósito.
         saldos = {
-            produto_id: float(quantidade or 0)
-            for produto_id, quantidade in Estoque.objects.filter(
+            row['produto_id']: float(row['total'] or 0)
+            for row in Estoque.objects.filter(
                 filial=filial,
                 produto_id__in=[produto.pk for produto in produtos],
-            ).values_list('produto_id', 'quantidade_atual')
+            ).values('produto_id').annotate(total=db_models.Sum('quantidade_atual'))
         }
         resultados = [
             {

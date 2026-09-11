@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.db.models import Count, Sum
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
@@ -131,6 +132,45 @@ class DepositoUpdateView(PermissaoRequiredMixin, View):
             'form': form, 'deposito': deposito,
             'title': f'Editar depósito — {deposito.nome}',
         })
+
+
+class EstoquePorDepositoJsonView(PermissaoRequiredMixin, View):
+    """Saldo de um produto em cada depósito da filial — alimenta o painel
+    ao lado da transferência interna, pra escolher "De" com o saldo à vista."""
+
+    permissao_modulo = 'estoque'
+
+    def get(self, request):
+        filial = request.filial_ativa
+        produto_id = request.GET.get('produto')
+        if not produto_id:
+            return JsonResponse({'ok': False, 'error': 'Informe o produto.'}, status=400)
+
+        saldos = {
+            row['deposito_id']: row
+            for row in (
+                Estoque.objects.filter(filial=filial, produto_id=produto_id)
+                .values('deposito_id')
+                .annotate(
+                    atual=Sum('quantidade_atual'),
+                    disponivel=Sum('quantidade_disponivel'),
+                )
+            )
+        }
+        depositos = Deposito.objects.filter(filial=filial, ativo=True).order_by(
+            '-is_padrao', 'nome',
+        )
+        resultados = [
+            {
+                'id': dep.pk,
+                'nome': dep.nome,
+                'padrao': dep.is_padrao,
+                'atual': float(saldos.get(dep.pk, {}).get('atual') or 0),
+                'disponivel': float(saldos.get(dep.pk, {}).get('disponivel') or 0),
+            }
+            for dep in depositos
+        ]
+        return JsonResponse({'ok': True, 'results': resultados})
 
 
 class TransferenciaInternaView(PermissaoRequiredMixin, View):

@@ -58,6 +58,7 @@ urlpatterns = [
     path('depositos/novo/', views.DepositoCreateView.as_view(), name='deposito-create'),
     path('depositos/<int:pk>/', views.DepositoUpdateView.as_view(), name='deposito-update'),
     path('depositos/transferencia-interna/', views.TransferenciaInternaView.as_view(), name='transferencia-interna'),
+    path('depositos/saldo-por-deposito/', views.EstoquePorDepositoJsonView.as_view(), name='estoque-por-deposito-json'),
 
     # Lotes
     path('lotes/', views.LoteListView.as_view(), name='lote-list'),

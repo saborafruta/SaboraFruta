@@ -83,6 +83,11 @@ class DepositoCrudViewTests(DepositoViewsBase):
 
 class TransferenciaInternaViewTests(DepositoViewsBase):
 
+    def test_tela_abre(self):
+        self._set_filial_sessao()
+        resp = self.client.get(reverse('estoque:transferencia-interna'))
+        self.assertEqual(resp.status_code, 200)
+
     def test_transfere_pela_tela(self):
         self._set_filial_sessao()
         loja_id = Deposito.padrao_id(self.filial.pk)
@@ -105,3 +110,43 @@ class TransferenciaInternaViewTests(DepositoViewsBase):
             produto=self.produto, filial=self.filial, deposito=fabrica,
         ).quantidade_atual
         self.assertEqual(saldo_fabrica, Decimal('4'))
+
+
+class EstoquePorDepositoJsonViewTests(DepositoViewsBase):
+
+    def test_soma_por_deposito_e_devolve_todos_os_ativos(self):
+        self._set_filial_sessao()
+        loja_id = Deposito.padrao_id(self.filial.pk)
+        fabrica = Deposito.objects.create(filial=self.filial, nome='Fábrica')
+        inativo = Deposito.objects.create(
+            filial=self.filial, nome='Antigo', ativo=False,
+        )
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=self.produto.pk, filial_id=self.filial.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('10'), usuario_id=self.usuario.pk,
+            valor_unitario=Decimal('2'), deposito_id=loja_id,
+        )
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=self.produto.pk, filial_id=self.filial.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('3'), usuario_id=self.usuario.pk,
+            valor_unitario=Decimal('2'), deposito_id=fabrica.pk,
+        )
+
+        resp = self.client.get(
+            reverse('estoque:estoque-por-deposito-json'),
+            {'produto': self.produto.pk},
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['ok'])
+        por_id = {row['id']: row for row in data['results']}
+        self.assertEqual(por_id[loja_id]['atual'], 10.0)
+        self.assertEqual(por_id[fabrica.pk]['atual'], 3.0)
+        self.assertNotIn(inativo.pk, por_id)
+
+    def test_sem_produto_devolve_erro(self):
+        self._set_filial_sessao()
+        resp = self.client.get(reverse('estoque:estoque-por-deposito-json'))
+        self.assertEqual(resp.status_code, 400)
