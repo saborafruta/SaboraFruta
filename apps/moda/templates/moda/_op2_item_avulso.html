@@ -17,17 +17,24 @@
     </div>
   </label>
   <div x-show="(draft.itens_avulsos||[]).length" x-cloak
-       class="flex flex-wrap gap-1.5 mt-2" aria-label="Itens avulsos preparados">
-    <template x-for="(nome, indice) in (draft.itens_avulsos||[])" :key="`${indice}-${nome}`">
-      <span class="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs"
-            style="background:rgba(37,99,235,.12);color:#2563eb;border:1px solid rgba(37,99,235,.25)">
-        <span x-text="nome"></span>
-        <button type="button" class="font-bold leading-none" :aria-label="`Remover ${nome}`"
-                @click="removerItemAvulso(indice)">×</button>
-      </span>
+       class="grid gap-1.5 mt-2" aria-label="Itens avulsos preparados">
+    <template x-for="(item, indice) in (draft.itens_avulsos||[])" :key="item.uid||indice">
+      <div class="flex flex-wrap gap-1.5 items-center rounded-lg p-1.5"
+           style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.22)">
+        <input x-model="item.nome" maxlength="160" class="form-input min-w-[140px] flex-1 text-xs"
+               :aria-label="`Nome do item avulso ${indice+1}`">
+        <input x-model.number="item.quantidade" type="number" min="1" placeholder="Qtd."
+               class="form-input text-xs text-center" style="width:76px"
+               :aria-label="`Quantidade de ${item.nome}`" title="Quantidade">
+        <input x-model="item.valor_unitario" type="number" min="0" step=".01" placeholder="R$"
+               class="form-input text-xs" style="width:105px"
+               :aria-label="`Valor unitário de ${item.nome}`" title="Valor unitário">
+        <button type="button" class="btn-secondary" style="width:32px;height:32px;padding:0;justify-content:center;color:#ef4444"
+                :aria-label="`Remover ${item.nome}`" @click="removerItemAvulso(indice)">×</button>
+      </div>
     </template>
   </div>
   <small class="block mt-1 opacity-70">
-    Use + para incluir vários. Cada nome vira um item separado, não entra em Modelos de Produção e aparece com este nome nos PDFs.
+    Use + para incluir vários. Cada linha terá nome, quantidade e valor próprios, não entra em Modelos de Produção e aparece com este nome nos PDFs.
   </small>
 </div>

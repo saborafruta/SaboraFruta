@@ -554,6 +554,38 @@ class Op2Tests(TestCase):
         self.assertEqual(pdf.status_code, 200)
         self.assertTrue(pdf.content.startswith(b'%PDF-'))
 
+    def test_itens_avulsos_usam_quantidades_e_valores_individuais(self):
+        self._login_op2()
+        avulsos = [
+            {'nome': 'Faixa', 'quantidade': 2, 'valor_unitario': '18.50'},
+            {'nome': 'Bandeira', 'quantidade': 5, 'valor_unitario': '31.90'},
+            {'nome': 'Braçadeira', 'quantidade': 1, 'valor_unitario': '12.00'},
+        ]
+
+        resposta = self.client.post(
+            reverse('moda:op2-action', args=[self.pedido.pk]),
+            {
+                **self._modelo_completo(),
+                'acao': 'adicionar_item',
+                'itens_avulsos': json.dumps(avulsos),
+                'quantidade': '',
+                'valor_unitario': '',
+            },
+        )
+
+        self.assertRedirects(
+            resposta, reverse('moda:op2-detail', args=[self.pedido.pk]),
+        )
+        itens = list(self.pedido.itens.order_by('ordem'))
+        self.assertEqual([item.descricao for item in itens], [
+            'Faixa', 'Bandeira', 'Braçadeira',
+        ])
+        self.assertEqual([item.quantidade for item in itens], [2, 5, 1])
+        self.assertEqual(
+            [item.valor_unitario for item in itens],
+            [Decimal('18.50'), Decimal('31.90'), Decimal('12.00')],
+        )
+
     def test_editores_oferecem_item_avulso_com_aviso_sobre_pdfs(self):
         self._login_op2()
         for url in (
@@ -567,7 +599,9 @@ class Op2Tests(TestCase):
             self.assertContains(resposta, 'usarItemAvulso()')
             self.assertContains(resposta, 'Adicionar outro item avulso')
             self.assertContains(resposta, 'removerItemAvulso(indice)')
-            self.assertContains(resposta, 'Cada nome vira um item separado')
+            self.assertContains(resposta, 'Cada linha terá nome, quantidade e valor próprios')
+            self.assertContains(resposta, 'x-model.number="item.quantidade"')
+            self.assertContains(resposta, 'x-model="item.valor_unitario"')
 
     def test_edicao_pode_trocar_modelo_por_item_avulso(self):
         from apps.moda.views_op2 import _dados_modal_item

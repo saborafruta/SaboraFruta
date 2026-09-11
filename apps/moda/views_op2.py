@@ -1955,7 +1955,6 @@ class Op2ActionView(ModaBaseView):
             )
         else:
             validar_estrutura_item(request.POST, estrutura_opcoes)
-        valor_unitario = validar_valor_unitario(request.POST.get('valor_unitario'))
         grades = (
             list(Grade.objects.filter(pk__in=(
                 configuracao_conjunto.get('camisa', {}).get('grades') or []
@@ -1982,7 +1981,7 @@ class Op2ActionView(ModaBaseView):
                 f'A quantidade total deve ser igual à soma das grades ({total_geral}).'
             )
         produto_id = (request.POST.get('produto_id') or '').strip()
-        nomes_avulsos = []
+        itens_avulsos = []
         if not produto_id:
             bruto = (request.POST.get('itens_avulsos') or '').strip()
             if bruto:
@@ -1992,31 +1991,70 @@ class Op2ActionView(ModaBaseView):
                     raise ValueError('Não foi possível ler os nomes dos itens avulsos.') from erro
                 if not isinstance(valores, list):
                     raise ValueError('A lista de itens avulsos é inválida.')
-                nomes_avulsos = [
-                    str(nome or '').strip()[:160] for nome in valores
-                    if str(nome or '').strip()
-                ]
+                for valor in valores:
+                    if isinstance(valor, dict):
+                        nome = str(valor.get('nome') or '').strip()[:160]
+                        quantidade_bruta = valor.get('quantidade')
+                        valor_bruto = valor.get('valor_unitario')
+                    else:
+                        nome = str(valor or '').strip()[:160]
+                        quantidade_bruta = request.POST.get('quantidade')
+                        valor_bruto = request.POST.get('valor_unitario')
+                    if not nome:
+                        continue
+                    try:
+                        quantidade = int(quantidade_bruta or 0)
+                    except (TypeError, ValueError) as erro:
+                        raise ValueError(
+                            f'Quantidade inválida para o item {nome}.'
+                        ) from erro
+                    if quantidade < 1:
+                        raise ValueError(
+                            f'A quantidade do item {nome} precisa ser pelo menos 1.'
+                        )
+                    itens_avulsos.append({
+                        'nome': nome,
+                        'quantidade': quantidade,
+                        'valor_unitario': validar_valor_unitario(valor_bruto),
+                    })
             else:
                 descricao = (request.POST.get('descricao') or '').strip()
                 if descricao:
-                    nomes_avulsos = [descricao[:160]]
-            if not nomes_avulsos:
+                    try:
+                        quantidade = int(request.POST.get('quantidade') or 0)
+                    except (TypeError, ValueError) as erro:
+                        raise ValueError('Informe uma quantidade válida.') from erro
+                    if quantidade < 1:
+                        raise ValueError('A quantidade precisa ser pelo menos 1.')
+                    itens_avulsos = [{
+                        'nome': descricao[:160],
+                        'quantidade': quantidade,
+                        'valor_unitario': validar_valor_unitario(
+                            request.POST.get('valor_unitario')
+                        ),
+                    }]
+            if not itens_avulsos:
                 raise ValueError('Informe o nome de pelo menos um item avulso.')
-            if len(nomes_avulsos) > 20:
+            if len(itens_avulsos) > 20:
                 raise ValueError('Adicione no máximo 20 itens avulsos de cada vez.')
+        else:
+            valor_unitario = validar_valor_unitario(request.POST.get('valor_unitario'))
 
         alvos = [
-            (grade, descricao)
-            for descricao in (nomes_avulsos or [None])
+            (grade, item_avulso)
+            for item_avulso in (itens_avulsos or [None])
             for grade in (grades or [None])
         ]
         criados = []
-        for grade, descricao_avulsa in alvos:
+        for grade, item_avulso in alvos:
             dados = request.POST.copy()
-            dados['valor_unitario'] = str(valor_unitario)
+            dados['valor_unitario'] = str(
+                item_avulso['valor_unitario'] if item_avulso else valor_unitario
+            )
             dados['produto'] = f'moda:{produto_id}' if produto_id else ''
-            if descricao_avulsa is not None:
-                dados['descricao'] = descricao_avulsa
+            if item_avulso:
+                dados['descricao'] = item_avulso['nome']
+                dados['quantidade'] = str(item_avulso['quantidade'])
             dados['observacoes'] = (
                 '' if configuracao_conjunto else
                 request.POST.get('item_observacoes') or ''
@@ -2059,7 +2097,7 @@ class Op2ActionView(ModaBaseView):
             RascunhoItemOP.objects.filter(
                 filial=_filial(request), pedido=pedido,
             ).delete()
-        if len(nomes_avulsos) > 1:
+        if len(itens_avulsos) > 1:
             messages.success(
                 request,
                 f'{len(criados)} itens avulsos adicionados separadamente.',
