@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from urllib.parse import urlencode
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -19,6 +20,7 @@ from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.financeiro.forms import (
+    BaixaContaReceberForm,
     EditarEntradaFinanceiraForm,
     EditarMovimentoBancarioForm,
     EditarTaxaTransacaoForm,
@@ -36,6 +38,8 @@ from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaSe
 from apps.financeiro.services.receber_service import ContaReceberService
 from apps.financeiro.views.contas_bancarias import ContaBancariaListView, _usuario_admin
 from apps.financeiro.views.pagar import _contexto_meta_despesa_pessoal
+from apps.moda.models import PedidoProducao
+from apps.moda.services.financeiro import FinanceiroPedidoService
 
 
 def _calculo_taxa_edicao(dados):
@@ -100,6 +104,54 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         data_referencia = parse_date(request.POST.get("data_referencia", "")) or timezone.localdate()
         destino = reverse("financeiro:posicao_diaria") + f"?data={data_referencia.isoformat()}"
         auxiliar = ContaBancariaListView()
+        if acao == "receber_op":
+            if not request.user.tem_permissao("financeiro", "editar"):
+                messages.error(request, "Você não tem permissão para registrar recebimentos.")
+                return redirect(destino)
+            pedido = get_object_or_404(
+                PedidoProducao.objects.for_filial(filial).prefetch_related('itens'),
+                pk=request.POST.get("pedido_id"),
+            )
+            form = BaixaContaReceberForm(request.POST, filial=filial)
+            if form.is_valid():
+                dados = form.cleaned_data
+                try:
+                    resultado = FinanceiroPedidoService.receber(
+                        pedido,
+                        data_pagamento=dados["data_pagamento"],
+                        valor_pago=dados["valor_pago"],
+                        forma_pagamento=dados["forma_pagamento"],
+                        usuario=request.user,
+                        conta_bancaria=dados.get("conta_bancaria"),
+                        observacao=dados.get("observacao", ""),
+                        bandeira=dados.get("bandeira", ""),
+                        numero_parcelas=dados.get("numero_parcelas"),
+                        valor_taxa=dados.get("valor_taxa"),
+                        valor_liquido=dados.get("valor_liquido"),
+                    )
+                except (DomainError, ValidationError) as exc:
+                    form.add_error(None, str(exc))
+                else:
+                    data_referencia = dados["data_pagamento"]
+                    destino = reverse("financeiro:posicao_diaria") + f"?data={data_referencia.isoformat()}"
+                    complemento = (
+                        "OP quitada."
+                        if resultado.saldo_restante <= 0
+                        else f"Saldo restante: R$ {resultado.saldo_restante:.2f}."
+                    )
+                    messages.success(
+                        request,
+                        f"Recebimento de R$ {resultado.valor_recebido:.2f} registrado na "
+                        f"OP #{pedido.numero:06d}. {complemento}",
+                    )
+                    return redirect(destino)
+            return self._render(
+                request,
+                receber_op_form=form,
+                op_recebimento_modal=True,
+                op_selecionada=pedido,
+                data_referencia_forcada=data_referencia,
+            )
         if acao == "lancar_movimento":
             form = MovimentoContaBancariaForm(request.POST, filial=filial)
             if form.is_valid():
@@ -236,7 +288,8 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
     def _render(
         self, request, movimento_form=None, movimento_modal=False, editar_movimento=None,
         editar_form=None, editar_entrada_form=None, detalhe_forcado=None,
-        data_referencia_forcada=None,
+        data_referencia_forcada=None, receber_op_form=None,
+        op_recebimento_modal=False, op_selecionada=None,
     ):
         data_referencia = (
             data_referencia_forcada
@@ -356,6 +409,19 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             movimento_form = MovimentoContaBancariaForm(
                 filial=request.filial_ativa, initial={"data_lancamento": data_referencia},
             )
+        pedidos_com_saldo = FinanceiroPedidoService.pedidos_com_saldo(request.filial_ativa)
+        if receber_op_form is None:
+            receber_op_form = BaixaContaReceberForm(
+                filial=request.filial_ativa,
+                initial={"data_pagamento": timezone.localdate()},
+            )
+        if op_selecionada:
+            op_atual = next(
+                (pedido for pedido in pedidos_com_saldo if pedido.pk == op_selecionada.pk),
+                None,
+            )
+            if op_atual:
+                op_selecionada = op_atual
         if editar_movimento is None and request.GET.get("editar") and _usuario_admin(request):
             editar_movimento = get_object_or_404(
                 ExtratoBancario.objects.filter(filial=request.filial_ativa, origem="manual"),
@@ -460,6 +526,11 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             "title": "Posicao Diaria de Caixa", "data_referencia": data_referencia, "posicao": posicao,
             "hoje": timezone.localdate(),
             "movimento_form": movimento_form, "movimento_modal": movimento_modal,
+            "pedidos_com_saldo": pedidos_com_saldo,
+            "receber_op_form": receber_op_form,
+            "op_recebimento_modal": op_recebimento_modal,
+            "op_selecionada": op_selecionada,
+            "pode_receber_op": request.user.tem_permissao("financeiro", "editar"),
             "editar_movimento": editar_movimento, "editar_form": editar_form, "detalhe": detalhe,
             "editar_entrada_form": editar_entrada_form,
             "abrir_taxas_modal": request.GET.get("taxas") == "1",

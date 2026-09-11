@@ -40,6 +40,14 @@ class Parcela:
     rotulo: str
 
 
+@dataclass(frozen=True)
+class ResultadoRecebimentoPedido:
+    valor_recebido: Decimal
+    valor_taxa: Decimal
+    saldo_restante: Decimal
+    pagamentos_criados: int
+
+
 class FinanceiroPedidoService:
 
     # Grava no `documento_tipo` da conta. É por ele que o pedido reencontra
@@ -169,6 +177,198 @@ class FinanceiroPedidoService:
             )
             for resumo in resumos
         }
+
+    @classmethod
+    def pedidos_com_saldo(cls, filial):
+        """Lista OPs com valor comercial ainda não recebido.
+
+        A OP entra na lista mesmo antes de ``gerar`` ser usado. Nesse caso o
+        valor total comercial é a dívida e nenhum sinal digitado na OP é
+        considerado dinheiro recebido até existir uma baixa real.
+        """
+        from apps.moda.models import PedidoProducao
+
+        pedidos = list(
+            PedidoProducao.objects.for_filial(filial)
+            .exclude(status=PedidoProducao.Status.CANCELADO)
+            .select_related('cliente')
+            .prefetch_related('itens')
+            .order_by('-data_pedido', '-numero')
+        )
+        recebidos = {
+            linha['documento_id']: linha['valor_recebido'] or Decimal('0')
+            for linha in (
+                ContaReceber.objects.for_filial(filial)
+                .filter(
+                    documento_tipo=cls.DOCUMENTO_TIPO,
+                    documento_id__in=[pedido.pk for pedido in pedidos],
+                )
+                .exclude(status=StatusContaReceber.CANCELADO)
+                .order_by()
+                .values('documento_id')
+                .annotate(valor_recebido=Sum('valor_pago'))
+            )
+        }
+        ids_com_financeiro = set(recebidos)
+        pendentes = []
+        for pedido in pedidos:
+            total = pedido.valor_total.quantize(CENTAVO)
+            recebido = recebidos.get(pedido.pk, Decimal('0')).quantize(CENTAVO)
+            saldo = max(total - recebido, Decimal('0')).quantize(CENTAVO)
+            if total <= 0 or saldo <= 0:
+                continue
+            pedido.valor_recebido_op = recebido
+            pedido.valor_aberto_op = saldo
+            pedido.tem_financeiro_op = pedido.pk in ids_com_financeiro
+            pedido.pagamento_parcial_op = recebido > 0
+            pendentes.append(pedido)
+        return pendentes
+
+    @classmethod
+    @tenant_atomic
+    def receber(
+        cls, pedido, *, data_pagamento, valor_pago, forma_pagamento, usuario,
+        conta_bancaria=None, observacao='', bandeira='', numero_parcelas=None,
+        valor_taxa=None, valor_liquido=None,
+    ) -> ResultadoRecebimentoPedido:
+        """Recebe uma OP, criando seu título quando ele ainda não existe."""
+        from apps.moda.models import PedidoProducao
+
+        pedido = (
+            PedidoProducao.objects.select_for_update()
+            .select_related('cliente', 'filial')
+            .prefetch_related('itens')
+            .get(pk=pedido.pk, filial_id=pedido.filial_id)
+        )
+        if pedido.status == pedido.Status.CANCELADO:
+            raise DomainError('Pedido cancelado não pode receber pagamento.')
+
+        valor_pago = Decimal(valor_pago).quantize(CENTAVO)
+        if valor_pago <= 0:
+            raise DomainError('Informe um valor recebido maior que zero.')
+
+        contas = list(
+            ContaReceber.objects.select_for_update()
+            .filter(documento_tipo=cls.DOCUMENTO_TIPO, documento_id=pedido.pk)
+            .exclude(status=StatusContaReceber.CANCELADO)
+            .order_by('data_vencimento', 'parcela', 'pk')
+        )
+        total_pedido = pedido.valor_total.quantize(CENTAVO)
+        total_recebido = sum((conta.valor_pago for conta in contas), Decimal('0'))
+        saldo_pedido = (total_pedido - total_recebido).quantize(CENTAVO)
+        if saldo_pedido <= 0:
+            raise DomainError('Esta OP já está integralmente paga.')
+        if valor_pago > saldo_pedido:
+            raise DomainError(
+                f'O valor recebido não pode passar do saldo da OP de R$ {saldo_pedido:.2f}.'
+            )
+
+        if contas:
+            total_titulos = sum((conta.valor_final for conta in contas), Decimal('0'))
+            if total_titulos != total_pedido:
+                cls.sincronizar_valor_total(pedido, usuario=usuario)
+                contas = list(
+                    ContaReceber.objects.select_for_update()
+                    .filter(documento_tipo=cls.DOCUMENTO_TIPO, documento_id=pedido.pk)
+                    .exclude(status=StatusContaReceber.CANCELADO)
+                    .order_by('data_vencimento', 'parcela', 'pk')
+                )
+        else:
+            contas = [cls._criar_titulo_integral(pedido, usuario)]
+
+        if valor_taxa is None and valor_liquido is None:
+            calculo = forma_pagamento.calcular_taxa_recebimento(
+                valor_pago, numero_parcelas or 1, bandeira or '',
+            )
+            taxa_total = calculo['taxa'].quantize(CENTAVO)
+            liquido_total = calculo['liquido'].quantize(CENTAVO)
+        else:
+            taxa_total = (
+                Decimal(valor_taxa).quantize(CENTAVO)
+                if valor_taxa is not None
+                else (valor_pago - Decimal(valor_liquido)).quantize(CENTAVO)
+            )
+            liquido_total = (
+                Decimal(valor_liquido).quantize(CENTAVO)
+                if valor_liquido is not None else valor_pago - taxa_total
+            )
+        if (
+            taxa_total < 0 or taxa_total > valor_pago or liquido_total < 0
+            or abs((valor_pago - taxa_total) - liquido_total) > CENTAVO
+        ):
+            raise DomainError('A taxa e o valor final do recebimento são inválidos.')
+        restante = valor_pago
+        taxa_distribuida = Decimal('0')
+        pagamentos = 0
+        abertas = [conta for conta in contas if conta.valor_saldo > 0]
+        for indice, conta in enumerate(abertas):
+            if restante <= 0:
+                break
+            parte = min(restante, conta.valor_saldo).quantize(CENTAVO)
+            ultima = parte == restante or indice == len(abertas) - 1
+            if ultima:
+                taxa_parte = taxa_total - taxa_distribuida
+            else:
+                taxa_parte = (taxa_total * parte / valor_pago).quantize(
+                    CENTAVO, rounding=ROUND_DOWN,
+                )
+            taxa_distribuida += taxa_parte
+            ContaReceberService.registrar_baixa(
+                conta, data_pagamento, parte, forma_pagamento, usuario,
+                conta_bancaria=conta_bancaria,
+                observacao=(observacao or f'Recebimento da OP #{pedido.numero:06d}'),
+                bandeira=bandeira,
+                numero_parcelas=numero_parcelas,
+                valor_taxa=taxa_parte,
+                valor_liquido=parte - taxa_parte,
+            )
+            restante -= parte
+            pagamentos += 1
+
+        if restante > 0:
+            raise DomainError('Não foi possível distribuir o recebimento entre os títulos da OP.')
+
+        if not pedido.financeiro_gerado_em:
+            pedido.financeiro_gerado_em = timezone.now()
+            pedido.save(update_fields=['financeiro_gerado_em', 'updated_at'])
+        return ResultadoRecebimentoPedido(
+            valor_recebido=valor_pago,
+            valor_taxa=taxa_total,
+            saldo_restante=(saldo_pedido - valor_pago).quantize(CENTAVO),
+            pagamentos_criados=pagamentos,
+        )
+
+    @classmethod
+    def _criar_titulo_integral(cls, pedido, usuario):
+        categoria = categoria_vendas_produtos(pedido.filial)
+        vencimento = cls._data_base_saldo(pedido)
+        conta = ContaReceber(
+            filial=pedido.filial,
+            cliente=pedido.cliente,
+            documento_tipo=cls.DOCUMENTO_TIPO,
+            documento_id=pedido.pk,
+            documento_numero=f'OP #{pedido.numero:06d} · {pedido.cliente}',
+            parcela=1,
+            total_parcelas=1,
+            valor_original=pedido.valor_total.quantize(CENTAVO),
+            valor_final=pedido.valor_total.quantize(CENTAVO),
+            valor_saldo=pedido.valor_total.quantize(CENTAVO),
+            data_emissao=pedido.data_pedido,
+            data_vencimento=vencimento,
+            status_entrega=(
+                ContaReceber.StatusEntrega.PREVISTA
+                if pedido.data_prevista_entrega else ContaReceber.StatusEntrega.SEM_PREVISAO
+            ),
+            data_entrega_prevista=pedido.data_prevista_entrega,
+            forma_pagamento=pedido.forma_pagamento,
+            plano_contas=categoria,
+            conta_contabil=categoria.conta_contabil if categoria else None,
+            status=StatusContaReceber.ABERTO,
+            observacao=f'Pedido de produção #{pedido.numero:06d} — cobrança criada no recebimento',
+            usuario=usuario,
+        )
+        conta.save()
+        return conta
 
     # ── Plano de pagamento ───────────────────────────────────────────────
 

@@ -278,6 +278,24 @@
   movimentoModal: {{ movimento_modal|yesno:'true,false' }},
   contaPagarModal: false,
   contaReceberModal: false,
+  opModal: false,
+  opRecebimentoModal: {{ op_recebimento_modal|yesno:'true,false' }},
+  buscaOps: '',
+  opSelecionada: {
+    id: '{{ op_selecionada.pk|default:"" }}',
+    numero: '{{ op_selecionada.numero|default:"" }}',
+    cliente: '{{ op_selecionada.cliente.nome_display|default:""|escapejs }}',
+    total: '{{ op_selecionada.valor_total|default:"0"|floatformat:2|escapejs }}',
+    recebido: '{{ op_selecionada.valor_recebido_op|default:"0"|floatformat:2|escapejs }}',
+    saldo: '{{ op_selecionada.valor_aberto_op|default:"0"|floatformat:2|escapejs }}',
+    financeiro: {{ op_selecionada.tem_financeiro_op|yesno:'true,false' }}
+  },
+  selecionarOp(id, numero, cliente, total, recebido, saldo, financeiro) {
+    this.opSelecionada = {id, numero, cliente, total, recebido, saldo, financeiro};
+    this.opModal = false;
+    this.opRecebimentoModal = true;
+    this.$nextTick(() => window.dispatchEvent(new CustomEvent('op-selecionada', {detail:{saldo}})));
+  },
   contaPagarQuitada: false,
   tituloPagarModal: false,
   tituloPagarCarregando: false,
@@ -645,7 +663,7 @@
 
   <section class="grid items-start gap-5 lg:grid-cols-2">
     <div class="pc-ledger entry overflow-hidden rounded-lg shadow-sm">
-      <div class="pc-ledger-head flex items-center justify-between gap-4 px-4 py-4"><div><h3 class="pc-ledger-title text-lg font-semibold">Entradas</h3><p class="mt-0.5 text-xs text-gray-500">Vendas, recebimentos e créditos manuais</p></div><div class="flex flex-col items-end gap-2"><div class="text-right"><span class="block text-[11px] font-semibold uppercase text-gray-500">Total do dia</span><strong class="pc-ledger-total text-xl">R$ {{ posicao.total_entradas|floatformat:2 }}</strong></div><div class="flex flex-wrap justify-end gap-2"><button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="contaReceberModal=true" aria-label="Adicionar conta a receber">+ Conta a receber</button><button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="abrirMovimento('credito')" aria-label="Adicionar entrada manual">+ Entrada</button></div></div></div>
+      <div class="pc-ledger-head flex items-center justify-between gap-4 px-4 py-4"><div><h3 class="pc-ledger-title text-lg font-semibold">Entradas</h3><p class="mt-0.5 text-xs text-gray-500">Vendas, recebimentos e créditos manuais</p></div><div class="flex flex-col items-end gap-2"><div class="text-right"><span class="block text-[11px] font-semibold uppercase text-gray-500">Total do dia</span><strong class="pc-ledger-total text-xl">R$ {{ posicao.total_entradas|floatformat:2 }}</strong></div><div class="flex flex-wrap justify-end gap-2">{% if pode_receber_op %}<button type="button" class="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-700" @click="opModal=true" aria-label="Receber pagamento de OP">+ Receber OP{% if pedidos_com_saldo %} · {{ pedidos_com_saldo|length }}{% endif %}</button>{% endif %}<button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="contaReceberModal=true" aria-label="Adicionar conta a receber">+ Conta a receber</button><button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="abrirMovimento('credito')" aria-label="Adicionar entrada manual">+ Entrada</button></div></div></div>
       <div class="pc-ledger-columns px-4 py-2 text-[11px] font-semibold uppercase"><span>Descrição e origem</span><span>Forma / conta</span><span class="text-right">Valor</span></div>
       <div>
         {% for mov in posicao.entradas %}
@@ -904,6 +922,44 @@
     </div>
   </div></template>
 
+  <template x-teleport="body"><div x-show="opModal" x-cloak class="fixed inset-0 z-[150] flex items-center justify-center p-0 sm:p-5" style="background:rgba(15,23,42,.82);backdrop-filter:blur(10px)" @keydown.escape.window="opModal=false" @click.self="opModal=false">
+    <div class="card flex h-full w-full max-w-5xl flex-col overflow-hidden sm:h-auto sm:max-h-[calc(100vh-2rem)] sm:rounded-lg" @click.stop>
+      <div class="flex items-start justify-between border-b border-slate-200 px-4 py-4 dark:border-slate-700 sm:px-6"><div><span class="text-[11px] font-bold uppercase text-emerald-600">Recebimentos de vendas</span><h3 class="mt-1 text-xl font-semibold">OPs com pagamento em aberto</h3><p class="mt-1 text-xs text-gray-500">Inclui OPs que ainda não passaram pelo botão “Gerar financeiro”.</p></div><button type="button" class="btn-secondary px-3" @click="opModal=false" aria-label="Fechar">×</button></div>
+      <div class="border-b border-slate-200 p-4 dark:border-slate-700 sm:px-6"><label class="block text-xs font-semibold">Buscar por número ou cliente<input type="search" class="form-input mt-1 w-full" x-model="buscaOps" placeholder="Ex.: 000018 ou nome do cliente"></label></div>
+      <div class="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+        <div class="space-y-3">
+          {% for pedido in pedidos_com_saldo %}
+          <article x-show="correspondePrevisao('{{ pedido.numero|stringformat:'s'|escapejs }} {{ pedido.cliente.nome_display|escapejs }}', buscaOps)" class="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><strong class="text-base">OP #{{ pedido.numero|stringformat:'06d' }}</strong>{% if pedido.pagamento_parcial_op %}<span class="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase text-amber-800 dark:bg-amber-950 dark:text-amber-200">Pagamento parcial</span>{% elif not pedido.tem_financeiro_op %}<span class="rounded-full bg-blue-100 px-2 py-1 text-[10px] font-bold uppercase text-blue-800 dark:bg-blue-950 dark:text-blue-200">Financeiro ainda não gerado</span>{% else %}<span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-700 dark:bg-slate-800 dark:text-slate-200">Pendente</span>{% endif %}</div><p class="mt-1 truncate text-sm">{{ pedido.cliente.nome_display }}</p><p class="mt-1 text-xs text-gray-500">OP de {{ pedido.data_pedido|date:'d/m/Y' }}{% if pedido.data_prevista_entrega %} · Entrega {{ pedido.data_prevista_entrega|date:'d/m/Y' }}{% endif %}</p></div>
+              <div class="grid grid-cols-3 gap-3 sm:min-w-[25rem]"><div><span class="block text-[10px] font-bold uppercase text-gray-500">Valor da OP</span><strong class="pc-sensitive mt-1 block text-sm">R$ {{ pedido.valor_total|floatformat:2 }}</strong></div><div><span class="block text-[10px] font-bold uppercase text-gray-500">Recebido</span><strong class="pc-sensitive mt-1 block text-sm text-emerald-600">R$ {{ pedido.valor_recebido_op|floatformat:2 }}</strong></div><div><span class="block text-[10px] font-bold uppercase text-gray-500">Restante</span><strong class="pc-sensitive mt-1 block text-base text-amber-600">R$ {{ pedido.valor_aberto_op|floatformat:2 }}</strong></div></div>
+              <button type="button" class="btn-primary min-h-10 justify-center" @click="selecionarOp('{{ pedido.pk }}', '{{ pedido.numero|stringformat:'06d' }}', '{{ pedido.cliente.nome_display|escapejs }}', '{{ pedido.valor_total|floatformat:2|escapejs }}', '{{ pedido.valor_recebido_op|floatformat:2|escapejs }}', '{{ pedido.valor_aberto_op|floatformat:2|escapejs }}', {{ pedido.tem_financeiro_op|yesno:'true,false' }})">Receber</button>
+            </div>
+          </article>
+          {% empty %}<div class="py-14 text-center"><strong class="block text-lg">Nenhuma OP com saldo aberto</strong><p class="mt-2 text-sm text-gray-500">Todas as OPs com valor estão quitadas.</p></div>{% endfor %}
+        </div>
+      </div>
+    </div>
+  </div></template>
+
+  <template x-teleport="body"><div x-show="opRecebimentoModal" x-cloak class="fixed inset-0 z-[160] flex items-center justify-center overflow-y-auto p-0 sm:p-5" style="background:rgba(15,23,42,.86);backdrop-filter:blur(11px)" @keydown.escape.window="opRecebimentoModal=false" @click.self="opRecebimentoModal=false">
+    <div class="card my-auto w-full max-w-4xl overflow-hidden sm:rounded-lg" @click.stop x-data="recebimentoOpForm()" @op-selecionada.window="selecionarSaldo($event.detail.saldo)">
+      <div class="flex items-start justify-between border-b border-slate-200 px-4 py-4 dark:border-slate-700 sm:px-6"><div><span class="text-[11px] font-bold uppercase text-emerald-600">Receber OP</span><h3 class="mt-1 text-xl font-semibold">OP #<span x-text="opSelecionada.numero"></span> · <span x-text="opSelecionada.cliente"></span></h3><p class="mt-1 text-xs text-gray-500">O recebimento ficará vinculado à OP e aparecerá no caixa e no financeiro do pedido.</p></div><button type="button" class="btn-secondary px-3" @click="opRecebimentoModal=false" aria-label="Fechar">×</button></div>
+      <form method="post" class="max-h-[calc(100vh-5rem)] overflow-y-auto p-4 sm:p-6" @submit="enviando=true">
+        {% csrf_token %}<input type="hidden" name="acao" value="receber_op"><input type="hidden" name="pedido_id" :value="opSelecionada.id"><input type="hidden" name="data_referencia" value="{{ data_referencia|date:'Y-m-d' }}">
+        {% if receber_op_form.non_field_errors %}<div class="mb-4 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700">{{ receber_op_form.non_field_errors|join:', ' }}</div>{% endif %}
+        <div class="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-zinc-800 sm:grid-cols-3"><div><span class="block text-xs text-gray-500">Valor da OP</span><strong class="pc-sensitive mt-1 block" x-text="moeda(opSelecionada.total)"></strong></div><div><span class="block text-xs text-gray-500">Já recebido</span><strong class="pc-sensitive mt-1 block text-emerald-600" x-text="moeda(opSelecionada.recebido)"></strong></div><div><span class="block text-xs text-gray-500">Saldo restante</span><strong class="pc-sensitive mt-1 block text-lg text-amber-600" x-text="moeda(opSelecionada.saldo)"></strong></div></div>
+        <div class="mt-5 grid gap-5 lg:grid-cols-2">
+          <section class="space-y-4 rounded-lg border border-slate-200 p-4 dark:border-slate-700"><h4 class="font-semibold">Valor e data</h4><div class="grid grid-cols-2 gap-2"><button type="button" class="btn-secondary justify-center" @click="receberTudo()">Receber tudo</button><button type="button" class="btn-secondary justify-center" @click="receberMetade()">Receber 50%</button></div><label class="block text-sm font-semibold">Data do recebimento *{{ receber_op_form.data_pagamento|add_class:'form-input mt-1 w-full' }}{% for erro in receber_op_form.data_pagamento.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label><label class="block text-sm font-semibold">Valor recebido (R$) *{{ receber_op_form.valor_pago|add_class:'form-input mt-1 w-full text-lg font-bold'|attr:'x-model:valor'|attr:'@input:atualizarTaxaAutomatica()' }}{% for erro in receber_op_form.valor_pago.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label><p class="rounded-lg bg-blue-50 p-3 text-xs text-blue-800 dark:bg-blue-950/30 dark:text-blue-200">Se receber apenas uma parte, o restante continua automaticamente em Contas a Receber.</p></section>
+          <section class="space-y-4 rounded-lg border border-slate-200 p-4 dark:border-slate-700"><h4 class="font-semibold">Forma e conta</h4><label class="block text-sm font-semibold">Forma de recebimento *{{ receber_op_form.forma_pagamento|add_class:'form-input mt-1 w-full'|attr:'x-ref:forma'|attr:'@change:atualizarCartao()' }}{% for erro in receber_op_form.forma_pagamento.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label><label class="block text-sm font-semibold">Conta creditada{{ receber_op_form.conta_bancaria|add_class:'form-input mt-1 w-full'|attr:'x-ref:conta' }}{% for erro in receber_op_form.conta_bancaria.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label><div class="grid gap-3 sm:grid-cols-2"><label class="block text-sm font-semibold" x-ref="campoBandeira">Bandeira{{ receber_op_form.bandeira|add_class:'form-input mt-1 w-full'|attr:'x-ref:bandeira'|attr:'@change:atualizarTaxaAutomatica()' }}</label><label class="block text-sm font-semibold" x-ref="campoParcelas">Parcelas{{ receber_op_form.numero_parcelas|add_class:'form-input mt-1 w-full'|attr:'x-ref:parcelas'|attr:'@change:atualizarTaxaAutomatica()' }}</label></div></section>
+        </div>
+        <section class="mt-5 rounded-lg border border-blue-500/30 bg-blue-500/5 p-4"><h4 class="font-semibold">Taxa desta transação</h4><div class="mt-3 grid gap-4 sm:grid-cols-2"><label class="block text-sm font-semibold">Taxa cobrada (R$){{ receber_op_form.valor_taxa|add_class:'form-input mt-1 w-full'|attr:'x-model:taxa'|attr:'@input:atualizarPorTaxa()' }}{% for erro in receber_op_form.valor_taxa.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label><label class="block text-sm font-semibold">Valor final após taxa (R$){{ receber_op_form.valor_liquido|add_class:'form-input mt-1 w-full'|attr:'x-model:liquido'|attr:'@input:atualizarPorLiquido()' }}{% for erro in receber_op_form.valor_liquido.errors %}<span class="mt-1 block text-xs text-rose-600">{{ erro }}</span>{% endfor %}</label></div><p class="mt-2 text-xs text-gray-500">A taxa configurada é sugerida automaticamente e pode ser corrigida antes de confirmar.</p></section>
+        <label class="mt-5 block text-sm font-semibold">Observação{{ receber_op_form.observacao|add_class:'form-input mt-1 w-full'|attr:'placeholder:Informação para conferência futura' }}</label>
+        <div class="mt-5 flex flex-col-reverse gap-2 border-t border-slate-200 pt-4 dark:border-slate-700 sm:flex-row sm:justify-between"><button type="button" class="btn-secondary" @click="opRecebimentoModal=false; opModal=true">Escolher outra OP</button><button type="submit" class="btn-primary min-h-11 justify-center" :disabled="enviando"><span x-show="!enviando">Confirmar recebimento</span><span x-show="enviando" x-cloak>Registrando...</span></button></div>
+      </form>
+    </div>
+  </div></template>
+
   <template x-teleport="body"><div x-show="contaPagarModal" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6" style="background:rgba(15,23,42,.78);backdrop-filter:blur(8px)" @keydown.escape.window="contaPagarModal=false">
     <div class="flex w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-2xl dark:border-slate-700 dark:bg-zinc-900" style="height:94vh" @click.stop>
       <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700"><div><h3 class="font-semibold" x-text="contaPagarQuitada ? 'Nova despesa paga' : 'Nova conta a pagar'"></h3><p class="text-xs text-gray-500" x-text="contaPagarQuitada ? 'Classifique a despesa e registre a quitação sem sair da conferência.' : 'O título será incluído sem sair da conferência.'"></p></div><button type="button" class="btn-secondary px-3" @click="contaPagarModal=false" aria-label="Fechar conta a pagar">×</button></div>
@@ -1007,6 +1063,81 @@
 
 {% block extra_js %}
 <script src="{% static 'js/transferencia_taxa_preview.js' %}?v=20260909-1"></script>
+<script>
+function recebimentoOpForm() {
+  return {
+    enviando: false,
+    valor: '{{ receber_op_form.valor_pago.value|default_if_none:""|escapejs }}',
+    taxa: '{{ receber_op_form.valor_taxa.value|default_if_none:""|escapejs }}',
+    liquido: '{{ receber_op_form.valor_liquido.value|default_if_none:""|escapejs }}',
+    num(valor) {
+      const raw = String(valor ?? '').trim();
+      if (!raw) return 0;
+      const normal = raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw;
+      const numero = Number.parseFloat(normal);
+      return Number.isFinite(numero) ? numero : 0;
+    },
+    moeda(valor) {
+      return this.num(valor).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+    },
+    arredondar(valor) { return Math.round((valor + Number.EPSILON) * 100) / 100; },
+    selecionarSaldo(saldo) {
+      this.valor = this.num(saldo).toFixed(2);
+      this.$nextTick(() => this.atualizarCartao());
+    },
+    receberTudo() { this.valor = this.num(this.opSelecionada.saldo).toFixed(2); this.atualizarTaxaAutomatica(); },
+    receberMetade() { this.valor = (this.num(this.opSelecionada.saldo) / 2).toFixed(2); this.atualizarTaxaAutomatica(); },
+    percentualSelecionado(opcao) {
+      let taxas = {};
+      try { taxas = JSON.parse(opcao?.dataset?.taxasParcelamento || '{}'); } catch (_) { taxas = {}; }
+      const parcelas = this.num(this.$refs.parcelas?.value) || 1;
+      const bandeira = this.$refs.bandeira?.value || '';
+      if (Object.prototype.hasOwnProperty.call(taxas, `${parcelas}|${bandeira}`)) return this.num(taxas[`${parcelas}|${bandeira}`]);
+      if (Object.prototype.hasOwnProperty.call(taxas, `${parcelas}|`)) return this.num(taxas[`${parcelas}|`]);
+      return this.num(opcao?.dataset?.taxaPercentual);
+    },
+    atualizarTaxaAutomatica() {
+      const opcao = this.$refs.forma?.selectedOptions?.[0];
+      const bruto = this.num(this.valor);
+      const taxa = Math.min(this.arredondar(
+        (bruto * this.percentualSelecionado(opcao) / 100) + this.num(opcao?.dataset?.taxaFixa)
+      ), bruto);
+      this.taxa = taxa.toFixed(2);
+      this.liquido = this.arredondar(bruto - taxa).toFixed(2);
+    },
+    atualizarPorTaxa() {
+      const bruto = this.num(this.valor);
+      const taxa = Math.min(this.num(this.taxa), bruto);
+      this.liquido = this.arredondar(bruto - taxa).toFixed(2);
+    },
+    atualizarPorLiquido() {
+      const bruto = this.num(this.valor);
+      const liquido = Math.min(this.num(this.liquido), bruto);
+      this.taxa = this.arredondar(bruto - liquido).toFixed(2);
+    },
+    atualizarCartao() {
+      const forma = this.$refs.forma;
+      const tipo = forma?.selectedOptions?.[0]?.dataset?.tipo || '';
+      const cartao = tipo === 'cartao_debito' || tipo === 'cartao_credito';
+      if (this.$refs.campoBandeira) this.$refs.campoBandeira.style.display = cartao ? '' : 'none';
+      if (this.$refs.campoParcelas) this.$refs.campoParcelas.style.display = tipo === 'cartao_credito' ? '' : 'none';
+      const contaId = forma?.selectedOptions?.[0]?.dataset?.conta || '';
+      if (contaId && Array.from(this.$refs.conta?.options || []).some((opcao) => opcao.value === contaId)) this.$refs.conta.value = contaId;
+      if (tipo === 'cartao_debito' && this.$refs.parcelas) this.$refs.parcelas.value = '1';
+      if (!cartao) { if (this.$refs.bandeira) this.$refs.bandeira.value = ''; if (this.$refs.parcelas) this.$refs.parcelas.value = ''; }
+      const maximo = parseInt(forma?.selectedOptions?.[0]?.dataset?.maxParcelas || '1', 10);
+      Array.from(this.$refs.parcelas?.options || []).forEach((item) => {
+        const numero = parseInt(item.value || '0', 10); item.hidden = numero > maximo; item.disabled = numero > maximo;
+      });
+      this.atualizarTaxaAutomatica();
+    },
+    init() {
+      if (!this.valor && this.opSelecionada.saldo) this.valor = this.num(this.opSelecionada.saldo).toFixed(2);
+      this.$nextTick(() => this.atualizarCartao());
+    }
+  };
+}
+</script>
 <script>
 function comprovantePosicaoDiaria() {
   return {
