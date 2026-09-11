@@ -128,6 +128,44 @@ class ProdutoModaForm(_FilialFormMixin, forms.ModelForm):
         return codigo
 
 
+class ProdutoRapidoForm(_FilialFormMixin, forms.ModelForm):
+    """
+    O mínimo para o produto existir e a ficha técnica começar.
+
+    Nasce pra destravar "Nova ficha técnica" sem obrigar a passar pelo
+    cadastro completo de produto primeiro — mesma lógica do
+    `ClienteRapidoForm`: poucos campos agora, o resto completa depois no
+    cadastro cheio. Tecido e grade entram aqui (e não ficam de fora, como
+    no cliente rápido) porque são exatamente o que a ficha precisa herdar
+    pra a tela de "o que vem do produto" não nascer em branco.
+    """
+
+    class Meta:
+        model = ProdutoModa
+        fields = ['codigo', 'nome', 'tecido', 'grade']
+        widgets = {
+            'codigo': forms.TextInput(attrs={'placeholder': 'CAM001'}),
+            'nome': forms.TextInput(attrs={'placeholder': 'Camisa de jogo'}),
+        }
+
+    def __init__(self, *args, filial=None, **kwargs):
+        from .models import Tecido
+        self.campos_por_filial = {'tecido': Tecido, 'grade': Grade}
+        super().__init__(*args, filial=filial, **kwargs)
+        self.fields['tecido'].required = False
+        self.fields['grade'].required = False
+
+    def clean_codigo(self):
+        codigo = (self.cleaned_data['codigo'] or '').strip().upper()
+        if not codigo:
+            raise forms.ValidationError('Informe um código — ele vira o prefixo do SKU.')
+        if ProdutoModa.objects.filter(filial=self.filial, codigo=codigo).exists():
+            raise forms.ValidationError(
+                f'Já existe um produto com o código {codigo} — ele é o prefixo do SKU.'
+            )
+        return codigo
+
+
 class PedidoProducaoForm(_FilialFormMixin, forms.ModelForm):
     """Cabeçalho do pedido de produção — a parte de cima da ficha."""
 

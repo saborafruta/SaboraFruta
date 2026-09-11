@@ -145,7 +145,7 @@
               a tela pedia um produto que não existia em lugar nenhum.
               O campo enxerga os dois e traz o do ERP ao salvar.
             {% endcomment %}
-            {% include "moda/_combo_produto.html" with nome_campo="produto" sem_ficha=1 %}
+            {% include "moda/_combo_produto.html" with nome_campo="produto" sem_ficha=1 permite_criar=1 tecidos=tecidos grades=grades %}
           {% endif %}
           {% for erro in form.produto.errors %}
             <p class="text-xs mt-1" style="color:#dc2626;">{{ erro }}</p>

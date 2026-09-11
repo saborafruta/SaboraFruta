@@ -246,6 +246,7 @@ ROTAS_PRONTAS: list = [
     path('engenharia/custos/', vcus.CustoListView.as_view(), name='custos'),
 
     path('engenharia/ficha-tecnica/', vf.FichaListView.as_view(), name='ficha-list'),
+    path('engenharia/ficha-tecnica/produto-rapido/', vf.ProdutoRapidoJsonView.as_view(), name='produto-rapido-json'),
     path('engenharia/ficha-tecnica/nova/', vf.FichaFormView.as_view(), name='ficha-create'),
     path('engenharia/ficha-tecnica/<int:pk>/', vf.FichaDetailView.as_view(), name='ficha-detail'),
     path('engenharia/ficha-tecnica/<int:pk>/editar/', vf.FichaFormView.as_view(), name='ficha-update'),

@@ -11,10 +11,12 @@
   conhecido pela produção.
 
   Espera `nome_campo` (o `name` do input) e, opcional, `sem_ficha` e
-  `escolhido_json`.
+  `escolhido_json`. `permite_criar=1` liga o atalho "+ Novo produto" (ver
+  `tecidos`/`grades` abaixo, que alimentam os selects dele).
 {% endcomment %}
 <div x-data="comboProduto({
        url: '{% url 'moda:produto-buscar' %}',
+       criarUrl: '{% url 'moda:produto-rapido-json' %}',
        semFicha: {% if sem_ficha %}true{% else %}false{% endif %},
        escolhido: {{ escolhido_json|default:'null' }}
      })"
@@ -72,6 +74,47 @@
     </p>
   </template>
 
+  {% if permite_criar %}
+    {% comment %}
+      O ATALHO para quem não quer procurar um produto que não existe ainda
+      -- "não achei" é justamente o momento em que cadastrar rápido evita
+      abrir outra aba, preencher lá e voltar aqui para procurar de novo.
+    {% endcomment %}
+    <div x-show="!escolhido" x-cloak class="mt-1.5">
+      <button type="button" class="text-xs font-semibold" style="color:#2563eb;"
+              @click="novoAberto = !novoAberto"
+              x-text="novoAberto ? 'Cancelar' : '+ Cadastrar produto novo'"></button>
+
+      <div x-show="novoAberto" x-cloak class="mt-2 p-3 rounded-lg space-y-2"
+           :style="temaClaro ? 'background:#f8fafc;border:1px solid #e5e7eb;' : 'background:#18181b;border:1px solid #303036;'">
+        <div class="grid grid-cols-2 gap-2">
+          <input type="text" x-model="novoCodigo" placeholder="Código (ex.: CAM001)"
+                 class="form-input text-sm" maxlength="30">
+          <input type="text" x-model="novoNome" placeholder="Nome da peça"
+                 class="form-input text-sm" maxlength="120">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <select x-model="novoTecido" class="form-input text-sm">
+            <option value="">Malha (opcional)</option>
+            {% for t in tecidos %}<option value="{{ t.pk }}">{{ t.nome }}</option>{% endfor %}
+          </select>
+          <select x-model="novoGrade" class="form-input text-sm">
+            <option value="">Grade (opcional)</option>
+            {% for g in grades %}<option value="{{ g.pk }}">{{ g.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        <p x-show="novoErro" x-cloak class="text-xs" style="color:#dc2626;" x-text="novoErro"></p>
+        <div class="flex items-center gap-2">
+          <button type="button" class="btn-primary text-xs" @click="criarProduto()"
+                  :disabled="criando" x-text="criando ? 'Criando…' : 'Criar e usar'"></button>
+          <span class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#71717a;'">
+            Só código e nome são obrigatórios — o resto completa depois no cadastro.
+          </span>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
   {# ── Lista ────────────────────────────────────────────────────────── #}
   <div x-show="aberto && resultados.length" x-cloak
        class="absolute z-30 left-0 right-0 mt-1 rounded-lg overflow-hidden shadow-lg max-h-72 overflow-y-auto"
@@ -112,6 +155,7 @@ if (!window.__comboProdutoRegistrado) {
   document.addEventListener('alpine:init', () => {
     Alpine.data('comboProduto', (config) => ({
       url: config.url,
+      criarUrl: config.criarUrl || '',
       semFicha: !!config.semFicha,
       escolhido: config.escolhido || null,
       termo: config.escolhido ? config.escolhido.nome : '',
@@ -123,6 +167,15 @@ if (!window.__comboProdutoRegistrado) {
       // é descartada — senão a lista pisca com o resultado do que a pessoa
       // já terminou de digitar.
       requisicao: 0,
+
+      // ── Cadastro rápido ──────────────────────────────────────────────
+      novoAberto: false,
+      novoCodigo: '',
+      novoNome: '',
+      novoTecido: '',
+      novoGrade: '',
+      novoErro: '',
+      criando: false,
 
       init() {
         if (this.escolhido) this.avisar();
@@ -162,6 +215,44 @@ if (!window.__comboProdutoRegistrado) {
         window.dispatchEvent(new CustomEvent('produto-escolhido', {
           detail: this.escolhido,
         }));
+      },
+
+      async criarProduto() {
+        this.novoErro = '';
+        if (!this.novoCodigo.trim() || !this.novoNome.trim()) {
+          this.novoErro = 'Informe código e nome.';
+          return;
+        }
+        this.criando = true;
+        try {
+          const corpo = new URLSearchParams();
+          corpo.set('codigo', this.novoCodigo.trim());
+          corpo.set('nome', this.novoNome.trim());
+          if (this.novoTecido) corpo.set('tecido', this.novoTecido);
+          if (this.novoGrade) corpo.set('grade', this.novoGrade);
+          const csrf = (document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/) || [])[1] || '';
+          const resp = await fetch(this.criarUrl, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' },
+            body: corpo,
+          });
+          const dados = await resp.json();
+          if (!resp.ok || !dados.ok) {
+            this.novoErro = Object.values(dados.erros || {}).flat().join(' ')
+              || 'Não deu para criar o produto.';
+            return;
+          }
+          this.escolher(dados.produto);
+          this.novoAberto = false;
+          this.novoCodigo = '';
+          this.novoNome = '';
+          this.novoTecido = '';
+          this.novoGrade = '';
+        } catch (e) {
+          this.novoErro = 'Falha ao criar o produto agora.';
+        } finally {
+          this.criando = false;
+        }
       },
 
       limpar() {

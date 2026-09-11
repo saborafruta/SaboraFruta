@@ -8,10 +8,11 @@ que já é grande sem nenhum ganho.
 """
 from django.contrib import messages
 from django.db.models import Prefetch
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-from .forms import FichaTecnicaForm, ImagemFichaForm, MaterialFichaForm
+from .forms import FichaTecnicaForm, ImagemFichaForm, MaterialFichaForm, ProdutoRapidoForm
 from .models import (
     Aviamento, FichaTecnica, Grade, ImagemFicha, ItemGrade, MaterialFicha,
     PesoTamanhoFicha,
@@ -181,6 +182,36 @@ class FichaListView(ModaBaseView):
         })
 
 
+class ProdutoRapidoJsonView(ModaBaseView):
+    """
+    Cadastro rápido de produto, de dentro da tela de ficha técnica.
+
+    EXISTE PORQUE A FICHA ESTÁ SENDO DIGITADA. Mandar quem preenche uma
+    ficha para o cadastro completo de produto, esperar ele terminar e
+    voltar pra começar de novo é o tipo de atrito que faz a pessoa desistir
+    e não cadastrar nada. Aqui o produto nasce com o mínimo -- código, nome,
+    tecido e grade -- e a busca já devolve escolhido, sem sair da tela.
+    """
+
+    permissao_acao = 'criar'
+
+    def post(self, request):
+        from .services.importar_produtos import BuscaProdutos
+
+        form = ProdutoRapidoForm(request.POST, filial=_filial(request))
+        if not form.is_valid():
+            return JsonResponse({
+                'ok': False,
+                'erros': {c: [str(e) for e in erros] for c, erros in form.errors.items()},
+            }, status=400)
+
+        produto = form.save(commit=False)
+        produto.filial = _filial(request)
+        produto.save()
+
+        return JsonResponse({'ok': True, 'produto': BuscaProdutos.como_dicionario(produto)})
+
+
 class FichaFormView(ModaBaseView):
     """Cria e edita o cabeçalho da ficha."""
 
@@ -212,7 +243,7 @@ class FichaFormView(ModaBaseView):
 
     @staticmethod
     def _render(request, form, ficha):
-        from apps.moda.models import ProdutoModa
+        from apps.moda.models import ProdutoModa, Tecido
         from apps.moda.services.importar_produtos import ImportarProdutosService
 
         filial = _filial(request)
@@ -248,6 +279,17 @@ class FichaFormView(ModaBaseView):
             'total_produtos': total_produtos,
             'ja_com_ficha': total_produtos - len(disponiveis),
             'do_erp': do_erp,
+            # Alimentam o "+ Cadastrar produto novo" da caixa de busca —
+            # só faz sentido na criação, o produto de uma ficha existente
+            # não muda (ver `_combo_produto.html`).
+            'tecidos': (
+                Tecido.objects.for_filial(filial).filter(ativo=True).order_by('nome')
+                if not ficha else []
+            ),
+            'grades': (
+                Grade.objects.for_filial(filial).filter(ativo=True).order_by('nome')
+                if not ficha else []
+            ),
         })
 
 
