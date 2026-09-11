@@ -2337,6 +2337,40 @@ class Op2ActionView(ModaBaseView):
         else:
             messages.success(request, 'Produto atualizado.')
 
+    def _acao_editar_item_com_avulsos(self, request, pedido):
+        """Atualiza o item aberto e cria os demais avulsos na mesma operação."""
+        post_original = request.POST
+        try:
+            try:
+                itens = json.loads(request.POST.get('itens_avulsos') or '[]')
+            except json.JSONDecodeError as erro:
+                raise ValueError('Não foi possível ler os itens avulsos.') from erro
+            if not isinstance(itens, list) or not itens:
+                raise ValueError('Informe pelo menos um item avulso.')
+            if not isinstance(itens[0], dict):
+                raise ValueError('Os dados do primeiro item avulso são inválidos.')
+
+            primeiro, restantes = itens[0], itens[1:]
+            dados_edicao = post_original.copy()
+            dados_edicao['produto_id'] = ''
+            dados_edicao['descricao'] = primeiro.get('nome') or ''
+            dados_edicao['quantidade'] = primeiro.get('quantidade') or ''
+            dados_edicao['valor_unitario'] = primeiro.get('valor_unitario')
+            dados_edicao['itens_avulsos'] = ''
+            request._post = dados_edicao
+            self._acao_editar_item(request, pedido)
+
+            if restantes:
+                dados_adicao = post_original.copy()
+                dados_adicao['item_id'] = ''
+                dados_adicao['produto_id'] = ''
+                dados_adicao['descricao'] = ''
+                dados_adicao['itens_avulsos'] = json.dumps(restantes)
+                request._post = dados_adicao
+                self._acao_adicionar_item(request, pedido)
+        finally:
+            request._post = post_original
+
     @staticmethod
     def _sincronizar_dados_compartilhados(
         pedido, item, produto_original_id, descricao_original,

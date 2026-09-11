@@ -586,6 +586,40 @@ class Op2Tests(TestCase):
             [Decimal('18.50'), Decimal('31.90'), Decimal('12.00')],
         )
 
+    def test_edicao_de_item_avulso_atualiza_original_e_adiciona_outros(self):
+        self._login_op2()
+        original = ItemPedidoProducao.objects.create(
+            pedido=self.pedido, descricao='Faixa antiga', quantidade=1,
+            valor_unitario=Decimal('10.00'), ordem=10,
+        )
+        avulsos = [
+            {'nome': 'Faixa atualizada', 'quantidade': 3, 'valor_unitario': '15.00'},
+            {'nome': 'Bandeira nova', 'quantidade': 2, 'valor_unitario': '28.50'},
+        ]
+
+        resposta = self.client.post(
+            reverse('moda:op2-action', args=[self.pedido.pk]),
+            {
+                **self._modelo_completo(),
+                'acao': 'editar_item_com_avulsos',
+                'item_id': original.pk,
+                'produto_id': '',
+                'itens_avulsos': json.dumps(avulsos),
+            },
+        )
+
+        self.assertRedirects(
+            resposta, reverse('moda:op2-detail', args=[self.pedido.pk]),
+        )
+        original.refresh_from_db()
+        self.assertEqual(original.descricao, 'Faixa atualizada')
+        self.assertEqual(original.quantidade, 3)
+        self.assertEqual(original.valor_unitario, Decimal('15.00'))
+        novo = self.pedido.itens.exclude(pk=original.pk).get()
+        self.assertEqual(novo.descricao, 'Bandeira nova')
+        self.assertEqual(novo.quantidade, 2)
+        self.assertEqual(novo.valor_unitario, Decimal('28.50'))
+
     def test_editores_oferecem_item_avulso_com_aviso_sobre_pdfs(self):
         self._login_op2()
         for url in (
@@ -602,6 +636,7 @@ class Op2Tests(TestCase):
             self.assertContains(resposta, 'Cada linha terá nome, quantidade e valor próprios')
             self.assertContains(resposta, 'x-model.number="item.quantidade"')
             self.assertContains(resposta, 'x-model="item.valor_unitario"')
+            self.assertContains(resposta, 'podeAdicionarVariosAvulsos=function(){return true}')
 
     def test_edicao_pode_trocar_modelo_por_item_avulso(self):
         from apps.moda.views_op2 import _dados_modal_item

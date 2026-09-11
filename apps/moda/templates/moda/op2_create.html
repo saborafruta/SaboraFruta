@@ -377,7 +377,7 @@ function op2NovaMelhorada(){
     }
     this.somarDraftGrade();
   };
-  estado.podeAdicionarVariosAvulsos=function(){return this.editandoIdx===null};
+  estado.podeAdicionarVariosAvulsos=function(){return true};
   estado.itensAvulsosParaEnvio=function(){
     const itens=[...(this.draft.itens_avulsos||[])].map(item=>typeof item==='string'?{uid:this.gerarUidItem(),nome:item,quantidade:Number(this.draft.quantidade||1),valor_unitario:this.draft.valor_unitario}:item).filter(item=>String(item?.nome||'').trim());
     const nome=String(this.draft.descricao||'').trim();if(nome)itens.push({uid:this.gerarUidItem(),nome,quantidade:Number(this.draft.quantidade||1),valor_unitario:this.draft.valor_unitario});return itens;
@@ -399,7 +399,7 @@ function op2NovaMelhorada(){
       if(quantidade<1){alert('Informe a quantidade deste item.');return}
       if(valor===''||valor===null||valor===undefined||Number(valor)<0){alert('Informe o valor deste item.');return}
       this.draft.itens_avulsos=[...(this.draft.itens_avulsos||[]),{uid:this.gerarUidItem(),nome,quantidade,valor_unitario:valor}];
-      this.draft.descricao='';this.draft.quantidade=1;this.draft.valor_unitario='';this.atualizarResumoItensAvulsos();
+      this.draft.descricao='';this.atualizarResumoItensAvulsos();
       this.$nextTick(()=>this.$refs.itemAvulsoNome?.focus());
     }else{
       this.draft.itens_avulsos=[];this.draft.descricao=nome;this.draft.nome=nome;
