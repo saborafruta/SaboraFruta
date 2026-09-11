@@ -20,6 +20,15 @@ DEBUG = env('DEBUG', default=False)
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 
+# A OP 2.0 envia campos indexados para cada item, grade, tamanho e detalhe
+# técnico. Com vários itens legítimos, o limite padrão de 1.000 parâmetros do
+# Django é ultrapassado antes mesmo de a view conseguir validar o formulário.
+# O teto continua finito para proteger o parser, mas comporta os 20 itens que a
+# própria tela permite adicionar de uma vez.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = env.int(
+    'DATA_UPLOAD_MAX_NUMBER_FIELDS', default=10000,
+)
+
 # Tela de falha de CSRF com saída, em vez do beco amarelo do Django. A
 # proteção é a mesma; muda o que a pessoa vê quando ela dispara -- e no link
 # público do pedido quem vê é o cliente da confecção.
