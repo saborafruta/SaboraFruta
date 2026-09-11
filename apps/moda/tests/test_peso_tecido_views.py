@@ -63,6 +63,31 @@ class PesoTecidoViewTests(PesoTecidoViewsBase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'Acrescentar grade')
 
+    def test_ja_cadastrados_nao_repete_a_mesma_grade_por_tamanho(self):
+        """
+        Bug real: a ordenação padrão do model (que inclui `ordem`, o campo
+        de posição do TAMANHO) vazava pro `.distinct()` dos nomes de grade,
+        e "Adulto" aparecia uma vez por tamanho pesado em vez de uma vez só.
+        """
+        self._set_filial_sessao()
+        PesoTecidoGrade.objects.create(
+            filial=self.filial, tecido=self.tecido, tipo_peca='Camisa',
+            grade=self.grade, tamanho=self.p, peso_g=Decimal('145'),
+        )
+        PesoTecidoGrade.objects.create(
+            filial=self.filial, tecido=self.tecido, tipo_peca='Camisa',
+            grade=self.grade, tamanho=self.m, peso_g=Decimal('176'),
+        )
+
+        resp = self.client.get(reverse('moda:peso-tecido'))
+
+        combos = resp.context['combos_cadastrados']
+        self.assertEqual(len(combos), 1)
+        self.assertEqual(combos[0]['grades'], ['Adulto'])
+        self.assertEqual(combos[0]['pesados'], 2)
+        self.assertEqual(combos[0]['total_tamanhos'], 2)
+        self.assertTrue(combos[0]['completo'])
+
 
 class PesoTecidoGradeAddViewTests(PesoTecidoViewsBase):
 

@@ -45,17 +45,26 @@ def _combos_cadastrados(filial) -> list[dict]:
     )
     combos = []
     for linha in linhas:
-        grades = (
+        linhas_do_combo = list(
             PesoTecidoGrade.objects.filter(
                 filial=filial, tecido_id=linha['tecido_id'], tipo_peca=linha['tipo_peca'],
-            )
-            .values_list('grade__nome', flat=True).distinct()
+            ).select_related('grade')
         )
+        # `.order_by()` limpo antes do `.distinct()`: a ordenação padrão do
+        # model inclui `ordem` (o campo que dá a posição do TAMANHO dentro
+        # da grade), que varia linha a linha -- sem zerar aqui, o Postgres
+        # inclui `ordem` na comparação de distinção e "Adulto" aparece uma
+        # vez por tamanho em vez de uma vez só.
+        nomes_grade = sorted({l.grade.nome for l in linhas_do_combo})
+        pesados = sum(1 for l in linhas_do_combo if l.peso_g is not None)
         combos.append({
             'tecido_id': linha['tecido_id'],
             'tecido_nome': linha['tecido__nome'],
             'tipo_peca': linha['tipo_peca'],
-            'grades': sorted(grades),
+            'grades': nomes_grade,
+            'total_tamanhos': len(linhas_do_combo),
+            'pesados': pesados,
+            'completo': pesados == len(linhas_do_combo) and len(linhas_do_combo) > 0,
         })
     return combos
 
@@ -90,6 +99,10 @@ class PesoTecidoView(ModaBaseView):
                 })
                 grupo['linhas'].append(linha)
             grupos = sorted(por_grade.values(), key=lambda g: g['grade_nome'])
+            for grupo in grupos:
+                grupo['pesados'] = sum(1 for l in grupo['linhas'] if l.peso_g is not None)
+                grupo['total'] = len(grupo['linhas'])
+                grupo['completo'] = grupo['pesados'] == grupo['total']
 
             ja_pesadas = set(por_grade.keys())
             grades_sem_peso = [
