@@ -120,7 +120,10 @@
         <div class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
           {{ inventario.descricao|default:"Inventario sem descricao" }}
         </div>
-        <div class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Aberto por {{ inventario.usuario_inicio.nome|default:inventario.usuario_inicio }}</div>
+        <div class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Aberto por {{ inventario.usuario_inicio.nome|default:inventario.usuario_inicio }}
+          {% if inventario.deposito_id %}· Depósito: {{ inventario.deposito.nome }}{% endif %}
+        </div>
         {% if inventario.status == 'fechado' and inventario.divergencias_total %}
           <div class="text-xs mt-1" :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">
             {{ inventario.divergencias_total }} divergencia{{ inventario.divergencias_total|pluralize:"s" }} no fechamento

@@ -4,6 +4,7 @@ from django import forms
 
 from apps.cadastros.models import Fornecedor
 from apps.compras.models import EntradaNF, EntradaNFAjusteFinanceiro, EntradaNFParcela, PedidoCompra
+from apps.estoque.models import Deposito
 from apps.produtos.models import Produto
 
 
@@ -15,6 +16,7 @@ class EntradaNFForm(forms.ModelForm):
             'chave_acesso_nf', 'data_emissao_nf', 'tipo',
             'tipo_entrada_operacional', 'origem_fiscal',
             'movimenta_estoque', 'movimenta_financeiro', 'altera_custo_estoque',
+            'deposito',
             'valor_frete', 'valor_seguro', 'valor_outras_despesas',
             'observacao',
         ]
@@ -43,6 +45,13 @@ class EntradaNFForm(forms.ModelForm):
                 ],
             ).order_by('-data_emissao')
             self.fields['pedido_compra'].required = False
+            self.fields['deposito'].queryset = Deposito.objects.filter(
+                filial=filial, ativo=True,
+            ).order_by('-is_padrao', 'nome')
+            self.fields['deposito'].required = False
+            self.fields['deposito'].help_text = (
+                'Onde a mercadoria entra. Vazio = depósito padrão da filial.'
+            )
 
     def clean_chave_acesso_nf(self):
         chave = ''.join(filter(str.isdigit, self.cleaned_data.get('chave_acesso_nf', '') or ''))

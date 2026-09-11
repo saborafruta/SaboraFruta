@@ -15,6 +15,10 @@ class Inventario(FilialScopedModel):
         CANCELADO = 'cancelado', 'Cancelado'
 
     descricao = models.CharField(max_length=100, blank=True)
+    deposito = models.ForeignKey(
+        'estoque.Deposito', on_delete=models.PROTECT, related_name='inventarios',
+        help_text='Depósito contado neste inventário.',
+    )
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.ABERTO, db_index=True,
     )
@@ -38,6 +42,14 @@ class Inventario(FilialScopedModel):
         ordering = ['-data_inicio']
         verbose_name = 'Inventário'
         verbose_name_plural = 'Inventários'
+
+    def save(self, *args, **kwargs):
+        # Rede de segurança: quem abre um inventário sem indicar depósito
+        # cai no padrão da filial — o comportamento de antes desta dimensão.
+        if self.deposito_id is None and self.filial_id is not None:
+            from apps.estoque.models.deposito import Deposito
+            self.deposito_id = Deposito.padrao_id(self.filial_id)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'Inventário {self.data_inicio:%d/%m/%Y} - {self.get_status_display()}'

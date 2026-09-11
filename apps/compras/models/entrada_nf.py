@@ -46,6 +46,11 @@ class EntradaNF(FilialScopedModel):
     fornecedor = models.ForeignKey(
         'cadastros.Fornecedor', on_delete=models.PROTECT, related_name='entradas_nf',
     )
+    deposito = models.ForeignKey(
+        'estoque.Deposito', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='entradas_nf',
+        help_text='Depósito de destino da mercadoria. Vazio = depósito padrão da filial.',
+    )
 
     # Dados da NF do fornecedor
     numero_nf = models.CharField(max_length=20, db_index=True)

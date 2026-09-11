@@ -12,7 +12,9 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
-from apps.estoque.models import Deposito, Estoque, MovimentacaoEstoque
+from apps.estoque.models import (
+    Deposito, Estoque, Inventario, ItemInventario, MovimentacaoEstoque,
+)
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.produtos.models import (
     Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial,
@@ -322,4 +324,93 @@ class ProducaoNoDepositoTests(DepositoBase):
         MovimentacaoService.liberar_reserva(
             produto_id=self.produto.pk, filial_id=self.filial.pk,
             quantidade=Decimal('1'), tolerar_ausente=True,
+        )
+
+
+class EntradaCompraNoDepositoTests(DepositoBase):
+    """Fase 5: a entrada por compra cai no depósito informado."""
+
+    def test_entrada_compra_respeita_o_deposito(self):
+        produto = self._produto('Insumo')
+        fabrica = Deposito.objects.create(
+            filial=self.filial, nome='Fábrica', tipo=Deposito.Tipo.PRODUCAO,
+        )
+        MovimentacaoService.registrar_entrada_compra(
+            produto_id=produto.pk, filial_id=self.filial.pk,
+            quantidade=Decimal('15'), valor_unitario=Decimal('3'),
+            usuario_id=self.usuario.pk, deposito_id=fabrica.pk,
+        )
+        self.assertTrue(
+            Estoque.objects.filter(
+                produto=produto, filial=self.filial, deposito=fabrica,
+                quantidade_atual=Decimal('15'),
+            ).exists()
+        )
+
+    def test_entrada_compra_sem_deposito_cai_no_padrao(self):
+        produto = self._produto('Mercadoria')
+        MovimentacaoService.registrar_entrada_compra(
+            produto_id=produto.pk, filial_id=self.filial.pk,
+            quantidade=Decimal('9'), valor_unitario=Decimal('2'),
+            usuario_id=self.usuario.pk,
+        )
+        est = Estoque.objects.get(produto=produto, filial=self.filial)
+        self.assertEqual(est.deposito_id, Deposito.padrao_id(self.filial.pk))
+
+
+class InventarioPorDepositoTests(DepositoBase):
+    """Fase 5: o inventário fotografa e ajusta um único depósito."""
+
+    def setUp(self):
+        self.produto = self._produto('Camisa')
+        self.padrao_id = Deposito.padrao_id(self.filial.pk)
+        self.fabrica = Deposito.objects.create(
+            filial=self.filial, nome='Fábrica', tipo=Deposito.Tipo.PRODUCAO,
+        )
+        for dep, qtd in ((self.padrao_id, '50'), (self.fabrica.pk, '8')):
+            MovimentacaoService.registrar_movimentacao(
+                produto_id=self.produto.pk, filial_id=self.filial.pk,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+                quantidade=Decimal(qtd), usuario_id=self.usuario.pk,
+                valor_unitario=Decimal('5'), deposito_id=dep,
+            )
+
+    def _inventario(self, deposito):
+        from django.utils import timezone
+        from apps.estoque.views.inventario import _criar_itens_inventario
+        inv = Inventario.objects.create(
+            filial=self.filial, deposito=deposito, data_inicio=timezone.now(),
+            usuario_inicio=self.usuario,
+        )
+        _criar_itens_inventario(inv)
+        return inv
+
+    def test_snapshot_pega_o_saldo_do_deposito_do_inventario(self):
+        inv = self._inventario(self.fabrica)
+        item = inv.itens.get(produto=self.produto)
+        self.assertEqual(item.quantidade_sistema, Decimal('8'))
+
+    def test_fechar_ajusta_so_o_deposito_do_inventario(self):
+        from django.utils import timezone
+        inv = self._inventario(self.fabrica)
+        item = inv.itens.get(produto=self.produto)
+        item.quantidade_contada = Decimal('6')
+        item.calcular_diferenca()
+        item.save()
+
+        MovimentacaoService.ajustar_manual(
+            produto_id=self.produto.pk, filial_id=self.filial.pk,
+            quantidade_nova=Decimal('6'), usuario_id=self.usuario.pk,
+            justificativa='Inventário fábrica.', deposito_id=inv.deposito_id,
+        )
+        self.assertEqual(
+            Estoque.objects.get(
+                produto=self.produto, filial=self.filial, deposito=self.fabrica,
+            ).quantidade_atual, Decimal('6'),
+        )
+        # padrão intacto
+        self.assertEqual(
+            Estoque.objects.get(
+                produto=self.produto, filial=self.filial, deposito_id=self.padrao_id,
+            ).quantidade_atual, Decimal('50'),
         )

@@ -37,7 +37,7 @@ from apps.compras.services.entrada_xml_service import (
 from apps.core.services.exceptions import DomainError
 from apps.core.services.auditoria import auditoria_para_objeto, registrar_auditoria, snapshot_modelo
 from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE, PermissaoRequiredMixin
-from apps.estoque.models import Estoque, LoteProduto, MovimentacaoEstoque
+from apps.estoque.models import Deposito, Estoque, LoteProduto, MovimentacaoEstoque
 from apps.produtos.models import Produto
 from apps.produtos.services.prontidao_comercial_service import avaliar_entrada_pos_efetivacao
 
@@ -2058,10 +2058,12 @@ def _resultado_efetivacao_entrada(request, entrada: EntradaNF, itens=None) -> di
         .select_related('produto')
         .order_by('produto__descricao', 'numero_lote')
     )
+    deposito_entrada_id = entrada.deposito_id or Deposito.padrao_id(entrada.filial_id)
     estoques = {
         estoque.produto_id: estoque
         for estoque in Estoque.objects.filter(
             filial=entrada.filial,
+            deposito_id=deposito_entrada_id,
             produto_id__in=[item.produto_id for item in itens if item.produto_id],
         )
     }

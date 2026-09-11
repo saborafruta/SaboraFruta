@@ -605,8 +605,11 @@ class MovimentacaoService:
         data_validade=None,
         numero_nota: str = '',
         documento_id: int | None = None,
+        deposito_id: int | None = None,
     ) -> MovimentacaoEstoque:
         """Entrada por compra: cria lote (se aplicável) + movimentação + atualiza custo médio."""
+        if not deposito_id:
+            deposito_id = Deposito.padrao_id(filial_id)
         lote_id = None
         if numero_lote:
             lote, created = LoteProduto.objects.select_for_update().get_or_create(
@@ -654,6 +657,7 @@ class MovimentacaoService:
             documento_id=documento_id,
             documento_numero=numero_nota,
             observacao=f'Entrada por compra - NF {numero_nota}' if numero_nota else '',
+            deposito_id=deposito_id,
         )
 
     # ----------------------------------------------------------------------

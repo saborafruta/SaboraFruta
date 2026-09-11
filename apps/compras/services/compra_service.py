@@ -368,6 +368,7 @@ class CompraService:
                 data_validade=item.data_validade,
                 numero_nota=entrada.numero_nf,
                 documento_id=entrada.pk,
+                deposito_id=entrada.deposito_id,
             )
 
             if mov.lote_id:

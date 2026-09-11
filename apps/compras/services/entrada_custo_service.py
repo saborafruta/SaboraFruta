@@ -244,11 +244,12 @@ class EntradaCustoService:
         if not item.produto_id:
             return {'valor': Decimal('0'), 'origem': ''}
 
-        from apps.estoque.models import Estoque
+        from apps.estoque.models import Deposito, Estoque
 
         estoque = Estoque.objects.filter(
             produto_id=item.produto_id,
             filial_id=entrada.filial_id,
+            deposito_id=entrada.deposito_id or Deposito.padrao_id(entrada.filial_id),
         ).first()
         if estoque and cls._decimal(estoque.custo_medio) > 0:
             return {

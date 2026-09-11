@@ -21,7 +21,7 @@ from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE, PermissaoRequiredMixin
 from apps.estoque.forms import InventarioForm
 from apps.estoque.models import (
-    Estoque, Inventario, ItemInventario, LoteProduto, MovimentacaoEstoque,
+    Deposito, Estoque, Inventario, ItemInventario, LoteProduto, MovimentacaoEstoque,
 )
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.estoque.views.permissoes import (
@@ -141,7 +141,12 @@ def _relatorio_divergencias(itens):
     }
 
 
-def _criar_itens_inventario(inventario, filial):
+def _criar_itens_inventario(inventario, _filial=None):
+    # `_filial` fica só por compatibilidade com chamadas antigas — a filial
+    # e o depósito autoritativos vêm do próprio inventário.
+    filial = inventario.filial
+    deposito_id = inventario.deposito_id
+    conta_lotes = deposito_id == Deposito.padrao_id(filial.pk)
     produtos = list(
         Produto.objects.for_filial(filial).filter(ativo=True).select_related(
             'unidade_medida',
@@ -152,12 +157,18 @@ def _criar_itens_inventario(inventario, filial):
         item.produto_id: item
         for item in Estoque.objects.filter(
             filial=filial,
+            deposito_id=deposito_id,
             produto_id__in=[produto.pk for produto in produtos],
         )
     }
     itens = []
     for produto in produtos:
         if produto.controla_lote:
+            # O saldo do lote é da filial, não do depósito. Para não contar o
+            # mesmo lote em dois inventários, só o inventário do depósito
+            # padrão traz os produtos com lote.
+            if not conta_lotes:
+                continue
             lotes = LoteProduto.objects.filter(
                 filial=filial,
                 produto=produto,
@@ -193,6 +204,7 @@ class InventarioListView(PermissaoRequiredMixin, View):
         qs = Inventario.objects.for_filial(request.filial_ativa).select_related(
             'usuario_inicio',
             'usuario_fechamento',
+            'deposito',
         ).annotate(
             itens_total=Count('itens', distinct=True),
             divergencias_total=Count(
@@ -226,13 +238,13 @@ class InventarioCreateView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         return render(request, self.template_name, {
-            'form': InventarioForm(),
+            'form': InventarioForm(filial=request.filial_ativa),
             'title': 'Novo inventario',
             'cancel_url': reverse_lazy('estoque:inventario-list'),
         })
 
     def post(self, request):
-        form = InventarioForm(request.POST)
+        form = InventarioForm(request.POST, filial=request.filial_ativa)
         if form.is_valid():
             with tenant_atomic():
                 inventario = form.save(commit=False)
@@ -241,7 +253,7 @@ class InventarioCreateView(PermissaoRequiredMixin, View):
                 inventario.data_inicio = timezone.now()
                 inventario.status = Inventario.Status.ABERTO
                 inventario.save()
-                _criar_itens_inventario(inventario, request.filial_ativa)
+                _criar_itens_inventario(inventario)
             _auditar_inventario(
                 request,
                 'criar',
@@ -406,6 +418,7 @@ class InventarioDetailView(PermissaoRequiredMixin, View):
                 documento_id=inventario.pk,
                 documento_numero=str(inventario.pk),
                 lote_id=item.lote_id,
+                deposito_id=inventario.deposito_id,
             )
 
         inventario.status = Inventario.Status.FECHADO

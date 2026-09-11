@@ -115,7 +115,9 @@ def calcular_impacto_estorno_entrada(entrada: EntradaNF) -> ImpactoEstornoEntrad
                 'Estorno automatico bloqueado para preservar custo medio e rastreio.'
             )
 
-        estoque = Estoque.objects.filter(filial=mov.filial, produto=mov.produto).first()
+        estoque = Estoque.objects.filter(
+            filial=mov.filial, produto=mov.produto, deposito_id=mov.deposito_id,
+        ).first()
         if not estoque or estoque.quantidade_atual < mov.quantidade:
             atual = estoque.quantidade_atual if estoque else Decimal('0')
             bloqueios.append(
@@ -185,9 +187,13 @@ def estornar_entrada(entrada: EntradaNF, usuario, motivo: str) -> tuple[EntradaN
             documento_id=entrada.pk,
             documento_numero=entrada.numero_nf,
             observacao=f'Estorno da entrada NF {entrada.numero_nf}/{entrada.serie_nf}. {motivo}',
+            deposito_id=mov.deposito_id,
         )
         movimentos_estorno.append(reverso)
-        estoque = Estoque.objects.select_for_update().get(filial_id=mov.filial_id, produto_id=mov.produto_id)
+        estoque = Estoque.objects.select_for_update().get(
+            filial_id=mov.filial_id, produto_id=mov.produto_id,
+            deposito_id=mov.deposito_id,
+        )
         if estoque.quantidade_atual <= 0:
             estoque.custo_medio = Decimal('0')
             estoque.save(update_fields=['custo_medio', 'updated_at'])
