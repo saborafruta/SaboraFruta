@@ -128,9 +128,12 @@ class RecebimentoOpPosicaoDiariaTests(TestCase):
         self.assertEqual(pendente.valor_aberto_op, Decimal('1000.00'))
         self.assertFalse(pendente.tem_financeiro_op)
         response = self.client.get(reverse('financeiro:posicao_diaria'), {'data': '2026-09-11'})
-        self.assertContains(response, '+ Receber OP')
+        self.assertContains(response, "+ Receber OP's")
         self.assertContains(response, 'Financeiro ainda não gerado')
         self.assertContains(response, 'OP #000018')
+        self.assertContains(response, 'Ver OP')
+        self.assertContains(response, reverse('moda:op2-detail', args=[pedido.pk]))
+        self.assertContains(response, 'style="z-index:300;')
 
     def test_recebimento_parcial_cria_titulo_integral_vinculado_e_bloqueia_duplicacao(self):
         pedido = self._pedido()
