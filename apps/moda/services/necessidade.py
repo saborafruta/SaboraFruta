@@ -69,6 +69,7 @@ class Necessidade:
     codigo: str
     unidade: str
     tipo: str
+    tipo_valor: str = ''            # MaterialFicha.Tipo cru, pra rotear depósito
     produto: object = None          # produtos.Produto, quando ligado
     material_id: int | None = None  # linha da ficha, para a reserva apontar
     previsto: Decimal = ZERO
@@ -165,6 +166,7 @@ class NecessidadeService:
                         codigo=material.codigo,
                         unidade=material.get_unidade_display(),
                         tipo=material.get_tipo_display(),
+                        tipo_valor=material.tipo,
                         produto=material.produto_estoque,
                         material_id=material.pk,
                     )
@@ -186,18 +188,27 @@ class NecessidadeService:
 
     @staticmethod
     def _preencher_estoque(filial, linhas, ordens, Estoque) -> None:
-        ids = [l.produto.pk for l in linhas.values() if l.ligado]
+        ligadas = [l for l in linhas.values() if l.ligado]
+        ids = [l.produto.pk for l in ligadas]
         if not ids:
             return
 
+        # Cada linha pode ter seu próprio depósito de produção (tecido em
+        # "Tecidos", zíper em "Aviamentos"...) -- agrupa por depósito
+        # resolvido pra fazer uma consulta por grupo, não uma por linha.
         from apps.estoque.models import Deposito
-        deposito_id = Deposito.producao_id(filial.pk)
-        saldos = {
-            e.produto_id: e for e in
-            Estoque.objects.filter(
-                produto_id__in=ids, filial=filial, deposito_id=deposito_id,
-            )
-        }
+        produtos_por_deposito: dict[int, list[int]] = defaultdict(list)
+        for l in ligadas:
+            dep_id = Deposito.producao_id(filial.pk, tipo_material=l.tipo_valor)
+            produtos_por_deposito[dep_id].append(l.produto.pk)
+
+        saldos: dict[int, object] = {}
+        for dep_id, produto_ids in produtos_por_deposito.items():
+            for e in Estoque.objects.filter(
+                produto_id__in=produto_ids, filial=filial, deposito_id=dep_id,
+            ):
+                saldos[e.produto_id] = e
+
         reservas = defaultdict(Decimal)
         for r in ReservaMaterial.objects.for_filial(filial).filter(
             produto_id__in=ids,
@@ -277,7 +288,7 @@ class NecessidadeService:
 
         MovimentacaoService.reservar_estoque(
             produto_id=linha.produto.pk, filial_id=filial.pk, quantidade=total,
-            deposito_id=Deposito.producao_id(filial.pk),
+            deposito_id=Deposito.producao_id(filial.pk, tipo_material=linha.tipo_valor),
         )
         ReservaMaterial.objects.bulk_create(criadas)
         return criadas
@@ -291,10 +302,11 @@ class NecessidadeService:
         if reserva.status != ReservaMaterial.Status.ATIVA:
             raise DomainError('Esta reserva já não está ativa.')
 
+        tipo_valor = reserva.material.tipo if reserva.material_id else ''
         MovimentacaoService.liberar_reserva(
             produto_id=reserva.produto_id, filial_id=reserva.filial_id,
             quantidade=reserva.quantidade, tolerar_ausente=True,
-            deposito_id=Deposito.producao_id(reserva.filial_id),
+            deposito_id=Deposito.producao_id(reserva.filial_id, tipo_material=tipo_valor),
         )
         reserva.status = ReservaMaterial.Status.CANCELADA
         reserva.save(update_fields=['status'])
@@ -329,7 +341,6 @@ class NecessidadeService:
         ficha = ordem.ficha
         if ficha is None:
             return []
-        deposito_id = Deposito.producao_id(ordem.filial_id)
 
         ja_reservado: dict[int, Decimal] = defaultdict(lambda: ZERO)
         for reserva in ReservaMaterial.all_objects.filter(
@@ -343,6 +354,10 @@ class NecessidadeService:
             falta = precisa - ja_reservado[material.produto_estoque_id]
             if falta <= ZERO:
                 continue
+
+            # Cada tipo de material (tecido, zíper, elástico...) pode ter
+            # seu próprio depósito de produção.
+            deposito_id = Deposito.producao_id(ordem.filial_id, tipo_material=material.tipo)
 
             disponivel = Estoque.objects.filter(
                 produto_id=material.produto_estoque_id, filial_id=ordem.filial_id,

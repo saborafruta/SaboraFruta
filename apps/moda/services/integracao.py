@@ -244,7 +244,7 @@ class IntegracaoService:
         from apps.estoque.models import Deposito
         from apps.estoque.models.estoque import MovimentacaoEstoque
         from apps.estoque.services.movimentacao_service import MovimentacaoService
-        from apps.moda.models import ConsumoLoteCorte
+        from apps.moda.models import ConsumoLoteCorte, MaterialFicha
 
         if corte.estoque_baixado_em:
             raise DomainError('O estoque deste corte já foi baixado.')
@@ -267,7 +267,9 @@ class IntegracaoService:
         comum = {
             'produto_id': produto.pk,
             'filial_id': corte.filial_id,
-            'deposito_id': Deposito.producao_id(corte.filial_id),
+            'deposito_id': Deposito.producao_id(
+                corte.filial_id, tipo_material=MaterialFicha.Tipo.TECIDO_PRINCIPAL,
+            ),
             'tipo_operacao': MovimentacaoEstoque.TipoOperacao.PRODUCAO_SAIDA,
             'usuario_id': usuario.pk,
             'documento_tipo': MovimentacaoEstoque.DocumentoTipo.ORDEM_PRODUCAO,
@@ -381,6 +383,7 @@ class IntegracaoService:
         from apps.estoque.models import Deposito
         from apps.estoque.models.estoque import MovimentacaoEstoque
         from apps.estoque.services.movimentacao_service import MovimentacaoService
+        from apps.moda.models import MaterialFicha
 
         if not corte.estoque_baixado_em:
             raise DomainError('Este corte não tem baixa de estoque para estornar.')
@@ -393,7 +396,9 @@ class IntegracaoService:
         comum = {
             'produto_id': produto.pk,
             'filial_id': corte.filial_id,
-            'deposito_id': Deposito.producao_id(corte.filial_id),
+            'deposito_id': Deposito.producao_id(
+                corte.filial_id, tipo_material=MaterialFicha.Tipo.TECIDO_PRINCIPAL,
+            ),
             'tipo_operacao': MovimentacaoEstoque.TipoOperacao.PRODUCAO_ENTRADA,
             'usuario_id': usuario.pk,
             'documento_tipo': MovimentacaoEstoque.DocumentoTipo.ORDEM_PRODUCAO,

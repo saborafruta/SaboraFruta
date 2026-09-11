@@ -315,7 +315,7 @@ class NovoProdutoEstoqueView(ModaBaseView):
         produto = self._criar_produto(request, form, cadastro)
         quantidade = form.cleaned_data.get('quantidade_inicial')
         if quantidade:
-            self._lancar_quantidade_inicial(request, produto, quantidade)
+            self._lancar_quantidade_inicial(request, produto, quantidade, cadastro)
 
         obj.produto_estoque = produto
         obj.save(update_fields=['produto_estoque'])
@@ -358,9 +358,17 @@ class NovoProdutoEstoqueView(ModaBaseView):
         return produto
 
     @staticmethod
-    def _lancar_quantidade_inicial(request, produto, quantidade):
+    def _lancar_quantidade_inicial(request, produto, quantidade, cadastro=None):
         from apps.estoque.models import Deposito
         from apps.estoque.services.movimentacao_service import MovimentacaoService
+        from apps.moda.services.estoque_aviamento import TIPOS_AVIAMENTO
+
+        tipo_material = ''
+        slug = getattr(cadastro, 'slug', '')
+        if slug == 'materiais':
+            tipo_material = 'tecido_principal'
+        elif slug == 'cadastro-aviamentos':
+            tipo_material = TIPOS_AVIAMENTO
 
         MovimentacaoService.ajustar_manual(
             produto_id=produto.pk,
@@ -368,7 +376,8 @@ class NovoProdutoEstoqueView(ModaBaseView):
             quantidade_nova=quantidade,
             usuario_id=request.user.pk,
             justificativa='Quantidade inicial informada ao cadastrar o produto de estoque.',
-            # Matéria-prima entra no depósito de produção (a "Fábrica"),
+            # Matéria-prima entra no depósito de produção do tipo dela
+            # (a "Fábrica", ou um específico como "Tecidos"/"Aviamentos"),
             # quando a filial tem um; senão, no padrão.
-            deposito_id=Deposito.producao_id(request.filial_ativa.pk),
+            deposito_id=Deposito.producao_id(request.filial_ativa.pk, tipo_material=tipo_material),
         )

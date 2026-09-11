@@ -4,6 +4,21 @@ from apps.estoque.models import Deposito
 
 
 class DepositoForm(forms.ModelForm):
+    # Não é campo de model direto: `tipos_material` é JSONField (lista),
+    # não mapeia num widget de ModelForm sozinho. Escolhas vêm da moda
+    # (import local no __init__, pra não criar dependência de módulo
+    # estoque -> moda em tempo de carga) e o valor é lido/gravado à mão
+    # em __init__/save().
+    tipos_material = forms.MultipleChoiceField(
+        required=False, widget=forms.CheckboxSelectMultiple,
+        label='Tipos de material (moda) que caem aqui automaticamente',
+        help_text=(
+            'Ao dar baixa no corte ou reservar material da OP, o tecido/aviamento '
+            'vai para o depósito marcado com o tipo dele. Sem nenhum tipo marcado '
+            'em nenhum depósito, tudo cai no primeiro depósito de produção.'
+        ),
+    )
+
     class Meta:
         model = Deposito
         fields = ['nome', 'tipo', 'permite_venda', 'permite_producao', 'ativo']
@@ -14,11 +29,22 @@ class DepositoForm(forms.ModelForm):
     def __init__(self, *args, filial=None, **kwargs):
         self.filial = filial
         super().__init__(*args, **kwargs)
+        from apps.moda.models import MaterialFicha
+        self.fields['tipos_material'].choices = MaterialFicha.Tipo.choices
+        if self.instance and self.instance.pk:
+            self.initial.setdefault('tipos_material', list(self.instance.tipos_material or []))
         if self.instance and self.instance.pk and self.instance.is_padrao:
             # O depósito padrão não pode ser desativado nem renomeado à toa:
             # é o destino de tudo que não indica depósito.
             self.fields['ativo'].disabled = True
             self.fields['ativo'].help_text = 'O depósito padrão da filial não pode ser desativado.'
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.tipos_material = self.cleaned_data.get('tipos_material') or []
+        if commit:
+            instance.save()
+        return instance
 
     def clean_nome(self):
         nome = self.cleaned_data['nome'].strip()

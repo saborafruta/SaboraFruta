@@ -161,7 +161,7 @@ class EstoqueAviamentoService:
             e.produto_id: e
             for e in Estoque.objects.filter(
                 produto_id__in=ids, filial=filial,
-                deposito_id=Deposito.producao_id(filial.pk),
+                deposito_id=Deposito.producao_id(filial.pk, tipo_material=TIPOS_AVIAMENTO),
             )
         }
         for linha in linhas:

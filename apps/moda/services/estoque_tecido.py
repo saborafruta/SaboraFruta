@@ -127,11 +127,14 @@ class EstoqueTecidoService:
         if not ids:
             return {}
         from apps.estoque.models import Deposito
+        from apps.moda.models import MaterialFicha
         return {
             e.produto_id: e
             for e in Estoque.objects.filter(
                 produto_id__in=ids, filial=filial,
-                deposito_id=Deposito.producao_id(filial.pk),
+                deposito_id=Deposito.producao_id(
+                    filial.pk, tipo_material=MaterialFicha.Tipo.TECIDO_PRINCIPAL,
+                ),
             )
         }
 

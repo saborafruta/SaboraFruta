@@ -44,6 +44,9 @@
             <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'">{{ d.nome }}</span>
             {% if d.is_padrao %}<span class="ml-2 text-xs px-1.5 py-0.5 rounded" style="background:rgba(59,130,246,.15);color:#60a5fa;">padrão</span>{% endif %}
             {% if not d.ativo %}<span class="ml-2 text-xs px-1.5 py-0.5 rounded" style="background:rgba(148,163,184,.15);color:#94a3b8;">inativo</span>{% endif %}
+            {% if d.tipos_material_labels %}
+              <div class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ d.tipos_material_labels|join:", " }}</div>
+            {% endif %}
           </td>
           <td class="px-4 py-3" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">{{ d.get_tipo_display }}</td>
           <td class="px-4 py-3 text-center">{% if d.permite_venda %}✓{% else %}—{% endif %}</td>

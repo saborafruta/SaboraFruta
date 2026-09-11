@@ -104,3 +104,102 @@ class ProducaoNoDepositoDeFabricaTests(AutomacaoBase):
             produto=self.tecido, filial=self.filial, deposito=self.fabrica,
         )
         self.assertEqual(saldo_fabrica.quantidade_reservada, Decimal('20.0000'))
+
+
+class RoteamentoPorTipoDeMaterialTests(AutomacaoBase):
+    """Com dois depósitos de produção configurados por tipo, tecido e
+    aviamento (zíper) vão cada um para o seu -- não disputam um só."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.usuario)
+        self.tecidos = Deposito.objects.create(
+            filial=self.filial, nome='Tecidos', tipo=Deposito.Tipo.PRODUCAO,
+            tipos_material=['tecido_principal'],
+        )
+        self.aviamentos = Deposito.objects.create(
+            filial=self.filial, nome='Aviamentos', tipo=Deposito.Tipo.PRODUCAO,
+            tipos_material=['ziper', 'aviamento'],
+        )
+
+    def _ordem_com_ziper(self, consumo_tecido='2', consumo_ziper='1', quantidade=10, numero=1):
+        from apps.produtos.models import Produto
+        from apps.moda.models import (
+            FichaTecnica, ItemPedidoProducao, MaterialFicha, OrdemProducao,
+            PedidoProducao, ProdutoModa,
+        )
+
+        self.ziper = Produto.objects.create(
+            filial=self.filial, codigo='ZIP001', descricao='Zíper 20cm',
+            unidade_medida=self.unidade, controla_lote=False,
+        )
+        produto_moda = ProdutoModa.objects.create(
+            filial=self.filial, codigo=f'CAM{numero:03d}', nome='Camisa',
+        )
+        ficha = FichaTecnica.objects.create(filial=self.filial, produto=produto_moda)
+        MaterialFicha.objects.create(
+            ficha=ficha, tipo=MaterialFicha.Tipo.TECIDO_PRINCIPAL,
+            descricao='Malha PV', consumo=Decimal(consumo_tecido),
+            produto_estoque=self.tecido,
+        )
+        MaterialFicha.objects.create(
+            ficha=ficha, tipo=MaterialFicha.Tipo.ZIPER,
+            descricao='Zíper 20cm', consumo=Decimal(consumo_ziper),
+            produto_estoque=self.ziper,
+        )
+        pedido = PedidoProducao.objects.create(
+            filial=self.filial, cliente=self.cliente, numero=numero,
+        )
+        item = ItemPedidoProducao.objects.create(
+            pedido=pedido, produto=produto_moda, descricao='Camisa',
+            quantidade=quantidade, valor_unitario=Decimal('45'),
+        )
+        return OrdemProducao.objects.create(
+            filial=self.filial, pedido=pedido, item=item,
+            numero=f'OP-{numero:04d}', ano=2026, sequencial=numero,
+            quantidade=quantidade,
+        )
+
+    def _saldo(self, produto, deposito, total):
+        Estoque.objects.update_or_create(
+            produto=produto, filial=self.filial, deposito=deposito,
+            defaults={
+                'quantidade_atual': Decimal(total),
+                'quantidade_reservada': Decimal('0'),
+                'quantidade_disponivel': Decimal(total),
+            },
+        )
+        if produto.controla_lote:
+            from datetime import timedelta
+            from apps.moda.tests.test_estoque_automatico import LoteProduto
+            LoteProduto.objects.update_or_create(
+                filial=self.filial, produto=produto, numero_lote='L1',
+                defaults={
+                    'quantidade_inicial': Decimal(total),
+                    'quantidade_atual': Decimal(total),
+                    'custo_unitario': Decimal('10'),
+                    'data_validade': HOJE + timedelta(days=60),
+                },
+            )
+
+    def test_reserva_automatica_separa_tecido_e_ziper_em_depositos_diferentes(self):
+        ordem = self._ordem_com_ziper()
+        self._saldo(self.tecido, self.tecidos, 100)
+        self._saldo(self.ziper, self.aviamentos, 50)
+
+        NecessidadeService.reservar_da_ordem(ordem, self.usuario)
+
+        tecido_estoque = Estoque.objects.get(
+            produto=self.tecido, filial=self.filial, deposito=self.tecidos,
+        )
+        ziper_estoque = Estoque.objects.get(
+            produto=self.ziper, filial=self.filial, deposito=self.aviamentos,
+        )
+        self.assertEqual(tecido_estoque.quantidade_reservada, Decimal('20.0000'))
+        self.assertEqual(ziper_estoque.quantidade_reservada, Decimal('10.0000'))
+        # não vazou pro depósito do outro tipo
+        self.assertFalse(
+            Estoque.objects.filter(
+                produto=self.ziper, filial=self.filial, deposito=self.tecidos,
+            ).exists()
+        )

@@ -458,3 +458,61 @@ class ConsolidadoPorDepositoTests(DepositoBase):
         resp = client.get('/estoque/', {'deposito': str(self.fabrica.pk)})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.context['deposito_id'], str(self.fabrica.pk))
+
+
+class ProducaoIdPorTipoDeMaterialTests(DepositoBase):
+    """`Deposito.producao_id(tipo_material=...)` roteia por tipo quando o
+    depósito declara `tipos_material`; senão cai no comportamento antigo."""
+
+    def test_sem_tipos_material_configurado_cai_no_comportamento_antigo(self):
+        fabrica = Deposito.objects.create(
+            filial=self.filial, nome='Fábrica', tipo=Deposito.Tipo.PRODUCAO,
+        )
+        self.assertEqual(
+            Deposito.producao_id(self.filial.pk, tipo_material='tecido_principal'),
+            fabrica.pk,
+        )
+
+    def test_escolhe_o_deposito_marcado_para_o_tipo(self):
+        tecidos = Deposito.objects.create(
+            filial=self.filial, nome='Tecidos', tipo=Deposito.Tipo.PRODUCAO,
+            tipos_material=['tecido_principal'],
+        )
+        aviamentos = Deposito.objects.create(
+            filial=self.filial, nome='Aviamentos', tipo=Deposito.Tipo.PRODUCAO,
+            tipos_material=['aviamento', 'ziper', 'botao'],
+        )
+        self.assertEqual(
+            Deposito.producao_id(self.filial.pk, tipo_material='tecido_principal'),
+            tecidos.pk,
+        )
+        self.assertEqual(
+            Deposito.producao_id(self.filial.pk, tipo_material='ziper'),
+            aviamentos.pk,
+        )
+
+    def test_tipo_nao_configurado_em_nenhum_cai_no_primeiro_por_nome(self):
+        tecidos = Deposito.objects.create(
+            filial=self.filial, nome='Tecidos', tipo=Deposito.Tipo.PRODUCAO,
+            tipos_material=['tecido_principal'],
+        )
+        Deposito.objects.create(
+            filial=self.filial, nome='Zerado', tipo=Deposito.Tipo.PRODUCAO,
+        )
+        # nenhum depósito declara 'embalagem' -> primeiro por nome
+        self.assertEqual(
+            Deposito.producao_id(self.filial.pk, tipo_material='embalagem'),
+            tecidos.pk,
+        )
+
+    def test_aceita_lista_de_tipos(self):
+        aviamentos = Deposito.objects.create(
+            filial=self.filial, nome='Aviamentos', tipo=Deposito.Tipo.PRODUCAO,
+            tipos_material=['linha', 'elastico'],
+        )
+        self.assertEqual(
+            Deposito.producao_id(
+                self.filial.pk, tipo_material=['ziper', 'elastico', 'botao'],
+            ),
+            aviamentos.pk,
+        )

@@ -41,6 +41,15 @@ class Deposito(FilialScopedModel):
         default=True,
         help_text='Se desmarcado, a produção não consome nem dá entrada neste depósito.',
     )
+    tipos_material = models.JSONField(
+        default=list, blank=True,
+        help_text=(
+            'Tipos de material da ficha técnica (moda) que este depósito recebe '
+            'automaticamente na baixa e na reserva da produção -- ex.: só '
+            '"Tecido principal". Vazio: entra na disputa genérica de depósito de '
+            'produção (o primeiro por nome), sem distinguir tipo.'
+        ),
+    )
     ativo = models.BooleanField(default=True, db_index=True)
 
     class Meta:
@@ -94,30 +103,47 @@ class Deposito(FilialScopedModel):
         return deposito.pk
 
     @classmethod
-    def producao_id(cls, filial_id: int) -> int:
+    def producao_id(cls, filial_id: int, tipo_material=''):
         """
         Depósito onde a produção consome insumo e dá entrada/estorno.
 
-        Se a filial tem um depósito do tipo "produção" ativo (o "Fábrica"
-        típico), é ele. Senão, cai no padrão — então a produção de quem não
-        separou estoque continua exatamente como era.
+        `tipo_material` é um valor (ou lista de valores) de
+        `MaterialFicha.Tipo` da moda -- ex.: "tecido_principal",
+        "aviamento". Com ele, prefere um depósito que tenha PELO MENOS UM
+        desses tipos marcado em `tipos_material`: tecido sai de "Tecidos",
+        aviamento de "Aviamentos", cada um do seu. Uma lista serve para
+        telas que tratam vários tipos como um grupo só (o "aviamento" da
+        moda cobre linha, elástico, zíper, botão... como um bloco).
 
-        Com mais de um depósito de produção, escolhe de forma determinística
-        (nome, depois id); o refinamento de escolher qual fica para quando
-        alguém precisar de dois.
+        Sem `tipo_material`, ou se nenhum depósito estiver configurado para
+        nenhum daqueles tipos, cai no primeiro depósito de produção da
+        filial por nome (o comportamento de antes de existir
+        `tipos_material`). Sem depósito de produção nenhum, cai no padrão
+        — a produção de quem não separou estoque continua exatamente como
+        era.
         """
-        pk = (
+        # Em Python, não em SQL: o lookup `contains` de JSONField não é
+        # suportado em todo backend (o sqlite deste ambiente de teste, por
+        # exemplo, recusa com NotSupportedError), e a lista de depósitos de
+        # produção de uma filial é sempre pequena -- não compensa depender
+        # de um recurso que só funciona em Postgres.
+        candidatos = list(
             cls.objects.filter(
                 filial_id=filial_id,
                 tipo=cls.Tipo.PRODUCAO,
                 ativo=True,
                 permite_producao=True,
-            )
-            .order_by('nome', 'pk')
-            .values_list('pk', flat=True)
-            .first()
+            ).order_by('nome', 'pk')
         )
-        return pk or cls.padrao_id(filial_id)
+        tipos = {tipo_material} if isinstance(tipo_material, str) else set(tipo_material)
+        tipos.discard('')
+        if tipos:
+            for dep in candidatos:
+                if tipos.intersection(dep.tipos_material or []):
+                    return dep.pk
+        if candidatos:
+            return candidatos[0].pk
+        return cls.padrao_id(filial_id)
 
     @classmethod
     def venda_id(cls, filial_id: int) -> int:

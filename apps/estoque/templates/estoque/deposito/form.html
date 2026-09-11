@@ -42,6 +42,19 @@
     <label class="flex items-center gap-2 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
       {{ form.permite_producao }} Usado pela produção (consumo e entrada)
     </label>
+
+    <div>
+      <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ form.tipos_material.label }}</label>
+      <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border p-3" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#334155;'">
+        {% for checkbox in form.tipos_material %}
+          <label class="flex items-center gap-2 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+            {{ checkbox.tag }} {{ checkbox.choice_label }}
+          </label>
+        {% endfor %}
+      </div>
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ form.tipos_material.help_text }}</p>
+    </div>
+
     <label class="flex items-center gap-2 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
       {{ form.ativo }} Ativo
     </label>

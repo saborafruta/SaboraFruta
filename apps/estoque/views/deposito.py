@@ -34,6 +34,9 @@ class DepositoListView(PermissaoRequiredMixin, View):
     template_name = 'estoque/deposito/list.html'
 
     def get(self, request):
+        from apps.moda.models import MaterialFicha
+        tipo_labels = dict(MaterialFicha.Tipo.choices)
+
         filial = request.filial_ativa
         depositos = list(
             Deposito.objects.filter(filial=filial).order_by('-is_padrao', 'nome')
@@ -53,6 +56,9 @@ class DepositoListView(PermissaoRequiredMixin, View):
             linha = resumo.get(dep.pk, {})
             dep.itens_com_saldo = linha.get('itens', 0)
             dep.total_unidades = linha.get('total') or Decimal('0')
+            dep.tipos_material_labels = [
+                tipo_labels.get(valor, valor) for valor in (dep.tipos_material or [])
+            ]
 
         return render(request, self.template_name, {
             'title': 'Depósitos',
