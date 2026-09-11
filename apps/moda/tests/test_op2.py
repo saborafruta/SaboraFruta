@@ -522,6 +522,38 @@ class Op2Tests(TestCase):
             self.assertEqual(pdf['Content-Type'], 'application/pdf')
             self.assertTrue(pdf.content.startswith(b'%PDF-'))
 
+    def test_varios_itens_avulsos_sao_gravados_como_itens_separados(self):
+        from apps.moda.services.pedido_pdf import _nome_item_pdf
+
+        self._login_op2()
+        nomes = ['Faixa da comissão', 'Bandeira personalizada', 'Braçadeira especial']
+
+        resposta = self.client.post(
+            reverse('moda:op2-action', args=[self.pedido.pk]),
+            {
+                **self._modelo_completo(),
+                'acao': 'adicionar_item',
+                'itens_avulsos': json.dumps(nomes),
+                'quantidade': '2',
+                'valor_unitario': '35.00',
+            },
+        )
+
+        self.assertRedirects(
+            resposta, reverse('moda:op2-detail', args=[self.pedido.pk]),
+        )
+        itens = list(self.pedido.itens.order_by('ordem'))
+        self.assertEqual(len(itens), 3)
+        self.assertEqual([item.descricao for item in itens], nomes)
+        self.assertEqual(len({item.pk for item in itens}), 3)
+        self.assertEqual([item.quantidade for item in itens], [2, 2, 2])
+        self.assertTrue(all(item.produto_id is None for item in itens))
+        self.assertEqual([_nome_item_pdf(item) for item in itens], nomes)
+
+        pdf = self.client.get(reverse('moda:pedido-pdf', args=[self.pedido.pk]))
+        self.assertEqual(pdf.status_code, 200)
+        self.assertTrue(pdf.content.startswith(b'%PDF-'))
+
     def test_editores_oferecem_item_avulso_com_aviso_sobre_pdfs(self):
         self._login_op2()
         for url in (
@@ -533,6 +565,9 @@ class Op2Tests(TestCase):
             self.assertContains(resposta, 'não entra em Modelos de Produção')
             self.assertContains(resposta, 'aparece com este nome nos PDFs')
             self.assertContains(resposta, 'usarItemAvulso()')
+            self.assertContains(resposta, 'Adicionar outro item avulso')
+            self.assertContains(resposta, 'removerItemAvulso(indice)')
+            self.assertContains(resposta, 'Cada nome vira um item separado')
 
     def test_edicao_pode_trocar_modelo_por_item_avulso(self):
         from apps.moda.views_op2 import _dados_modal_item

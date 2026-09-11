@@ -1,17 +1,33 @@
 <div class="mt-3 pt-3" style="border-top:1px solid rgba(148,163,184,.22)">
   <label>
     <span class="op2-label">Item avulso</span>
-    <div class="flex flex-wrap gap-2">
-      <input x-model="draft.descricao" maxlength="160"
+    <div class="flex gap-2">
+      <input x-ref="itemAvulsoNome" x-model="draft.descricao" maxlength="160"
              class="form-input flex-1 min-w-[190px]"
              placeholder="Nome do item, ex.: Faixa personalizada"
              @keydown.enter.prevent="usarItemAvulso()">
-      <button type="button" class="btn-secondary"
+      <button x-show="podeAdicionarVariosAvulsos()" type="button"
+              class="btn-secondary shrink-0" style="width:42px;padding:0;justify-content:center"
+              :disabled="!String(draft.descricao||'').trim()"
+              aria-label="Adicionar outro item avulso" title="Adicionar à lista"
+              @click="usarItemAvulso()"><span aria-hidden="true" class="text-xl">+</span></button>
+      <button x-show="!podeAdicionarVariosAvulsos()" type="button" class="btn-secondary"
               :disabled="!String(draft.descricao||'').trim()"
               @click="usarItemAvulso()">Usar na OP</button>
     </div>
   </label>
+  <div x-show="(draft.itens_avulsos||[]).length" x-cloak
+       class="flex flex-wrap gap-1.5 mt-2" aria-label="Itens avulsos preparados">
+    <template x-for="(nome, indice) in (draft.itens_avulsos||[])" :key="`${indice}-${nome}`">
+      <span class="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs"
+            style="background:rgba(37,99,235,.12);color:#2563eb;border:1px solid rgba(37,99,235,.25)">
+        <span x-text="nome"></span>
+        <button type="button" class="font-bold leading-none" :aria-label="`Remover ${nome}`"
+                @click="removerItemAvulso(indice)">×</button>
+      </span>
+    </template>
+  </div>
   <small class="block mt-1 opacity-70">
-    Fica somente nesta OP, não entra em Modelos de Produção e aparece com este nome nos PDFs.
+    Use + para incluir vários. Cada nome vira um item separado, não entra em Modelos de Produção e aparece com este nome nos PDFs.
   </small>
 </div>

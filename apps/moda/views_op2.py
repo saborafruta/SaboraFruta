@@ -866,6 +866,7 @@ class Op2CreateView(ModaBaseView):
             raise ValueError('Não foi possível preservar o item em rascunho.') from erro
         if not isinstance(dados, dict) or not (
             dados.get('produto_id') or str(dados.get('descricao') or '').strip()
+            or dados.get('itens_avulsos')
         ):
             return None
         return dados
@@ -1980,13 +1981,42 @@ class Op2ActionView(ModaBaseView):
             raise ValueError(
                 f'A quantidade total deve ser igual à soma das grades ({total_geral}).'
             )
-        alvos = grades or [None]
+        produto_id = (request.POST.get('produto_id') or '').strip()
+        nomes_avulsos = []
+        if not produto_id:
+            bruto = (request.POST.get('itens_avulsos') or '').strip()
+            if bruto:
+                try:
+                    valores = json.loads(bruto)
+                except json.JSONDecodeError as erro:
+                    raise ValueError('Não foi possível ler os nomes dos itens avulsos.') from erro
+                if not isinstance(valores, list):
+                    raise ValueError('A lista de itens avulsos é inválida.')
+                nomes_avulsos = [
+                    str(nome or '').strip()[:160] for nome in valores
+                    if str(nome or '').strip()
+                ]
+            else:
+                descricao = (request.POST.get('descricao') or '').strip()
+                if descricao:
+                    nomes_avulsos = [descricao[:160]]
+            if not nomes_avulsos:
+                raise ValueError('Informe o nome de pelo menos um item avulso.')
+            if len(nomes_avulsos) > 20:
+                raise ValueError('Adicione no máximo 20 itens avulsos de cada vez.')
+
+        alvos = [
+            (grade, descricao)
+            for descricao in (nomes_avulsos or [None])
+            for grade in (grades or [None])
+        ]
         criados = []
-        for grade in alvos:
+        for grade, descricao_avulsa in alvos:
             dados = request.POST.copy()
             dados['valor_unitario'] = str(valor_unitario)
-            produto_id = dados.get('produto_id')
             dados['produto'] = f'moda:{produto_id}' if produto_id else ''
+            if descricao_avulsa is not None:
+                dados['descricao'] = descricao_avulsa
             dados['observacoes'] = (
                 '' if configuracao_conjunto else
                 request.POST.get('item_observacoes') or ''
@@ -2029,7 +2059,12 @@ class Op2ActionView(ModaBaseView):
             RascunhoItemOP.objects.filter(
                 filial=_filial(request), pedido=pedido,
             ).delete()
-        if len(criados) == 1:
+        if len(nomes_avulsos) > 1:
+            messages.success(
+                request,
+                f'{len(criados)} itens avulsos adicionados separadamente.',
+            )
+        elif len(criados) == 1:
             messages.success(request, f'{criados[0].nome_exibicao} adicionado.')
         else:
             messages.success(
@@ -2047,6 +2082,7 @@ class Op2ActionView(ModaBaseView):
             raise ValueError('Não foi possível salvar o item em rascunho.') from erro
         if not isinstance(dados, dict) or not (
             dados.get('produto_id') or str(dados.get('descricao') or '').strip()
+            or dados.get('itens_avulsos')
         ):
             return JsonResponse({'ok': True, 'ignorado': True})
         rascunho, _ = RascunhoItemOP.objects.update_or_create(

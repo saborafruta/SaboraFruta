@@ -261,6 +261,7 @@ function op2NovaMelhorada(){
     draft.estrutura_tipo_outro='';
     draft.tipo_impressao=['N/A'];
     draft.nome_editavel=false;
+    draft.itens_avulsos=[];
     draft.gradePorGrade={};
     draft.cor_personalizada='';
     draft.estrutura_outros={};
@@ -326,8 +327,8 @@ function op2NovaMelhorada(){
   estado.draft=estado.novoDraft();
   estado.itemRascunho=null;
   estado.origemEditor='novo';
-  estado.temItemRascunho=function(){return Boolean(this.itemRascunho?.produto_id||String(this.itemRascunho?.descricao||'').trim())};
-  estado.fecharModalItem=function(){const identificado=this.draft?.produto_id||String(this.draft?.descricao||'').trim();if(this.origemEditor==='rascunho'&&identificado)this.itemRascunho=JSON.parse(JSON.stringify(this.draft));else if((this.origemEditor==='novo'||this.origemEditor==='duplicar')&&!this.temItemRascunho()&&identificado)this.itemRascunho=JSON.parse(JSON.stringify(this.draft));this.modalProduto=false;this.agendarAutosave()};
+  estado.temItemRascunho=function(){return Boolean(this.itemRascunho?.produto_id||String(this.itemRascunho?.descricao||'').trim()||(this.itemRascunho?.itens_avulsos||[]).length)};
+  estado.fecharModalItem=function(){const identificado=this.draft?.produto_id||String(this.draft?.descricao||'').trim()||(this.draft?.itens_avulsos||[]).length;if(this.origemEditor==='rascunho'&&identificado)this.itemRascunho=JSON.parse(JSON.stringify(this.draft));else if((this.origemEditor==='novo'||this.origemEditor==='duplicar')&&!this.temItemRascunho()&&identificado)this.itemRascunho=JSON.parse(JSON.stringify(this.draft));this.modalProduto=false;this.agendarAutosave()};
   estado.retomarItemRascunho=function(){if(!this.temItemRascunho())return;this.origemEditor='rascunho';this.editandoIdx=null;this.draft=JSON.parse(JSON.stringify(this.itemRascunho));this.modalProduto=true;this.agendarAutosave()};
   estado.limparItemRascunho=function(){if(this.origemEditor==='rascunho')this.itemRascunho=null;this.modalProduto=false;this.editandoIdx=null;this.origemEditor='novo';this.draft=this.novoDraft();this.buscaProduto='';this.agendarAutosave()};
   estado.descartarItemRascunho=function(){
@@ -353,6 +354,7 @@ function op2NovaMelhorada(){
     const gradeAtualCompativel=novaGradeId&&this.draft.grades.map(String).includes(novaGradeId);
     this.draft.produto_id=String(id);
     this.draft.descricao='';
+    this.draft.itens_avulsos=[];
     this.draft.nome=nome;
     this.draft.nome_editavel=String(codigo||'').startsWith('OP2-');
     this.draft.codigo=codigo;
@@ -375,17 +377,36 @@ function op2NovaMelhorada(){
     }
     this.somarDraftGrade();
   };
+  estado.podeAdicionarVariosAvulsos=function(){return this.editandoIdx===null};
+  estado.nomesItensAvulsos=function(){
+    const nomes=[...(this.draft.itens_avulsos||[])].map(nome=>String(nome||'').trim()).filter(Boolean);
+    const digitado=String(this.draft.descricao||'').trim();if(digitado)nomes.push(digitado);return nomes;
+  };
+  estado.atualizarResumoItensAvulsos=function(){
+    const nomes=this.draft.itens_avulsos||[];
+    this.draft.nome=nomes.length===1?nomes[0]:nomes.length?`${nomes.length} itens avulsos`:'';
+    this.draft.info=nomes.length?'Itens separados · não salvos no catálogo':'';
+  };
   estado.usarItemAvulso=function(){
     const nome=String(this.draft.descricao||'').trim();
     if(!nome){alert('Informe o nome do item avulso.');return}
     const tinhaModelo=Boolean(this.draft.produto_id);
     this.draft.produto_id='';
-    this.draft.descricao=nome;
-    this.draft.nome=nome;
     this.draft.nome_editavel=false;
     this.draft.codigo='';
-    this.draft.info='Item avulso · não salvo no catálogo';
+    if(this.podeAdicionarVariosAvulsos()){
+      this.draft.itens_avulsos=[...(this.draft.itens_avulsos||[]),nome];
+      this.draft.descricao='';this.atualizarResumoItensAvulsos();
+      this.$nextTick(()=>this.$refs.itemAvulsoNome?.focus());
+    }else{
+      this.draft.itens_avulsos=[];this.draft.descricao=nome;this.draft.nome=nome;
+      this.draft.info='Item avulso · não salvo no catálogo';
+    }
     if(tinhaModelo){this.draft.grades=[];this.draft.gradePorGrade={}}
+  };
+  estado.removerItemAvulso=function(indice){
+    this.draft.itens_avulsos=(this.draft.itens_avulsos||[]).filter((_,i)=>i!==indice);
+    this.atualizarResumoItensAvulsos();
   };
   estado.salvarNomeModeloRapido=async function(){
     const nome=String(this.draft.nome||'').trim();
@@ -488,7 +509,20 @@ function op2NovaMelhorada(){
     }
     return item;
   };
+  estado.expandirItensAvulsos=function(itensBase){
+    if(this.draft.produto_id)return itensBase;
+    const nomes=this.nomesItensAvulsos();
+    const itens=nomes.flatMap(nome=>itensBase.map(base=>{
+      const item=JSON.parse(JSON.stringify(base));
+      item.uid=this.gerarUidItem();item.descricao=nome;item.nome=nome;
+      item.codigo='';item.info='Item avulso · não salvo no catálogo';item.itens_avulsos=[];
+      return item;
+    }));
+    itens.slice(1).forEach(item=>{item.imagensNomes=[];item.imagensPreview=[];item.imagensObservacoes=''});
+    return itens;
+  };
   estado.prepararDraftExistente=function(){
+    this.draft.itens_avulsos=this.draft.itens_avulsos||[];
     this.draft.estrutura_tipo_outro=this.draft.estrutura_tipo_outro||'';
     this.draft.estrutura_outros=this.draft.estrutura_outros||{};
     this.draft.estrutura_observacoes=this.draft.estrutura_observacoes||{};
@@ -530,16 +564,16 @@ function op2NovaMelhorada(){
     const uidRascunho=uidRascunhoOriginal&&!this.itens.some(
       item=>String(item.uid)===String(uidRascunhoOriginal),
     )?uidRascunhoOriginal:null;
-    if(!this.draft.produto_id&&!String(this.draft.descricao||'').trim()){
+    if(!this.draft.produto_id&&!this.nomesItensAvulsos().length){
       alert('Selecione um modelo ou informe o nome de um item avulso.');return
     }
     if(this.draft.estrutura_tipo==='conjunto'){
       const erroConjunto=validarConjuntoOp2(this.draft.configuracao_conjunto,this.estruturaOpcoes);
       if(erroConjunto){alert(erroConjunto);return}
       if(this.draft.configuracao_conjunto.camisa.grades?.length)this.draft.quantidade=this.totalComponenteConjunto('camisa');
-      const novo=this.montarItemParaGrade('');
-      if(uidRascunho)novo.uid=uidRascunho;
-      if(this.editandoIdx===null)this.itens.push(novo);else{novo.uid=this.itens[this.editandoIdx].uid;this.itens.splice(this.editandoIdx,1,novo)}
+      const novos=this.expandirItensAvulsos([this.montarItemParaGrade('')]);
+      if(uidRascunho&&novos.length)novos[0].uid=uidRascunho;
+      if(this.editandoIdx===null)this.itens.push(...novos);else{novos[0].uid=this.itens[this.editandoIdx].uid;this.itens.splice(this.editandoIdx,1,...novos)}
       this.limparItemRascunho();return;
     }
     if(this.draft.estrutura?.cor==='COR PERSONALIZADA'&&!String(this.draft.cor_personalizada||'').trim()){
@@ -560,7 +594,7 @@ function op2NovaMelhorada(){
       alert(`Informe ao menos uma peça na grade ${grade?.nome||''}.`);
       return;
     }
-    const novos=grades.map(id=>this.montarItemParaGrade(id));
+    const novos=this.expandirItensAvulsos(grades.map(id=>this.montarItemParaGrade(id)));
     if(uidRascunho&&novos.length)novos[0].uid=uidRascunho;
     if(this.editandoIdx!==null&&novos.length>1){
       novos.slice(1).forEach(item=>{item.imagensNomes=[];item.imagensPreview=[]});
@@ -720,7 +754,7 @@ function op2NovaMelhorada(){
   };
   estado.temConteudoRascunho=function(dados){
     const c=dados.campos||{};
-    return Boolean(dados.buscaCliente||dados.clienteId||dados.contatoNome||dados.contatoTelefone||(dados.clientesAdicionais||[]).length||(dados.itens||[]).length||dados.itemRascunho?.produto_id||dados.draft?.produto_id||(dados.personalizacoes||[]).some(p=>p.nome||p.numero||p.tamanhoId)||(dados.pagamentos||[]).some(p=>p.forma||Number(p.valor||0)>0)||c.data_pedido!=='{{ hoje|date:"Y-m-d" }}'||c.data_prevista_entrega||c.descricao_arquivo||c.observacoes||c.informacoes_criacao);
+    return Boolean(dados.buscaCliente||dados.clienteId||dados.contatoNome||dados.contatoTelefone||(dados.clientesAdicionais||[]).length||(dados.itens||[]).length||dados.itemRascunho?.produto_id||(dados.itemRascunho?.itens_avulsos||[]).length||dados.draft?.produto_id||(dados.draft?.itens_avulsos||[]).length||(dados.personalizacoes||[]).some(p=>p.nome||p.numero||p.tamanhoId)||(dados.pagamentos||[]).some(p=>p.forma||Number(p.valor||0)>0)||c.data_pedido!=='{{ hoje|date:"Y-m-d" }}'||c.data_prevista_entrega||c.descricao_arquivo||c.observacoes||c.informacoes_criacao);
   };
   estado.salvarLocal=function(){
     if(this.autosavePausado)return null;
@@ -758,7 +792,7 @@ function op2NovaMelhorada(){
       const imagens=this.imagensRascunho.filter(imagem=>String(imagem.item_uid)===String(item.uid));
       return{...item,imagensNomes:imagens.map(imagem=>imagem.nome),imagensPreview:imagens.map(imagem=>({chave:imagem.url,nome:imagem.nome,imagem:true,url:imagem.url})),imagensStatus:imagens.length?`${imagens.length} imagem(ns) salva(s)`:''};
     });this.personalizacoes=Array.isArray(dados.personalizacoes)?dados.personalizacoes:[];this.pagamentos=Array.isArray(dados.pagamentos)&&dados.pagamentos.length?dados.pagamentos:this.pagamentos;
-    const rascunhoLegado=!dados.itemRascunho&&dados.draft?.produto_id&&dados.modalProduto===false?dados.draft:null;
+    const rascunhoLegado=!dados.itemRascunho&&(dados.draft?.produto_id||(dados.draft?.itens_avulsos||[]).length)&&dados.modalProduto===false?dados.draft:null;
     const itemRascunho=dados.itemRascunho||rascunhoLegado||null;
     const rascunhoNormalizado=itemRascunho?this.normalizarUidsItens(
       [...this.itens,itemRascunho],
@@ -775,8 +809,8 @@ function op2NovaMelhorada(){
     sessionStorage.removeItem('op2-rascunho-concluindo');
     let local=null;try{local=JSON.parse(localStorage.getItem(this.chaveRascunho)||'null')}catch(e){}
     const servidor=JSON.parse(document.getElementById('op2-rascunho-servidor')?.textContent||'null')?.dados||null;
-    const servidorTemItens=(servidor?.itens||[]).length>0||Boolean(servidor?.itemRascunho?.produto_id);
-    const localTemItens=(local?.itens||[]).length>0||Boolean(local?.itemRascunho?.produto_id);
+    const servidorTemItens=(servidor?.itens||[]).length>0||Boolean(servidor?.itemRascunho?.produto_id||(servidor?.itemRascunho?.itens_avulsos||[]).length);
+    const localTemItens=(local?.itens||[]).length>0||Boolean(local?.itemRascunho?.produto_id||(local?.itemRascunho?.itens_avulsos||[]).length);
     const escolhido=servidorTemItens&&!localTemItens?servidor:
       (Number(local?.salvoEm||0)>=Number(servidor?.salvoEm||0)?local:servidor);
     if(escolhido)this.aplicarRascunho(escolhido);
