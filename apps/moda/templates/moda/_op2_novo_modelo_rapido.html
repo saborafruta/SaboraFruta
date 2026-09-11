@@ -21,4 +21,5 @@
             @click="novoModeloAberto=false; novoModeloNome=''; erroModelo=''">Cancelar</button>
   </div>
   <small x-show="novoModeloAberto || (draft.nome_editavel && draft.produto_id)" class="block mt-1" style="color:#ef4444" x-text="erroModelo"></small>
+  {% include "moda/_op2_item_avulso.html" %}
 </div>

@@ -373,6 +373,7 @@ def _dados_modal_item(item, estrutura_opcoes):
     return {
         'item_id': str(item.pk),
         'produto_id': str(item.produto_id or ''),
+        'descricao': item.descricao or '',
         'nome': item.produto.nome if item.produto_id else item.nome_exibicao,
         'nome_editavel': bool(
             item.produto_id and item.produto.codigo.startswith('OP2-')
@@ -835,7 +836,9 @@ class Op2CreateView(ModaBaseView):
             dados = json.loads(texto)
         except json.JSONDecodeError as erro:
             raise ValueError('Não foi possível preservar o item em rascunho.') from erro
-        if not isinstance(dados, dict) or not dados.get('produto_id'):
+        if not isinstance(dados, dict) or not (
+            dados.get('produto_id') or str(dados.get('descricao') or '').strip()
+        ):
             return None
         return dados
 
@@ -1997,7 +2000,9 @@ class Op2ActionView(ModaBaseView):
             dados = json.loads(texto)
         except json.JSONDecodeError as erro:
             raise ValueError('Não foi possível salvar o item em rascunho.') from erro
-        if not isinstance(dados, dict) or not dados.get('produto_id'):
+        if not isinstance(dados, dict) or not (
+            dados.get('produto_id') or str(dados.get('descricao') or '').strip()
+        ):
             return JsonResponse({'ok': True, 'ignorado': True})
         rascunho, _ = RascunhoItemOP.objects.update_or_create(
             filial=_filial(request), pedido=pedido,
@@ -2113,6 +2118,13 @@ class Op2ActionView(ModaBaseView):
                 ProdutoModa.objects.for_filial(_filial(request)).filter(ativo=True),
                 pk=produto_id,
             )
+            item.descricao = ''
+        else:
+            descricao = (request.POST.get('descricao') or '').strip()
+            if not descricao:
+                raise ValueError('Informe o nome do item avulso.')
+            item.produto = None
+            item.descricao = descricao
         grades = (
             list(Grade.objects.filter(pk__in=(
                 configuracao_conjunto.get('camisa', {}).get('grades') or []
@@ -2168,7 +2180,7 @@ class Op2ActionView(ModaBaseView):
             )
         )
         item.save(update_fields=[
-            'produto', 'grade_tamanho', 'quantidade', 'quantidade_entregue',
+            'produto', 'descricao', 'grade_tamanho', 'quantidade', 'quantidade_entregue',
             'valor_unitario', 'referencia', 'acabamento', 'observacoes',
             'configuracao_conjunto',
         ])

@@ -326,8 +326,8 @@ function op2NovaMelhorada(){
   estado.draft=estado.novoDraft();
   estado.itemRascunho=null;
   estado.origemEditor='novo';
-  estado.temItemRascunho=function(){return Boolean(this.itemRascunho?.produto_id)};
-  estado.fecharModalItem=function(){if(this.origemEditor==='rascunho'&&this.draft?.produto_id)this.itemRascunho=JSON.parse(JSON.stringify(this.draft));else if((this.origemEditor==='novo'||this.origemEditor==='duplicar')&&!this.temItemRascunho()&&this.draft?.produto_id)this.itemRascunho=JSON.parse(JSON.stringify(this.draft));this.modalProduto=false;this.agendarAutosave()};
+  estado.temItemRascunho=function(){return Boolean(this.itemRascunho?.produto_id||String(this.itemRascunho?.descricao||'').trim())};
+  estado.fecharModalItem=function(){const identificado=this.draft?.produto_id||String(this.draft?.descricao||'').trim();if(this.origemEditor==='rascunho'&&identificado)this.itemRascunho=JSON.parse(JSON.stringify(this.draft));else if((this.origemEditor==='novo'||this.origemEditor==='duplicar')&&!this.temItemRascunho()&&identificado)this.itemRascunho=JSON.parse(JSON.stringify(this.draft));this.modalProduto=false;this.agendarAutosave()};
   estado.retomarItemRascunho=function(){if(!this.temItemRascunho())return;this.origemEditor='rascunho';this.editandoIdx=null;this.draft=JSON.parse(JSON.stringify(this.itemRascunho));this.modalProduto=true;this.agendarAutosave()};
   estado.limparItemRascunho=function(){if(this.origemEditor==='rascunho')this.itemRascunho=null;this.modalProduto=false;this.editandoIdx=null;this.origemEditor='novo';this.draft=this.novoDraft();this.buscaProduto='';this.agendarAutosave()};
   estado.descartarItemRascunho=function(){
@@ -352,6 +352,7 @@ function op2NovaMelhorada(){
     const novaGradeId=String(grade.grade_id||'');
     const gradeAtualCompativel=novaGradeId&&this.draft.grades.map(String).includes(novaGradeId);
     this.draft.produto_id=String(id);
+    this.draft.descricao='';
     this.draft.nome=nome;
     this.draft.nome_editavel=String(codigo||'').startsWith('OP2-');
     this.draft.codigo=codigo;
@@ -373,6 +374,18 @@ function op2NovaMelhorada(){
       if(novaGradeId)this.garantirGradeConjunto('camisa',novaGradeId);
     }
     this.somarDraftGrade();
+  };
+  estado.usarItemAvulso=function(){
+    const nome=String(this.draft.descricao||'').trim();
+    if(!nome){alert('Informe o nome do item avulso.');return}
+    const tinhaModelo=Boolean(this.draft.produto_id);
+    this.draft.produto_id='';
+    this.draft.descricao=nome;
+    this.draft.nome=nome;
+    this.draft.nome_editavel=false;
+    this.draft.codigo='';
+    this.draft.info='Item avulso · não salvo no catálogo';
+    if(tinhaModelo){this.draft.grades=[];this.draft.gradePorGrade={}}
   };
   estado.salvarNomeModeloRapido=async function(){
     const nome=String(this.draft.nome||'').trim();
@@ -517,6 +530,9 @@ function op2NovaMelhorada(){
     const uidRascunho=uidRascunhoOriginal&&!this.itens.some(
       item=>String(item.uid)===String(uidRascunhoOriginal),
     )?uidRascunhoOriginal:null;
+    if(!this.draft.produto_id&&!String(this.draft.descricao||'').trim()){
+      alert('Selecione um modelo ou informe o nome de um item avulso.');return
+    }
     if(this.draft.estrutura_tipo==='conjunto'){
       const erroConjunto=validarConjuntoOp2(this.draft.configuracao_conjunto,this.estruturaOpcoes);
       if(erroConjunto){alert(erroConjunto);return}
@@ -532,7 +548,6 @@ function op2NovaMelhorada(){
     }
     const erroModelo=validarModeloOp2(this.draft,JSON.parse(document.getElementById('op2-estrutura-opcoes').textContent));
     if(erroModelo){alert(erroModelo);return}
-    if(!this.draft.produto_id){alert('Selecione um modelo de produção.');return}
     if(this.gradeDivergente()){
       alert(`A quantidade total (${this.draft.quantidade}) deve ser igual à soma da grade (${this.totalTodasGrades()}).`);
       this.somarDraftGrade();

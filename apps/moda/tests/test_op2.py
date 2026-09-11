@@ -485,6 +485,93 @@ class Op2Tests(TestCase):
             count=2,
         )
 
+    def test_item_avulso_nao_cria_modelo_e_mantem_nome_nos_pdfs(self):
+        from apps.moda.services.pedido_pdf import _nome_item_pdf
+
+        self._login_op2()
+        quantidade_modelos = ProdutoModa.objects.count()
+        nome = 'Faixa personalizada da comissão'
+        resposta = self.client.post(reverse('moda:op2-create'), {
+            **self._modelo_completo('item_0_'),
+            'cliente': str(self.cliente.pk),
+            'item_0_descricao': nome,
+            'item_0_quantidade': '2',
+            'item_0_valor_unitario': '35.00',
+            'pagamento_0_forma': 'nao_informado',
+            'pagamento_0_valor': '70.00',
+        })
+
+        self.assertEqual(resposta.status_code, 302)
+        criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        item = criado.itens.get()
+        self.assertIsNone(item.produto)
+        self.assertEqual(item.descricao, nome)
+        self.assertEqual(item.nome_exibicao, nome)
+        self.assertEqual(_nome_item_pdf(item), nome)
+        self.assertEqual(ProdutoModa.objects.count(), quantidade_modelos)
+
+        detalhe = self.client.get(reverse('moda:op2-detail', args=[criado.pk]))
+        self.assertContains(detalhe, nome)
+        for nome_url in ('pedido-orcamento-pdf', 'pedido-pdf'):
+            pdf = self.client.get(reverse(f'moda:{nome_url}', args=[criado.pk]))
+            self.assertEqual(pdf.status_code, 200)
+            self.assertEqual(pdf['Content-Type'], 'application/pdf')
+            self.assertTrue(pdf.content.startswith(b'%PDF-'))
+
+    def test_editores_oferecem_item_avulso_com_aviso_sobre_pdfs(self):
+        self._login_op2()
+        for url in (
+            reverse('moda:op2-create'),
+            reverse('moda:op2-detail', args=[self.pedido.pk]),
+        ):
+            resposta = self.client.get(url)
+            self.assertContains(resposta, 'Item avulso')
+            self.assertContains(resposta, 'não entra em Modelos de Produção')
+            self.assertContains(resposta, 'aparece com este nome nos PDFs')
+            self.assertContains(resposta, 'usarItemAvulso()')
+
+    def test_edicao_pode_trocar_modelo_por_item_avulso(self):
+        from apps.moda.views_op2 import _dados_modal_item
+
+        self._login_op2()
+        item = self._item(quantidade=2)
+        nome = 'Peça piloto sem cadastro'
+        resposta = self.client.post(
+            reverse('moda:op2-action', args=[self.pedido.pk]),
+            {
+                **self._modelo_completo(),
+                'acao': 'editar_item',
+                'item_id': str(item.pk),
+                'descricao': nome,
+                'quantidade': '2',
+                'valor_unitario': '50.00',
+            },
+        )
+
+        self.assertEqual(resposta.status_code, 302)
+        item.refresh_from_db()
+        self.assertIsNone(item.produto)
+        self.assertEqual(item.descricao, nome)
+        modal = _dados_modal_item(item, opcoes_estrutura_filial(self.filial))
+        self.assertEqual(modal['descricao'], nome)
+        self.assertEqual(modal['nome'], nome)
+
+    def test_cores_solicitadas_aparecem_no_kanban_comercial(self):
+        self._login_op2()
+        resposta = self.client.get(reverse('moda:comercial'))
+        for coluna, cor in {
+            'orcamento': '#38bdf8',
+            'aprovacao': '#1d4ed8',
+            'confirmado': '#7c3aed',
+            'producao': '#dc2626',
+            'pronto': '#f97316',
+            'entregue': '#dc2626',
+        }.items():
+            self.assertContains(
+                resposta,
+                f'.kc-raia[data-coluna="{coluna}"] {{ --kc-accent:{cor};',
+            )
+
     def _configuracao_conjunto(self, grade, tamanho_p, tamanho_m):
         grupos = opcoes_estrutura_filial(self.filial)
 
