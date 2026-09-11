@@ -205,7 +205,7 @@ class OrdemProducao(ComCodigoQr, FilialScopedModel):
         for m in self.materiais:
             total = None
             if tecido is not None and m.tipo == MaterialFicha.Tipo.TECIDO_PRINCIPAL:
-                total = consumo_tecido_principal(ficha, self.produto, tecido, quantidades)
+                total = consumo_tecido_principal(self.filial_id, self.item, tecido, quantidades)
             if total is None:
                 total = (m.consumo_bruto * self.quantidade).quantize(Decimal('0.0001'))
             linhas.append({'material': m, 'total': total})

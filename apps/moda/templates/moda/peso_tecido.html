@@ -1,0 +1,154 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<style>
+.ficha-grade-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.ficha-grade-chip{border:1px solid rgba(148,163,184,.28);border-radius:10px;padding:10px;text-align:left;min-height:60px}
+.ficha-grade-chip:hover{border-color:rgba(59,130,246,.6)}
+</style>
+<div class="space-y-5">
+
+  {# ── Cabeçalho + escolha do combo ────────────────────────────────── #}
+  <div class="card p-5">
+    <p class="text-sm mb-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Peso de cada tamanho, por tecido e tipo de peça — <b>não</b> por produto.
+      Vale para qualquer item da OP que use essa malha e esse tipo de peça,
+      inclusive sem produto de catálogo ligado.
+    </p>
+    <form method="get" class="flex flex-wrap items-end gap-3">
+      <div>
+        <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Tecido / Malha</label>
+        <select name="tecido" class="form-input" style="min-width:220px;" required>
+          <option value="">Escolha…</option>
+          {% for t in tecidos %}
+            <option value="{{ t.pk }}" {% if tecido_escolhido.pk == t.pk %}selected{% endif %}>{{ t.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Tipo de peça</label>
+        <input type="text" name="tipo_peca" list="tipos-peca-conhecidos" class="form-input" style="min-width:220px;"
+               value="{{ tipo_peca_escolhido }}" placeholder="Ex.: Camisa" required>
+        <datalist id="tipos-peca-conhecidos">
+          {% for tp in tipos_peca_conhecidos %}<option value="{{ tp }}">{% endfor %}
+        </datalist>
+        <p class="text-xs mt-1" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+          Igual ao "Tipo de peça" da Estrutura da peça, na OP 2.0.
+        </p>
+      </div>
+      <button type="submit" class="btn-primary text-sm">Ver tabela</button>
+    </form>
+  </div>
+
+  {# ── Tabela de peso do combo escolhido ───────────────────────────── #}
+  {% if tecido_escolhido and tipo_peca_escolhido %}
+    <div class="card p-5 space-y-4">
+      <div>
+        <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">
+          {{ tecido_escolhido.nome }} · {{ tipo_peca_escolhido }}
+        </h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% if tecido_escolhido.gramatura and tecido_escolhido.largura_cm %}
+            Gramatura {{ tecido_escolhido.gramatura }} g/m² · largura {{ tecido_escolhido.largura_cm }} cm — pronto para calcular metros pelo peso.
+          {% else %}
+            <span style="color:#d97706;">Este tecido ainda não tem gramatura e largura cadastradas — o consumo pelo peso não roda sem isso.
+              <a href="{% url 'moda:apoio-update' 'engenharia' 'materiais' tecido_escolhido.pk %}" style="text-decoration:underline;">Cadastrar agora</a>.
+            </span>
+          {% endif %}
+        </p>
+      </div>
+
+      {% for grupo in grupos %}
+        <div class="rounded-xl p-4" :style="temaClaro ? 'background:#f8fafc; border:1px solid #e5e7eb;' : 'background:#18181b; border:1px solid #303036;'">
+          <div class="flex items-center justify-between gap-2 mb-3">
+            <strong class="text-sm" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ grupo.grade_nome }}</strong>
+            <form method="post" action="{% url 'moda:peso-tecido-grade-remover' grupo.grade_id %}">
+              {% csrf_token %}
+              <input type="hidden" name="tecido" value="{{ tecido_escolhido.pk }}">
+              <input type="hidden" name="tipo_peca" value="{{ tipo_peca_escolhido }}">
+              <button type="submit" class="text-xs font-semibold" style="color:#dc2626;">Remover grade</button>
+            </form>
+          </div>
+          <form method="post" action="{% url 'moda:peso-tecido-salvar' %}">
+            {% csrf_token %}
+            <input type="hidden" name="tecido" value="{{ tecido_escolhido.pk }}">
+            <input type="hidden" name="tipo_peca" value="{{ tipo_peca_escolhido }}">
+            <table class="w-full text-sm mb-2">
+              <thead>
+                <tr class="text-xs uppercase tracking-wider" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                  <th class="text-left font-semibold pb-2">Tamanho</th>
+                  <th class="text-right font-semibold pb-2">Peso da peça (g)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for linha in grupo.linhas %}
+                  <tr class="border-t" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#303036;'">
+                    <td class="py-2 font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#e5e7eb;'">
+                      {{ linha.tamanho.sigla }}
+                    </td>
+                    <td class="py-2 pl-2 w-32">
+                      <input type="number" step="0.1" min="0" name="peso_{{ linha.pk }}"
+                             value="{% if linha.peso_g is not None %}{{ linha.peso_g|stringformat:'s' }}{% endif %}"
+                             placeholder="não pesado" class="form-input text-right w-full">
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            <button type="submit" class="btn-primary text-sm">Salvar pesos</button>
+          </form>
+        </div>
+      {% empty %}
+        <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Nenhuma grade pesada ainda para este tecido + tipo de peça. Acrescente uma abaixo.
+        </p>
+      {% endfor %}
+
+      {% if grades_sem_peso %}
+        <div>
+          <p class="text-xs uppercase tracking-wider mb-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            Acrescentar grade
+          </p>
+          <div class="ficha-grade-grid">
+            {% for g in grades_sem_peso %}
+              <form method="post" action="{% url 'moda:peso-tecido-grade-add' %}">
+                {% csrf_token %}
+                <input type="hidden" name="tecido" value="{{ tecido_escolhido.pk }}">
+                <input type="hidden" name="tipo_peca" value="{{ tipo_peca_escolhido }}">
+                <button type="submit" name="grade" value="{{ g.id }}" class="ficha-grade-chip" title="{{ g.tipo }}">
+                  <strong class="block text-sm">{{ g.nome }}</strong>
+                  <small class="block mt-1 opacity-70">{% firstof g.resumo 'sem tamanhos' %}</small>
+                </button>
+              </form>
+            {% endfor %}
+          </div>
+        </div>
+      {% elif not existe_grade_cadastrada %}
+        <p class="text-xs" style="color:#d97706;">
+          Cadastre uma grade primeiro — sem tamanhos não há o que pesar.
+          <a href="{% url 'moda:grade-create' %}" class="font-semibold"
+             :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Cadastrar</a>.
+        </p>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {# ── Combos já cadastrados, pra navegar rápido ───────────────────── #}
+  {% if combos_cadastrados %}
+    <div class="card p-5 space-y-3">
+      <h3 class="text-sm font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Já cadastrados</h3>
+      <div class="ficha-grade-grid">
+        {% for c in combos_cadastrados %}
+          <a href="{% url 'moda:peso-tecido' %}?tecido={{ c.tecido_id }}&tipo_peca={{ c.tipo_peca|urlencode }}"
+             class="ficha-grade-chip">
+            <strong class="block text-sm">{{ c.tecido_nome }} · {{ c.tipo_peca }}</strong>
+            <small class="block mt-1 opacity-70">{{ c.grades|join:", " }}</small>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

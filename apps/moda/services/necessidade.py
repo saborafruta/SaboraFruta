@@ -165,7 +165,7 @@ class NecessidadeService:
             for material in ficha.materiais.all():
                 consumo = None
                 if tecido is not None and material.tipo == MaterialFicha.Tipo.TECIDO_PRINCIPAL:
-                    consumo = consumo_tecido_principal(ficha, produto, tecido, quantidades)
+                    consumo = consumo_tecido_principal(filial.pk, ordem.item, tecido, quantidades)
                 if consumo is None:
                     consumo = material.consumo_bruto * ordem.quantidade
                 if not consumo:
@@ -376,7 +376,7 @@ class NecessidadeService:
         for material in ficha.materiais.exclude(produto_estoque__isnull=True):
             precisa = None
             if tecido is not None and material.tipo == MaterialFicha.Tipo.TECIDO_PRINCIPAL:
-                precisa = consumo_tecido_principal(ficha, ordem.produto, tecido, quantidades)
+                precisa = consumo_tecido_principal(ordem.filial_id, ordem.item, tecido, quantidades)
             if precisa is None:
                 precisa = (material.consumo or ZERO) * ordem.quantidade
             falta = precisa - ja_reservado[material.produto_estoque_id]

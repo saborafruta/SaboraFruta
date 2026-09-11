@@ -78,6 +78,10 @@ GRUPOS: tuple[Grupo, ...] = (
         'regua',
         (
             Item('ficha-tecnica', 'Ficha Técnica', 'A especificação completa da peça.'),
+            Item(
+                'peso-tecido', 'Peso por Tecido e Grade',
+                'Peso de cada tamanho por malha e tipo de peça — não por produto — usado para calcular metros de tecido pelo peso.',
+            ),
             Item('estrutura-produto', 'Estrutura do Produto', 'Composição em níveis.'),
             Item('materiais', 'Materiais', 'Tecidos e insumos que entram na peça.'),
             Item('aviamentos', 'Aviamentos', 'Linhas, botões, zíperes, etiquetas.'),

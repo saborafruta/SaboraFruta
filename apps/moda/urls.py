@@ -26,6 +26,7 @@ from . import (
     views_estoque_aviamento as vea, views_estoque_produto as vep,
     views_estoque_semiacabado as ves, views_estoque_acabado as veac,
     views_estoque_lote as velo, views_margem as vmar, views_prazo as vpz,
+    views_peso_tecido as vpt,
 )
 
 app_name = 'moda'
@@ -258,6 +259,13 @@ ROTAS_PRONTAS: list = [
     path('engenharia/ficha-tecnica/<int:pk>/materiais/<int:material_pk>/remover/', vf.MaterialDeleteView.as_view(), name='ficha-material-delete'),
     path('engenharia/ficha-tecnica/<int:pk>/imagens/', vf.ImagemCreateView.as_view(), name='ficha-imagem-add'),
     path('engenharia/ficha-tecnica/<int:pk>/imagens/<int:imagem_pk>/remover/', vf.ImagemDeleteView.as_view(), name='ficha-imagem-delete'),
+
+    # Peso por tecido + tipo de peça + grade -- independente de produto,
+    # ver `views_peso_tecido.py`.
+    path('engenharia/peso-tecido/', vpt.PesoTecidoView.as_view(), name='peso-tecido'),
+    path('engenharia/peso-tecido/grade/', vpt.PesoTecidoGradeAddView.as_view(), name='peso-tecido-grade-add'),
+    path('engenharia/peso-tecido/grade/<int:grade_pk>/remover/', vpt.PesoTecidoGradeRemoverView.as_view(), name='peso-tecido-grade-remover'),
+    path('engenharia/peso-tecido/salvar/', vpt.PesoTecidoSalvarView.as_view(), name='peso-tecido-salvar'),
 
     # Roteiro de produção. A lista fica no endereço do menu
     # (/moda/engenharia/sequencia-producao/), pelo mesmo motivo da ficha.

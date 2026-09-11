@@ -280,7 +280,7 @@ class RegistroCorte(ComCodigoQr, FilialScopedModel):
             if tecido else {}
         )
         por_peso = (
-            consumo_tecido_principal(ficha, produto, tecido, quantidades)
+            consumo_tecido_principal(self.filial_id, self.item, tecido, quantidades)
             if tecido is not None else None
         )
         if por_peso is not None:

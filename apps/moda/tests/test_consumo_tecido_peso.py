@@ -2,16 +2,18 @@
 Consumo de tecido pela grade: metros pelo peso de cada tamanho, em vez do
 consumo fixo por peça digitado na ficha.
 
-"Malha PV a camisa P - 145g, M - 176g..." -- o peso já era cadastrado por
-tamanho (`PesoTamanhoFicha`), mas só aparecia na tela. Estes testes cercam
-a conta nova (peso × gramatura/largura do tecido = metros) e os três
-lugares que passam a usá-la: o painel de necessidade, a reserva automática
-ao começar a produção, e a sugestão de planejado no corte.
+"Malha PV a camisa P - 145g, M - 176g..." é uma tabela do TECIDO + TIPO DE
+PEÇA + GRADE (`PesoTecidoGrade`), não do produto: o mesmo peso vale para
+qualquer item de OP que peça essa malha, tipo de peça e grade, com ou sem
+produto de catálogo ligado. Estes testes cercam a conta (peso ×
+gramatura/largura do tecido = metros) e os três lugares que passam a
+usá-la: o painel de necessidade, a reserva automática ao começar a
+produção, e a sugestão de planejado no corte.
 
-SEMPRE COM FALLBACK. Sem malha ligada, sem peso cadastrado para algum
-tamanho pedido, ou sem grade no produto, a conta velha (consumo fixo ×
-quantidade) continua valendo -- não é opcional, é o comportamento de
-qualquer cliente que nunca cadastrou peso nenhum.
+SEMPRE COM FALLBACK. Sem malha ligada, sem tipo de peça, sem grade no
+item, ou sem peso cadastrado para algum tamanho pedido, a conta velha
+(consumo fixo × quantidade) continua valendo -- não é opcional, é o
+comportamento de qualquer cliente que nunca cadastrou peso nenhum.
 """
 from decimal import Decimal
 
@@ -23,7 +25,7 @@ from apps.estoque.models import Estoque
 from apps.moda.models import (
     FichaTecnica, Grade, ItemCorte, ItemGrade, ItemGradePedido,
     ItemPedidoProducao, MaterialFicha, OrdemProducao, PedidoProducao,
-    PesoTamanhoFicha, ProdutoModa, RegistroCorte, Tamanho, Tecido,
+    PesoTecidoGrade, ProdutoModa, RegistroCorte, Tamanho, Tecido,
 )
 from apps.moda.services.consumo_tecido import consumo_tecido_principal, tecido_da_malha
 from apps.moda.services.necessidade import NecessidadeService
@@ -76,8 +78,27 @@ class ConsumoTecidoPesoBase(TestCase):
         ItemGrade.objects.create(grade=cls.grade, tamanho=cls.m, ordem=20)
         ItemGrade.objects.create(grade=cls.grade, tamanho=cls.g, ordem=30)
 
+        # Peso cadastrado pra "Camisa" em PV, grade Adulto -- SEM produto,
+        # SEM ficha técnica. 145 g no P, 176 g no M, 193 g no G, do
+        # exemplo do usuário.
+        PesoTecidoGrade.objects.create(
+            filial=cls.filial, tecido=cls.tecido, tipo_peca='Camisa',
+            grade=cls.grade, tamanho=cls.p, peso_g=Decimal('145'),
+        )
+        PesoTecidoGrade.objects.create(
+            filial=cls.filial, tecido=cls.tecido, tipo_peca='Camisa',
+            grade=cls.grade, tamanho=cls.m, peso_g=Decimal('176'),
+        )
+        PesoTecidoGrade.objects.create(
+            filial=cls.filial, tecido=cls.tecido, tipo_peca='Camisa',
+            grade=cls.grade, tamanho=cls.g, peso_g=Decimal('193'),
+        )
+
+        # Produto e ficha só entram nos testes que precisam da reserva
+        # real (o material tem que apontar pra um produto de estoque) --
+        # o cálculo do peso em si não depende de nenhum dos dois.
         cls.produto = ProdutoModa.objects.create(
-            filial=cls.filial, codigo='CAM001', nome='Camisa', grade=cls.grade,
+            filial=cls.filial, codigo='CAM001', nome='Camisa',
         )
         cls.ficha = FichaTecnica.objects.create(filial=cls.filial, produto=cls.produto)
         cls.material = MaterialFicha.objects.create(
@@ -85,75 +106,120 @@ class ConsumoTecidoPesoBase(TestCase):
             descricao='Malha PV', consumo=Decimal('1.5'),
             produto_estoque=cls.tecido_estoque,
         )
-        # 145 g no P, 176 g no M, 193 g no G — do exemplo do usuário.
-        PesoTamanhoFicha.objects.create(
-            ficha=cls.ficha, grade=cls.grade, tamanho=cls.p, peso_g=Decimal('145'),
-        )
-        PesoTamanhoFicha.objects.create(
-            ficha=cls.ficha, grade=cls.grade, tamanho=cls.m, peso_g=Decimal('176'),
-        )
-        PesoTamanhoFicha.objects.create(
-            ficha=cls.ficha, grade=cls.grade, tamanho=cls.g, peso_g=Decimal('193'),
-        )
 
-    def _ordem(self, quantidades, numero=1, malha='PV'):
-        """Uma ordem com grade P/M/G e a malha nas observações, como a OP 2.0 grava."""
+    def _item(self, quantidades, numero=1, malha='PV', tipo_peca='Camisa',
+              grade=True, produto=None):
+        """Um item de OP com grade P/M/G, malha e tipo de peça nas
+        observações, como a OP 2.0 grava -- com ou sem produto ligado."""
         total = sum(quantidades.values())
         pedido = PedidoProducao.objects.create(
             filial=self.filial, cliente=self.cliente, numero=numero,
         )
+        observacoes = (
+            f'Estrutura da peça:\nTipo de peça: {tipo_peca}\nMalha: {malha}\n'
+            if tipo_peca else ''
+        )
         item = ItemPedidoProducao.objects.create(
-            pedido=pedido, produto=self.produto, descricao='Camisa',
+            pedido=pedido, produto=produto, descricao='Camisa',
             quantidade=total, valor_unitario=Decimal('50'),
-            observacoes=f'Estrutura da peça:\nTipo de peça: Camisa\nMalha: {malha}\n',
+            observacoes=observacoes,
+            grade_tamanho=self.grade if grade else None,
         )
         for tamanho, qtd in quantidades.items():
             ItemGradePedido.objects.create(item=item, tamanho=tamanho, quantidade=qtd)
+        return item
+
+    def _ordem(self, quantidades, numero=1, malha='PV', tipo_peca='Camisa',
+               grade=True, produto=None):
+        item = self._item(
+            quantidades, numero=numero, malha=malha, tipo_peca=tipo_peca,
+            grade=grade, produto=produto if produto is not None else self.produto,
+        )
         return OrdemProducao.objects.create(
-            filial=self.filial, pedido=pedido, item=item,
+            filial=self.filial, pedido=item.pedido, item=item,
             numero=f'OP-{numero:04d}', ano=2026, sequencial=numero,
-            quantidade=total,
+            quantidade=item.quantidade,
         )
 
 
-class ConsumoTecidoPorPesoModelTests(ConsumoTecidoPesoBase):
-    """`FichaTecnica.consumo_tecido_por_peso` isolado."""
+class ConsumoTecidoPrincipalTests(ConsumoTecidoPesoBase):
+    """`consumo_tecido_principal` isolado, sem produto nenhum envolvido."""
 
     def test_calcula_metros_pelo_peso_da_grade(self):
         # 3 P (145g) + 2 M (176g) + 1 G (193g) = 980 g
         # 980 / 200 g/m2 / 1,5 m de largura = 3,2666... m
-        metros = self.ficha.consumo_tecido_por_peso(
-            self.tecido, self.grade.pk,
+        item = self._item({self.p: 3, self.m: 2, self.g: 1}, produto=None)
+        metros = consumo_tecido_principal(
+            self.filial.pk, item, self.tecido,
             {self.p.pk: 3, self.m.pk: 2, self.g.pk: 1},
         )
         self.assertEqual(metros, Decimal('3.2667'))
 
+    def test_funciona_sem_produto_de_catalogo(self):
+        item = self._item({self.p: 1}, produto=None)
+        self.assertIsNone(item.produto_id)
+        metros = consumo_tecido_principal(
+            self.filial.pk, item, self.tecido, {self.p.pk: 1},
+        )
+        self.assertEqual(metros, Decimal('0.4833'))
+
     def test_sem_gramatura_devolve_none(self):
         tecido_sem_dado = Tecido.objects.create(filial=self.filial, nome='SEM GRAMATURA')
-        metros = self.ficha.consumo_tecido_por_peso(
-            tecido_sem_dado, self.grade.pk, {self.p.pk: 1},
+        item = self._item({self.p: 1}, produto=None)
+        metros = consumo_tecido_principal(
+            self.filial.pk, item, tecido_sem_dado, {self.p.pk: 1},
+        )
+        self.assertIsNone(metros)
+
+    def test_sem_grade_no_item_devolve_none(self):
+        item = self._item({self.p: 1}, produto=None, grade=False)
+        metros = consumo_tecido_principal(
+            self.filial.pk, item, self.tecido, {self.p.pk: 1},
+        )
+        self.assertIsNone(metros)
+
+    def test_sem_tipo_de_peca_nas_observacoes_devolve_none(self):
+        item = self._item({self.p: 1}, produto=None, tipo_peca='')
+        metros = consumo_tecido_principal(
+            self.filial.pk, item, self.tecido, {self.p.pk: 1},
+        )
+        self.assertIsNone(metros)
+
+    def test_tipo_de_peca_sem_peso_cadastrado_devolve_none(self):
+        item = self._item({self.p: 1}, produto=None, tipo_peca='Bermuda')
+        metros = consumo_tecido_principal(
+            self.filial.pk, item, self.tecido, {self.p.pk: 1},
         )
         self.assertIsNone(metros)
 
     def test_sem_peso_cadastrado_para_tamanho_pedido_devolve_none(self):
         gg = Tamanho.objects.create(filial=self.filial, sigla='GG', ordem=40)
-        ItemGrade.objects.create(grade=self.grade, tamanho=gg, ordem=40)
-        metros = self.ficha.consumo_tecido_por_peso(
-            self.tecido, self.grade.pk, {self.p.pk: 1, gg.pk: 1},
+        item = self._item({self.p: 1, gg: 1}, produto=None)
+        metros = consumo_tecido_principal(
+            self.filial.pk, item, self.tecido, {self.p.pk: 1, gg.pk: 1},
         )
         self.assertIsNone(metros)
 
     def test_grade_errada_nao_usa_peso_de_outra_grade(self):
         outra_grade = Grade.objects.create(filial=self.filial, nome='Oversized')
-        metros = self.ficha.consumo_tecido_por_peso(
-            self.tecido, outra_grade.pk, {self.p.pk: 1},
+        ItemGrade.objects.create(grade=outra_grade, tamanho=self.p, ordem=10)
+        pedido = PedidoProducao.objects.create(filial=self.filial, cliente=self.cliente, numero=99)
+        item = ItemPedidoProducao.objects.create(
+            pedido=pedido, produto=None, descricao='Camisa', quantidade=1,
+            valor_unitario=Decimal('50'),
+            observacoes='Estrutura da peça:\nTipo de peça: Camisa\nMalha: PV\n',
+            grade_tamanho=outra_grade,
+        )
+        metros = consumo_tecido_principal(
+            self.filial.pk, item, self.tecido, {self.p.pk: 1},
         )
         self.assertIsNone(metros)
 
     def test_tamanho_com_quantidade_zero_nao_exige_peso(self):
         gg = Tamanho.objects.create(filial=self.filial, sigla='GG', ordem=40)
-        metros = self.ficha.consumo_tecido_por_peso(
-            self.tecido, self.grade.pk, {self.p.pk: 3, gg.pk: 0},
+        item = self._item({self.p: 3, gg: 0}, produto=None)
+        metros = consumo_tecido_principal(
+            self.filial.pk, item, self.tecido, {self.p.pk: 3, gg.pk: 0},
         )
         self.assertIsNotNone(metros)
 

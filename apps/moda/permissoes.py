@@ -57,6 +57,7 @@ AREA_POR_MODULO = {
     'apps.moda.views_orcamentos': 'comercial',
     'apps.moda.views_apoio': 'comercial',
     'apps.moda.views_ficha': 'pcp',
+    'apps.moda.views_peso_tecido': 'pcp',
     'apps.moda.views_roteiro': 'pcp',
     'apps.moda.views_pcp': 'pcp',
     'apps.moda.views_ordem': 'pcp',

@@ -511,6 +511,27 @@ def juntar_observacoes_item(observacoes: str, post, grupos=None) -> str:
 MARCADOR_ESTRUTURA = 'Estrutura da peça:'
 
 
+def parse_tipo_peca(observacoes: str) -> str:
+    """
+    Lê de volta o "Tipo de peça" que `estrutura_resumo` gravou -- a mesma
+    label escolhida no formulário (Camisa, Camisa Polo, Bermuda...), ou o
+    nome livre digitado em "Outro".
+
+    Separado de `parse_estrutura_campos` porque aquela função ignora esta
+    linha de propósito (ela é o cabeçalho do bloco, não um campo); aqui é
+    exatamente essa linha que se quer.
+    """
+    texto = observacoes or ''
+    if MARCADOR_ESTRUTURA not in texto:
+        return ''
+    _, bloco = texto.split(MARCADOR_ESTRUTURA, 1)
+    for linha in bloco.splitlines():
+        linha = linha.strip()
+        if linha.casefold().startswith('tipo de peça:'):
+            return linha.split(':', 1)[1].strip()
+    return ''
+
+
 def parse_estrutura_campos(observacoes: str) -> dict[str, str]:
     """
     Lê de volta os campos que `juntar_observacoes_item` gravou (malha, cor,

@@ -22,6 +22,7 @@ from .op2_config import OpcaoEstruturaOP2
 from .pcp import CapacidadeSetor
 from .pedido import PedidoProducao
 from .personalizacao import Personalizacao
+from .peso_tecido import PesoTecidoGrade
 from .produto import ProdutoCor, ProdutoModa, Variante
 from .qualidade import Inspecao, ItemInspecao
 from .rascunho_op import ImagemRascunhoOP, RascunhoOP
@@ -68,6 +69,7 @@ __all__ = [
     'Posicao',
     'Personalizacao',
     'PersonalizacaoIndividual',
+    'PesoTecidoGrade',
     'ProdutoCor',
     'ProdutoModa',
     'RegistroCorte',
