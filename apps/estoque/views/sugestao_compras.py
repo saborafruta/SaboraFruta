@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 from django.db.models import Max, Q, Sum
 from django.http import HttpResponse
@@ -287,8 +288,12 @@ class SugestaoComprasView(PermissaoRequiredMixin, View):
             produto_ids = list(produtos_qs.values_list("id", flat=True))
 
             estoques_map = {
-                e.produto_id: e
-                for e in Estoque.objects.filter(produto_id__in=produto_ids, filial=filial)
+                row["produto_id"]: SimpleNamespace(quantidade_disponivel=row["disp"] or ZERO)
+                for row in (
+                    Estoque.objects.filter(produto_id__in=produto_ids, filial=filial)
+                    .values("produto_id")
+                    .annotate(disp=Sum("quantidade_disponivel"))
+                )
             }
             saidas_map    = self._saidas_por_produto(filial, produto_ids, data_ini)
             custos_map    = self._ultimos_custos(produto_ids)

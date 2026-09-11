@@ -68,14 +68,43 @@ def _auditar_estoque(request, acao, objeto, descricao='', justificativa='', ante
     )
 
 
-def produtos_estoque_queryset(filial):
-    estoque_qs = Estoque.objects.filter(
-        produto=OuterRef('pk'),
-        filial=filial,
-    )
+def produtos_estoque_queryset(filial, deposito_id=None):
+    """
+    Consulta de estoque por produto. Sem `deposito_id`, os saldos são a
+    SOMA de todos os depósitos da filial (era um `[:1]` que pegava um
+    depósito qualquer). Com `deposito_id`, restringe àquele depósito.
+    """
     quantidade_field = DecimalField(max_digits=12, decimal_places=3)
     custo_field = DecimalField(max_digits=14, decimal_places=4)
     reposicao_field = DecimalField(max_digits=12, decimal_places=3)
+
+    estoque_qs = Estoque.objects.filter(produto=OuterRef('pk'), filial=filial)
+    if deposito_id:
+        estoque_qs = estoque_qs.filter(deposito_id=deposito_id)
+
+    def _soma(campo):
+        return Coalesce(
+            Subquery(
+                estoque_qs.values('produto')
+                .annotate(_v=Sum(campo))
+                .values('_v')[:1],
+                output_field=quantidade_field,
+            ),
+            Value(Decimal('0'), output_field=quantidade_field),
+            output_field=quantidade_field,
+        )
+
+    if deposito_id:
+        custo_annotation = Coalesce(
+            Subquery(estoque_qs.values('custo_medio')[:1], output_field=custo_field),
+            Value(Decimal('0'), output_field=custo_field),
+            output_field=custo_field,
+        )
+    else:
+        # Custo médio não soma entre depósitos; a consolidada usa o custo
+        # médio do próprio produto (o Case abaixo cai nele).
+        custo_annotation = Value(Decimal('0'), output_field=custo_field)
+
     return Produto.objects.for_filial(filial).filter(
         ativo=True,
     ).select_related(
@@ -84,38 +113,10 @@ def produtos_estoque_queryset(filial):
         'subcategoria',
         'fornecedor',
     ).annotate(
-        estoque_quantidade_atual=Coalesce(
-            Subquery(
-                estoque_qs.values('quantidade_atual')[:1],
-                output_field=quantidade_field,
-            ),
-            Value(Decimal('0'), output_field=quantidade_field),
-            output_field=quantidade_field,
-        ),
-        estoque_quantidade_reservada=Coalesce(
-            Subquery(
-                estoque_qs.values('quantidade_reservada')[:1],
-                output_field=quantidade_field,
-            ),
-            Value(Decimal('0'), output_field=quantidade_field),
-            output_field=quantidade_field,
-        ),
-        estoque_quantidade_disponivel=Coalesce(
-            Subquery(
-                estoque_qs.values('quantidade_disponivel')[:1],
-                output_field=quantidade_field,
-            ),
-            Value(Decimal('0'), output_field=quantidade_field),
-            output_field=quantidade_field,
-        ),
-        estoque_custo_medio=Coalesce(
-            Subquery(
-                estoque_qs.values('custo_medio')[:1],
-                output_field=custo_field,
-            ),
-            Value(Decimal('0'), output_field=custo_field),
-            output_field=custo_field,
-        ),
+        estoque_quantidade_atual=_soma('quantidade_atual'),
+        estoque_quantidade_reservada=_soma('quantidade_reservada'),
+        estoque_quantidade_disponivel=_soma('quantidade_disponivel'),
+        estoque_custo_medio=custo_annotation,
     ).annotate(
         estoque_custo_unitario=Case(
             When(estoque_custo_medio__gt=0, then=F('estoque_custo_medio')),
@@ -175,7 +176,15 @@ class EstoqueListView(PermissaoRequiredMixin, View):
     template_name = 'estoque/estoque/list.html'
 
     def get(self, request):
-        base_qs = produtos_estoque_queryset(request.filial_ativa)
+        depositos = list(
+            Deposito.objects.filter(filial=request.filial_ativa, ativo=True)
+            .order_by('-is_padrao', 'nome')
+        )
+        deposito_id = request.GET.get('deposito', '')
+        if deposito_id and not any(str(d.pk) == deposito_id for d in depositos):
+            deposito_id = ''
+
+        base_qs = produtos_estoque_queryset(request.filial_ativa, deposito_id or None)
         qs = base_qs
 
         busca = request.GET.get('q', '').strip()
@@ -396,6 +405,9 @@ class EstoqueListView(PermissaoRequiredMixin, View):
             'somente_com_estoque': somente_com_estoque,
             'ordem': ordem,
             'sort_urls': sort_urls,
+            'depositos': depositos,
+            'deposito_id': deposito_id,
+            'tem_varios_depositos': len(depositos) > 1,
             'categorias': CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
                 empresa=request.user.empresa,
                 ativo=True,
@@ -743,10 +755,10 @@ class EstoqueKardexProdutoView(PermissaoRequiredMixin, View):
             pk=pk,
         )
         avaliacao = avaliar_produtos_para_venda([produto], filial=request.filial_ativa).get(produto.pk)
-        estoque = Estoque.objects.filter(produto=produto, filial=request.filial_ativa).first()
-        quantidade_atual = estoque.quantidade_atual if estoque else Decimal('0')
-        quantidade_reservada = estoque.quantidade_reservada if estoque else Decimal('0')
-        quantidade_disponivel = estoque.quantidade_disponivel if estoque else Decimal('0')
+        # Somados de todos os depósitos (o queryset já anota assim).
+        quantidade_atual = produto.estoque_quantidade_atual or Decimal('0')
+        quantidade_reservada = produto.estoque_quantidade_reservada or Decimal('0')
+        quantidade_disponivel = produto.estoque_quantidade_disponivel or Decimal('0')
         reposicao = EstoqueInlineEditView._sugestao_reposicao(produto, quantidade_disponivel)
         custo_unitario = produto.estoque_custo_unitario or Decimal('0')
         valor_custo_total = quantidade_atual * custo_unitario
@@ -961,7 +973,10 @@ class EstoqueInlineEditView(PermissaoRequiredMixin, View):
             _decimal_from_request,
         )
 
-        estoque = Estoque.objects.filter(produto=produto, filial=request.filial_ativa).first()
+        estoque = Estoque.objects.filter(
+            produto=produto, filial=request.filial_ativa,
+            deposito_id=Deposito.padrao_id(request.filial_ativa.pk),
+        ).first()
         quantidade_atual = estoque.quantidade_atual if estoque else Decimal('0')
         try:
             quantidade_nova = _decimal_from_request(value)
@@ -1026,7 +1041,10 @@ class EstoqueInlineEditView(PermissaoRequiredMixin, View):
         return getattr(produto, field) or ''
 
     def _displays_estoque(self, produto, filial, format_quantidade):
-        estoque = Estoque.objects.filter(produto=produto, filial=filial).first()
+        estoque = Estoque.objects.filter(
+            produto=produto, filial=filial,
+            deposito_id=Deposito.padrao_id(filial.pk),
+        ).first()
         quantidade_atual = estoque.quantidade_atual if estoque else Decimal('0')
         quantidade_disponivel = estoque.quantidade_disponivel if estoque else Decimal('0')
         custo_unitario = (

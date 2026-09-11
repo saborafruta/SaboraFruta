@@ -417,6 +417,16 @@
       {% endfor %}
     </select>
   </div>
+  {% if tem_varios_depositos %}
+  <div class="md:col-span-2 estoque-filter-select">
+    <select name="deposito" class="form-input">
+      <option value="">Todos os depósitos</option>
+      {% for d in depositos %}
+        <option value="{{ d.id }}" {% if deposito_id == d.id|stringformat:"s" %}selected{% endif %}>{{ d.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
   <div class="md:col-span-2 estoque-filter-order">
     <select name="ordem" class="form-input">
       <option value="id" {% if ordem == 'id' %}selected{% endif %}>Ordenar</option>

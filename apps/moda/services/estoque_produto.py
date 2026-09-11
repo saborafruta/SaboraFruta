@@ -113,9 +113,13 @@ class EstoqueProdutoService:
         ids = {l['produto'].produto_erp_id for l in linhas if l['ligado']}
         if not ids:
             return
+        from apps.estoque.models import Deposito
         saldos = {
             e.produto_id: e
-            for e in Estoque.objects.filter(produto_id__in=ids, filial=filial)
+            for e in Estoque.objects.filter(
+                produto_id__in=ids, filial=filial,
+                deposito_id=Deposito.venda_id(filial.pk),
+            )
         }
         hoje = timezone.now()
         for linha in linhas:

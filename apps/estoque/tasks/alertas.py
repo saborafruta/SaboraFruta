@@ -9,7 +9,7 @@ import logging
 from decimal import Decimal
 
 from celery import shared_task
-from django.db.models import DecimalField, F, OuterRef, Subquery, Value
+from django.db.models import DecimalField, F, OuterRef, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
@@ -92,7 +92,10 @@ def _verificar_estoque_minimo_banco_atual():
     ).annotate(
         quantidade_disponivel=Coalesce(
             Subquery(
-                estoque_qs.values('quantidade_disponivel')[:1],
+                # soma os depósitos antes de comparar com o mínimo
+                estoque_qs.values('produto_id')
+                .annotate(_s=Sum('quantidade_disponivel'))
+                .values('_s')[:1],
                 output_field=quantidade_field,
             ),
             Value(Decimal('0'), output_field=quantidade_field),

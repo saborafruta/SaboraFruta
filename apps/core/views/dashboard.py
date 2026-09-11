@@ -92,11 +92,16 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         from apps.produtos.models import Produto
 
         total_produtos = Produto.objects.for_filial(filial).filter(ativo=True).count()
-        produtos_criticos = Estoque.objects.filter(
-            filial=filial,
-            quantidade_disponivel__lt=F('produto__estoque_minimo'),
-            produto__ativo=True,
-        ).count()
+        # Soma os depósitos antes de comparar com o mínimo — senão um
+        # produto com saldo sobrando na loja mas baixo na fábrica contaria
+        # como crítico, e um produto em dois depósitos contaria em dobro.
+        produtos_criticos = (
+            Estoque.objects.filter(filial=filial, produto__ativo=True)
+            .values('produto_id')
+            .annotate(disp=Sum('quantidade_disponivel'))
+            .filter(disp__lt=F('produto__estoque_minimo'))
+            .count()
+        )
 
         return {
             'total_produtos': total_produtos,
@@ -152,25 +157,28 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     output_field=DecimalField(max_digits=18, decimal_places=4),
                 )
                 agg = Estoque.objects.filter(filial=f, produto__ativo=True).aggregate(
-                    total_itens=Count('id'),
+                    total_itens=Count('produto_id', distinct=True),
                     qtd_total=Sum('quantidade_atual'),
                     qtd_disponivel=Sum('quantidade_disponivel'),
                     qtd_reservada=Sum('quantidade_reservada'),
                     valor_estoque=Sum(valor_expr),
-                    criticos=Count(
-                        'id',
-                        filter=Q(quantidade_disponivel__lt=F('produto__estoque_minimo')),
-                    ),
+                )
+                criticos = (
+                    Estoque.objects.filter(filial=f, produto__ativo=True)
+                    .values('produto_id')
+                    .annotate(disp=Sum('quantidade_disponivel'))
+                    .filter(disp__lt=F('produto__estoque_minimo'))
+                    .count()
                 )
                 resultado.append({
                     'filial': f,
                     'is_matriz': f.is_matriz,
+                    'criticos': criticos,
                     'total_itens': agg['total_itens'] or 0,
                     'qtd_total': agg['qtd_total'] or 0,
                     'qtd_disponivel': agg['qtd_disponivel'] or 0,
                     'qtd_reservada': agg['qtd_reservada'] or 0,
                     'valor_estoque': agg['valor_estoque'] or 0,
-                    'criticos': agg['criticos'] or 0,
                 })
             return resultado
         except Exception:

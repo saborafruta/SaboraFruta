@@ -156,9 +156,13 @@ class EstoqueAviamentoService:
         ids = {l['produto'].pk for l in linhas if l['ligado']}
         if not ids:
             return
+        from apps.estoque.models import Deposito
         saldos = {
             e.produto_id: e
-            for e in Estoque.objects.filter(produto_id__in=ids, filial=filial)
+            for e in Estoque.objects.filter(
+                produto_id__in=ids, filial=filial,
+                deposito_id=Deposito.producao_id(filial.pk),
+            )
         }
         for linha in linhas:
             # Sem vínculo tudo fica None: é "não sei", e nunca zero, que

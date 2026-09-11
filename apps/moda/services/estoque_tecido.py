@@ -126,9 +126,13 @@ class EstoqueTecidoService:
         ids = {produto.pk for produto, _ in vinculos.values()}
         if not ids:
             return {}
+        from apps.estoque.models import Deposito
         return {
             e.produto_id: e
-            for e in Estoque.objects.filter(produto_id__in=ids, filial=filial)
+            for e in Estoque.objects.filter(
+                produto_id__in=ids, filial=filial,
+                deposito_id=Deposito.producao_id(filial.pk),
+            )
         }
 
     @staticmethod

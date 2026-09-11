@@ -414,3 +414,47 @@ class InventarioPorDepositoTests(DepositoBase):
                 produto=self.produto, filial=self.filial, deposito_id=self.padrao_id,
             ).quantidade_atual, Decimal('50'),
         )
+
+
+class ConsolidadoPorDepositoTests(DepositoBase):
+    """Fase 6: a consulta de estoque soma os depósitos (ou filtra um)."""
+
+    def setUp(self):
+        self.produto = self._produto('Bermuda')
+        self.padrao_id = Deposito.padrao_id(self.filial.pk)
+        self.fabrica = Deposito.objects.create(
+            filial=self.filial, nome='Fábrica', tipo=Deposito.Tipo.PRODUCAO,
+        )
+        for dep, qtd in ((self.padrao_id, '30'), (self.fabrica.pk, '12')):
+            MovimentacaoService.registrar_movimentacao(
+                produto_id=self.produto.pk, filial_id=self.filial.pk,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+                quantidade=Decimal(qtd), usuario_id=self.usuario.pk,
+                valor_unitario=Decimal('5'), deposito_id=dep,
+            )
+
+    def test_sem_deposito_soma_todos(self):
+        from apps.estoque.views.estoque import produtos_estoque_queryset
+        row = produtos_estoque_queryset(self.filial).get(pk=self.produto.pk)
+        self.assertEqual(row.estoque_quantidade_atual, Decimal('42'))
+        self.assertEqual(row.estoque_quantidade_disponivel, Decimal('42'))
+
+    def test_filtrando_um_deposito_mostra_so_ele(self):
+        from apps.estoque.views.estoque import produtos_estoque_queryset
+        row = produtos_estoque_queryset(self.filial, self.fabrica.pk).get(pk=self.produto.pk)
+        self.assertEqual(row.estoque_quantidade_atual, Decimal('12'))
+
+    def test_lista_de_estoque_responde_e_filtra_por_deposito(self):
+        from django.test import Client
+        client = Client()
+        client.force_login(self.usuario)
+        session = client.session
+        session['filial_ativa_id'] = self.filial.pk
+        session.save()
+
+        resp = client.get('/estoque/')
+        self.assertEqual(resp.status_code, 200)
+
+        resp = client.get('/estoque/', {'deposito': str(self.fabrica.pk)})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context['deposito_id'], str(self.fabrica.pk))
