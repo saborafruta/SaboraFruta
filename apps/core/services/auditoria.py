@@ -1,12 +1,17 @@
 """Servicos para auditoria operacional explicita."""
 import json
+import logging
 from decimal import Decimal
 
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
+from django.db.utils import Error as DatabaseError
 
 from apps.core.middleware.audit import get_client_ip
 from apps.core.models import RegistroAuditoria
+from apps.core.tenant_context import tenant_atomic
+
+logger = logging.getLogger(__name__)
 
 
 def snapshot_modelo(obj, campos=None):
@@ -66,23 +71,46 @@ def registrar_auditoria(
     # (`apps/core/db_router.py`) e estoura "the current database router
     # prevents this relation" se os dois lados não baterem. Atribuir só o
     # id nunca passa por essa checagem.
-    return RegistroAuditoria.objects.create(
-        filial_id=getattr(filial, 'pk', None),
-        usuario_id=usuario.pk if getattr(usuario, 'is_authenticated', False) else None,
-        modulo=modulo,
-        acao=acao,
-        objeto_tipo=objeto_tipo,
-        objeto_id=objeto_id,
-        objeto_descricao=(descricao or str(objeto))[:255],
-        relacionado_tipo=relacionado_tipo,
-        relacionado_id=relacionado_id,
-        justificativa=justificativa or '',
-        dados_anteriores=antes,
-        dados_novos=depois,
-        metadados=metadados or {},
-        ip_acesso=get_client_ip(request) if request else None,
-        user_agent=(request.META.get('HTTP_USER_AGENT', '')[:500] if request else ''),
-    )
+    usuario_id = usuario.pk if getattr(usuario, 'is_authenticated', False) else None
+    filial_id = getattr(filial, 'pk', None)
+
+    # CADA EMPRESA TEM SEU PRÓPRIO BANCO, e um operador que atende várias
+    # empresas (ex.: equipe iTed) pode ter um id de usuário que existe no
+    # banco de uma empresa mas não no de outra -- o `usuario_id` acima é só
+    # um número, não passa pela checagem do Django, e o INSERT quebra a
+    # foreign key de verdade no Postgres. Auditoria é bookkeeping: perder o
+    # registro é ruim, mas travar a ação de verdade (criar o depósito, dar
+    # baixa, excluir o título) por causa disso é pior. `tenant_atomic()`
+    # abre um savepoint -- se o INSERT falhar, só ele desfaz; a transação
+    # de quem chamou continua de pé.
+    try:
+        with tenant_atomic():
+            return RegistroAuditoria.objects.create(
+                filial_id=filial_id,
+                usuario_id=usuario_id,
+                modulo=modulo,
+                acao=acao,
+                objeto_tipo=objeto_tipo,
+                objeto_id=objeto_id,
+                objeto_descricao=(descricao or str(objeto))[:255],
+                relacionado_tipo=relacionado_tipo,
+                relacionado_id=relacionado_id,
+                justificativa=justificativa or '',
+                dados_anteriores=antes,
+                dados_novos=depois,
+                metadados=metadados or {},
+                ip_acesso=get_client_ip(request) if request else None,
+                user_agent=(request.META.get('HTTP_USER_AGENT', '')[:500] if request else ''),
+            )
+    except DatabaseError:
+        logger.warning(
+            'Falha ao gravar auditoria (modulo=%s acao=%s objeto=%s usuario_id=%s '
+            'filial_id=%s) -- provavelmente usuario_id/filial_id sem linha '
+            'correspondente neste banco de tenant.',
+            modulo, acao, objeto_tipo, usuario_id, filial_id,
+            exc_info=True,
+        )
+        return None
 
 
 def auditoria_para_objeto(obj, limit=20):

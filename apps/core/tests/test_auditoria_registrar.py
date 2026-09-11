@@ -16,11 +16,14 @@ tenant de verdade), mas garantem que a gravação não regride pro
 padrão antigo.
 """
 from decimal import Decimal
+from unittest.mock import patch
 
+from django.db import IntegrityError
 from django.test import RequestFactory, TestCase
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, RegistroAuditoria, Usuario
 from apps.core.services.auditoria import registrar_auditoria
+from apps.core.tenant_context import tenant_atomic
 
 
 class RegistrarAuditoriaBase(TestCase):
@@ -116,3 +119,59 @@ class RegistrarAuditoriaTests(RegistrarAuditoriaBase):
 
         self.assertIsNone(registro)
         self.assertEqual(RegistroAuditoria.objects.count(), 0)
+
+
+class RegistrarAuditoriaFalhaDeBancoTests(RegistrarAuditoriaBase):
+    """
+    Em produção, cada empresa tem seu próprio banco. Um operador que atende
+    várias empresas pode ter `usuario_id` sem linha correspondente no banco
+    de uma delas -- o INSERT do registro de auditoria quebra a foreign key
+    de verdade (não é o `allow_relation` do Django, é o Postgres mesmo).
+    Isso já derrubou em produção uma tela que não tinha nada a ver com
+    auditoria (criar um depósito) com 500, depois de a ação principal já
+    ter sido salva -- auditoria é bookkeeping, não pode travar o trabalho.
+    """
+
+    def test_nao_devolve_excecao_quando_o_insert_falha(self):
+        request = RequestFactory().post('/qualquer/')
+        request.user = self.usuario
+        request.filial_ativa = self.filial
+
+        with patch(
+            'apps.core.services.auditoria.RegistroAuditoria.objects.create',
+            side_effect=IntegrityError('usuario_id nao existe neste banco'),
+        ):
+            registro = registrar_auditoria(
+                request=request,
+                modulo=RegistroAuditoria.Modulo.ESTOQUE,
+                acao=RegistroAuditoria.Acao.CRIAR,
+                objeto=self._objeto_qualquer(),
+            )
+
+        self.assertIsNone(registro)
+
+    def test_falha_na_auditoria_nao_derruba_a_transacao_de_quem_chamou(self):
+        """A auditoria roda num savepoint -- se ela falhar, o resto do
+        trabalho feito na MESMA transação continua de pé."""
+        request = RequestFactory().post('/qualquer/')
+        request.user = self.usuario
+        request.filial_ativa = self.filial
+
+        with tenant_atomic():
+            with patch(
+                'apps.core.services.auditoria.RegistroAuditoria.objects.create',
+                side_effect=IntegrityError('usuario_id nao existe neste banco'),
+            ):
+                registrar_auditoria(
+                    request=request,
+                    modulo=RegistroAuditoria.Modulo.ESTOQUE,
+                    acao=RegistroAuditoria.Acao.CRIAR,
+                    objeto=self._objeto_qualquer(),
+                )
+            # Sem o savepoint isolando a falha, esta escrita levantaria
+            # TransactionManagementError -- a transação já estaria abortada.
+            self.usuario.nome = 'Renomeado depois da falha de auditoria'
+            self.usuario.save(update_fields=['nome'])
+
+        self.usuario.refresh_from_db()
+        self.assertEqual(self.usuario.nome, 'Renomeado depois da falha de auditoria')
