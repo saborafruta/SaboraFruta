@@ -19,7 +19,8 @@ from django.urls import reverse
 from django.utils import timezone
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from apps.core.tenant_context import tenant_atomic
+from apps.core.models import Usuario
+from apps.core.tenant_context import get_current_database_alias, tenant_atomic
 from apps.cadastros.models import Cliente
 from apps.core.services.exceptions import DadosInvalidosError, DomainError
 from apps.financeiro.models import ContaBancaria, FormaPagamento
@@ -54,6 +55,32 @@ from .views import ModaBaseView
 
 def _filial(request):
     return request.filial_ativa
+
+
+def _usuario_operacional(request, *, obrigatorio=False):
+    """Resolve o usuário no mesmo banco em que a OP será gravada.
+
+    Um superadministrador autenticado no banco central continua sendo o ator
+    de permissões do request, mas os relacionamentos da OP pertencem ao banco
+    do tenant. Os IDs desses dois registros não são necessariamente iguais.
+    """
+    usuario = request.user
+    if not getattr(usuario, 'is_authenticated', False):
+        usuario = None
+    else:
+        alias = get_current_database_alias()
+        if getattr(getattr(usuario, '_state', None), 'db', None) != alias:
+            email = (getattr(usuario, 'email', '') or '').strip()
+            usuario = (
+                Usuario.objects.using(alias).filter(email__iexact=email, ativo=True).first()
+                if email else None
+            )
+    if usuario is None and obrigatorio:
+        raise DomainError(
+            'Não foi possível identificar seu usuário no banco desta empresa. '
+            'Saia, entre novamente e, se o problema continuar, fale com o suporte.'
+        )
+    return usuario
 
 
 def _pedido(request, pk):
@@ -626,16 +653,17 @@ class Op2CreateView(ModaBaseView):
             messages.error(request, str(erro))
             return render(request, 'moda/op2_create.html', self._context(request))
 
+        usuario_operacional = _usuario_operacional(request)
         rascunho_chave = (request.POST.get('rascunho_chave') or '').strip()
         rascunho_op = None
         if rascunho_chave:
             rascunho_op = RascunhoOP.objects.filter(
-                filial=_filial(request), usuario=request.user, chave=rascunho_chave,
+                filial=_filial(request), usuario=usuario_operacional, chave=rascunho_chave,
             ).prefetch_related('imagens').first()
 
         with tenant_atomic():
             pedido = PedidoProducao.objects.create(
-                filial=_filial(request), cliente=cliente, vendedor=request.user,
+                filial=_filial(request), cliente=cliente, vendedor=usuario_operacional,
                 status=PedidoProducao.Status.ORCAMENTO,
                 contato_nome=request.POST.get('contato_nome') or cliente.contato_nome or '',
                 contato_telefone=(
@@ -651,7 +679,7 @@ class Op2CreateView(ModaBaseView):
             texto_criacao = (request.POST.get('informacoes_criacao') or '').strip()
             if texto_criacao:
                 RegistroCriacaoArte.objects.create(
-                    pedido=pedido, texto=texto_criacao, criado_por=request.user,
+                    pedido=pedido, texto=texto_criacao, criado_por=usuario_operacional,
                 )
             pedido.clientes_adicionais.set(clientes_adicionais)
             primeiro_item = None
@@ -749,7 +777,7 @@ class Op2CreateView(ModaBaseView):
                             pedido=pedido, arquivo=visual.imagem,
                             tipo=ArquivoPedido.Tipo.ARTE,
                             descricao=f'Imagem · {item.nome_exibicao}',
-                            enviado_por=request.user,
+                            enviado_por=usuario_operacional,
                         )
 
             for ordem, pessoa in enumerate(individuais, start=1):
@@ -771,7 +799,7 @@ class Op2CreateView(ModaBaseView):
                     pedido=pedido, arquivo=upload,
                     tipo=request.POST.get('tipo_arquivo') or ArquivoPedido.Tipo.ARTE,
                     descricao=(request.POST.get('descricao_arquivo') or '').strip(),
-                    enviado_por=request.user,
+                    enviado_por=usuario_operacional,
                 )
             if primeiro_item:
                 self._salvar_mockups_do_item(request, pedido, primeiro_item)
@@ -779,14 +807,14 @@ class Op2CreateView(ModaBaseView):
             if rascunho_item:
                 RascunhoItemOP.objects.create(
                     filial=_filial(request), pedido=pedido,
-                    usuario=request.user, dados=rascunho_item,
+                    usuario=usuario_operacional, dados=rascunho_item,
                 )
 
             destino = request.POST.get('destino') or 'salvar'
             if destino == 'enviar':
                 aprovacao, _ = AprovacaoPedido.objects.get_or_create(pedido=pedido)
                 aprovacao.liberar(
-                    request.user, 'Orçamento salvo e enviado ao cliente pela OP 2.0.',
+                    usuario_operacional, 'Orçamento salvo e enviado ao cliente pela OP 2.0.',
                 )
 
             if rascunho_chave:
@@ -794,14 +822,14 @@ class Op2CreateView(ModaBaseView):
                     for imagem_rascunho in rascunho_op.imagens.all():
                         imagem_rascunho.arquivo.delete(save=False)
                 RascunhoOP.objects.filter(
-                    filial=_filial(request), usuario=request.user,
+                    filial=_filial(request), usuario=usuario_operacional,
                     chave=rascunho_chave,
                 ).delete()
             else:
                 # Compatibilidade com uma aba aberta antes de cada rascunho
                 # ganhar sua própria chave.
                 RascunhoOP.objects.filter(
-                    filial=_filial(request), usuario=request.user,
+                    filial=_filial(request), usuario=usuario_operacional,
                 ).delete()
 
         messages.success(request, f'Rascunho #{pedido.numero:06d} criado.')
@@ -873,7 +901,8 @@ class Op2CreateView(ModaBaseView):
         rascunho = None
         if chave_retomada or chave_sessao:
             rascunho = RascunhoOP.objects.filter(
-                filial=_filial(request), usuario=request.user, chave=chave,
+                filial=_filial(request),
+                usuario=_usuario_operacional(request), chave=chave,
             ).first()
             if chave_retomada and rascunho is None:
                 chave = uuid4()
@@ -1126,7 +1155,8 @@ class Op2CreateView(ModaBaseView):
             )
             ArquivoPedido.objects.create(
                 pedido=pedido, arquivo=visual.imagem, tipo=ArquivoPedido.Tipo.ARTE,
-                descricao=f'Imagem · {item.nome_exibicao}', enviado_por=request.user,
+                descricao=f'Imagem · {item.nome_exibicao}',
+                enviado_por=_usuario_operacional(request),
             )
         if not incluir_legado:
             return
@@ -1146,7 +1176,7 @@ class Op2CreateView(ModaBaseView):
                 arquivo=visual.imagem,
                 tipo=ArquivoPedido.Tipo.ARTE,
                 descricao=visual.get_posicao_display(),
-                enviado_por=request.user,
+                enviado_por=_usuario_operacional(request),
             )
 
 
@@ -1208,7 +1238,8 @@ class Op2HistoricoClienteView(ModaBaseView):
                 destino_id = (request.POST.get('destino_id') or '').strip()
                 if not destino_id:
                     destino = _nova_op_aproveitada(
-                        origem, request.user, itens, completa=modo == 'completa',
+                        origem, _usuario_operacional(request), itens,
+                        completa=modo == 'completa',
                     )
                 else:
                     destino = _pedido(request, destino_id)
@@ -1222,7 +1253,8 @@ class Op2HistoricoClienteView(ModaBaseView):
                         if destino.status != PedidoProducao.Status.ORCAMENTO:
                             raise ValueError('A OP completa só pode substituir um orçamento em edição.')
                         destino.itens.update(
-                            excluido_em=timezone.now(), excluido_por=request.user,
+                            excluido_em=timezone.now(),
+                            excluido_por=_usuario_operacional(request),
                         )
                         for campo in (
                             'prioridade', 'observacoes', 'desconto', 'acrescimo',
@@ -1267,6 +1299,10 @@ class Op2RascunhoView(ModaBaseView):
         }
 
     def post(self, request):
+        try:
+            usuario_operacional = _usuario_operacional(request, obrigatorio=True)
+        except DomainError as erro:
+            return JsonResponse({'ok': False, 'erro': str(erro)}, status=400)
         if request.FILES:
             chave_texto = (request.POST.get('rascunho_chave') or '').strip()
             item_uid = (request.POST.get('item_uid') or '').strip()
@@ -1280,7 +1316,7 @@ class Op2RascunhoView(ModaBaseView):
             if any(upload.size > self.limite_imagem for upload in uploads):
                 return JsonResponse({'ok': False, 'erro': 'Cada imagem pode ter até 15 MB.'}, status=413)
             rascunho, _ = RascunhoOP.objects.get_or_create(
-                filial=_filial(request), usuario=request.user, chave=chave,
+                filial=_filial(request), usuario=usuario_operacional, chave=chave,
             )
             for imagem in list(rascunho.imagens.filter(item_uid=item_uid)):
                 imagem.arquivo.delete(save=False)
@@ -1309,11 +1345,11 @@ class Op2RascunhoView(ModaBaseView):
             chave = UUID(chave_texto)
         except (TypeError, ValueError):
             existente = RascunhoOP.objects.filter(
-                filial=_filial(request), usuario=request.user,
+                filial=_filial(request), usuario=usuario_operacional,
             ).order_by('-updated_at').first()
             chave = existente.chave if existente else uuid4()
         rascunho, _ = RascunhoOP.objects.update_or_create(
-            filial=_filial(request), usuario=request.user, chave=chave,
+            filial=_filial(request), usuario=usuario_operacional, chave=chave,
             defaults={'dados': dados},
         )
         return JsonResponse({
@@ -1322,7 +1358,14 @@ class Op2RascunhoView(ModaBaseView):
         })
 
     def delete(self, request):
-        filtros = {'filial': _filial(request), 'usuario': request.user}
+        try:
+            usuario_operacional = _usuario_operacional(request, obrigatorio=True)
+        except DomainError as erro:
+            return JsonResponse({'ok': False, 'erro': str(erro)}, status=400)
+        filtros = {
+            'filial': _filial(request),
+            'usuario': usuario_operacional,
+        }
         chave_texto = (request.GET.get('chave') or '').strip()
         if chave_texto:
             try:
@@ -1650,7 +1693,7 @@ class Op2ActionView(ModaBaseView):
         if not texto:
             raise ValueError('Escreva uma informação sobre a criação da arte.')
         RegistroCriacaoArte.objects.create(
-            pedido=pedido, texto=texto, criado_por=request.user,
+            pedido=pedido, texto=texto, criado_por=_usuario_operacional(request),
         )
         messages.success(request, 'Informação adicionada à linha do tempo da criação.')
 
@@ -1794,7 +1837,9 @@ class Op2ActionView(ModaBaseView):
 
         contas_existem = FinanceiroPedidoService.contas_do_pedido(pedido).exists()
         if contas_existem:
-            FinanceiroPedidoService.sincronizar_valor_total(pedido, request.user)
+            FinanceiroPedidoService.sincronizar_valor_total(
+                pedido, _usuario_operacional(request),
+            )
         elif pedido.financeiro_gerado and valor_total > 0:
             # Uma OP antes zerada não tinha títulos. Ao ganhar valor, volta a
             # oferecer a geração do contas a receber.
@@ -1890,7 +1935,7 @@ class Op2ActionView(ModaBaseView):
             'conta_bancaria_entrada', 'updated_at',
         ])
         contas = FinanceiroPedidoService.gerar(
-            pedido, request.user, vencimento_saldo=vencimento,
+            pedido, _usuario_operacional(request), vencimento_saldo=vencimento,
             parcelas_saldo=parcelas, pagadores_entrada=pagadores_entrada,
             devedores_saldo=devedores_saldo,
         )
@@ -2006,7 +2051,7 @@ class Op2ActionView(ModaBaseView):
             return JsonResponse({'ok': True, 'ignorado': True})
         rascunho, _ = RascunhoItemOP.objects.update_or_create(
             filial=_filial(request), pedido=pedido,
-            defaults={'usuario': request.user, 'dados': dados},
+            defaults={'usuario': _usuario_operacional(request), 'dados': dados},
         )
         return JsonResponse({
             'ok': True, 'atualizado_em': rascunho.updated_at.isoformat(),
@@ -2030,7 +2075,8 @@ class Op2ActionView(ModaBaseView):
             ArquivoPedido.objects.create(
                 pedido=pedido, arquivo=visual.imagem,
                 tipo=ArquivoPedido.Tipo.ARTE,
-                descricao=f'Imagem · {item.nome_exibicao}', enviado_por=request.user,
+                descricao=f'Imagem · {item.nome_exibicao}',
+                enviado_por=_usuario_operacional(request),
             )
         messages.success(request, f'{len(uploads)} imagem(ns) adicionada(s) ao produto.')
 
@@ -2074,11 +2120,7 @@ class Op2ActionView(ModaBaseView):
     def _acao_remover_item(self, request, pedido):
         item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
         item.excluido_em = timezone.now()
-        # `_id`, não a instância: `request.user` é um `SimpleLazyObject` que pode
-        # resolver noutro alias de banco do que `item` (roteamento por tenant,
-        # `apps/core/db_router.py`) e disparar "the current database router
-        # prevents this relation" em `allow_relation()`.
-        item.excluido_por_id = request.user.pk
+        item.excluido_por = _usuario_operacional(request)
         item.save(update_fields=['excluido_em', 'excluido_por'])
         GradePedidoService.recalcular_pedido(pedido)
         _sincronizar_status(pedido)
@@ -2355,7 +2397,10 @@ class Op2ActionView(ModaBaseView):
     def _acao_enviar_whatsapp(self, request, pedido):
         aprovacao, _ = AprovacaoPedido.objects.get_or_create(pedido=pedido)
         if not aprovacao.liberado:
-            aprovacao.liberar(request.user, 'Liberado pela OP 2.0 para envio ao cliente.')
+            aprovacao.liberar(
+                _usuario_operacional(request),
+                'Liberado pela OP 2.0 para envio ao cliente.',
+            )
         if (pedido.status != PedidoProducao.Status.ORCAMENTO
                 and aprovacao.aguardando_cliente):
             pedido.status = PedidoProducao.Status.AGUARDANDO_APROVACAO
@@ -2371,7 +2416,7 @@ class Op2ActionView(ModaBaseView):
                 pedido=pedido, arquivo=upload,
                 tipo=request.POST.get('tipo') or ArquivoPedido.Tipo.ARTE,
                 descricao=(request.POST.get('descricao') or '').strip(),
-                enviado_por=request.user,
+                enviado_por=_usuario_operacional(request),
             )
         messages.success(request, f'{len(arquivos)} arquivo(s) anexado(s).')
 
@@ -2542,7 +2587,8 @@ class Op2ActionView(ModaBaseView):
 
     def _acao_duplicar(self, request, pedido):
         novo = _nova_op_aproveitada(
-            pedido, request.user, list(pedido.itens.all()), completa=True,
+            pedido, _usuario_operacional(request), list(pedido.itens.all()),
+            completa=True,
         )
         messages.success(request, f'OP duplicada como rascunho #{novo.numero:06d}.')
         return _voltar(novo)

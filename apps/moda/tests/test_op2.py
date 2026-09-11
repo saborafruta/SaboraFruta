@@ -3,6 +3,8 @@ import re
 from datetime import timedelta
 from decimal import Decimal
 from io import BytesIO
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 from zipfile import ZipFile
 from uuid import uuid4
 
@@ -30,7 +32,9 @@ from apps.moda.services.op2_estrutura import (
 from apps.moda.services.conjunto import validar_configuracao_conjunto
 from apps.moda.services.historico import HistoricoService
 from apps.moda.services.kanban_comercial import COLUNAS
-from apps.moda.views_op2 import Op2CreateView, _sincronizar_status
+from apps.moda.views_op2 import (
+    Op2CreateView, _sincronizar_status, _usuario_operacional,
+)
 
 
 class Op2Tests(TestCase):
@@ -2781,6 +2785,74 @@ class Op2Tests(TestCase):
         self.assertIsNone(restaurado.excluido_por)
         self.assertEqual(restaurado.grade.get().quantidade, 3)
         self.assertEqual(restaurado.personalizacoes.get().local, 'Peito')
+
+    def test_excluir_item_usa_usuario_correspondente_do_banco_operacional(self):
+        item = self._item(quantidade=1)
+        usuario_tenant = Usuario.objects.create_user(
+            email='admin-tenant@teste.local', nome='Administrador no tenant',
+            empresa=self.filial.empresa, filial=self.filial, perfil=self.perfil,
+        )
+        self._login_op2()
+
+        with patch(
+            'apps.moda.views_op2._usuario_operacional',
+            return_value=usuario_tenant,
+        ):
+            resposta = self.client.post(
+                reverse('moda:op2-action', args=[self.pedido.pk]),
+                {'acao': 'remover_item', 'item_id': str(item.pk)},
+            )
+
+        self.assertRedirects(
+            resposta, reverse('moda:op2-detail', args=[self.pedido.pk]),
+        )
+        item = ItemPedidoProducao.all_objects.get(pk=item.pk)
+        self.assertEqual(item.excluido_por, usuario_tenant)
+
+    def test_excluir_item_sem_usuario_no_tenant_nao_gera_erro_500(self):
+        item = self._item(quantidade=1)
+        self._login_op2()
+
+        with patch(
+            'apps.moda.views_op2._usuario_operacional', return_value=None,
+        ):
+            resposta = self.client.post(
+                reverse('moda:op2-action', args=[self.pedido.pk]),
+                {'acao': 'remover_item', 'item_id': str(item.pk)},
+            )
+
+        self.assertRedirects(
+            resposta, reverse('moda:op2-detail', args=[self.pedido.pk]),
+        )
+        item = ItemPedidoProducao.all_objects.get(pk=item.pk)
+        self.assertIsNotNone(item.excluido_em)
+        self.assertIsNone(item.excluido_por)
+
+    def test_usuario_operacional_busca_mesmo_email_no_banco_do_tenant(self):
+        usuario_tenant = self._usuario()
+        usuario_central = SimpleNamespace(
+            is_authenticated=True,
+            email=usuario_tenant.email.upper(),
+            _state=SimpleNamespace(db='default'),
+        )
+        request = SimpleNamespace(user=usuario_central)
+        queryset = Mock()
+        queryset.filter.return_value.first.return_value = usuario_tenant
+
+        with (
+            patch(
+                'apps.moda.views_op2.get_current_database_alias',
+                return_value='tenant_empresa',
+            ),
+            patch.object(Usuario.objects, 'using', return_value=queryset) as using,
+        ):
+            resolvido = _usuario_operacional(request)
+
+        self.assertIs(resolvido, usuario_tenant)
+        using.assert_called_once_with('tenant_empresa')
+        queryset.filter.assert_called_once_with(
+            email__iexact=usuario_tenant.email.upper(), ativo=True,
+        )
 
     def test_lixeira_nao_permite_restaurar_item_de_outra_op(self):
         outro_pedido = PedidoProducao.objects.create(
