@@ -1082,7 +1082,9 @@ def api_caixa_abrir(request):
     sessao = SessaoPDV.objects.create(
         filial=request.filial_ativa,
         caixa=caixa,
-        usuario=request.user,
+        # Use o id: request.user e um SimpleLazyObject carregado do banco
+        # central e a sessao pertence ao banco tenant da empresa.
+        usuario_id=request.user.pk,
         valor_abertura=valor_abertura,
         data_abertura=timezone.now(),
         status="aberto",

@@ -5,6 +5,7 @@ import subprocess
 from decimal import Decimal
 from pathlib import Path
 from unittest import skipUnless
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
@@ -184,14 +185,21 @@ class CaixaPDVApiTests(TestCase):
         criar = self.post_json("pdv:api_caixa_criar", {}).json()
         caixa_id = criar["caixa"]["id"]
 
-        response = self.post_json(
-            "pdv:api_caixa_abrir",
-            {"caixa_id": caixa_id, "valor_abertura": "12.50"},
-        )
+        with patch.object(
+            SessaoPDV.objects,
+            "create",
+            wraps=SessaoPDV.objects.create,
+        ) as criar_sessao:
+            response = self.post_json(
+                "pdv:api_caixa_abrir",
+                {"caixa_id": caixa_id, "valor_abertura": "12.50"},
+            )
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertTrue(data["ok"])
+        self.assertNotIn("usuario", criar_sessao.call_args.kwargs)
+        self.assertEqual(criar_sessao.call_args.kwargs["usuario_id"], self.usuario.pk)
         sessao = SessaoPDV.objects.get(pk=data["sessao_id"])
         self.assertEqual(sessao.caixa_id, caixa_id)
         self.assertEqual(sessao.valor_abertura, Decimal("12.50"))
