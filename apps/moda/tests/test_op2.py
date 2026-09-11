@@ -565,7 +565,7 @@ class Op2Tests(TestCase):
             'confirmado': '#7c3aed',
             'producao': '#dc2626',
             'pronto': '#f97316',
-            'entregue': '#dc2626',
+            'entregue': '#16a34a',
         }.items():
             self.assertContains(
                 resposta,
