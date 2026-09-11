@@ -53,6 +53,12 @@ urlpatterns = [
     path('inventarios/<int:pk>/divergencias/', views.InventarioDivergenciasView.as_view(), name='inventario-divergencias'),
     path('inventarios/<int:pk>/cancelar/', views.InventarioCancelView.as_view(), name='inventario-cancel'),
 
+    # Depositos (locais de estoque dentro da filial)
+    path('depositos/', views.DepositoListView.as_view(), name='deposito-list'),
+    path('depositos/novo/', views.DepositoCreateView.as_view(), name='deposito-create'),
+    path('depositos/<int:pk>/', views.DepositoUpdateView.as_view(), name='deposito-update'),
+    path('depositos/transferencia-interna/', views.TransferenciaInternaView.as_view(), name='transferencia-interna'),
+
     # Lotes
     path('lotes/', views.LoteListView.as_view(), name='lote-list'),
     path('lotes/novo/', views.LoteCreateView.as_view(), name='lote-create'),

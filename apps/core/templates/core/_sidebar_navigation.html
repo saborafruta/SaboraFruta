@@ -10,6 +10,7 @@
       {% url 'compras:entrada-list' as compras_url %}
       {% url 'estoque:sugestao-compras' as sugestao_compras_url %}
       {% url 'estoque:outras-mov-hub' as outras_mov_url %}
+      {% url 'estoque:deposito-list' as depositos_url %}
       {% url 'lotes:dashboard' as lotes_url %}
 
       {% if not hide_sidebar_logo %}
@@ -282,6 +283,21 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
         </svg>
         <span x-show="!collapsed">Outras Mov.</span>
+      </a>
+
+      <a href="{{ depositos_url }}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="{% if '/estoque/depositos' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
+         {% if '/estoque/depositos' not in request.path %}
+         @mouseenter="$el.style.background=temaClaro?'#eff6ff':'#242426'; $el.style.color=temaClaro?'#1d4ed8':'#d4d4d4';"
+         @mouseleave="$el.style.background='transparent'; $el.style.color=temaClaro?'#6b7280':'#f8fafc'; $el.style.fontWeight='';"
+         {% endif %}
+         title="Depósitos">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5m14 0h2m-2 0V11a2 2 0 00-2-2H9a2 2 0 00-2 2v10"/>
+        </svg>
+        <span x-show="!collapsed">Depósitos</span>
       </a>
 
 

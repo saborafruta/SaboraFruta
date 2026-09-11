@@ -1,0 +1,119 @@
+{% extends "_base.html" %}
+{% load widget_tweaks %}
+{% block title %}{{ title }} — ERP iNoovaTed{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block largura_conteudo %}max-w-2xl{% endblock %}
+
+{% block content %}
+<div class="w-full space-y-5"
+     x-data="transfInterna({
+       produtoId: '{{ form.produto.value|default:'' }}',
+       produtoLabel: '{{ produto.descricao|default:''|escapejs }}'
+     })">
+
+  <div>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'estoque:deposito-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Depósitos</a>
+      <span class="mx-1">›</span> Transferência interna
+    </p>
+    <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Move saldo de um depósito para outro na mesma filial. Não emite NF-e.
+    </p>
+  </div>
+
+  {% if form.non_field_errors %}
+    <div class="rounded-lg px-4 py-3 text-sm" style="background:rgba(239,68,68,.1);color:#f87171;">
+      {{ form.non_field_errors|join:" " }}
+    </div>
+  {% endif %}
+
+  <form method="post" class="card p-6 space-y-4">
+    {% csrf_token %}
+    <input type="hidden" name="produto" :value="produtoId">
+
+    <div class="relative">
+      <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Produto</label>
+      <input type="text" x-model="busca" @input.debounce.300ms="buscar()" @focus="buscar()"
+             :placeholder="produtoLabel || 'Digite para buscar…'"
+             class="w-full rounded-lg border px-3 py-2 text-sm" autocomplete="off">
+      <div x-show="resultados.length" class="absolute z-20 mt-1 w-full rounded-lg border shadow-lg max-h-60 overflow-auto"
+           :style="temaClaro ? 'background:#fff;' : 'background:#0f172a;border-color:#1e293b;'" style="display:none;">
+        <template x-for="r in resultados" :key="r.id">
+          <button type="button" @click="escolher(r)"
+                  class="w-full text-left px-3 py-2 text-sm hover:opacity-80"
+                  :style="temaClaro ? 'color:#111827;' : 'color:#e2e8f0;'">
+            <span x-text="r.label"></span>
+            <span class="text-xs opacity-60" x-text="r.detalhe ? ' · ' + r.detalhe : ''"></span>
+            <span class="text-xs opacity-60" x-text="' · saldo ' + r.estoque"></span>
+          </button>
+        </template>
+      </div>
+      <p class="text-xs mt-1" x-show="produtoId" :style="temaClaro ? 'color:#16a34a;' : 'color:#4ade80;'">
+        Selecionado: <span x-text="produtoLabel"></span>
+      </p>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">De</label>
+        {{ form.deposito_origem|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
+        {% if form.deposito_origem.errors %}<p class="text-xs mt-1" style="color:#f87171;">{{ form.deposito_origem.errors.0 }}</p>{% endif %}
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Para</label>
+        {{ form.deposito_destino|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
+        {% if form.deposito_destino.errors %}<p class="text-xs mt-1" style="color:#f87171;">{{ form.deposito_destino.errors.0 }}</p>{% endif %}
+      </div>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Quantidade</label>
+      {{ form.quantidade|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
+      {% if form.quantidade.errors %}<p class="text-xs mt-1" style="color:#f87171;">{{ form.quantidade.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Observação</label>
+      {{ form.observacao|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
+    </div>
+
+    <div class="flex gap-3 justify-end pt-2">
+      <a href="{% url 'estoque:deposito-list' %}" class="btn-secondary">Cancelar</a>
+      <button type="submit" class="btn-primary" :disabled="!produtoId">Transferir</button>
+    </div>
+  </form>
+</div>
+
+<script>
+function transfInterna(init) {
+  return {
+    busca: '',
+    resultados: [],
+    produtoId: init.produtoId || '',
+    produtoLabel: init.produtoLabel || '',
+    async buscar() {
+      const q = this.busca.trim();
+      if (q.length < 2) { this.resultados = []; return; }
+      try {
+        const resp = await fetch(
+          "{% url 'estoque:produto-estoque-search-json' %}?q=" + encodeURIComponent(q),
+          { headers: { 'Accept': 'application/json' } }
+        );
+        if (!resp.ok || !(resp.headers.get('content-type') || '').includes('application/json')) {
+          this.resultados = []; return;
+        }
+        const data = await resp.json();
+        this.resultados = data.results || [];
+      } catch (e) { this.resultados = []; }
+    },
+    escolher(r) {
+      this.produtoId = r.id;
+      this.produtoLabel = r.label;
+      this.busca = '';
+      this.resultados = [];
+    },
+  };
+}
+</script>
+{% endblock %}

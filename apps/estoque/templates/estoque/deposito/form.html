@@ -1,0 +1,57 @@
+{% extends "_base.html" %}
+{% load widget_tweaks %}
+{% block title %}{{ title }} — ERP iNoovaTed{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block largura_conteudo %}max-w-2xl{% endblock %}
+
+{% block content %}
+<div class="w-full space-y-5">
+
+  <div>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'estoque:deposito-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Depósitos</a>
+      <span class="mx-1">›</span> {{ title }}
+    </p>
+    <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+  </div>
+
+  {% if form.non_field_errors %}
+    <div class="rounded-lg px-4 py-3 text-sm" style="background:rgba(239,68,68,.1);color:#f87171;">
+      {{ form.non_field_errors|join:" " }}
+    </div>
+  {% endif %}
+
+  <form method="post" class="card p-6 space-y-4">
+    {% csrf_token %}
+
+    <div>
+      <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Nome</label>
+      {{ form.nome|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
+      {% if form.nome.errors %}<p class="text-xs mt-1" style="color:#f87171;">{{ form.nome.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Tipo</label>
+      {{ form.tipo|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
+      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Só organiza; as regras de venda/produção são os campos abaixo.</p>
+    </div>
+
+    <label class="flex items-center gap-2 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+      {{ form.permite_venda }} Disponível para venda (aparece no PDV)
+    </label>
+    <label class="flex items-center gap-2 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+      {{ form.permite_producao }} Usado pela produção (consumo e entrada)
+    </label>
+    <label class="flex items-center gap-2 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+      {{ form.ativo }} Ativo
+    </label>
+    {% if form.ativo.help_text %}<p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ form.ativo.help_text }}</p>{% endif %}
+
+    <div class="flex gap-3 justify-end pt-2">
+      <a href="{% url 'estoque:deposito-list' %}" class="btn-secondary">Cancelar</a>
+      <button type="submit" class="btn-primary">Salvar</button>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

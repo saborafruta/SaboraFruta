@@ -149,3 +149,82 @@ class DepositoNaMovimentacaoTests(DepositoBase):
         estoque = Estoque.objects.get(produto=produto, filial=self.filial)
         self.assertEqual(estoque.quantidade_atual, Decimal('7'))
         self.assertEqual(estoque.deposito_id, Deposito.padrao_id(self.filial.pk))
+
+
+class TransferenciaInternaTests(DepositoBase):
+
+    def _saldo(self, produto, deposito):
+        return (
+            Estoque.objects.filter(
+                produto=produto, filial=self.filial, deposito=deposito,
+            ).values_list('quantidade_atual', flat=True).first()
+            or Decimal('0')
+        )
+
+    def setUp(self):
+        self.produto = self._produto('Camiseta')
+        self.loja_id = Deposito.padrao_id(self.filial.pk)
+        self.loja = Deposito.objects.get(pk=self.loja_id)
+        self.fabrica = Deposito.objects.create(
+            filial=self.filial, nome='Fábrica', tipo=Deposito.Tipo.PRODUCAO,
+            permite_venda=False,
+        )
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=self.produto.pk, filial_id=self.filial.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('20'), usuario_id=self.usuario.pk,
+            valor_unitario=Decimal('5'),
+        )  # entra no depósito padrão (loja)
+
+    def test_move_saldo_entre_depositos_sem_mexer_no_total_da_filial(self):
+        MovimentacaoService.transferir_entre_depositos(
+            produto_id=self.produto.pk, filial_id=self.filial.pk,
+            deposito_origem_id=self.loja_id, deposito_destino_id=self.fabrica.pk,
+            quantidade=Decimal('8'), usuario_id=self.usuario.pk,
+        )
+        self.assertEqual(self._saldo(self.produto, self.loja), Decimal('12'))
+        self.assertEqual(self._saldo(self.produto, self.fabrica), Decimal('8'))
+
+        movs = MovimentacaoEstoque.objects.filter(
+            produto=self.produto,
+            tipo_operacao__in=[
+                MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_INTERNA_SAIDA,
+                MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_INTERNA_ENTRADA,
+            ],
+        )
+        self.assertEqual(movs.count(), 2)
+        saida = movs.get(tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_INTERNA_SAIDA)
+        self.assertEqual(saida.deposito_id, self.loja_id)
+        self.assertEqual(saida.deposito_destino_id, self.fabrica.pk)
+
+    def test_recusa_mesmo_deposito(self):
+        from apps.core.services.exceptions import DadosInvalidosError
+        with self.assertRaises(DadosInvalidosError):
+            MovimentacaoService.transferir_entre_depositos(
+                produto_id=self.produto.pk, filial_id=self.filial.pk,
+                deposito_origem_id=self.loja_id, deposito_destino_id=self.loja_id,
+                quantidade=Decimal('1'), usuario_id=self.usuario.pk,
+            )
+
+    def test_recusa_saldo_insuficiente(self):
+        from apps.core.services.exceptions import EstoqueInsuficienteError
+        with self.assertRaises(EstoqueInsuficienteError):
+            MovimentacaoService.transferir_entre_depositos(
+                produto_id=self.produto.pk, filial_id=self.filial.pk,
+                deposito_origem_id=self.loja_id, deposito_destino_id=self.fabrica.pk,
+                quantidade=Decimal('999'), usuario_id=self.usuario.pk,
+            )
+
+    def test_recusa_deposito_de_outra_filial(self):
+        from apps.core.services.exceptions import DadosInvalidosError
+        outra = Filial.objects.create(
+            empresa=self.empresa, razao_social='Outra F', nome_fantasia='Outra',
+            cnpj='19345678000199', uf='RN',
+        )
+        dep_outra = Deposito.objects.create(filial=outra, nome='X')
+        with self.assertRaises(DadosInvalidosError):
+            MovimentacaoService.transferir_entre_depositos(
+                produto_id=self.produto.pk, filial_id=self.filial.pk,
+                deposito_origem_id=self.loja_id, deposito_destino_id=dep_outra.pk,
+                quantidade=Decimal('1'), usuario_id=self.usuario.pk,
+            )

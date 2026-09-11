@@ -478,6 +478,108 @@ class MovimentacaoService:
         return mov_saida, mov_entrada
 
     # ----------------------------------------------------------------------
+    # Transferência interna entre depósitos da MESMA filial (sem NF-e)
+    # ----------------------------------------------------------------------
+
+    @classmethod
+    @tenant_atomic
+    def transferir_entre_depositos(
+        cls,
+        produto_id: int,
+        filial_id: int,
+        deposito_origem_id: int,
+        deposito_destino_id: int,
+        quantidade: Decimal,
+        usuario_id: int,
+        lote_id: int | None = None,
+        observacao: str = '',
+        forcar_estoque_negativo: bool = False,
+    ) -> tuple[MovimentacaoEstoque, MovimentacaoEstoque]:
+        """
+        Move saldo de um depósito para outro DENTRO da mesma filial.
+
+        É operação interna: mesmo CNPJ, mesmo estabelecimento — não emite
+        NF-e. Gera duas movimentações (saída no depósito de origem, entrada
+        no de destino) numa única transação.
+
+        `LoteProduto` não tem dimensão de depósito: o lote continua o mesmo
+        pedaço físico na mesma filial, então a quantidade do lote NÃO é
+        mexida aqui. Se um lote for informado, ele é apenas carimbado nas
+        duas movimentações para rastreio.
+        """
+        if quantidade <= 0:
+            raise DadosInvalidosError('Quantidade deve ser positiva.')
+        if deposito_origem_id == deposito_destino_id:
+            raise DadosInvalidosError('Depósito de origem e destino não podem ser iguais.')
+
+        depositos = {
+            d.pk: d for d in Deposito.objects.filter(
+                pk__in=[deposito_origem_id, deposito_destino_id],
+                filial_id=filial_id,
+            )
+        }
+        if deposito_origem_id not in depositos or deposito_destino_id not in depositos:
+            raise DadosInvalidosError('Depósito de origem ou destino não pertence à filial.')
+        if not depositos[deposito_destino_id].ativo:
+            raise DadosInvalidosError('O depósito de destino está inativo.')
+
+        saldo_origem, custo_origem = (
+            Estoque.objects.filter(
+                produto_id=produto_id, filial_id=filial_id,
+                deposito_id=deposito_origem_id,
+            )
+            .values_list('quantidade_atual', 'custo_medio')
+            .first()
+        ) or (Decimal('0'), Decimal('0'))
+        if not forcar_estoque_negativo and saldo_origem < quantidade:
+            raise EstoqueInsuficienteError(
+                f'Saldo insuficiente no depósito de origem. '
+                f'Disponível: {saldo_origem}, solicitado: {quantidade}.'
+            )
+
+        origem = depositos[deposito_origem_id].nome
+        destino = depositos[deposito_destino_id].nome
+
+        mov_saida = cls.registrar_movimentacao(
+            produto_id=produto_id,
+            filial_id=filial_id,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_INTERNA_SAIDA,
+            quantidade=quantidade,
+            usuario_id=usuario_id,
+            documento_tipo=MovimentacaoEstoque.DocumentoTipo.TRANSFERENCIA_INTERNA,
+            observacao=observacao or f'Transferência interna: {origem} → {destino}',
+            deposito_id=deposito_origem_id,
+            forcar_estoque_negativo=forcar_estoque_negativo,
+            permitir_sem_lote=True,
+        )
+        mov_entrada = cls.registrar_movimentacao(
+            produto_id=produto_id,
+            filial_id=filial_id,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_INTERNA_ENTRADA,
+            quantidade=quantidade,
+            usuario_id=usuario_id,
+            # Leva o custo médio do depósito de origem para o de destino não
+            # herdar custo zero — a valorização por depósito depende disso.
+            valor_unitario=custo_origem or None,
+            documento_tipo=MovimentacaoEstoque.DocumentoTipo.TRANSFERENCIA_INTERNA,
+            documento_id=mov_saida.pk,
+            observacao=f'Recebido de {origem} — mov. saída #{mov_saida.pk}',
+            deposito_id=deposito_destino_id,
+            permitir_sem_lote=True,
+        )
+
+        mov_saida.documento_id = mov_entrada.pk
+        mov_saida.deposito_destino_id = deposito_destino_id
+        mov_saida.save(update_fields=['documento_id', 'deposito_destino'])
+
+        if lote_id:
+            MovimentacaoEstoque.objects.filter(
+                pk__in=[mov_saida.pk, mov_entrada.pk],
+            ).update(lote_id=lote_id)
+
+        return mov_saida, mov_entrada
+
+    # ----------------------------------------------------------------------
     # Entrada por compra (com lote)
     # ----------------------------------------------------------------------
 

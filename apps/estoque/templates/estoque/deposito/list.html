@@ -1,0 +1,67 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — ERP iNoovaTed{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="w-full space-y-5">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'estoque:estoque-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Estoque</a>
+        <span class="mx-1">›</span> Depósitos
+      </p>
+      <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Depósitos</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Locais de estoque dentro desta filial. Mover saldo entre eles é operação interna — não emite NF-e.
+      </p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{% url 'estoque:transferencia-interna' %}" class="btn-secondary">Transferência interna</a>
+      {% if permissoes_estoque.pode_criar %}
+        <a href="{% url 'estoque:deposito-create' %}" class="btn-primary">+ Novo depósito</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr :style="temaClaro ? 'background:#f8fafc;color:#475569;' : 'background:#0f172a;color:#94a3b8;'">
+          <th class="text-left font-medium px-4 py-3">Depósito</th>
+          <th class="text-left font-medium px-4 py-3">Tipo</th>
+          <th class="text-center font-medium px-4 py-3">Venda</th>
+          <th class="text-center font-medium px-4 py-3">Produção</th>
+          <th class="text-right font-medium px-4 py-3">Itens com saldo</th>
+          <th class="text-right font-medium px-4 py-3">Total un.</th>
+          <th class="px-4 py-3"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in depositos %}
+        <tr :style="temaClaro ? 'border-top:1px solid #e2e8f0;' : 'border-top:1px solid #1e293b;'">
+          <td class="px-4 py-3">
+            <span class="font-medium" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'">{{ d.nome }}</span>
+            {% if d.is_padrao %}<span class="ml-2 text-xs px-1.5 py-0.5 rounded" style="background:rgba(59,130,246,.15);color:#60a5fa;">padrão</span>{% endif %}
+            {% if not d.ativo %}<span class="ml-2 text-xs px-1.5 py-0.5 rounded" style="background:rgba(148,163,184,.15);color:#94a3b8;">inativo</span>{% endif %}
+          </td>
+          <td class="px-4 py-3" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">{{ d.get_tipo_display }}</td>
+          <td class="px-4 py-3 text-center">{% if d.permite_venda %}✓{% else %}—{% endif %}</td>
+          <td class="px-4 py-3 text-center">{% if d.permite_producao %}✓{% else %}—{% endif %}</td>
+          <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">{{ d.itens_com_saldo }}</td>
+          <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">{{ d.total_unidades|floatformat:3 }}</td>
+          <td class="px-4 py-3 text-right">
+            {% if permissoes_estoque.pode_editar %}
+              <a href="{% url 'estoque:deposito-update' d.pk %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Editar</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhum depósito.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

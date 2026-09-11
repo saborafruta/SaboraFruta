@@ -1,0 +1,63 @@
+from django import forms
+
+from apps.estoque.models import Deposito
+
+
+class DepositoForm(forms.ModelForm):
+    class Meta:
+        model = Deposito
+        fields = ['nome', 'tipo', 'permite_venda', 'permite_producao', 'ativo']
+        widgets = {
+            'nome': forms.TextInput(attrs={'placeholder': 'Ex.: Loja, Fábrica'}),
+        }
+
+    def __init__(self, *args, filial=None, **kwargs):
+        self.filial = filial
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and self.instance.is_padrao:
+            # O depósito padrão não pode ser desativado nem renomeado à toa:
+            # é o destino de tudo que não indica depósito.
+            self.fields['ativo'].disabled = True
+            self.fields['ativo'].help_text = 'O depósito padrão da filial não pode ser desativado.'
+
+    def clean_nome(self):
+        nome = self.cleaned_data['nome'].strip()
+        if not nome:
+            raise forms.ValidationError('Informe um nome.')
+        qs = Deposito.objects.filter(filial=self.filial, nome__iexact=nome)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError('Já existe um depósito com esse nome nesta filial.')
+        return nome
+
+
+class TransferenciaInternaForm(forms.Form):
+    """Move saldo de um depósito para outro na mesma filial (sem NF-e)."""
+
+    produto = forms.IntegerField(widget=forms.HiddenInput)
+    deposito_origem = forms.ModelChoiceField(queryset=Deposito.objects.none(), label='De')
+    deposito_destino = forms.ModelChoiceField(queryset=Deposito.objects.none(), label='Para')
+    quantidade = forms.DecimalField(
+        min_value=0, max_digits=12, decimal_places=3, label='Quantidade',
+        widget=forms.NumberInput(attrs={'step': '0.001', 'inputmode': 'decimal'}),
+    )
+    observacao = forms.CharField(
+        required=False, label='Observação',
+        widget=forms.TextInput(attrs={'placeholder': 'Opcional'}),
+    )
+
+    def __init__(self, *args, filial=None, **kwargs):
+        self.filial = filial
+        super().__init__(*args, **kwargs)
+        depositos = Deposito.objects.filter(filial=filial, ativo=True).order_by('nome')
+        self.fields['deposito_origem'].queryset = depositos
+        self.fields['deposito_destino'].queryset = depositos
+
+    def clean(self):
+        dados = super().clean()
+        origem = dados.get('deposito_origem')
+        destino = dados.get('deposito_destino')
+        if origem and destino and origem == destino:
+            self.add_error('deposito_destino', 'Escolha um depósito diferente da origem.')
+        return dados
