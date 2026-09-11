@@ -211,11 +211,19 @@ class EntregaBonificacaoService:
     @staticmethod
     def _devolver_ao_estoque(entrega, motivo: str, usuario=None) -> None:
         """A cortesia da carga volta para a prateleira de onde saiu."""
-        from apps.estoque.models import MovimentacaoEstoque
+        from apps.estoque.models import Deposito, MovimentacaoEstoque
         from apps.estoque.services.movimentacao_service import MovimentacaoService
 
         item = entrega.item_carga
         viagem = item.viagem
+        # De onde saiu, pro mesmo depósito -- a carga guarda o ponteiro pro
+        # movimento que a tirou de lá. Carga fechada antes desse ponteiro
+        # existir cai no depósito de venda da filial, o mesmo destino de
+        # qualquer saída sem rastro mais específico.
+        deposito_id = (
+            item.movimentacao.deposito_id if item.movimentacao_id
+            else Deposito.venda_id(viagem.filial_id)
+        )
         MovimentacaoService.registrar_movimentacao(
             produto_id=item.produto_id,
             filial_id=viagem.filial_id,
@@ -233,6 +241,7 @@ class EntregaBonificacaoService:
                 f'viagem #{viagem.numero:06d}'
             ),
             permitir_sem_lote=True,
+            deposito_id=deposito_id,
         )
 
     @staticmethod

@@ -97,11 +97,17 @@ class EstoqueEmTransitoService:
         # O ESTOQUE FISICO AO LADO: e' a leitura que a pessoa faz de verdade --
         # "tenho 700 aqui e 300 na rua" -- e sem os dois numeros juntos ela tem
         # que abrir outra tela para fechar a conta.
-        fisico = dict(
-            Estoque.objects
-            .filter(filial=filial, produto_id__in=agrupado.keys())
-            .values_list('produto_id', 'quantidade_atual')
-        )
+        # Soma os depósitos: "tenho 700 aqui" precisa ser o físico da filial
+        # inteira, não o de um depósito qualquer.
+        fisico = {
+            row['produto_id']: row['total']
+            for row in (
+                Estoque.objects
+                .filter(filial=filial, produto_id__in=agrupado.keys())
+                .values('produto_id')
+                .annotate(total=Sum('quantidade_atual'))
+            )
+        }
         linhas = []
         for produto_id, linha in agrupado.items():
             linha['fisico'] = fisico.get(produto_id, ZERO) or ZERO

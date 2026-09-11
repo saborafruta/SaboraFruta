@@ -29,7 +29,7 @@ from django.utils import timezone
 
 from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
-from apps.estoque.models import MovimentacaoEstoque
+from apps.estoque.models import Deposito, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.fiscal.models import NaturezaOperacao
 from apps.fiscal.services.natureza_operacao_service import NaturezaOperacaoService
@@ -268,6 +268,10 @@ class ViagemService:
                 documento_tipo='viagem',
                 documento_id=viagem.pk,
                 documento_numero=str(viagem.numero),
+                # A carga sai do mesmo depósito de onde o PDV vende -- é a
+                # mesma mercadoria disponível pro balcão saindo pela porta
+                # do caminhão em vez da porta da loja.
+                deposito_id=Deposito.venda_id(viagem.filial_id),
                 # PARA QUEM E SOB QUE NOTA. Sem o destinatario, duas
                 # bonificacoes na mesma viagem viram dois movimentos
                 # indistinguiveis, e "para quem demos as 20 caixas?" so' se
@@ -402,6 +406,8 @@ class ViagemService:
             documento_numero=str(viagem.numero),
             observacao=f'Retorno da viagem #{viagem.numero:06d}',
             permitir_sem_lote=True,
+            # Volta pro mesmo depósito de onde a carga saiu.
+            deposito_id=Deposito.venda_id(viagem.filial_id),
         )
         return saldo
 
