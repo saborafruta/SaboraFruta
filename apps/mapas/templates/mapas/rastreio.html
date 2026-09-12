@@ -496,8 +496,9 @@ function rastreio() {
       if (!this._mapa) {
         const c = this.centro || { lat: -14.235, lng: -51.925 };
         this._mapa = L.map(el).setView([c.lat, c.lng], 12);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19, attribution: '&copy; OpenStreetMap',
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+          maxZoom: 20, subdomains: 'abcd',
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
         }).addTo(this._mapa);
       }
       if (this._traco) { this._mapa.removeLayer(this._traco); this._traco = null; }
