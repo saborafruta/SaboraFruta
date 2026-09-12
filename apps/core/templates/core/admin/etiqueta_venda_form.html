@@ -7,6 +7,7 @@
 {% block content %}
 <style>
   .label-layout-editor { position:relative; user-select:none; touch-action:none; }
+  .label-layout-content { position:absolute; }
   .label-layout-item { position:absolute; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:3px; border:1px dashed transparent; cursor:grab; line-height:1.05; }
   .label-layout-item:hover, .label-layout-item:focus { border-color:#2563eb; background:rgba(37,99,235,.08); outline:none; }
   .label-layout-item:active { cursor:grabbing; }
@@ -16,6 +17,9 @@
   .label-layout-item.is-customer { font-size:18px; font-weight:900; }
   .label-layout-item.is-meta { font-size:10px; }
   .label-layout-item.is-message { font-size:10px; font-weight:700; border-top-color:#d1d5db; }
+  .label-layout-editor.high-sharpness .label-layout-content { filter:contrast(1.16); }
+  .label-layout-editor.high-sharpness .label-layout-item { -webkit-font-smoothing:none; text-rendering:geometricPrecision; }
+  .label-layout-editor.high-sharpness img { image-rendering:-webkit-optimize-contrast; }
 </style>
 <div class="max-w-6xl mx-auto space-y-5">
   <div>
@@ -61,6 +65,36 @@
             {% if form.altura_mm.errors %}<div class="text-sm text-red-500 mt-2">{{ form.altura_mm.errors|striptags }}</div>{% endif %}
           </div>
         </div>
+        <div class="rounded-xl border border-gray-500/20 p-4 space-y-4">
+          <div>
+            <h4 class="text-sm font-semibold">Margem e calibração</h4>
+            <p class="text-xs text-gray-500 mt-1">Para mover a impressão para a esquerda, use um ajuste horizontal negativo, como −1 mm.</p>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label for="{{ form.margem_interna_mm.id_for_label }}" class="block text-sm font-semibold mb-2">{{ form.margem_interna_mm.label }}</label>
+              {{ form.margem_interna_mm }}
+              {% if form.margem_interna_mm.errors %}<div class="text-sm text-red-500 mt-2">{{ form.margem_interna_mm.errors|striptags }}</div>{% endif %}
+            </div>
+            <div>
+              <label for="{{ form.deslocamento_horizontal_mm.id_for_label }}" class="block text-sm font-semibold mb-2">{{ form.deslocamento_horizontal_mm.label }}</label>
+              {{ form.deslocamento_horizontal_mm }}
+              {% if form.deslocamento_horizontal_mm.errors %}<div class="text-sm text-red-500 mt-2">{{ form.deslocamento_horizontal_mm.errors|striptags }}</div>{% endif %}
+            </div>
+            <div>
+              <label for="{{ form.deslocamento_vertical_mm.id_for_label }}" class="block text-sm font-semibold mb-2">{{ form.deslocamento_vertical_mm.label }}</label>
+              {{ form.deslocamento_vertical_mm }}
+              {% if form.deslocamento_vertical_mm.errors %}<div class="text-sm text-red-500 mt-2">{{ form.deslocamento_vertical_mm.errors|striptags }}</div>{% endif %}
+            </div>
+          </div>
+          <label class="flex items-start gap-3" for="{{ form.alta_nitidez.id_for_label }}">
+            {{ form.alta_nitidez }}
+            <span>
+              <span class="block text-sm font-semibold">{{ form.alta_nitidez.label }}</span>
+              <span class="block text-xs text-gray-500 mt-1">Aumenta o contraste da logo e prioriza contornos mais definidos. Use também a maior qualidade/DPI disponível no driver.</span>
+            </span>
+          </label>
+        </div>
         <div>
           <label for="{{ form.impressora_nome.id_for_label }}" class="block text-sm font-semibold mb-2">{{ form.impressora_nome.label }}</label>
           {{ form.impressora_nome }}
@@ -105,6 +139,7 @@
       <p class="text-xs text-gray-500 mb-3">Arraste cada bloco visível para a posição desejada. Também é possível focá-lo e usar as setas do teclado.</p>
       <div class="flex justify-center rounded-xl bg-gray-500/10 p-5 overflow-hidden">
         <div id="label-preview" class="label-layout-editor bg-white text-black border border-gray-300 shadow-lg overflow-hidden" style="width:340px;aspect-ratio:3/2;">
+          <div id="label-content" class="label-layout-content">
           <div id="preview-logo" data-layout-key="logo" tabindex="0" class="label-layout-item is-logo" style="left:{{ layout_etiqueta.logo.x|unlocalize }}%;top:{{ layout_etiqueta.logo.y|unlocalize }}%;width:{{ layout_etiqueta.logo.w|unlocalize }}%;height:{{ layout_etiqueta.logo.h|unlocalize }}%;">
             {% if filial.imagem %}
               <img src="{{ filial.imagem.url }}" alt="Logo da filial" onerror="this.style.display='none'">
@@ -117,6 +152,7 @@
           <div id="preview-sale" data-layout-key="venda" tabindex="0" class="label-layout-item is-meta" style="left:{{ layout_etiqueta.venda.x|unlocalize }}%;top:{{ layout_etiqueta.venda.y|unlocalize }}%;width:{{ layout_etiqueta.venda.w|unlocalize }}%;height:{{ layout_etiqueta.venda.h|unlocalize }}%;">Venda #000644</div>
           <div id="preview-date" data-layout-key="data" tabindex="0" class="label-layout-item is-meta" style="left:{{ layout_etiqueta.data.x|unlocalize }}%;top:{{ layout_etiqueta.data.y|unlocalize }}%;width:{{ layout_etiqueta.data.w|unlocalize }}%;height:{{ layout_etiqueta.data.h|unlocalize }}%;">12/09/2026 19:11</div>
           <div id="preview-message" data-layout-key="mensagem" tabindex="0" class="label-layout-item is-message" style="left:{{ layout_etiqueta.mensagem.x|unlocalize }}%;top:{{ layout_etiqueta.mensagem.y|unlocalize }}%;width:{{ layout_etiqueta.mensagem.w|unlocalize }}%;height:{{ layout_etiqueta.mensagem.h|unlocalize }}%;">{{ form.texto_rodape.value|default:'Obrigado pela sua preferência!' }}</div>
+          </div>
         </div>
       </div>
       <div class="mt-4 rounded-lg border border-gray-500/20 px-4 py-3 text-sm">
@@ -139,6 +175,11 @@
     const message = byId('id_texto_rodape');
     const printer = byId('id_impressora_nome');
     const preview = byId('label-preview');
+    const content = byId('label-content');
+    const margin = byId('id_margem_interna_mm');
+    const offsetX = byId('id_deslocamento_horizontal_mm');
+    const offsetY = byId('id_deslocamento_vertical_mm');
+    const highSharpness = byId('id_alta_nitidez');
     const layoutInput = byId('id_layout_elementos');
     let layout = JSON.parse(byId('label-layout-initial').textContent);
     const defaultLayout = JSON.parse(byId('label-layout-default').textContent);
@@ -157,6 +198,15 @@
       const w = numberValue(width, 60);
       const h = numberValue(height, 40);
       preview.style.aspectRatio = w + ' / ' + h;
+      const marginMm = Math.max(0, numberValue(margin, 0));
+      const offsetXMm = Number(String(offsetX.value || '0').replace(',', '.')) || 0;
+      const offsetYMm = Number(String(offsetY.value || '0').replace(',', '.')) || 0;
+      content.style.left = (marginMm / w * 100) + '%';
+      content.style.right = (marginMm / w * 100) + '%';
+      content.style.top = (marginMm / h * 100) + '%';
+      content.style.bottom = (marginMm / h * 100) + '%';
+      content.style.transform = 'translate(' + ((offsetXMm / w) * preview.clientWidth) + 'px,' + ((offsetYMm / h) * preview.clientHeight) + 'px)';
+      preview.classList.toggle('high-sharpness', highSharpness.checked);
       byId('preview-size').textContent = w + ' × ' + h + ' mm (proporção real)';
       byId('preview-message').textContent = message.value || '';
       byId('preview-printer').textContent = printer.value || 'Não informada';
@@ -183,14 +233,14 @@
       applyPosition(key);
       persistLayout();
     }
-    preview.querySelectorAll('[data-layout-key]').forEach(element => {
+    content.querySelectorAll('[data-layout-key]').forEach(element => {
       const key = element.dataset.layoutKey;
       element.addEventListener('pointerdown', event => {
         if (event.button !== 0) return;
         event.preventDefault();
         element.focus();
         element.setPointerCapture(event.pointerId);
-        const rect = preview.getBoundingClientRect();
+        const rect = content.getBoundingClientRect();
         const startX = event.clientX;
         const startY = event.clientY;
         const originalX = layout[key].x;
@@ -224,7 +274,7 @@
       Object.keys(layout).forEach(applyPosition);
       persistLayout();
     };
-    [width, height, message, printer, ...Object.keys(toggles).map(byId)].forEach(input => {
+    [width, height, margin, offsetX, offsetY, highSharpness, message, printer, ...Object.keys(toggles).map(byId)].forEach(input => {
       input.addEventListener('input', refresh);
       input.addEventListener('change', refresh);
     });

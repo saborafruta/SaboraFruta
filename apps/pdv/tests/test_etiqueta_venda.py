@@ -18,6 +18,9 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertEqual(config.altura_mm, Decimal('40.00'))
         self.assertEqual(config.texto_rodape, 'Obrigado pela sua preferência!')
         self.assertFalse(config.ativa)
+        self.assertEqual(config.margem_interna_mm, Decimal('1.00'))
+        self.assertEqual(config.deslocamento_horizontal_mm, Decimal('-1.00'))
+        self.assertFalse(config.alta_nitidez)
         self.assertEqual(config.layout_normalizado()['logo']['x'], 3)
         self.assertEqual(config.layout_normalizado()['cliente']['x'], 39)
 
@@ -35,6 +38,9 @@ class EtiquetaVendaTests(SimpleTestCase):
             altura_mm=Decimal('40.00'),
             impressora_nome='Zebra ZD220',
             texto_rodape='Volte sempre!',
+            margem_interna_mm=Decimal('1.50'),
+            deslocamento_horizontal_mm=Decimal('-1.00'),
+            alta_nitidez=True,
         )
         filial = SimpleNamespace(nome_fantasia='Sabor a Fruta', razao_social='Sabor LTDA')
         venda = SimpleNamespace(numero_venda=644, data_venda=datetime(2026, 9, 12, 19, 11))
@@ -56,6 +62,9 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertIn('Zebra ZD220', html)
         self.assertIn('left:3.0%', html)
         self.assertIn('left:39.0%', html)
+        self.assertIn('--safe-margin: 1.50mm', html)
+        self.assertIn('--offset-x: -1.00mm', html)
+        self.assertIn('label high-sharpness', html)
 
     def test_layout_padrao_e_seguro_e_pode_ser_reposicionado(self):
         config = ConfiguracaoEtiquetaVenda(
@@ -93,3 +102,5 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertIn('data-layout-key="logo"', editor)
         self.assertIn("element.addEventListener('pointerdown'", editor)
         self.assertIn('id_layout_elementos', editor)
+        self.assertIn('id_deslocamento_horizontal_mm', editor)
+        self.assertIn('id_alta_nitidez', editor)
