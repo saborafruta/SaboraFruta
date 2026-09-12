@@ -3710,6 +3710,7 @@
 
         <div class="impr-divider"></div>
 
+        {% if etiqueta_venda_disponivel %}
         <button class="impr-opt" @click="imprimirEtiquetaVenda()">
           <div class="impr-opt-icon" style="background:linear-gradient(135deg,#7c2d12,#ea580c);">
             <svg fill="none" stroke="#fff" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -3723,6 +3724,7 @@
           </div>
           <span class="impr-badge" style="background:#7c2d12;color:#fb923c;">Etiqueta</span>
         </button>
+        {% endif %}
 
         <button class="impr-opt" @click="imprimirCupom('termica'); fecharModalImpressao()">
           <div class="impr-opt-icon" style="background:linear-gradient(135deg,#451a03,#b45309);">

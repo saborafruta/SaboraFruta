@@ -3,11 +3,13 @@ import base64
 import json
 
 from django.contrib import messages
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.core.forms.parametros import FilialIdentidadeForm, ParametrosSistemaForm
+from apps.core.models import Filial
 from apps.core.models.parametros import ParametroDocumentoFiscal, ParametrosSistema
 from apps.core.services.imagem_filial import preparar_imagem_filial
 from apps.core.views._admin import admin_area_required
@@ -46,6 +48,28 @@ MODALIDADE_FRETE_CHOICES = [
     (4, 'Proprio destinatario'),
     (9, 'Sem frete'),
 ]
+
+NOME_CREDENCIAL_IPRINT = 'iPrint - {cnpj}'
+
+
+def _contexto_iprint(filial):
+    filial_central = (
+        Filial.objects.using('default')
+        .select_related('empresa')
+        .filter(cnpj=filial.cnpj, ativo=True, empresa__ativo=True)
+        .first()
+    )
+    if filial_central is None:
+        return None, None
+    from apps.integracoes.models import CredencialIntegracao
+
+    nome = NOME_CREDENCIAL_IPRINT.format(cnpj=filial_central.cnpj)
+    credencial = (
+        CredencialIntegracao.objects.using('default')
+        .filter(empresa_id=filial_central.empresa_id, nome=nome)
+        .first()
+    )
+    return filial_central, credencial
 
 
 def _para_int(valor, padrao):
@@ -185,6 +209,7 @@ def parametros_sistema(request):
         return redirect('core:dashboard')
 
     params, _ = ParametrosSistema.objects.get_or_create(filial=filial)
+    _, iprint_credencial = _contexto_iprint(filial)
     _sincronizar_imagem_antiga(filial, params)
     documentos = _garantir_documentos(params)
 
@@ -262,7 +287,58 @@ def parametros_sistema(request):
         'presenca_choices': PRESENCA_CHOICES,
         'modalidade_frete_choices': MODALIDADE_FRETE_CHOICES,
         'prontidao': _prontidao_fiscal(filial, params, documentos),
+        'iprint_credencial': iprint_credencial,
     })
+
+
+@admin_area_required
+@require_POST
+def api_gerar_chave_iprint(request):
+    """Cria ou rotaciona a chave iPrint da filial e a revela uma única vez."""
+    filial = getattr(request, 'filial_ativa', None)
+    if filial is None:
+        return JsonResponse({'ok': False, 'erro': 'Nenhuma filial ativa selecionada.'}, status=400)
+
+    filial_central, _ = _contexto_iprint(filial)
+    if filial_central is None:
+        return JsonResponse(
+            {'ok': False, 'erro': 'A filial não foi localizada no cadastro central.'},
+            status=400,
+        )
+
+    from apps.integracoes.models import CredencialIntegracao, ESCOPOS_DISPONIVEIS
+
+    nome = NOME_CREDENCIAL_IPRINT.format(cnpj=filial_central.cnpj)
+    escopos = list(ESCOPOS_DISPONIVEIS)
+    with transaction.atomic(using='default'):
+        credencial = (
+            CredencialIntegracao.objects.using('default')
+            .select_for_update()
+            .filter(empresa_id=filial_central.empresa_id, nome=nome)
+            .first()
+        )
+        rotacionada = credencial is not None
+        if credencial:
+            token = credencial.rotacionar(escopos=escopos)
+        else:
+            usuario_central = request.user if request.user._state.db == 'default' else None
+            credencial, token = CredencialIntegracao.criar(
+                empresa=filial_central.empresa,
+                nome=nome,
+                escopos=escopos,
+                criado_por=usuario_central,
+            )
+        credencial.filiais.set([filial_central])
+
+    resposta = JsonResponse({
+        'ok': True,
+        'chave': token,
+        'prefixo': credencial.prefixo,
+        'rotacionada': rotacionada,
+        'api_url': request.build_absolute_uri('/api/v1/'),
+    })
+    resposta['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+    return resposta
 
 
 CAMPOS_SEGREDO_FILIAL = {'focusnfe_token'}

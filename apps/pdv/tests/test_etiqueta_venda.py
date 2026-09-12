@@ -17,7 +17,7 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertEqual(config.largura_mm, Decimal('60.00'))
         self.assertEqual(config.altura_mm, Decimal('40.00'))
         self.assertEqual(config.texto_rodape, 'Obrigado pela sua preferência!')
-        self.assertTrue(config.ativa)
+        self.assertFalse(config.ativa)
 
         largura = ConfiguracaoEtiquetaVenda._meta.get_field('largura_mm')
         altura = ConfiguracaoEtiquetaVenda._meta.get_field('altura_mm')
@@ -28,6 +28,7 @@ class EtiquetaVendaTests(SimpleTestCase):
     def test_template_renderiza_dados_da_venda_e_tamanho_em_milimetros(self):
         config = ConfiguracaoEtiquetaVenda(
             filial_id=1,
+            ativa=True,
             largura_mm=Decimal('60.00'),
             altura_mm=Decimal('40.00'),
             impressora_nome='Zebra ZD220',
@@ -63,4 +64,5 @@ class EtiquetaVendaTests(SimpleTestCase):
         central = (apps_dir / 'core/templates/core/admin/central.html').read_text(encoding='utf-8')
         self.assertIn('Imprimir etiqueta de venda', pdv)
         self.assertIn('imprimirEtiquetaVenda()', pdv)
+        self.assertIn('{% if etiqueta_venda_disponivel %}', pdv)
         self.assertIn('admin_etiqueta_venda_config', central)

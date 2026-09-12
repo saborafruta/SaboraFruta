@@ -39,7 +39,10 @@ from apps.pdv.services.cancelamento_fiscal_service import (
     obter_documento_fiscal,
 )
 from apps.pdv.services.edicao_venda_service import estornar_venda_para_edicao, validar_venda_editavel
-from apps.pdv.services.etiqueta_venda_service import contexto_etiqueta_venda
+from apps.pdv.services.etiqueta_venda_service import (
+    configuracao_etiqueta_filial,
+    contexto_etiqueta_venda,
+)
 from apps.pdv.services.fiscal_readiness_service import verificar_prontidao_fiscal
 from apps.produtos.models import (
     BrindeProduto,
@@ -180,12 +183,14 @@ def pdv_home(request):
         LinhaProducao.objects.filter(ativo=True)
         .values('id', 'nome', 'icone', 'cor_identificacao')
     )
+    config_etiqueta, _ = configuracao_etiqueta_filial(request.filial_ativa)
     return render(request, "pdv/home.html", {
         "title": "PDV",
         "caixas_json": json.dumps(caixas),
         "linhas_json": json.dumps(linhas),
         "usuario_e_admin": _usuario_e_admin(request),
         "cliente_inicial_json": json.dumps(_cliente_inicial(request)),
+        "etiqueta_venda_disponivel": bool(config_etiqueta and config_etiqueta.ativa),
     })
 
 

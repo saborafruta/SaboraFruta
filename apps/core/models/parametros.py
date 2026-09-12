@@ -86,7 +86,7 @@ class ConfiguracaoEtiquetaVenda(TimestampedModel):
         on_delete=models.CASCADE,
         related_name='configuracao_etiqueta_venda',
     )
-    ativa = models.BooleanField(default=True)
+    ativa = models.BooleanField(default=False)
     largura_mm = models.DecimalField(
         max_digits=6,
         decimal_places=2,
