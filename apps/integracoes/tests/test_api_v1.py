@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial
+from apps.core.tenant_context import get_current_tenant_db
 from apps.integracoes.models import CredencialIntegracao
 from apps.moda.models import (
     Cor, ItemGradePedido, ItemPedidoProducao, OrdemProducao,
@@ -25,6 +26,7 @@ class IntegracaoApiV1Tests(TestCase):
             cnpj='11222333000181',
             regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
             codigo_regime_tributario=1,
+            logo_url='https://cdn.example.com/logo.png',
         )
         cls.filial = Filial.objects.create(
             empresa=cls.empresa,
@@ -162,6 +164,7 @@ class IntegracaoApiV1Tests(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertEqual(resposta.data['empresa']['cnpj'], self.empresa.cnpj)
         self.assertEqual(resposta.data['versao'], 'v1')
+        self.assertIsNone(get_current_tenant_db())
 
     def test_chave_revogada_ou_expirada_e_recusada(self):
         for alteracao in (
@@ -201,6 +204,34 @@ class IntegracaoApiV1Tests(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertEqual([item['id'] for item in resposta.data['dados']], [self.produto.pk])
         self.assertEqual(resposta.data['dados'][0]['preco_venda'], '89.90')
+        self.assertEqual(resposta.data['dados'][0]['preco_atual'], '89.90')
+        self.assertEqual(resposta.data['dados'][0]['logo_url'], 'https://cdn.example.com/logo.png')
+
+    def test_produto_entrega_promocao_vigente_para_etiqueta(self):
+        self.produto.preco_promocional = '69.9000'
+        self.produto.promocao_inicio = timezone.localdate() - timedelta(days=1)
+        self.produto.promocao_fim = timezone.localdate() + timedelta(days=1)
+        self.produto.save(update_fields=[
+            'preco_promocional', 'promocao_inicio', 'promocao_fim', 'updated_at',
+        ])
+        self.autenticar()
+
+        resposta = self.client.get(reverse('integracoes_api:produtos'))
+
+        self.assertEqual(resposta.status_code, 200)
+        produto = resposta.data['dados'][0]
+        self.assertEqual(produto['preco_venda'], '89.90')
+        self.assertEqual(produto['preco_atual'], '69.90')
+        self.assertEqual(produto['preco_atual_tipo'], 'promocional')
+
+    def test_contexto_entrega_logo_da_empresa_e_da_filial(self):
+        self.autenticar()
+
+        resposta = self.client.get(reverse('integracoes_api:contexto'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.data['empresa']['logo_url'], 'https://cdn.example.com/logo.png')
+        self.assertEqual(resposta.data['filiais'][0]['logo_url'], 'https://cdn.example.com/logo.png')
 
     def test_cliente_de_outra_empresa_nao_e_exposto(self):
         Cliente.objects.create(

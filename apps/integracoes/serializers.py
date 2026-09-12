@@ -2,25 +2,65 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
+from apps.produtos.services.preco_service import PrecoService
+
 
 def dinheiro(valor):
     return f'{Decimal(valor or 0):.2f}'
 
 
+def url_absoluta(request, valor):
+    valor = str(valor or '').strip()
+    if not valor:
+        return ''
+    if valor.startswith(('http://', 'https://')) or request is None:
+        return valor
+    return request.build_absolute_uri(valor)
+
+
+def logo_filial(request, filial):
+    if filial.imagem:
+        try:
+            return url_absoluta(request, filial.imagem.url)
+        except (ValueError, OSError):
+            pass
+    return url_absoluta(request, filial.empresa.logo_url)
+
+
+def foto_produto(request, produto):
+    try:
+        valor = produto.foto_url_resolvida
+    except Exception:
+        # Imagem é contexto auxiliar: falha no storage não pode derrubar a
+        # consulta de preços ou estoque usada para impressão.
+        valor = produto.foto_url
+    return url_absoluta(request, valor)
+
+
 class FilialSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
-    razao_social = serializers.CharField()
-    nome_fantasia = serializers.CharField()
-    cnpj = serializers.CharField()
-    cidade = serializers.CharField()
-    uf = serializers.CharField()
-    is_matriz = serializers.BooleanField()
-    ativo = serializers.BooleanField()
-    atualizado_em = serializers.DateTimeField(source='updated_at')
+    def to_representation(self, filial):
+        request = self.context.get('request')
+        return {
+            'id': filial.pk,
+            'razao_social': filial.razao_social,
+            'nome_fantasia': filial.nome_fantasia,
+            'cnpj': filial.cnpj,
+            'cidade': filial.cidade,
+            'uf': filial.uf,
+            'is_matriz': filial.is_matriz,
+            'logo_url': logo_filial(request, filial),
+            'ativo': filial.ativo,
+            'atualizado_em': filial.updated_at.isoformat(),
+        }
 
 
 class ProdutoSerializer(serializers.Serializer):
     def to_representation(self, produto):
+        request = self.context.get('request')
+        preco_atual = PrecoService.melhor_preco_produto_detalhado(
+            produto, filial=produto.filial, quantidade=1,
+        )
+        foto_url = foto_produto(request, produto)
         return {
             'id': produto.pk,
             'filial': {
@@ -33,16 +73,34 @@ class ProdutoSerializer(serializers.Serializer):
             'codigos_barras_extras': produto.codigos_barras_extras or [],
             'descricao': produto.descricao,
             'descricao_curta': produto.descricao_curta,
+            'descricao_completa': produto.descricao_completa,
             'descricao_pdv': produto.descricao_pdv,
+            'categoria': str(produto.categoria) if produto.categoria_id else '',
+            'subcategoria': str(produto.subcategoria) if produto.subcategoria_id else '',
+            'marca': str(produto.marca) if produto.marca_id else '',
             'tipo': produto.tipo_produto,
             'unidade': str(produto.unidade_medida),
             'preco_venda': dinheiro(produto.preco_venda),
             'preco_promocional': dinheiro(produto.preco_promocional),
+            'promocao_inicio': produto.promocao_inicio.isoformat() if produto.promocao_inicio else None,
+            'promocao_fim': produto.promocao_fim.isoformat() if produto.promocao_fim else None,
+            'preco_atual': dinheiro(preco_atual['preco']),
+            'preco_atual_tipo': preco_atual['tipo'],
+            'preco_atual_origem': preco_atual['origem'],
             'moeda': produto.moeda,
             'codigo_balanca': produto.codigo_balanca,
             'gera_etiqueta_balanca': produto.gera_etiqueta_balanca,
+            'vendido_por_peso_granel': produto.vendido_por_peso_granel,
+            'unidade_pesagem': produto.unidade_pesagem,
+            'tara_padrao': str(produto.tara_padrao),
+            'peso_bruto': str(produto.peso_bruto) if produto.peso_bruto is not None else None,
             'peso_liquido': str(produto.peso_liquido) if produto.peso_liquido is not None else None,
-            'foto_url': produto.foto_url,
+            'largura': str(produto.largura) if produto.largura is not None else None,
+            'altura': str(produto.altura) if produto.altura is not None else None,
+            'profundidade': str(produto.profundidade) if produto.profundidade is not None else None,
+            'unidade_dimensao': produto.unidade_dimensao,
+            'foto_url': foto_url,
+            'logo_url': logo_filial(request, produto.filial),
             'id_externo': produto.id_externo,
             'ativo': produto.ativo,
             'atualizado_em': produto.updated_at.isoformat(),
@@ -83,6 +141,7 @@ class ClienteSerializer(serializers.Serializer):
 
 class EstoqueSerializer(serializers.Serializer):
     def to_representation(self, estoque):
+        request = self.context.get('request')
         return {
             'id': estoque.pk,
             'filial': {
@@ -94,6 +153,7 @@ class EstoqueSerializer(serializers.Serializer):
                 'codigo': estoque.produto.codigo,
                 'codigo_barras': estoque.produto.codigo_barras,
                 'descricao': estoque.produto.descricao,
+                'foto_url': foto_produto(request, estoque.produto),
             },
             'deposito': {
                 'id': estoque.deposito_id,

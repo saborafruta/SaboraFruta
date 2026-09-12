@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 
 from apps.cadastros.models import Cliente
 from apps.core.models import Filial
+from apps.core.tenant_context import reset_current_tenant_db, set_current_tenant_db
 from apps.estoque.models import Estoque
 from apps.moda.models import OrdemProducao, ProdutoModa, Variante
 from apps.produtos.models import Produto
@@ -27,6 +28,7 @@ from .serializers import (
     ProdutoModaSerializer,
     ProdutoSerializer,
     VarianteModaSerializer,
+    url_absoluta,
 )
 from .throttling import LimitePorCredencial
 
@@ -35,6 +37,18 @@ class BaseIntegracaoView:
     authentication_classes = [ChaveApiAuthentication]
     permission_classes = [IsAuthenticated, PossuiEscopoIntegracao]
     throttle_classes = [LimitePorCredencial]
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        self._tenant_token = set_current_tenant_db(self.alias)
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        try:
+            return super().finalize_response(request, response, *args, **kwargs)
+        finally:
+            token = getattr(self, '_tenant_token', None)
+            if token is not None:
+                reset_current_tenant_db(token)
 
     @property
     def alias(self):
@@ -51,7 +65,11 @@ class BaseIntegracaoView:
         if ids_restritos:
             centrais = centrais.filter(pk__in=ids_restritos)
         cnpjs = list(centrais.values_list('cnpj', flat=True))
-        return Filial.objects.using(self.alias).filter(cnpj__in=cnpjs, ativo=True)
+        return (
+            Filial.objects.using(self.alias)
+            .select_related('empresa')
+            .filter(cnpj__in=cnpjs, ativo=True)
+        )
 
     def filiais_ids(self):
         return list(self.filiais_permitidas().values_list('pk', flat=True))
@@ -90,6 +108,7 @@ class RaizApiView(BaseIntegracaoView, APIView):
                 'razao_social': request.auth.empresa.razao_social,
                 'nome_fantasia': request.auth.empresa.nome_fantasia,
                 'cnpj': request.auth.empresa.cnpj,
+                'logo_url': url_absoluta(request, request.auth.empresa.logo_url),
             },
             'credencial': request.auth.nome,
             'escopos': request.auth.escopos,
@@ -114,8 +133,11 @@ class ContextoApiView(BaseIntegracaoView, APIView):
                 'razao_social': request.auth.empresa.razao_social,
                 'nome_fantasia': request.auth.empresa.nome_fantasia,
                 'cnpj': request.auth.empresa.cnpj,
+                'logo_url': url_absoluta(request, request.auth.empresa.logo_url),
             },
-            'filiais': FilialSerializer(self.filiais_permitidas(), many=True).data,
+            'filiais': FilialSerializer(
+                self.filiais_permitidas(), many=True, context={'request': request},
+            ).data,
             'escopos': [
                 {'codigo': codigo, 'descricao': ESCOPOS_DISPONIVEIS.get(codigo, codigo)}
                 for codigo in request.auth.escopos
@@ -140,7 +162,10 @@ class ProdutosApiView(BaseIntegracaoView, GenericAPIView):
     pagination_class = PaginacaoIntegracao
 
     def get_queryset(self):
-        qs = Produto.objects.using(self.alias).select_related('filial', 'unidade_medida')
+        qs = Produto.objects.using(self.alias).select_related(
+            'filial__empresa', 'unidade_medida', 'categoria',
+            'subcategoria', 'marca',
+        )
         qs = self.filtrar_filial(qs)
         qs = self.filtrar_atualizacao(qs)
         busca = self.request.query_params.get('busca', '').strip()
