@@ -2568,6 +2568,65 @@ class MDFeEncerrarView(PermissaoRequiredMixin, View):
         return redirect("logistica:mdfe-detail", pk=mdfe.pk)
 
 
+class MDFeCancelarRascunhoView(PermissaoRequiredMixin, View):
+    """
+    Cancela um MDF-e que nunca chegou a ser enviado à SEFAZ.
+
+    Diferente de `MDFeCancelarFocusView` (que fala com a Focus NFe pra
+    cancelar um manifesto JÁ AUTORIZADO): aqui não existe nada pra
+    cancelar do lado de fora, então só muda o status local — mantém o
+    registro (e a justificativa, se houver), ao contrário da exclusão.
+    """
+
+    permissao_modulo = "logistica"
+    permissao_acao = "cancelar"
+
+    def post(self, request, pk):
+        mdfe = get_object_or_404(MDFe.objects.for_filial(_filial(request)), pk=pk)
+        if mdfe.status not in STATUS_MDFE_EDITAVEIS:
+            messages.error(
+                request,
+                'Este MDF-e já foi enviado à SEFAZ — use "Cancelar MDF-e" na tela de status.',
+            )
+            return redirect("logistica:mdfe-detail", pk=mdfe.pk)
+
+        justificativa = (request.POST.get("justificativa") or "").strip()
+        campos = ["status", "updated_at"]
+        mdfe.status = MDFe.Status.CANCELADO
+        if justificativa:
+            mdfe.justificativa_cancelamento = justificativa
+            campos.append("justificativa_cancelamento")
+        mdfe.save(update_fields=campos)
+        messages.success(request, f"MDF-e #{mdfe.numero:06d} cancelado.")
+        return redirect("logistica:mdfe-detail", pk=mdfe.pk)
+
+
+class MDFeDeleteView(PermissaoRequiredMixin, View):
+    """
+    Exclui um MDF-e que nunca chegou a ser enviado à SEFAZ.
+
+    Os documentos vinculados vão junto (FK em cascata) — a NF-e/CT-e em si
+    não é apagada, só o vínculo com este manifesto.
+    """
+
+    permissao_modulo = "logistica"
+    permissao_acao = "excluir"
+
+    def post(self, request, pk):
+        mdfe = get_object_or_404(MDFe.objects.for_filial(_filial(request)), pk=pk)
+        if mdfe.status not in STATUS_MDFE_EDITAVEIS:
+            messages.error(
+                request,
+                "Este MDF-e já foi enviado à SEFAZ e não pode ser excluído — cancele-o na tela de status.",
+            )
+            return redirect("logistica:mdfe-detail", pk=mdfe.pk)
+
+        numero = mdfe.numero
+        mdfe.delete()
+        messages.success(request, f"MDF-e #{numero:06d} excluído.")
+        return redirect("logistica:mdfe-list")
+
+
 class MDFeDamdfeView(PermissaoRequiredMixin, View):
     permissao_modulo = "logistica"
 

@@ -180,6 +180,20 @@
           <a href="{% url 'logistica:mdfe-damdfe' mdfe.pk %}" target="_blank" class="btn-secondary gap-1.5">Baixar DAMDFE</a>
           {% endif %}
         {% endif %}
+        {% comment %}
+          CANCELAR E EXCLUIR só para quem ainda não foi pra SEFAZ -- um
+          manifesto autorizado tem o cancelamento certo ali em cima (fala
+          com a Focus NFe) e não pode ser excluído: apagar um documento que
+          a SEFAZ já conhece deixaria rastro nenhum do que aconteceu.
+        {% endcomment %}
+        {% if mdfe_editavel %}
+        <button type="button" class="btn-secondary gap-1.5"
+                :style="temaClaro ? 'color:#b45309; border-color:#fde68a;' : 'color:#fcd34d; border-color:#78350f;'"
+                onclick="document.getElementById('modal-cancelar-rascunho-mdfe').classList.remove('hidden')">Cancelar</button>
+        <button type="button" class="btn-secondary gap-1.5"
+                :style="temaClaro ? 'color:#dc2626; border-color:#fca5a5;' : 'color:#fca5a5; border-color:#7f1d1d;'"
+                onclick="document.getElementById('modal-excluir-mdfe').classList.remove('hidden')">Excluir</button>
+        {% endif %}
       </div>
     </div>
     {% if mdfe.protocolo_autorizacao %}
@@ -510,6 +524,42 @@
       </form>
     </div>
   </div>
+
+  {% if mdfe_editavel %}
+  <!-- Modal: Cancelar MDF-e ainda não enviado (sem SEFAZ) -->
+  <div id="modal-cancelar-rascunho-mdfe" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 no-print" style="background:rgba(0,0,0,0.55);">
+    <div class="w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4" :style="temaClaro ? 'background:#fff;' : 'background:#0f172a; border:1px solid #1e293b;'">
+      <h3 class="text-lg font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Cancelar MDF-e</h3>
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Este manifesto ainda não foi enviado à SEFAZ, então não há nada a cancelar lá — só marca como cancelado aqui, mantendo o registro. A justificativa é opcional.
+      </p>
+      <form method="post" action="{% url 'logistica:mdfe-cancelar-rascunho' mdfe.pk %}" class="space-y-3">
+        {% csrf_token %}
+        <textarea name="justificativa" rows="3" class="form-input w-full" placeholder="Motivo do cancelamento (opcional)..."></textarea>
+        <div class="flex gap-2 pt-1">
+          <button type="button" class="btn-secondary flex-1" onclick="document.getElementById('modal-cancelar-rascunho-mdfe').classList.add('hidden')">Voltar</button>
+          <button type="submit" class="btn-primary flex-1"
+                  :style="temaClaro ? 'background:#b45309;' : 'background:#b45309;'">Confirmar Cancelamento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Excluir MDF-e -->
+  <div id="modal-excluir-mdfe" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 no-print" style="background:rgba(0,0,0,0.55);">
+    <div class="w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4" :style="temaClaro ? 'background:#fff;' : 'background:#0f172a; border:1px solid #1e293b;'">
+      <h3 class="text-lg font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Excluir MDF-e</h3>
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Apaga o MDF-e #{{ mdfe.numero|stringformat:"06d" }} e os vínculos com os documentos dele. As NF-e/CT-e em si não são afetadas. Esta ação não pode ser desfeita.
+      </p>
+      <form method="post" action="{% url 'logistica:mdfe-delete' mdfe.pk %}" class="flex gap-2 pt-1">
+        {% csrf_token %}
+        <button type="button" class="btn-secondary flex-1" onclick="document.getElementById('modal-excluir-mdfe').classList.add('hidden')">Voltar</button>
+        <button type="submit" class="btn-primary flex-1" style="background:#dc2626;">Confirmar Exclusão</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
 
 </div>
 {% endblock %}

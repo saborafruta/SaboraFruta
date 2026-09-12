@@ -1,8 +1,9 @@
 {% extends "_base.html" %}
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
+{% block largura_conteudo %}max-w-none{% endblock %}
 {% block content %}
-<div class="max-w-6xl mx-auto space-y-5">
+<div class="w-full space-y-5">
 
   <div>
     <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
@@ -82,6 +83,7 @@
     </div>
     {% endif %}
 
+    <div class="grid gap-5 xl:grid-cols-2 items-start">
     <!-- Viagem e carga -->
     <div class="card p-6 space-y-4">
       <div>
@@ -201,6 +203,7 @@
         {{ form.veiculo_descricao }}
       </label>
       </div>
+    </div>
     </div>
 
     <!-- Percurso -->
