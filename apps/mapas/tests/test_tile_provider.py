@@ -9,15 +9,25 @@ foi o bloqueio (ver captura do usuário: "App is not following the tile
 usage policy... osm.wiki/Blocked") -- toda tela de mapa parou de mostrar
 o fundo.
 
-Trocado para o CARTO (basemaps.cartocdn.com), que permite exatamente este
-uso sem chave de API. Estes testes travam a URL: ninguém deveria
-reintroduzir o domínio bloqueado copiando um bloco antigo de outra tela.
+PRIMEIRA TROCA (CARTO) NÃO SEGUROU: `basemaps.cartocdn.com` devolve os
+tiles, mas cada um vem com uma marca d'água "API KEY REQUIRED" por cima
+do mapa inteiro -- confirmado visualmente pelo usuário depois do deploy.
+CARTO não é mais de graça sem conta para embutir fora do próprio site
+deles, mesmo sem exigir a chave no request (a resposta HTTP é 200; só a
+imagem vem carimbada).
+
+Trocado para o Esri World Street Map (server.arcgisonline.com), que
+devolve o tile de verdade, sem marca d'água e sem chave. Estes testes
+travam a URL: ninguém deveria reintroduzir um domínio bloqueado ou
+marcado d'água copiando um bloco antigo de outra tela -- e, se trocar de
+provider de novo, vale abrir um tile de verdade (não só checar o status
+HTTP) antes de assumir que funcionou.
 """
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-DOMINIO_BLOQUEADO = 'tile.openstreetmap.org'
-DOMINIO_ATUAL = 'basemaps.cartocdn.com'
+DOMINIOS_PROIBIDOS = ('tile.openstreetmap.org', 'basemaps.cartocdn.com')
+DOMINIO_ATUAL = 'server.arcgisonline.com'
 
 
 @override_settings(PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'])
@@ -49,7 +59,8 @@ class TileProviderBase(TestCase):
 
     def _assert_tile_ok(self, url_name, *args):
         html = self.client.get(reverse(url_name, args=args)).content.decode()
-        self.assertNotIn(DOMINIO_BLOQUEADO, html)
+        for dominio in DOMINIOS_PROIBIDOS:
+            self.assertNotIn(dominio, html)
         self.assertIn(DOMINIO_ATUAL, html)
 
 
