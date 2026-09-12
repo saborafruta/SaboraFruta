@@ -81,6 +81,7 @@ urlpatterns = [
     path('gestao/parametros/', parametros_views.parametros_sistema, name='admin_parametros'),
     path('gestao/parametros/sincronizar-focus/', parametros_views.api_sincronizar_focus, name='admin_parametros_sincronizar_focus'),
     path('gestao/parametros/revelar-segredo/', parametros_views.api_revelar_segredo, name='admin_parametros_revelar_segredo'),
+    path('gestao/parametros/gerar-chave-iprint/', parametros_views.api_gerar_chave_iprint, name='admin_parametros_gerar_chave_iprint'),
     path('gestao/manutencao/limpar-fiscal/', admin_area.limpar_documentos_fiscais, name='admin_limpar_fiscal'),
     path('gestao/media-diagnostico/', admin_area.media_diagnostico, name='admin_media_diagnostico'),
     path('gestao/log/<str:tipo>/<int:pk>/registros/', CoreAdminLogItemsView.as_view(), name='admin-log-items'),

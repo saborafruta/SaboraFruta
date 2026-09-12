@@ -222,6 +222,14 @@
   .param-status-number { display:block; margin-top:8px; font-size:22px; font-weight:900; }
   body.tema-claro .param-status-number { color:#c2410c; }
   body:not(.tema-claro) .param-status-number { color:#93c5fd; }
+  .iprint-key-box { display:none; margin-top:16px; border-radius:12px; padding:14px; }
+  body.tema-claro .iprint-key-box { background:#ecfdf5; border:1px solid #86efac; color:#14532d; }
+  body:not(.tema-claro) .iprint-key-box { background:rgba(16,185,129,.10); border:1px solid rgba(52,211,153,.35); color:#a7f3d0; }
+  .iprint-key-value { display:flex; align-items:center; gap:8px; margin-top:9px; }
+  .iprint-key-value input { min-width:0; flex:1; font-family:ui-monospace,monospace; }
+  .iprint-generate-btn { display:inline-flex; align-items:center; justify-content:center; padding:10px 16px; border:0; border-radius:9px; background:#0f766e; color:#fff; font-size:12px; font-weight:800; cursor:pointer; }
+  .iprint-generate-btn:hover { background:#115e59; }
+  .iprint-generate-btn:disabled { opacity:.6; cursor:wait; }
 
   @media (max-width: 900px) {
     .param-check-grid { grid-template-columns:1fr; }
@@ -503,6 +511,39 @@
     </div>
 
     <div class="param-card">
+      <div class="param-card-title">Integração iPrint</div>
+      <p class="param-card-sub">Gere uma chave exclusiva desta filial para conectar o iPrint à API do iTed.</p>
+      <div class="param-subpanel mt-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            {% if iprint_credencial %}
+              <div class="param-label" style="margin:0;">
+                Chave {% if iprint_credencial.ativo %}ativa{% else %}inativa{% endif %}
+                · prefixo ited_{{ iprint_credencial.prefixo }}
+              </div>
+              <p class="param-card-sub">Gerar uma nova chave invalida imediatamente a chave anterior.</p>
+            {% else %}
+              <div class="param-label" style="margin:0;">Nenhuma chave iPrint gerada</div>
+              <p class="param-card-sub">A chave ficará limitada à empresa e a esta filial.</p>
+            {% endif %}
+          </div>
+          <button type="button" id="iprint-generate-btn" class="iprint-generate-btn" onclick="gerarChaveIPrint()">
+            {% if iprint_credencial %}Gerar nova chave{% else %}Gerar chave iPrint{% endif %}
+          </button>
+        </div>
+        <div id="iprint-key-box" class="iprint-key-box" role="status">
+          <strong>Copie esta chave agora. Ela não poderá ser consultada novamente.</strong>
+          <div class="iprint-key-value">
+            <input type="text" id="iprint-key-value" class="param-input" readonly autocomplete="off">
+            <button type="button" class="btn-secondary" onclick="copiarChaveIPrint()">Copiar</button>
+          </div>
+          <p class="param-card-sub" style="margin-top:8px;">API: <span id="iprint-api-url"></span></p>
+        </div>
+        <div id="iprint-error" class="param-erro" style="display:none;margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <div class="param-card">
       <div class="param-card-title">Integracao Focus</div>
       <p class="param-card-sub">Configuracao por filial. Se o regime ficar vazio, o sistema usa o cadastro da empresa.</p>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
@@ -629,6 +670,50 @@
 </div>
 
 <script>
+async function gerarChaveIPrint() {
+  const jaExiste = {{ iprint_credencial|yesno:"true,false" }};
+  if (jaExiste && !window.confirm('Gerar uma nova chave invalidará imediatamente a chave iPrint anterior. Deseja continuar?')) {
+    return;
+  }
+  const botao = document.getElementById('iprint-generate-btn');
+  const caixa = document.getElementById('iprint-key-box');
+  const erro = document.getElementById('iprint-error');
+  botao.disabled = true;
+  botao.textContent = 'Gerando...';
+  caixa.style.display = 'none';
+  erro.style.display = 'none';
+  try {
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const resposta = await fetch('{% url "core:admin_parametros_gerar_chave_iprint" %}', {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest'},
+      cache: 'no-store'
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok || !dados.ok) throw new Error(dados.erro || 'Não foi possível gerar a chave.');
+    document.getElementById('iprint-key-value').value = dados.chave;
+    document.getElementById('iprint-api-url').textContent = dados.api_url;
+    caixa.style.display = 'block';
+    botao.textContent = 'Gerar nova chave';
+  } catch (e) {
+    erro.textContent = e.message || 'Erro de conexão.';
+    erro.style.display = 'block';
+    botao.textContent = jaExiste ? 'Gerar nova chave' : 'Gerar chave iPrint';
+  } finally {
+    botao.disabled = false;
+  }
+}
+
+async function copiarChaveIPrint() {
+  const campo = document.getElementById('iprint-key-value');
+  try {
+    await navigator.clipboard.writeText(campo.value);
+  } catch (_) {
+    campo.select();
+    document.execCommand('copy');
+  }
+}
+
 async function revelarSegredoParam(btn, campo) {
   const wrap = btn.closest('.param-secret-wrap');
   const popover = wrap.querySelector('.param-secret-popover');

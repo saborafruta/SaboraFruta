@@ -10,13 +10,12 @@ def _arquivo_url(arquivo):
         return ''
 
 
-def contexto_etiqueta_venda(venda):
-    """Monta a etiqueta sem misturar as PKs do banco tenant e do central."""
-    filial_venda = venda.filial
+def configuracao_etiqueta_filial(filial):
+    """Retorna configuração e identidade centrais equivalentes à filial tenant."""
     filial_central = (
         Filial.objects.using('default')
         .select_related('empresa')
-        .filter(cnpj=filial_venda.cnpj)
+        .filter(cnpj=filial.cnpj)
         .first()
     )
     config = None
@@ -26,6 +25,13 @@ def contexto_etiqueta_venda(venda):
             .filter(filial_id=filial_central.pk)
             .first()
         )
+    return config, filial_central
+
+
+def contexto_etiqueta_venda(venda):
+    """Monta a etiqueta sem misturar as PKs do banco tenant e do central."""
+    filial_venda = venda.filial
+    config, filial_central = configuracao_etiqueta_filial(filial_venda)
     if config is None:
         config = ConfiguracaoEtiquetaVenda(
             filial_id=getattr(filial_central, 'pk', filial_venda.pk),

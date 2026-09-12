@@ -102,10 +102,15 @@ class CredencialIntegracao(models.Model):
                 raise ValidationError({'ips_permitidos': f'IP ou CIDR inválido: {rede}.'}) from exc
 
     @classmethod
-    def criar(cls, *, empresa, nome, escopos=None, criado_por=None, expira_em=None):
+    def gerar_token(cls):
         segredo = secrets.token_urlsafe(32)
         prefixo = secrets.token_hex(5)
         token = f'ited_{prefixo}.{segredo}'
+        return prefixo, token
+
+    @classmethod
+    def criar(cls, *, empresa, nome, escopos=None, criado_por=None, expira_em=None):
+        prefixo, token = cls.gerar_token()
         credencial = cls.objects.create(
             empresa=empresa,
             nome=nome,
@@ -116,6 +121,25 @@ class CredencialIntegracao(models.Model):
             expira_em=expira_em,
         )
         return credencial, token
+
+    def rotacionar(self, *, escopos=None):
+        """Troca o segredo sem jamais persistir ou registrar o token aberto."""
+        prefixo, token = self.gerar_token()
+        self.prefixo = prefixo
+        self.token_hash = self.hash_token(token)
+        self.ativo = True
+        self.expira_em = None
+        self.ultimo_uso_em = None
+        self.ultimo_ip = None
+        campos = [
+            'prefixo', 'token_hash', 'ativo', 'expira_em', 'ultimo_uso_em',
+            'ultimo_ip', 'atualizado_em',
+        ]
+        if escopos is not None:
+            self.escopos = list(escopos)
+            campos.append('escopos')
+        self.save(using=self._state.db or 'default', update_fields=campos)
+        return token
 
     @staticmethod
     def hash_token(token):
