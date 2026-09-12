@@ -257,8 +257,18 @@ function aoVivo() {
 
       // Enquadra uma vez só: reenquadrar a cada 10s tiraria o mapa do lugar
       // enquanto alguém está olhando um ponto específico.
+      //
+      // ENTRA TAMBÉM O ROTEIRO, não só a posição do motorista. Sem isso, um
+      // motorista testando de um notebook (geolocalização por IP, longe dos
+      // clientes de verdade) deixava os pinos de entrega desenhados no mapa
+      // só que fora da área visível -- ninguém veria sem procurar.
       if (!this._jaEnquadrou && this.motoristas.length) {
-        const limites = L.latLngBounds(this.motoristas.map(m => [m.lat, m.lng]));
+        const pontos = [];
+        this.motoristas.forEach((m) => {
+          pontos.push([m.lat, m.lng]);
+          (m.destinos_pendentes || []).forEach(d => pontos.push([d.lat, d.lng]));
+        });
+        const limites = L.latLngBounds(pontos);
         if (limites.isValid()) this._mapa.fitBounds(limites, { padding: [60, 60] });
         this._jaEnquadrou = true;
       }
