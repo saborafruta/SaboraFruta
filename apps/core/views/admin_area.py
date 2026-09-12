@@ -38,6 +38,10 @@ from apps.core.models import (
     ConfiguracaoEtiquetaVenda, Empresa, EmpresaBanco, Filial, PerfilAcesso,
     Permissao, RailwayProjectPool, SeparacaoFilial, Usuario,
 )
+from apps.core.models.parametros import (
+    layout_etiqueta_venda_padrao,
+    normalizar_layout_etiqueta_venda,
+)
 from apps.core.services.imagem_filial import preparar_imagem_filial
 from apps.core.services.empresa_banco_service import EmpresaBancoService
 from apps.core.services.separacao_filial_service import (
@@ -436,12 +440,23 @@ def etiqueta_venda_config(request, filial_id):
             'filial': filial.razao_social,
         }),
     )
+    layout_enviado = request.POST.get('layout_elementos') if request.method == 'POST' else None
+    if layout_enviado:
+        try:
+            layout_enviado = json.loads(layout_enviado)
+        except (TypeError, ValueError):
+            layout_enviado = None
+    layout_etiqueta = normalizar_layout_etiqueta_venda(
+        layout_enviado if layout_enviado is not None else config.layout_elementos,
+    )
     return render(request, 'core/admin/etiqueta_venda_form.html', {
         'form': form,
         'config': config,
         'filial': filial,
         'central_url': central_url,
         'page_title': 'Etiqueta de venda',
+        'layout_etiqueta': layout_etiqueta,
+        'layout_etiqueta_padrao': layout_etiqueta_venda_padrao(),
     })
 
 

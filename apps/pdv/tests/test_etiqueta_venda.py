@@ -18,6 +18,8 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertEqual(config.altura_mm, Decimal('40.00'))
         self.assertEqual(config.texto_rodape, 'Obrigado pela sua preferência!')
         self.assertFalse(config.ativa)
+        self.assertEqual(config.layout_normalizado()['logo']['x'], 3)
+        self.assertEqual(config.layout_normalizado()['cliente']['x'], 39)
 
         largura = ConfiguracaoEtiquetaVenda._meta.get_field('largura_mm')
         altura = ConfiguracaoEtiquetaVenda._meta.get_field('altura_mm')
@@ -44,6 +46,7 @@ class EtiquetaVendaTests(SimpleTestCase):
             'cliente_nome': 'Cliente Teste',
             'venda': venda,
             'auto_print': False,
+            'layout_etiqueta': config.layout_normalizado(),
         })
 
         self.assertIn('@page { size: 60.00mm 40.00mm; margin: 0; }', html)
@@ -51,6 +54,26 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertIn('Venda #000644', html)
         self.assertIn('Volte sempre!', html)
         self.assertIn('Zebra ZD220', html)
+        self.assertIn('left:3.0%', html)
+        self.assertIn('left:39.0%', html)
+
+    def test_layout_padrao_e_seguro_e_pode_ser_reposicionado(self):
+        config = ConfiguracaoEtiquetaVenda(
+            filial_id=1,
+            layout_elementos={
+                'logo': {'x': 12.5, 'y': 7, 'w': 28, 'h': 70},
+                'cliente': {'x': 500, 'y': -20, 'w': 40, 'h': 20},
+                'desconhecido': {'x': 1, 'y': 1, 'w': 1, 'h': 1},
+            },
+        )
+
+        layout = config.layout_normalizado()
+
+        self.assertEqual(layout['logo']['x'], 12.5)
+        self.assertEqual(layout['logo']['y'], 7)
+        self.assertEqual(layout['cliente']['x'], 60)
+        self.assertEqual(layout['cliente']['y'], 0)
+        self.assertNotIn('desconhecido', layout)
 
     def test_rotas_e_botoes_estao_integrados(self):
         self.assertEqual(reverse('pdv:etiqueta_venda', args=[12]), '/pdv/venda/12/etiqueta/')
@@ -62,7 +85,11 @@ class EtiquetaVendaTests(SimpleTestCase):
         apps_dir = pdv_app.parent
         pdv = (pdv_app / 'templates/pdv/home.html').read_text(encoding='utf-8')
         central = (apps_dir / 'core/templates/core/admin/central.html').read_text(encoding='utf-8')
+        editor = (apps_dir / 'core/templates/core/admin/etiqueta_venda_form.html').read_text(encoding='utf-8')
         self.assertIn('Imprimir etiqueta de venda', pdv)
         self.assertIn('imprimirEtiquetaVenda()', pdv)
         self.assertIn('{% if etiqueta_venda_disponivel %}', pdv)
         self.assertIn('admin_etiqueta_venda_config', central)
+        self.assertIn('data-layout-key="logo"', editor)
+        self.assertIn("element.addEventListener('pointerdown'", editor)
+        self.assertIn('id_layout_elementos', editor)

@@ -54,4 +54,5 @@ def contexto_etiqueta_venda(venda):
         'filial_identidade': filial_identidade,
         'logo_url': logo_url,
         'cliente_nome': venda.cliente.nome_display if venda.cliente else 'Consumidor Final',
+        'layout_etiqueta': config.layout_normalizado(),
     }

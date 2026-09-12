@@ -4,6 +4,7 @@ from apps.core.models import (
     ConfiguracaoEtiquetaVenda, Empresa, Filial, PerfilAcesso, Permissao, PoliticaReplicacao, Usuario,
     PoliticaReplicacaoFilial, RailwayProjectPool, UsuarioFilialAcesso,
 )
+from apps.core.models.parametros import normalizar_layout_etiqueta_venda
 
 
 class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
@@ -13,6 +14,7 @@ class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
             'ativa', 'largura_mm', 'altura_mm', 'impressora_nome',
             'texto_rodape', 'exibir_logo', 'exibir_nome_empresa',
             'exibir_nome_cliente', 'exibir_numero_venda', 'exibir_data_venda',
+            'layout_elementos',
         ]
         widgets = {
             'largura_mm': forms.NumberInput(attrs={'min': '20', 'max': '300', 'step': '0.1'}),
@@ -25,6 +27,7 @@ class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
                 'maxlength': '300',
                 'placeholder': 'Obrigado pela sua preferência!',
             }),
+            'layout_elementos': forms.HiddenInput(),
         }
         labels = {
             'ativa': 'Disponibilizar etiqueta no PDV',
@@ -44,12 +47,17 @@ class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
         for name, field in self.fields.items():
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs['class'] = 'h-4 w-4 rounded border-gray-400 text-blue-600'
+            elif isinstance(field.widget, forms.HiddenInput):
+                continue
             else:
                 field.widget.attrs['class'] = 'form-input w-full'
         self.fields['impressora_nome'].help_text = (
             'O navegador exibirá este nome como referência. Por segurança, a impressora '
             'física ainda deve ser confirmada no diálogo de impressão.'
         )
+
+    def clean_layout_elementos(self):
+        return normalizar_layout_etiqueta_venda(self.cleaned_data.get('layout_elementos'))
 
 
 def _digits(value):

@@ -7,11 +7,56 @@ armazenamento. Este módulo guarda apenas o que ainda não existia: a logo,
 o e-mail secundário e a configuração de emissão por documento fiscal.
 """
 from decimal import Decimal
+from math import isfinite
 
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from .base import TimestampedModel
+
+
+LAYOUT_ETIQUETA_VENDA_PADRAO = {
+    'logo': {'x': 3, 'y': 10, 'w': 33, 'h': 80},
+    'empresa': {'x': 39, 'y': 8, 'w': 58, 'h': 15},
+    'cliente': {'x': 39, 'y': 27, 'w': 58, 'h': 24},
+    'venda': {'x': 39, 'y': 55, 'w': 27, 'h': 12},
+    'data': {'x': 69, 'y': 55, 'w': 28, 'h': 12},
+    'mensagem': {'x': 39, 'y': 72, 'w': 58, 'h': 20},
+}
+
+
+def layout_etiqueta_venda_padrao():
+    return {chave: dict(posicao) for chave, posicao in LAYOUT_ETIQUETA_VENDA_PADRAO.items()}
+
+
+def normalizar_layout_etiqueta_venda(valor):
+    """Limita o layout ao interior da etiqueta e ignora chaves desconhecidas."""
+    layout = layout_etiqueta_venda_padrao()
+    if not isinstance(valor, dict):
+        return layout
+    for chave, padrao in layout.items():
+        recebido = valor.get(chave)
+        if not isinstance(recebido, dict):
+            continue
+        try:
+            numeros = [
+                float(recebido.get(campo, padrao[campo]))
+                for campo in ('x', 'y', 'w', 'h')
+            ]
+        except (TypeError, ValueError):
+            continue
+        if not all(isfinite(numero) for numero in numeros):
+            continue
+        x_recebido, y_recebido, largura_recebida, altura_recebida = numeros
+        largura = min(100.0, max(8.0, largura_recebida))
+        altura = min(100.0, max(6.0, altura_recebida))
+        x = min(100.0 - largura, max(0.0, x_recebido))
+        y = min(100.0 - altura, max(0.0, y_recebido))
+        layout[chave] = {
+            'x': round(x, 2), 'y': round(y, 2),
+            'w': round(largura, 2), 'h': round(altura, 2),
+        }
+    return layout
 
 
 class ParametrosSistema(TimestampedModel):
@@ -116,6 +161,7 @@ class ConfiguracaoEtiquetaVenda(TimestampedModel):
     exibir_nome_cliente = models.BooleanField(default=True)
     exibir_numero_venda = models.BooleanField(default=True)
     exibir_data_venda = models.BooleanField(default=True)
+    layout_elementos = models.JSONField(default=layout_etiqueta_venda_padrao, blank=True)
 
     class Meta:
         db_table = 'configuracoes_etiqueta_venda'
@@ -124,6 +170,9 @@ class ConfiguracaoEtiquetaVenda(TimestampedModel):
 
     def __str__(self):
         return f'Etiqueta de venda — {self.filial}'
+
+    def layout_normalizado(self):
+        return normalizar_layout_etiqueta_venda(self.layout_elementos)
 
 
 class ParametroDocumentoFiscal(TimestampedModel):
