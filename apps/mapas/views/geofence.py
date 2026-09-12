@@ -194,13 +194,21 @@ def registrar_posicao(request):
 
     from apps.mapas.services import RastreioService
 
+    destinos_pendentes = _destinos_pendentes(corpo.get('destinos_pendentes'))
+    # DIAGNÓSTICO TEMPORÁRIO -- tirar depois de confirmar com o usuário
+    # se o roteiro está mesmo chegando no corpo da requisição.
+    logger.info(
+        'posicao motorista=%s bruto=%r saneado=%d',
+        motorista.pk, corpo.get('destinos_pendentes'), len(destinos_pendentes),
+    )
+
     # Rastreamento (§13): última posição + histórico, quando couber.
     RastreioService.registrar(
         filial=filial, motorista=motorista, latitude=lat, longitude=lng,
         velocidade_kmh=_velocidade(corpo.get('velocidade')),
         precisao_m=_inteiro(corpo.get('precisao')),
         destino_venda_id=_destino_venda(corpo.get('destino_venda'), filial),
-        destinos_pendentes=_destinos_pendentes(corpo.get('destinos_pendentes')),
+        destinos_pendentes=destinos_pendentes,
     )
 
     eventos = GeofenceService.processar_posicao(
