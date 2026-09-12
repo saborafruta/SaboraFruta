@@ -1,6 +1,7 @@
 import json
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.conf import settings
@@ -18,6 +19,7 @@ from django.utils.crypto import constant_time_compare
 
 from apps.cadastros.services.replicacao_service import ReplicacaoCadastrosService
 from apps.core.forms.admin_forms import (
+    ConfiguracaoEtiquetaVendaForm,
     EmpresaAdminForm,
     FilialAdminForm,
     get_or_create_politica_filial,
@@ -33,8 +35,8 @@ from apps.core.services.modulos import (
     modulos_de_verticais, modulos_disponiveis, modulos_para_admin,
 )
 from apps.core.models import (
-    Empresa, EmpresaBanco, Filial, PerfilAcesso, Permissao, RailwayProjectPool,
-    SeparacaoFilial, Usuario,
+    ConfiguracaoEtiquetaVenda, Empresa, EmpresaBanco, Filial, PerfilAcesso,
+    Permissao, RailwayProjectPool, SeparacaoFilial, Usuario,
 )
 from apps.core.services.imagem_filial import preparar_imagem_filial
 from apps.core.services.empresa_banco_service import EmpresaBancoService
@@ -401,6 +403,45 @@ def central_administrativa(request):
         'modulos_verticais': modulos_de_verticais(
             filial_selecionada.empresa if filial_selecionada else None
         ),
+    })
+
+
+@superuser_required
+def etiqueta_venda_config(request, filial_id):
+    """Configura no banco central a etiqueta usada pelo PDV desta filial."""
+    filial = get_object_or_404(
+        Filial.objects.using('default').select_related('empresa'),
+        pk=filial_id,
+        ativo=True,
+        empresa__ativo=True,
+    )
+    config = (
+        ConfiguracaoEtiquetaVenda.objects.using('default')
+        .filter(filial_id=filial.pk)
+        .first()
+        or ConfiguracaoEtiquetaVenda(filial_id=filial.pk)
+    )
+    form = ConfiguracaoEtiquetaVendaForm(request.POST or None, instance=config)
+    if request.method == 'POST' and form.is_valid():
+        config = form.save(commit=False)
+        config.filial_id = filial.pk
+        config.save(using='default')
+        messages.success(request, 'Configuração da etiqueta de venda salva com sucesso.')
+        return redirect('core:admin_etiqueta_venda_config', filial_id=filial.pk)
+
+    central_url = '{}?{}'.format(
+        reverse('core:admin_central'),
+        urlencode({
+            'empresa': filial.empresa.razao_social,
+            'filial': filial.razao_social,
+        }),
+    )
+    return render(request, 'core/admin/etiqueta_venda_form.html', {
+        'form': form,
+        'config': config,
+        'filial': filial,
+        'central_url': central_url,
+        'page_title': 'Etiqueta de venda',
     })
 
 

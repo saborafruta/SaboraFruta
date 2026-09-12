@@ -1,0 +1,156 @@
+{% extends "_base.html" %}
+
+{% block title %}Etiqueta de venda — ERP iNoovaTed{% endblock %}
+{% block page_title %}Etiqueta de venda{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-5">
+  <div>
+    <a href="{{ central_url }}" class="text-sm font-semibold text-blue-500">← Central Administrativa</a>
+    <h2 class="text-2xl font-semibold mt-2">Configurar etiqueta de venda</h2>
+    <p class="text-sm text-gray-500 mt-1">
+      {{ filial.empresa.nome_fantasia|default:filial.empresa.razao_social }} ·
+      {{ filial.nome_fantasia|default:filial.razao_social }}
+    </p>
+  </div>
+
+  <div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
+    O tamanho configurado é enviado ao navegador em milímetros. A impressora informada serve como
+    referência para o operador, que deve confirmá-la no diálogo de impressão do navegador.
+  </div>
+
+  <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6">
+    <form method="post" class="card p-6 space-y-6" id="etiqueta-config-form">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <section class="space-y-4">
+        <h3 class="font-semibold text-lg">Impressão</h3>
+        <label class="flex items-center gap-3 rounded-xl border border-gray-500/20 p-4" for="{{ form.ativa.id_for_label }}">
+          {{ form.ativa }}
+          <span>
+            <span class="block font-semibold">{{ form.ativa.label }}</span>
+            <span class="block text-xs text-gray-500 mt-1">Quando desativada, a etiqueta não será enviada para impressão.</span>
+          </span>
+        </label>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label for="{{ form.largura_mm.id_for_label }}" class="block text-sm font-semibold mb-2">{{ form.largura_mm.label }}</label>
+            {{ form.largura_mm }}
+            {% if form.largura_mm.errors %}<div class="text-sm text-red-500 mt-2">{{ form.largura_mm.errors|striptags }}</div>{% endif %}
+          </div>
+          <div>
+            <label for="{{ form.altura_mm.id_for_label }}" class="block text-sm font-semibold mb-2">{{ form.altura_mm.label }}</label>
+            {{ form.altura_mm }}
+            {% if form.altura_mm.errors %}<div class="text-sm text-red-500 mt-2">{{ form.altura_mm.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+        <div>
+          <label for="{{ form.impressora_nome.id_for_label }}" class="block text-sm font-semibold mb-2">{{ form.impressora_nome.label }}</label>
+          {{ form.impressora_nome }}
+          <p class="text-xs text-gray-500 mt-2">{{ form.impressora_nome.help_text }}</p>
+          {% if form.impressora_nome.errors %}<div class="text-sm text-red-500 mt-2">{{ form.impressora_nome.errors|striptags }}</div>{% endif %}
+        </div>
+      </section>
+
+      <section class="space-y-4 border-t border-gray-500/20 pt-5">
+        <h3 class="font-semibold text-lg">Conteúdo</h3>
+        <div>
+          <label for="{{ form.texto_rodape.id_for_label }}" class="block text-sm font-semibold mb-2">{{ form.texto_rodape.label }}</label>
+          {{ form.texto_rodape }}
+          <p class="text-xs text-gray-500 mt-2">Texto livre com até 300 caracteres.</p>
+          {% if form.texto_rodape.errors %}<div class="text-sm text-red-500 mt-2">{{ form.texto_rodape.errors|striptags }}</div>{% endif %}
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {% for field in form %}
+            {% if field.name == 'exibir_logo' or field.name == 'exibir_nome_empresa' or field.name == 'exibir_nome_cliente' or field.name == 'exibir_numero_venda' or field.name == 'exibir_data_venda' %}
+              <label class="flex items-center gap-3 rounded-lg border border-gray-500/20 px-4 py-3" for="{{ field.id_for_label }}">
+                {{ field }} <span class="text-sm font-medium">{{ field.label }}</span>
+              </label>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </section>
+
+      <div class="flex justify-end gap-3 border-t border-gray-500/20 pt-5">
+        <a href="{{ central_url }}" class="btn-secondary">Cancelar</a>
+        <button type="submit" class="btn-primary">Salvar configuração</button>
+      </div>
+    </form>
+
+    <aside class="card p-6 h-fit xl:sticky xl:top-24">
+      <div class="flex items-start justify-between gap-3 mb-5">
+        <div>
+          <h3 class="font-semibold text-lg">Prévia da etiqueta</h3>
+          <p class="text-xs text-gray-500 mt-1" id="preview-size"></p>
+        </div>
+        <span class="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-500">Venda #000644</span>
+      </div>
+      <div class="flex justify-center rounded-xl bg-gray-500/10 p-5 overflow-hidden">
+        <div id="label-preview" class="bg-white text-black border border-gray-300 shadow-lg flex flex-col items-center justify-center text-center p-4 overflow-hidden" style="width:340px;aspect-ratio:3/2;">
+          <div id="preview-logo">
+            {% if filial.imagem %}
+              <img src="{{ filial.imagem.url }}" alt="Logo da filial" class="mx-auto max-h-16 max-w-40 object-contain mb-2" onerror="this.style.display='none'">
+            {% else %}
+              <div class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Logo da filial</div>
+            {% endif %}
+          </div>
+          <div id="preview-company" class="font-bold text-sm">{{ filial.nome_fantasia|default:filial.razao_social }}</div>
+          <div id="preview-customer" class="font-bold text-xl leading-tight mt-2">Cliente da venda</div>
+          <div class="flex items-center justify-center gap-3 text-xs mt-2">
+            <span id="preview-sale">Venda #000644</span>
+            <span id="preview-date">12/09/2026 19:11</span>
+          </div>
+          <div id="preview-message" class="text-xs mt-3 border-t border-gray-300 pt-2 w-full">{{ form.texto_rodape.value|default:'Obrigado pela sua preferência!' }}</div>
+        </div>
+      </div>
+      <div class="mt-4 rounded-lg border border-gray-500/20 px-4 py-3 text-sm">
+        <span class="text-gray-500">Impressora:</span>
+        <strong id="preview-printer">{{ form.impressora_nome.value|default:'Não informada' }}</strong>
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const byId = id => document.getElementById(id);
+    const width = byId('id_largura_mm');
+    const height = byId('id_altura_mm');
+    const message = byId('id_texto_rodape');
+    const printer = byId('id_impressora_nome');
+    const preview = byId('label-preview');
+    const toggles = {
+      id_exibir_logo: 'preview-logo',
+      id_exibir_nome_empresa: 'preview-company',
+      id_exibir_nome_cliente: 'preview-customer',
+      id_exibir_numero_venda: 'preview-sale',
+      id_exibir_data_venda: 'preview-date'
+    };
+    function numberValue(input, fallback) {
+      const value = Number(String(input.value || '').replace(',', '.'));
+      return value > 0 ? value : fallback;
+    }
+    function refresh() {
+      const w = numberValue(width, 60);
+      const h = numberValue(height, 40);
+      preview.style.aspectRatio = w + ' / ' + h;
+      byId('preview-size').textContent = w + ' × ' + h + ' mm (proporção real)';
+      byId('preview-message').textContent = message.value || '';
+      byId('preview-printer').textContent = printer.value || 'Não informada';
+      Object.entries(toggles).forEach(([inputId, previewId]) => {
+        byId(previewId).style.display = byId(inputId).checked ? '' : 'none';
+      });
+    }
+    [width, height, message, printer, ...Object.keys(toggles).map(byId)].forEach(input => {
+      input.addEventListener('input', refresh);
+      input.addEventListener('change', refresh);
+    });
+    refresh();
+  }());
+</script>
+{% endblock %}

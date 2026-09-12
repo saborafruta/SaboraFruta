@@ -1,0 +1,110 @@
+{% load l10n %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Etiqueta da venda #{{ venda.numero_venda }}</title>
+  <style>
+    :root {
+      --label-width: {{ config.largura_mm|unlocalize }}mm;
+      --label-height: {{ config.altura_mm|unlocalize }}mm;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; font-family: Arial, Helvetica, sans-serif; }
+    body { background: #e5e7eb; color: #111827; }
+    .toolbar {
+      position: sticky; top: 0; z-index: 2; display: flex; align-items: center;
+      justify-content: center; gap: 14px; flex-wrap: wrap; padding: 14px 18px;
+      background: #111827; color: #f9fafb; box-shadow: 0 4px 18px rgba(0,0,0,.2);
+    }
+    .toolbar strong { color: #93c5fd; }
+    .toolbar button {
+      border: 0; border-radius: 8px; background: #2563eb; color: white;
+      padding: 10px 18px; font: inherit; font-weight: 700; cursor: pointer;
+    }
+    .warning { color: #fbbf24; font-size: 12px; }
+    .canvas { min-height: calc(100vh - 74px); display: grid; place-items: center; padding: 28px; overflow: auto; }
+    .label {
+      width: var(--label-width); height: var(--label-height); overflow: hidden;
+      flex: none; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; text-align: center; background: white; color: black;
+      padding: 2.2mm; border: 1px solid #d1d5db; box-shadow: 0 12px 30px rgba(0,0,0,.18);
+    }
+    .logo { display: block; max-width: 72%; max-height: 24%; object-fit: contain; margin: 0 auto 1mm; }
+    .company { max-width: 100%; font-size: 3.2mm; font-weight: 800; line-height: 1.05; overflow-wrap: anywhere; }
+    .customer { max-width: 100%; margin-top: 1.4mm; font-size: 5mm; font-weight: 900; line-height: 1.03; overflow-wrap: anywhere; }
+    .sale-meta { display: flex; justify-content: center; gap: 2.6mm; flex-wrap: wrap; margin-top: 1.2mm; font-size: 2.5mm; line-height: 1.1; }
+    .message { width: 100%; margin-top: 1.5mm; padding-top: 1.2mm; border-top: .25mm solid #111; font-size: 2.7mm; font-weight: 700; line-height: 1.12; overflow-wrap: anywhere; }
+    .disabled {
+      max-width: 560px; border-radius: 14px; background: white; padding: 28px;
+      box-shadow: 0 14px 40px rgba(0,0,0,.15); text-align: center;
+    }
+    @page { size: {{ config.largura_mm|unlocalize }}mm {{ config.altura_mm|unlocalize }}mm; margin: 0; }
+    @media print {
+      html, body { width: var(--label-width); height: var(--label-height); background: white; }
+      .no-print { display: none !important; }
+      .canvas { display: block; min-height: 0; padding: 0; }
+      .label { border: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  {% if config.ativa %}
+    <div class="toolbar no-print">
+      <span>Tamanho: <strong>{{ config.largura_mm }} × {{ config.altura_mm }} mm</strong></span>
+      <span>Impressora: <strong>{{ config.impressora_nome|default:"não informada" }}</strong></span>
+      <button type="button" onclick="window.print()">Imprimir etiqueta</button>
+      <span class="warning">Confirme a impressora e use escala 100% / tamanho real.</span>
+    </div>
+    <main class="canvas">
+      <section class="label" aria-label="Etiqueta da venda {{ venda.numero_venda }}">
+        {% if config.exibir_logo and logo_url %}
+          <img class="logo" src="{{ logo_url }}" alt="Logo de {{ filial_identidade.nome_fantasia|default:filial_identidade.razao_social }}">
+        {% endif %}
+        {% if config.exibir_nome_empresa %}
+          <div class="company">{{ filial_identidade.nome_fantasia|default:filial_identidade.razao_social }}</div>
+        {% endif %}
+        {% if config.exibir_nome_cliente %}
+          <div class="customer">{{ cliente_nome }}</div>
+        {% endif %}
+        {% if config.exibir_numero_venda or config.exibir_data_venda %}
+          <div class="sale-meta">
+            {% if config.exibir_numero_venda %}<span>Venda #{{ venda.numero_venda|stringformat:"06d" }}</span>{% endif %}
+            {% if config.exibir_data_venda %}<span>{{ venda.data_venda|date:"d/m/Y H:i" }}</span>{% endif %}
+          </div>
+        {% endif %}
+        {% if config.texto_rodape %}<div class="message">{{ config.texto_rodape }}</div>{% endif %}
+      </section>
+    </main>
+  {% else %}
+    <main class="canvas">
+      <section class="disabled">
+        <h1>Etiqueta desativada</h1>
+        <p>A impressão de etiqueta está desativada para esta filial. Ative-a na Central Administrativa.</p>
+        <button type="button" onclick="window.close()">Fechar</button>
+      </section>
+    </main>
+  {% endif %}
+  {% if auto_print %}
+    <script>
+      window.addEventListener('load', function () {
+        const logo = document.querySelector('.logo');
+        let printStarted = false;
+        const printNow = () => {
+          if (printStarted) return;
+          printStarted = true;
+          window.setTimeout(() => window.print(), 180);
+        };
+        if (logo && !logo.complete) {
+          logo.addEventListener('load', printNow, {once: true});
+          logo.addEventListener('error', printNow, {once: true});
+          window.setTimeout(printNow, 2500);
+        } else {
+          printNow();
+        }
+      });
+    </script>
+  {% endif %}
+</body>
+</html>

@@ -6,6 +6,9 @@ permanecem na ``Filial``; a tela de Parâmetros os edita, mas não duplica o
 armazenamento. Este módulo guarda apenas o que ainda não existia: a logo,
 o e-mail secundário e a configuração de emissão por documento fiscal.
 """
+from decimal import Decimal
+
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from .base import TimestampedModel
@@ -73,6 +76,54 @@ class ParametrosSistema(TimestampedModel):
 
     def __str__(self):
         return f'Parâmetros — {self.filial}'
+
+
+class ConfiguracaoEtiquetaVenda(TimestampedModel):
+    """Layout da etiqueta impressa depois da finalização de uma venda."""
+
+    filial = models.OneToOneField(
+        'core.Filial',
+        on_delete=models.CASCADE,
+        related_name='configuracao_etiqueta_venda',
+    )
+    ativa = models.BooleanField(default=True)
+    largura_mm = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal('60.00'),
+        validators=[MinValueValidator(Decimal('20')), MaxValueValidator(Decimal('300'))],
+        help_text='Largura física da etiqueta, em milímetros.',
+    )
+    altura_mm = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal('40.00'),
+        validators=[MinValueValidator(Decimal('20')), MaxValueValidator(Decimal('300'))],
+        help_text='Altura física da etiqueta, em milímetros.',
+    )
+    impressora_nome = models.CharField(
+        max_length=150,
+        blank=True,
+        help_text='Nome da impressora de etiquetas que o operador deve selecionar.',
+    )
+    texto_rodape = models.CharField(
+        max_length=300,
+        default='Obrigado pela sua preferência!',
+        blank=True,
+    )
+    exibir_logo = models.BooleanField(default=True)
+    exibir_nome_empresa = models.BooleanField(default=True)
+    exibir_nome_cliente = models.BooleanField(default=True)
+    exibir_numero_venda = models.BooleanField(default=True)
+    exibir_data_venda = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'configuracoes_etiqueta_venda'
+        verbose_name = 'Configuração de etiqueta de venda'
+        verbose_name_plural = 'Configurações de etiqueta de venda'
+
+    def __str__(self):
+        return f'Etiqueta de venda — {self.filial}'
 
 
 class ParametroDocumentoFiscal(TimestampedModel):
