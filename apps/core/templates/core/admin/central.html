@@ -336,6 +336,7 @@
             <a href="{% url 'core:admin_usuario_create' %}?central_filial={{ filial_selecionada.pk }}" class="btn-secondary justify-center">+ Novo usuario</a>
             <a href="{% url 'core:admin_perfil_list' %}?central_filial={{ filial_selecionada.pk }}" class="btn-secondary justify-center">Perfis da empresa</a>
             <a href="{% url 'core:admin_perfil_create' %}?central_filial={{ filial_selecionada.pk }}" class="btn-secondary justify-center">+ Novo perfil</a>
+            <a href="{% url 'core:admin_etiqueta_venda_config' filial_selecionada.pk %}" class="btn-secondary justify-center">Impressão de etiqueta</a>
             <button type="button" @click="modulosAberta = true" class="btn-secondary justify-center">Módulos</button>
           </div>
         </div>

@@ -1,9 +1,55 @@
 from django import forms
 
 from apps.core.models import (
-    Empresa, Filial, PerfilAcesso, Permissao, PoliticaReplicacao, Usuario,
+    ConfiguracaoEtiquetaVenda, Empresa, Filial, PerfilAcesso, Permissao, PoliticaReplicacao, Usuario,
     PoliticaReplicacaoFilial, RailwayProjectPool, UsuarioFilialAcesso,
 )
+
+
+class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
+    class Meta:
+        model = ConfiguracaoEtiquetaVenda
+        fields = [
+            'ativa', 'largura_mm', 'altura_mm', 'impressora_nome',
+            'texto_rodape', 'exibir_logo', 'exibir_nome_empresa',
+            'exibir_nome_cliente', 'exibir_numero_venda', 'exibir_data_venda',
+        ]
+        widgets = {
+            'largura_mm': forms.NumberInput(attrs={'min': '20', 'max': '300', 'step': '0.1'}),
+            'altura_mm': forms.NumberInput(attrs={'min': '20', 'max': '300', 'step': '0.1'}),
+            'impressora_nome': forms.TextInput(attrs={
+                'placeholder': 'Ex.: Zebra ZD220, Elgin L42 ou Argox OS-214',
+            }),
+            'texto_rodape': forms.Textarea(attrs={
+                'rows': 3,
+                'maxlength': '300',
+                'placeholder': 'Obrigado pela sua preferência!',
+            }),
+        }
+        labels = {
+            'ativa': 'Disponibilizar etiqueta no PDV',
+            'largura_mm': 'Largura (mm)',
+            'altura_mm': 'Altura (mm)',
+            'impressora_nome': 'Impressora de etiquetas',
+            'texto_rodape': 'Mensagem da empresa',
+            'exibir_logo': 'Logo da filial',
+            'exibir_nome_empresa': 'Nome da empresa/filial',
+            'exibir_nome_cliente': 'Nome do cliente da venda',
+            'exibir_numero_venda': 'Número da venda',
+            'exibir_data_venda': 'Data e hora da venda',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs['class'] = 'h-4 w-4 rounded border-gray-400 text-blue-600'
+            else:
+                field.widget.attrs['class'] = 'form-input w-full'
+        self.fields['impressora_nome'].help_text = (
+            'O navegador exibirá este nome como referência. Por segurança, a impressora '
+            'física ainda deve ser confirmada no diálogo de impressão.'
+        )
 
 
 def _digits(value):

@@ -4,7 +4,7 @@ from .base import (
 from .empresa import Empresa, Filial, PoliticaReplicacao, PoliticaReplicacaoFilial
 from .usuario import Usuario, PerfilAcesso, Permissao, SessaoUsuario, UsuarioFilialAcesso
 from .log import LogSistema, LogAcesso, RegistroAuditoria
-from .parametros import ParametrosSistema, ParametroDocumentoFiscal
+from .parametros import ConfiguracaoEtiquetaVenda, ParametrosSistema, ParametroDocumentoFiscal
 from .notificacao import Notificacao, NotificacaoLeitura
 from .tenant import EmpresaBanco, RailwayProjectPool, TenantPublicLink
 from .separacao import SeparacaoFilial
@@ -15,7 +15,7 @@ __all__ = [
     'Empresa', 'Filial', 'PoliticaReplicacao', 'PoliticaReplicacaoFilial',
     'Usuario', 'PerfilAcesso', 'Permissao', 'SessaoUsuario', 'UsuarioFilialAcesso',
     'LogSistema', 'LogAcesso', 'RegistroAuditoria',
-    'ParametrosSistema', 'ParametroDocumentoFiscal',
+    'ParametrosSistema', 'ParametroDocumentoFiscal', 'ConfiguracaoEtiquetaVenda',
     'Notificacao', 'NotificacaoLeitura',
     'EmpresaBanco', 'RailwayProjectPool', 'TenantPublicLink', 'SeparacaoFilial',
 ]

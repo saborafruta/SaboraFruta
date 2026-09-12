@@ -34,6 +34,11 @@ urlpatterns = [
 
     path('gestao/central/', admin_area.central_administrativa, name='admin_central'),
     path(
+        'gestao/central/filiais/<int:filial_id>/etiqueta-venda/',
+        admin_area.etiqueta_venda_config,
+        name='admin_etiqueta_venda_config',
+    ),
+    path(
         'gestao/central/gestao-railway/', admin_area.railway_pool_list,
         name='admin_railway_pool_list',
     ),

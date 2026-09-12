@@ -8,6 +8,7 @@ urlpatterns = [
     path('api/venda/<int:pk>/comprovante-link/', criar_link, name='api_comprovante_link'),
     path('venda/<int:pk>/comprovante/', visualizar_interno, name='comprovante_venda'),
     path('venda/<int:pk>/comprovante/pdf/', baixar_pdf_interno, name='comprovante_venda_pdf'),
+    path('venda/<int:pk>/etiqueta/', pdv.etiqueta_venda, name='etiqueta_venda'),
     path("", pdv.pdv_home, name="home"),
     path("vendas/", pdv.vendas_list, name="vendas_list"),
     path("orcamentos/", pdv.orcamentos_list, name="orcamentos_list"),

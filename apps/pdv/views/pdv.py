@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from django.db.models import Max, Min, Q, Sum
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from django.core.paginator import Paginator
 from django.urls import reverse
 from django.utils import timezone
@@ -39,6 +39,7 @@ from apps.pdv.services.cancelamento_fiscal_service import (
     obter_documento_fiscal,
 )
 from apps.pdv.services.edicao_venda_service import estornar_venda_para_edicao, validar_venda_editavel
+from apps.pdv.services.etiqueta_venda_service import contexto_etiqueta_venda
 from apps.pdv.services.fiscal_readiness_service import verificar_prontidao_fiscal
 from apps.produtos.models import (
     BrindeProduto,
@@ -186,6 +187,21 @@ def pdv_home(request):
         "usuario_e_admin": _usuario_e_admin(request),
         "cliente_inicial_json": json.dumps(_cliente_inicial(request)),
     })
+
+
+@require_GET
+@requer_permissao('pdv', 'ver')
+def etiqueta_venda(request, pk):
+    venda = get_object_or_404(
+        VendaPDV.objects.for_filial(request.filial_ativa).select_related('cliente', 'filial'),
+        pk=pk,
+    )
+    contexto = contexto_etiqueta_venda(venda)
+    contexto.update({
+        'venda': venda,
+        'auto_print': request.GET.get('auto') == '1' and contexto['config'].ativa,
+    })
+    return render(request, 'pdv/etiqueta_venda.html', contexto)
 
 
 def _cliente_inicial(request):

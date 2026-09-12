@@ -186,6 +186,7 @@ TENANT_ROUTED_APPS = [
     'producao', 'produtos', 'qualidade', 'sessions', 'vendas',
 ]
 TENANT_GLOBAL_MODELS = [
+    'core.configuracaoetiquetavenda',
     'core.empresabanco',
     'core.filialfavorita',
     'core.separacaofilial',
