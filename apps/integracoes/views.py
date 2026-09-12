@@ -61,7 +61,12 @@ class BaseIntegracaoView:
             empresa__ativo=True,
             ativo=True,
         )
-        ids_restritos = list(credencial.filiais.values_list('pk', flat=True))
+        # A restrição da credencial vive no banco central. O contexto do tenant
+        # já está ativo neste ponto, então o alias precisa ser explícito para a
+        # tabela intermediária não ser procurada no banco operacional.
+        ids_restritos = list(
+            credencial.filiais.using('default').values_list('pk', flat=True)
+        )
         if ids_restritos:
             centrais = centrais.filter(pk__in=ids_restritos)
         cnpjs = list(centrais.values_list('cnpj', flat=True))
