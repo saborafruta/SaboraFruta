@@ -9,6 +9,7 @@ from apps.core.views.pwa import service_worker
 
 urlpatterns = [
     path('health/', health_check, name='health'),
+    path('api/v1/', include('apps.integracoes.urls', namespace='integracoes_api')),
     # Raiz de proposito: o escopo de um service worker e' limitado ao
     # diretorio de onde ele foi baixado (ver apps/core/views/pwa.py).
     path('sw.js', service_worker, name='service-worker'),

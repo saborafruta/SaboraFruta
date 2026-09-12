@@ -26,6 +26,7 @@ class FilialMiddleware:
         '/auth/logout/',
         '/auth/minha-foto/',
         '/auth/trocar-filial/',
+        '/api/v1/',
         '/gestao/central/',
         '/gestao/empresas/',
         '/gestao/filiais/',

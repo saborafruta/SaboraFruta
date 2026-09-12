@@ -18,7 +18,7 @@ AUTH_DATABASE_SESSION_KEY = 'auth_database_alias'
 
 class TenantContextMiddleware:
     SESSION_KEY = 'tenant_db_alias'
-    CENTRAL_PATHS = ('/gestao/', '/admin/', '/static/', '/media/')
+    CENTRAL_PATHS = ('/gestao/', '/admin/', '/api/v1/', '/static/', '/media/')
 
     def __init__(self, get_response):
         if settings.TENANT_DATABASE_ROUTING_ENABLED:

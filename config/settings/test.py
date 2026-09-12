@@ -29,6 +29,7 @@ LOCAL_APP_LABELS = [
     'financeiro',
     'fiscal',
     'food_service',
+    'integracoes',
     'lotes',
     'logistica',
     'mapas',

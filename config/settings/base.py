@@ -74,6 +74,7 @@ LOCAL_APPS = [
     'apps.crm',
     'apps.mapas',
     'apps.food_service',
+    'apps.integracoes',
     'apps.moda',
     'apps.polpa',
 ]
@@ -257,6 +258,8 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
 }
+
+INTEGRACAO_API_RATE_LIMIT = env.int('INTEGRACAO_API_RATE_LIMIT', default=120)
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
