@@ -106,7 +106,11 @@ class VendaPDVService:
             endereco_entrega=endereco_entrega or {},
             valor_desconto=desconto,
             valor_acrescimo=acrescimo,
-            usuario=usuario,
+            # Use o id: no acesso de Super Admin, ``usuario`` pode ser o
+            # SimpleLazyObject autenticado no banco gerencial, enquanto a
+            # venda pertence ao banco tenant da empresa. Atribuir a instância
+            # dispara ``allow_relation()`` e bloqueia a finalização.
+            usuario_id=usuario.pk,
             data_venda=data_venda_efetiva,
             observacao=(observacao or "").strip(),
         )
