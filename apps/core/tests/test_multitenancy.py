@@ -17,11 +17,13 @@ from apps.core.models import (
 )
 from apps.core.services.empresa_banco_service import EmpresaBancoService
 from apps.core.services.auth_service import AuthService
+from apps.core.services.exceptions import DadosInvalidosError
 from apps.core.services.railway_provisioner import RailwayProvisioner
 from apps.core.services.tenant_public_link_service import TenantPublicLinkService
 from apps.core.services.tenant_task_service import TenantTaskService
 from apps.core.tenant_context import get_current_tenant_db, tenant_atomic, tenant_db
 from apps.core.views.auth import SelecionarFilialView
+from apps.core.views.admin_area import central_administrativa
 
 
 class MultitenancyFoundationTests(TestCase):
@@ -297,6 +299,66 @@ class MultitenancyFoundationTests(TestCase):
         self.assertEqual(context['empresas']._db, 'default')
         self.assertEqual(list(context['filiais']), [self.filial])
         self.assertEqual(list(context['empresas']), [self.empresa])
+
+    def test_central_nao_oferece_empresa_inativa_como_contexto_de_trabalho(self):
+        self.usuario.is_superuser = True
+        self.usuario.is_staff = True
+        self.usuario.save(update_fields=['is_superuser', 'is_staff'])
+        inativa = Empresa.objects.create(
+            razao_social='Empresa antiga',
+            nome_fantasia='Empresa repetida',
+            cnpj='88777666000155',
+            regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+            ativo=False,
+        )
+        request = RequestFactory().get('/gestao/central/')
+        request.user = self.usuario
+
+        with patch(
+            'apps.core.views.admin_area.render', side_effect=lambda _r, _t, c: c,
+        ):
+            context = central_administrativa(request)
+
+        self.assertEqual(list(context['empresas']), [self.empresa])
+        self.assertNotIn(inativa, context['empresas'])
+        self.assertEqual(context['total_empresas'], 1)
+
+    @override_settings(TENANT_DATABASE_ROUTING_ENABLED=True)
+    def test_troca_global_falha_sem_misturar_tenant_novo_com_filial_antiga(self):
+        self.usuario.is_superuser = True
+        self.usuario.is_staff = True
+        self.usuario.save(update_fields=['is_superuser', 'is_staff'])
+        request = RequestFactory().get(f'/auth/trocar-filial/{self.filial.pk}/')
+        request.user = self.usuario
+        request.tenant_db_alias = 'empresa_anterior'
+        request.session = {
+            'auth_database_alias': 'default',
+            'tenant_db_alias': 'empresa_anterior',
+            'filial_ativa_id': 999,
+        }
+        default_manager = Filial.objects.using('default')
+        tenant_manager = Mock()
+        tenant_manager.get.side_effect = Filial.DoesNotExist
+
+        with (
+            patch(
+                'apps.core.services.auth_service.register_tenant_database',
+                return_value=True,
+            ),
+            patch.object(
+                Filial.objects,
+                'using',
+                side_effect=lambda alias: (
+                    default_manager if alias == 'default' else tenant_manager
+                ),
+            ),
+        ):
+            with self.assertRaises(DadosInvalidosError):
+                AuthService.trocar_filial(request, self.filial.pk)
+
+        self.assertEqual(request.session['tenant_db_alias'], 'empresa_anterior')
+        self.assertEqual(request.session['filial_ativa_id'], 999)
 
     @override_settings(
         TENANT_DATABASE_ROUTING_ENABLED=True,

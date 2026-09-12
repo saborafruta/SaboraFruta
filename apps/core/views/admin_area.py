@@ -299,8 +299,15 @@ def _require_object_in_scope(obj, queryset):
 def central_administrativa(request):
     empresa_busca = request.GET.get('empresa', '').strip()
     filial_busca = request.GET.get('filial', '').strip()
-    empresas = Empresa.objects.order_by('razao_social')
-    filiais = Filial.objects.select_related('empresa').order_by('empresa__razao_social', 'razao_social')
+    # Este bloco escolhe contexto de trabalho, portanto cadastros inativos nao
+    # devem aparecer como uma segunda empresa selecionavel. Eles continuam
+    # disponiveis em "Listar empresas" para consulta e eventual reativacao.
+    empresas = Empresa.objects.filter(ativo=True).order_by('razao_social')
+    filiais = (
+        Filial.objects.select_related('empresa')
+        .filter(ativo=True, empresa__ativo=True)
+        .order_by('empresa__razao_social', 'razao_social')
+    )
     empresa_selecionada = None
 
     if empresa_busca:
@@ -379,8 +386,10 @@ def central_administrativa(request):
         'politica_filial_origem': politica_filial_origem,
         'replicacao_bloqueada': replicacao_bloqueada,
         'filial_selecionada': filial_selecionada,
-        'total_empresas': Empresa.objects.count(),
-        'total_filiais': Filial.objects.count(),
+        'total_empresas': Empresa.objects.filter(ativo=True).count(),
+        'total_filiais': Filial.objects.filter(
+            ativo=True, empresa__ativo=True,
+        ).count(),
         'total_super_admins': Usuario.objects.filter(is_superuser=True).count(),
         # Só os módulos que a empresa da filial pode ter -- um módulo de
         # outro vertical não aparece nem desmarcado, porque marcá-lo não

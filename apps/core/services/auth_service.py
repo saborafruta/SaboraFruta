@@ -158,8 +158,6 @@ class AuthService:
                 ).first()
             if not banco or not register_tenant_database(banco):
                 raise DadosInvalidosError('Esta empresa não possui banco ativo para acesso.')
-            request.session['tenant_db_alias'] = banco.db_alias
-            request.tenant_db_alias = banco.db_alias
             if is_global_admin:
                 try:
                     filial = Filial.objects.using(banco.db_alias).get(cnpj=filial.cnpj)
@@ -167,6 +165,13 @@ class AuthService:
                     raise DadosInvalidosError(
                         'A filial ainda não foi localizada no banco da empresa.'
                     ) from exc
+            # A sessao so pode apontar para o novo tenant depois de confirmar
+            # que a filial existe nele. Se a copia do diretorio estiver
+            # incompleta, manter metade da troca fazia o dashboard abrir com o
+            # banco novo e a filial antiga (que pode ter o mesmo PK em outro
+            # banco), parecendo entrar em uma empresa diferente.
+            request.session['tenant_db_alias'] = banco.db_alias
+            request.tenant_db_alias = banco.db_alias
         if is_global_admin:
             request.session[AUTH_DATABASE_SESSION_KEY] = 'default'
         request.session['filial_ativa_id'] = filial.pk
