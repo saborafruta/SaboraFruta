@@ -474,3 +474,130 @@ class LimparRastreioTests(BaseRastreio):
         resp = self._limpar(self.motorista.pk)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()['pontos'], 0)
+
+
+class DestinosPendentesTests(BaseRastreio):
+    """
+    O roteiro inteiro que falta entregar, não só a parada atual -- é o que
+    faz o mapa ao vivo do gestor mostrar os pinos de entrega assim que o
+    motorista aperta "Iniciar rastreio" (ver `_desenhar` em ao_vivo.html).
+    """
+
+    def test_grava_a_lista_saneada(self):
+        from apps.mapas.models import PosicaoMotorista
+
+        lat, lng = deslocar(0)
+        resp = self.client.post(
+            reverse('mapas:api-posicao'),
+            data=('{"motorista": %d, "lat": %s, "lng": %s, "destinos_pendentes": '
+                  '[{"lat": -5.8, "lng": -35.2, "nome": "Cliente A"}, '
+                  '{"lat": "ruim"}, "nao e objeto"]}'
+                  % (self.motorista.pk, lat, lng)),
+            content_type='application/json',
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        pendentes = PosicaoMotorista.objects.get().destinos_pendentes
+        self.assertEqual(pendentes, [{'lat': -5.8, 'lng': -35.2, 'nome': 'Cliente A'}])
+
+    def test_lista_ausente_fica_vazia(self):
+        from apps.mapas.models import PosicaoMotorista
+
+        lat, lng = deslocar(0)
+        self.client.post(
+            reverse('mapas:api-posicao'),
+            data='{"motorista": %d, "lat": %s, "lng": %s}' % (self.motorista.pk, lat, lng),
+            content_type='application/json',
+        )
+
+        self.assertEqual(PosicaoMotorista.objects.get().destinos_pendentes, [])
+
+    def test_ao_vivo_devolve_os_destinos_pendentes(self):
+        self._registrar(deslocar(0), destinos_pendentes=[
+            {'lat': -5.8, 'lng': -35.2, 'nome': 'Cliente A'},
+        ])
+
+        d = self.client.get(reverse('mapas:api-ao-vivo')).json()
+
+        self.assertEqual(
+            d['motoristas'][0]['destinos_pendentes'],
+            [{'lat': -5.8, 'lng': -35.2, 'nome': 'Cliente A'}],
+        )
+
+
+class MarcarEntregaTests(BaseRastreio):
+    """
+    O motorista marca "Entregue" na própria tela de rastreio, e o pedido
+    já sai do Kanban de delivery sem ninguém arrastar o card de novo — os
+    dois lêem o mesmo `status_delivery`.
+    """
+
+    def _venda(self, status_delivery='em_entrega', filial=None):
+        from apps.cadastros.models import Cliente
+        from apps.pdv.models import VendaPDV
+
+        filial = filial or self.filial
+        cliente = Cliente.objects.create(
+            filial=filial, razao_social='Cliente Rastreio', cpf_cnpj='12345678901',
+        )
+        return VendaPDV.objects.create(
+            filial=filial, numero_venda=1, cliente=cliente,
+            usuario=self.usuario, status='finalizada', delivery=True,
+            status_delivery=status_delivery, data_venda=timezone.now(),
+        )
+
+    def _marcar(self, venda_pk, entregue):
+        import json as _json
+        return self.client.post(
+            reverse('mapas:api-rastreio-entrega', args=[venda_pk]),
+            data=_json.dumps({'entregue': entregue}),
+            content_type='application/json',
+        )
+
+    def test_marca_como_entregue(self):
+        venda = self._venda()
+        resp = self._marcar(venda.pk, True)
+
+        self.assertEqual(resp.status_code, 200)
+        venda.refresh_from_db()
+        self.assertEqual(venda.status_delivery, 'entregue')
+
+    def test_desfazer_volta_para_em_entrega(self):
+        venda = self._venda(status_delivery='entregue')
+        resp = self._marcar(venda.pk, False)
+
+        self.assertEqual(resp.status_code, 200)
+        venda.refresh_from_db()
+        self.assertEqual(venda.status_delivery, 'em_entrega')
+
+    def test_venda_de_outra_empresa_e_404(self):
+        outra = self._empresa('Gama', '55444333000122')
+        venda = self._venda(filial=outra)
+
+        resp = self._marcar(venda.pk, True)
+
+        self.assertEqual(resp.status_code, 404)
+
+    def test_venda_inexistente_e_404(self):
+        resp = self._marcar(999999, True)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_permissao_de_apenas_leitura_do_mapa_basta(self):
+        """
+        A tela de rastreio só exige `mapas.ver`, não `pdv.editar` — o
+        motorista tem acesso a ela, não necessariamente ao Kanban.
+        """
+        from apps.core.models import PerfilAcesso, Permissao, Usuario
+
+        perfil = PerfilAcesso.objects.create(
+            empresa=self.filial.empresa, nome='So mapa', is_admin=False)
+        Permissao.objects.create(perfil=perfil, modulo='mapas', pode_ver=True)
+        motorista_usuario = Usuario.objects.create_user(
+            email='so-mapa@teste.local', nome='So Mapa', password='senha-de-teste-123',
+            empresa=self.filial.empresa, perfil=perfil, filial=self.filial)
+        self._logar(motorista_usuario, self.filial)
+
+        venda = self._venda()
+        resp = self._marcar(venda.pk, True)
+
+        self.assertEqual(resp.status_code, 200)

@@ -1,5 +1,6 @@
 """Bloco 16 — Vendas PDV, itens, pagamentos, pesagens e devoluções."""
 from django.db import models
+from django.utils import timezone
 from apps.core.models import Filial, Usuario
 from apps.cadastros.models import Cliente
 from apps.core.models.base import TimestampedModel
@@ -112,6 +113,40 @@ class VendaPDV(TimestampedModel):
 
     def __str__(self):
         return f"Venda PDV #{self.numero_venda}"
+
+    def mudar_status_delivery(self, novo_status, *, observacao='', entregador='', campos_extra=None):
+        """
+        Muda o status do delivery com o mesmo cuidado do Kanban.
+
+        Uma conta só: o Kanban (`delivery_mover`) e a tela de rastreio do
+        motorista (`apps.mapas`) precisam da mesma resposta pra "o motorista
+        marcou entregue no celular" e "alguém arrastou o card" nunca
+        divergirem em qual campo atualizar ou quando zerar o carimbo de
+        encerramento.
+        """
+        campos = ['status_delivery']
+        self.status_delivery = novo_status
+
+        # Marca/limpa o momento do encerramento, base do corte diário das
+        # 04:00 que limpa o Kanban (ver `_delivery_corte_limpeza`).
+        if novo_status in (self.StatusDelivery.FINALIZADO, self.StatusDelivery.CANCELADO):
+            if self.delivery_encerrado_em is None:
+                self.delivery_encerrado_em = timezone.now()
+                campos.append('delivery_encerrado_em')
+        elif self.delivery_encerrado_em is not None:
+            self.delivery_encerrado_em = None
+            campos.append('delivery_encerrado_em')
+
+        if observacao:
+            self.observacao_delivery = observacao
+            campos.append('observacao_delivery')
+        if entregador:
+            self.entregador = entregador[:100]
+            campos.append('entregador')
+        if campos_extra:
+            campos.extend(campos_extra)
+
+        self.save(update_fields=campos)
 
 
 class PesagemPDV(models.Model):

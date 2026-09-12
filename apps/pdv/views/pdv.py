@@ -2538,31 +2538,11 @@ def delivery_mover(request, pk):
     if not venda:
         return JsonResponse({'erro': 'Pedido nao encontrado'}, status=404)
 
-    campos = ['status_delivery']
-    venda.status_delivery = novo_status
-
-    # Marca/limpa o momento do encerramento, base do corte diário das 04:00
-    # que limpa o Kanban (ver _delivery_corte_limpeza).
-    if novo_status in ('finalizado', 'cancelado'):
-        if venda.delivery_encerrado_em is None:
-            venda.delivery_encerrado_em = timezone.now()
-            campos.append('delivery_encerrado_em')
-    elif venda.delivery_encerrado_em is not None:
-        # Voltou para uma etapa ativa: volta a contar como pedido em aberto.
-        venda.delivery_encerrado_em = None
-        campos.append('delivery_encerrado_em')
-
-    observacao = body.get('observacao', '').strip()
-    if observacao:
-        venda.observacao_delivery = observacao
-        campos.append('observacao_delivery')
-
-    entregador = body.get('entregador', '').strip()
-    if entregador:
-        venda.entregador = entregador[:100]
-        campos.append('entregador')
-
-    venda.save(update_fields=campos)
+    venda.mudar_status_delivery(
+        novo_status,
+        observacao=body.get('observacao', '').strip(),
+        entregador=body.get('entregador', '').strip(),
+    )
     return JsonResponse({
         'ok': True,
         'status': venda.status_delivery,

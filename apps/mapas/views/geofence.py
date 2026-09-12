@@ -200,6 +200,7 @@ def registrar_posicao(request):
         velocidade_kmh=_velocidade(corpo.get('velocidade')),
         precisao_m=_inteiro(corpo.get('precisao')),
         destino_venda_id=_destino_venda(corpo.get('destino_venda'), filial),
+        destinos_pendentes=_destinos_pendentes(corpo.get('destinos_pendentes')),
     )
 
     eventos = GeofenceService.processar_posicao(
@@ -245,6 +246,70 @@ def _destino_venda(bruto, filial):
         pk=pk, delivery=True, filial__in=GeofenceService._escopo(filial),
     ).exists()
     return pk if existe else None
+
+
+MAX_DESTINOS_PENDENTES = 60
+
+
+def _destinos_pendentes(bruto):
+    """
+    Saneia a lista de paradas ainda não entregues, vinda do celular do
+    motorista, pro mapa ao vivo desenhar sem confiar cegamente no que
+    chegou de fora.
+    """
+    if not isinstance(bruto, list):
+        return []
+    limpos = []
+    for item in bruto[:MAX_DESTINOS_PENDENTES]:
+        if not isinstance(item, dict):
+            continue
+        try:
+            lat = float(item.get('lat'))
+            lng = float(item.get('lng'))
+        except (TypeError, ValueError):
+            continue
+        limpos.append({
+            'lat': lat, 'lng': lng,
+            'nome': str(item.get('nome') or '')[:120],
+        })
+    return limpos
+
+
+@require_POST
+@requer_permissao('mapas', 'ver')
+def marcar_entrega(request, pk):
+    """
+    POST /mapas/api/rastreio/<pk>/entrega/  {"entregue": true}
+
+    O motorista marca "Entregue" na própria tela de rastreio e o pedido
+    já sai do Kanban de delivery sem ninguém precisar arrastar o card de
+    novo — o mesmo `status_delivery` que o Kanban lê.
+
+    Permissão é só `mapas.ver` (a mesma da tela de rastreio), e não
+    `pdv.editar`: o motorista tem acesso à tela de rastreio, não
+    necessariamente ao Kanban do delivery, e essa tela só deveria poder
+    alternar entre "a caminho" e "entregue" — nada além disso.
+    """
+    from apps.pdv.models import VendaPDV
+
+    try:
+        corpo = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+
+    filial = getattr(request, 'filial_ativa', None)
+    venda = VendaPDV.objects.filter(
+        pk=pk, delivery=True, filial__in=GeofenceService._escopo(filial),
+    ).first()
+    if venda is None:
+        return JsonResponse({'erro': 'Pedido não encontrado.'}, status=404)
+
+    novo_status = (
+        VendaPDV.StatusDelivery.ENTREGUE if corpo.get('entregue')
+        else VendaPDV.StatusDelivery.EM_ENTREGA
+    )
+    venda.mudar_status_delivery(novo_status)
+    return JsonResponse({'ok': True, 'status': venda.status_delivery})
 
 
 @requer_permissao('mapas', 'ver')

@@ -35,6 +35,12 @@
                align-items:center; justify-content:center; font-size:13px;
                font-weight:800; color:#fff; border:2px solid rgba(255,255,255,.85);
                box-shadow:0 2px 6px rgba(0,0,0,.45); }
+
+  /* Ponto de entrega pendente do roteiro -- menor e de cor diferente do
+     motorista, pra não competir com o pino dele quando os dois ficam perto. */
+  .vivo-pino-entrega { width:16px; height:16px; border-radius:50%;
+                        background:#f97316; border:2px solid rgba(255,255,255,.9);
+                        box-shadow:0 1px 4px rgba(0,0,0,.4); }
 </style>
 {% endblock %}
 
@@ -157,6 +163,7 @@ function aoVivo() {
     status: '',
     _mapa: null,
     _marcadores: {},
+    _marcadoresEntrega: {},
     _linha: null,
     _timer: null,
     _jaEnquadrou: false,
@@ -218,13 +225,33 @@ function aoVivo() {
           this._marcadores[m.motorista_id] = marcador;
         }
         marcador.bindPopup(this._popup(m));
+
+        // Pontos de entrega ainda não marcados como "Entregue" no roteiro
+        // deste motorista -- redesenhados inteiros a cada atualização, pois
+        // a lista encolhe conforme ele vai entregando.
+        (this._marcadoresEntrega[m.motorista_id] || []).forEach(l => this._mapa.removeLayer(l));
+        this._marcadoresEntrega[m.motorista_id] = (m.destinos_pendentes || []).map((d) => {
+          const icone = L.divIcon({
+            className: '', iconSize: [16, 16], iconAnchor: [8, 8],
+            html: '<div class="vivo-pino-entrega"></div>',
+          });
+          return L.marker([d.lat, d.lng], { icon: icone, title: d.nome })
+            .bindPopup(
+              `<div style="font-size:12.5px;"><strong>${this._esc(d.nome || 'Entrega')}</strong>`
+              + `<div style="opacity:.65;">roteiro de ${this._esc(m.nome)}</div></div>`
+            )
+            .addTo(this._mapa);
+        });
       });
 
-      // Motorista que sumiu do retorno (posição apagada) some do mapa também.
+      // Motorista que sumiu do retorno (posição apagada) some do mapa também
+      // — e o roteiro dele junto, senão os pinos de entrega ficam órfãos.
       Object.keys(this._marcadores).forEach((id) => {
         if (!vistos.has(Number(id))) {
           this._mapa.removeLayer(this._marcadores[id]);
           delete this._marcadores[id];
+          (this._marcadoresEntrega[id] || []).forEach(l => this._mapa.removeLayer(l));
+          delete this._marcadoresEntrega[id];
         }
       });
 

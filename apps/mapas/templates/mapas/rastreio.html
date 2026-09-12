@@ -272,6 +272,9 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const CSRF = '{{ csrf_token }}';
+// Padrão de URL com pk 0, pra trocar pelo id de verdade na hora do fetch --
+// respeita o prefixo real das rotas em vez de montar o caminho na unha.
+const URL_ENTREGA_PADRAO = '{% url "mapas:api-rastreio-entrega" 0 %}';
 // Fila de posicoes em localStorage (nao em memoria): se o navegador matar a
 // aba, o celular reiniciar ou o motorista fechar sem querer, o percurso
 // captado sem sinal continua la' e sobe na proxima abertura da tela.
@@ -528,12 +531,27 @@ function rastreio() {
       setTimeout(() => this._mapa.invalidateSize(), 60);
     },
 
-    marcarFeita(i) {
+    async marcarFeita(i) {
       const pos = this.feitas.indexOf(i);
-      if (pos >= 0) this.feitas.splice(pos, 1);
-      else this.feitas.push(i);
+      const marcando = pos < 0;
+      if (marcando) this.feitas.push(i);
+      else this.feitas.splice(pos, 1);
       const proxima = this.paradas.findIndex((_, idx) => !this.feitas.includes(idx));
       this.paradaAtual = proxima >= 0 ? proxima : this.paradas.length;
+
+      // Fecha o loop com o Kanban: o mesmo status_delivery que ele lê.
+      // Não trava a tela por isso -- a marcação local já valeu, e sem
+      // sinal a próxima posição enviada (com o roteiro reduzido) já
+      // resolve pro mapa ao vivo mesmo que este POST específico se perca.
+      for (const vendaId of this._vendasDaParada(i)) {
+        try {
+          await fetch(URL_ENTREGA_PADRAO.replace('/0/', `/${vendaId}/`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ entregue: marcando }),
+          });
+        } catch (e) { /* sem conexão agora -- fica pro próximo envio de posição */ }
+      }
     },
 
     // Venda que representa a parada atual -- e' ela que vai no destino_venda,
@@ -545,6 +563,27 @@ function rastreio() {
         x => x.cliente_id === p.cliente_id && this.selecionadas.includes(x.id)
       );
       return e ? e.id : null;
+    },
+
+    // As paradas que ainda faltam entregar, só com o que o mapa precisa pra
+    // desenhar o pino -- a rota é por cliente, então não há venda por trás
+    // de cada uma (ver `_vendasDaParada`, que resolve isso quando precisa).
+    _destinosPendentes() {
+      return this.paradas
+        .filter((_, i) => !this.feitas.includes(i))
+        .map(p => ({ lat: p.lat, lng: p.lng, nome: p.nome }));
+    },
+
+    // Todas as vendas por trás de uma parada -- pode ser mais de uma quando
+    // o mesmo cliente tem dois pedidos no roteiro (ver comentário de
+    // `_clientesSelecionados`): marcar a parada como entregue precisa
+    // encerrar todas elas no Kanban, não só a primeira que achar.
+    _vendasDaParada(i) {
+      const p = this.paradas[i];
+      if (!p || !p.cliente_id) return [];
+      return this.entregas
+        .filter(e => e.cliente_id === p.cliente_id && this.selecionadas.includes(e.id))
+        .map(e => e.id);
     },
 
     // ---------- rastreio ----------
@@ -608,6 +647,10 @@ function rastreio() {
         velocidade: pos.coords.speed,
         precisao: pos.coords.accuracy ? Math.round(pos.coords.accuracy) : null,
         destino_venda: this._vendaDestinoAtual(),
+        // Todo o roteiro que falta entregar, não só a parada atual -- é o
+        // que faz o mapa ao vivo do gestor mostrar os pinos de entrega
+        // assim que o motorista aperta "Iniciar rastreio".
+        destinos_pendentes: this._destinosPendentes(),
       });
       this._gravarFila();
       this._moverMarcador(pos.coords.latitude, pos.coords.longitude);

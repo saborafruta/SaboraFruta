@@ -43,7 +43,8 @@ class RastreioService:
     @classmethod
     def registrar(cls, *, filial, motorista, latitude, longitude,
                   velocidade_kmh=None, precisao_m=None, momento=None,
-                  destino_venda_id=None, destino_cliente_id=None):
+                  destino_venda_id=None, destino_cliente_id=None,
+                  destinos_pendentes=None):
         """
         Atualiza a posição do motorista e devolve o registro.
 
@@ -71,6 +72,7 @@ class RastreioService:
                 'precisao_m': precisao_m,
                 'destino_venda_id': destino_venda_id,
                 'destino_cliente_id': destino_cliente_id,
+                'destinos_pendentes': destinos_pendentes or [],
             },
         )
         cls._talvez_gravar_percurso(
@@ -161,6 +163,7 @@ class RastreioService:
                     if destino is not None else None
                 ),
                 'venda_id': p.destino_venda_id,
+                'destinos_pendentes': p.destinos_pendentes or [],
             })
         return motoristas
 

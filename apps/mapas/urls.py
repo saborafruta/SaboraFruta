@@ -32,6 +32,7 @@ urlpatterns = [
     path('cercas/eventos/', GeofenceEventosView.as_view(), name='geofence-eventos'),
     path('rastreio/', geofence.pagina_rastreio, name='rastreio'),
     path('api/posicao/', geofence.registrar_posicao, name='api-posicao'),
+    path('api/rastreio/<int:pk>/entrega/', geofence.marcar_entrega, name='api-rastreio-entrega'),
 
     # Rastreamento ao vivo (secao 13)
     path('ao-vivo/', MapaAoVivoView.as_view(), name='ao-vivo'),

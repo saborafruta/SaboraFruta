@@ -49,6 +49,15 @@ class PosicaoMotorista(TimestampedModel):
         related_name='+',
     )
 
+    # As paradas do roteiro que o motorista montou e ainda não marcou como
+    # entregue -- [{"lat":, "lng":, "nome":}, ...]. Não aponta pra venda:
+    # a rota é por CLIENTE (duas entregas do mesmo cliente viram uma parada
+    # só), e o mapa ao vivo só precisa de onde desenhar o pino, não de qual
+    # registro de venda está por trás dele. Reenviado a cada posição — o
+    # gestor vê o roteiro assim que o motorista aperta "Iniciar rastreio",
+    # e ele encolhe sozinho conforme as entregas vão sendo marcadas.
+    destinos_pendentes = models.JSONField(default=list, blank=True)
+
     class Meta:
         db_table = 'mapas_posicao_motorista'
         verbose_name = 'Posição do motorista'
