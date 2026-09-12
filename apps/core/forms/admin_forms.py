@@ -12,6 +12,8 @@ class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
         model = ConfiguracaoEtiquetaVenda
         fields = [
             'ativa', 'largura_mm', 'altura_mm', 'impressora_nome',
+            'margem_interna_mm', 'deslocamento_horizontal_mm',
+            'deslocamento_vertical_mm', 'alta_nitidez',
             'texto_rodape', 'exibir_logo', 'exibir_nome_empresa',
             'exibir_nome_cliente', 'exibir_numero_venda', 'exibir_data_venda',
             'layout_elementos',
@@ -19,6 +21,9 @@ class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
         widgets = {
             'largura_mm': forms.NumberInput(attrs={'min': '20', 'max': '300', 'step': '0.1'}),
             'altura_mm': forms.NumberInput(attrs={'min': '20', 'max': '300', 'step': '0.1'}),
+            'margem_interna_mm': forms.NumberInput(attrs={'min': '0', 'max': '10', 'step': '0.1'}),
+            'deslocamento_horizontal_mm': forms.NumberInput(attrs={'min': '-10', 'max': '10', 'step': '0.1'}),
+            'deslocamento_vertical_mm': forms.NumberInput(attrs={'min': '-10', 'max': '10', 'step': '0.1'}),
             'impressora_nome': forms.TextInput(attrs={
                 'placeholder': 'Ex.: Zebra ZD220, Elgin L42 ou Argox OS-214',
             }),
@@ -33,6 +38,10 @@ class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
             'ativa': 'Disponibilizar etiqueta no PDV',
             'largura_mm': 'Largura (mm)',
             'altura_mm': 'Altura (mm)',
+            'margem_interna_mm': 'Margem interna (mm)',
+            'deslocamento_horizontal_mm': 'Ajuste horizontal (mm)',
+            'deslocamento_vertical_mm': 'Ajuste vertical (mm)',
+            'alta_nitidez': 'Otimizar para alta nitidez',
             'impressora_nome': 'Impressora de etiquetas',
             'texto_rodape': 'Mensagem da empresa',
             'exibir_logo': 'Logo da filial',

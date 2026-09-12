@@ -9,6 +9,9 @@
     :root {
       --label-width: {{ config.largura_mm|unlocalize }}mm;
       --label-height: {{ config.altura_mm|unlocalize }}mm;
+      --safe-margin: {{ config.margem_interna_mm|unlocalize }}mm;
+      --offset-x: {{ config.deslocamento_horizontal_mm|unlocalize }}mm;
+      --offset-y: {{ config.deslocamento_vertical_mm|unlocalize }}mm;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; min-height: 100%; font-family: Arial, Helvetica, sans-serif; }
@@ -30,6 +33,7 @@
       position: relative; flex: none; text-align: center; background: white; color: black;
       border: 1px solid #d1d5db; box-shadow: 0 12px 30px rgba(0,0,0,.18);
     }
+    .label-content { position:absolute; inset:var(--safe-margin); transform:translate(var(--offset-x), var(--offset-y)); }
     .element { position:absolute; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:.5mm; overflow-wrap:anywhere; }
     .logo-element { padding:1mm; }
     .logo { display:block; width:100%; height:100%; object-fit:contain; }
@@ -37,6 +41,10 @@
     .customer { font-size:5mm; font-weight:900; line-height:1.03; }
     .sale-meta { font-size:2.5mm; line-height:1.1; }
     .message { border-top:.25mm solid #111; font-size:2.7mm; font-weight:700; line-height:1.12; }
+    .label.high-sharpness { print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+    .label.high-sharpness .label-content { filter:contrast(1.16); }
+    .label.high-sharpness .element { -webkit-font-smoothing:none; text-rendering:geometricPrecision; }
+    .label.high-sharpness .logo { image-rendering:-webkit-optimize-contrast; }
     .disabled {
       max-width: 560px; border-radius: 14px; background: white; padding: 28px;
       box-shadow: 0 14px 40px rgba(0,0,0,.15); text-align: center;
@@ -59,7 +67,8 @@
       <span class="warning">Confirme a impressora e use escala 100% / tamanho real.</span>
     </div>
     <main class="canvas">
-      <section class="label" aria-label="Etiqueta da venda {{ venda.numero_venda }}">
+      <section class="label{% if config.alta_nitidez %} high-sharpness{% endif %}" aria-label="Etiqueta da venda {{ venda.numero_venda }}">
+        <div class="label-content">
         {% if config.exibir_logo and logo_url %}
           <div class="element logo-element" style="left:{{ layout_etiqueta.logo.x|unlocalize }}%;top:{{ layout_etiqueta.logo.y|unlocalize }}%;width:{{ layout_etiqueta.logo.w|unlocalize }}%;height:{{ layout_etiqueta.logo.h|unlocalize }}%;">
             <img class="logo" src="{{ logo_url }}" alt="Logo de {{ filial_identidade.nome_fantasia|default:filial_identidade.razao_social }}">
@@ -74,6 +83,7 @@
         {% if config.exibir_numero_venda %}<div class="element sale-meta" style="left:{{ layout_etiqueta.venda.x|unlocalize }}%;top:{{ layout_etiqueta.venda.y|unlocalize }}%;width:{{ layout_etiqueta.venda.w|unlocalize }}%;height:{{ layout_etiqueta.venda.h|unlocalize }}%;">Venda #{{ venda.numero_venda|stringformat:"06d" }}</div>{% endif %}
         {% if config.exibir_data_venda %}<div class="element sale-meta" style="left:{{ layout_etiqueta.data.x|unlocalize }}%;top:{{ layout_etiqueta.data.y|unlocalize }}%;width:{{ layout_etiqueta.data.w|unlocalize }}%;height:{{ layout_etiqueta.data.h|unlocalize }}%;">{{ venda.data_venda|date:"d/m/Y H:i" }}</div>{% endif %}
         {% if config.texto_rodape %}<div class="element message" style="left:{{ layout_etiqueta.mensagem.x|unlocalize }}%;top:{{ layout_etiqueta.mensagem.y|unlocalize }}%;width:{{ layout_etiqueta.mensagem.w|unlocalize }}%;height:{{ layout_etiqueta.mensagem.h|unlocalize }}%;">{{ config.texto_rodape }}</div>{% endif %}
+        </div>
       </section>
     </main>
   {% else %}

@@ -146,6 +146,31 @@ class ConfiguracaoEtiquetaVenda(TimestampedModel):
         validators=[MinValueValidator(Decimal('20')), MaxValueValidator(Decimal('300'))],
         help_text='Altura física da etiqueta, em milímetros.',
     )
+    margem_interna_mm = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=Decimal('1.00'),
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('10'))],
+        help_text='Área de segurança entre o conteúdo e as bordas da etiqueta.',
+    )
+    deslocamento_horizontal_mm = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('-1.00'),
+        validators=[MinValueValidator(Decimal('-10')), MaxValueValidator(Decimal('10'))],
+        help_text='Use valor negativo para levar toda a impressão para a esquerda.',
+    )
+    deslocamento_vertical_mm = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('-10')), MaxValueValidator(Decimal('10'))],
+        help_text='Use valor negativo para subir toda a impressão.',
+    )
+    alta_nitidez = models.BooleanField(
+        default=False,
+        help_text='Reforça contraste, contornos do texto e renderização da logo.',
+    )
     impressora_nome = models.CharField(
         max_length=150,
         blank=True,
