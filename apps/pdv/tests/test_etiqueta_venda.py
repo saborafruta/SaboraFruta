@@ -8,9 +8,26 @@ from django.test import SimpleTestCase
 from django.urls import reverse
 
 from apps.core.models import ConfiguracaoEtiquetaVenda
+from apps.core.forms.admin_forms import ConfiguracaoEtiquetaVendaForm
 
 
 class EtiquetaVendaTests(SimpleTestCase):
+    def test_formulario_preserva_offset_negativo_com_virgula(self):
+        dados = {
+            'largura_mm': '60', 'altura_mm': '30', 'margem_interna_mm': '1',
+            'deslocamento_horizontal_mm': '-1,5', 'deslocamento_vertical_mm': '−0,5',
+            'impressora_nome': 'Zebra', 'texto_rodape': 'Teste',
+            'layout_elementos': '{}',
+        }
+        form = ConfiguracaoEtiquetaVendaForm(
+            dados,
+            instance=ConfiguracaoEtiquetaVenda(filial_id=1),
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['deslocamento_horizontal_mm'], Decimal('-1.5'))
+        self.assertEqual(form.cleaned_data['deslocamento_vertical_mm'], Decimal('-0.5'))
+
     def test_configuracao_tem_tamanho_fisico_e_texto_padrao(self):
         config = ConfiguracaoEtiquetaVenda(filial_id=1)
 
@@ -104,3 +121,4 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertIn('id_layout_elementos', editor)
         self.assertIn('id_deslocamento_horizontal_mm', editor)
         self.assertIn('id_alta_nitidez', editor)
+        self.assertIn("setHorizontalOffset('-1')", editor)

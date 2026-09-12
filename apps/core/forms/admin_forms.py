@@ -7,7 +7,34 @@ from apps.core.models import (
 from apps.core.models.parametros import normalizar_layout_etiqueta_venda
 
 
+class DecimalCalibracaoField(forms.DecimalField):
+    """Aceita decimal brasileiro e os dois sinais de menos comuns na UI."""
+
+    def to_python(self, value):
+        if isinstance(value, str):
+            value = value.strip().replace('\u2212', '-').replace(',', '.')
+        return super().to_python(value)
+
+
 class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
+    margem_interna_mm = DecimalCalibracaoField(
+        label='Margem interna (mm)',
+        min_value=0, max_value=10, decimal_places=2, max_digits=4,
+        widget=forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '1,0'}),
+    )
+    deslocamento_horizontal_mm = DecimalCalibracaoField(
+        label='Ajuste horizontal (mm)',
+        help_text='Use valor negativo para levar toda a impressão para a esquerda.',
+        min_value=-10, max_value=10, decimal_places=2, max_digits=5,
+        widget=forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '-1,0'}),
+    )
+    deslocamento_vertical_mm = DecimalCalibracaoField(
+        label='Ajuste vertical (mm)',
+        help_text='Use valor negativo para subir toda a impressão.',
+        min_value=-10, max_value=10, decimal_places=2, max_digits=5,
+        widget=forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '0,0'}),
+    )
+
     class Meta:
         model = ConfiguracaoEtiquetaVenda
         fields = [
@@ -21,9 +48,6 @@ class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
         widgets = {
             'largura_mm': forms.NumberInput(attrs={'min': '20', 'max': '300', 'step': '0.1'}),
             'altura_mm': forms.NumberInput(attrs={'min': '20', 'max': '300', 'step': '0.1'}),
-            'margem_interna_mm': forms.NumberInput(attrs={'min': '0', 'max': '10', 'step': '0.1'}),
-            'deslocamento_horizontal_mm': forms.NumberInput(attrs={'min': '-10', 'max': '10', 'step': '0.1'}),
-            'deslocamento_vertical_mm': forms.NumberInput(attrs={'min': '-10', 'max': '10', 'step': '0.1'}),
             'impressora_nome': forms.TextInput(attrs={
                 'placeholder': 'Ex.: Zebra ZD220, Elgin L42 ou Argox OS-214',
             }),
