@@ -1,9 +1,22 @@
 {% extends "_base.html" %}
+{% load l10n %}
 
 {% block title %}Etiqueta de venda — ERP iNoovaTed{% endblock %}
 {% block page_title %}Etiqueta de venda{% endblock %}
 
 {% block content %}
+<style>
+  .label-layout-editor { position:relative; user-select:none; touch-action:none; }
+  .label-layout-item { position:absolute; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:3px; border:1px dashed transparent; cursor:grab; line-height:1.05; }
+  .label-layout-item:hover, .label-layout-item:focus { border-color:#2563eb; background:rgba(37,99,235,.08); outline:none; }
+  .label-layout-item:active { cursor:grabbing; }
+  .label-layout-item img { width:100%; height:100%; object-fit:contain; pointer-events:none; }
+  .label-layout-item.is-logo { padding:5px; }
+  .label-layout-item.is-company { font-size:12px; font-weight:800; }
+  .label-layout-item.is-customer { font-size:18px; font-weight:900; }
+  .label-layout-item.is-meta { font-size:10px; }
+  .label-layout-item.is-message { font-size:10px; font-weight:700; border-top-color:#d1d5db; }
+</style>
 <div class="max-w-6xl mx-auto space-y-5">
   <div>
     <a href="{{ central_url }}" class="text-sm font-semibold text-blue-500">← Central Administrativa</a>
@@ -22,6 +35,7 @@
   <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6">
     <form method="post" class="card p-6 space-y-6" id="etiqueta-config-form">
       {% csrf_token %}
+      {{ form.layout_elementos }}
       {% if form.non_field_errors %}
         <div class="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm">{{ form.non_field_errors }}</div>
       {% endif %}
@@ -86,24 +100,23 @@
           <h3 class="font-semibold text-lg">Prévia da etiqueta</h3>
           <p class="text-xs text-gray-500 mt-1" id="preview-size"></p>
         </div>
-        <span class="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-500">Venda #000644</span>
+        <button type="button" class="btn-secondary text-xs" onclick="resetLabelLayout()">Restaurar posições</button>
       </div>
+      <p class="text-xs text-gray-500 mb-3">Arraste cada bloco visível para a posição desejada. Também é possível focá-lo e usar as setas do teclado.</p>
       <div class="flex justify-center rounded-xl bg-gray-500/10 p-5 overflow-hidden">
-        <div id="label-preview" class="bg-white text-black border border-gray-300 shadow-lg flex flex-col items-center justify-center text-center p-4 overflow-hidden" style="width:340px;aspect-ratio:3/2;">
-          <div id="preview-logo">
+        <div id="label-preview" class="label-layout-editor bg-white text-black border border-gray-300 shadow-lg overflow-hidden" style="width:340px;aspect-ratio:3/2;">
+          <div id="preview-logo" data-layout-key="logo" tabindex="0" class="label-layout-item is-logo" style="left:{{ layout_etiqueta.logo.x|unlocalize }}%;top:{{ layout_etiqueta.logo.y|unlocalize }}%;width:{{ layout_etiqueta.logo.w|unlocalize }}%;height:{{ layout_etiqueta.logo.h|unlocalize }}%;">
             {% if filial.imagem %}
-              <img src="{{ filial.imagem.url }}" alt="Logo da filial" class="mx-auto max-h-16 max-w-40 object-contain mb-2" onerror="this.style.display='none'">
+              <img src="{{ filial.imagem.url }}" alt="Logo da filial" onerror="this.style.display='none'">
             {% else %}
-              <div class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Logo da filial</div>
+              <div class="text-[10px] font-bold uppercase tracking-widest text-gray-500">Logo da filial</div>
             {% endif %}
           </div>
-          <div id="preview-company" class="font-bold text-sm">{{ filial.nome_fantasia|default:filial.razao_social }}</div>
-          <div id="preview-customer" class="font-bold text-xl leading-tight mt-2">Cliente da venda</div>
-          <div class="flex items-center justify-center gap-3 text-xs mt-2">
-            <span id="preview-sale">Venda #000644</span>
-            <span id="preview-date">12/09/2026 19:11</span>
-          </div>
-          <div id="preview-message" class="text-xs mt-3 border-t border-gray-300 pt-2 w-full">{{ form.texto_rodape.value|default:'Obrigado pela sua preferência!' }}</div>
+          <div id="preview-company" data-layout-key="empresa" tabindex="0" class="label-layout-item is-company" style="left:{{ layout_etiqueta.empresa.x|unlocalize }}%;top:{{ layout_etiqueta.empresa.y|unlocalize }}%;width:{{ layout_etiqueta.empresa.w|unlocalize }}%;height:{{ layout_etiqueta.empresa.h|unlocalize }}%;">{{ filial.nome_fantasia|default:filial.razao_social }}</div>
+          <div id="preview-customer" data-layout-key="cliente" tabindex="0" class="label-layout-item is-customer" style="left:{{ layout_etiqueta.cliente.x|unlocalize }}%;top:{{ layout_etiqueta.cliente.y|unlocalize }}%;width:{{ layout_etiqueta.cliente.w|unlocalize }}%;height:{{ layout_etiqueta.cliente.h|unlocalize }}%;">Cliente da venda</div>
+          <div id="preview-sale" data-layout-key="venda" tabindex="0" class="label-layout-item is-meta" style="left:{{ layout_etiqueta.venda.x|unlocalize }}%;top:{{ layout_etiqueta.venda.y|unlocalize }}%;width:{{ layout_etiqueta.venda.w|unlocalize }}%;height:{{ layout_etiqueta.venda.h|unlocalize }}%;">Venda #000644</div>
+          <div id="preview-date" data-layout-key="data" tabindex="0" class="label-layout-item is-meta" style="left:{{ layout_etiqueta.data.x|unlocalize }}%;top:{{ layout_etiqueta.data.y|unlocalize }}%;width:{{ layout_etiqueta.data.w|unlocalize }}%;height:{{ layout_etiqueta.data.h|unlocalize }}%;">12/09/2026 19:11</div>
+          <div id="preview-message" data-layout-key="mensagem" tabindex="0" class="label-layout-item is-message" style="left:{{ layout_etiqueta.mensagem.x|unlocalize }}%;top:{{ layout_etiqueta.mensagem.y|unlocalize }}%;width:{{ layout_etiqueta.mensagem.w|unlocalize }}%;height:{{ layout_etiqueta.mensagem.h|unlocalize }}%;">{{ form.texto_rodape.value|default:'Obrigado pela sua preferência!' }}</div>
         </div>
       </div>
       <div class="mt-4 rounded-lg border border-gray-500/20 px-4 py-3 text-sm">
@@ -113,6 +126,8 @@
     </aside>
   </div>
 </div>
+{{ layout_etiqueta|json_script:"label-layout-initial" }}
+{{ layout_etiqueta_padrao|json_script:"label-layout-default" }}
 {% endblock %}
 
 {% block extra_js %}
@@ -124,6 +139,9 @@
     const message = byId('id_texto_rodape');
     const printer = byId('id_impressora_nome');
     const preview = byId('label-preview');
+    const layoutInput = byId('id_layout_elementos');
+    let layout = JSON.parse(byId('label-layout-initial').textContent);
+    const defaultLayout = JSON.parse(byId('label-layout-default').textContent);
     const toggles = {
       id_exibir_logo: 'preview-logo',
       id_exibir_nome_empresa: 'preview-company',
@@ -146,10 +164,72 @@
         byId(previewId).style.display = byId(inputId).checked ? '' : 'none';
       });
     }
+    function persistLayout() {
+      layoutInput.value = JSON.stringify(layout);
+    }
+    function applyPosition(key) {
+      const element = preview.querySelector('[data-layout-key="' + key + '"]');
+      const position = layout[key];
+      if (!element || !position) return;
+      element.style.left = position.x + '%';
+      element.style.top = position.y + '%';
+      element.style.width = position.w + '%';
+      element.style.height = position.h + '%';
+    }
+    function moveElement(key, x, y) {
+      const position = layout[key];
+      position.x = Math.round(Math.max(0, Math.min(100 - position.w, x)) * 100) / 100;
+      position.y = Math.round(Math.max(0, Math.min(100 - position.h, y)) * 100) / 100;
+      applyPosition(key);
+      persistLayout();
+    }
+    preview.querySelectorAll('[data-layout-key]').forEach(element => {
+      const key = element.dataset.layoutKey;
+      element.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        element.focus();
+        element.setPointerCapture(event.pointerId);
+        const rect = preview.getBoundingClientRect();
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const originalX = layout[key].x;
+        const originalY = layout[key].y;
+        const onMove = moveEvent => {
+          moveElement(
+            key,
+            originalX + ((moveEvent.clientX - startX) / rect.width) * 100,
+            originalY + ((moveEvent.clientY - startY) / rect.height) * 100
+          );
+        };
+        const onEnd = () => {
+          element.removeEventListener('pointermove', onMove);
+          element.removeEventListener('pointerup', onEnd);
+          element.removeEventListener('pointercancel', onEnd);
+        };
+        element.addEventListener('pointermove', onMove);
+        element.addEventListener('pointerup', onEnd);
+        element.addEventListener('pointercancel', onEnd);
+      });
+      element.addEventListener('keydown', event => {
+        const directions = {ArrowLeft:[-1,0], ArrowRight:[1,0], ArrowUp:[0,-1], ArrowDown:[0,1]};
+        if (!directions[event.key]) return;
+        event.preventDefault();
+        const step = event.shiftKey ? 0.25 : 1;
+        moveElement(key, layout[key].x + directions[event.key][0] * step, layout[key].y + directions[event.key][1] * step);
+      });
+    });
+    window.resetLabelLayout = function () {
+      layout = JSON.parse(JSON.stringify(defaultLayout));
+      Object.keys(layout).forEach(applyPosition);
+      persistLayout();
+    };
     [width, height, message, printer, ...Object.keys(toggles).map(byId)].forEach(input => {
       input.addEventListener('input', refresh);
       input.addEventListener('change', refresh);
     });
+    Object.keys(layout).forEach(applyPosition);
+    persistLayout();
     refresh();
   }());
 </script>
