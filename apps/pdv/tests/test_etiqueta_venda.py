@@ -28,6 +28,20 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertEqual(form.cleaned_data['deslocamento_horizontal_mm'], Decimal('-1.5'))
         self.assertEqual(form.cleaned_data['deslocamento_vertical_mm'], Decimal('-0.5'))
 
+    def test_ajuste_horizontal_usa_select_nativo_com_valor_negativo(self):
+        form = ConfiguracaoEtiquetaVendaForm(
+            instance=ConfiguracaoEtiquetaVenda(
+                filial_id=1,
+                deslocamento_horizontal_mm=Decimal('-2.00'),
+            ),
+        )
+
+        html = str(form['deslocamento_horizontal_mm'])
+        self.assertIn('<select', html)
+        self.assertIn('value="-2.00" selected', html)
+        self.assertIn('← 2,00 mm — esquerda', html)
+        self.assertNotIn('type="text"', html)
+
     def test_configuracao_tem_tamanho_fisico_e_texto_padrao(self):
         config = ConfiguracaoEtiquetaVenda(filial_id=1)
 
@@ -121,8 +135,8 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertIn('id_layout_elementos', editor)
         self.assertIn('id_deslocamento_horizontal_mm', editor)
         self.assertIn('id_alta_nitidez', editor)
-        self.assertIn("{element: byId('offset-left-2'), value: -2}", editor)
-        self.assertIn("{element: byId('offset-left-1'), value: -1}", editor)
-        self.assertIn("control.element.addEventListener('click', () => setHorizontalOffset(control.value))", editor)
+        self.assertIn('Escolha “esquerda”', editor)
+        self.assertNotIn('setHorizontalOffset', editor)
+        self.assertNotIn('offset-left-2', editor)
         self.assertNotIn('data-horizontal-offset=', editor)
         self.assertIn("return '−' + magnitude + ' mm · esquerda'", editor)

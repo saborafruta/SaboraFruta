@@ -7,6 +7,26 @@ from apps.core.models import (
 from apps.core.models.parametros import normalizar_layout_etiqueta_venda
 
 
+def _opcoes_deslocamento_horizontal():
+    """Valores nativos do select; o sinal segue intacto até o POST."""
+    opcoes = []
+    for meios_milimetros in range(-20, 21):
+        valor = meios_milimetros / 2
+        valor_post = f'{valor:.2f}'
+        magnitude = f'{abs(valor):.2f}'.replace('.', ',')
+        if valor < 0:
+            rotulo = f'← {magnitude} mm — esquerda'
+        elif valor > 0:
+            rotulo = f'{magnitude} mm → direita'
+        else:
+            rotulo = '0,00 mm — centralizado'
+        opcoes.append((valor_post, rotulo))
+    return opcoes
+
+
+DESLOCAMENTO_HORIZONTAL_CHOICES = _opcoes_deslocamento_horizontal()
+
+
 class DecimalCalibracaoField(forms.DecimalField):
     """Aceita decimal brasileiro e os dois sinais de menos comuns na UI."""
 
@@ -26,10 +46,7 @@ class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
         label='Ajuste horizontal (mm)',
         help_text='Use valor negativo para levar toda a impressão para a esquerda.',
         min_value=-10, max_value=10, decimal_places=2, max_digits=5,
-        widget=forms.TextInput(attrs={
-            'inputmode': 'decimal', 'placeholder': '-1,0', 'dir': 'ltr',
-            'autocomplete': 'off',
-        }),
+        widget=forms.Select(choices=DESLOCAMENTO_HORIZONTAL_CHOICES),
     )
     deslocamento_vertical_mm = DecimalCalibracaoField(
         label='Ajuste vertical (mm)',

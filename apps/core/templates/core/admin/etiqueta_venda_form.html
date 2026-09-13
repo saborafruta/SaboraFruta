@@ -79,13 +79,7 @@
             <div>
               <label for="{{ form.deslocamento_horizontal_mm.id_for_label }}" class="block text-sm font-semibold mb-2">{{ form.deslocamento_horizontal_mm.label }}</label>
               {{ form.deslocamento_horizontal_mm }}
-              <div class="flex flex-wrap gap-1 mt-2" aria-label="Ajustes horizontais rápidos">
-                <button id="offset-left-2" type="button" class="btn-secondary text-xs px-2 py-1">← 2 mm</button>
-                <button id="offset-left-1" type="button" class="btn-secondary text-xs px-2 py-1">← 1 mm</button>
-                <button id="offset-center" type="button" class="btn-secondary text-xs px-2 py-1">Centralizar</button>
-                <button id="offset-right-1" type="button" class="btn-secondary text-xs px-2 py-1">1 mm →</button>
-                <button id="offset-right-2" type="button" class="btn-secondary text-xs px-2 py-1">2 mm →</button>
-              </div>
+              <p class="text-xs text-gray-500 mt-2">Escolha “esquerda” para corrigir impressão cortada na margem esquerda.</p>
               <p id="horizontal-offset-feedback" class="text-xs font-semibold mt-2" aria-live="polite"></p>
               {% if form.deslocamento_horizontal_mm.errors %}<div class="text-sm text-red-500 mt-2">{{ form.deslocamento_horizontal_mm.errors|striptags }}</div>{% endif %}
             </div>
@@ -192,13 +186,6 @@
     const highSharpness = byId('id_alta_nitidez');
     const layoutInput = byId('id_layout_elementos');
     const offsetFeedback = byId('horizontal-offset-feedback');
-    const offsetButtons = [
-      {element: byId('offset-left-2'), value: -2},
-      {element: byId('offset-left-1'), value: -1},
-      {element: byId('offset-center'), value: 0},
-      {element: byId('offset-right-1'), value: 1},
-      {element: byId('offset-right-2'), value: 2}
-    ];
     let layout = JSON.parse(byId('label-layout-initial').textContent);
     const defaultLayout = JSON.parse(byId('label-layout-default').textContent);
     const toggles = {
@@ -241,12 +228,6 @@
       preview.classList.toggle('high-sharpness', highSharpness.checked);
       byId('preview-offset-x').textContent = formatOffset(offsetXMm);
       offsetFeedback.textContent = 'Aplicado: ' + formatOffset(offsetXMm);
-      offsetButtons.forEach(control => {
-        const selected = control.value === offsetXMm;
-        control.element.setAttribute('aria-pressed', selected ? 'true' : 'false');
-        control.element.classList.toggle('ring-2', selected);
-        control.element.classList.toggle('ring-blue-500', selected);
-      });
       byId('preview-size').textContent = w + ' × ' + h + ' mm (proporção real)';
       byId('preview-message').textContent = message.value || '';
       byId('preview-printer').textContent = printer.value || 'Não informada';
@@ -314,15 +295,6 @@
       Object.keys(layout).forEach(applyPosition);
       persistLayout();
     };
-    function setHorizontalOffset(value) {
-      offsetX.value = String(value);
-      offsetX.dispatchEvent(new Event('input', {bubbles:true}));
-      offsetX.dispatchEvent(new Event('change', {bubbles:true}));
-      offsetX.focus();
-    }
-    offsetButtons.forEach(control => {
-      control.element.addEventListener('click', () => setHorizontalOffset(control.value));
-    });
     [width, height, margin, offsetX, offsetY, highSharpness, message, printer, ...Object.keys(toggles).map(byId)].forEach(input => {
       input.addEventListener('input', refresh);
       input.addEventListener('change', refresh);
