@@ -1,90 +1,121 @@
 {% extends "_base.html" %}
 {% block title %}Checkout de venda - iNoovaTed{% endblock %}
+{% block largura_conteudo %}max-w-none{% endblock %}
+{% block global_back %}{% endblock %}
 
 {% block content %}
 <style>
-  .checkout-page { max-width:1500px; margin:0 auto; --co-card:#18181b; --co-border:#2d2d32; --co-muted:#92929c; --co-text:#f4f4f5; --co-input:#111113; --co-blue:#2563eb; }
+  .checkout-page { width:100%; height:calc(100dvh - 7.5rem); min-height:560px; margin:0 auto; overflow:hidden; display:flex; flex-direction:column; --co-card:#18181b; --co-border:#2d2d32; --co-muted:#92929c; --co-text:#f4f4f5; --co-input:#111113; --co-blue:#2563eb; }
   body.tema-claro .checkout-page { --co-card:#fff; --co-border:#e5e7eb; --co-muted:#64748b; --co-text:#111827; --co-input:#f8fafc; --co-blue:#f15a24; }
-  .co-head { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:18px; }
-  .co-title { font-size:24px; line-height:1.1; font-weight:900; color:var(--co-text); }
-  .co-sub { margin-top:5px; font-size:13px; color:var(--co-muted); }
-  .co-layout { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(330px,.7fr); gap:16px; align-items:start; }
-  .co-card { border:1px solid var(--co-border); background:var(--co-card); border-radius:16px; box-shadow:0 12px 32px rgba(0,0,0,.08); }
-  .co-search { position:relative; padding:18px; }
-  .co-search-row { display:flex; gap:9px; }
-  .co-input { width:100%; min-height:48px; padding:10px 14px; border:1px solid var(--co-border); background:var(--co-input); color:var(--co-text); border-radius:11px; outline:none; }
+  .co-head { flex:0 0 auto; display:flex; justify-content:space-between; align-items:center; gap:14px; margin-bottom:8px; }
+  .co-title { font-size:21px; line-height:1.1; font-weight:900; color:var(--co-text); }
+  .co-sub { margin-top:3px; font-size:12px; color:var(--co-muted); }
+  .co-shortcuts { flex:1; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px; }
+  .co-shortcut { padding:4px 7px; border:1px solid var(--co-border); border-radius:7px; color:var(--co-muted); font-size:10px; white-space:nowrap; }
+  .co-shortcut kbd { margin-right:3px; color:var(--co-text); font-weight:900; }
+  .co-layout { flex:1 1 auto; min-height:0; display:grid; grid-template-columns:minmax(0,1.55fr) minmax(390px,.7fr); gap:10px; align-items:stretch; }
+  .co-main { min-height:0; display:flex; flex-direction:column; gap:10px; }
+  .co-card { border:1px solid var(--co-border); background:var(--co-card); border-radius:13px; box-shadow:0 8px 24px rgba(0,0,0,.07); }
+  .co-search { flex:0 0 auto; position:relative; padding:10px; }
+  .co-search-row { display:grid; grid-template-columns:105px minmax(0,1fr) 92px; gap:7px; align-items:end; }
+  .co-field-inline label { display:block; margin:0 0 4px 2px; color:var(--co-muted); font-size:10px; font-weight:800; }
+  .co-input { width:100%; min-height:40px; padding:7px 11px; border:1px solid var(--co-border); background:var(--co-input); color:var(--co-text); border-radius:9px; outline:none; }
   .co-input:focus { border-color:var(--co-blue); box-shadow:0 0 0 3px color-mix(in srgb, var(--co-blue) 18%, transparent); }
-  .co-search-input { font-size:18px; font-weight:750; }
-  .co-btn { min-height:42px; padding:9px 15px; border-radius:10px; border:1px solid var(--co-border); background:transparent; color:var(--co-text); font-weight:800; cursor:pointer; }
+  .co-search-input { font-size:16px; font-weight:750; }
+  .co-btn { min-height:38px; padding:7px 12px; border-radius:9px; border:1px solid var(--co-border); background:transparent; color:var(--co-text); font-weight:800; cursor:pointer; }
   .co-btn:hover { border-color:var(--co-blue); }
   .co-btn:disabled { opacity:.5; cursor:not-allowed; }
   .co-btn-primary { color:#fff; background:var(--co-blue); border-color:var(--co-blue); }
   .co-btn-danger { color:#ef4444; padding:5px 9px; min-height:32px; }
-  .co-mode { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:9px; color:var(--co-muted); font-size:12px; }
+  .co-mode { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:5px; color:var(--co-muted); font-size:11px; }
   .co-mode label { display:flex; align-items:center; gap:7px; cursor:pointer; }
   .co-mode input { accent-color:var(--co-blue); }
-  .co-results { position:absolute; z-index:40; left:18px; right:18px; top:78px; max-height:320px; overflow:auto; padding:7px; border:1px solid var(--co-border); background:var(--co-card); border-radius:12px; box-shadow:0 20px 50px rgba(0,0,0,.3); }
+  .co-results { position:absolute; z-index:40; left:10px; right:10px; top:61px; max-height:280px; overflow:auto; padding:6px; border:1px solid var(--co-border); background:var(--co-card); border-radius:10px; box-shadow:0 20px 50px rgba(0,0,0,.3); }
   .co-result { width:100%; display:flex; justify-content:space-between; align-items:center; gap:14px; padding:11px; color:var(--co-text); background:transparent; border:0; border-radius:9px; text-align:left; cursor:pointer; }
-  .co-result:hover { background:color-mix(in srgb,var(--co-blue) 12%,transparent); }
+  .co-result:hover, .co-result.active { background:color-mix(in srgb,var(--co-blue) 15%,transparent); outline:1px solid color-mix(in srgb,var(--co-blue) 55%,transparent); }
   .co-result-code { color:var(--co-muted); font-size:12px; }
-  .co-section-head { padding:15px 18px; display:flex; align-items:center; justify-content:space-between; gap:12px; border-bottom:1px solid var(--co-border); }
+  .co-cart-card { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+  .co-cart-scroll { flex:1 1 auto; min-height:0; overflow:auto; }
+  .co-section-head { flex:0 0 auto; min-height:43px; padding:9px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px; border-bottom:1px solid var(--co-border); }
   .co-section-head strong { color:var(--co-text); }
   .co-count { color:var(--co-muted); font-size:12px; }
-  .co-empty { padding:54px 18px; text-align:center; color:var(--co-muted); }
+  .co-empty { padding:38px 14px; text-align:center; color:var(--co-muted); }
   .co-table { width:100%; border-collapse:collapse; color:var(--co-text); }
-  .co-table th { color:var(--co-muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; text-align:left; padding:10px 14px; border-bottom:1px solid var(--co-border); }
-  .co-table td { padding:12px 14px; border-bottom:1px solid var(--co-border); vertical-align:middle; }
+  .co-table th { position:sticky; top:0; z-index:2; background:var(--co-card); color:var(--co-muted); font-size:10px; text-transform:uppercase; letter-spacing:.04em; text-align:left; padding:7px 10px; border-bottom:1px solid var(--co-border); }
+  .co-table td { padding:8px 10px; border-bottom:1px solid var(--co-border); vertical-align:middle; }
   .co-table tr:last-child td { border-bottom:0; }
   .co-product-name { font-weight:850; }
   .co-product-code { margin-top:3px; font-size:11px; color:var(--co-muted); }
   .co-qty { display:inline-grid; grid-template-columns:32px 55px 32px; align-items:center; border:1px solid var(--co-border); border-radius:9px; overflow:hidden; }
   .co-qty button { height:34px; border:0; background:transparent; color:var(--co-text); cursor:pointer; font-size:17px; }
   .co-qty input { width:55px; height:34px; border:0; border-inline:1px solid var(--co-border); background:var(--co-input); color:var(--co-text); text-align:center; outline:none; }
-  .co-side { display:grid; gap:16px; position:sticky; top:16px; }
-  .co-side-body { padding:16px; }
-  .co-client-current { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:12px; border:1px solid var(--co-border); border-radius:11px; color:var(--co-text); }
-  .co-client-search { position:relative; margin-top:10px; }
-  .co-client-results { max-height:210px; overflow:auto; margin-top:6px; padding:5px; border:1px solid var(--co-border); border-radius:10px; }
-  .co-payment-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:12px; }
-  .co-payment { min-height:64px; padding:10px; border:1px solid var(--co-border); border-radius:11px; background:transparent; color:var(--co-text); cursor:pointer; text-align:left; }
+  .co-side { min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr); gap:10px; }
+  .co-side-body { padding:10px; }
+  .co-client-current { display:flex; justify-content:space-between; gap:8px; align-items:center; padding:8px 10px; border:1px solid var(--co-border); border-radius:9px; color:var(--co-text); }
+  .co-client-search { position:relative; margin-top:7px; }
+  .co-client-results { position:absolute; z-index:30; left:0; right:0; max-height:180px; overflow:auto; margin-top:4px; padding:4px; border:1px solid var(--co-border); background:var(--co-card); border-radius:9px; box-shadow:0 16px 35px rgba(0,0,0,.3); }
+  .co-summary-card { min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+  .co-payment-body { flex:1 1 auto; min-height:0; overflow:auto; }
+  .co-payment-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-top:7px; }
+  .co-payment { min-height:45px; padding:6px 8px; border:1px solid var(--co-border); border-radius:9px; background:transparent; color:var(--co-text); cursor:pointer; text-align:left; overflow:hidden; }
   .co-payment.active { border-color:var(--co-blue); background:color-mix(in srgb,var(--co-blue) 13%,transparent); box-shadow:inset 0 0 0 1px var(--co-blue); }
-  .co-payment small { display:block; margin-top:3px; color:var(--co-muted); }
-  .co-summary { display:grid; gap:10px; padding:16px; border-top:1px solid var(--co-border); }
+  .co-payment strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+  .co-payment small { display:block; margin-top:1px; color:var(--co-muted); font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .co-summary { flex:0 0 auto; display:grid; gap:6px; padding:9px 10px 10px; border-top:1px solid var(--co-border); }
   .co-summary-row { display:flex; justify-content:space-between; gap:12px; color:var(--co-muted); font-size:13px; }
   .co-summary-row strong { color:var(--co-text); }
-  .co-total { font-size:23px; font-weight:950; color:var(--co-text); }
-  .co-finish { width:100%; min-height:55px; margin-top:5px; font-size:16px; }
-  .co-alert { padding:11px 13px; border-radius:10px; font-size:13px; background:rgba(239,68,68,.11); color:#f87171; border:1px solid rgba(239,68,68,.28); }
+  .co-total { font-size:20px; font-weight:950; color:var(--co-text); }
+  .co-finish { width:100%; min-height:43px; font-size:14px; }
+  .co-alert { padding:8px 10px; border-radius:9px; font-size:12px; background:rgba(239,68,68,.11); color:#f87171; border:1px solid rgba(239,68,68,.28); }
   .co-success { background:rgba(16,185,129,.11); color:#34d399; border-color:rgba(16,185,129,.28); }
   .co-backdrop { position:fixed; inset:0; z-index:9000; display:flex; align-items:center; justify-content:center; padding:18px; background:rgba(0,0,0,.65); backdrop-filter:blur(3px); }
   .co-modal { width:min(520px,100%); max-height:calc(100vh - 36px); overflow:auto; padding:20px; border:1px solid var(--co-border); border-radius:16px; background:var(--co-card); color:var(--co-text); box-shadow:0 30px 90px rgba(0,0,0,.45); }
   .co-modal h3 { font-size:19px; font-weight:900; }
-  .co-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px; }
+  .co-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:8px; }
   .co-field label { display:block; margin-bottom:5px; color:var(--co-muted); font-size:11px; font-weight:800; }
   .co-modal-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:18px; }
   [x-cloak] { display:none!important; }
-  @media(max-width:1000px){ .co-layout{grid-template-columns:1fr}.co-side{position:static}.co-side{grid-template-columns:1fr 1fr}.co-summary-card{grid-column:1/-1} }
-  @media(max-width:680px){ .co-head{align-items:flex-start;flex-direction:column}.co-side{grid-template-columns:1fr}.co-grid{grid-template-columns:1fr}.co-table th:nth-child(2),.co-table td:nth-child(2){display:none}.co-search-row{flex-direction:column}.co-results{top:128px} }
+  @media(max-height:760px) and (min-width:1001px){ .co-shortcut{padding:2px 5px}.co-sub{display:none}.co-payment-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.co-payment{min-height:39px}.co-side-body{padding:7px}.co-summary{padding:7px}.co-input{min-height:36px}.co-btn{min-height:35px} }
+  @media(max-width:1000px){ .checkout-page{height:auto;min-height:0;overflow:visible}.co-layout{grid-template-columns:1fr}.co-side{grid-template-columns:1fr 1fr}.co-summary-card{grid-column:1/-1}.co-cart-card{min-height:340px}.co-shortcuts{justify-content:flex-start} }
+  @media(max-width:680px){ .co-head{align-items:flex-start;flex-direction:column}.co-side{grid-template-columns:1fr}.co-grid{grid-template-columns:1fr}.co-table th:nth-child(2),.co-table td:nth-child(2){display:none}.co-search-row{grid-template-columns:90px minmax(0,1fr)}.co-search-row .co-btn-primary{grid-column:1/-1}.co-results{top:105px}.co-shortcuts{display:none} }
 </style>
 
 {{ caixas|json_script:"checkout-caixas" }}
-<div class="checkout-page" x-data="checkoutVenda()" x-init="init()" @keydown.escape.window="fecharModais()">
+<div class="checkout-page" x-data="checkoutVenda()" x-init="init()" @keydown.window="atalhoTeclado($event)">
   <div class="co-head">
     <div>
       <h1 class="co-title">Checkout de venda</h1>
       <p class="co-sub">Leitura rápida, pagamento e finalização em uma única tela.</p>
     </div>
-    <div class="co-count" x-text="sessao ? 'Caixa aberto' : 'Caixa fechado'"></div>
+    <div class="co-shortcuts" aria-label="Atalhos do checkout">
+      <span class="co-shortcut"><kbd>F2</kbd>Produto</span>
+      <span class="co-shortcut"><kbd>F3</kbd>Quantidade</span>
+      <span class="co-shortcut"><kbd>F4</kbd>Cliente</span>
+      <span class="co-shortcut"><kbd>Shift+F4</kbd>Novo cliente</span>
+      <span class="co-shortcut"><kbd>F6</kbd>Desconto</span>
+      <span class="co-shortcut"><kbd>F7</kbd>Pagamento</span>
+      <span class="co-shortcut"><kbd>F8</kbd>Valor</span>
+      <span class="co-shortcut"><kbd>F10</kbd>Finalizar</span>
+    </div>
+    <div class="co-count" x-text="sessao ? 'Caixa aberto' : 'Caixa fechado'" style="white-space:nowrap"></div>
   </div>
 
   <div class="co-layout">
-    <div class="space-y-4">
+    <div class="co-main">
       <div class="co-card co-search">
         <div class="co-search-row">
-          <input x-ref="buscaProduto" class="co-input co-search-input" x-model="busca"
-                 @keydown.enter.prevent="buscarProduto()"
-                 :placeholder="buscarPorNome ? 'Digite o nome do produto' : 'Bipe ou digite o ID, código interno ou código de barras'"
-                 autocomplete="off" autofocus>
+          <div class="co-field-inline">
+            <label for="checkout-quantidade">Qtd. (F3)</label>
+            <input id="checkout-quantidade" x-ref="quantidadeProduto" class="co-input" type="text" inputmode="decimal"
+                   x-model="quantidadeEntrada" @keydown.enter.prevent="focarProduto()" @focus="$event.target.select()" autocomplete="off">
+          </div>
+          <div class="co-field-inline">
+            <label for="checkout-produto">Código do produto (F2)</label>
+            <input id="checkout-produto" x-ref="buscaProduto" class="co-input co-search-input" x-model="busca"
+                   @keydown.enter.prevent="confirmarBuscaProduto()" @keydown.arrow-down.prevent="moverResultadoProduto(1)" @keydown.arrow-up.prevent="moverResultadoProduto(-1)"
+                   :placeholder="buscarPorNome ? 'Digite o nome do produto' : 'Bipe ou digite ID, código interno ou código de barras'"
+                   autocomplete="off" autofocus>
+          </div>
           <button type="button" class="co-btn co-btn-primary" @click="buscarProduto()" :disabled="buscando">Buscar</button>
         </div>
         <div class="co-mode">
@@ -95,7 +126,7 @@
         </div>
         <div class="co-results" x-show="resultados.length" x-cloak>
           <template x-for="produto in resultados" :key="produto.id">
-            <button type="button" class="co-result" @click="adicionarProduto(produto)">
+            <button type="button" class="co-result" :class="{'active':resultados[indiceProduto]?.id===produto.id}" @click="adicionarProduto(produto)">
               <span><strong x-text="produto.descricao"></strong><span class="co-result-code" x-text="'ID '+produto.id+(produto.codigo_barras?' · '+produto.codigo_barras:'')"></span></span>
               <strong x-text="moeda(produto.preco)"></strong>
             </button>
@@ -104,13 +135,13 @@
         <div class="co-alert" x-show="erroBusca" x-text="erroBusca" x-cloak style="margin-top:10px;"></div>
       </div>
 
-      <div class="co-card">
+      <div class="co-card co-cart-card">
         <div class="co-section-head">
           <strong>Produtos da venda</strong>
           <span class="co-count" x-text="quantidadeItens+' item(ns)'"></span>
         </div>
         <div class="co-empty" x-show="!itens.length">Bipe o primeiro produto para começar.</div>
-        <div style="overflow:auto" x-show="itens.length" x-cloak>
+        <div class="co-cart-scroll" x-show="itens.length" x-cloak>
           <table class="co-table">
             <thead><tr><th>Produto</th><th>Valor unitário</th><th>Quantidade</th><th>Total</th><th></th></tr></thead>
             <tbody>
@@ -137,17 +168,17 @@
 
     <aside class="co-side">
       <div class="co-card">
-        <div class="co-section-head"><strong>Cliente</strong><button class="co-btn" type="button" @click="modalCliente=true">Cadastro rápido</button></div>
+        <div class="co-section-head"><strong>Cliente (F4)</strong><button class="co-btn" type="button" @click="abrirCadastroCliente()">Cadastro rápido <small>Shift+F4</small></button></div>
         <div class="co-side-body">
           <div class="co-client-current">
             <div><strong x-text="cliente ? cliente.razao_social : 'Consumidor Final'"></strong><div class="co-product-code" x-text="cliente ? (cliente.cpf_cnpj || 'Cliente identificado') : 'Sem cliente cadastrado'"></div></div>
             <button type="button" class="co-btn" x-show="cliente" @click="selecionarCliente(null)">Usar balcão</button>
           </div>
           <div class="co-client-search">
-            <input class="co-input" x-model="buscaCliente" @input.debounce.300ms="buscarClientes()" placeholder="Buscar cliente por nome, CPF/CNPJ ou telefone">
+            <input x-ref="buscaCliente" class="co-input" x-model="buscaCliente" @input.debounce.300ms="buscarClientes()" @keydown.enter.prevent="selecionarPrimeiroCliente()" @keydown.arrow-down.prevent="moverResultadoCliente(1)" @keydown.arrow-up.prevent="moverResultadoCliente(-1)" placeholder="Buscar nome, CPF/CNPJ ou telefone">
             <div class="co-client-results" x-show="clientes.length" x-cloak>
               <template x-for="pessoa in clientes" :key="pessoa.id">
-                <button type="button" class="co-result" @click="selecionarCliente(pessoa)"><span><strong x-text="pessoa.razao_social"></strong><span class="co-result-code" x-text="pessoa.cpf_cnpj || pessoa.celular"></span></span></button>
+                <button type="button" class="co-result" :class="{'active':clientes[indiceCliente]?.id===pessoa.id}" @click="selecionarCliente(pessoa)"><span><strong x-text="pessoa.razao_social"></strong><span class="co-result-code" x-text="pessoa.cpf_cnpj || pessoa.celular"></span></span></button>
               </template>
             </div>
           </div>
@@ -155,8 +186,15 @@
       </div>
 
       <div class="co-card co-summary-card">
-        <div class="co-section-head"><strong>Pagamento</strong><span class="co-count">Selecione uma forma</span></div>
-        <div class="co-side-body">
+        <div class="co-section-head"><strong>Pagamento (F7)</strong><span class="co-count" x-text="formaSelecionada ? formaSelecionada.descricao : 'Selecione uma forma'"></span></div>
+        <div class="co-side-body co-payment-body">
+          <div class="co-field">
+            <label for="checkout-forma-pagamento">Forma de pagamento</label>
+            <select id="checkout-forma-pagamento" x-ref="formaPagamento" class="co-input" x-model.number="formaPagamentoId" @change="selecionarFormaPorId()">
+              <option :value="null">Selecione</option>
+              <template x-for="forma in formasPagamento" :key="'select-'+forma.id"><option :value="forma.id" x-text="forma.descricao"></option></template>
+            </select>
+          </div>
           <div class="co-payment-grid">
             <template x-for="forma in formasPagamento" :key="forma.id">
               <button type="button" class="co-payment" :class="{'active':formaPagamentoId===forma.id}" @click="selecionarForma(forma)">
@@ -168,7 +206,7 @@
           <div class="co-grid" x-show="formaCartao" x-cloak>
             <div class="co-field">
               <label>Bandeira do cartão</label>
-              <select class="co-input" x-model="bandeiraPagamento">
+              <select x-ref="bandeiraPagamento" class="co-input" x-model="bandeiraPagamento">
                 <option value="">Selecione</option><option value="mastercard">Mastercard</option><option value="visa">Visa</option><option value="elo">Elo</option><option value="amex">Amex</option><option value="hiper">Hiper</option>
               </select>
             </div>
@@ -182,13 +220,21 @@
         </div>
         <div class="co-summary">
           <div class="co-summary-row"><span>Subtotal</span><strong x-text="moeda(subtotal)"></strong></div>
-          <div class="co-field">
-            <label for="checkout-desconto">Desconto da venda (R$)</label>
-            <input id="checkout-desconto" class="co-input" type="text" inputmode="decimal" x-model="descontoEntrada" @input="normalizarDesconto()" placeholder="0,00">
+          <div class="co-grid" style="margin-top:0">
+            <div class="co-field">
+              <label for="checkout-desconto">Desconto (F6)</label>
+              <input id="checkout-desconto" x-ref="desconto" class="co-input" type="text" inputmode="decimal" x-model="descontoEntrada" @input="normalizarDesconto()" @keydown.enter.prevent="focarValorPagamento()" placeholder="0,00">
+            </div>
+            <div class="co-field">
+              <label for="checkout-valor-pagamento">Valor recebido (F8)</label>
+              <input id="checkout-valor-pagamento" x-ref="valorPagamento" class="co-input" type="text" inputmode="decimal" x-model="valorPagamentoEntrada" @input="valorPagamentoManual=true; mensagem=''" @keydown.enter.prevent="solicitarFinalizacao()" placeholder="0,00">
+            </div>
           </div>
           <div class="co-summary-row"><span>Total</span><span class="co-total" x-text="moeda(total)"></span></div>
+          <div class="co-summary-row" x-show="troco > 0" x-cloak><span>Troco</span><strong style="color:#34d399" x-text="moeda(troco)"></strong></div>
+          <div class="co-summary-row" x-show="faltaPagamento > 0" x-cloak><span>Falta receber</span><strong style="color:#f87171" x-text="moeda(faltaPagamento)"></strong></div>
           <div class="co-alert" x-show="mensagem" :class="{'co-success':sucesso}" x-text="mensagem" x-cloak></div>
-          <button type="button" class="co-btn co-btn-primary co-finish" @click="finalizar()" :disabled="finalizando || !podeFinalizar" x-text="finalizando ? 'Finalizando...' : 'Finalizar venda'"></button>
+          <button type="button" class="co-btn co-btn-primary co-finish" @click="solicitarFinalizacao()" :disabled="finalizando" x-text="finalizando ? 'Finalizando...' : 'Finalizar venda · F10'"></button>
         </div>
       </div>
     </aside>
@@ -208,18 +254,18 @@
   </div>
 
   <div class="co-backdrop" x-show="modalCliente" x-cloak @click.self="modalCliente=false">
-    <div class="co-modal">
+    <form class="co-modal" @submit.prevent="criarCliente()">
       <h3>Cadastro rápido de cliente</h3>
       <p class="co-sub">Informe o essencial e continue a venda.</p>
       <div class="co-grid">
-        <div class="co-field" style="grid-column:1/-1"><label>Nome / Razão social *</label><input class="co-input" x-model="novoCliente.razao_social"></div>
+        <div class="co-field" style="grid-column:1/-1"><label>Nome / Razão social *</label><input x-ref="novoClienteNome" class="co-input" x-model="novoCliente.razao_social"></div>
         <div class="co-field"><label>CPF/CNPJ</label><input class="co-input" x-model="novoCliente.cpf_cnpj" inputmode="numeric"></div>
         <div class="co-field"><label>Celular</label><input class="co-input" x-model="novoCliente.celular"></div>
         <div class="co-field" style="grid-column:1/-1"><label>E-mail</label><input class="co-input" x-model="novoCliente.email" type="email"></div>
       </div>
       <div class="co-alert" x-show="erroCliente" x-text="erroCliente" x-cloak style="margin-top:12px"></div>
-      <div class="co-modal-actions"><button class="co-btn" @click="modalCliente=false">Cancelar</button><button class="co-btn co-btn-primary" @click="criarCliente()" :disabled="salvandoCliente">Salvar e selecionar</button></div>
-    </div>
+      <div class="co-modal-actions"><button type="button" class="co-btn" @click="modalCliente=false; focarProduto()">Cancelar</button><button type="submit" class="co-btn co-btn-primary" :disabled="salvandoCliente">Salvar e selecionar</button></div>
+    </form>
   </div>
 </div>
 
@@ -227,12 +273,12 @@
 function checkoutVenda() {
   return {
     caixas: JSON.parse(document.getElementById('checkout-caixas').textContent), sessao:null, carregando:true,
-    busca:'', buscarPorNome:false, buscando:false, resultados:[], erroBusca:'', itens:[],
-    formasPagamento:[], formaPagamentoId:null, bandeiraPagamento:'', parcelasPagamento:1, cliente:null, buscaCliente:'', clientes:[],
-    descontoEntrada:'', mensagem:'', sucesso:false, finalizando:false,
+    busca:'', quantidadeEntrada:'1', buscarPorNome:false, buscando:false, resultados:[], indiceProduto:-1, erroBusca:'', itens:[],
+    formasPagamento:[], formaPagamentoId:null, bandeiraPagamento:'', parcelasPagamento:1, cliente:null, buscaCliente:'', clientes:[], indiceCliente:-1,
+    descontoEntrada:'', valorPagamentoEntrada:'', valorPagamentoManual:false, mensagem:'', sucesso:false, finalizando:false,
     modalCliente:false, novoCliente:{razao_social:'',cpf_cnpj:'',celular:'',email:'',tipo_pessoa:'F'}, erroCliente:'', salvandoCliente:false,
     abertura:{caixa_id:'',valor:'0,00'}, abrindoCaixa:false, erroCaixa:'',
-    async init(){ await this.carregarEstado(); this.$nextTick(()=>this.$refs.buscaProduto?.focus()); },
+    async init(){ await this.carregarEstado(); this.focarProduto(); },
     csrf(){ return document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || this.cookie('csrftoken'); },
     cookie(nome){ return document.cookie.split('; ').find(v=>v.startsWith(nome+'='))?.split('=').slice(1).join('=') || ''; },
     numero(valor){ const texto=String(valor??0).trim(); const normalizado=texto.includes(',')?texto.replace(/\./g,'').replace(',','.'):texto; const n=Number(normalizado); return Number.isFinite(n)?n:0; },
@@ -241,15 +287,38 @@ function checkoutVenda() {
     get desconto(){ return Math.min(this.subtotal,Math.max(0,this.numero(this.descontoEntrada))); },
     get total(){ return Math.max(0,this.subtotal-this.desconto); },
     get quantidadeItens(){ return this.itens.reduce((s,i)=>s+Number(i.quantidade),0); },
-    get formaSelecionada(){ return this.formasPagamento.find(f=>f.id===this.formaPagamentoId)||null; },
+    get formaSelecionada(){ return this.formasPagamento.find(f=>String(f.id)===String(this.formaPagamentoId))||null; },
     get formaCartao(){ return ['cartao_credito','cartao_debito'].includes(this.formaSelecionada?.tipo); },
     get opcoesParcelas(){ const max=Math.max(1,Number(this.formaSelecionada?.maximo_parcelas||1)); return Array.from({length:max},(_,i)=>i+1); },
-    get podeFinalizar(){ return !!(this.sessao && this.itens.length && (this.total<=0 || (this.formaPagamentoId && (!this.formaCartao || this.bandeiraPagamento)))); },
-    normalizarDesconto(){ this.mensagem=''; },
+    get valorPagamento(){ return Math.max(0,this.numero(this.valorPagamentoEntrada)); },
+    get troco(){ return Math.max(0,this.valorPagamento-this.total); },
+    get faltaPagamento(){ return this.total>0 ? Math.max(0,this.total-this.valorPagamento) : 0; },
+    get podeFinalizar(){ return !!(this.sessao && this.itens.length && (this.total<=0 || (this.formaPagamentoId && this.valorPagamento>=this.total && (!this.formaCartao || this.bandeiraPagamento)))); },
+    formatarNumeroInput(valor){ return Number(valor||0).toFixed(2).replace('.',','); },
+    focar(ref){ this.$nextTick(()=>{ const campo=this.$refs[ref]; if(campo){ campo.focus(); if(typeof campo.select==='function')campo.select(); } }); },
+    focarProduto(){ this.focar('buscaProduto'); },
+    focarQuantidade(){ this.focar('quantidadeProduto'); },
+    focarCliente(){ this.focar('buscaCliente'); },
+    focarPagamento(){ this.focar('formaPagamento'); },
+    focarValorPagamento(){ this.focar('valorPagamento'); },
+    normalizarDesconto(){ this.mensagem=''; this.sincronizarValorPagamento(); },
+    sincronizarValorPagamento(forcar=false){ if(forcar || !this.valorPagamentoManual)this.valorPagamentoEntrada=this.formatarNumeroInput(this.total); },
+    atalhoTeclado(evento){
+      const tecla=evento.key;
+      if(tecla==='Escape'){ evento.preventDefault(); this.fecharModais(); return; }
+      if(this.modalCliente || !this.sessao || this.carregando)return;
+      if(tecla==='F2'){ evento.preventDefault(); this.focarProduto(); }
+      else if(tecla==='F3'){ evento.preventDefault(); this.focarQuantidade(); }
+      else if(tecla==='F4'){ evento.preventDefault(); evento.shiftKey ? this.abrirCadastroCliente() : this.focarCliente(); }
+      else if(tecla==='F6'){ evento.preventDefault(); this.focar('desconto'); }
+      else if(tecla==='F7'){ evento.preventDefault(); this.focarPagamento(); }
+      else if(tecla==='F8'){ evento.preventDefault(); this.focarValorPagamento(); }
+      else if(tecla==='F10'){ evento.preventDefault(); this.solicitarFinalizacao(); }
+    },
     async carregarEstado(){
       this.carregando=true;
       try { const r=await fetch('{% url "pdv:api_estado" %}',{headers:{'Accept':'application/json'}}); const d=await r.json(); this.sessao=d.sessao; this.formasPagamento=d.formas_pagamento||[]; }
-      finally { this.carregando=false; }
+      finally { this.carregando=false; this.sincronizarValorPagamento(); }
     },
     async buscarProduto(){
       const termo=this.busca.trim(); if(!termo)return;
@@ -258,33 +327,46 @@ function checkoutVenda() {
         const p=new URLSearchParams({q:termo,por_nome:this.buscarPorNome?'1':'0'}); if(this.cliente)p.set('cliente_id',this.cliente.id);
         const r=await fetch('{% url "pdv:api_checkout_produtos" %}?'+p); const d=await r.json();
         if(!r.ok)throw new Error(d.erro||'Produto não encontrado.');
-        this.resultados=d.produtos||[];
+        this.resultados=d.produtos||[]; this.indiceProduto=this.resultados.length?0:-1;
         if(this.resultados.length===1)this.adicionarProduto(this.resultados[0]);
         else if(!this.resultados.length)this.erroBusca=this.buscarPorNome?'Nenhum produto encontrado.':'Código não encontrado nesta filial.';
       } catch(e){ this.erroBusca=e.message; } finally { this.buscando=false; }
     },
+    confirmarBuscaProduto(){ if(this.resultados.length && this.indiceProduto>=0)this.adicionarProduto(this.resultados[this.indiceProduto]); else this.buscarProduto(); },
+    moverResultadoProduto(direcao){ if(!this.resultados.length)return; this.indiceProduto=(this.indiceProduto+direcao+this.resultados.length)%this.resultados.length; },
+    quantidadeParaProduto(produto){
+      const casas=Math.max(0,Number(produto.quantidade_decimais||0));
+      const minimo=Number(produto.quantidade_step||1);
+      const informada=Math.max(minimo,this.numero(this.quantidadeEntrada)||minimo);
+      return casas ? Number(informada.toFixed(casas)) : Math.max(1,Math.trunc(informada));
+    },
     adicionarProduto(produto){
       if(!produto.pode_vender){ this.erroBusca=(produto.bloqueios||[]).join(' ')||'Produto indisponível para venda.'; return; }
+      const quantidade=this.quantidadeParaProduto(produto);
       const atual=this.itens.find(i=>i.id===produto.id);
-      if(atual) atual.quantidade=Number((Number(atual.quantidade)+Number(atual.quantidade_step||1)).toFixed(atual.quantidade_decimais||0));
-      else this.itens.push({...produto,quantidade:1});
-      this.busca=''; this.resultados=[]; this.erroBusca=''; this.mensagem=''; this.$nextTick(()=>this.$refs.buscaProduto?.focus());
+      if(atual) atual.quantidade=Number((Number(atual.quantidade)+quantidade).toFixed(atual.quantidade_decimais||0));
+      else this.itens.push({...produto,quantidade});
+      this.quantidadeEntrada='1'; this.busca=''; this.resultados=[]; this.indiceProduto=-1; this.erroBusca=''; this.mensagem=''; this.sincronizarValorPagamento(); this.focarProduto();
     },
-    selecionarForma(forma){ this.formaPagamentoId=forma.id; this.bandeiraPagamento=''; this.parcelasPagamento=Math.max(1,Number(forma.minimo_parcelas||1)); },
+    selecionarForma(forma){ this.formaPagamentoId=forma.id; this.bandeiraPagamento=''; this.parcelasPagamento=Math.max(1,Number(forma.minimo_parcelas||1)); this.sincronizarValorPagamento(true); },
+    selecionarFormaPorId(){ const forma=this.formaSelecionada; if(forma)this.selecionarForma(forma); },
     alterarQuantidade(item,delta){ this.definirQuantidade(item,Number(item.quantidade)+Number(delta)); },
-    definirQuantidade(item,valor){ const min=Number(item.quantidade_step||1); const n=Math.max(min,Number(valor)||min); item.quantidade=Number(n.toFixed(item.quantidade_decimais||0)); },
-    removerItem(id){ this.itens=this.itens.filter(i=>i.id!==id); },
+    definirQuantidade(item,valor){ const min=Number(item.quantidade_step||1); const n=Math.max(min,Number(valor)||min); item.quantidade=Number(n.toFixed(item.quantidade_decimais||0)); this.sincronizarValorPagamento(); },
+    removerItem(id){ this.itens=this.itens.filter(i=>i.id!==id); this.sincronizarValorPagamento(); },
     async buscarClientes(){
-      const q=this.buscaCliente.trim(); if(q.length<2){this.clientes=[];return;}
-      const r=await fetch('{% url "pdv:api_clientes" %}?q='+encodeURIComponent(q)); const d=await r.json(); this.clientes=d.clientes||[];
+      const q=this.buscaCliente.trim(); if(q.length<2){this.clientes=[];this.indiceCliente=-1;return;}
+      const r=await fetch('{% url "pdv:api_clientes" %}?q='+encodeURIComponent(q)); const d=await r.json(); this.clientes=d.clientes||[]; this.indiceCliente=this.clientes.length?0:-1;
     },
-    async selecionarCliente(cliente){ this.cliente=cliente; this.clientes=[]; this.buscaCliente=''; await this.recalcularPrecos(); },
+    moverResultadoCliente(direcao){ if(!this.clientes.length)return; this.indiceCliente=(this.indiceCliente+direcao+this.clientes.length)%this.clientes.length; },
+    async selecionarPrimeiroCliente(){ if(!this.clientes.length)await this.buscarClientes(); if(this.clientes.length)await this.selecionarCliente(this.clientes[Math.max(0,this.indiceCliente)]); },
+    async selecionarCliente(cliente){ this.cliente=cliente; this.clientes=[]; this.indiceCliente=-1; this.buscaCliente=''; await this.recalcularPrecos(); this.focarProduto(); },
     async recalcularPrecos(){
       if(!this.itens.length)return;
       const r=await fetch('{% url "pdv:api_precos_cliente" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({cliente_id:this.cliente?.id||null,itens:this.itens.map(i=>({produto_id:i.id,quantidade:i.quantidade}))})});
       const d=await r.json(); if(!r.ok)return;
-      (d.precos||[]).forEach(p=>{const item=this.itens.find(i=>i.id===p.id);if(item)Object.assign(item,p);});
+      (d.precos||[]).forEach(p=>{const item=this.itens.find(i=>i.id===p.id);if(item)Object.assign(item,p);}); this.sincronizarValorPagamento();
     },
+    abrirCadastroCliente(){ this.modalCliente=true; this.erroCliente=''; this.focar('novoClienteNome'); },
     async criarCliente(){
       if(!this.novoCliente.razao_social.trim()){this.erroCliente='Informe o nome do cliente.';return;}
       this.salvandoCliente=true;this.erroCliente='';
@@ -292,15 +374,24 @@ function checkoutVenda() {
     },
     async abrirCaixa(){
       if(!this.abertura.caixa_id){this.erroCaixa='Selecione um caixa.';return;}this.abrindoCaixa=true;this.erroCaixa='';
-      try{const r=await fetch('{% url "pdv:api_caixa_abrir" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({caixa_id:this.abertura.caixa_id,valor_abertura:this.numero(this.abertura.valor)})});const d=await r.json();if(!r.ok)throw new Error(d.erro||'Não foi possível abrir o caixa.');await this.carregarEstado();this.$nextTick(()=>this.$refs.buscaProduto?.focus());}catch(e){this.erroCaixa=e.message;}finally{this.abrindoCaixa=false;}
+      try{const r=await fetch('{% url "pdv:api_caixa_abrir" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({caixa_id:this.abertura.caixa_id,valor_abertura:this.numero(this.abertura.valor)})});const d=await r.json();if(!r.ok)throw new Error(d.erro||'Não foi possível abrir o caixa.');await this.carregarEstado();this.focarProduto();}catch(e){this.erroCaixa=e.message;}finally{this.abrindoCaixa=false;}
+    },
+    solicitarFinalizacao(){
+      this.mensagem=''; this.sucesso=false;
+      if(!this.sessao){this.mensagem='Abra o caixa antes de finalizar.';return;}
+      if(!this.itens.length){this.mensagem='Bipe ao menos um produto.';this.focarProduto();return;}
+      if(this.total>0 && !this.formaPagamentoId){this.mensagem='Selecione a forma de pagamento.';this.focarPagamento();return;}
+      if(this.formaCartao && !this.bandeiraPagamento){this.mensagem='Selecione a bandeira do cartão.';this.focar('bandeiraPagamento');return;}
+      if(this.total>0 && this.valorPagamento<this.total){this.mensagem='O valor recebido é menor que o total da venda.';this.focarValorPagamento();return;}
+      this.finalizar();
     },
     async finalizar(){
       if(!this.podeFinalizar)return;this.finalizando=true;this.mensagem='';this.sucesso=false;
-      const pagamentos=this.total>0?[{forma_id:this.formaPagamentoId,valor:this.total,parcelas:this.parcelasPagamento,bandeira:this.formaCartao?this.bandeiraPagamento:''}]:[];
+      const pagamentos=this.total>0?[{forma_id:this.formaPagamentoId,valor:this.valorPagamento,parcelas:this.parcelasPagamento,bandeira:this.formaCartao?this.bandeiraPagamento:''}]:[];
       const payload={cliente_id:this.cliente?.id||null,desconto:this.desconto,acrescimo:0,itens:this.itens.map(i=>({produto_id:i.id,quantidade:i.quantidade,valor_unitario:i.preco,preco_origem_tipo:i.preco_origem_tipo,preco_origem_detalhe:i.preco_origem_detalhe,desconto_valor:0})),pagamentos};
-      try{const r=await fetch('{% url "pdv:api_venda_finalizar" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)throw new Error(d.erro||'Não foi possível finalizar a venda.');this.sucesso=true;this.mensagem='Venda #'+String(d.numero_venda).padStart(6,'0')+' finalizada com sucesso.';this.itens=[];this.descontoEntrada='';this.formaPagamentoId=null;this.bandeiraPagamento='';this.parcelasPagamento=1;this.cliente=null;this.busca='';this.$nextTick(()=>this.$refs.buscaProduto?.focus());}catch(e){this.mensagem=e.message;}finally{this.finalizando=false;}
+      try{const r=await fetch('{% url "pdv:api_venda_finalizar" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)throw new Error(d.erro||'Não foi possível finalizar a venda.');this.sucesso=true;this.mensagem='Venda #'+String(d.numero_venda).padStart(6,'0')+' finalizada com sucesso.';this.itens=[];this.quantidadeEntrada='1';this.descontoEntrada='';this.valorPagamentoEntrada='';this.valorPagamentoManual=false;this.formaPagamentoId=null;this.bandeiraPagamento='';this.parcelasPagamento=1;this.cliente=null;this.busca='';this.focarProduto();}catch(e){this.mensagem=e.message;}finally{this.finalizando=false;}
     },
-    fecharModais(){this.modalCliente=false;this.resultados=[];}
+    fecharModais(){this.modalCliente=false;this.resultados=[];this.indiceProduto=-1;this.clientes=[];this.indiceCliente=-1;this.focarProduto();}
   };
 }
 </script>
