@@ -1,5 +1,6 @@
 """Forms for the system parameters screen."""
 from django import forms
+from django.contrib.auth.hashers import make_password
 
 from apps.core.constants.choices import UF
 from apps.core.models import Empresa, Filial
@@ -83,6 +84,25 @@ class FilialIdentidadeForm(forms.ModelForm):
 class ParametrosSistemaForm(forms.ModelForm):
     """General parameters that belong to the current branch."""
 
+    checkout_busca_nome_senha = forms.CharField(
+        required=False,
+        min_length=4,
+        max_length=64,
+        label='Senha para liberar busca por nome',
+        help_text='Defina a senha que o operador deverá informar no checkout.',
+        widget=forms.PasswordInput(
+            render_value=False,
+            attrs={
+                'autocomplete': 'new-password',
+                'placeholder': 'Deixe em branco para manter a senha atual',
+            },
+        ),
+    )
+    remover_checkout_busca_nome_senha = forms.BooleanField(
+        required=False,
+        label='Remover senha configurada',
+    )
+
     class Meta:
         model = ParametrosSistema
         fields = [
@@ -152,3 +172,16 @@ class ParametrosSistemaForm(forms.ModelForm):
 
     def clean_nfce_csc_token(self):
         return self._segredo_ou_atual('nfce_csc_token')
+
+    def save(self, commit=True):
+        instancia = super().save(commit=False)
+        if self.cleaned_data.get('remover_checkout_busca_nome_senha'):
+            instancia.checkout_busca_nome_senha_hash = ''
+        else:
+            senha = (self.cleaned_data.get('checkout_busca_nome_senha') or '').strip()
+            if senha:
+                instancia.checkout_busca_nome_senha_hash = make_password(senha)
+        if commit:
+            instancia.save()
+            self.save_m2m()
+        return instancia

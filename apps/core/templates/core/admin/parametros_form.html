@@ -356,9 +356,31 @@
         </span>
       </label>
       {{ form_params.checkout_venda_ativo.errors }}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <div>
+          <label class="param-label">{{ form_params.checkout_busca_nome_senha.label }}</label>
+          {{ form_params.checkout_busca_nome_senha }}
+          {% for e in form_params.checkout_busca_nome_senha.errors %}<p class="param-erro">{{ e }}</p>{% endfor %}
+          <div class="param-help mt-2">
+            {% if parametros.checkout_busca_nome_senha_hash %}
+              Senha configurada. Deixe o campo vazio para mantê-la ou informe outra para substituir.
+            {% else %}
+              Cadastre uma senha de pelo menos 4 caracteres para liberar esta função no checkout.
+            {% endif %}
+          </div>
+        </div>
+        {% if parametros.checkout_busca_nome_senha_hash %}
+        <label class="flex items-start gap-3 md:mt-7">
+          {{ form_params.remover_checkout_busca_nome_senha }}
+          <span>
+            <strong class="block text-sm">{{ form_params.remover_checkout_busca_nome_senha.label }}</strong>
+            <span class="param-card-sub">A busca por nome voltará a ficar bloqueada para esta filial.</span>
+          </span>
+        </label>
+        {% endif %}
+      </div>
       <div class="param-help mt-4">
-        A busca por nome fica disponível somente para usuários com permissão <strong>Aprovar</strong> no módulo PDV.
-        Os demais operadores pesquisam exclusivamente por ID, código interno ou código de barras.
+        A busca por ID, código interno e código de barras continua livre. Somente a busca por nome exige esta senha e apenas na tela de Checkout de venda.
       </div>
     </div>
 
