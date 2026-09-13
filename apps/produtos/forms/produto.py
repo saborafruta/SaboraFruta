@@ -9,6 +9,7 @@ from apps.cadastros.models import Fornecedor
 from apps.produtos.models import (
     CategoriaProduto, ClasseFiscal, LinhaProducao, MarcaProduto, Produto, UnidadeMedida,
 )
+from apps.produtos.services.codigo_barras_service import codigo_barras_em_uso
 
 LIMITE_IMAGEM_PRODUTO_MB = 30
 LIMITE_IMAGEM_PRODUTO_BYTES = LIMITE_IMAGEM_PRODUTO_MB * 1024 * 1024
@@ -255,6 +256,7 @@ class ProdutoForm(forms.ModelForm):
 
     def __init__(self, *args, empresa=None, filial=None, estoque_atual=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.empresa = empresa
         if estoque_atual is not None:
             self.fields['estoque_quantidade'].initial = estoque_atual
         self.fields['estoque_quantidade'].widget.attrs.update({
@@ -567,6 +569,29 @@ class ProdutoForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        campos_codigo_barras = [
+            'codigo_barras',
+            'codigo_barras_extra_1',
+            'codigo_barras_extra_2',
+            'codigo_barras_extra_3',
+        ]
+        codigos_vistos = set()
+        for field_name in campos_codigo_barras:
+            codigo = str(cleaned.get(field_name) or '').strip()
+            if not codigo:
+                continue
+            cleaned[field_name] = codigo
+            if codigo in codigos_vistos:
+                self.add_error(field_name, 'Este codigo de barras esta repetido neste produto.')
+                continue
+            codigos_vistos.add(codigo)
+            if codigo_barras_em_uso(
+                codigo,
+                empresa=self.empresa,
+                produto_id=getattr(self.instance, 'pk', None),
+            ):
+                self.add_error(field_name, 'Este codigo de barras ja pertence a outro produto.')
+
         tipo = cleaned.get('tipo_produto')
         controla_lote = cleaned.get('controla_lote')
         controla_validade = cleaned.get('controla_validade')

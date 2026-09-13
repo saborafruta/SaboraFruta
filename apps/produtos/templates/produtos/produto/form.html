@@ -230,8 +230,11 @@
   .produto-btn.secondary { background: rgba(15,23,42,.16); color: inherit; }
   body.tema-claro .produto-btn.secondary { background: transparent; color: inherit; }
   .produto-barcode-field { grid-column: span 3; min-width: 0; }
-  .produto-barcode-row { display: grid; grid-template-columns: minmax(0, 1fr) 34px; gap: .35rem; align-items: center; }
+  .produto-barcode-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 34px; gap: .35rem; align-items: center; }
+  .produto-barcode-generate { min-height: 34px; white-space: nowrap; }
   .produto-barcode-add { min-height: 34px; width: 34px; padding: 0; font-size: 1.05rem; margin-top: 0; }
+  .produto-barcode-status { margin-top: .35rem; color: #34d399; }
+  .produto-barcode-status.is-error { color: #f87171; }
   .produto-barcode-extra { display: grid; grid-template-columns: 1fr; gap: .45rem; margin-top: .45rem; }
   .produto-stock-panel {
     display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(220px, .9fr); gap: 1rem; align-items: end;
@@ -608,10 +611,14 @@
             <label for="{{ form.codigo_barras.id_for_label }}" class="produto-label">{{ form.codigo_barras.label }}</label>
             <div class="produto-barcode-row">
               {{ form.codigo_barras }}
+              <button type="button" class="produto-btn secondary produto-barcode-generate" @click="generateBarcode()" :disabled="generatingBarcode">
+                <span x-text="generatingBarcode ? 'Gerando...' : 'Gerar codigo'"></span>
+              </button>
               <button type="button" class="produto-btn secondary produto-barcode-add" @click="showBarcodeExtras = !showBarcodeExtras" :title="showBarcodeExtras ? 'Ocultar codigos extras' : 'Adicionar codigo de barras'">+</button>
             </div>
             {% if form.codigo_barras.help_text %}<p class="produto-help">{{ form.codigo_barras.help_text }}</p>{% endif %}
             {% if form.codigo_barras.errors %}<p class="produto-error">{{ form.codigo_barras.errors|first }}</p>{% endif %}
+            <p class="produto-help produto-barcode-status" :class="{ 'is-error': barcodeError }" x-show="barcodeMessage" x-text="barcodeMessage" x-cloak></p>
             <div class="produto-barcode-extra" x-show="showBarcodeExtras" x-cloak>
               <div>{% include "produtos/produto/partials/_field.html" with field=form.codigo_barras_extra_1 %}</div>
               <div>{% include "produtos/produto/partials/_field.html" with field=form.codigo_barras_extra_2 %}</div>
@@ -1131,6 +1138,9 @@
       specs: [],
       specInput: null,
       showBarcodeExtras: false,
+      generatingBarcode: false,
+      barcodeMessage: '',
+      barcodeError: false,
       showLog: false,
       init() {
         this.initSpecs();
@@ -1187,6 +1197,38 @@
           const field = document.getElementById(`id_codigo_barras_extra_${index}`);
           return field && field.value.trim();
         });
+      },
+      async generateBarcode() {
+        if (this.generatingBarcode) return;
+        const field = document.getElementById('id_codigo_barras');
+        const csrf = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        if (!field || !csrf) return;
+        this.generatingBarcode = true;
+        this.barcodeMessage = '';
+        this.barcodeError = false;
+        try {
+          const response = await fetch('{% url "produtos:produto-gerar-codigo-barras" %}', {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-CSRFToken': csrf.value,
+            },
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data.codigo_barras) {
+            throw new Error(data.error || 'Nao foi possivel gerar o codigo de barras.');
+          }
+          field.value = data.codigo_barras;
+          field.dispatchEvent(new Event('input', { bubbles: true }));
+          field.dispatchEvent(new Event('change', { bubbles: true }));
+          this.barcodeMessage = `${data.formato || 'EAN-13'} gerado e verificado: ${data.codigo_barras}`;
+        } catch (error) {
+          this.barcodeError = true;
+          this.barcodeMessage = error.message || 'Nao foi possivel gerar o codigo de barras.';
+        } finally {
+          this.generatingBarcode = false;
+        }
       },
       initPricing() {
         const venda = document.getElementById('id_preco_venda');
