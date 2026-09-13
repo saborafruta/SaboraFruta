@@ -190,9 +190,20 @@ def calcular_equilibrio(
             item["deficit"] = max(ZERO, item["meta"] - item["saldo"] - item["a_caminho"])
             item["excedente"] = max(ZERO, item["saldo"] - item["meta"])
 
+        # Prioridade por URGÊNCIA (dias até faltar), não por tamanho do
+        # déficit em unidades. Uma filial que vende pouco mas está a 1 dia
+        # de ruptura corre mais risco do que uma que vende muito e ainda
+        # tem uma semana de saldo -- atender pelo déficit bruto atenderia
+        # primeiro quem menos precisa com urgência. Sem giro (sem venda no
+        # período) não tem "dias até faltar" para medir; entra por último,
+        # depois de quem realmente corre risco de parar de vender.
+        def _urgencia(item):
+            cobertura = _cobertura(item["saldo"], item["demanda_diaria"])
+            return (cobertura is None, cobertura if cobertura is not None else ZERO)
+
         destinos = sorted(
             (item for item in posicoes if item["deficit"] > ZERO),
-            key=lambda item: (item["deficit"], item["demanda_diaria"]), reverse=True,
+            key=_urgencia,
         )
         origens = sorted(
             (item for item in posicoes if item["excedente"] > ZERO),
