@@ -27,6 +27,7 @@ from .configuracao_abc import ConfiguracaoAbcEstoqueView
 from .dashboard_equalizacao import DashboardEqualizacaoView
 from .mapa_estoque import MapaEstoqueView
 from .central_equalizacao import CentralEqualizacaoView
+from .recomendacoes_transferencia import RecomendacoesTransferenciaView
 from .outras_movimentacoes import (
     OutrasMovimentacoesHubView, DevolucaoClienteView, DevolucaoFornecedorView, SaidaEspecialView,
     FornecedorSearchJsonView, ProdutoEstoqueSearchJsonView,
@@ -64,6 +65,7 @@ __all__ = [
     'DashboardEqualizacaoView',
     'MapaEstoqueView',
     'CentralEqualizacaoView',
+    'RecomendacoesTransferenciaView',
     'OutrasMovimentacoesHubView', 'DevolucaoClienteView', 'DevolucaoFornecedorView', 'SaidaEspecialView',
     'FornecedorSearchJsonView', 'ProdutoEstoqueSearchJsonView',
     'ClienteSearchJsonView', 'LoteSearchJsonView', 'VendaDevolucaoJsonView', 'DevolucaoClienteApiView',
