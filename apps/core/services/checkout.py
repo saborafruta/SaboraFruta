@@ -4,7 +4,6 @@ import hashlib
 
 from django.conf import settings
 from django.db import DEFAULT_DB_ALIAS
-from django.db.models import Q
 from django.views.decorators.debug import sensitive_variables
 
 
@@ -75,6 +74,15 @@ def _escopo_busca_nome(request) -> str:
     return f'{tenant_alias or database_alias}:{identificador_filial}'
 
 
+def _banco_operacional(request) -> str:
+    filial = getattr(request, 'filial_ativa', None)
+    return (
+        getattr(getattr(filial, '_state', None), 'db', None)
+        or getattr(request, 'tenant_db_alias', None)
+        or DEFAULT_DB_ALIAS
+    )
+
+
 def _versao_senha(senha_hash: str) -> str:
     return hashlib.sha256((senha_hash or '').encode('utf-8')).hexdigest()
 
@@ -97,26 +105,40 @@ def _autorizador_elegivel(request, usuario) -> bool:
 
 
 def usuarios_autorizadores_checkout(request) -> list[dict]:
-    """Lista os aprovadores ativos que podem atuar na filial do checkout."""
+    """Lista aprovadores locais e superusuários do diretório central."""
     from apps.core.models import Usuario
 
-    usuarios = (
-        Usuario.objects.select_related('perfil')
+    banco_operacional = _banco_operacional(request)
+    usuarios_locais = (
+        Usuario.objects.using(banco_operacional).select_related('perfil')
         .filter(
-            Q(empresa_id=request.filial_ativa.empresa_id) | Q(is_superuser=True),
+            empresa_id=request.filial_ativa.empresa_id,
             ativo=True,
+            is_superuser=False,
         )
-        .order_by('nome', 'email')
     )
-    return [
+    superusuarios = Usuario.objects.using(DEFAULT_DB_ALIAS).filter(
+        is_superuser=True,
+        ativo=True,
+    )
+    autorizadores = [
         {
-            'id': usuario.pk,
+            'id': f'usuario:{usuario.pk}',
             'nome': usuario.nome or usuario.email,
             'email': usuario.email,
         }
-        for usuario in usuarios
+        for usuario in usuarios_locais
         if _autorizador_elegivel(request, usuario)
     ]
+    autorizadores.extend({
+        'id': f'super:{usuario.pk}',
+        'nome': usuario.nome or usuario.email,
+        'email': usuario.email,
+    } for usuario in superusuarios)
+    return sorted(
+        autorizadores,
+        key=lambda item: ((item['nome'] or '').casefold(), item['email'].casefold()),
+    )
 
 
 @sensitive_variables('senha')
@@ -124,19 +146,32 @@ def validar_autorizador_checkout_busca_nome(request, usuario_id, senha: str):
     """Valida as credenciais de um usuário com Aprovar no PDV da filial."""
     from apps.core.models import Usuario
 
+    referencia = str(usuario_id or '')
+    tipo, separador, valor_id = referencia.partition(':')
+    if not separador:
+        tipo, valor_id = 'usuario', referencia
     try:
-        usuario_id = int(usuario_id)
+        usuario_pk = int(valor_id)
     except (TypeError, ValueError):
         return None
     if not senha or len(senha) > 128:
         return None
+    if tipo == 'super':
+        banco = DEFAULT_DB_ALIAS
+        filtro = {'pk': usuario_pk, 'is_superuser': True, 'ativo': True}
+    elif tipo == 'usuario':
+        banco = _banco_operacional(request)
+        filtro = {
+            'pk': usuario_pk,
+            'empresa_id': request.filial_ativa.empresa_id,
+            'ativo': True,
+            'is_superuser': False,
+        }
+    else:
+        return None
     autorizador = (
-        Usuario.objects.select_related('perfil')
-        .filter(
-            Q(empresa_id=request.filial_ativa.empresa_id) | Q(is_superuser=True),
-            pk=usuario_id,
-            ativo=True,
-        )
+        Usuario.objects.using(banco).select_related('perfil')
+        .filter(**filtro)
         .first()
     )
     if not _autorizador_elegivel(request, autorizador):
@@ -151,6 +186,7 @@ def autorizar_checkout_busca_nome(request, autorizador) -> None:
     request.session[_SESSION_KEY_BUSCA_NOME] = {
         'escopo': _escopo_busca_nome(request),
         'usuario_id': autorizador.pk,
+        'banco': autorizador._state.db or DEFAULT_DB_ALIAS,
         'versao': _versao_senha(autorizador.password),
     }
 
@@ -162,8 +198,12 @@ def checkout_busca_nome_liberada(request) -> bool:
         return False
     from apps.core.models import Usuario
 
+    banco = autorizacao.get('banco') or _banco_operacional(request)
+    if banco not in {DEFAULT_DB_ALIAS, _banco_operacional(request)}:
+        request.session.pop(_SESSION_KEY_BUSCA_NOME, None)
+        return False
     autorizador = (
-        Usuario.objects.select_related('perfil')
+        Usuario.objects.using(banco).select_related('perfil')
         .filter(pk=autorizacao.get('usuario_id'), ativo=True)
         .first()
     )
