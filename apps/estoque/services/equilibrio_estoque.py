@@ -4,16 +4,40 @@ from __future__ import annotations
 from collections import defaultdict
 from decimal import Decimal, ROUND_DOWN
 
-from django.db.models import Q, Sum
+from django.db.models import F, Q, Sum
 from django.utils import timezone
 
+from apps.compras.models import ItemPedidoCompra, PedidoCompra
 from apps.core.models import Filial
 from apps.estoque.models import Estoque
 from apps.pdv.models import ItemVendaPDV
 from apps.produtos.models import Produto, ProdutoFilial
+from apps.vendas.models import ItemPedidoVenda, PedidoVenda
 
 
 ZERO = Decimal("0")
+
+# Pedido de venda so' vira demanda de verdade quando a mercadoria de fato
+# saiu (faturado/entregue) -- rascunho, aprovacao e separacao ainda podem
+# cair, e contar isso infla a demanda diaria com venda que nunca aconteceu.
+STATUS_VENDA_REALIZADA = (
+    PedidoVenda.Status.FATURADO,
+    PedidoVenda.Status.PARCIALMENTE_FATURADO,
+    PedidoVenda.Status.ENTREGUE,
+)
+
+# Pedido de compra "em aberto" e' qualquer um que ainda vai trazer
+# mercadoria -- os dois status finais (recebido/cancelado) sao os unicos
+# que nao tem mais nada a caminho.
+#
+# TRANSFERENCIA ENTRE LOJAS NAO ENTRA AQUI DE PROPOSITO:
+# `MovimentacaoService.transferir_entre_filiais` credita o destino na
+# hora (a entrada é criada junto com a saída, na mesma chamada) -- a
+# conferência posterior é auditoria de quanto chegou, não o gatilho que
+# faz a mercadoria aparecer no saldo. Uma transferência "aguardando
+# conferência" já está dentro de `Estoque.quantidade_disponivel` do
+# destino; somar de novo aqui contaria a mesma mercadoria duas vezes.
+STATUS_COMPRA_ENCERRADA = (PedidoCompra.Status.RECEBIDO, PedidoCompra.Status.CANCELADO)
 
 
 def _decimal(value) -> Decimal:
@@ -71,6 +95,10 @@ def calcular_equilibrio(
         saldos[(row["produto_id"], row["filial_id"])] = _decimal(row["total"])
 
     inicio = timezone.now() - timezone.timedelta(days=dias_analise)
+    # Demanda soma os dois canais de venda -- PDV (balcao) e pedido de venda
+    # (B2B/atacado). Ignorar o segundo faria uma filial que vende so' por
+    # pedido parecer sem giro nenhum, e o equilibrio mandaria embora
+    # justamente o estoque que ela mais precisa.
     vendas = defaultdict(lambda: ZERO)
     for row in (
         ItemVendaPDV.objects.filter(
@@ -82,7 +110,33 @@ def calcular_equilibrio(
         .values("produto_id", "venda_pdv__filial_id")
         .annotate(total=Sum("quantidade"))
     ):
-        vendas[(row["produto_id"], row["venda_pdv__filial_id"])] = _decimal(row["total"])
+        vendas[(row["produto_id"], row["venda_pdv__filial_id"])] += _decimal(row["total"])
+    for row in (
+        ItemPedidoVenda.objects.filter(
+            produto_id__in=produto_ids,
+            pedido__filial_id__in=filial_ids,
+            pedido__status__in=STATUS_VENDA_REALIZADA,
+            pedido__data_emissao__gte=inicio,
+        )
+        .values("produto_id", "pedido__filial_id")
+        .annotate(total=Sum("quantidade"))
+    ):
+        vendas[(row["produto_id"], row["pedido__filial_id"])] += _decimal(row["total"])
+
+    # O que ja esta a caminho de cada filial via compra em aberto com o
+    # fornecedor -- mercadoria que o sistema ainda nao contou em nenhum
+    # saldo. Sem isso, o equilibrio sugeriria mandar de outra loja algo
+    # que ja esta chegando pelo fornecedor.
+    a_caminho = defaultdict(lambda: ZERO)
+    for row in (
+        ItemPedidoCompra.objects.filter(
+            produto_id__in=produto_ids, pedido__filial_id__in=filial_ids,
+        )
+        .exclude(pedido__status__in=STATUS_COMPRA_ENCERRADA)
+        .values("produto_id", "pedido__filial_id")
+        .annotate(pendente=Sum(F("quantidade") - F("quantidade_recebida")))
+    ):
+        a_caminho[(row["produto_id"], row["pedido__filial_id"])] += _decimal(row["pendente"])
 
     sugestoes = []
     analisados = 0
@@ -108,6 +162,7 @@ def calcular_equilibrio(
                 "vendido": vendido,
                 "demanda_diaria": demanda_diaria,
                 "reserva": reserva,
+                "a_caminho": a_caminho[(produto.pk, filial_id)],
             })
 
         # Primeiro cada filial preserva sua reserva. Se a rede possui estoque
@@ -124,7 +179,10 @@ def calcular_equilibrio(
                 if excedente_rede > ZERO and demanda_rede > ZERO else ZERO
             )
             item["meta"] = item["reserva"] + adicional
-            item["deficit"] = max(ZERO, item["meta"] - item["saldo"])
+            # O que ja esta a caminho cobre parte (ou tudo) do deficit antes
+            # de qualquer sugestao nova -- nao conta pro excedente, porque
+            # essa mercadoria ainda nao chegou e nao pode ser reenviada.
+            item["deficit"] = max(ZERO, item["meta"] - item["saldo"] - item["a_caminho"])
             item["excedente"] = max(ZERO, item["saldo"] - item["meta"])
 
         destinos = sorted(
@@ -163,6 +221,7 @@ def calcular_equilibrio(
                     "origem_cobertura": _cobertura(origem["saldo"], origem["demanda_diaria"]),
                     "destino_cobertura": _cobertura(destino["saldo"], destino["demanda_diaria"]),
                     "destino_meta": destino["meta"].quantize(Decimal("0.001")),
+                    "destino_a_caminho": destino["a_caminho"],
                     "produto_parado_origem": origem["vendido"] == ZERO,
                     "destino_sem_estoque": destino["saldo"] <= ZERO,
                 })
