@@ -73,13 +73,16 @@
   .co-doc-head { padding:22px 20px 16px; text-align:center; border-bottom:1px solid var(--co-border); }
   .co-doc-check { width:46px; height:46px; margin:0 auto 10px; display:grid; place-items:center; border-radius:50%; background:#059669; color:#fff; font-size:25px; font-weight:900; }
   .co-doc-list { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:12px; }
-  .co-doc-option { min-height:70px; padding:11px 12px; display:flex; align-items:center; gap:10px; border:1px solid var(--co-border); border-radius:11px; background:transparent; color:var(--co-text); text-align:left; cursor:pointer; }
+  .co-doc-option { position:relative; min-height:70px; padding:11px 48px 11px 12px; display:flex; align-items:center; gap:10px; border:1px solid var(--co-border); border-radius:11px; background:transparent; color:var(--co-text); text-align:left; cursor:pointer; }
   .co-doc-option:hover, .co-doc-option:focus { border-color:var(--co-blue); background:color-mix(in srgb,var(--co-blue) 11%,transparent); outline:none; }
   .co-doc-option:disabled { opacity:.55; cursor:wait; }
   .co-doc-icon { width:38px; height:38px; flex:0 0 auto; display:grid; place-items:center; border-radius:10px; background:color-mix(in srgb,var(--co-blue) 18%,transparent); color:var(--co-blue); font-size:19px; }
   .co-doc-option strong { display:block; font-size:13px; }
   .co-doc-option small { display:block; margin-top:2px; color:var(--co-muted); font-size:10px; line-height:1.3; }
+  .co-doc-key { position:absolute; top:8px; right:8px; min-width:28px; padding:2px 5px; border:1px solid var(--co-border); border-bottom-width:2px; border-radius:6px; color:var(--co-muted); background:var(--co-input); font-size:9px; font-weight:900; text-align:center; line-height:1.2; }
   .co-doc-footer { padding:11px 14px 14px; display:flex; justify-content:center; border-top:1px solid var(--co-border); }
+  .co-doc-footer .co-btn { display:flex; align-items:center; gap:8px; }
+  .co-doc-footer kbd { padding:2px 5px; border:1px solid var(--co-border); border-bottom-width:2px; border-radius:6px; color:var(--co-muted); background:var(--co-input); font-size:9px; }
   [x-cloak] { display:none!important; }
   @media(max-height:760px) and (min-width:1001px){ .co-shortcut{padding:2px 5px}.co-sub{display:none}.co-side-body{padding:7px}.co-summary{padding:7px}.co-input{min-height:36px}.co-btn{min-height:35px} }
   @media(max-width:1000px){ .checkout-page{height:auto;min-height:0;overflow:visible}.co-layout{grid-template-columns:1fr}.co-side{grid-template-columns:1fr 1fr}.co-summary-card{grid-column:1/-1}.co-cart-card{min-height:340px}.co-shortcuts{justify-content:flex-start} }
@@ -276,26 +279,26 @@
       </div>
       <div class="co-doc-list">
         <button x-ref="imprimirComprovante" type="button" class="co-doc-option" @click="abrirComprovante(true)">
-          <span class="co-doc-icon">▤</span><span><strong>Imprimir comprovante</strong><small>Cupom não fiscal pronto para impressão</small></span>
+          <kbd class="co-doc-key">F2</kbd><span class="co-doc-icon">▤</span><span><strong>Imprimir comprovante</strong><small>Cupom não fiscal pronto para impressão</small></span>
         </button>
         <button type="button" class="co-doc-option" @click="baixarComprovante()">
-          <span class="co-doc-icon">↓</span><span><strong>Baixar PDF</strong><small>Salvar o comprovante da venda</small></span>
+          <kbd class="co-doc-key">F3</kbd><span class="co-doc-icon">↓</span><span><strong>Baixar PDF</strong><small>Salvar o comprovante da venda</small></span>
         </button>
         <button type="button" class="co-doc-option" @click="emitirFiscal('nfce')" :disabled="processandoDocumento">
-          <span class="co-doc-icon">N</span><span><strong>NFC-e</strong><small>Emitir e abrir o DANFE da venda</small></span>
+          <kbd class="co-doc-key">F4</kbd><span class="co-doc-icon">N</span><span><strong>NFC-e</strong><small>Emitir e abrir o DANFE da venda</small></span>
         </button>
         <button type="button" class="co-doc-option" @click="emitirFiscal('nfe')" :disabled="processandoDocumento">
-          <span class="co-doc-icon">N</span><span><strong>NF-e</strong><small>Emitir e abrir o DANFE da venda</small></span>
+          <kbd class="co-doc-key">F5</kbd><span class="co-doc-icon">N</span><span><strong>NF-e</strong><small>Emitir e abrir o DANFE da venda</small></span>
         </button>
         {% if etiqueta_venda_disponivel %}
         <button type="button" class="co-doc-option" @click="imprimirEtiqueta()">
-          <span class="co-doc-icon">◇</span><span><strong>Etiqueta da venda</strong><small>Usar o modelo configurado para esta filial</small></span>
+          <kbd class="co-doc-key">F6</kbd><span class="co-doc-icon">◇</span><span><strong>Etiqueta da venda</strong><small>Usar o modelo configurado para esta filial</small></span>
         </button>
         {% endif %}
       </div>
       <div class="co-alert" x-show="mensagemDocumento" x-text="mensagemDocumento" x-cloak style="margin:0 12px 12px"></div>
       <div class="co-doc-footer">
-        <button type="button" class="co-btn" @click="fecharDocumento()">Pular → Nova venda</button>
+        <button type="button" class="co-btn" @click="fecharDocumento()"><kbd>F10</kbd>Pular → Nova venda</button>
       </div>
     </div>
   </div>
@@ -310,6 +313,7 @@ function checkoutVenda() {
     descontoEntrada:'', valorPagamentoEntrada:'', valorPagamentoManual:false, mensagem:'', sucesso:false, finalizando:false,
     modalCliente:false, novoCliente:{razao_social:'',cpf_cnpj:'',celular:'',email:'',tipo_pessoa:'F'}, erroCliente:'', salvandoCliente:false,
     modalDocumento:false, vendaFinalizada:{id:null,numero:null}, processandoDocumento:false, mensagemDocumento:'',
+    etiquetaVendaDisponivel:{% if etiqueta_venda_disponivel %}true{% else %}false{% endif %},
     abertura:{caixa_id:'',valor:'0,00'}, abrindoCaixa:false, erroCaixa:'',
     async init(){ await this.carregarEstado(); this.focarProduto(); },
     csrf(){ return document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || this.cookie('csrftoken'); },
@@ -339,7 +343,8 @@ function checkoutVenda() {
     atalhoTeclado(evento){
       const tecla=evento.key;
       if(tecla==='Escape'){ evento.preventDefault(); this.modalDocumento ? this.fecharDocumento() : this.fecharModais(); return; }
-      if(this.modalCliente || this.modalDocumento || !this.sessao || this.carregando)return;
+      if(this.modalDocumento){ this.atalhoDocumento(evento); return; }
+      if(this.modalCliente || !this.sessao || this.carregando)return;
       if(tecla==='F2'){ evento.preventDefault(); this.focarProduto(); }
       else if(tecla==='F3'){ evento.preventDefault(); this.focarQuantidade(); }
       else if(tecla==='F4'){ evento.preventDefault(); evento.shiftKey ? this.abrirCadastroCliente() : this.focarCliente(); }
@@ -347,6 +352,18 @@ function checkoutVenda() {
       else if(tecla==='F7'){ evento.preventDefault(); this.focarPagamento(); }
       else if(tecla==='F8'){ evento.preventDefault(); this.focarValorPagamento(); }
       else if(tecla==='F10'){ evento.preventDefault(); this.solicitarFinalizacao(); }
+    },
+    atalhoDocumento(evento){
+      const tecla=evento.key;
+      if(!['F2','F3','F4','F5','F6','F10'].includes(tecla))return;
+      evento.preventDefault();
+      if(evento.repeat || this.processandoDocumento)return;
+      if(tecla==='F2')this.abrirComprovante(true);
+      else if(tecla==='F3')this.baixarComprovante();
+      else if(tecla==='F4')this.emitirFiscal('nfce');
+      else if(tecla==='F5')this.emitirFiscal('nfe');
+      else if(tecla==='F6' && this.etiquetaVendaDisponivel)this.imprimirEtiqueta();
+      else if(tecla==='F10')this.fecharDocumento();
     },
     async carregarEstado(){
       this.carregando=true;

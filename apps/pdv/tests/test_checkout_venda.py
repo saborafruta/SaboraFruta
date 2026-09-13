@@ -171,6 +171,14 @@ class CheckoutVendaTests(TestCase):
         self.assertNotContains(resposta, 'class="co-payment-grid"')
         self.assertContains(resposta, 'Venda finalizada!')
         self.assertContains(resposta, 'Imprimir comprovante')
+        self.assertContains(resposta, '<kbd class="co-doc-key">F2</kbd>', html=True)
+        self.assertContains(resposta, '<kbd class="co-doc-key">F3</kbd>', html=True)
+        self.assertContains(resposta, '<kbd class="co-doc-key">F4</kbd>', html=True)
+        self.assertContains(resposta, '<kbd class="co-doc-key">F5</kbd>', html=True)
+        self.assertContains(resposta, '<kbd>F10</kbd>Pular → Nova venda', html=True)
+        self.assertContains(resposta, 'atalhoDocumento(evento)')
+        self.assertContains(resposta, "this.emitirFiscal('nfce')")
+        self.assertContains(resposta, "this.emitirFiscal('nfe')")
         self.assertContains(resposta, "emitirFiscal('nfce')")
         self.assertContains(resposta, '/pdv/venda/0/comprovante/')
         self.assertContains(resposta, 'class="co-table" data-columns="off"')
@@ -244,6 +252,45 @@ assert.equal(checkout.podeFinalizar, false);
             encoding='utf-8',
             capture_output=True,
             timeout=20,
+        )
+
+        self.assertEqual(resultado.returncode, 0, resultado.stdout + resultado.stderr)
+
+    @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do checkout')
+    def test_atalhos_do_modal_executam_a_acao_correta(self):
+        self.habilitar_checkout()
+        resposta = self.client.get(reverse('pdv:checkout'))
+        html = resposta.content.decode('utf-8')
+        script = 'function checkoutVenda()' + html.split(
+            'function checkoutVenda()', 1,
+        )[1].split('</script>', 1)[0]
+        script += r'''
+const assert = require('node:assert/strict');
+global.document = {getElementById: () => ({textContent: '[]'})};
+const checkout = checkoutVenda();
+const acoes = [];
+checkout.modalDocumento = true;
+checkout.etiquetaVendaDisponivel = true;
+checkout.abrirComprovante = (imprimir) => acoes.push(['comprovante', imprimir]);
+checkout.baixarComprovante = () => acoes.push(['pdf']);
+checkout.emitirFiscal = (tipo) => acoes.push(['fiscal', tipo]);
+checkout.imprimirEtiqueta = () => acoes.push(['etiqueta']);
+checkout.fecharDocumento = () => acoes.push(['nova-venda']);
+function tecla(key) {
+  let prevenido = false;
+  checkout.atalhoTeclado({key, repeat: false, preventDefault: () => { prevenido = true; }});
+  assert.equal(prevenido, true, key);
+}
+['F2','F3','F4','F5','F6','F10'].forEach(tecla);
+assert.deepEqual(acoes, [
+  ['comprovante', true], ['pdf'], ['fiscal', 'nfce'],
+  ['fiscal', 'nfe'], ['etiqueta'], ['nova-venda']
+]);
+'''
+
+        resultado = subprocess.run(
+            [shutil.which('node')], input=script, text=True, encoding='utf-8',
+            capture_output=True, timeout=20,
         )
 
         self.assertEqual(resultado.returncode, 0, resultado.stdout + resultado.stderr)
