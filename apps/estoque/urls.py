@@ -21,6 +21,9 @@ urlpatterns = [
     path('faixas-cobertura/<int:pk>/editar/', views.FaixaCoberturaUpdateView.as_view(), name='faixa-cobertura-update'),
     path('faixas-cobertura/<int:pk>/excluir/', views.FaixaCoberturaDeleteView.as_view(), name='faixa-cobertura-delete'),
     path('configuracao-abc/', views.ConfiguracaoAbcEstoqueView.as_view(), name='configuracao-abc'),
+    path('dashboard-equalizacao/', views.DashboardEqualizacaoView.as_view(), name='dashboard-equalizacao'),
+    path('mapa-estoque/', views.MapaEstoqueView.as_view(), name='mapa-estoque'),
+    path('central-equalizacao/', views.CentralEqualizacaoView.as_view(), name='central-equalizacao'),
     path('movimentacoes/', views.MovimentacaoListView.as_view(), name='movimentacao-list'),
 
     # Operacoes

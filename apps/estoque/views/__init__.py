@@ -24,6 +24,9 @@ from .faixa_cobertura import (
     FaixaCoberturaListView, FaixaCoberturaCreateView, FaixaCoberturaUpdateView, FaixaCoberturaDeleteView,
 )
 from .configuracao_abc import ConfiguracaoAbcEstoqueView
+from .dashboard_equalizacao import DashboardEqualizacaoView
+from .mapa_estoque import MapaEstoqueView
+from .central_equalizacao import CentralEqualizacaoView
 from .outras_movimentacoes import (
     OutrasMovimentacoesHubView, DevolucaoClienteView, DevolucaoFornecedorView, SaidaEspecialView,
     FornecedorSearchJsonView, ProdutoEstoqueSearchJsonView,
@@ -58,6 +61,9 @@ __all__ = [
     'ProdutosExcessoView',
     'FaixaCoberturaListView', 'FaixaCoberturaCreateView', 'FaixaCoberturaUpdateView', 'FaixaCoberturaDeleteView',
     'ConfiguracaoAbcEstoqueView',
+    'DashboardEqualizacaoView',
+    'MapaEstoqueView',
+    'CentralEqualizacaoView',
     'OutrasMovimentacoesHubView', 'DevolucaoClienteView', 'DevolucaoFornecedorView', 'SaidaEspecialView',
     'FornecedorSearchJsonView', 'ProdutoEstoqueSearchJsonView',
     'ClienteSearchJsonView', 'LoteSearchJsonView', 'VendaDevolucaoJsonView', 'DevolucaoClienteApiView',
