@@ -3,9 +3,10 @@ import json
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
+from django.db import connections
 from django.db.models import Max, Min, Q, Sum
 from django.db.models.functions import Coalesce
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.core.paginator import Paginator
 from django.urls import reverse
@@ -13,6 +14,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 from apps.cadastros.models import Cliente
+from apps.core.models import ParametrosSistema
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
 from apps.core.tenant_context import tenant_atomic
 from apps.core.services.permissions import requer_permissao
@@ -50,6 +52,7 @@ from apps.produtos.models import (
     KitProduto,
     LinhaProducao,
     Produto,
+    ProdutoCodigoBarras,
     ProdutoFilial,
     PromocaoQuantidade,
 )
@@ -191,6 +194,109 @@ def pdv_home(request):
         "usuario_e_admin": _usuario_e_admin(request),
         "cliente_inicial_json": json.dumps(_cliente_inicial(request)),
         "etiqueta_venda_disponivel": bool(config_etiqueta and config_etiqueta.ativa),
+    })
+
+
+def _checkout_ativo(filial):
+    return ParametrosSistema.objects.filter(
+        filial=filial,
+        checkout_venda_ativo=True,
+    ).exists()
+
+
+@requer_permissao('pdv', 'ver')
+def checkout_venda(request):
+    if not _checkout_ativo(request.filial_ativa):
+        raise Http404('O checkout de venda não está habilitado para esta filial.')
+    caixas = list(
+        Caixa.objects.for_filial(request.filial_ativa)
+        .filter(ativo=True)
+        .values('id', 'numero', 'descricao')
+    )
+    return render(request, 'pdv/checkout.html', {
+        'title': 'Checkout de venda',
+        'caixas': caixas,
+        'pode_buscar_produto_por_nome': request.user.tem_permissao('pdv', 'aprovar'),
+    })
+
+
+@requer_permissao('pdv', 'ver')
+@require_GET
+def checkout_buscar_produto(request):
+    if not _checkout_ativo(request.filial_ativa):
+        return JsonResponse({'erro': 'Checkout não habilitado para esta filial.'}, status=404)
+
+    termo = request.GET.get('q', '').strip()
+    por_nome = request.GET.get('por_nome') == '1'
+    pode_buscar_nome = request.user.tem_permissao('pdv', 'aprovar')
+    if por_nome and not pode_buscar_nome:
+        return JsonResponse({'erro': 'Você não possui autorização para pesquisar por nome.'}, status=403)
+    if not termo:
+        return JsonResponse({'produtos': []})
+
+    produtos_base = Produto.objects.for_filial(request.filial_ativa).filter(ativo=True)
+    if por_nome:
+        produtos = list(
+            filter_queryset_by_terms(
+                produtos_base,
+                termo,
+                fields=('descricao_pdv', 'descricao'),
+            ).select_related('linha_producao')[:20]
+        )
+    else:
+        filtro = Q(codigo__iexact=termo) | Q(codigo_barras=termo)
+        if termo.isdigit():
+            filtro |= Q(pk=int(termo))
+        produtos = list(
+            produtos_base.filter(filtro)
+            .select_related('linha_producao')
+            .distinct()[:20]
+        )
+
+        ids_encontrados = {produto.pk for produto in produtos}
+        ids_alternativos = ProdutoCodigoBarras.objects.filter(
+            produto__in=produtos_base,
+            ean=termo,
+            ativo=True,
+        ).values_list('produto_id', flat=True)
+        # PostgreSQL consulta o JSON no banco; o fallback mantém os testes e
+        # instalações SQLite compatíveis sem ampliar a busca para descrições.
+        if connections[produtos_base.db].vendor == 'postgresql':
+            ids_extras = produtos_base.filter(
+                codigos_barras_extras__contains=[termo],
+            ).values_list('pk', flat=True)
+        else:
+            ids_extras = [
+                produto.pk
+                for produto in produtos_base.exclude(pk__in=ids_encontrados)
+                .only('pk', 'codigos_barras_extras')
+                if termo in {
+                    str(codigo).strip()
+                    for codigo in (produto.codigos_barras_extras or [])
+                }
+            ]
+        ids_complementares = list(ids_alternativos) + list(ids_extras)
+        if ids_complementares:
+            produtos.extend(
+                produtos_base.filter(pk__in=ids_complementares)
+                .exclude(pk__in=ids_encontrados)
+                .select_related('linha_producao')
+                [:20 - len(produtos)]
+            )
+
+    cliente = _cliente_precificacao(request)
+    contexto = _preparar_contexto_ofertas(produtos, request.filial_ativa)
+    return JsonResponse({
+        'produtos': [
+            _serializa_produto(
+                produto,
+                request.filial_ativa,
+                cliente=cliente,
+                contexto_ofertas=contexto,
+            )
+            for produto in produtos
+        ],
+        'busca_por_nome': por_nome,
     })
 
 

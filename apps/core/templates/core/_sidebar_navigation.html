@@ -438,6 +438,7 @@
       {% url 'logistica:mdfe-list' as mdfe_url %}
       {% url 'logistica:pedido-expedicao-list' as pedido_expedicao_url %}
       {% url 'pdv:home' as pdv_url %}
+      {% url 'pdv:checkout' as checkout_url %}
       {% url 'pdv:delivery' as delivery_url %}
       {% url 'pdv:pre_venda_nova' as pre_venda_url %}
       {% url 'fiscal:consultas-cnpj' as fiscal_consultas_url %}
@@ -777,6 +778,19 @@
         </svg>
         <span x-show="!collapsed">PDV</span>
       </a>
+
+      {% if checkout_venda_ativo %}
+      <a href="{{ checkout_url }}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="{% if request.path == checkout_url %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
+         title="Checkout de venda">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 5h2l2.4 10.2a2 2 0 002 1.5h7.7a2 2 0 001.9-1.4L21 8H7m3 12a1 1 0 100-2 1 1 0 000 2zm7 0a1 1 0 100-2 1 1 0 000 2z"/>
+        </svg>
+        <span x-show="!collapsed">Checkout de venda</span>
+      </a>
+      {% endif %}
 
       <a href="{{ delivery_url }}"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"

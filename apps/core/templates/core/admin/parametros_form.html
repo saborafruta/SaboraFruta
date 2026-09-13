@@ -346,6 +346,23 @@
     </div>
 
     <div class="param-card">
+      <div class="param-card-title">Checkout de venda</div>
+      <p class="param-card-sub">Tela rápida para leitura de produtos, recebimento e finalização da venda.</p>
+      <label class="mt-4 flex items-start gap-3">
+        {{ form_params.checkout_venda_ativo }}
+        <span>
+          <strong class="block text-sm">{{ form_params.checkout_venda_ativo.label }}</strong>
+          <span class="param-card-sub">{{ form_params.checkout_venda_ativo.help_text }}</span>
+        </span>
+      </label>
+      {{ form_params.checkout_venda_ativo.errors }}
+      <div class="param-help mt-4">
+        A busca por nome fica disponível somente para usuários com permissão <strong>Aprovar</strong> no módulo PDV.
+        Os demais operadores pesquisam exclusivamente por ID, código interno ou código de barras.
+      </div>
+    </div>
+
+    <div class="param-card">
       <div class="param-card-title">Endereco</div>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
         <div>

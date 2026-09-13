@@ -1,0 +1,308 @@
+{% extends "_base.html" %}
+{% block title %}Checkout de venda - iNoovaTed{% endblock %}
+
+{% block content %}
+<style>
+  .checkout-page { max-width:1500px; margin:0 auto; --co-card:#18181b; --co-border:#2d2d32; --co-muted:#92929c; --co-text:#f4f4f5; --co-input:#111113; --co-blue:#2563eb; }
+  body.tema-claro .checkout-page { --co-card:#fff; --co-border:#e5e7eb; --co-muted:#64748b; --co-text:#111827; --co-input:#f8fafc; --co-blue:#f15a24; }
+  .co-head { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:18px; }
+  .co-title { font-size:24px; line-height:1.1; font-weight:900; color:var(--co-text); }
+  .co-sub { margin-top:5px; font-size:13px; color:var(--co-muted); }
+  .co-layout { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(330px,.7fr); gap:16px; align-items:start; }
+  .co-card { border:1px solid var(--co-border); background:var(--co-card); border-radius:16px; box-shadow:0 12px 32px rgba(0,0,0,.08); }
+  .co-search { position:relative; padding:18px; }
+  .co-search-row { display:flex; gap:9px; }
+  .co-input { width:100%; min-height:48px; padding:10px 14px; border:1px solid var(--co-border); background:var(--co-input); color:var(--co-text); border-radius:11px; outline:none; }
+  .co-input:focus { border-color:var(--co-blue); box-shadow:0 0 0 3px color-mix(in srgb, var(--co-blue) 18%, transparent); }
+  .co-search-input { font-size:18px; font-weight:750; }
+  .co-btn { min-height:42px; padding:9px 15px; border-radius:10px; border:1px solid var(--co-border); background:transparent; color:var(--co-text); font-weight:800; cursor:pointer; }
+  .co-btn:hover { border-color:var(--co-blue); }
+  .co-btn:disabled { opacity:.5; cursor:not-allowed; }
+  .co-btn-primary { color:#fff; background:var(--co-blue); border-color:var(--co-blue); }
+  .co-btn-danger { color:#ef4444; padding:5px 9px; min-height:32px; }
+  .co-mode { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:9px; color:var(--co-muted); font-size:12px; }
+  .co-mode label { display:flex; align-items:center; gap:7px; cursor:pointer; }
+  .co-mode input { accent-color:var(--co-blue); }
+  .co-results { position:absolute; z-index:40; left:18px; right:18px; top:78px; max-height:320px; overflow:auto; padding:7px; border:1px solid var(--co-border); background:var(--co-card); border-radius:12px; box-shadow:0 20px 50px rgba(0,0,0,.3); }
+  .co-result { width:100%; display:flex; justify-content:space-between; align-items:center; gap:14px; padding:11px; color:var(--co-text); background:transparent; border:0; border-radius:9px; text-align:left; cursor:pointer; }
+  .co-result:hover { background:color-mix(in srgb,var(--co-blue) 12%,transparent); }
+  .co-result-code { color:var(--co-muted); font-size:12px; }
+  .co-section-head { padding:15px 18px; display:flex; align-items:center; justify-content:space-between; gap:12px; border-bottom:1px solid var(--co-border); }
+  .co-section-head strong { color:var(--co-text); }
+  .co-count { color:var(--co-muted); font-size:12px; }
+  .co-empty { padding:54px 18px; text-align:center; color:var(--co-muted); }
+  .co-table { width:100%; border-collapse:collapse; color:var(--co-text); }
+  .co-table th { color:var(--co-muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; text-align:left; padding:10px 14px; border-bottom:1px solid var(--co-border); }
+  .co-table td { padding:12px 14px; border-bottom:1px solid var(--co-border); vertical-align:middle; }
+  .co-table tr:last-child td { border-bottom:0; }
+  .co-product-name { font-weight:850; }
+  .co-product-code { margin-top:3px; font-size:11px; color:var(--co-muted); }
+  .co-qty { display:inline-grid; grid-template-columns:32px 55px 32px; align-items:center; border:1px solid var(--co-border); border-radius:9px; overflow:hidden; }
+  .co-qty button { height:34px; border:0; background:transparent; color:var(--co-text); cursor:pointer; font-size:17px; }
+  .co-qty input { width:55px; height:34px; border:0; border-inline:1px solid var(--co-border); background:var(--co-input); color:var(--co-text); text-align:center; outline:none; }
+  .co-side { display:grid; gap:16px; position:sticky; top:16px; }
+  .co-side-body { padding:16px; }
+  .co-client-current { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:12px; border:1px solid var(--co-border); border-radius:11px; color:var(--co-text); }
+  .co-client-search { position:relative; margin-top:10px; }
+  .co-client-results { max-height:210px; overflow:auto; margin-top:6px; padding:5px; border:1px solid var(--co-border); border-radius:10px; }
+  .co-payment-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:12px; }
+  .co-payment { min-height:64px; padding:10px; border:1px solid var(--co-border); border-radius:11px; background:transparent; color:var(--co-text); cursor:pointer; text-align:left; }
+  .co-payment.active { border-color:var(--co-blue); background:color-mix(in srgb,var(--co-blue) 13%,transparent); box-shadow:inset 0 0 0 1px var(--co-blue); }
+  .co-payment small { display:block; margin-top:3px; color:var(--co-muted); }
+  .co-summary { display:grid; gap:10px; padding:16px; border-top:1px solid var(--co-border); }
+  .co-summary-row { display:flex; justify-content:space-between; gap:12px; color:var(--co-muted); font-size:13px; }
+  .co-summary-row strong { color:var(--co-text); }
+  .co-total { font-size:23px; font-weight:950; color:var(--co-text); }
+  .co-finish { width:100%; min-height:55px; margin-top:5px; font-size:16px; }
+  .co-alert { padding:11px 13px; border-radius:10px; font-size:13px; background:rgba(239,68,68,.11); color:#f87171; border:1px solid rgba(239,68,68,.28); }
+  .co-success { background:rgba(16,185,129,.11); color:#34d399; border-color:rgba(16,185,129,.28); }
+  .co-backdrop { position:fixed; inset:0; z-index:9000; display:flex; align-items:center; justify-content:center; padding:18px; background:rgba(0,0,0,.65); backdrop-filter:blur(3px); }
+  .co-modal { width:min(520px,100%); max-height:calc(100vh - 36px); overflow:auto; padding:20px; border:1px solid var(--co-border); border-radius:16px; background:var(--co-card); color:var(--co-text); box-shadow:0 30px 90px rgba(0,0,0,.45); }
+  .co-modal h3 { font-size:19px; font-weight:900; }
+  .co-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px; }
+  .co-field label { display:block; margin-bottom:5px; color:var(--co-muted); font-size:11px; font-weight:800; }
+  .co-modal-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:18px; }
+  [x-cloak] { display:none!important; }
+  @media(max-width:1000px){ .co-layout{grid-template-columns:1fr}.co-side{position:static}.co-side{grid-template-columns:1fr 1fr}.co-summary-card{grid-column:1/-1} }
+  @media(max-width:680px){ .co-head{align-items:flex-start;flex-direction:column}.co-side{grid-template-columns:1fr}.co-grid{grid-template-columns:1fr}.co-table th:nth-child(2),.co-table td:nth-child(2){display:none}.co-search-row{flex-direction:column}.co-results{top:128px} }
+</style>
+
+{{ caixas|json_script:"checkout-caixas" }}
+<div class="checkout-page" x-data="checkoutVenda()" x-init="init()" @keydown.escape.window="fecharModais()">
+  <div class="co-head">
+    <div>
+      <h1 class="co-title">Checkout de venda</h1>
+      <p class="co-sub">Leitura rápida, pagamento e finalização em uma única tela.</p>
+    </div>
+    <div class="co-count" x-text="sessao ? 'Caixa aberto' : 'Caixa fechado'"></div>
+  </div>
+
+  <div class="co-layout">
+    <div class="space-y-4">
+      <div class="co-card co-search">
+        <div class="co-search-row">
+          <input x-ref="buscaProduto" class="co-input co-search-input" x-model="busca"
+                 @keydown.enter.prevent="buscarProduto()"
+                 :placeholder="buscarPorNome ? 'Digite o nome do produto' : 'Bipe ou digite o ID, código interno ou código de barras'"
+                 autocomplete="off" autofocus>
+          <button type="button" class="co-btn co-btn-primary" @click="buscarProduto()" :disabled="buscando">Buscar</button>
+        </div>
+        <div class="co-mode">
+          <span x-text="buscarPorNome ? 'Busca por nome autorizada' : 'Busca restrita a códigos'"></span>
+          {% if pode_buscar_produto_por_nome %}
+          <label><input type="checkbox" x-model="buscarPorNome"> Permitir nome</label>
+          {% endif %}
+        </div>
+        <div class="co-results" x-show="resultados.length" x-cloak>
+          <template x-for="produto in resultados" :key="produto.id">
+            <button type="button" class="co-result" @click="adicionarProduto(produto)">
+              <span><strong x-text="produto.descricao"></strong><span class="co-result-code" x-text="'ID '+produto.id+(produto.codigo_barras?' · '+produto.codigo_barras:'')"></span></span>
+              <strong x-text="moeda(produto.preco)"></strong>
+            </button>
+          </template>
+        </div>
+        <div class="co-alert" x-show="erroBusca" x-text="erroBusca" x-cloak style="margin-top:10px;"></div>
+      </div>
+
+      <div class="co-card">
+        <div class="co-section-head">
+          <strong>Produtos da venda</strong>
+          <span class="co-count" x-text="quantidadeItens+' item(ns)'"></span>
+        </div>
+        <div class="co-empty" x-show="!itens.length">Bipe o primeiro produto para começar.</div>
+        <div style="overflow:auto" x-show="itens.length" x-cloak>
+          <table class="co-table">
+            <thead><tr><th>Produto</th><th>Valor unitário</th><th>Quantidade</th><th>Total</th><th></th></tr></thead>
+            <tbody>
+              <template x-for="item in itens" :key="item.id">
+                <tr>
+                  <td><div class="co-product-name" x-text="item.descricao"></div><div class="co-product-code" x-text="item.codigo_barras || 'ID '+item.id"></div></td>
+                  <td x-text="moeda(item.preco)"></td>
+                  <td>
+                    <div class="co-qty">
+                      <button type="button" @click="alterarQuantidade(item,-item.quantidade_step)">−</button>
+                      <input type="number" :step="item.quantidade_step" :value="item.quantidade" @change="definirQuantidade(item,$event.target.value)">
+                      <button type="button" @click="alterarQuantidade(item,item.quantidade_step)">+</button>
+                    </div>
+                  </td>
+                  <td><strong x-text="moeda(item.preco*item.quantidade)"></strong></td>
+                  <td><button type="button" class="co-btn co-btn-danger" @click="removerItem(item.id)">×</button></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <aside class="co-side">
+      <div class="co-card">
+        <div class="co-section-head"><strong>Cliente</strong><button class="co-btn" type="button" @click="modalCliente=true">Cadastro rápido</button></div>
+        <div class="co-side-body">
+          <div class="co-client-current">
+            <div><strong x-text="cliente ? cliente.razao_social : 'Consumidor Final'"></strong><div class="co-product-code" x-text="cliente ? (cliente.cpf_cnpj || 'Cliente identificado') : 'Sem cliente cadastrado'"></div></div>
+            <button type="button" class="co-btn" x-show="cliente" @click="selecionarCliente(null)">Usar balcão</button>
+          </div>
+          <div class="co-client-search">
+            <input class="co-input" x-model="buscaCliente" @input.debounce.300ms="buscarClientes()" placeholder="Buscar cliente por nome, CPF/CNPJ ou telefone">
+            <div class="co-client-results" x-show="clientes.length" x-cloak>
+              <template x-for="pessoa in clientes" :key="pessoa.id">
+                <button type="button" class="co-result" @click="selecionarCliente(pessoa)"><span><strong x-text="pessoa.razao_social"></strong><span class="co-result-code" x-text="pessoa.cpf_cnpj || pessoa.celular"></span></span></button>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="co-card co-summary-card">
+        <div class="co-section-head"><strong>Pagamento</strong><span class="co-count">Selecione uma forma</span></div>
+        <div class="co-side-body">
+          <div class="co-payment-grid">
+            <template x-for="forma in formasPagamento" :key="forma.id">
+              <button type="button" class="co-payment" :class="{'active':formaPagamentoId===forma.id}" @click="selecionarForma(forma)">
+                <strong x-text="forma.descricao"></strong><small x-text="forma.tipo || 'pagamento'"></small>
+              </button>
+            </template>
+          </div>
+          <p class="co-empty" x-show="!formasPagamento.length" style="padding:20px 0">Nenhuma forma disponível no PDV.</p>
+          <div class="co-grid" x-show="formaCartao" x-cloak>
+            <div class="co-field">
+              <label>Bandeira do cartão</label>
+              <select class="co-input" x-model="bandeiraPagamento">
+                <option value="">Selecione</option><option value="mastercard">Mastercard</option><option value="visa">Visa</option><option value="elo">Elo</option><option value="amex">Amex</option><option value="hiper">Hiper</option>
+              </select>
+            </div>
+            <div class="co-field" x-show="formaSelecionada?.tipo === 'cartao_credito'">
+              <label>Parcelas</label>
+              <select class="co-input" x-model.number="parcelasPagamento">
+                <template x-for="parcela in opcoesParcelas" :key="parcela"><option :value="parcela" x-text="parcela+'x'"></option></template>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="co-summary">
+          <div class="co-summary-row"><span>Subtotal</span><strong x-text="moeda(subtotal)"></strong></div>
+          <div class="co-field">
+            <label for="checkout-desconto">Desconto da venda (R$)</label>
+            <input id="checkout-desconto" class="co-input" type="text" inputmode="decimal" x-model="descontoEntrada" @input="normalizarDesconto()" placeholder="0,00">
+          </div>
+          <div class="co-summary-row"><span>Total</span><span class="co-total" x-text="moeda(total)"></span></div>
+          <div class="co-alert" x-show="mensagem" :class="{'co-success':sucesso}" x-text="mensagem" x-cloak></div>
+          <button type="button" class="co-btn co-btn-primary co-finish" @click="finalizar()" :disabled="finalizando || !podeFinalizar" x-text="finalizando ? 'Finalizando...' : 'Finalizar venda'"></button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="co-backdrop" x-show="!carregando && !sessao" x-cloak>
+    <div class="co-modal">
+      <h3>Abrir caixa para usar o checkout</h3>
+      <p class="co-sub">Selecione o caixa e informe o valor de abertura.</p>
+      <div class="co-grid">
+        <div class="co-field"><label>Caixa</label><select class="co-input" x-model="abertura.caixa_id"><option value="">Selecione</option><template x-for="caixa in caixas" :key="caixa.id"><option :value="caixa.id" x-text="caixa.descricao || 'Caixa '+caixa.numero"></option></template></select></div>
+        <div class="co-field"><label>Valor de abertura</label><input class="co-input" x-model="abertura.valor" inputmode="decimal" placeholder="0,00"></div>
+      </div>
+      <div class="co-alert" x-show="erroCaixa" x-text="erroCaixa" x-cloak style="margin-top:12px"></div>
+      <div class="co-modal-actions"><a class="co-btn" href="{% url 'pdv:home' %}">Ir para o PDV</a><button class="co-btn co-btn-primary" @click="abrirCaixa()" :disabled="abrindoCaixa">Abrir caixa</button></div>
+    </div>
+  </div>
+
+  <div class="co-backdrop" x-show="modalCliente" x-cloak @click.self="modalCliente=false">
+    <div class="co-modal">
+      <h3>Cadastro rápido de cliente</h3>
+      <p class="co-sub">Informe o essencial e continue a venda.</p>
+      <div class="co-grid">
+        <div class="co-field" style="grid-column:1/-1"><label>Nome / Razão social *</label><input class="co-input" x-model="novoCliente.razao_social"></div>
+        <div class="co-field"><label>CPF/CNPJ</label><input class="co-input" x-model="novoCliente.cpf_cnpj" inputmode="numeric"></div>
+        <div class="co-field"><label>Celular</label><input class="co-input" x-model="novoCliente.celular"></div>
+        <div class="co-field" style="grid-column:1/-1"><label>E-mail</label><input class="co-input" x-model="novoCliente.email" type="email"></div>
+      </div>
+      <div class="co-alert" x-show="erroCliente" x-text="erroCliente" x-cloak style="margin-top:12px"></div>
+      <div class="co-modal-actions"><button class="co-btn" @click="modalCliente=false">Cancelar</button><button class="co-btn co-btn-primary" @click="criarCliente()" :disabled="salvandoCliente">Salvar e selecionar</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+function checkoutVenda() {
+  return {
+    caixas: JSON.parse(document.getElementById('checkout-caixas').textContent), sessao:null, carregando:true,
+    busca:'', buscarPorNome:false, buscando:false, resultados:[], erroBusca:'', itens:[],
+    formasPagamento:[], formaPagamentoId:null, bandeiraPagamento:'', parcelasPagamento:1, cliente:null, buscaCliente:'', clientes:[],
+    descontoEntrada:'', mensagem:'', sucesso:false, finalizando:false,
+    modalCliente:false, novoCliente:{razao_social:'',cpf_cnpj:'',celular:'',email:'',tipo_pessoa:'F'}, erroCliente:'', salvandoCliente:false,
+    abertura:{caixa_id:'',valor:'0,00'}, abrindoCaixa:false, erroCaixa:'',
+    async init(){ await this.carregarEstado(); this.$nextTick(()=>this.$refs.buscaProduto?.focus()); },
+    csrf(){ return document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || this.cookie('csrftoken'); },
+    cookie(nome){ return document.cookie.split('; ').find(v=>v.startsWith(nome+'='))?.split('=').slice(1).join('=') || ''; },
+    numero(valor){ const texto=String(valor??0).trim(); const normalizado=texto.includes(',')?texto.replace(/\./g,'').replace(',','.'):texto; const n=Number(normalizado); return Number.isFinite(n)?n:0; },
+    moeda(valor){ return Number(valor||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); },
+    get subtotal(){ return this.itens.reduce((s,i)=>s+(Number(i.preco)*Number(i.quantidade)),0); },
+    get desconto(){ return Math.min(this.subtotal,Math.max(0,this.numero(this.descontoEntrada))); },
+    get total(){ return Math.max(0,this.subtotal-this.desconto); },
+    get quantidadeItens(){ return this.itens.reduce((s,i)=>s+Number(i.quantidade),0); },
+    get formaSelecionada(){ return this.formasPagamento.find(f=>f.id===this.formaPagamentoId)||null; },
+    get formaCartao(){ return ['cartao_credito','cartao_debito'].includes(this.formaSelecionada?.tipo); },
+    get opcoesParcelas(){ const max=Math.max(1,Number(this.formaSelecionada?.maximo_parcelas||1)); return Array.from({length:max},(_,i)=>i+1); },
+    get podeFinalizar(){ return !!(this.sessao && this.itens.length && (this.total<=0 || (this.formaPagamentoId && (!this.formaCartao || this.bandeiraPagamento)))); },
+    normalizarDesconto(){ this.mensagem=''; },
+    async carregarEstado(){
+      this.carregando=true;
+      try { const r=await fetch('{% url "pdv:api_estado" %}',{headers:{'Accept':'application/json'}}); const d=await r.json(); this.sessao=d.sessao; this.formasPagamento=d.formas_pagamento||[]; }
+      finally { this.carregando=false; }
+    },
+    async buscarProduto(){
+      const termo=this.busca.trim(); if(!termo)return;
+      this.buscando=true; this.erroBusca=''; this.resultados=[];
+      try {
+        const p=new URLSearchParams({q:termo,por_nome:this.buscarPorNome?'1':'0'}); if(this.cliente)p.set('cliente_id',this.cliente.id);
+        const r=await fetch('{% url "pdv:api_checkout_produtos" %}?'+p); const d=await r.json();
+        if(!r.ok)throw new Error(d.erro||'Produto não encontrado.');
+        this.resultados=d.produtos||[];
+        if(this.resultados.length===1)this.adicionarProduto(this.resultados[0]);
+        else if(!this.resultados.length)this.erroBusca=this.buscarPorNome?'Nenhum produto encontrado.':'Código não encontrado nesta filial.';
+      } catch(e){ this.erroBusca=e.message; } finally { this.buscando=false; }
+    },
+    adicionarProduto(produto){
+      if(!produto.pode_vender){ this.erroBusca=(produto.bloqueios||[]).join(' ')||'Produto indisponível para venda.'; return; }
+      const atual=this.itens.find(i=>i.id===produto.id);
+      if(atual) atual.quantidade=Number((Number(atual.quantidade)+Number(atual.quantidade_step||1)).toFixed(atual.quantidade_decimais||0));
+      else this.itens.push({...produto,quantidade:1});
+      this.busca=''; this.resultados=[]; this.erroBusca=''; this.mensagem=''; this.$nextTick(()=>this.$refs.buscaProduto?.focus());
+    },
+    selecionarForma(forma){ this.formaPagamentoId=forma.id; this.bandeiraPagamento=''; this.parcelasPagamento=Math.max(1,Number(forma.minimo_parcelas||1)); },
+    alterarQuantidade(item,delta){ this.definirQuantidade(item,Number(item.quantidade)+Number(delta)); },
+    definirQuantidade(item,valor){ const min=Number(item.quantidade_step||1); const n=Math.max(min,Number(valor)||min); item.quantidade=Number(n.toFixed(item.quantidade_decimais||0)); },
+    removerItem(id){ this.itens=this.itens.filter(i=>i.id!==id); },
+    async buscarClientes(){
+      const q=this.buscaCliente.trim(); if(q.length<2){this.clientes=[];return;}
+      const r=await fetch('{% url "pdv:api_clientes" %}?q='+encodeURIComponent(q)); const d=await r.json(); this.clientes=d.clientes||[];
+    },
+    async selecionarCliente(cliente){ this.cliente=cliente; this.clientes=[]; this.buscaCliente=''; await this.recalcularPrecos(); },
+    async recalcularPrecos(){
+      if(!this.itens.length)return;
+      const r=await fetch('{% url "pdv:api_precos_cliente" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({cliente_id:this.cliente?.id||null,itens:this.itens.map(i=>({produto_id:i.id,quantidade:i.quantidade}))})});
+      const d=await r.json(); if(!r.ok)return;
+      (d.precos||[]).forEach(p=>{const item=this.itens.find(i=>i.id===p.id);if(item)Object.assign(item,p);});
+    },
+    async criarCliente(){
+      if(!this.novoCliente.razao_social.trim()){this.erroCliente='Informe o nome do cliente.';return;}
+      this.salvandoCliente=true;this.erroCliente='';
+      try{const r=await fetch('{% url "pdv:api_cliente_criar" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify(this.novoCliente)});const d=await r.json();if(!r.ok)throw new Error(d.erro||'Não foi possível cadastrar.');this.modalCliente=false;this.novoCliente={razao_social:'',cpf_cnpj:'',celular:'',email:'',tipo_pessoa:'F'};await this.selecionarCliente(d.cliente);}catch(e){this.erroCliente=e.message;}finally{this.salvandoCliente=false;}
+    },
+    async abrirCaixa(){
+      if(!this.abertura.caixa_id){this.erroCaixa='Selecione um caixa.';return;}this.abrindoCaixa=true;this.erroCaixa='';
+      try{const r=await fetch('{% url "pdv:api_caixa_abrir" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({caixa_id:this.abertura.caixa_id,valor_abertura:this.numero(this.abertura.valor)})});const d=await r.json();if(!r.ok)throw new Error(d.erro||'Não foi possível abrir o caixa.');await this.carregarEstado();this.$nextTick(()=>this.$refs.buscaProduto?.focus());}catch(e){this.erroCaixa=e.message;}finally{this.abrindoCaixa=false;}
+    },
+    async finalizar(){
+      if(!this.podeFinalizar)return;this.finalizando=true;this.mensagem='';this.sucesso=false;
+      const pagamentos=this.total>0?[{forma_id:this.formaPagamentoId,valor:this.total,parcelas:this.parcelasPagamento,bandeira:this.formaCartao?this.bandeiraPagamento:''}]:[];
+      const payload={cliente_id:this.cliente?.id||null,desconto:this.desconto,acrescimo:0,itens:this.itens.map(i=>({produto_id:i.id,quantidade:i.quantidade,valor_unitario:i.preco,preco_origem_tipo:i.preco_origem_tipo,preco_origem_detalhe:i.preco_origem_detalhe,desconto_valor:0})),pagamentos};
+      try{const r=await fetch('{% url "pdv:api_venda_finalizar" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)throw new Error(d.erro||'Não foi possível finalizar a venda.');this.sucesso=true;this.mensagem='Venda #'+String(d.numero_venda).padStart(6,'0')+' finalizada com sucesso.';this.itens=[];this.descontoEntrada='';this.formaPagamentoId=null;this.bandeiraPagamento='';this.parcelasPagamento=1;this.cliente=null;this.busca='';this.$nextTick(()=>this.$refs.buscaProduto?.focus());}catch(e){this.mensagem=e.message;}finally{this.finalizando=false;}
+    },
+    fecharModais(){this.modalCliente=false;this.resultados=[];}
+  };
+}
+</script>
+<form style="display:none">{% csrf_token %}</form>
+{% endblock %}

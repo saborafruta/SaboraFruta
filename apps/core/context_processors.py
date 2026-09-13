@@ -10,11 +10,15 @@ def parametros_sistema(request):
     """
     from apps.core.models.parametros import ParametrosSistema
     params = None
+    checkout_venda_ativo = False
     logo_url_fallback = ''
     try:
         filial = getattr(request, 'filial_ativa', None)
         if filial is not None:
             params = ParametrosSistema.objects.filter(filial=filial).first()
+            checkout_venda_ativo = bool(
+                params and getattr(params, 'checkout_venda_ativo', False)
+            )
             # Tenta logo_url da empresa como fallback externo
             empresa = getattr(filial, 'empresa', None)
             if empresa:
@@ -32,7 +36,13 @@ def parametros_sistema(request):
     # Prioridade: params.logo_url > empresa.logo_url
     if params and getattr(params, 'logo_url', ''):
         logo_url_fallback = params.logo_url
-    return {'parametros_sistema': params, 'empresa_logo_url': logo_url_fallback}
+    return {
+        'parametros_sistema': params,
+        'empresa_logo_url': logo_url_fallback,
+        # Esta flag deve sempre refletir a filial ativa. `params` pode receber
+        # parâmetros de outra filial apenas como fallback visual para a logo.
+        'checkout_venda_ativo': checkout_venda_ativo,
+    }
 
 
 def filial_context(request):

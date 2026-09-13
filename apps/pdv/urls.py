@@ -10,6 +10,7 @@ urlpatterns = [
     path('venda/<int:pk>/comprovante/pdf/', baixar_pdf_interno, name='comprovante_venda_pdf'),
     path('venda/<int:pk>/etiqueta/', pdv.etiqueta_venda, name='etiqueta_venda'),
     path("", pdv.pdv_home, name="home"),
+    path("checkout/", pdv.checkout_venda, name="checkout"),
     path("vendas/", pdv.vendas_list, name="vendas_list"),
     path("orcamentos/", pdv.orcamentos_list, name="orcamentos_list"),
     # Pré-venda — vendedor externo, sem caixa, sem pagamento
@@ -17,6 +18,7 @@ urlpatterns = [
     path("api/pre-venda/criar/", pdv.api_pre_venda_criar, name="api_pre_venda_criar"),
     # Busca
     path("api/produtos/", pdv.buscar_produto, name="api_produtos"),
+    path("api/checkout/produtos/", pdv.checkout_buscar_produto, name="api_checkout_produtos"),
     path("api/clientes/", pdv.buscar_cliente, name="api_clientes"),
     # Estado e caixa
     path("api/estado/", pdv.api_estado, name="api_estado"),
