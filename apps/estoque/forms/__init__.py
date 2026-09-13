@@ -3,6 +3,7 @@ from .deposito import DepositoForm, TransferenciaInternaForm
 from .movimentacao import AjusteEstoqueForm, MovimentacaoManualForm, TransferenciaForm
 from .inventario import InventarioForm, ItemInventarioForm
 from .outras_movimentacoes import DevolucaoClienteForm, SaidaEspecialForm
+from .faixa_cobertura import FaixaCoberturaEstoqueForm
 
 __all__ = [
     'LoteProdutoForm',
@@ -10,4 +11,5 @@ __all__ = [
     'AjusteEstoqueForm', 'MovimentacaoManualForm', 'TransferenciaForm',
     'InventarioForm', 'ItemInventarioForm',
     'DevolucaoClienteForm', 'SaidaEspecialForm',
+    'FaixaCoberturaEstoqueForm',
 ]

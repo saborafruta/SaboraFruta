@@ -1,0 +1,76 @@
+{% extends "_base.html" %}
+{% load widget_tweaks %}
+{% block title %}{{ title }} — ERP iNoovaTed{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block largura_conteudo %}max-w-2xl{% endblock %}
+
+{% block content %}
+<div class="w-full space-y-5">
+
+  <div>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'estoque:faixa-cobertura-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Faixas de cobertura</a>
+      <span class="mx-1">›</span> {{ title }}
+    </p>
+    <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+  </div>
+
+  {% if form.non_field_errors %}
+    <div class="rounded-lg px-4 py-3 text-sm" style="background:rgba(239,68,68,.1);color:#f87171;">
+      {{ form.non_field_errors|join:" " }}
+    </div>
+  {% endif %}
+
+  <form method="post" class="card p-6 space-y-4">
+    {% csrf_token %}
+
+    <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Deixe produto e categoria em branco para cadastrar o padrão da empresa. Preencher um dos dois cria uma exceção que vence o padrão só para aquele escopo.
+    </p>
+
+    <div>
+      <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Categoria (opcional)</label>
+      {{ form.categoria|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
+      {% if form.categoria.errors %}<p class="text-xs mt-1" style="color:#f87171;">{{ form.categoria.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Produto (opcional)</label>
+      {{ form.produto|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
+      {% if form.produto.errors %}<p class="text-xs mt-1" style="color:#f87171;">{{ form.produto.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Crítico até (dias)</label>
+        {{ form.dias_critico|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
+        {% if form.dias_critico.errors %}<p class="text-xs mt-1" style="color:#f87171;">{{ form.dias_critico.errors.0 }}</p>{% endif %}
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Baixo até (dias)</label>
+        {{ form.dias_baixo|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
+        {% if form.dias_baixo.errors %}<p class="text-xs mt-1" style="color:#f87171;">{{ form.dias_baixo.errors.0 }}</p>{% endif %}
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Normal até (dias)</label>
+        {{ form.dias_normal|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
+        {% if form.dias_normal.errors %}<p class="text-xs mt-1" style="color:#f87171;">{{ form.dias_normal.errors.0 }}</p>{% endif %}
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Alto até (dias)</label>
+        {{ form.dias_alto|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
+        {% if form.dias_alto.errors %}<p class="text-xs mt-1" style="color:#f87171;">{{ form.dias_alto.errors.0 }}</p>{% endif %}
+      </div>
+    </div>
+    <p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      0 dias = Ruptura. Acima de "Alto até" = Excesso.
+    </p>
+
+    <div class="flex gap-3 justify-end pt-2">
+      <a href="{% url 'estoque:faixa-cobertura-list' %}" class="btn-secondary">Cancelar</a>
+      <button type="submit" class="btn-primary">Salvar</button>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

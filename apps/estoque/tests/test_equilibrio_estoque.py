@@ -4,10 +4,10 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.cadastros.models import Fornecedor
+from apps.cadastros.models import Cliente, Fornecedor
 from apps.compras.models import PedidoCompra
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
-from apps.estoque.models import Deposito, Estoque
+from apps.estoque.models import Deposito, Estoque, LoteProduto
 from apps.estoque.services.equilibrio_estoque import calcular_equilibrio
 from apps.pdv.models import ItemVendaPDV, VendaPDV
 from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
@@ -457,15 +457,19 @@ class ExemploQuatroFiliaisTests(TestCase):
         sugestoes = resultado["sugestoes"]
         self.assertEqual(len(sugestoes), 2)
 
-        # D e' mais urgente (1,25 dia de cobertura) que B (1,33 dia) --
-        # tem que ser atendida primeiro, mesmo com deficit bruto menor.
-        self.assertEqual(sugestoes[0]["origem"], self.filial_a)
-        self.assertEqual(sugestoes[0]["destino"], self.filial_d)
-        self.assertEqual(sugestoes[0]["quantidade"], Decimal("150"))
+        # A ALOCACAO (quem recebe quanto) continua por urgencia: D (1,25
+        # dia de cobertura) e B (1,33 dia) dividem o excedente de A em
+        # 150/150 cada -- o deficit bruto maior de B nao a faz levar mais.
+        pares = {(s["origem"], s["destino"]): s["quantidade"] for s in sugestoes}
+        self.assertEqual(pares[(self.filial_a, self.filial_d)], Decimal("150"))
+        self.assertEqual(pares[(self.filial_a, self.filial_b)], Decimal("150"))
 
-        self.assertEqual(sugestoes[1]["origem"], self.filial_a)
-        self.assertEqual(sugestoes[1]["destino"], self.filial_b)
-        self.assertEqual(sugestoes[1]["quantidade"], Decimal("150"))
+        # A ORDEM DE EXIBICAO, por sua vez, e' pelo score de prioridade
+        # (Fase 5) -- B tem venda diaria acima da media da rede (fator
+        # "venda alta") e por isso aparece primeiro, mesmo D sendo mais
+        # urgente em dias.
+        self.assertEqual([s["destino"] for s in sugestoes], [self.filial_b, self.filial_d])
+        self.assertGreaterEqual(sugestoes[0]["score"], sugestoes[1]["score"])
 
         # Nunca sugerir mais que o excedente real da origem: 500 - meta
         # (200, por 10 un./dia x 20 dias) = 300, e 150+150 fecha exato.
@@ -476,3 +480,241 @@ class ExemploQuatroFiliaisTests(TestCase):
         # (5 un./dia x 20 dias = 100) -- sem deficit, sem excedente.
         destinos_da_rede = {s["destino"] for s in sugestoes}
         self.assertNotIn(self.filial_c, destinos_da_rede)
+
+
+class EquilibrioScoreDePrioridadeTests(TestCase):
+    """
+    Fase 5: score 0-100 combinando ruptura, abaixo do minimo, venda acima
+    da media, cobertura critica, pedido pendente, curva A e produto parado
+    na origem. Um cenario que acerta todos os fatores deve saturar em 100
+    (a soma bruta passaria de 100).
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.empresa = Empresa.objects.create(
+            razao_social="Rede Score LTDA", nome_fantasia="Rede Score",
+            cnpj="85445678000191", regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        cls.loja_a = Filial.objects.create(
+            empresa=cls.empresa, razao_social="Loja A", nome_fantasia="Loja A",
+            cnpj="85445678000192", uf="RN", is_matriz=True,
+        )
+        cls.loja_b = Filial.objects.create(
+            empresa=cls.empresa, razao_social="Loja B", nome_fantasia="Loja B",
+            cnpj="85445678000193", uf="RN",
+        )
+        cls.perfil = PerfilAcesso.objects.create(empresa=cls.empresa, nome="Admin", is_admin=True)
+        cls.usuario = Usuario.objects.create_user(
+            email="score@inoovated.com", nome="Usuario Score", password="teste1234",
+            empresa=cls.empresa, filial=cls.loja_a, perfil=cls.perfil,
+        )
+        cls.unidade = UnidadeMedida.objects.create(
+            empresa=cls.empresa, sigla="UN", descricao="Unidade", tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        UnidadeMedidaFilial.objects.create(unidade=cls.unidade, filial=cls.loja_a)
+        UnidadeMedidaFilial.objects.create(unidade=cls.unidade, filial=cls.loja_b)
+        cls.produto = Produto.objects.create(
+            filial=cls.loja_a, unidade_medida=cls.unidade, descricao="Produto Score",
+            ncm="20089900", estoque_minimo=Decimal("10"), preco_venda=Decimal("10"),
+        )
+        ProdutoFilial.objects.create(produto=cls.produto, filial=cls.loja_a)
+        ProdutoFilial.objects.create(produto=cls.produto, filial=cls.loja_b)
+        deposito_a = Deposito.objects.create(filial=cls.loja_a, nome="Geral A", is_padrao=True)
+        deposito_b = Deposito.objects.create(filial=cls.loja_b, nome="Geral B", is_padrao=True)
+        # Loja A: origem parada (saldo alto, zero venda no periodo).
+        Estoque.objects.create(
+            produto=cls.produto, filial=cls.loja_a, deposito=deposito_a,
+            quantidade_atual=100, quantidade_disponivel=100,
+        )
+        # Loja B: destino em ruptura (saldo zero) e abaixo do minimo.
+        Estoque.objects.create(
+            produto=cls.produto, filial=cls.loja_b, deposito=deposito_b,
+            quantidade_atual=0, quantidade_disponivel=0,
+        )
+        venda = VendaPDV.objects.create(
+            filial=cls.loja_b, numero_venda=1, usuario=cls.usuario,
+            data_venda=timezone.now(), status="finalizada", valor_total=Decimal("1500"),
+        )
+        ItemVendaPDV.objects.create(
+            venda_pdv=venda, produto=cls.produto, numero_item=1, quantidade=Decimal("150"),
+            unidade_medida="UN", valor_unitario=10, valor_total=Decimal("1500"),
+        )
+        cliente = Cliente.objects.create(
+            filial=cls.loja_b, cpf_cnpj="11122233344", razao_social="Cliente Score",
+            cidade="Natal", uf="RN",
+        )
+        pedido = PedidoVenda.objects.create(
+            filial=cls.loja_b, numero_pedido="PV-SCORE-1", cliente=cliente,
+            usuario=cls.usuario, status=PedidoVenda.Status.APROVADO, data_emissao=timezone.now(),
+        )
+        ItemPedidoVenda.objects.create(
+            pedido=pedido, produto=cls.produto, quantidade=Decimal("20"),
+            valor_unitario=Decimal("10"), valor_bruto=Decimal("200"), valor_total=Decimal("200"),
+        )
+
+    def test_cenario_com_todos_os_fatores_de_risco_satura_em_100(self):
+        resultado = calcular_equilibrio(empresa=self.empresa, dias_analise=30, dias_cobertura=14)
+
+        self.assertEqual(len(resultado["sugestoes"]), 1)
+        sugestao = resultado["sugestoes"][0]
+        self.assertEqual(sugestao["destino"], self.loja_b)
+        self.assertEqual(sugestao["destino_classe"], "ruptura")
+        self.assertTrue(sugestao["destino_pedido_pendente"])
+        self.assertTrue(sugestao["produto_parado_origem"])
+        self.assertEqual(sugestao["score"], 100)
+
+
+class EquilibrioEstoqueMaximoTests(TestCase):
+    """
+    Fase 5: a meta do destino nunca ultrapassa o estoque_maximo cadastrado
+    do produto -- sem esse teto, uma filial de alta venda podia herdar
+    excedente da rede alem do que ela mesma comporta.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.empresa = Empresa.objects.create(
+            razao_social="Rede Maximo LTDA", nome_fantasia="Rede Maximo",
+            cnpj="85545678000191", regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        cls.loja_a = Filial.objects.create(
+            empresa=cls.empresa, razao_social="Loja A", nome_fantasia="Loja A",
+            cnpj="85545678000192", uf="RN", is_matriz=True,
+        )
+        cls.loja_b = Filial.objects.create(
+            empresa=cls.empresa, razao_social="Loja B", nome_fantasia="Loja B",
+            cnpj="85545678000193", uf="RN",
+        )
+        cls.perfil = PerfilAcesso.objects.create(empresa=cls.empresa, nome="Admin", is_admin=True)
+        cls.usuario = Usuario.objects.create_user(
+            email="maximo@inoovated.com", nome="Usuario Maximo", password="teste1234",
+            empresa=cls.empresa, filial=cls.loja_a, perfil=cls.perfil,
+        )
+        cls.unidade = UnidadeMedida.objects.create(
+            empresa=cls.empresa, sigla="UN", descricao="Unidade", tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        UnidadeMedidaFilial.objects.create(unidade=cls.unidade, filial=cls.loja_a)
+        UnidadeMedidaFilial.objects.create(unidade=cls.unidade, filial=cls.loja_b)
+        # Estoque maximo baixo (20) -- bem menor que a meta que a venda
+        # media diaria (50 un./dia x 14 dias = 700) pediria sem o teto.
+        cls.produto = Produto.objects.create(
+            filial=cls.loja_a, unidade_medida=cls.unidade, descricao="Produto Maximo",
+            ncm="20089900", estoque_minimo=Decimal("0"), estoque_maximo=Decimal("20"),
+            preco_venda=Decimal("10"),
+        )
+        ProdutoFilial.objects.create(produto=cls.produto, filial=cls.loja_a)
+        ProdutoFilial.objects.create(produto=cls.produto, filial=cls.loja_b)
+        deposito_a = Deposito.objects.create(filial=cls.loja_a, nome="Geral A", is_padrao=True)
+        deposito_b = Deposito.objects.create(filial=cls.loja_b, nome="Geral B", is_padrao=True)
+        Estoque.objects.create(
+            produto=cls.produto, filial=cls.loja_a, deposito=deposito_a,
+            quantidade_atual=1000, quantidade_disponivel=1000,
+        )
+        Estoque.objects.create(
+            produto=cls.produto, filial=cls.loja_b, deposito=deposito_b,
+            quantidade_atual=0, quantidade_disponivel=0,
+        )
+        venda = VendaPDV.objects.create(
+            filial=cls.loja_b, numero_venda=1, usuario=cls.usuario,
+            data_venda=timezone.now(), status="finalizada", valor_total=Decimal("15000"),
+        )
+        ItemVendaPDV.objects.create(
+            venda_pdv=venda, produto=cls.produto, numero_item=1, quantidade=Decimal("1500"),
+            unidade_medida="UN", valor_unitario=10, valor_total=Decimal("15000"),
+        )
+
+    def test_meta_e_deficit_nao_ultrapassam_o_estoque_maximo(self):
+        resultado = calcular_equilibrio(empresa=self.empresa, dias_analise=30, dias_cobertura=14)
+
+        self.assertEqual(len(resultado["sugestoes"]), 1)
+        sugestao = resultado["sugestoes"][0]
+        self.assertEqual(sugestao["destino_meta"], Decimal("20.000"))
+        self.assertEqual(sugestao["quantidade"], Decimal("20"))
+
+
+class EquilibrioLoteValidadeTests(TestCase):
+    """
+    Fase 5: produtos com controle de lote so' oferecem pra transferencia o
+    que esta em lote ATIVO e nao vencido -- nunca sugerir mandar lote
+    vencido/bloqueado pra outra filial.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.empresa = Empresa.objects.create(
+            razao_social="Rede Lote LTDA", nome_fantasia="Rede Lote",
+            cnpj="85645678000191", regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        cls.loja_a = Filial.objects.create(
+            empresa=cls.empresa, razao_social="Loja A", nome_fantasia="Loja A",
+            cnpj="85645678000192", uf="RN", is_matriz=True,
+        )
+        cls.loja_b = Filial.objects.create(
+            empresa=cls.empresa, razao_social="Loja B", nome_fantasia="Loja B",
+            cnpj="85645678000193", uf="RN",
+        )
+        cls.perfil = PerfilAcesso.objects.create(empresa=cls.empresa, nome="Admin", is_admin=True)
+        cls.usuario = Usuario.objects.create_user(
+            email="lote@inoovated.com", nome="Usuario Lote", password="teste1234",
+            empresa=cls.empresa, filial=cls.loja_a, perfil=cls.perfil,
+        )
+        cls.unidade = UnidadeMedida.objects.create(
+            empresa=cls.empresa, sigla="UN", descricao="Unidade", tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        UnidadeMedidaFilial.objects.create(unidade=cls.unidade, filial=cls.loja_a)
+        UnidadeMedidaFilial.objects.create(unidade=cls.unidade, filial=cls.loja_b)
+        cls.produto = Produto.objects.create(
+            filial=cls.loja_a, unidade_medida=cls.unidade, descricao="Produto Perecivel",
+            ncm="20089900", estoque_minimo=Decimal("0"), preco_venda=Decimal("10"),
+            controla_lote=True, dias_aviso_vencimento=30,
+        )
+        ProdutoFilial.objects.create(produto=cls.produto, filial=cls.loja_a)
+        ProdutoFilial.objects.create(produto=cls.produto, filial=cls.loja_b)
+        deposito_a = Deposito.objects.create(filial=cls.loja_a, nome="Geral A", is_padrao=True)
+        deposito_b = Deposito.objects.create(filial=cls.loja_b, nome="Geral B", is_padrao=True)
+        # Saldo agregado da origem e' 100, mas so' 60 estao em lote ativo e
+        # nao vencido -- os outros 40 estao bloqueados e nao podem sair.
+        Estoque.objects.create(
+            produto=cls.produto, filial=cls.loja_a, deposito=deposito_a,
+            quantidade_atual=100, quantidade_disponivel=100,
+        )
+        hoje = timezone.localdate()
+        LoteProduto.objects.create(
+            produto=cls.produto, filial=cls.loja_a, numero_lote="L1",
+            quantidade_inicial=60, quantidade_atual=60,
+            status=LoteProduto.Status.ATIVO, data_validade=hoje + timezone.timedelta(days=5),
+        )
+        LoteProduto.objects.create(
+            produto=cls.produto, filial=cls.loja_a, numero_lote="L2",
+            quantidade_inicial=40, quantidade_atual=40,
+            status=LoteProduto.Status.BLOQUEADO, data_validade=hoje + timezone.timedelta(days=400),
+        )
+        Estoque.objects.create(
+            produto=cls.produto, filial=cls.loja_b, deposito=deposito_b,
+            quantidade_atual=0, quantidade_disponivel=0,
+        )
+        venda = VendaPDV.objects.create(
+            filial=cls.loja_b, numero_venda=1, usuario=cls.usuario,
+            data_venda=timezone.now(), status="finalizada", valor_total=Decimal("300"),
+        )
+        ItemVendaPDV.objects.create(
+            venda_pdv=venda, produto=cls.produto, numero_item=1, quantidade=Decimal("30"),
+            unidade_medida="UN", valor_unitario=10, valor_total=Decimal("300"),
+        )
+
+    def test_nao_sugere_mais_do_que_o_lote_ativo_e_nao_vencido_disponivel(self):
+        resultado = calcular_equilibrio(empresa=self.empresa, dias_analise=30, dias_cobertura=14)
+
+        self.assertEqual(len(resultado["sugestoes"]), 1)
+        sugestao = resultado["sugestoes"][0]
+        # Sem o teto de lote, o excedente real seria 100 (saldo total);
+        # com o teto, fica limitado aos 60 do lote ativo/nao vencido.
+        self.assertLessEqual(sugestao["quantidade"], Decimal("60"))
+        self.assertEqual(sugestao["origem_lote_dias_vencer"], 5)
+        # Lote perto de vencer (5 <= dias_aviso_vencimento=30) soma pontos
+        # no score de prioridade.
+        self.assertGreaterEqual(sugestao["score"], 5)

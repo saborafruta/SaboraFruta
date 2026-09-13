@@ -16,6 +16,10 @@ urlpatterns = [
     path('equilibrio/', views.EquilibrioEstoqueView.as_view(), name='equilibrio-estoque'),
     path('analise/curva-abc/', views.CurvaAbcGiroView.as_view(), name='curva-abc-giro'),
     path('analise/excesso/', views.ProdutosExcessoView.as_view(), name='produtos-excesso'),
+    path('faixas-cobertura/', views.FaixaCoberturaListView.as_view(), name='faixa-cobertura-list'),
+    path('faixas-cobertura/nova/', views.FaixaCoberturaCreateView.as_view(), name='faixa-cobertura-create'),
+    path('faixas-cobertura/<int:pk>/editar/', views.FaixaCoberturaUpdateView.as_view(), name='faixa-cobertura-update'),
+    path('faixas-cobertura/<int:pk>/excluir/', views.FaixaCoberturaDeleteView.as_view(), name='faixa-cobertura-delete'),
     path('movimentacoes/', views.MovimentacaoListView.as_view(), name='movimentacao-list'),
 
     # Operacoes

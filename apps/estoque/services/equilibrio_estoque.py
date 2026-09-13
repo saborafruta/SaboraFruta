@@ -9,7 +9,9 @@ from django.utils import timezone
 
 from apps.compras.models import ItemPedidoCompra, PedidoCompra
 from apps.core.models import Filial
-from apps.estoque.models import Estoque
+from apps.estoque.models import Estoque, LoteProduto
+from apps.estoque.services.analise_estoque import classificar_abc_giro
+from apps.estoque.services.cobertura_service import CLASSE_LABEL, carregar_faixas, classificar_cobertura, resolver_faixa
 from apps.pdv.models import ItemVendaPDV
 from apps.produtos.models import Produto, ProdutoFilial
 from apps.vendas.models import ItemPedidoVenda, PedidoVenda
@@ -24,6 +26,15 @@ STATUS_VENDA_REALIZADA = (
     PedidoVenda.Status.FATURADO,
     PedidoVenda.Status.PARCIALMENTE_FATURADO,
     PedidoVenda.Status.ENTREGUE,
+)
+
+# Pedido de venda ainda em curso (nao caiu, nao faturou): sinaliza demanda
+# que ja esta represada esperando estoque, mesmo sem ter virado venda.
+STATUS_VENDA_PENDENTE = (
+    PedidoVenda.Status.AGUARDANDO_APROVACAO,
+    PedidoVenda.Status.APROVADO,
+    PedidoVenda.Status.CONFIRMADO,
+    PedidoVenda.Status.EM_SEPARACAO,
 )
 
 # Pedido de compra "em aberto" e' qualquer um que ainda vai trazer
@@ -55,6 +66,35 @@ def _cobertura(saldo: Decimal, demanda_diaria: Decimal):
     return max(ZERO, saldo / demanda_diaria).quantize(Decimal("0.1"))
 
 
+def _score_prioridade(
+    *, destino, origem, produto, media_demanda_diaria, tem_pedido_pendente, classe_abc, lote_dias_vencer,
+) -> int:
+    """
+    Score 0-100 que ordena as sugestoes pela combinacao de fatores de
+    risco, nao so' pelo tamanho da transferencia. Pontos somam e o total
+    e' limitado em 100 -- varios fatores de risco juntos nao inflam alem
+    do teto.
+    """
+    pontos = 0
+    if destino["classe"] == "ruptura":
+        pontos += 30
+    if destino["saldo"] < _decimal(produto.estoque_minimo):
+        pontos += 25
+    if media_demanda_diaria > ZERO and destino["demanda_diaria"] > media_demanda_diaria:
+        pontos += 20
+    if destino["cobertura"] is not None and destino["cobertura"] < Decimal("3"):
+        pontos += 15
+    if tem_pedido_pendente:
+        pontos += 10
+    if classe_abc == "A":
+        pontos += 10
+    if origem["vendido"] == ZERO:
+        pontos += 10
+    if produto.controla_lote and lote_dias_vencer is not None and lote_dias_vencer <= (produto.dias_aviso_vencimento or 0):
+        pontos += 5
+    return min(100, pontos)
+
+
 def calcular_equilibrio(
     *, empresa, dias_analise: int = 30, dias_cobertura: int = 14,
     busca: str = "", filial_origem_id=None, filial_destino_id=None,
@@ -76,7 +116,7 @@ def calcular_equilibrio(
             | Q(codigo__icontains=busca)
             | Q(codigo_barras__icontains=busca)
         )
-    produtos = list(produtos_qs.select_related("unidade_medida").order_by("descricao"))
+    produtos = list(produtos_qs.select_related("unidade_medida", "categoria").order_by("descricao"))
     produto_ids = [produto.pk for produto in produtos]
 
     vinculos = ProdutoFilial.objects.filter(
@@ -123,6 +163,20 @@ def calcular_equilibrio(
     ):
         vendas[(row["produto_id"], row["pedido__filial_id"])] += _decimal(row["total"])
 
+    # Pedido de venda ainda aberto (nao faturado) por filial/produto -- sinal
+    # de demanda ja represada, usado no score de prioridade.
+    pedidos_pendentes = defaultdict(lambda: ZERO)
+    for row in (
+        ItemPedidoVenda.objects.filter(
+            produto_id__in=produto_ids,
+            pedido__filial_id__in=filial_ids,
+            pedido__status__in=STATUS_VENDA_PENDENTE,
+        )
+        .values("produto_id", "pedido__filial_id")
+        .annotate(total=Sum("quantidade"))
+    ):
+        pedidos_pendentes[(row["produto_id"], row["pedido__filial_id"])] += _decimal(row["total"])
+
     # O que ja esta a caminho de cada filial via compra em aberto com o
     # fornecedor -- mercadoria que o sistema ainda nao contou em nenhum
     # saldo. Sem isso, o equilibrio sugeriria mandar de outra loja algo
@@ -138,6 +192,35 @@ def calcular_equilibrio(
     ):
         a_caminho[(row["produto_id"], row["pedido__filial_id"])] += _decimal(row["pendente"])
 
+    # Produtos com controle de lote/validade: soma so' o que esta em lote
+    # ATIVO e nao vencido (o que pode de fato sair pra outra filial) e o
+    # menor "dias para vencer" entre esses lotes (usado no score -- lote
+    # perto do fim da validade pesa a favor de tirar da origem antes que
+    # estrague parado).
+    produtos_com_lote_ids = [produto.pk for produto in produtos if produto.controla_lote]
+    lotes_disponiveis = defaultdict(lambda: ZERO)
+    lotes_dias_vencer = {}
+    if produtos_com_lote_ids:
+        hoje = timezone.localdate()
+        lotes_qs = LoteProduto.objects.filter(
+            produto_id__in=produtos_com_lote_ids, filial_id__in=filial_ids,
+            status=LoteProduto.Status.ATIVO, quantidade_atual__gt=ZERO,
+        ).filter(Q(data_validade__isnull=True) | Q(data_validade__gte=hoje))
+        for lote in lotes_qs:
+            chave = (lote.produto_id, lote.filial_id)
+            lotes_disponiveis[chave] += _decimal(lote.quantidade_atual)
+            if lote.data_validade:
+                dias = (lote.data_validade - hoje).days
+                atual = lotes_dias_vencer.get(chave)
+                if atual is None or dias < atual:
+                    lotes_dias_vencer[chave] = dias
+
+    faixas_cobertura = carregar_faixas(empresa=empresa)
+    classe_abc_por_produto = {
+        item["produto"].pk: item["classe"]
+        for item in classificar_abc_giro(empresa=empresa, dias_analise=dias_analise)["itens"]
+    }
+
     sugestoes = []
     analisados = 0
     divisor = Decimal(dias_analise)
@@ -152,6 +235,7 @@ def calcular_equilibrio(
         # descoberta se o fornecedor dela demora 20 -- a reserva existe
         # justamente para o intervalo até a próxima compra chegar.
         dias_meta = max(dias_cobertura, produto.lead_time_reposicao_dias or 0)
+        faixa = resolver_faixa(faixas_cobertura, produto)
         for filial_id in vinculadas:
             vendido = vendas[(produto.pk, filial_id)]
             demanda_diaria = vendido / divisor
@@ -161,13 +245,23 @@ def calcular_equilibrio(
                 _decimal(produto.estoque_seguranca),
                 demanda_diaria * Decimal(dias_meta),
             )
+            cobertura = _cobertura(saldo, demanda_diaria)
+            # Sem lote controlado, tudo que esta no saldo pode ser oferecido
+            # pra transferencia. Com lote, so' o que esta em lote ativo e
+            # nao vencido sai de verdade -- o resto ja esta reservado pro
+            # consumo local ou parado esperando baixa/descarte.
+            saldo_transferivel = saldo
+            if produto.controla_lote:
+                saldo_transferivel = min(saldo, lotes_disponiveis[(produto.pk, filial_id)])
             posicoes.append({
                 "filial_id": filial_id,
                 "saldo": saldo,
+                "saldo_transferivel": saldo_transferivel,
                 "vendido": vendido,
                 "demanda_diaria": demanda_diaria,
                 "reserva": reserva,
                 "a_caminho": a_caminho[(produto.pk, filial_id)],
+                "cobertura": cobertura,
             })
 
         # Primeiro cada filial preserva sua reserva. Se a rede possui estoque
@@ -178,17 +272,26 @@ def calcular_equilibrio(
         reserva_rede = sum((item["reserva"] for item in posicoes), ZERO)
         demanda_rede = sum((item["demanda_diaria"] for item in posicoes), ZERO)
         excedente_rede = max(ZERO, estoque_rede - reserva_rede)
+        media_demanda_diaria = demanda_rede / len(posicoes) if posicoes else ZERO
+        maximo = _decimal(produto.estoque_maximo)
         for item in posicoes:
             adicional = (
                 excedente_rede * item["demanda_diaria"] / demanda_rede
                 if excedente_rede > ZERO and demanda_rede > ZERO else ZERO
             )
-            item["meta"] = item["reserva"] + adicional
+            meta = item["reserva"] + adicional
+            # O destino nunca precisa de mais do que comporta -- sem esse
+            # teto, uma filial com pouca reserva mas muita venda podia
+            # herdar excedente da rede alem do proprio maximo cadastrado.
+            if maximo > ZERO:
+                meta = min(meta, maximo)
+            item["meta"] = meta
             # O que ja esta a caminho cobre parte (ou tudo) do deficit antes
             # de qualquer sugestao nova -- nao conta pro excedente, porque
             # essa mercadoria ainda nao chegou e nao pode ser reenviada.
             item["deficit"] = max(ZERO, item["meta"] - item["saldo"] - item["a_caminho"])
-            item["excedente"] = max(ZERO, item["saldo"] - item["meta"])
+            item["excedente"] = max(ZERO, item["saldo_transferivel"] - item["meta"])
+            item["classe"] = classificar_cobertura(item["cobertura"], faixa)
 
         # Prioridade por URGÊNCIA (dias até faltar), não por tamanho do
         # déficit em unidades. Uma filial que vende pouco mas está a 1 dia
@@ -198,8 +301,7 @@ def calcular_equilibrio(
         # período) não tem "dias até faltar" para medir; entra por último,
         # depois de quem realmente corre risco de parar de vender.
         def _urgencia(item):
-            cobertura = _cobertura(item["saldo"], item["demanda_diaria"])
-            return (cobertura is None, cobertura if cobertura is not None else ZERO)
+            return (item["cobertura"] is None, item["cobertura"] if item["cobertura"] is not None else ZERO)
 
         destinos = sorted(
             (item for item in posicoes if item["deficit"] > ZERO),
@@ -211,6 +313,7 @@ def calcular_equilibrio(
         )
         for destino in destinos:
             restante = destino["deficit"]
+            tem_pedido_pendente = pedidos_pendentes[(produto.pk, destino["filial_id"])] > ZERO
             for origem in origens:
                 if restante <= ZERO or origem["excedente"] <= ZERO:
                     break
@@ -225,6 +328,14 @@ def calcular_equilibrio(
                 restante -= quantidade
                 origem_filial = filial_por_id[origem["filial_id"]]
                 destino_filial = filial_por_id[destino["filial_id"]]
+                lote_dias_vencer = lotes_dias_vencer.get((produto.pk, origem["filial_id"]))
+                score = _score_prioridade(
+                    destino=destino, origem=origem, produto=produto,
+                    media_demanda_diaria=media_demanda_diaria,
+                    tem_pedido_pendente=tem_pedido_pendente,
+                    classe_abc=classe_abc_por_produto.get(produto.pk),
+                    lote_dias_vencer=lote_dias_vencer,
+                )
                 sugestoes.append({
                     "produto": produto,
                     "origem": origem_filial,
@@ -234,20 +345,22 @@ def calcular_equilibrio(
                     "destino_saldo": destino["saldo"],
                     "origem_vendido": origem["vendido"],
                     "destino_vendido": destino["vendido"],
-                    "origem_cobertura": _cobertura(origem["saldo"], origem["demanda_diaria"]),
-                    "destino_cobertura": _cobertura(destino["saldo"], destino["demanda_diaria"]),
+                    "origem_cobertura": origem["cobertura"],
+                    "destino_cobertura": destino["cobertura"],
+                    "origem_classe": origem["classe"],
+                    "origem_classe_label": CLASSE_LABEL.get(origem["classe"], ""),
+                    "destino_classe": destino["classe"],
+                    "destino_classe_label": CLASSE_LABEL.get(destino["classe"], ""),
                     "destino_meta": destino["meta"].quantize(Decimal("0.001")),
                     "destino_a_caminho": destino["a_caminho"],
                     "dias_meta": dias_meta,
                     "lead_time_maior_que_cobertura": produto.lead_time_reposicao_dias > dias_cobertura,
                     "produto_parado_origem": origem["vendido"] == ZERO,
                     "destino_sem_estoque": destino["saldo"] <= ZERO,
+                    "destino_pedido_pendente": tem_pedido_pendente,
+                    "origem_lote_dias_vencer": lote_dias_vencer,
+                    "score": score,
                 })
 
-    sugestoes.sort(key=lambda item: (
-        not item["destino_sem_estoque"],
-        not item["produto_parado_origem"],
-        -item["quantidade"],
-        item["produto"].descricao,
-    ))
+    sugestoes.sort(key=lambda item: (-item["score"], -item["quantidade"], item["produto"].descricao))
     return {"filiais": filiais, "sugestoes": sugestoes, "produtos_analisados": analisados}

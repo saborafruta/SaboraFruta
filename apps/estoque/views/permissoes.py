@@ -12,6 +12,7 @@ def permissoes_estoque(request):
     pode_cancelar = usuario.tem_permissao('estoque', 'cancelar')
     pode_aprovar = usuario.tem_permissao('estoque', 'aprovar')
     pode_exportar = usuario.tem_permissao('estoque', 'exportar')
+    pode_excluir = usuario.tem_permissao('estoque', 'excluir')
     return {
         'pode_ver': usuario.tem_permissao('estoque', 'ver'),
         'pode_criar': pode_criar,
@@ -19,6 +20,7 @@ def permissoes_estoque(request):
         'pode_cancelar': pode_cancelar,
         'pode_aprovar': pode_aprovar,
         'pode_exportar': pode_exportar,
+        'pode_excluir': pode_excluir,
         'pode_movimentar': pode_criar,
         'pode_ajustar': pode_editar,
         'pode_transferir': pode_aprovar,

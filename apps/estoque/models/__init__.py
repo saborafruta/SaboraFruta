@@ -6,6 +6,7 @@ from .inventario import Inventario, ItemInventario
 from .conferencia_transferencia import (
     ConferenciaTransferencia, ItemConferenciaTransferencia,
 )
+from .faixa_cobertura import FaixaCoberturaEstoque
 
 __all__ = [
     'LoteProduto',
@@ -14,4 +15,5 @@ __all__ = [
     'AlertaVencimento',
     'Inventario', 'ItemInventario',
     'ConferenciaTransferencia', 'ItemConferenciaTransferencia',
+    'FaixaCoberturaEstoque',
 ]
