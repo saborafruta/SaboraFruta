@@ -1,13 +1,22 @@
 import shutil
 import subprocess
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest import skipUnless
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from apps.core.models import Empresa, Filial, ParametrosSistema, PerfilAcesso, Usuario
+from apps.core.models import (
+    Empresa,
+    EmpresaBanco,
+    Filial,
+    ParametrosSistema,
+    PerfilAcesso,
+    Usuario,
+)
+from apps.core.services.checkout import checkout_venda_ativo
 from apps.produtos.models import (
     Produto,
     ProdutoCodigoBarras,
@@ -111,9 +120,32 @@ class CheckoutVendaTests(TestCase):
     def test_checkout_fica_oculto_e_indisponivel_por_padrao(self):
         resposta = self.client.get(reverse('pdv:checkout'))
 
-        self.assertEqual(resposta.status_code, 404)
+        self.assertRedirects(
+            resposta,
+            reverse('core:dashboard'),
+            fetch_redirect_response=False,
+        )
         menu = self.client.get(reverse('pdv:home'))
         self.assertNotContains(menu, 'title="Checkout de venda"')
+
+    @override_settings(TENANT_DATABASE_ROUTING_ENABLED=True)
+    def test_multibanco_le_flag_salva_na_filial_do_banco_gerencial(self):
+        self.habilitar_checkout()
+        banco = EmpresaBanco.objects.create(
+            empresa=self.empresa,
+            slug='empresa-checkout-82345678000191',
+            db_alias='empresa_checkout_82345678000191',
+            database_url_env_var='TENANT_DATABASE_URL_EMPRESA_CHECKOUT_82345678000191',
+            ativo=True,
+            status=EmpresaBanco.Status.ATIVO,
+        )
+        request = SimpleNamespace(
+            tenant_db_alias=banco.db_alias,
+            # Representa a cópia da mesma filial carregada do banco operacional.
+            filial_ativa=SimpleNamespace(cnpj=self.filial.cnpj),
+        )
+
+        self.assertTrue(checkout_venda_ativo(request))
 
     def test_flag_da_filial_exibe_menu_e_libera_tela(self):
         self.habilitar_checkout()
