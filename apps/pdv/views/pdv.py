@@ -12,16 +12,16 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.core.paginator import Paginator
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.debug import sensitive_variables
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 from apps.cadastros.models import Cliente
 from apps.core.services.checkout import (
     AUTORIZACAO_BUSCA_NOME_MINUTOS,
     autorizar_checkout_busca_nome,
-    checkout_busca_nome_configurada,
     checkout_busca_nome_liberada,
     checkout_venda_ativo,
-    validar_senha_checkout_busca_nome,
+    validar_autorizador_checkout_busca_nome,
 )
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
 from apps.core.tenant_context import tenant_atomic
@@ -219,26 +219,22 @@ def checkout_venda(request):
     return render(request, 'pdv/checkout.html', {
         'title': 'Checkout de venda',
         'caixas': caixas,
-        'busca_nome_configurada': checkout_busca_nome_configurada(request),
         'busca_nome_liberada': checkout_busca_nome_liberada(request),
         'etiqueta_venda_disponivel': bool(config_etiqueta and config_etiqueta.ativa),
     })
 
 
+@sensitive_variables('senha')
 @requer_permissao('pdv', 'ver')
 @require_POST
 def checkout_liberar_busca_nome(request):
     if not checkout_venda_ativo(request):
         return JsonResponse({'erro': 'Checkout não habilitado para esta filial.'}, status=404)
-    if not checkout_busca_nome_configurada(request):
-        return JsonResponse(
-            {'erro': 'A senha da busca por nome ainda não foi configurada para esta filial.'},
-            status=409,
-        )
     try:
         dados = json.loads(request.body or b'{}')
     except (json.JSONDecodeError, TypeError):
         return JsonResponse({'erro': 'Dados inválidos.'}, status=400)
+    usuario_login = str(dados.get('usuario') or '')
     senha = str(dados.get('senha') or '')
     agora = timezone.now().timestamp()
     filial_id = getattr(request.filial_ativa, 'cnpj', None) or request.filial_ativa.pk
@@ -254,16 +250,20 @@ def checkout_liberar_busca_nome(request):
     quantidade = int(tentativas.get('quantidade') or 0)
     if agora - inicio > 60:
         inicio, quantidade = agora, 0
-    if len(senha) > 64 or not validar_senha_checkout_busca_nome(request, senha):
+    autorizador = validar_autorizador_checkout_busca_nome(request, usuario_login, senha)
+    if autorizador is None:
         quantidade += 1
         request.session[chave_tentativas] = {
             'inicio': inicio,
             'quantidade': quantidade,
             'bloqueado_ate': agora + 60 if quantidade >= 5 else 0,
         }
-        return JsonResponse({'erro': 'Senha inválida.'}, status=403)
+        return JsonResponse(
+            {'erro': 'Usuário, senha ou permissão de aprovação inválidos.'},
+            status=403,
+        )
     request.session.pop(chave_tentativas, None)
-    autorizar_checkout_busca_nome(request)
+    autorizar_checkout_busca_nome(request, autorizador)
     return JsonResponse({
         'ok': True,
         'expira_em_minutos': AUTORIZACAO_BUSCA_NOME_MINUTOS,

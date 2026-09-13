@@ -4,9 +4,10 @@ import hashlib
 from datetime import timedelta
 
 from django.conf import settings
-from django.contrib.auth.hashers import check_password
 from django.db import DEFAULT_DB_ALIAS
+from django.db.models import Q
 from django.utils import timezone
+from django.views.decorators.debug import sensitive_variables
 
 
 AUTORIZACAO_BUSCA_NOME_MINUTOS = 30
@@ -50,7 +51,7 @@ def _parametros_checkout(request):
         return (
             ParametrosSistema.objects.using(DEFAULT_DB_ALIAS)
             .filter(filial_id=filial_central_id)
-            .only('checkout_venda_ativo', 'checkout_busca_nome_senha_hash')
+            .only('checkout_venda_ativo')
             .first()
         )
 
@@ -58,7 +59,7 @@ def _parametros_checkout(request):
     return (
         ParametrosSistema.objects.using(database_alias)
         .filter(filial_id=filial.pk)
-        .only('checkout_venda_ativo', 'checkout_busca_nome_senha_hash')
+        .only('checkout_venda_ativo')
         .first()
     )
 
@@ -67,12 +68,6 @@ def checkout_venda_ativo(request) -> bool:
     """Retorna a flag salva pela Central para a filial ativa."""
     parametros = _parametros_checkout(request)
     return bool(parametros and parametros.checkout_venda_ativo)
-
-
-def checkout_busca_nome_configurada(request) -> bool:
-    """Informa sem expor o segredo se a filial cadastrou a senha de liberação."""
-    parametros = _parametros_checkout(request)
-    return bool(parametros and parametros.checkout_busca_nome_senha_hash)
 
 
 def _escopo_busca_nome(request) -> str:
@@ -84,24 +79,54 @@ def _escopo_busca_nome(request) -> str:
 
 
 def _versao_senha(senha_hash: str) -> str:
-    return hashlib.sha256(senha_hash.encode('utf-8')).hexdigest()
+    return hashlib.sha256((senha_hash or '').encode('utf-8')).hexdigest()
 
 
-def validar_senha_checkout_busca_nome(request, senha: str) -> bool:
-    """Valida a senha configurada na Central sem enviá-la ao navegador."""
-    parametros = _parametros_checkout(request)
-    senha_hash = parametros.checkout_busca_nome_senha_hash if parametros else ''
-    return bool(senha_hash and senha and check_password(senha, senha_hash))
+def _autorizador_elegivel(request, usuario) -> bool:
+    filial = getattr(request, 'filial_ativa', None)
+    if not usuario or not filial or not usuario.is_active:
+        return False
+    if not (usuario.is_superuser or usuario.empresa_id == filial.empresa_id):
+        return False
+    if not usuario.pode_acessar_filial(filial):
+        return False
+    perfil = usuario.perfil_para_filial(filial)
+    if not perfil or not perfil.ativo:
+        return False
+    usuario._perfil_ativo = perfil
+    return usuario.tem_permissao('pdv', 'aprovar')
 
 
-def autorizar_checkout_busca_nome(request) -> None:
-    """Autoriza por 30 minutos a filial atual na sessão autenticada."""
-    parametros = _parametros_checkout(request)
-    if not parametros or not parametros.checkout_busca_nome_senha_hash:
-        return
+@sensitive_variables('senha')
+def validar_autorizador_checkout_busca_nome(request, usuario_login: str, senha: str):
+    """Valida as credenciais de um usuário com Aprovar no PDV da filial."""
+    from apps.core.models import Usuario
+
+    login = (usuario_login or '').strip().lower()
+    if not login or not senha or len(login) > 120 or len(senha) > 128:
+        return None
+    autorizador = (
+        Usuario.objects.select_related('perfil')
+        .filter(
+            Q(empresa_id=request.filial_ativa.empresa_id) | Q(is_superuser=True),
+            email__iexact=login,
+            ativo=True,
+        )
+        .first()
+    )
+    if not _autorizador_elegivel(request, autorizador):
+        return None
+    if not autorizador.check_password(senha):
+        return None
+    return autorizador
+
+
+def autorizar_checkout_busca_nome(request, autorizador) -> None:
+    """Autoriza por 30 minutos usando a conta aprovada para a filial atual."""
     request.session[_SESSION_KEY_BUSCA_NOME] = {
         'escopo': _escopo_busca_nome(request),
-        'versao': _versao_senha(parametros.checkout_busca_nome_senha_hash),
+        'usuario_id': autorizador.pk,
+        'versao': _versao_senha(autorizador.password),
         'expira_em': (timezone.now() + timedelta(minutes=AUTORIZACAO_BUSCA_NOME_MINUTOS)).timestamp(),
     }
 
@@ -118,9 +143,14 @@ def checkout_busca_nome_liberada(request) -> bool:
     if expira_em <= timezone.now().timestamp():
         request.session.pop(_SESSION_KEY_BUSCA_NOME, None)
         return False
-    parametros = _parametros_checkout(request)
-    senha_hash = parametros.checkout_busca_nome_senha_hash if parametros else ''
+    from apps.core.models import Usuario
+
+    autorizador = (
+        Usuario.objects.select_related('perfil')
+        .filter(pk=autorizacao.get('usuario_id'), ativo=True)
+        .first()
+    )
     return bool(
-        senha_hash
-        and autorizacao.get('versao') == _versao_senha(senha_hash)
+        _autorizador_elegivel(request, autorizador)
+        and autorizacao.get('versao') == _versao_senha(autorizador.password)
     )
