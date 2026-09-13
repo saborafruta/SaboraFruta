@@ -146,6 +146,83 @@
   body.sidebar-collapsed .sidebar-desktop .sidebar-favorite-toggle {
     display: none;
   }
+  .sidebar-menu-search {
+    position: sticky;
+    top: 0;
+    z-index: 25;
+    margin: 2px 4px 10px;
+    padding: 2px 0;
+  }
+  .sidebar-menu-search-field {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 40px;
+    padding: 0 9px;
+    border: 1px solid rgba(148, 163, 184, 0.34);
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.06);
+  }
+  .sidebar-menu-search-field > svg {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 17px;
+    color: #64748b;
+  }
+  .sidebar-menu-search-field input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #111827;
+    font-size: 13px;
+  }
+  .sidebar-menu-search-field input::placeholder { color: #94a3b8; }
+  .sidebar-menu-search-field button {
+    border: 0;
+    padding: 1px 3px;
+    background: transparent;
+    color: #64748b;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .sidebar-menu-search-results {
+    max-height: min(430px, 55vh);
+    margin-top: 5px;
+    overflow-y: auto;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 10px;
+    padding: 5px;
+    background: #fff;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  }
+  .sidebar-menu-search-results a {
+    display: block;
+    overflow: hidden;
+    border-radius: 7px;
+    padding: 8px 9px;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sidebar-menu-search-results a:hover,
+  .sidebar-menu-search-results a.is-selected { background:#dbeafe; color:#1d4ed8; }
+  .sidebar-menu-search-empty { padding:12px 8px; color:#64748b; font-size:12px; text-align:center; }
+  body:not(.tema-claro) .sidebar-menu-search-field,
+  body:not(.tema-claro) .sidebar-menu-search-results {
+    border-color: rgba(148, 163, 184, 0.2);
+    background: #202023;
+  }
+  body:not(.tema-claro) .sidebar-menu-search-field input { color:#f8fafc; }
+  body:not(.tema-claro) .sidebar-menu-search-results a { color:#e5e7eb; }
+  body:not(.tema-claro) .sidebar-menu-search-results a:hover,
+  body:not(.tema-claro) .sidebar-menu-search-results a.is-selected { background:#1e3a5f; color:#bfdbfe; }
+  body.sidebar-collapsed .sidebar-desktop .sidebar-menu-search { display:none; }
   aside nav > a > svg:first-child,
   aside nav > div > button > svg:first-child {
     box-sizing: content-box;
@@ -558,6 +635,8 @@
           </div>
         </div>
       {% endif %}
+
+      {% include "core/_sidebar_search.html" %}
 
       <a href="{{ dashboard_url }}" @click="mobileOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
@@ -1287,3 +1366,4 @@
 
 {{ request.user.menu_favoritos|default_if_none:''|json_script:"sidebar-favorites-data" }}
 <script src="{% static 'core/js/sidebar_favorites.js' %}?v=20260830-1" defer></script>
+<script src="{% static 'core/js/sidebar_search.js' %}?v=20260913-1" defer></script>
