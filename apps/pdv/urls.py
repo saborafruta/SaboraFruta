@@ -24,6 +24,16 @@ urlpatterns = [
         pdv.checkout_liberar_busca_nome,
         name="api_checkout_liberar_busca_nome",
     ),
+    path(
+        "api/checkout/consumir-busca-nome/",
+        pdv.checkout_consumir_busca_nome,
+        name="api_checkout_consumir_busca_nome",
+    ),
+    path(
+        "api/checkout/encerrar-busca-nome/",
+        pdv.checkout_encerrar_busca_nome,
+        name="api_checkout_encerrar_busca_nome",
+    ),
     path("api/clientes/", pdv.buscar_cliente, name="api_clientes"),
     # Estado e caixa
     path("api/estado/", pdv.api_estado, name="api_estado"),

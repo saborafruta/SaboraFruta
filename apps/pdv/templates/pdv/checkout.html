@@ -90,6 +90,7 @@
 </style>
 
 {{ caixas|json_script:"checkout-caixas" }}
+{{ usuarios_autorizadores|json_script:"checkout-autorizadores" }}
 <div class="checkout-page" x-data="checkoutVenda()" x-init="init()" @keydown.window="atalhoTeclado($event)">
   <div class="co-head">
     <div>
@@ -133,7 +134,7 @@
         </div>
         <div class="co-results" x-ref="resultadosProduto" x-show="resultados.length" x-cloak role="listbox">
           <template x-for="produto in resultados" :key="produto.id">
-            <button type="button" class="co-result" :class="{'active':resultados[indiceProduto]?.id===produto.id}" @click="adicionarProduto(produto)" role="option" :aria-selected="resultados[indiceProduto]?.id===produto.id">
+            <button type="button" class="co-result" :class="{'active':resultados[indiceProduto]?.id===produto.id}" @click="selecionarProduto(produto)" role="option" :aria-selected="resultados[indiceProduto]?.id===produto.id">
               <span><strong x-text="produto.descricao"></strong><span class="co-result-code" x-text="'ID '+produto.id+(produto.codigo_barras?' · '+produto.codigo_barras:'')"></span></span>
               <strong x-text="moeda(produto.preco)"></strong>
             </button>
@@ -256,21 +257,27 @@
   <div class="co-backdrop" x-show="modalSenhaBuscaNome" x-cloak @click.self="fecharSenhaBuscaNome()">
     <form class="co-modal" @submit.prevent="liberarBuscaPorNome()" role="dialog" aria-modal="true" aria-labelledby="checkout-senha-busca-titulo">
       <h3 id="checkout-senha-busca-titulo">Autorizar busca por nome</h3>
-      <p class="co-sub">Informe as credenciais de um usuário com a permissão Aprovar no módulo PDV desta filial.</p>
+      <p class="co-sub">Selecione um usuário autorizado nesta filial e informe a senha. A liberação vale para adicionar um único produto.</p>
       <div class="co-grid">
         <div class="co-field" style="grid-column:1/-1">
-          <label for="checkout-usuario-autorizador">Usuário (e-mail)</label>
-          <input id="checkout-usuario-autorizador" x-ref="usuarioAutorizador" class="co-input" type="email" x-model="usuarioBuscaNome" autocomplete="username">
+          <label for="checkout-usuario-autorizador">Usuário autorizador</label>
+          <select id="checkout-usuario-autorizador" x-ref="usuarioAutorizador" class="co-input" x-model="usuarioAutorizadorId" autocomplete="username">
+            <option value="">Selecione o usuário</option>
+            <template x-for="usuario in usuariosAutorizadores" :key="usuario.id">
+              <option :value="usuario.id" x-text="usuario.nome + ' · ' + usuario.email"></option>
+            </template>
+          </select>
         </div>
         <div class="co-field" style="grid-column:1/-1">
           <label for="checkout-senha-busca">Senha</label>
           <input id="checkout-senha-busca" x-ref="senhaBuscaNome" class="co-input" type="password" x-model="senhaBuscaNome" autocomplete="current-password">
         </div>
       </div>
+      <div class="co-alert" x-show="!usuariosAutorizadores.length" x-cloak style="margin-top:12px">Nenhum usuário desta filial possui a permissão PDV → Aprovar.</div>
       <div class="co-alert" x-show="erroSenhaBuscaNome" x-text="erroSenhaBuscaNome" x-cloak style="margin-top:12px"></div>
       <div class="co-modal-actions">
         <button type="button" class="co-btn" @click="fecharSenhaBuscaNome()">Cancelar</button>
-        <button type="submit" class="co-btn co-btn-primary" :disabled="liberandoBuscaNome" x-text="liberandoBuscaNome ? 'Validando...' : 'Liberar por 30 minutos'"></button>
+        <button type="submit" class="co-btn co-btn-primary" :disabled="liberandoBuscaNome || !usuariosAutorizadores.length" x-text="liberandoBuscaNome ? 'Validando...' : 'Autorizar um item'"></button>
       </div>
     </form>
   </div>
@@ -328,8 +335,9 @@
 function checkoutVenda() {
   return {
     caixas: JSON.parse(document.getElementById('checkout-caixas').textContent), sessao:null, carregando:true,
-    busca:'', quantidadeEntrada:'1', buscarPorNome:{% if busca_nome_liberada %}true{% else %}false{% endif %}, buscando:false, resultados:[], indiceProduto:-1, erroBusca:'', itens:[],
-    buscaNomeLiberada:{% if busca_nome_liberada %}true{% else %}false{% endif %}, modalSenhaBuscaNome:false, usuarioBuscaNome:'', senhaBuscaNome:'', erroSenhaBuscaNome:'', liberandoBuscaNome:false,
+    usuariosAutorizadores:JSON.parse(document.getElementById('checkout-autorizadores').textContent),
+    busca:'', quantidadeEntrada:'1', buscarPorNome:false, buscando:false, resultados:[], indiceProduto:-1, erroBusca:'', itens:[],
+    buscaNomeLiberada:false, modalSenhaBuscaNome:false, usuarioAutorizadorId:'', senhaBuscaNome:'', erroSenhaBuscaNome:'', liberandoBuscaNome:false,
     formasPagamento:[], formaPagamentoId:null, bandeiraPagamento:'', parcelasPagamento:1, cliente:null, buscaCliente:'', clientes:[], indiceCliente:-1,
     descontoEntrada:'', valorPagamentoEntrada:'', valorPagamentoManual:false, mensagem:'', sucesso:false, finalizando:false,
     modalCliente:false, novoCliente:{razao_social:'',cpf_cnpj:'',celular:'',email:'',tipo_pessoa:'F'}, erroCliente:'', salvandoCliente:false,
@@ -406,16 +414,16 @@ function checkoutVenda() {
         const r=await fetch('{% url "pdv:api_checkout_produtos" %}?'+p); const d=await r.json();
         if(!r.ok){
           if(r.status===403 && this.buscarPorNome){
-            this.buscarPorNome=false; this.buscaNomeLiberada=false; this.modalSenhaBuscaNome=true; this.focar('usuarioAutorizador');
+            this.buscarPorNome=false; this.buscaNomeLiberada=false; this.modalSenhaBuscaNome=true; this.usuarioAutorizadorId=''; this.focar('usuarioAutorizador');
           }
           throw new Error(d.erro||'Produto não encontrado.');
         }
         this.resultados=d.produtos||[]; this.indiceProduto=this.resultados.length?0:-1;
-        if(this.resultados.length===1)this.adicionarProduto(this.resultados[0]);
+        if(this.resultados.length===1)await this.selecionarProduto(this.resultados[0]);
         else if(!this.resultados.length)this.erroBusca=this.buscarPorNome?'Nenhum produto encontrado.':'Código não encontrado nesta filial.';
       } catch(e){ this.erroBusca=e.message; } finally { this.buscando=false; }
     },
-    confirmarBuscaProduto(){ if(this.resultados.length && this.indiceProduto>=0)this.adicionarProduto(this.resultados[this.indiceProduto]); else this.buscarProduto(); },
+    async confirmarBuscaProduto(){ if(this.resultados.length && this.indiceProduto>=0)await this.selecionarProduto(this.resultados[this.indiceProduto]); else await this.buscarProduto(); },
     moverResultadoProduto(direcao){
       if(!this.resultados.length)return;
       if(this.indiceProduto<0)this.indiceProduto=direcao>0?0:this.resultados.length-1;
@@ -425,22 +433,38 @@ function checkoutVenda() {
         if(selecionado)selecionado.scrollIntoView({block:'nearest'});
       });
     },
-    solicitarBuscaPorNome(evento){
-      if(!evento.target.checked){ this.buscarPorNome=false; this.resultados=[]; this.indiceProduto=-1; return; }
+    async solicitarBuscaPorNome(evento){
+      if(!evento.target.checked){ this.buscarPorNome=false; this.buscaNomeLiberada=false; this.resultados=[]; this.indiceProduto=-1; await this.encerrarBuscaPorNome(); return; }
       if(this.buscaNomeLiberada){ this.buscarPorNome=true; return; }
-      evento.target.checked=false; this.modalSenhaBuscaNome=true; this.usuarioBuscaNome=''; this.senhaBuscaNome=''; this.erroSenhaBuscaNome=''; this.focar('usuarioAutorizador');
+      evento.target.checked=false; this.modalSenhaBuscaNome=true; this.usuarioAutorizadorId=''; this.senhaBuscaNome=''; this.erroSenhaBuscaNome=''; this.focar('usuarioAutorizador');
     },
-    fecharSenhaBuscaNome(){ this.modalSenhaBuscaNome=false; this.usuarioBuscaNome=''; this.senhaBuscaNome=''; this.erroSenhaBuscaNome=''; this.focarProduto(); },
+    fecharSenhaBuscaNome(){ this.modalSenhaBuscaNome=false; this.usuarioAutorizadorId=''; this.senhaBuscaNome=''; this.erroSenhaBuscaNome=''; this.focarProduto(); },
     async liberarBuscaPorNome(){
-      if(!this.usuarioBuscaNome.trim()){this.erroSenhaBuscaNome='Informe o usuário autorizador.';this.focar('usuarioAutorizador');return;}
+      if(!this.usuarioAutorizadorId){this.erroSenhaBuscaNome='Selecione o usuário autorizador.';this.focar('usuarioAutorizador');return;}
       if(!this.senhaBuscaNome){this.erroSenhaBuscaNome='Informe a senha do usuário autorizador.';this.focar('senhaBuscaNome');return;}
       this.liberandoBuscaNome=true; this.erroSenhaBuscaNome='';
       try{
-        const r=await fetch('{% url "pdv:api_checkout_liberar_busca_nome" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({usuario:this.usuarioBuscaNome,senha:this.senhaBuscaNome})});
+        const r=await fetch('{% url "pdv:api_checkout_liberar_busca_nome" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({usuario_id:this.usuarioAutorizadorId,senha:this.senhaBuscaNome})});
         const d=await r.json(); if(!r.ok)throw new Error(d.erro||'Não foi possível liberar a busca por nome.');
-        this.buscaNomeLiberada=true; this.buscarPorNome=true; this.modalSenhaBuscaNome=false; this.usuarioBuscaNome=''; this.senhaBuscaNome=''; this.focarProduto();
+        this.buscaNomeLiberada=true; this.buscarPorNome=true; this.modalSenhaBuscaNome=false; this.usuarioAutorizadorId=''; this.senhaBuscaNome=''; this.focarProduto();
       }catch(e){this.erroSenhaBuscaNome=e.message;this.senhaBuscaNome='';this.focar('senhaBuscaNome');}
       finally{this.liberandoBuscaNome=false;}
+    },
+    async encerrarBuscaPorNome(){
+      try{await fetch('{% url "pdv:api_checkout_encerrar_busca_nome" %}',{method:'POST',headers:{'X-CSRFToken':this.csrf()}});}catch(e){}
+    },
+    async selecionarProduto(produto){
+      if(!produto.pode_vender){this.adicionarProduto(produto);return;}
+      if(this.buscarPorNome){
+        try{
+          const r=await fetch('{% url "pdv:api_checkout_consumir_busca_nome" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({produto_id:produto.id})});
+          const d=await r.json(); if(!r.ok)throw new Error(d.erro||'Não foi possível confirmar a autorização deste item.');
+        }catch(e){
+          this.buscarPorNome=false; this.buscaNomeLiberada=false; this.resultados=[]; this.indiceProduto=-1; this.erroBusca=e.message; this.modalSenhaBuscaNome=true; this.usuarioAutorizadorId=''; this.senhaBuscaNome=''; this.focar('usuarioAutorizador'); return;
+        }
+        this.buscarPorNome=false; this.buscaNomeLiberada=false;
+      }
+      this.adicionarProduto(produto);
     },
     quantidadeParaProduto(produto){
       const casas=Math.max(0,Number(produto.quantidade_decimais||0));
