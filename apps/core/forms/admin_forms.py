@@ -68,8 +68,8 @@ class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
         widget=forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '0,0'}),
     )
     tamanho_fonte_mensagem_mm = DecimalCalibracaoField(
-        label='Tamanho máximo da fonte',
-        help_text='Se o texto não couber, a fonte é reduzida automaticamente para evitar cortes.',
+        label='Tamanho da fonte',
+        help_text='O tamanho escolhido é aplicado exatamente na prévia e na impressão.',
         min_value=1, max_value=8, decimal_places=2, max_digits=4,
         widget=forms.Select(choices=TAMANHO_FONTE_MENSAGEM_CHOICES),
     )
@@ -108,7 +108,7 @@ class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
             'alta_nitidez': 'Otimizar para alta nitidez',
             'impressora_nome': 'Impressora de etiquetas',
             'texto_rodape': 'Mensagem da empresa',
-            'tamanho_fonte_mensagem_mm': 'Tamanho máximo da fonte',
+            'tamanho_fonte_mensagem_mm': 'Tamanho da fonte',
             'exibir_logo': 'Logo da filial',
             'exibir_nome_empresa': 'Nome da empresa/filial',
             'exibir_nome_cliente': 'Nome do cliente da venda',

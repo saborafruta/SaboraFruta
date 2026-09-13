@@ -16,7 +16,8 @@
   .label-layout-item.is-company { font-size:12px; font-weight:800; }
   .label-layout-item.is-customer { font-size:18px; font-weight:900; }
   .label-layout-item.is-meta { font-size:10px; }
-  .label-layout-item.is-message { font-size:10px; font-weight:700; border-top-color:#d1d5db; }
+  .label-layout-item.is-message { font-size:10px; font-weight:700; border-top-color:#d1d5db; overflow:visible; align-items:flex-end; }
+  .label-layout-item.is-message .message-text { display:block; width:100%; }
   .label-layout-editor.high-sharpness .label-layout-content { filter:contrast(1.16); }
   .label-layout-editor.high-sharpness .label-layout-item { -webkit-font-smoothing:none; text-rendering:geometricPrecision; }
   .label-layout-editor.high-sharpness img { image-rendering:-webkit-optimize-contrast; }
@@ -117,7 +118,7 @@
           <div>
             <label for="{{ form.tamanho_fonte_mensagem_mm.id_for_label }}" class="block text-sm font-semibold mb-2">{{ form.tamanho_fonte_mensagem_mm.label }}</label>
             {{ form.tamanho_fonte_mensagem_mm }}
-            <p class="text-xs text-gray-500 mt-2">{{ form.tamanho_fonte_mensagem_mm.help_text }}</p>
+            <p class="text-xs text-gray-500 mt-2">{{ form.tamanho_fonte_mensagem_mm.help_text }} Tamanhos maiores podem ocupar mais espaço para cima.</p>
             {% if form.tamanho_fonte_mensagem_mm.errors %}<div class="text-sm text-red-500 mt-2">{{ form.tamanho_fonte_mensagem_mm.errors|striptags }}</div>{% endif %}
           </div>
         </div>
@@ -161,7 +162,7 @@
           <div id="preview-customer" data-layout-key="cliente" tabindex="0" class="label-layout-item is-customer" style="left:{{ layout_etiqueta.cliente.x|unlocalize }}%;top:{{ layout_etiqueta.cliente.y|unlocalize }}%;width:{{ layout_etiqueta.cliente.w|unlocalize }}%;height:{{ layout_etiqueta.cliente.h|unlocalize }}%;">Cliente da venda</div>
           <div id="preview-sale" data-layout-key="venda" tabindex="0" class="label-layout-item is-meta" style="left:{{ layout_etiqueta.venda.x|unlocalize }}%;top:{{ layout_etiqueta.venda.y|unlocalize }}%;width:{{ layout_etiqueta.venda.w|unlocalize }}%;height:{{ layout_etiqueta.venda.h|unlocalize }}%;">Venda #000644</div>
           <div id="preview-date" data-layout-key="data" tabindex="0" class="label-layout-item is-meta" style="left:{{ layout_etiqueta.data.x|unlocalize }}%;top:{{ layout_etiqueta.data.y|unlocalize }}%;width:{{ layout_etiqueta.data.w|unlocalize }}%;height:{{ layout_etiqueta.data.h|unlocalize }}%;">12/09/2026 19:11</div>
-          <div id="preview-message" data-layout-key="mensagem" tabindex="0" class="label-layout-item is-message" style="left:{{ layout_etiqueta.mensagem.x|unlocalize }}%;top:{{ layout_etiqueta.mensagem.y|unlocalize }}%;width:{{ layout_etiqueta.mensagem.w|unlocalize }}%;height:{{ layout_etiqueta.mensagem.h|unlocalize }}%;">{{ form.texto_rodape.value|default:'Obrigado pela sua preferência!' }}</div>
+          <div id="preview-message" data-layout-key="mensagem" tabindex="0" class="label-layout-item is-message" style="left:{{ layout_etiqueta.mensagem.x|unlocalize }}%;top:{{ layout_etiqueta.mensagem.y|unlocalize }}%;width:{{ layout_etiqueta.mensagem.w|unlocalize }}%;height:{{ layout_etiqueta.mensagem.h|unlocalize }}%;"><span id="preview-message-text" class="message-text">{{ form.texto_rodape.value|default:'Obrigado pela sua preferência!' }}</span></div>
           </div>
         </div>
       </div>
@@ -252,14 +253,14 @@
         ['preview-company', 3.2, 1.5],
         ['preview-customer', 5, 1.5],
         ['preview-sale', 2.5, 1.2],
-        ['preview-date', 2.5, 1.2],
-        ['preview-message', decimalValue(messageFont, 2.7), 1]
+        ['preview-date', 2.5, 1.2]
       ];
       content.querySelectorAll('.label-layout-item').forEach(element => {
         element.style.padding = (element.dataset.layoutKey === 'logo' ? 1 : 0.5) * pxPerMm + 'px';
       });
       const messageElement = byId('preview-message');
       messageElement.style.borderTopWidth = (0.25 * pxPerMm) + 'px';
+      messageElement.style.fontSize = (decimalValue(messageFont, 2.7) * pxPerMm) + 'px';
       specs.forEach(([id, maximumMm, minimumMm]) => {
         fitPreviewText(byId(id), maximumMm * pxPerMm, minimumMm * pxPerMm);
       });
@@ -280,7 +281,7 @@
       byId('preview-offset-x').textContent = formatOffset(offsetXMm);
       offsetFeedback.textContent = 'Aplicado: ' + formatOffset(offsetXMm);
       byId('preview-size').textContent = w + ' × ' + h + ' mm (proporção real)';
-      byId('preview-message').textContent = message.value || '';
+      byId('preview-message-text').textContent = message.value || '';
       byId('preview-printer').textContent = printer.value || 'Não informada';
       Object.entries(toggles).forEach(([inputId, previewId]) => {
         byId(previewId).style.display = byId(inputId).checked ? '' : 'none';
