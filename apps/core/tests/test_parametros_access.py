@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from django.contrib.auth.hashers import check_password
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
 from django.test import RequestFactory, TestCase
@@ -124,34 +123,6 @@ class ParametrosSistemaAccessTests(TestCase):
             'token-principal-secreto',
         )
         self.assertEqual(params_post.cleaned_data['nfce_csc_token'], 'csc-secreto')
-
-    def test_formulario_grava_hash_e_preserva_senha_da_busca_por_nome(self):
-        params = ParametrosSistema.objects.create(filial=self.filial)
-        form_base = ParametrosSistemaForm(instance=params)
-        dados = {
-            field: form_base.initial.get(field, '')
-            for field in form_base.fields
-            if field != 'certificado_digital'
-        }
-        dados['checkout_busca_nome_senha'] = 'Senha-Checkout-42'
-        form = ParametrosSistemaForm(dados, instance=params)
-
-        self.assertTrue(form.is_valid(), form.errors)
-        salvo = form.save()
-        self.assertNotEqual(salvo.checkout_busca_nome_senha_hash, 'Senha-Checkout-42')
-        self.assertTrue(check_password('Senha-Checkout-42', salvo.checkout_busca_nome_senha_hash))
-        self.assertNotIn('Senha-Checkout-42', ParametrosSistemaForm(instance=salvo).as_p())
-
-        dados['checkout_busca_nome_senha'] = ''
-        form_sem_nova_senha = ParametrosSistemaForm(dados, instance=salvo)
-        self.assertTrue(form_sem_nova_senha.is_valid(), form_sem_nova_senha.errors)
-        preservado = form_sem_nova_senha.save()
-        self.assertTrue(check_password('Senha-Checkout-42', preservado.checkout_busca_nome_senha_hash))
-
-        dados['remover_checkout_busca_nome_senha'] = 'on'
-        form_remocao = ParametrosSistemaForm(dados, instance=preservado)
-        self.assertTrue(form_remocao.is_valid(), form_remocao.errors)
-        self.assertEqual(form_remocao.save().checkout_busca_nome_senha_hash, '')
 
     @patch('apps.fiscal.integrations.focusnfe.FocusNFeClient')
     @patch('apps.fiscal.integrations.focusnfe.config.FocusNFeConfig.from_env')

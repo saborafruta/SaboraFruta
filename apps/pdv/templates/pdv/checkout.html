@@ -129,11 +129,7 @@
         </div>
         <div class="co-mode">
           <span x-text="buscarPorNome ? 'Busca por nome autorizada' : 'Busca restrita a códigos'"></span>
-          {% if busca_nome_configurada %}
           <label><input type="checkbox" :checked="buscarPorNome" @change="solicitarBuscaPorNome($event)"> Permitir nome</label>
-          {% else %}
-          <span>Busca por nome não configurada</span>
-          {% endif %}
         </div>
         <div class="co-results" x-ref="resultadosProduto" x-show="resultados.length" x-cloak role="listbox">
           <template x-for="produto in resultados" :key="produto.id">
@@ -259,11 +255,17 @@
 
   <div class="co-backdrop" x-show="modalSenhaBuscaNome" x-cloak @click.self="fecharSenhaBuscaNome()">
     <form class="co-modal" @submit.prevent="liberarBuscaPorNome()" role="dialog" aria-modal="true" aria-labelledby="checkout-senha-busca-titulo">
-      <h3 id="checkout-senha-busca-titulo">Liberar busca por nome</h3>
-      <p class="co-sub">Informe a senha definida pelo administrador nos parâmetros desta filial.</p>
-      <div class="co-field" style="margin-top:14px">
-        <label for="checkout-senha-busca">Senha de liberação</label>
-        <input id="checkout-senha-busca" x-ref="senhaBuscaNome" class="co-input" type="password" x-model="senhaBuscaNome" autocomplete="current-password">
+      <h3 id="checkout-senha-busca-titulo">Autorizar busca por nome</h3>
+      <p class="co-sub">Informe as credenciais de um usuário com a permissão Aprovar no módulo PDV desta filial.</p>
+      <div class="co-grid">
+        <div class="co-field" style="grid-column:1/-1">
+          <label for="checkout-usuario-autorizador">Usuário (e-mail)</label>
+          <input id="checkout-usuario-autorizador" x-ref="usuarioAutorizador" class="co-input" type="email" x-model="usuarioBuscaNome" autocomplete="username">
+        </div>
+        <div class="co-field" style="grid-column:1/-1">
+          <label for="checkout-senha-busca">Senha</label>
+          <input id="checkout-senha-busca" x-ref="senhaBuscaNome" class="co-input" type="password" x-model="senhaBuscaNome" autocomplete="current-password">
+        </div>
       </div>
       <div class="co-alert" x-show="erroSenhaBuscaNome" x-text="erroSenhaBuscaNome" x-cloak style="margin-top:12px"></div>
       <div class="co-modal-actions">
@@ -327,7 +329,7 @@ function checkoutVenda() {
   return {
     caixas: JSON.parse(document.getElementById('checkout-caixas').textContent), sessao:null, carregando:true,
     busca:'', quantidadeEntrada:'1', buscarPorNome:{% if busca_nome_liberada %}true{% else %}false{% endif %}, buscando:false, resultados:[], indiceProduto:-1, erroBusca:'', itens:[],
-    buscaNomeLiberada:{% if busca_nome_liberada %}true{% else %}false{% endif %}, modalSenhaBuscaNome:false, senhaBuscaNome:'', erroSenhaBuscaNome:'', liberandoBuscaNome:false,
+    buscaNomeLiberada:{% if busca_nome_liberada %}true{% else %}false{% endif %}, modalSenhaBuscaNome:false, usuarioBuscaNome:'', senhaBuscaNome:'', erroSenhaBuscaNome:'', liberandoBuscaNome:false,
     formasPagamento:[], formaPagamentoId:null, bandeiraPagamento:'', parcelasPagamento:1, cliente:null, buscaCliente:'', clientes:[], indiceCliente:-1,
     descontoEntrada:'', valorPagamentoEntrada:'', valorPagamentoManual:false, mensagem:'', sucesso:false, finalizando:false,
     modalCliente:false, novoCliente:{razao_social:'',cpf_cnpj:'',celular:'',email:'',tipo_pessoa:'F'}, erroCliente:'', salvandoCliente:false,
@@ -404,7 +406,7 @@ function checkoutVenda() {
         const r=await fetch('{% url "pdv:api_checkout_produtos" %}?'+p); const d=await r.json();
         if(!r.ok){
           if(r.status===403 && this.buscarPorNome){
-            this.buscarPorNome=false; this.buscaNomeLiberada=false; this.modalSenhaBuscaNome=true; this.focar('senhaBuscaNome');
+            this.buscarPorNome=false; this.buscaNomeLiberada=false; this.modalSenhaBuscaNome=true; this.focar('usuarioAutorizador');
           }
           throw new Error(d.erro||'Produto não encontrado.');
         }
@@ -426,16 +428,17 @@ function checkoutVenda() {
     solicitarBuscaPorNome(evento){
       if(!evento.target.checked){ this.buscarPorNome=false; this.resultados=[]; this.indiceProduto=-1; return; }
       if(this.buscaNomeLiberada){ this.buscarPorNome=true; return; }
-      evento.target.checked=false; this.modalSenhaBuscaNome=true; this.senhaBuscaNome=''; this.erroSenhaBuscaNome=''; this.focar('senhaBuscaNome');
+      evento.target.checked=false; this.modalSenhaBuscaNome=true; this.usuarioBuscaNome=''; this.senhaBuscaNome=''; this.erroSenhaBuscaNome=''; this.focar('usuarioAutorizador');
     },
-    fecharSenhaBuscaNome(){ this.modalSenhaBuscaNome=false; this.senhaBuscaNome=''; this.erroSenhaBuscaNome=''; this.focarProduto(); },
+    fecharSenhaBuscaNome(){ this.modalSenhaBuscaNome=false; this.usuarioBuscaNome=''; this.senhaBuscaNome=''; this.erroSenhaBuscaNome=''; this.focarProduto(); },
     async liberarBuscaPorNome(){
-      if(!this.senhaBuscaNome){this.erroSenhaBuscaNome='Informe a senha de liberação.';this.focar('senhaBuscaNome');return;}
+      if(!this.usuarioBuscaNome.trim()){this.erroSenhaBuscaNome='Informe o usuário autorizador.';this.focar('usuarioAutorizador');return;}
+      if(!this.senhaBuscaNome){this.erroSenhaBuscaNome='Informe a senha do usuário autorizador.';this.focar('senhaBuscaNome');return;}
       this.liberandoBuscaNome=true; this.erroSenhaBuscaNome='';
       try{
-        const r=await fetch('{% url "pdv:api_checkout_liberar_busca_nome" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({senha:this.senhaBuscaNome})});
+        const r=await fetch('{% url "pdv:api_checkout_liberar_busca_nome" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({usuario:this.usuarioBuscaNome,senha:this.senhaBuscaNome})});
         const d=await r.json(); if(!r.ok)throw new Error(d.erro||'Não foi possível liberar a busca por nome.');
-        this.buscaNomeLiberada=true; this.buscarPorNome=true; this.modalSenhaBuscaNome=false; this.senhaBuscaNome=''; this.focarProduto();
+        this.buscaNomeLiberada=true; this.buscarPorNome=true; this.modalSenhaBuscaNome=false; this.usuarioBuscaNome=''; this.senhaBuscaNome=''; this.focarProduto();
       }catch(e){this.erroSenhaBuscaNome=e.message;this.senhaBuscaNome='';this.focar('senhaBuscaNome');}
       finally{this.liberandoBuscaNome=false;}
     },

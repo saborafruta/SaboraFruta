@@ -4,7 +4,6 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest import skipUnless
 
-from django.contrib.auth.hashers import make_password
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -14,14 +13,10 @@ from apps.core.models import (
     Filial,
     ParametrosSistema,
     PerfilAcesso,
+    Permissao,
     Usuario,
 )
-from apps.core.services.checkout import (
-    autorizar_checkout_busca_nome,
-    checkout_busca_nome_liberada,
-    checkout_venda_ativo,
-    validar_senha_checkout_busca_nome,
-)
+from apps.core.services.checkout import checkout_venda_ativo
 from apps.produtos.models import (
     Produto,
     ProdutoCodigoBarras,
@@ -58,7 +53,12 @@ class CheckoutVendaTests(TestCase):
         cls.perfil = PerfilAcesso.objects.create(
             empresa=cls.empresa,
             nome='Operador Checkout',
-            is_admin=True,
+            is_admin=False,
+        )
+        Permissao.objects.create(
+            perfil=cls.perfil,
+            modulo=Permissao.Modulo.PDV,
+            pode_ver=True,
         )
         cls.usuario = Usuario.objects.create_user(
             email='checkout@inoovated.com',
@@ -67,6 +67,25 @@ class CheckoutVendaTests(TestCase):
             empresa=cls.empresa,
             filial=cls.filial,
             perfil=cls.perfil,
+        )
+        cls.perfil_supervisor = PerfilAcesso.objects.create(
+            empresa=cls.empresa,
+            nome='Supervisor Checkout',
+            is_admin=False,
+        )
+        cls.permissao_supervisor = Permissao.objects.create(
+            perfil=cls.perfil_supervisor,
+            modulo=Permissao.Modulo.PDV,
+            pode_ver=True,
+            pode_aprovar=True,
+        )
+        cls.supervisor = Usuario.objects.create_user(
+            email='supervisor-checkout@inoovated.com',
+            nome='Supervisor Checkout',
+            password='Senha-Supervisor-42',
+            empresa=cls.empresa,
+            filial=cls.filial,
+            perfil=cls.perfil_supervisor,
         )
         cls.unidade = UnidadeMedida.objects.create(
             empresa=cls.empresa,
@@ -118,10 +137,6 @@ class CheckoutVendaTests(TestCase):
         self.parametros.checkout_venda_ativo = True
         self.parametros.save(update_fields=['checkout_venda_ativo'])
 
-    def configurar_senha_busca_nome(self, senha='Senha-Checkout-42'):
-        self.parametros.checkout_busca_nome_senha_hash = make_password(senha)
-        self.parametros.save(update_fields=['checkout_busca_nome_senha_hash'])
-
     def buscar(self, termo, **params):
         dados = {'q': termo, **params}
         return self.client.get(reverse('pdv:api_checkout_produtos'), dados)
@@ -155,28 +170,6 @@ class CheckoutVendaTests(TestCase):
         )
 
         self.assertTrue(checkout_venda_ativo(request))
-
-    @override_settings(TENANT_DATABASE_ROUTING_ENABLED=True)
-    def test_multibanco_valida_senha_na_filial_correta_do_banco_gerencial(self):
-        self.habilitar_checkout()
-        self.configurar_senha_busca_nome()
-        banco = EmpresaBanco.objects.create(
-            empresa=self.empresa,
-            slug='empresa-checkout-senha-82345678000191',
-            db_alias='empresa_checkout_senha_82345678000191',
-            database_url_env_var='TENANT_DATABASE_URL_EMPRESA_CHECKOUT_SENHA',
-            ativo=True,
-            status=EmpresaBanco.Status.ATIVO,
-        )
-        request = SimpleNamespace(
-            tenant_db_alias=banco.db_alias,
-            filial_ativa=SimpleNamespace(cnpj=self.filial.cnpj),
-            session={},
-        )
-
-        self.assertTrue(validar_senha_checkout_busca_nome(request, 'Senha-Checkout-42'))
-        autorizar_checkout_busca_nome(request)
-        self.assertTrue(checkout_busca_nome_liberada(request))
 
     def test_flag_da_filial_exibe_menu_e_libera_tela(self):
         self.habilitar_checkout()
@@ -392,37 +385,43 @@ assert.deepEqual(acoes, [
         self.assertEqual(self.buscar('CAF').json()['produtos'], [])
         self.assertEqual(self.buscar('SOMENTE-OUTRA-FILIAL').json()['produtos'], [])
 
-    def test_busca_por_nome_exige_senha_configurada_e_autorizacao_no_servidor(self):
+    def test_busca_por_nome_aparece_para_operador_sem_aprovacao_mas_exige_autorizacao(self):
         self.habilitar_checkout()
         resposta = self.buscar('Especial Checkout', por_nome='1')
-        tela_sem_senha = self.client.get(reverse('pdv:checkout'))
+        tela = self.client.get(reverse('pdv:checkout'))
 
         self.assertEqual(resposta.status_code, 403)
-        self.assertContains(tela_sem_senha, 'Busca por nome não configurada')
-
-        self.configurar_senha_busca_nome()
-        tela_com_senha = self.client.get(reverse('pdv:checkout'))
-        self.assertContains(tela_com_senha, 'Permitir nome')
-        self.assertContains(tela_com_senha, 'Liberar busca por nome')
-        self.assertNotContains(tela_com_senha, self.parametros.checkout_busca_nome_senha_hash)
+        self.assertFalse(self.usuario.tem_permissao('pdv', 'aprovar'))
+        self.assertContains(tela, 'Permitir nome')
+        self.assertContains(tela, 'Autorizar busca por nome')
+        self.assertContains(tela, 'Usuário (e-mail)')
         self.assertEqual(self.buscar('Especial Checkout', por_nome='1').status_code, 403)
 
-    def test_senha_invalida_nao_libera_e_senha_correta_libera_busca_por_nome(self):
+    def test_credenciais_sem_permissao_nao_liberam_busca_por_nome(self):
         self.habilitar_checkout()
-        self.configurar_senha_busca_nome()
         endpoint = reverse('pdv:api_checkout_liberar_busca_nome')
 
-        invalida = self.client.post(
+        resposta = self.client.post(
             endpoint,
-            data='{"senha":"incorreta"}',
+            data=(
+                '{"usuario":"checkout@inoovated.com",'
+                '"senha":"teste1234"}'
+            ),
             content_type='application/json',
         )
-        self.assertEqual(invalida.status_code, 403)
+        self.assertEqual(resposta.status_code, 403)
         self.assertEqual(self.buscar('Especial Checkout', por_nome='1').status_code, 403)
+
+    def test_supervisor_com_credenciais_e_aprovacao_libera_busca_por_nome(self):
+        self.habilitar_checkout()
+        endpoint = reverse('pdv:api_checkout_liberar_busca_nome')
 
         liberacao = self.client.post(
             endpoint,
-            data='{"senha":"Senha-Checkout-42"}',
+            data=(
+                '{"usuario":"supervisor-checkout@inoovated.com",'
+                '"senha":"Senha-Supervisor-42"}'
+            ),
             content_type='application/json',
         )
         self.assertEqual(liberacao.status_code, 200, liberacao.content)
@@ -439,35 +438,43 @@ assert.deepEqual(acoes, [
 
     def test_tentativas_repetidas_de_senha_sao_limitadas(self):
         self.habilitar_checkout()
-        self.configurar_senha_busca_nome()
         endpoint = reverse('pdv:api_checkout_liberar_busca_nome')
 
         for _ in range(5):
             resposta = self.client.post(
                 endpoint,
-                data='{"senha":"incorreta"}',
+                data=(
+                    '{"usuario":"supervisor-checkout@inoovated.com",'
+                    '"senha":"incorreta"}'
+                ),
                 content_type='application/json',
             )
             self.assertEqual(resposta.status_code, 403)
 
         bloqueada = self.client.post(
             endpoint,
-            data='{"senha":"Senha-Checkout-42"}',
+            data=(
+                '{"usuario":"supervisor-checkout@inoovated.com",'
+                '"senha":"Senha-Supervisor-42"}'
+            ),
             content_type='application/json',
         )
         self.assertEqual(bloqueada.status_code, 429)
 
-    def test_troca_da_senha_invalida_autorizacao_anterior(self):
+    def test_retirar_permissao_do_supervisor_invalida_autorizacao_anterior(self):
         self.habilitar_checkout()
-        self.configurar_senha_busca_nome()
         endpoint = reverse('pdv:api_checkout_liberar_busca_nome')
         self.client.post(
             endpoint,
-            data='{"senha":"Senha-Checkout-42"}',
+            data=(
+                '{"usuario":"supervisor-checkout@inoovated.com",'
+                '"senha":"Senha-Supervisor-42"}'
+            ),
             content_type='application/json',
         )
         self.assertEqual(self.buscar('Especial Checkout', por_nome='1').status_code, 200)
 
-        self.configurar_senha_busca_nome('Outra-Senha-99')
+        self.permissao_supervisor.pode_aprovar = False
+        self.permissao_supervisor.save(update_fields=['pode_aprovar'])
 
         self.assertEqual(self.buscar('Especial Checkout', por_nome='1').status_code, 403)
