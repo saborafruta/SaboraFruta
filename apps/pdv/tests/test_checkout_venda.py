@@ -169,6 +169,10 @@ class CheckoutVendaTests(TestCase):
         self.assertContains(resposta, '<kbd>F10</kbd>Finalizar', html=True)
         self.assertContains(resposta, 'quantidadeParaProduto(produto)')
         self.assertNotContains(resposta, 'class="co-payment-grid"')
+        self.assertContains(resposta, 'Venda finalizada!')
+        self.assertContains(resposta, 'Imprimir comprovante')
+        self.assertContains(resposta, "emitirFiscal('nfce')")
+        self.assertContains(resposta, '/pdv/venda/0/comprovante/')
 
     @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do checkout')
     def test_javascript_renderizado_tem_sintaxe_valida(self):

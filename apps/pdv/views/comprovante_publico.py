@@ -65,6 +65,7 @@ def visualizar_interno(request, pk):
     return privado(render(request, 'pdv/comprovante_publico.html', {
         'cupom': dados_comprovante(venda),
         'pdf_url': reverse('pdv:comprovante_venda_pdf', args=[venda.pk]),
+        'auto_print': request.GET.get('auto') == '1',
     }))
 
 
