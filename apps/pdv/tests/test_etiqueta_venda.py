@@ -66,7 +66,7 @@ class EtiquetaVendaTests(SimpleTestCase):
             filial_id=1,
             ativa=True,
             largura_mm=Decimal('60.00'),
-            altura_mm=Decimal('40.00'),
+            altura_mm=Decimal('30.00'),
             impressora_nome='Zebra ZD220',
             texto_rodape='Volte sempre!',
             margem_interna_mm=Decimal('1.50'),
@@ -82,11 +82,11 @@ class EtiquetaVendaTests(SimpleTestCase):
             'logo_url': '/media/logo.png',
             'cliente_nome': 'Cliente Teste',
             'venda': venda,
-            'auto_print': False,
+            'auto_print': True,
             'layout_etiqueta': config.layout_normalizado(),
         })
 
-        self.assertIn('@page { size: 60.00mm 40.00mm; margin: 0; }', html)
+        self.assertIn('@page { size: 60.00mm 30.00mm; margin: 0; }', html)
         self.assertIn('Cliente Teste', html)
         self.assertIn('Venda #000644', html)
         self.assertIn('Volte sempre!', html)
@@ -96,6 +96,12 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertIn('--safe-margin: 1.50mm', html)
         self.assertIn('--offset-x: -1.00mm', html)
         self.assertIn('label high-sharpness', html)
+        self.assertEqual(html.count(' data-fit-text '), 5)
+        self.assertIn("window.addEventListener('beforeprint', window.fitLabelText)", html)
+        self.assertIn('window.printLabel = function ()', html)
+        self.assertIn('window.setTimeout(() => window.printLabel(), 180)', html)
+        self.assertIn('range.getBoundingClientRect()', html)
+        self.assertIn('height: var(--label-height) !important', html)
 
     def test_layout_padrao_e_seguro_e_pode_ser_reposicionado(self):
         config = ConfiguracaoEtiquetaVenda(
@@ -140,3 +146,5 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertNotIn('offset-left-2', editor)
         self.assertNotIn('data-horizontal-offset=', editor)
         self.assertIn("return '−' + magnitude + ' mm · esquerda'", editor)
+        self.assertIn('function scaleAndFitPreview(w)', editor)
+        self.assertIn('fitPreviewText(byId(id)', editor)

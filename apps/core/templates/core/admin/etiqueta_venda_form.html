@@ -213,6 +213,48 @@
       if (value > 0) return '+' + magnitude + ' mm · direita';
       return '0 mm · centralizado';
     }
+    function textFits(element) {
+      const style = window.getComputedStyle(element);
+      const availableWidth = element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      const availableHeight = element.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const textRect = range.getBoundingClientRect();
+      range.detach();
+      return textRect.width <= availableWidth + 0.5 && textRect.height <= availableHeight + 0.5;
+    }
+    function fitPreviewText(element, maximum, minimum) {
+      if (!element || element.style.display === 'none') return;
+      element.style.fontSize = maximum + 'px';
+      if (textFits(element)) return;
+      let lower = Math.min(minimum, maximum);
+      let upper = maximum;
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const candidate = (lower + upper) / 2;
+        element.style.fontSize = candidate + 'px';
+        if (textFits(element)) lower = candidate;
+        else upper = candidate;
+      }
+      element.style.fontSize = lower + 'px';
+    }
+    function scaleAndFitPreview(w) {
+      const pxPerMm = preview.clientWidth / w;
+      const specs = [
+        ['preview-company', 3.2, 1.5],
+        ['preview-customer', 5, 1.5],
+        ['preview-sale', 2.5, 1.2],
+        ['preview-date', 2.5, 1.2],
+        ['preview-message', 2.7, 1.2]
+      ];
+      content.querySelectorAll('.label-layout-item').forEach(element => {
+        element.style.padding = (element.dataset.layoutKey === 'logo' ? 1 : 0.5) * pxPerMm + 'px';
+      });
+      const messageElement = byId('preview-message');
+      messageElement.style.borderTopWidth = (0.25 * pxPerMm) + 'px';
+      specs.forEach(([id, maximumMm, minimumMm]) => {
+        fitPreviewText(byId(id), maximumMm * pxPerMm, minimumMm * pxPerMm);
+      });
+    }
     function refresh() {
       const w = numberValue(width, 60);
       const h = numberValue(height, 40);
@@ -234,6 +276,7 @@
       Object.entries(toggles).forEach(([inputId, previewId]) => {
         byId(previewId).style.display = byId(inputId).checked ? '' : 'none';
       });
+      scaleAndFitPreview(w);
     }
     function persistLayout() {
       layoutInput.value = JSON.stringify(layout);

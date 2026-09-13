@@ -51,10 +51,21 @@
     }
     @page { size: {{ config.largura_mm|unlocalize }}mm {{ config.altura_mm|unlocalize }}mm; margin: 0; }
     @media print {
-      html, body { width: var(--label-width); height: var(--label-height); background: white; }
+      html, body {
+        width: var(--label-width) !important; height: var(--label-height) !important;
+        min-width: var(--label-width) !important; min-height: var(--label-height) !important;
+        margin: 0 !important; padding: 0 !important; overflow: hidden !important; background: white;
+      }
       .no-print { display: none !important; }
-      .canvas { display: block; min-height: 0; padding: 0; }
-      .label { border: 0; box-shadow: none; }
+      .canvas {
+        display: block !important; width: var(--label-width) !important;
+        height: var(--label-height) !important; min-height: 0 !important;
+        margin: 0 !important; padding: 0 !important; overflow: hidden !important;
+      }
+      .label {
+        width: var(--label-width) !important; height: var(--label-height) !important;
+        margin: 0 !important; border: 0 !important; box-shadow: none !important;
+      }
     }
   </style>
 </head>
@@ -63,7 +74,7 @@
     <div class="toolbar no-print">
       <span>Tamanho: <strong>{{ config.largura_mm }} × {{ config.altura_mm }} mm</strong></span>
       <span>Impressora: <strong>{{ config.impressora_nome|default:"não informada" }}</strong></span>
-      <button type="button" onclick="window.print()">Imprimir etiqueta</button>
+      <button type="button" onclick="window.printLabel()">Imprimir etiqueta</button>
       <span class="warning">Confirme a impressora e use escala 100% / tamanho real.</span>
     </div>
     <main class="canvas">
@@ -75,14 +86,14 @@
           </div>
         {% endif %}
         {% if config.exibir_nome_empresa %}
-          <div class="element company" style="left:{{ layout_etiqueta.empresa.x|unlocalize }}%;top:{{ layout_etiqueta.empresa.y|unlocalize }}%;width:{{ layout_etiqueta.empresa.w|unlocalize }}%;height:{{ layout_etiqueta.empresa.h|unlocalize }}%;">{{ filial_identidade.nome_fantasia|default:filial_identidade.razao_social }}</div>
+          <div class="element company" data-fit-text data-min-font-mm="1.5" style="left:{{ layout_etiqueta.empresa.x|unlocalize }}%;top:{{ layout_etiqueta.empresa.y|unlocalize }}%;width:{{ layout_etiqueta.empresa.w|unlocalize }}%;height:{{ layout_etiqueta.empresa.h|unlocalize }}%;">{{ filial_identidade.nome_fantasia|default:filial_identidade.razao_social }}</div>
         {% endif %}
         {% if config.exibir_nome_cliente %}
-          <div class="element customer" style="left:{{ layout_etiqueta.cliente.x|unlocalize }}%;top:{{ layout_etiqueta.cliente.y|unlocalize }}%;width:{{ layout_etiqueta.cliente.w|unlocalize }}%;height:{{ layout_etiqueta.cliente.h|unlocalize }}%;">{{ cliente_nome }}</div>
+          <div class="element customer" data-fit-text data-min-font-mm="1.5" style="left:{{ layout_etiqueta.cliente.x|unlocalize }}%;top:{{ layout_etiqueta.cliente.y|unlocalize }}%;width:{{ layout_etiqueta.cliente.w|unlocalize }}%;height:{{ layout_etiqueta.cliente.h|unlocalize }}%;">{{ cliente_nome }}</div>
         {% endif %}
-        {% if config.exibir_numero_venda %}<div class="element sale-meta" style="left:{{ layout_etiqueta.venda.x|unlocalize }}%;top:{{ layout_etiqueta.venda.y|unlocalize }}%;width:{{ layout_etiqueta.venda.w|unlocalize }}%;height:{{ layout_etiqueta.venda.h|unlocalize }}%;">Venda #{{ venda.numero_venda|stringformat:"06d" }}</div>{% endif %}
-        {% if config.exibir_data_venda %}<div class="element sale-meta" style="left:{{ layout_etiqueta.data.x|unlocalize }}%;top:{{ layout_etiqueta.data.y|unlocalize }}%;width:{{ layout_etiqueta.data.w|unlocalize }}%;height:{{ layout_etiqueta.data.h|unlocalize }}%;">{{ venda.data_venda|date:"d/m/Y H:i" }}</div>{% endif %}
-        {% if config.texto_rodape %}<div class="element message" style="left:{{ layout_etiqueta.mensagem.x|unlocalize }}%;top:{{ layout_etiqueta.mensagem.y|unlocalize }}%;width:{{ layout_etiqueta.mensagem.w|unlocalize }}%;height:{{ layout_etiqueta.mensagem.h|unlocalize }}%;">{{ config.texto_rodape }}</div>{% endif %}
+        {% if config.exibir_numero_venda %}<div class="element sale-meta" data-fit-text data-min-font-mm="1.2" style="left:{{ layout_etiqueta.venda.x|unlocalize }}%;top:{{ layout_etiqueta.venda.y|unlocalize }}%;width:{{ layout_etiqueta.venda.w|unlocalize }}%;height:{{ layout_etiqueta.venda.h|unlocalize }}%;">Venda #{{ venda.numero_venda|stringformat:"06d" }}</div>{% endif %}
+        {% if config.exibir_data_venda %}<div class="element sale-meta" data-fit-text data-min-font-mm="1.2" style="left:{{ layout_etiqueta.data.x|unlocalize }}%;top:{{ layout_etiqueta.data.y|unlocalize }}%;width:{{ layout_etiqueta.data.w|unlocalize }}%;height:{{ layout_etiqueta.data.h|unlocalize }}%;">{{ venda.data_venda|date:"d/m/Y H:i" }}</div>{% endif %}
+        {% if config.texto_rodape %}<div class="element message" data-fit-text data-min-font-mm="1.2" style="left:{{ layout_etiqueta.mensagem.x|unlocalize }}%;top:{{ layout_etiqueta.mensagem.y|unlocalize }}%;width:{{ layout_etiqueta.mensagem.w|unlocalize }}%;height:{{ layout_etiqueta.mensagem.h|unlocalize }}%;">{{ config.texto_rodape }}</div>{% endif %}
         </div>
       </section>
     </main>
@@ -95,6 +106,52 @@
       </section>
     </main>
   {% endif %}
+  <script>
+    (function () {
+      const PX_PER_MM = 96 / 25.4;
+
+      function textFits(element) {
+        const style = window.getComputedStyle(element);
+        const availableWidth = element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        const availableHeight = element.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const textRect = range.getBoundingClientRect();
+        range.detach();
+        return textRect.width <= availableWidth + 0.5 && textRect.height <= availableHeight + 0.5;
+      }
+
+      function fitText(element) {
+        if (!element.offsetParent) return;
+        const computedSize = parseFloat(window.getComputedStyle(element).fontSize);
+        const maximum = Number(element.dataset.baseFontPx || computedSize);
+        const minimum = Number(element.dataset.minFontMm || 1.2) * PX_PER_MM;
+        element.dataset.baseFontPx = String(maximum);
+        element.style.fontSize = maximum + 'px';
+        if (textFits(element)) return;
+
+        let lower = Math.min(minimum, maximum);
+        let upper = maximum;
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+          const candidate = (lower + upper) / 2;
+          element.style.fontSize = candidate + 'px';
+          if (textFits(element)) lower = candidate;
+          else upper = candidate;
+        }
+        element.style.fontSize = lower + 'px';
+      }
+
+      window.fitLabelText = function () {
+        document.querySelectorAll('[data-fit-text]').forEach(fitText);
+      };
+      window.printLabel = function () {
+        window.fitLabelText();
+        window.requestAnimationFrame(() => window.print());
+      };
+      window.addEventListener('load', window.fitLabelText);
+      window.addEventListener('beforeprint', window.fitLabelText);
+    }());
+  </script>
   {% if auto_print %}
     <script>
       window.addEventListener('load', function () {
@@ -103,7 +160,7 @@
         const printNow = () => {
           if (printStarted) return;
           printStarted = true;
-          window.setTimeout(() => window.print(), 180);
+          window.setTimeout(() => window.printLabel(), 180);
         };
         if (logo && !logo.complete) {
           logo.addEventListener('load', printNow, {once: true});
