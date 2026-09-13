@@ -1,6 +1,7 @@
 """Tela, historico e resultado da analise inteligente de compras."""
 import json
 from collections import OrderedDict
+from datetime import date
 from decimal import Decimal
 
 from django.contrib import messages
@@ -147,12 +148,37 @@ class CotacaoCompraDetailView(PermissaoRequiredMixin, View):
                 linha['melhor'] = posicao == 1
             economia_segunda = linhas[1]['custo_efetivo'] - linhas[0]['custo_efetivo'] if len(linhas) > 1 else Decimal('0')
             economia_unidade = economia_segunda / item.quantidade if item.quantidade else Decimal('0')
+            melhor_custo_unitario = linhas[0]['custo_efetivo'] / item.quantidade if item.quantidade else Decimal('0')
+            ultima_compra = dict(item.ultima_compra_snapshot or {})
+            variacao_percentual = None
+            variacao_tipo = ''
+            if ultima_compra:
+                try:
+                    ultima_compra['data_compra'] = date.fromisoformat(ultima_compra['data_compra'])
+                    ultimo_custo = Decimal(ultima_compra['custo_unitario'])
+                except (KeyError, TypeError, ValueError):
+                    ultima_compra = {}
+                else:
+                    if ultimo_custo > 0:
+                        variacao_percentual = (
+                            (melhor_custo_unitario - ultimo_custo) / ultimo_custo
+                        ) * Decimal('100')
+                        variacao_tipo = (
+                            'menor' if variacao_percentual < 0
+                            else 'maior' if variacao_percentual > 0
+                            else 'igual'
+                        )
             rankings.append({
                 'item': item,
                 'linhas': linhas,
                 'melhor': linhas[0],
                 'economia_segunda': economia_segunda,
                 'economia_unidade': economia_unidade,
+                'melhor_custo_unitario': melhor_custo_unitario,
+                'ultima_compra': ultima_compra,
+                'variacao_percentual': variacao_percentual,
+                'variacao_percentual_abs': abs(variacao_percentual) if variacao_percentual is not None else None,
+                'variacao_tipo': variacao_tipo,
             })
 
         grupos = OrderedDict()

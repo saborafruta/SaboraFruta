@@ -104,6 +104,11 @@ class CotacaoCompraItem(TimestampedModel):
     produto_codigo = models.CharField(max_length=30, blank=True)
     produto_ncm = models.CharField(max_length=8, blank=True)
     produto_fiscal_snapshot = models.JSONField(default=dict, blank=True)
+    ultima_compra_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Ultima compra efetivada conhecida no momento da analise.',
+    )
     quantidade = models.DecimalField(max_digits=14, decimal_places=3)
     unidade_sigla = models.CharField(max_length=12, blank=True)
 

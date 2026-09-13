@@ -8,7 +8,7 @@ from apps.cadastros.models import Fornecedor
 from apps.cadastros.services.replicacao_service import ReplicacaoCadastrosService
 from apps.compras.models import (
     CalculoTributarioCompra, CotacaoCompra, CotacaoCompraFornecedor,
-    CotacaoCompraItem, CotacaoCompraPreco,
+    CotacaoCompraItem, CotacaoCompraPreco, EntradaNF, ItemEntradaNF,
 )
 from apps.compras.services.purchase_tax_service import PurchaseTaxService
 from apps.core.constants.tributacao import regime_ibs_cbs_padrao
@@ -75,6 +75,12 @@ class CotacaoCompraService:
         if len(produtos) != len(produtos_ids):
             raise DadosInvalidosError('Um dos produtos nao pertence a filial ativa.')
 
+        ultimas_compras = cls._ultimas_compras(
+            filial=filial,
+            produtos_ids=produtos_ids,
+            data_referencia=data_referencia,
+        )
+
         cotacao = CotacaoCompra.objects.create(
             filial=filial,
             numero=f'ACI-{timezone.localtime():%Y%m%d%H%M%S%f}',
@@ -105,6 +111,7 @@ class CotacaoCompraService:
                 produto_descricao=produto.descricao,
                 produto_codigo=produto.codigo,
                 produto_ncm=produto.ncm,
+                ultima_compra_snapshot=ultimas_compras.get(produto.pk, {}),
                 quantidade=quantidade,
                 unidade_sigla=getattr(produto.unidade_medida, 'sigla', '') or '',
                 produto_fiscal_snapshot={
@@ -248,6 +255,43 @@ class CotacaoCompraService:
             'economia_estimada', 'fornecedor_base_nome', 'updated_at',
         ])
         return cotacao
+
+    @staticmethod
+    def _ultimas_compras(*, filial, produtos_ids, data_referencia):
+        """Retorna um snapshot da ultima entrada efetivada de cada produto."""
+        itens_entrada = (
+            ItemEntradaNF.objects
+            .filter(
+                entrada__filial=filial,
+                entrada__status=EntradaNF.Status.EFETIVADA,
+                entrada__data_emissao_nf__lte=data_referencia,
+                produto_id__in=produtos_ids,
+            )
+            .select_related('entrada__fornecedor')
+            .order_by(
+                'produto_id',
+                '-entrada__data_emissao_nf',
+                '-entrada__data_entrada',
+                '-pk',
+            )
+        )
+        snapshots = {}
+        for item in itens_entrada:
+            if item.produto_id in snapshots:
+                continue
+            custo_unitario = item.custo_unitario_total or item.valor_unitario
+            snapshots[item.produto_id] = {
+                'entrada_id': item.entrada_id,
+                'numero_nf': item.entrada.numero_nf,
+                'serie_nf': item.entrada.serie_nf,
+                'data_compra': item.entrada.data_emissao_nf.isoformat(),
+                'data_entrada': item.entrada.data_entrada.isoformat(),
+                'fornecedor_id': item.entrada.fornecedor_id,
+                'fornecedor_nome': str(item.entrada.fornecedor),
+                'custo_unitario': str(custo_unitario),
+                'valor_unitario_nf': str(item.valor_unitario),
+            }
+        return snapshots
 
     @staticmethod
     def _resolver_fornecedor(filial, dados, pode_criar_fornecedor):

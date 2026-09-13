@@ -1,11 +1,13 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from django.test import RequestFactory, TestCase
+from django.utils import timezone
 
 from apps.cadastros.models import Fornecedor, FornecedorFilial
 from apps.compras.models import (
-    CalculoTributarioCompra, CotacaoCompraFornecedor, RegraTributariaCompra,
+    CalculoTributarioCompra, CotacaoCompraFornecedor, EntradaNF, ItemEntradaNF,
+    RegraTributariaCompra,
 )
 from apps.compras.services.cotacao_compra_service import CotacaoCompraService
 from apps.compras.services.purchase_tax_service import PurchaseTaxService
@@ -131,6 +133,102 @@ class CotacaoCompraTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Compra otimizada por fornecedor')
         self.assertContains(response, 'Fornecedor Regular')
+
+    def test_exibe_ultima_compra_efetivada_e_variacao_sem_mudar_historico(self):
+        entrada_antiga = EntradaNF.objects.create(
+            filial=self.filial,
+            fornecedor=self.simples,
+            numero_nf='100',
+            serie_nf='1',
+            data_emissao_nf=date(2026, 7, 10),
+            data_entrada=timezone.make_aware(datetime(2026, 7, 10, 10, 0)),
+            status=EntradaNF.Status.EFETIVADA,
+            usuario=self.usuario,
+        )
+        ItemEntradaNF.objects.create(
+            entrada=entrada_antiga,
+            produto=self.produto,
+            quantidade=Decimal('10'),
+            valor_unitario=Decimal('9.00'),
+            custo_unitario_total=Decimal('9.20'),
+            valor_bruto=Decimal('90.00'),
+            valor_total=Decimal('90.00'),
+        )
+        entrada_ultima = EntradaNF.objects.create(
+            filial=self.filial,
+            fornecedor=self.regular,
+            numero_nf='200',
+            serie_nf='2',
+            data_emissao_nf=date(2026, 8, 20),
+            data_entrada=timezone.make_aware(datetime(2026, 8, 20, 14, 0)),
+            status=EntradaNF.Status.EFETIVADA,
+            usuario=self.usuario,
+        )
+        ItemEntradaNF.objects.create(
+            entrada=entrada_ultima,
+            produto=self.produto,
+            quantidade=Decimal('10'),
+            valor_unitario=Decimal('9.10'),
+            custo_unitario_total=Decimal('9.40'),
+            valor_bruto=Decimal('91.00'),
+            valor_total=Decimal('91.00'),
+        )
+        entrada_rascunho = EntradaNF.objects.create(
+            filial=self.filial,
+            fornecedor=self.simples,
+            numero_nf='300',
+            serie_nf='1',
+            data_emissao_nf=date(2026, 9, 1),
+            data_entrada=timezone.make_aware(datetime(2026, 9, 1, 9, 0)),
+            status=EntradaNF.Status.RASCUNHO,
+            usuario=self.usuario,
+        )
+        ItemEntradaNF.objects.create(
+            entrada=entrada_rascunho,
+            produto=self.produto,
+            quantidade=Decimal('10'),
+            valor_unitario=Decimal('15.00'),
+            custo_unitario_total=Decimal('15.00'),
+            valor_bruto=Decimal('150.00'),
+            valor_total=Decimal('150.00'),
+        )
+
+        cotacao = CotacaoCompraService.criar_e_analisar(
+            filial=self.filial, usuario=self.usuario, dados=self._payload(),
+        )
+        item = cotacao.itens.get()
+        self.assertEqual(item.ultima_compra_snapshot['numero_nf'], '200')
+        self.assertEqual(item.ultima_compra_snapshot['serie_nf'], '2')
+        self.assertEqual(item.ultima_compra_snapshot['fornecedor_nome'], 'Fornecedor Regular')
+        self.assertEqual(item.ultima_compra_snapshot['custo_unitario'], '9.4000')
+
+        entrada_nova = EntradaNF.objects.create(
+            filial=self.filial,
+            fornecedor=self.simples,
+            numero_nf='400',
+            serie_nf='1',
+            data_emissao_nf=date(2026, 9, 12),
+            data_entrada=timezone.make_aware(datetime(2026, 9, 12, 9, 0)),
+            status=EntradaNF.Status.EFETIVADA,
+            usuario=self.usuario,
+        )
+        ItemEntradaNF.objects.create(
+            entrada=entrada_nova,
+            produto=self.produto,
+            quantidade=Decimal('10'),
+            valor_unitario=Decimal('20.00'),
+            custo_unitario_total=Decimal('20.00'),
+            valor_bruto=Decimal('200.00'),
+            valor_total=Decimal('200.00'),
+        )
+        response = CotacaoCompraDetailView.as_view()(
+            self._request(f'/compras/cotacoes/{cotacao.pk}/'), pk=cotacao.pk,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Última compra efetivada')
+        self.assertContains(response, 'NF 200/2')
+        self.assertContains(response, 'Custo anterior')
+        self.assertNotContains(response, 'NF 400/1')
 
     def test_fornecedor_manual_pode_ficar_apenas_na_cotacao(self):
         dados = self._payload()
