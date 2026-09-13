@@ -3,8 +3,8 @@ import subprocess
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest import skipUnless
-from unittest.mock import patch
 
+from django.contrib.auth.hashers import make_password
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -16,7 +16,12 @@ from apps.core.models import (
     PerfilAcesso,
     Usuario,
 )
-from apps.core.services.checkout import checkout_venda_ativo
+from apps.core.services.checkout import (
+    autorizar_checkout_busca_nome,
+    checkout_busca_nome_liberada,
+    checkout_venda_ativo,
+    validar_senha_checkout_busca_nome,
+)
 from apps.produtos.models import (
     Produto,
     ProdutoCodigoBarras,
@@ -113,6 +118,10 @@ class CheckoutVendaTests(TestCase):
         self.parametros.checkout_venda_ativo = True
         self.parametros.save(update_fields=['checkout_venda_ativo'])
 
+    def configurar_senha_busca_nome(self, senha='Senha-Checkout-42'):
+        self.parametros.checkout_busca_nome_senha_hash = make_password(senha)
+        self.parametros.save(update_fields=['checkout_busca_nome_senha_hash'])
+
     def buscar(self, termo, **params):
         dados = {'q': termo, **params}
         return self.client.get(reverse('pdv:api_checkout_produtos'), dados)
@@ -146,6 +155,28 @@ class CheckoutVendaTests(TestCase):
         )
 
         self.assertTrue(checkout_venda_ativo(request))
+
+    @override_settings(TENANT_DATABASE_ROUTING_ENABLED=True)
+    def test_multibanco_valida_senha_na_filial_correta_do_banco_gerencial(self):
+        self.habilitar_checkout()
+        self.configurar_senha_busca_nome()
+        banco = EmpresaBanco.objects.create(
+            empresa=self.empresa,
+            slug='empresa-checkout-senha-82345678000191',
+            db_alias='empresa_checkout_senha_82345678000191',
+            database_url_env_var='TENANT_DATABASE_URL_EMPRESA_CHECKOUT_SENHA',
+            ativo=True,
+            status=EmpresaBanco.Status.ATIVO,
+        )
+        request = SimpleNamespace(
+            tenant_db_alias=banco.db_alias,
+            filial_ativa=SimpleNamespace(cnpj=self.filial.cnpj),
+            session={},
+        )
+
+        self.assertTrue(validar_senha_checkout_busca_nome(request, 'Senha-Checkout-42'))
+        autorizar_checkout_busca_nome(request)
+        self.assertTrue(checkout_busca_nome_liberada(request))
 
     def test_flag_da_filial_exibe_menu_e_libera_tela(self):
         self.habilitar_checkout()
@@ -182,6 +213,7 @@ class CheckoutVendaTests(TestCase):
         self.assertContains(resposta, "emitirFiscal('nfce')")
         self.assertContains(resposta, '/pdv/venda/0/comprovante/')
         self.assertContains(resposta, 'class="co-table" data-columns="off"')
+        self.assertContains(resposta, "scrollIntoView({block:'nearest'})")
 
     @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do checkout')
     def test_javascript_renderizado_tem_sintaxe_valida(self):
@@ -257,6 +289,41 @@ assert.equal(checkout.podeFinalizar, false);
         self.assertEqual(resultado.returncode, 0, resultado.stdout + resultado.stderr)
 
     @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do checkout')
+    def test_setas_percorrem_resultados_e_mantem_selecao_visivel(self):
+        self.habilitar_checkout()
+        resposta = self.client.get(reverse('pdv:checkout'))
+        html = resposta.content.decode('utf-8')
+        script = 'function checkoutVenda()' + html.split(
+            'function checkoutVenda()', 1,
+        )[1].split('</script>', 1)[0]
+        script += r'''
+const assert = require('node:assert/strict');
+global.document = {getElementById: () => ({textContent: '[]'})};
+const checkout = checkoutVenda();
+let rolado = null;
+checkout.$refs = {resultadosProduto: {querySelector: (seletor) => ({
+  scrollIntoView: (opcoes) => { rolado = [seletor, opcoes]; }
+})}};
+checkout.$nextTick = (callback) => callback();
+checkout.resultados = [{id:1},{id:2},{id:3}];
+checkout.indiceProduto = 0;
+checkout.moverResultadoProduto(1);
+assert.equal(checkout.indiceProduto, 1);
+assert.deepEqual(rolado, ['.co-result.active', {block:'nearest'}]);
+checkout.moverResultadoProduto(-1);
+assert.equal(checkout.indiceProduto, 0);
+checkout.moverResultadoProduto(-1);
+assert.equal(checkout.indiceProduto, 2);
+'''
+
+        resultado = subprocess.run(
+            [shutil.which('node')], input=script, text=True, encoding='utf-8',
+            capture_output=True, timeout=20,
+        )
+
+        self.assertEqual(resultado.returncode, 0, resultado.stdout + resultado.stderr)
+
+    @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do checkout')
     def test_atalhos_do_modal_executam_a_acao_correta(self):
         self.habilitar_checkout()
         resposta = self.client.get(reverse('pdv:checkout'))
@@ -325,24 +392,41 @@ assert.deepEqual(acoes, [
         self.assertEqual(self.buscar('CAF').json()['produtos'], [])
         self.assertEqual(self.buscar('SOMENTE-OUTRA-FILIAL').json()['produtos'], [])
 
-    def test_busca_por_nome_exige_aprovacao_no_servidor(self):
+    def test_busca_por_nome_exige_senha_configurada_e_autorizacao_no_servidor(self):
         self.habilitar_checkout()
-        permissao_somente_visualizar = lambda _usuario, _modulo, acao='ver': acao == 'ver'
-
-        with patch.object(
-            Usuario,
-            'tem_permissao',
-            autospec=True,
-            side_effect=permissao_somente_visualizar,
-        ):
-            resposta = self.buscar('Especial Checkout', por_nome='1')
-            tela = self.client.get(reverse('pdv:checkout'))
+        resposta = self.buscar('Especial Checkout', por_nome='1')
+        tela_sem_senha = self.client.get(reverse('pdv:checkout'))
 
         self.assertEqual(resposta.status_code, 403)
-        self.assertNotContains(tela, 'Permitir nome')
+        self.assertContains(tela_sem_senha, 'Busca por nome não configurada')
 
-    def test_usuario_com_aprovacao_pode_buscar_por_nome(self):
+        self.configurar_senha_busca_nome()
+        tela_com_senha = self.client.get(reverse('pdv:checkout'))
+        self.assertContains(tela_com_senha, 'Permitir nome')
+        self.assertContains(tela_com_senha, 'Liberar busca por nome')
+        self.assertNotContains(tela_com_senha, self.parametros.checkout_busca_nome_senha_hash)
+        self.assertEqual(self.buscar('Especial Checkout', por_nome='1').status_code, 403)
+
+    def test_senha_invalida_nao_libera_e_senha_correta_libera_busca_por_nome(self):
         self.habilitar_checkout()
+        self.configurar_senha_busca_nome()
+        endpoint = reverse('pdv:api_checkout_liberar_busca_nome')
+
+        invalida = self.client.post(
+            endpoint,
+            data='{"senha":"incorreta"}',
+            content_type='application/json',
+        )
+        self.assertEqual(invalida.status_code, 403)
+        self.assertEqual(self.buscar('Especial Checkout', por_nome='1').status_code, 403)
+
+        liberacao = self.client.post(
+            endpoint,
+            data='{"senha":"Senha-Checkout-42"}',
+            content_type='application/json',
+        )
+        self.assertEqual(liberacao.status_code, 200, liberacao.content)
+        self.assertEqual(liberacao.json()['expira_em_minutos'], 30)
 
         resposta = self.buscar('Especial Checkout', por_nome='1')
 
@@ -352,3 +436,38 @@ assert.deepEqual(acoes, [
             [self.produto.pk],
         )
         self.assertTrue(resposta.json()['busca_por_nome'])
+
+    def test_tentativas_repetidas_de_senha_sao_limitadas(self):
+        self.habilitar_checkout()
+        self.configurar_senha_busca_nome()
+        endpoint = reverse('pdv:api_checkout_liberar_busca_nome')
+
+        for _ in range(5):
+            resposta = self.client.post(
+                endpoint,
+                data='{"senha":"incorreta"}',
+                content_type='application/json',
+            )
+            self.assertEqual(resposta.status_code, 403)
+
+        bloqueada = self.client.post(
+            endpoint,
+            data='{"senha":"Senha-Checkout-42"}',
+            content_type='application/json',
+        )
+        self.assertEqual(bloqueada.status_code, 429)
+
+    def test_troca_da_senha_invalida_autorizacao_anterior(self):
+        self.habilitar_checkout()
+        self.configurar_senha_busca_nome()
+        endpoint = reverse('pdv:api_checkout_liberar_busca_nome')
+        self.client.post(
+            endpoint,
+            data='{"senha":"Senha-Checkout-42"}',
+            content_type='application/json',
+        )
+        self.assertEqual(self.buscar('Especial Checkout', por_nome='1').status_code, 200)
+
+        self.configurar_senha_busca_nome('Outra-Senha-99')
+
+        self.assertEqual(self.buscar('Especial Checkout', por_nome='1').status_code, 403)

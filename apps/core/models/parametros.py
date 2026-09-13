@@ -89,6 +89,13 @@ class ParametrosSistema(TimestampedModel):
         verbose_name='Utilizar checkout de venda',
         help_text='Exibe o Checkout no menu desta filial. Quando desativado, a tela fica indisponível.',
     )
+    checkout_busca_nome_senha_hash = models.CharField(
+        max_length=128,
+        blank=True,
+        editable=False,
+        verbose_name='Senha da busca por nome no checkout',
+        help_text='Hash da senha usada para liberar a busca de produtos por nome no checkout.',
+    )
     certificado_digital = models.FileField(
         upload_to='sistema/certificados/',
         blank=True,

@@ -129,13 +129,15 @@
         </div>
         <div class="co-mode">
           <span x-text="buscarPorNome ? 'Busca por nome autorizada' : 'Busca restrita a códigos'"></span>
-          {% if pode_buscar_produto_por_nome %}
-          <label><input type="checkbox" x-model="buscarPorNome"> Permitir nome</label>
+          {% if busca_nome_configurada %}
+          <label><input type="checkbox" :checked="buscarPorNome" @change="solicitarBuscaPorNome($event)"> Permitir nome</label>
+          {% else %}
+          <span>Busca por nome não configurada</span>
           {% endif %}
         </div>
-        <div class="co-results" x-show="resultados.length" x-cloak>
+        <div class="co-results" x-ref="resultadosProduto" x-show="resultados.length" x-cloak role="listbox">
           <template x-for="produto in resultados" :key="produto.id">
-            <button type="button" class="co-result" :class="{'active':resultados[indiceProduto]?.id===produto.id}" @click="adicionarProduto(produto)">
+            <button type="button" class="co-result" :class="{'active':resultados[indiceProduto]?.id===produto.id}" @click="adicionarProduto(produto)" role="option" :aria-selected="resultados[indiceProduto]?.id===produto.id">
               <span><strong x-text="produto.descricao"></strong><span class="co-result-code" x-text="'ID '+produto.id+(produto.codigo_barras?' · '+produto.codigo_barras:'')"></span></span>
               <strong x-text="moeda(produto.preco)"></strong>
             </button>
@@ -255,6 +257,22 @@
     </div>
   </div>
 
+  <div class="co-backdrop" x-show="modalSenhaBuscaNome" x-cloak @click.self="fecharSenhaBuscaNome()">
+    <form class="co-modal" @submit.prevent="liberarBuscaPorNome()" role="dialog" aria-modal="true" aria-labelledby="checkout-senha-busca-titulo">
+      <h3 id="checkout-senha-busca-titulo">Liberar busca por nome</h3>
+      <p class="co-sub">Informe a senha definida pelo administrador nos parâmetros desta filial.</p>
+      <div class="co-field" style="margin-top:14px">
+        <label for="checkout-senha-busca">Senha de liberação</label>
+        <input id="checkout-senha-busca" x-ref="senhaBuscaNome" class="co-input" type="password" x-model="senhaBuscaNome" autocomplete="current-password">
+      </div>
+      <div class="co-alert" x-show="erroSenhaBuscaNome" x-text="erroSenhaBuscaNome" x-cloak style="margin-top:12px"></div>
+      <div class="co-modal-actions">
+        <button type="button" class="co-btn" @click="fecharSenhaBuscaNome()">Cancelar</button>
+        <button type="submit" class="co-btn co-btn-primary" :disabled="liberandoBuscaNome" x-text="liberandoBuscaNome ? 'Validando...' : 'Liberar por 30 minutos'"></button>
+      </div>
+    </form>
+  </div>
+
   <div class="co-backdrop" x-show="modalCliente" x-cloak @click.self="modalCliente=false">
     <form class="co-modal" @submit.prevent="criarCliente()">
       <h3>Cadastro rápido de cliente</h3>
@@ -308,7 +326,8 @@
 function checkoutVenda() {
   return {
     caixas: JSON.parse(document.getElementById('checkout-caixas').textContent), sessao:null, carregando:true,
-    busca:'', quantidadeEntrada:'1', buscarPorNome:false, buscando:false, resultados:[], indiceProduto:-1, erroBusca:'', itens:[],
+    busca:'', quantidadeEntrada:'1', buscarPorNome:{% if busca_nome_liberada %}true{% else %}false{% endif %}, buscando:false, resultados:[], indiceProduto:-1, erroBusca:'', itens:[],
+    buscaNomeLiberada:{% if busca_nome_liberada %}true{% else %}false{% endif %}, modalSenhaBuscaNome:false, senhaBuscaNome:'', erroSenhaBuscaNome:'', liberandoBuscaNome:false,
     formasPagamento:[], formaPagamentoId:null, bandeiraPagamento:'', parcelasPagamento:1, cliente:null, buscaCliente:'', clientes:[], indiceCliente:-1,
     descontoEntrada:'', valorPagamentoEntrada:'', valorPagamentoManual:false, mensagem:'', sucesso:false, finalizando:false,
     modalCliente:false, novoCliente:{razao_social:'',cpf_cnpj:'',celular:'',email:'',tipo_pessoa:'F'}, erroCliente:'', salvandoCliente:false,
@@ -342,7 +361,14 @@ function checkoutVenda() {
     sincronizarValorPagamento(forcar=false){ if(forcar || !this.valorPagamentoManual)this.valorPagamentoEntrada=this.formatarNumeroInput(this.total); },
     atalhoTeclado(evento){
       const tecla=evento.key;
-      if(tecla==='Escape'){ evento.preventDefault(); this.modalDocumento ? this.fecharDocumento() : this.fecharModais(); return; }
+      if(tecla==='Escape'){
+        evento.preventDefault();
+        if(this.modalSenhaBuscaNome)this.fecharSenhaBuscaNome();
+        else if(this.modalDocumento)this.fecharDocumento();
+        else this.fecharModais();
+        return;
+      }
+      if(this.modalSenhaBuscaNome)return;
       if(this.modalDocumento){ this.atalhoDocumento(evento); return; }
       if(this.modalCliente || !this.sessao || this.carregando)return;
       if(tecla==='F2'){ evento.preventDefault(); this.focarProduto(); }
@@ -376,14 +402,43 @@ function checkoutVenda() {
       try {
         const p=new URLSearchParams({q:termo,por_nome:this.buscarPorNome?'1':'0'}); if(this.cliente)p.set('cliente_id',this.cliente.id);
         const r=await fetch('{% url "pdv:api_checkout_produtos" %}?'+p); const d=await r.json();
-        if(!r.ok)throw new Error(d.erro||'Produto não encontrado.');
+        if(!r.ok){
+          if(r.status===403 && this.buscarPorNome){
+            this.buscarPorNome=false; this.buscaNomeLiberada=false; this.modalSenhaBuscaNome=true; this.focar('senhaBuscaNome');
+          }
+          throw new Error(d.erro||'Produto não encontrado.');
+        }
         this.resultados=d.produtos||[]; this.indiceProduto=this.resultados.length?0:-1;
         if(this.resultados.length===1)this.adicionarProduto(this.resultados[0]);
         else if(!this.resultados.length)this.erroBusca=this.buscarPorNome?'Nenhum produto encontrado.':'Código não encontrado nesta filial.';
       } catch(e){ this.erroBusca=e.message; } finally { this.buscando=false; }
     },
     confirmarBuscaProduto(){ if(this.resultados.length && this.indiceProduto>=0)this.adicionarProduto(this.resultados[this.indiceProduto]); else this.buscarProduto(); },
-    moverResultadoProduto(direcao){ if(!this.resultados.length)return; this.indiceProduto=(this.indiceProduto+direcao+this.resultados.length)%this.resultados.length; },
+    moverResultadoProduto(direcao){
+      if(!this.resultados.length)return;
+      if(this.indiceProduto<0)this.indiceProduto=direcao>0?0:this.resultados.length-1;
+      else this.indiceProduto=(this.indiceProduto+direcao+this.resultados.length)%this.resultados.length;
+      this.$nextTick(()=>{
+        const selecionado=this.$refs.resultadosProduto?.querySelector('.co-result.active');
+        if(selecionado)selecionado.scrollIntoView({block:'nearest'});
+      });
+    },
+    solicitarBuscaPorNome(evento){
+      if(!evento.target.checked){ this.buscarPorNome=false; this.resultados=[]; this.indiceProduto=-1; return; }
+      if(this.buscaNomeLiberada){ this.buscarPorNome=true; return; }
+      evento.target.checked=false; this.modalSenhaBuscaNome=true; this.senhaBuscaNome=''; this.erroSenhaBuscaNome=''; this.focar('senhaBuscaNome');
+    },
+    fecharSenhaBuscaNome(){ this.modalSenhaBuscaNome=false; this.senhaBuscaNome=''; this.erroSenhaBuscaNome=''; this.focarProduto(); },
+    async liberarBuscaPorNome(){
+      if(!this.senhaBuscaNome){this.erroSenhaBuscaNome='Informe a senha de liberação.';this.focar('senhaBuscaNome');return;}
+      this.liberandoBuscaNome=true; this.erroSenhaBuscaNome='';
+      try{
+        const r=await fetch('{% url "pdv:api_checkout_liberar_busca_nome" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({senha:this.senhaBuscaNome})});
+        const d=await r.json(); if(!r.ok)throw new Error(d.erro||'Não foi possível liberar a busca por nome.');
+        this.buscaNomeLiberada=true; this.buscarPorNome=true; this.modalSenhaBuscaNome=false; this.senhaBuscaNome=''; this.focarProduto();
+      }catch(e){this.erroSenhaBuscaNome=e.message;this.senhaBuscaNome='';this.focar('senhaBuscaNome');}
+      finally{this.liberandoBuscaNome=false;}
+    },
     quantidadeParaProduto(produto){
       const casas=Math.max(0,Number(produto.quantidade_decimais||0));
       const minimo=Number(produto.quantidade_step||1);
