@@ -1,4 +1,5 @@
 """Context processors: disponibilizam dados em todos os templates."""
+from apps.core.services.checkout import checkout_venda_ativo as checkout_venda_habilitado
 from apps.core.services.modulos import modulos_ativos
 
 
@@ -16,9 +17,7 @@ def parametros_sistema(request):
         filial = getattr(request, 'filial_ativa', None)
         if filial is not None:
             params = ParametrosSistema.objects.filter(filial=filial).first()
-            checkout_venda_ativo = bool(
-                params and getattr(params, 'checkout_venda_ativo', False)
-            )
+            checkout_venda_ativo = checkout_venda_habilitado(request)
             # Tenta logo_url da empresa como fallback externo
             empresa = getattr(filial, 'empresa', None)
             if empresa:

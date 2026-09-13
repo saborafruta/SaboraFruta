@@ -3,18 +3,19 @@ import json
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
+from django.contrib import messages
 from django.db import connections
 from django.db.models import Max, Min, Q, Sum
 from django.db.models.functions import Coalesce
-from django.http import Http404, JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.core.paginator import Paginator
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 from apps.cadastros.models import Cliente
-from apps.core.models import ParametrosSistema
+from apps.core.services.checkout import checkout_venda_ativo
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
 from apps.core.tenant_context import tenant_atomic
 from apps.core.services.permissions import requer_permissao
@@ -197,17 +198,11 @@ def pdv_home(request):
     })
 
 
-def _checkout_ativo(filial):
-    return ParametrosSistema.objects.filter(
-        filial=filial,
-        checkout_venda_ativo=True,
-    ).exists()
-
-
 @requer_permissao('pdv', 'ver')
 def checkout_venda(request):
-    if not _checkout_ativo(request.filial_ativa):
-        raise Http404('O checkout de venda não está habilitado para esta filial.')
+    if not checkout_venda_ativo(request):
+        messages.warning(request, 'O checkout de venda não está habilitado para esta filial.')
+        return redirect('core:dashboard')
     caixas = list(
         Caixa.objects.for_filial(request.filial_ativa)
         .filter(ativo=True)
@@ -223,7 +218,7 @@ def checkout_venda(request):
 @requer_permissao('pdv', 'ver')
 @require_GET
 def checkout_buscar_produto(request):
-    if not _checkout_ativo(request.filial_ativa):
+    if not checkout_venda_ativo(request):
         return JsonResponse({'erro': 'Checkout não habilitado para esta filial.'}, status=404)
 
     termo = request.GET.get('q', '').strip()
