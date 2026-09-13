@@ -1,9 +1,10 @@
 {% extends "_base.html" %}
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
+{% block largura_conteudo %}max-w-none{% endblock %}
 {% block content %}
 
-<div class="max-w-5xl mx-auto space-y-5">
+<div class="w-full space-y-5">
 
   <div>
     <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
