@@ -173,6 +173,7 @@ class CheckoutVendaTests(TestCase):
         self.assertContains(resposta, 'Imprimir comprovante')
         self.assertContains(resposta, "emitirFiscal('nfce')")
         self.assertContains(resposta, '/pdv/venda/0/comprovante/')
+        self.assertContains(resposta, 'class="co-table" data-columns="off"')
 
     @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do checkout')
     def test_javascript_renderizado_tem_sintaxe_valida(self):

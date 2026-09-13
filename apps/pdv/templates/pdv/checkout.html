@@ -148,7 +148,7 @@
         </div>
         <div class="co-empty" x-show="!itens.length">Bipe o primeiro produto para começar.</div>
         <div class="co-cart-scroll" x-show="itens.length" x-cloak>
-          <table class="co-table">
+          <table class="co-table" data-columns="off">
             <thead><tr><th>Produto</th><th>Valor unitário</th><th>Quantidade</th><th>Total</th><th></th></tr></thead>
             <tbody>
               <template x-for="item in itens" :key="item.id">
