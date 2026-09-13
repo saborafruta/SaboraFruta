@@ -33,4 +33,5 @@
     <section aria-label="Pagamentos">{% for rotulo, valor in cupom.pagamentos %}<div class="linha"><span>{{ rotulo }}</span><strong class="valor">R$ {{ valor }}</strong></div>{% endfor %}</section>
     <footer>Este comprovante não é um documento fiscal.</footer>
   </main>
+  {% if auto_print %}<script>window.addEventListener('load', () => setTimeout(() => window.print(), 250));</script>{% endif %}
 </body></html>

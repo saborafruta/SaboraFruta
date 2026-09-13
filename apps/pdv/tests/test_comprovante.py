@@ -162,6 +162,19 @@ class ComprovanteDadosTests(SimpleTestCase):
                 self.assertIn(esperado, html)
         self.assertEqual(dados_comprovante(self.venda(com_cliente=False))['cliente_telefone'], '')
 
+    def test_comprovante_interno_pode_abrir_impressao_automaticamente(self):
+        cupom = dados_comprovante(self.venda())
+
+        automatico = get_template('pdv/comprovante_publico.html').render({
+            'cupom': cupom, 'pdf_url': '/pdf/', 'auto_print': True,
+        })
+        normal = get_template('pdv/comprovante_publico.html').render({
+            'cupom': cupom, 'pdf_url': '/pdf/', 'auto_print': False,
+        })
+
+        self.assertEqual(automatico.count('window.print()'), 2)
+        self.assertEqual(normal.count('window.print()'), 1)
+
     def test_telefone_no_pdf_publico(self):
         from reportlab.platypus import Paragraph
         for celular, telefone, esperado in [('84999990000', '', '84999990000'), ('', '8432220000', '8432220000'), (' ', '8432220000', '8432220000')]:

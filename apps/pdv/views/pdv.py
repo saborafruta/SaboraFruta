@@ -208,10 +208,12 @@ def checkout_venda(request):
         .filter(ativo=True)
         .values('id', 'numero', 'descricao')
     )
+    config_etiqueta, _ = configuracao_etiqueta_filial(request.filial_ativa)
     return render(request, 'pdv/checkout.html', {
         'title': 'Checkout de venda',
         'caixas': caixas,
         'pode_buscar_produto_por_nome': request.user.tem_permissao('pdv', 'aprovar'),
+        'etiqueta_venda_disponivel': bool(config_etiqueta and config_etiqueta.ativa),
     })
 
 

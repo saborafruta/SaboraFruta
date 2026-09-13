@@ -69,10 +69,21 @@
   .co-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:8px; }
   .co-field label { display:block; margin-bottom:5px; color:var(--co-muted); font-size:11px; font-weight:800; }
   .co-modal-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:18px; }
+  .co-doc-modal { width:min(560px,100%); padding:0; overflow:hidden; }
+  .co-doc-head { padding:22px 20px 16px; text-align:center; border-bottom:1px solid var(--co-border); }
+  .co-doc-check { width:46px; height:46px; margin:0 auto 10px; display:grid; place-items:center; border-radius:50%; background:#059669; color:#fff; font-size:25px; font-weight:900; }
+  .co-doc-list { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:12px; }
+  .co-doc-option { min-height:70px; padding:11px 12px; display:flex; align-items:center; gap:10px; border:1px solid var(--co-border); border-radius:11px; background:transparent; color:var(--co-text); text-align:left; cursor:pointer; }
+  .co-doc-option:hover, .co-doc-option:focus { border-color:var(--co-blue); background:color-mix(in srgb,var(--co-blue) 11%,transparent); outline:none; }
+  .co-doc-option:disabled { opacity:.55; cursor:wait; }
+  .co-doc-icon { width:38px; height:38px; flex:0 0 auto; display:grid; place-items:center; border-radius:10px; background:color-mix(in srgb,var(--co-blue) 18%,transparent); color:var(--co-blue); font-size:19px; }
+  .co-doc-option strong { display:block; font-size:13px; }
+  .co-doc-option small { display:block; margin-top:2px; color:var(--co-muted); font-size:10px; line-height:1.3; }
+  .co-doc-footer { padding:11px 14px 14px; display:flex; justify-content:center; border-top:1px solid var(--co-border); }
   [x-cloak] { display:none!important; }
   @media(max-height:760px) and (min-width:1001px){ .co-shortcut{padding:2px 5px}.co-sub{display:none}.co-side-body{padding:7px}.co-summary{padding:7px}.co-input{min-height:36px}.co-btn{min-height:35px} }
   @media(max-width:1000px){ .checkout-page{height:auto;min-height:0;overflow:visible}.co-layout{grid-template-columns:1fr}.co-side{grid-template-columns:1fr 1fr}.co-summary-card{grid-column:1/-1}.co-cart-card{min-height:340px}.co-shortcuts{justify-content:flex-start} }
-  @media(max-width:680px){ .co-head{align-items:flex-start;flex-direction:column}.co-side{grid-template-columns:1fr}.co-grid{grid-template-columns:1fr}.co-table th:nth-child(2),.co-table td:nth-child(2){display:none}.co-search-row{grid-template-columns:90px minmax(0,1fr)}.co-search-row .co-btn-primary{grid-column:1/-1}.co-results{top:105px}.co-shortcuts{display:none} }
+  @media(max-width:680px){ .co-head{align-items:flex-start;flex-direction:column}.co-side{grid-template-columns:1fr}.co-grid,.co-doc-list{grid-template-columns:1fr}.co-table th:nth-child(2),.co-table td:nth-child(2){display:none}.co-search-row{grid-template-columns:90px minmax(0,1fr)}.co-search-row .co-btn-primary{grid-column:1/-1}.co-results{top:105px}.co-shortcuts{display:none} }
 </style>
 
 {{ caixas|json_script:"checkout-caixas" }}
@@ -255,6 +266,39 @@
       <div class="co-modal-actions"><button type="button" class="co-btn" @click="modalCliente=false; focarProduto()">Cancelar</button><button type="submit" class="co-btn co-btn-primary" :disabled="salvandoCliente">Salvar e selecionar</button></div>
     </form>
   </div>
+
+  <div class="co-backdrop" x-show="modalDocumento" x-cloak>
+    <div class="co-modal co-doc-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-documento-titulo">
+      <div class="co-doc-head">
+        <div class="co-doc-check">✓</div>
+        <h3 id="checkout-documento-titulo">Venda finalizada!</h3>
+        <p class="co-sub" x-text="'#'+String(vendaFinalizada.numero||0).padStart(6,'0')+' — escolha o documento para imprimir'"></p>
+      </div>
+      <div class="co-doc-list">
+        <button x-ref="imprimirComprovante" type="button" class="co-doc-option" @click="abrirComprovante(true)">
+          <span class="co-doc-icon">▤</span><span><strong>Imprimir comprovante</strong><small>Cupom não fiscal pronto para impressão</small></span>
+        </button>
+        <button type="button" class="co-doc-option" @click="baixarComprovante()">
+          <span class="co-doc-icon">↓</span><span><strong>Baixar PDF</strong><small>Salvar o comprovante da venda</small></span>
+        </button>
+        <button type="button" class="co-doc-option" @click="emitirFiscal('nfce')" :disabled="processandoDocumento">
+          <span class="co-doc-icon">N</span><span><strong>NFC-e</strong><small>Emitir e abrir o DANFE da venda</small></span>
+        </button>
+        <button type="button" class="co-doc-option" @click="emitirFiscal('nfe')" :disabled="processandoDocumento">
+          <span class="co-doc-icon">N</span><span><strong>NF-e</strong><small>Emitir e abrir o DANFE da venda</small></span>
+        </button>
+        {% if etiqueta_venda_disponivel %}
+        <button type="button" class="co-doc-option" @click="imprimirEtiqueta()">
+          <span class="co-doc-icon">◇</span><span><strong>Etiqueta da venda</strong><small>Usar o modelo configurado para esta filial</small></span>
+        </button>
+        {% endif %}
+      </div>
+      <div class="co-alert" x-show="mensagemDocumento" x-text="mensagemDocumento" x-cloak style="margin:0 12px 12px"></div>
+      <div class="co-doc-footer">
+        <button type="button" class="co-btn" @click="fecharDocumento()">Pular → Nova venda</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -265,6 +309,7 @@ function checkoutVenda() {
     formasPagamento:[], formaPagamentoId:null, bandeiraPagamento:'', parcelasPagamento:1, cliente:null, buscaCliente:'', clientes:[], indiceCliente:-1,
     descontoEntrada:'', valorPagamentoEntrada:'', valorPagamentoManual:false, mensagem:'', sucesso:false, finalizando:false,
     modalCliente:false, novoCliente:{razao_social:'',cpf_cnpj:'',celular:'',email:'',tipo_pessoa:'F'}, erroCliente:'', salvandoCliente:false,
+    modalDocumento:false, vendaFinalizada:{id:null,numero:null}, processandoDocumento:false, mensagemDocumento:'',
     abertura:{caixa_id:'',valor:'0,00'}, abrindoCaixa:false, erroCaixa:'',
     async init(){ await this.carregarEstado(); this.focarProduto(); },
     csrf(){ return document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || this.cookie('csrftoken'); },
@@ -293,8 +338,8 @@ function checkoutVenda() {
     sincronizarValorPagamento(forcar=false){ if(forcar || !this.valorPagamentoManual)this.valorPagamentoEntrada=this.formatarNumeroInput(this.total); },
     atalhoTeclado(evento){
       const tecla=evento.key;
-      if(tecla==='Escape'){ evento.preventDefault(); this.fecharModais(); return; }
-      if(this.modalCliente || !this.sessao || this.carregando)return;
+      if(tecla==='Escape'){ evento.preventDefault(); this.modalDocumento ? this.fecharDocumento() : this.fecharModais(); return; }
+      if(this.modalCliente || this.modalDocumento || !this.sessao || this.carregando)return;
       if(tecla==='F2'){ evento.preventDefault(); this.focarProduto(); }
       else if(tecla==='F3'){ evento.preventDefault(); this.focarQuantidade(); }
       else if(tecla==='F4'){ evento.preventDefault(); evento.shiftKey ? this.abrirCadastroCliente() : this.focarCliente(); }
@@ -377,8 +422,65 @@ function checkoutVenda() {
       if(!this.podeFinalizar)return;this.finalizando=true;this.mensagem='';this.sucesso=false;
       const pagamentos=this.total>0?[{forma_id:this.formaPagamentoId,valor:this.valorPagamento,parcelas:this.parcelasPagamento,bandeira:this.formaCartao?this.bandeiraPagamento:''}]:[];
       const payload={cliente_id:this.cliente?.id||null,desconto:this.desconto,acrescimo:0,itens:this.itens.map(i=>({produto_id:i.id,quantidade:i.quantidade,valor_unitario:i.preco,preco_origem_tipo:i.preco_origem_tipo,preco_origem_detalhe:i.preco_origem_detalhe,desconto_valor:0})),pagamentos};
-      try{const r=await fetch('{% url "pdv:api_venda_finalizar" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)throw new Error(d.erro||'Não foi possível finalizar a venda.');this.sucesso=true;this.mensagem='Venda #'+String(d.numero_venda).padStart(6,'0')+' finalizada com sucesso.';this.itens=[];this.quantidadeEntrada='1';this.descontoEntrada='';this.valorPagamentoEntrada='';this.valorPagamentoManual=false;this.formaPagamentoId=null;this.bandeiraPagamento='';this.parcelasPagamento=1;this.cliente=null;this.busca='';this.focarProduto();}catch(e){this.mensagem=e.message;}finally{this.finalizando=false;}
+      try{
+        const r=await fetch('{% url "pdv:api_venda_finalizar" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify(payload)});
+        const d=await r.json(); if(!r.ok)throw new Error(d.erro||'Não foi possível finalizar a venda.');
+        this.sucesso=true; this.mensagem='Venda #'+String(d.numero_venda).padStart(6,'0')+' finalizada com sucesso.';
+        this.vendaFinalizada={id:d.venda_id||d.id||null,numero:d.numero_venda};
+        this.itens=[]; this.quantidadeEntrada='1'; this.descontoEntrada=''; this.valorPagamentoEntrada=''; this.valorPagamentoManual=false;
+        this.formaPagamentoId=null; this.bandeiraPagamento=''; this.parcelasPagamento=1; this.cliente=null; this.busca='';
+        this.mensagemDocumento=''; this.modalDocumento=true; this.focar('imprimirComprovante');
+      }catch(e){this.mensagem=e.message;}finally{this.finalizando=false;}
     },
+    urlVenda(modelo){ const id=this.vendaFinalizada.id; return id ? modelo.replace('/0/','/'+id+'/') : ''; },
+    abrirComprovante(imprimir=false){
+      const url=this.urlVenda("{% url 'pdv:comprovante_venda' 0 %}");
+      if(!url){this.mensagemDocumento='Não foi possível identificar a venda finalizada.';return;}
+      const janela=window.open(url+(imprimir?'?auto=1':''),'_blank','width=620,height=760,scrollbars=yes');
+      if(!janela){this.mensagemDocumento='Permita pop-ups para abrir a impressão.';return;}
+      this.fecharDocumento();
+    },
+    baixarComprovante(){
+      const url=this.urlVenda("{% url 'pdv:comprovante_venda_pdf' 0 %}");
+      if(!url){this.mensagemDocumento='Não foi possível identificar a venda finalizada.';return;}
+      const janela=window.open(url,'_blank');
+      if(!janela){this.mensagemDocumento='Permita pop-ups para baixar o PDF.';return;}
+      this.fecharDocumento();
+    },
+    imprimirEtiqueta(){
+      const url=this.urlVenda("{% url 'pdv:etiqueta_venda' 0 %}");
+      if(!url){this.mensagemDocumento='Não foi possível identificar a venda finalizada.';return;}
+      const janela=window.open(url+'?auto=1','_blank','width=760,height=720,scrollbars=yes');
+      if(!janela){this.mensagemDocumento='Permita pop-ups para imprimir a etiqueta.';return;}
+      this.fecharDocumento();
+    },
+    async emitirFiscal(tipo){
+      if(this.processandoDocumento)return;
+      const id=this.vendaFinalizada.id; const label=tipo==='nfce'?'NFC-e':'NF-e';
+      if(!id){this.mensagemDocumento='Não foi possível identificar a venda finalizada.';return;}
+      const janela=window.open('about:blank','_blank');
+      if(!janela){this.mensagemDocumento='Permita pop-ups para abrir o documento fiscal.';return;}
+      this.processandoDocumento=true; this.mensagemDocumento='Verificando os dados para emissão da '+label+'...';
+      try{
+        const check=await fetch(`/pdv/api/venda/${id}/prontidao-fiscal/?tipo=${tipo}`); const prontidao=await check.json();
+        if(!check.ok)throw new Error(prontidao.erro||'Não foi possível verificar os dados fiscais.');
+        if(!prontidao.ok){
+          janela.close();
+          const pendencias=(prontidao.pendencias||[]).map(item=>item.title||item.message).filter(Boolean);
+          this.mensagemDocumento=pendencias.length?pendencias.join(' · '):'Existem dados fiscais pendentes para esta emissão.';
+          return;
+        }
+        const endpoint=tipo==='nfce'?'emitir-nfce':'emitir-nfe';
+        const resposta=await fetch(`/pdv/api/venda/${id}/${endpoint}/`,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({informacoes_adicionais:''})});
+        const dados=await resposta.json();
+        if(!resposta.ok||dados.erro)throw new Error(dados.erro||dados.mensagem||'Falha na emissão fiscal.');
+        if(dados.pdf_danfe_url)janela.location.replace(dados.pdf_danfe_url);
+        else { janela.document.write('<p>Documento emitido com sucesso. O DANFE ainda não está disponível.</p>'); janela.document.close(); }
+        this.fecharDocumento();
+      }catch(e){ if(!janela.closed)janela.close(); this.mensagemDocumento='Erro ao emitir '+label+': '+e.message; }
+      finally{this.processandoDocumento=false;}
+    },
+    fecharDocumento(){ this.modalDocumento=false; this.mensagemDocumento=''; this.focarProduto(); },
     fecharModais(){this.modalCliente=false;this.resultados=[];this.indiceProduto=-1;this.clientes=[];this.indiceCliente=-1;this.focarProduto();}
   };
 }
