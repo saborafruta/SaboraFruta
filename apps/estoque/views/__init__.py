@@ -18,6 +18,7 @@ from .deposito import (
 from .alerta import AlertaListView
 from .desperdicio import DesperdicioDashboardView
 from .sugestao_compras import SugestaoComprasView
+from .equilibrio_estoque import EquilibrioEstoqueView
 from .outras_movimentacoes import (
     OutrasMovimentacoesHubView, DevolucaoClienteView, DevolucaoFornecedorView, SaidaEspecialView,
     FornecedorSearchJsonView, ProdutoEstoqueSearchJsonView,
@@ -46,6 +47,7 @@ __all__ = [
     'AlertaListView',
     'DesperdicioDashboardView',
     'SugestaoComprasView',
+    'EquilibrioEstoqueView',
     'OutrasMovimentacoesHubView', 'DevolucaoClienteView', 'DevolucaoFornecedorView', 'SaidaEspecialView',
     'FornecedorSearchJsonView', 'ProdutoEstoqueSearchJsonView',
     'ClienteSearchJsonView', 'LoteSearchJsonView', 'VendaDevolucaoJsonView', 'DevolucaoClienteApiView',

@@ -31,7 +31,7 @@ from apps.estoque.services.peso_carga import calcular_peso_bruto, peso_unitario_
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.estoque.views.permissoes import permissoes_estoque
 from apps.financeiro.constants.enums import StatusDocumentoFiscal
-from apps.produtos.models import Produto
+from apps.produtos.models import Produto, ProdutoFilial
 from apps.pdv.models import DevolucaoPDV, ItemDevolucaoPDV, VendaPDV
 
 # CFOP fixos por tipo de operação
@@ -1006,6 +1006,45 @@ class TransferenciaLojaView(PermissaoRequiredMixin, View):
                         }
                         for mov in movs_copia
                     ],
+                }
+
+        # Uma recomendacao do Equilibrio de estoque abre esta tela ja com
+        # destino, produto e quantidade preenchidos. Todos os IDs sao
+        # revalidados no tenant e na filial ativa; a transferencia continua
+        # dependendo da confirmacao normal do operador.
+        if not copia and request.GET.get('origem') == 'equilibrio':
+            try:
+                destino_id = int(request.GET.get('destino') or 0)
+                produto_id = int(request.GET.get('produto') or 0)
+                quantidade = Decimal((request.GET.get('quantidade') or '0').replace(',', '.'))
+            except (TypeError, ValueError, InvalidOperation):
+                destino_id = produto_id = 0
+                quantidade = Decimal('0')
+            destino_valido = Filial.objects.filter(
+                pk=destino_id, empresa=empresa, ativo=True,
+            ).exclude(pk=filial.pk).first()
+            produto_valido = (
+                Produto.objects.for_filial(filial)
+                .filter(pk=produto_id, ativo=True)
+                .select_related('unidade_medida')
+                .first()
+            )
+            vinculado_destino = ProdutoFilial.objects.filter(
+                produto_id=produto_id, filial=destino_valido, ativo=True,
+            ).exists() if destino_valido else False
+            if destino_valido and produto_valido and vinculado_destino and quantidade > 0:
+                copia = {
+                    'filial_destino_id': destino_valido.pk,
+                    'observacao': 'Transferencia sugerida pelo equilibrio de estoque.',
+                    'itens': [{
+                        'produto_id': produto_valido.pk,
+                        'produto_nome': produto_valido.descricao,
+                        'unidade': str(produto_valido.unidade_medida),
+                        'lote_id': None,
+                        'lote_nome': '',
+                        'quantidade': float(quantidade),
+                        'peso_bruto': _peso_unitario_para_json(produto_valido),
+                    }],
                 }
 
         filiais = list(Filial.objects.filter(
