@@ -426,6 +426,30 @@ assert.deepEqual(acoes, [
         self.assertEqual(resposta.status_code, 403)
         self.assertEqual(self.buscar('Especial Checkout', por_nome='1').status_code, 403)
 
+    def test_superusuario_ativo_aparece_e_pode_autorizar_sem_perfil_aprovador(self):
+        self.habilitar_checkout()
+        superusuario = Usuario.objects.create_superuser(
+            email='ited@ited.com.br',
+            nome='iTed Superusuário',
+            password='Senha-Superuser-42',
+            empresa=self.empresa,
+            filial=self.outra_filial,
+            perfil=self.perfil,
+        )
+
+        tela = self.client.get(reverse('pdv:checkout'))
+        emails = [item['email'] for item in tela.context['usuarios_autorizadores']]
+        self.assertIn(superusuario.email, emails)
+
+        liberacao = self.client.post(
+            reverse('pdv:api_checkout_liberar_busca_nome'),
+            data=f'{{"usuario_id":{superusuario.pk},"senha":"Senha-Superuser-42"}}',
+            content_type='application/json',
+        )
+
+        self.assertEqual(liberacao.status_code, 200, liberacao.content)
+        self.assertEqual(self.buscar('Especial Checkout', por_nome='1').status_code, 200)
+
     def test_supervisor_com_credenciais_e_aprovacao_libera_busca_por_nome(self):
         self.habilitar_checkout()
         endpoint = reverse('pdv:api_checkout_liberar_busca_nome')

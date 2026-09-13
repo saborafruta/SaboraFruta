@@ -83,7 +83,9 @@ def _autorizador_elegivel(request, usuario) -> bool:
     filial = getattr(request, 'filial_ativa', None)
     if not usuario or not filial or not usuario.is_active:
         return False
-    if not (usuario.is_superuser or usuario.empresa_id == filial.empresa_id):
+    if usuario.is_superuser:
+        return True
+    if usuario.empresa_id != filial.empresa_id:
         return False
     if not usuario.pode_acessar_filial(filial):
         return False
