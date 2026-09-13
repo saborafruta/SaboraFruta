@@ -42,6 +42,7 @@ from apps.produtos.models import (
     CategoriaProduto, ClasseFiscal, MarcaProduto, Produto, ProdutoFilial,
     ProdutoFornecedorEquivalencia, UnidadeMedida,
 )
+from apps.produtos.services.codigo_barras_service import gerar_codigo_barras_unico
 from apps.produtos.services.replicacao_service import ReplicacaoProdutoService
 
 
@@ -1638,6 +1639,22 @@ class ProdutoCreateView(PermissaoRequiredMixin, View):
             messages.success(request, f'Produto "{produto}" criado.')
             return redirect('produtos:produto-update', pk=produto.pk)
         return render(request, self.template_name, self.get_context(form, request=request))
+
+
+class ProdutoGerarCodigoBarrasView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'produtos'
+    permissao_acao = 'ver'
+
+    def post(self, request):
+        try:
+            codigo = gerar_codigo_barras_unico(empresa=request.user.empresa)
+        except RuntimeError as erro:
+            return JsonResponse({'ok': False, 'error': str(erro)}, status=503)
+        return JsonResponse({
+            'ok': True,
+            'codigo_barras': codigo,
+            'formato': 'EAN-13 interno',
+        })
 
 
 class ProdutoDuplicarView(ProdutoCreateView):
