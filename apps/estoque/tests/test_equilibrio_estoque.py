@@ -266,3 +266,94 @@ class EquilibrioComVendaB2BECompraEmAbertoTests(TestCase):
         # So' 10 un. ainda a caminho (40 - 30 recebidas); nao cobre o
         # deficit inteiro, entao ainda sobra sugestao de transferencia.
         self.assertEqual(len(resultado["sugestoes"]), 1)
+
+
+class EquilibrioComLeadTimeTests(TestCase):
+    """
+    Fase 4: a meta de cobertura nunca fica menor que o lead time de
+    reposição do produto -- escolher "14 dias" no filtro não pode deixar
+    uma loja descoberta se o fornecedor demora mais que isso pra entregar.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.empresa = Empresa.objects.create(
+            razao_social="Rede Lead Time LTDA", nome_fantasia="Rede Lead Time",
+            cnpj="86345678000191", regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        cls.loja_a = Filial.objects.create(
+            empresa=cls.empresa, razao_social="Loja A", nome_fantasia="Loja A",
+            cnpj="86345678000192", uf="RN", is_matriz=True,
+        )
+        cls.loja_b = Filial.objects.create(
+            empresa=cls.empresa, razao_social="Loja B", nome_fantasia="Loja B",
+            cnpj="86345678000193", uf="RN",
+        )
+        cls.perfil = PerfilAcesso.objects.create(empresa=cls.empresa, nome="Admin", is_admin=True)
+        cls.usuario = Usuario.objects.create_user(
+            email="leadtime@inoovated.com", nome="Usuario Lead Time", password="teste1234",
+            empresa=cls.empresa, filial=cls.loja_a, perfil=cls.perfil,
+        )
+        cls.unidade = UnidadeMedida.objects.create(
+            empresa=cls.empresa, sigla="UN", descricao="Unidade", tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        UnidadeMedidaFilial.objects.create(unidade=cls.unidade, filial=cls.loja_a)
+        UnidadeMedidaFilial.objects.create(unidade=cls.unidade, filial=cls.loja_b)
+        # 1 un/dia de demanda (30 vendidas em 30 dias de analise).
+        cls.produto = Produto.objects.create(
+            filial=cls.loja_a, unidade_medida=cls.unidade, descricao="Produto fornecedor lento",
+            ncm="20089900", estoque_minimo=Decimal("0"), preco_venda=Decimal("10"),
+            lead_time_reposicao_dias=30,
+        )
+        ProdutoFilial.objects.create(produto=cls.produto, filial=cls.loja_a)
+        ProdutoFilial.objects.create(produto=cls.produto, filial=cls.loja_b)
+        deposito_a = Deposito.objects.create(filial=cls.loja_a, nome="Geral A", is_padrao=True)
+        deposito_b = Deposito.objects.create(filial=cls.loja_b, nome="Geral B", is_padrao=True)
+        Estoque.objects.create(
+            produto=cls.produto, filial=cls.loja_a, deposito=deposito_a,
+            quantidade_atual=Decimal("10"), quantidade_disponivel=Decimal("10"),
+        )
+        # Saldo de rede propositalmente escasso: com 10 (loja A) + 20
+        # (loja B) = 30, uma meta de 30 dias (reserva 30) ja consome todo
+        # o excedente da rede -- e' o que faz a meta de 45 dias (reserva
+        # 45) aparecer diferente no resultado, em vez de ser absorvida
+        # pela redistribuicao do excedente (ver docstring da classe).
+        Estoque.objects.create(
+            produto=cls.produto, filial=cls.loja_b, deposito=deposito_b,
+            quantidade_atual=Decimal("20"), quantidade_disponivel=Decimal("20"),
+        )
+        venda = VendaPDV.objects.create(
+            filial=cls.loja_a, numero_venda=1, usuario=cls.usuario,
+            data_venda=timezone.now(), status="finalizada", valor_total=300,
+        )
+        ItemVendaPDV.objects.create(
+            venda_pdv=venda, produto=cls.produto, numero_item=1, quantidade=30,
+            unidade_medida="UN", valor_unitario=10, valor_total=300,
+        )
+
+    def test_meta_usa_o_lead_time_quando_maior_que_a_cobertura_escolhida(self):
+        # Cobertura escolhida: 14 dias. Lead time do produto: 30 dias ->
+        # a meta de verdade usa 30 dias (1 un./dia x 30 = 30 un.), nao 14.
+        resultado = calcular_equilibrio(
+            empresa=self.empresa, dias_analise=30, dias_cobertura=14,
+        )
+
+        self.assertEqual(len(resultado["sugestoes"]), 1)
+        sugestao = resultado["sugestoes"][0]
+        self.assertEqual(sugestao["destino_meta"], Decimal("30.000"))
+        self.assertEqual(sugestao["dias_meta"], 30)
+        self.assertTrue(sugestao["lead_time_maior_que_cobertura"])
+
+    def test_cobertura_do_filtro_vence_quando_maior_que_o_lead_time(self):
+        # Filtro pede 45 dias de cobertura, acima do lead time (30) -- a
+        # meta segue o filtro, nao o lead time, e por isso fica maior que
+        # no teste acima.
+        resultado = calcular_equilibrio(
+            empresa=self.empresa, dias_analise=30, dias_cobertura=45,
+        )
+
+        sugestao = resultado["sugestoes"][0]
+        self.assertEqual(sugestao["destino_meta"], Decimal("45.000"))
+        self.assertEqual(sugestao["dias_meta"], 45)
+        self.assertFalse(sugestao["lead_time_maior_que_cobertura"])

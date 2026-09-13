@@ -147,6 +147,11 @@ def calcular_equilibrio(
             continue
         analisados += 1
         posicoes = []
+        # A meta de cobertura nunca fica menor que o lead time de reposição
+        # do produto: escolher "14 dias" no filtro não pode deixar uma loja
+        # descoberta se o fornecedor dela demora 20 -- a reserva existe
+        # justamente para o intervalo até a próxima compra chegar.
+        dias_meta = max(dias_cobertura, produto.lead_time_reposicao_dias or 0)
         for filial_id in vinculadas:
             vendido = vendas[(produto.pk, filial_id)]
             demanda_diaria = vendido / divisor
@@ -154,7 +159,7 @@ def calcular_equilibrio(
             reserva = max(
                 _decimal(produto.estoque_minimo),
                 _decimal(produto.estoque_seguranca),
-                demanda_diaria * Decimal(dias_cobertura),
+                demanda_diaria * Decimal(dias_meta),
             )
             posicoes.append({
                 "filial_id": filial_id,
@@ -222,6 +227,8 @@ def calcular_equilibrio(
                     "destino_cobertura": _cobertura(destino["saldo"], destino["demanda_diaria"]),
                     "destino_meta": destino["meta"].quantize(Decimal("0.001")),
                     "destino_a_caminho": destino["a_caminho"],
+                    "dias_meta": dias_meta,
+                    "lead_time_maior_que_cobertura": produto.lead_time_reposicao_dias > dias_cobertura,
                     "produto_parado_origem": origem["vendido"] == ZERO,
                     "destino_sem_estoque": destino["saldo"] <= ZERO,
                 })
