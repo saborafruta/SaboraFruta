@@ -25,6 +25,19 @@ def _opcoes_deslocamento_horizontal():
 
 
 DESLOCAMENTO_HORIZONTAL_CHOICES = _opcoes_deslocamento_horizontal()
+TAMANHO_FONTE_MENSAGEM_CHOICES = [
+    ('1.20', '1,2 mm — pequena'),
+    ('1.50', '1,5 mm'),
+    ('2.00', '2,0 mm'),
+    ('2.50', '2,5 mm'),
+    ('2.70', '2,7 mm — padrão'),
+    ('3.00', '3,0 mm'),
+    ('3.50', '3,5 mm — grande'),
+    ('4.00', '4,0 mm — grande'),
+    ('4.50', '4,5 mm — extra grande'),
+    ('5.00', '5,0 mm — extra grande'),
+    ('6.00', '6,0 mm — máxima'),
+]
 
 
 class DecimalCalibracaoField(forms.DecimalField):
@@ -54,6 +67,12 @@ class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
         min_value=-10, max_value=10, decimal_places=2, max_digits=5,
         widget=forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '0,0'}),
     )
+    tamanho_fonte_mensagem_mm = DecimalCalibracaoField(
+        label='Tamanho máximo da fonte',
+        help_text='Se o texto não couber, a fonte é reduzida automaticamente para evitar cortes.',
+        min_value=1, max_value=8, decimal_places=2, max_digits=4,
+        widget=forms.Select(choices=TAMANHO_FONTE_MENSAGEM_CHOICES),
+    )
 
     class Meta:
         model = ConfiguracaoEtiquetaVenda
@@ -61,7 +80,8 @@ class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
             'ativa', 'largura_mm', 'altura_mm', 'impressora_nome',
             'margem_interna_mm', 'deslocamento_horizontal_mm',
             'deslocamento_vertical_mm', 'alta_nitidez',
-            'texto_rodape', 'exibir_logo', 'exibir_nome_empresa',
+            'texto_rodape', 'tamanho_fonte_mensagem_mm',
+            'exibir_logo', 'exibir_nome_empresa',
             'exibir_nome_cliente', 'exibir_numero_venda', 'exibir_data_venda',
             'layout_elementos',
         ]
@@ -88,6 +108,7 @@ class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
             'alta_nitidez': 'Otimizar para alta nitidez',
             'impressora_nome': 'Impressora de etiquetas',
             'texto_rodape': 'Mensagem da empresa',
+            'tamanho_fonte_mensagem_mm': 'Tamanho máximo da fonte',
             'exibir_logo': 'Logo da filial',
             'exibir_nome_empresa': 'Nome da empresa/filial',
             'exibir_nome_cliente': 'Nome do cliente da venda',

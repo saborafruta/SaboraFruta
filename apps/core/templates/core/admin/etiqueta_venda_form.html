@@ -107,11 +107,19 @@
 
       <section class="space-y-4 border-t border-gray-500/20 pt-5">
         <h3 class="font-semibold text-lg">Conteúdo</h3>
-        <div>
-          <label for="{{ form.texto_rodape.id_for_label }}" class="block text-sm font-semibold mb-2">{{ form.texto_rodape.label }}</label>
-          {{ form.texto_rodape }}
-          <p class="text-xs text-gray-500 mt-2">Texto livre com até 300 caracteres.</p>
-          {% if form.texto_rodape.errors %}<div class="text-sm text-red-500 mt-2">{{ form.texto_rodape.errors|striptags }}</div>{% endif %}
+        <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,2fr)_minmax(180px,1fr)] gap-4 items-start">
+          <div>
+            <label for="{{ form.texto_rodape.id_for_label }}" class="block text-sm font-semibold mb-2">{{ form.texto_rodape.label }}</label>
+            {{ form.texto_rodape }}
+            <p class="text-xs text-gray-500 mt-2">Texto livre com até 300 caracteres.</p>
+            {% if form.texto_rodape.errors %}<div class="text-sm text-red-500 mt-2">{{ form.texto_rodape.errors|striptags }}</div>{% endif %}
+          </div>
+          <div>
+            <label for="{{ form.tamanho_fonte_mensagem_mm.id_for_label }}" class="block text-sm font-semibold mb-2">{{ form.tamanho_fonte_mensagem_mm.label }}</label>
+            {{ form.tamanho_fonte_mensagem_mm }}
+            <p class="text-xs text-gray-500 mt-2">{{ form.tamanho_fonte_mensagem_mm.help_text }}</p>
+            {% if form.tamanho_fonte_mensagem_mm.errors %}<div class="text-sm text-red-500 mt-2">{{ form.tamanho_fonte_mensagem_mm.errors|striptags }}</div>{% endif %}
+          </div>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {% for field in form %}
@@ -177,6 +185,7 @@
     const width = byId('id_largura_mm');
     const height = byId('id_altura_mm');
     const message = byId('id_texto_rodape');
+    const messageFont = byId('id_tamanho_fonte_mensagem_mm');
     const printer = byId('id_impressora_nome');
     const preview = byId('label-preview');
     const content = byId('label-content');
@@ -244,7 +253,7 @@
         ['preview-customer', 5, 1.5],
         ['preview-sale', 2.5, 1.2],
         ['preview-date', 2.5, 1.2],
-        ['preview-message', 2.7, 1.2]
+        ['preview-message', decimalValue(messageFont, 2.7), 1]
       ];
       content.querySelectorAll('.label-layout-item').forEach(element => {
         element.style.padding = (element.dataset.layoutKey === 'logo' ? 1 : 0.5) * pxPerMm + 'px';
@@ -338,7 +347,7 @@
       Object.keys(layout).forEach(applyPosition);
       persistLayout();
     };
-    [width, height, margin, offsetX, offsetY, highSharpness, message, printer, ...Object.keys(toggles).map(byId)].forEach(input => {
+    [width, height, margin, offsetX, offsetY, highSharpness, message, messageFont, printer, ...Object.keys(toggles).map(byId)].forEach(input => {
       input.addEventListener('input', refresh);
       input.addEventListener('change', refresh);
     });

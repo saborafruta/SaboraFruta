@@ -40,7 +40,7 @@
     .company { font-size:3.2mm; font-weight:800; line-height:1.05; }
     .customer { font-size:5mm; font-weight:900; line-height:1.03; }
     .sale-meta { font-size:2.5mm; line-height:1.1; }
-    .message { border-top:.25mm solid #111; font-size:2.7mm; font-weight:700; line-height:1.12; }
+    .message { border-top:.25mm solid #111; font-size:{{ config.tamanho_fonte_mensagem_mm|unlocalize }}mm; font-weight:700; line-height:1.12; }
     .label.high-sharpness { print-color-adjust:exact; -webkit-print-color-adjust:exact; }
     .label.high-sharpness .label-content { filter:contrast(1.16); }
     .label.high-sharpness .element { -webkit-font-smoothing:none; text-rendering:geometricPrecision; }
@@ -93,7 +93,7 @@
         {% endif %}
         {% if config.exibir_numero_venda %}<div class="element sale-meta" data-fit-text data-min-font-mm="1.2" style="left:{{ layout_etiqueta.venda.x|unlocalize }}%;top:{{ layout_etiqueta.venda.y|unlocalize }}%;width:{{ layout_etiqueta.venda.w|unlocalize }}%;height:{{ layout_etiqueta.venda.h|unlocalize }}%;">Venda #{{ venda.numero_venda|stringformat:"06d" }}</div>{% endif %}
         {% if config.exibir_data_venda %}<div class="element sale-meta" data-fit-text data-min-font-mm="1.2" style="left:{{ layout_etiqueta.data.x|unlocalize }}%;top:{{ layout_etiqueta.data.y|unlocalize }}%;width:{{ layout_etiqueta.data.w|unlocalize }}%;height:{{ layout_etiqueta.data.h|unlocalize }}%;">{{ venda.data_venda|date:"d/m/Y H:i" }}</div>{% endif %}
-        {% if config.texto_rodape %}<div class="element message" data-fit-text data-min-font-mm="1.2" style="left:{{ layout_etiqueta.mensagem.x|unlocalize }}%;top:{{ layout_etiqueta.mensagem.y|unlocalize }}%;width:{{ layout_etiqueta.mensagem.w|unlocalize }}%;height:{{ layout_etiqueta.mensagem.h|unlocalize }}%;">{{ config.texto_rodape }}</div>{% endif %}
+        {% if config.texto_rodape %}<div class="element message" data-fit-text data-min-font-mm="1" style="left:{{ layout_etiqueta.mensagem.x|unlocalize }}%;top:{{ layout_etiqueta.mensagem.y|unlocalize }}%;width:{{ layout_etiqueta.mensagem.w|unlocalize }}%;height:{{ layout_etiqueta.mensagem.h|unlocalize }}%;">{{ config.texto_rodape }}</div>{% endif %}
         </div>
       </section>
     </main>
