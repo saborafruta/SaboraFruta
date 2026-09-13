@@ -158,6 +158,17 @@ class CheckoutVendaTests(TestCase):
         self.assertContains(resposta, 'Cadastro rápido de cliente')
         self.assertContains(menu, 'title="Checkout de venda"')
 
+    def test_tela_expoe_operacao_por_teclado_e_quantidade_antes_da_leitura(self):
+        self.habilitar_checkout()
+
+        resposta = self.client.get(reverse('pdv:checkout'))
+
+        self.assertContains(resposta, 'x-ref="quantidadeProduto"')
+        self.assertContains(resposta, 'x-ref="formaPagamento"')
+        self.assertContains(resposta, 'x-ref="valorPagamento"')
+        self.assertContains(resposta, '<kbd>F10</kbd>Finalizar', html=True)
+        self.assertContains(resposta, 'quantidadeParaProduto(produto)')
+
     @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do checkout')
     def test_javascript_renderizado_tem_sintaxe_valida(self):
         self.habilitar_checkout()
@@ -169,6 +180,59 @@ class CheckoutVendaTests(TestCase):
 
         resultado = subprocess.run(
             [shutil.which('node'), '--check'],
+            input=script,
+            text=True,
+            encoding='utf-8',
+            capture_output=True,
+            timeout=20,
+        )
+
+        self.assertEqual(resultado.returncode, 0, resultado.stdout + resultado.stderr)
+
+    @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do checkout')
+    def test_quantidade_previa_e_valor_recebido_funcionam_no_cliente(self):
+        self.habilitar_checkout()
+        resposta = self.client.get(reverse('pdv:checkout'))
+        html = resposta.content.decode('utf-8')
+        script = 'function checkoutVenda()' + html.split(
+            'function checkoutVenda()', 1,
+        )[1].split('</script>', 1)[0]
+        script += r'''
+const assert = require('node:assert/strict');
+global.document = {getElementById: () => ({textContent: '[]'})};
+const checkout = checkoutVenda();
+checkout.$refs = {};
+checkout.$nextTick = (callback) => callback();
+checkout.quantidadeEntrada = '3';
+checkout.adicionarProduto({
+  id: 7, descricao: 'Produto', preco: 10, pode_vender: true,
+  quantidade_step: 1, quantidade_decimais: 0
+});
+assert.equal(checkout.itens[0].quantidade, 3);
+assert.equal(checkout.quantidadeEntrada, '1');
+assert.equal(checkout.valorPagamentoEntrada, '30,00');
+checkout.quantidadeEntrada = '2';
+checkout.adicionarProduto({
+  id: 7, descricao: 'Produto', preco: 10, pode_vender: true,
+  quantidade_step: 1, quantidade_decimais: 0
+});
+assert.equal(checkout.itens[0].quantidade, 5);
+checkout.sessao = {id: 1};
+checkout.formasPagamento = [{id: 3, descricao: 'Dinheiro', tipo: 'dinheiro'}];
+checkout.selecionarForma(checkout.formasPagamento[0]);
+assert.equal(checkout.valorPagamentoEntrada, '50,00');
+checkout.valorPagamentoEntrada = '60,00';
+checkout.valorPagamentoManual = true;
+assert.equal(checkout.troco, 10);
+assert.equal(checkout.faltaPagamento, 0);
+assert.equal(checkout.podeFinalizar, true);
+checkout.valorPagamentoEntrada = '40,00';
+assert.equal(checkout.faltaPagamento, 10);
+assert.equal(checkout.podeFinalizar, false);
+'''
+
+        resultado = subprocess.run(
+            [shutil.which('node')],
             input=script,
             text=True,
             encoding='utf-8',
