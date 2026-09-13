@@ -259,8 +259,11 @@
         status.setAttribute('aria-live', 'polite');
         panel.appendChild(status);
 
+        var search = nav.querySelector('[data-sidebar-search]');
         var logo = nav.querySelector('.sidebar-branch-logo-card');
-        if (logo) logo.insertAdjacentElement('afterend', panel); else nav.prepend(panel);
+        if (search) search.insertAdjacentElement('afterend', panel);
+        else if (logo) logo.insertAdjacentElement('afterend', panel);
+        else nav.prepend(panel);
       });
     }
 
