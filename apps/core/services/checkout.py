@@ -1,16 +1,13 @@
 """Resolução segura da configuração do checkout entre Central e banco operacional."""
 
 import hashlib
-from datetime import timedelta
 
 from django.conf import settings
 from django.db import DEFAULT_DB_ALIAS
 from django.db.models import Q
-from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
 
 
-AUTORIZACAO_BUSCA_NOME_MINUTOS = 30
 _SESSION_KEY_BUSCA_NOME = 'checkout_busca_nome_autorizacao'
 
 
@@ -97,19 +94,45 @@ def _autorizador_elegivel(request, usuario) -> bool:
     return usuario.tem_permissao('pdv', 'aprovar')
 
 
+def usuarios_autorizadores_checkout(request) -> list[dict]:
+    """Lista os aprovadores ativos que podem atuar na filial do checkout."""
+    from apps.core.models import Usuario
+
+    usuarios = (
+        Usuario.objects.select_related('perfil')
+        .filter(
+            Q(empresa_id=request.filial_ativa.empresa_id) | Q(is_superuser=True),
+            ativo=True,
+        )
+        .order_by('nome', 'email')
+    )
+    return [
+        {
+            'id': usuario.pk,
+            'nome': usuario.nome or usuario.email,
+            'email': usuario.email,
+        }
+        for usuario in usuarios
+        if _autorizador_elegivel(request, usuario)
+    ]
+
+
 @sensitive_variables('senha')
-def validar_autorizador_checkout_busca_nome(request, usuario_login: str, senha: str):
+def validar_autorizador_checkout_busca_nome(request, usuario_id, senha: str):
     """Valida as credenciais de um usuário com Aprovar no PDV da filial."""
     from apps.core.models import Usuario
 
-    login = (usuario_login or '').strip().lower()
-    if not login or not senha or len(login) > 120 or len(senha) > 128:
+    try:
+        usuario_id = int(usuario_id)
+    except (TypeError, ValueError):
+        return None
+    if not senha or len(senha) > 128:
         return None
     autorizador = (
         Usuario.objects.select_related('perfil')
         .filter(
             Q(empresa_id=request.filial_ativa.empresa_id) | Q(is_superuser=True),
-            email__iexact=login,
+            pk=usuario_id,
             ativo=True,
         )
         .first()
@@ -122,26 +145,18 @@ def validar_autorizador_checkout_busca_nome(request, usuario_login: str, senha: 
 
 
 def autorizar_checkout_busca_nome(request, autorizador) -> None:
-    """Autoriza por 30 minutos usando a conta aprovada para a filial atual."""
+    """Autoriza a seleção de um único produto pesquisado por nome."""
     request.session[_SESSION_KEY_BUSCA_NOME] = {
         'escopo': _escopo_busca_nome(request),
         'usuario_id': autorizador.pk,
         'versao': _versao_senha(autorizador.password),
-        'expira_em': (timezone.now() + timedelta(minutes=AUTORIZACAO_BUSCA_NOME_MINUTOS)).timestamp(),
     }
 
 
 def checkout_busca_nome_liberada(request) -> bool:
-    """Confirma a autorização vigente, vinculada à filial e à senha atual."""
+    """Confirma a autorização de uso único vinculada à filial e à senha atual."""
     autorizacao = request.session.get(_SESSION_KEY_BUSCA_NOME) or {}
-    try:
-        expira_em = float(autorizacao.get('expira_em', 0))
-    except (TypeError, ValueError):
-        return False
     if autorizacao.get('escopo') != _escopo_busca_nome(request):
-        return False
-    if expira_em <= timezone.now().timestamp():
-        request.session.pop(_SESSION_KEY_BUSCA_NOME, None)
         return False
     from apps.core.models import Usuario
 
@@ -150,7 +165,23 @@ def checkout_busca_nome_liberada(request) -> bool:
         .filter(pk=autorizacao.get('usuario_id'), ativo=True)
         .first()
     )
-    return bool(
+    liberada = bool(
         _autorizador_elegivel(request, autorizador)
         and autorizacao.get('versao') == _versao_senha(autorizador.password)
     )
+    if not liberada:
+        request.session.pop(_SESSION_KEY_BUSCA_NOME, None)
+    return liberada
+
+
+def encerrar_checkout_busca_nome(request) -> None:
+    """Revoga qualquer autorização ainda não consumida."""
+    request.session.pop(_SESSION_KEY_BUSCA_NOME, None)
+
+
+def consumir_checkout_busca_nome(request) -> bool:
+    """Consome de forma definitiva a autorização depois da escolha do item."""
+    if not checkout_busca_nome_liberada(request):
+        return False
+    encerrar_checkout_busca_nome(request)
+    return True

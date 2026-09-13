@@ -17,10 +17,12 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 
 from apps.cadastros.models import Cliente
 from apps.core.services.checkout import (
-    AUTORIZACAO_BUSCA_NOME_MINUTOS,
     autorizar_checkout_busca_nome,
     checkout_busca_nome_liberada,
     checkout_venda_ativo,
+    consumir_checkout_busca_nome,
+    encerrar_checkout_busca_nome,
+    usuarios_autorizadores_checkout,
     validar_autorizador_checkout_busca_nome,
 )
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
@@ -210,6 +212,9 @@ def checkout_venda(request):
     if not checkout_venda_ativo(request):
         messages.warning(request, 'O checkout de venda não está habilitado para esta filial.')
         return redirect('core:dashboard')
+    # Uma autorização incompleta não deve sobreviver a recarga ou nova entrada
+    # na tela. Cada produto por nome exige uma aprovação própria.
+    encerrar_checkout_busca_nome(request)
     caixas = list(
         Caixa.objects.for_filial(request.filial_ativa)
         .filter(ativo=True)
@@ -219,7 +224,7 @@ def checkout_venda(request):
     return render(request, 'pdv/checkout.html', {
         'title': 'Checkout de venda',
         'caixas': caixas,
-        'busca_nome_liberada': checkout_busca_nome_liberada(request),
+        'usuarios_autorizadores': usuarios_autorizadores_checkout(request),
         'etiqueta_venda_disponivel': bool(config_etiqueta and config_etiqueta.ativa),
     })
 
@@ -234,7 +239,7 @@ def checkout_liberar_busca_nome(request):
         dados = json.loads(request.body or b'{}')
     except (json.JSONDecodeError, TypeError):
         return JsonResponse({'erro': 'Dados inválidos.'}, status=400)
-    usuario_login = str(dados.get('usuario') or '')
+    usuario_id = dados.get('usuario_id')
     senha = str(dados.get('senha') or '')
     agora = timezone.now().timestamp()
     filial_id = getattr(request.filial_ativa, 'cnpj', None) or request.filial_ativa.pk
@@ -250,7 +255,7 @@ def checkout_liberar_busca_nome(request):
     quantidade = int(tentativas.get('quantidade') or 0)
     if agora - inicio > 60:
         inicio, quantidade = agora, 0
-    autorizador = validar_autorizador_checkout_busca_nome(request, usuario_login, senha)
+    autorizador = validar_autorizador_checkout_busca_nome(request, usuario_id, senha)
     if autorizador is None:
         quantidade += 1
         request.session[chave_tentativas] = {
@@ -264,10 +269,40 @@ def checkout_liberar_busca_nome(request):
         )
     request.session.pop(chave_tentativas, None)
     autorizar_checkout_busca_nome(request, autorizador)
-    return JsonResponse({
-        'ok': True,
-        'expira_em_minutos': AUTORIZACAO_BUSCA_NOME_MINUTOS,
-    })
+    return JsonResponse({'ok': True})
+
+
+@requer_permissao('pdv', 'ver')
+@require_POST
+def checkout_consumir_busca_nome(request):
+    """Consome a autorização ao confirmar um produto pesquisado por nome."""
+    if not checkout_venda_ativo(request):
+        return JsonResponse({'erro': 'Checkout não habilitado para esta filial.'}, status=404)
+    try:
+        dados = json.loads(request.body or b'{}')
+        produto_id = int(dados.get('produto_id'))
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return JsonResponse({'erro': 'Produto inválido.'}, status=400)
+    produto_existe = Produto.objects.for_filial(request.filial_ativa).filter(
+        pk=produto_id,
+        ativo=True,
+    ).exists()
+    if not produto_existe:
+        return JsonResponse({'erro': 'Produto não encontrado nesta filial.'}, status=404)
+    if not consumir_checkout_busca_nome(request):
+        return JsonResponse(
+            {'erro': 'A autorização já foi utilizada. Autorize novamente para este item.'},
+            status=403,
+        )
+    return JsonResponse({'ok': True})
+
+
+@requer_permissao('pdv', 'ver')
+@require_POST
+def checkout_encerrar_busca_nome(request):
+    """Revoga a autorização quando o operador desmarca a busca por nome."""
+    encerrar_checkout_busca_nome(request)
+    return JsonResponse({'ok': True})
 
 
 @requer_permissao('pdv', 'ver')

@@ -387,6 +387,14 @@ assert.deepEqual(acoes, [
 
     def test_busca_por_nome_aparece_para_operador_sem_aprovacao_mas_exige_autorizacao(self):
         self.habilitar_checkout()
+        Usuario.objects.create_user(
+            email='supervisor-outra-filial@inoovated.com',
+            nome='Supervisor Outra Filial',
+            password='Senha-Supervisor-43',
+            empresa=self.empresa,
+            filial=self.outra_filial,
+            perfil=self.perfil_supervisor,
+        )
         resposta = self.buscar('Especial Checkout', por_nome='1')
         tela = self.client.get(reverse('pdv:checkout'))
 
@@ -394,7 +402,16 @@ assert.deepEqual(acoes, [
         self.assertFalse(self.usuario.tem_permissao('pdv', 'aprovar'))
         self.assertContains(tela, 'Permitir nome')
         self.assertContains(tela, 'Autorizar busca por nome')
-        self.assertContains(tela, 'Usuário (e-mail)')
+        self.assertContains(tela, 'Usuário autorizador')
+        self.assertContains(tela, 'Autorizar um item')
+        self.assertEqual(
+            tela.context['usuarios_autorizadores'],
+            [{
+                'id': self.supervisor.pk,
+                'nome': self.supervisor.nome,
+                'email': self.supervisor.email,
+            }],
+        )
         self.assertEqual(self.buscar('Especial Checkout', por_nome='1').status_code, 403)
 
     def test_credenciais_sem_permissao_nao_liberam_busca_por_nome(self):
@@ -403,10 +420,7 @@ assert.deepEqual(acoes, [
 
         resposta = self.client.post(
             endpoint,
-            data=(
-                '{"usuario":"checkout@inoovated.com",'
-                '"senha":"teste1234"}'
-            ),
+            data=f'{{"usuario_id":{self.usuario.pk},"senha":"teste1234"}}',
             content_type='application/json',
         )
         self.assertEqual(resposta.status_code, 403)
@@ -418,14 +432,11 @@ assert.deepEqual(acoes, [
 
         liberacao = self.client.post(
             endpoint,
-            data=(
-                '{"usuario":"supervisor-checkout@inoovated.com",'
-                '"senha":"Senha-Supervisor-42"}'
-            ),
+            data=f'{{"usuario_id":{self.supervisor.pk},"senha":"Senha-Supervisor-42"}}',
             content_type='application/json',
         )
         self.assertEqual(liberacao.status_code, 200, liberacao.content)
-        self.assertEqual(liberacao.json()['expira_em_minutos'], 30)
+        self.assertEqual(liberacao.json(), {'ok': True})
 
         resposta = self.buscar('Especial Checkout', por_nome='1')
 
@@ -436,6 +447,31 @@ assert.deepEqual(acoes, [
         )
         self.assertTrue(resposta.json()['busca_por_nome'])
 
+    def test_autorizacao_por_nome_e_consumida_ao_adicionar_um_item(self):
+        self.habilitar_checkout()
+        liberacao = self.client.post(
+            reverse('pdv:api_checkout_liberar_busca_nome'),
+            data=f'{{"usuario_id":{self.supervisor.pk},"senha":"Senha-Supervisor-42"}}',
+            content_type='application/json',
+        )
+        self.assertEqual(liberacao.status_code, 200, liberacao.content)
+        self.assertEqual(self.buscar('Especial Checkout', por_nome='1').status_code, 200)
+
+        consumo = self.client.post(
+            reverse('pdv:api_checkout_consumir_busca_nome'),
+            data=f'{{"produto_id":{self.produto.pk}}}',
+            content_type='application/json',
+        )
+
+        self.assertEqual(consumo.status_code, 200, consumo.content)
+        self.assertEqual(self.buscar('Especial Checkout', por_nome='1').status_code, 403)
+        segundo_consumo = self.client.post(
+            reverse('pdv:api_checkout_consumir_busca_nome'),
+            data=f'{{"produto_id":{self.produto.pk}}}',
+            content_type='application/json',
+        )
+        self.assertEqual(segundo_consumo.status_code, 403)
+
     def test_tentativas_repetidas_de_senha_sao_limitadas(self):
         self.habilitar_checkout()
         endpoint = reverse('pdv:api_checkout_liberar_busca_nome')
@@ -443,20 +479,14 @@ assert.deepEqual(acoes, [
         for _ in range(5):
             resposta = self.client.post(
                 endpoint,
-                data=(
-                    '{"usuario":"supervisor-checkout@inoovated.com",'
-                    '"senha":"incorreta"}'
-                ),
+                data=f'{{"usuario_id":{self.supervisor.pk},"senha":"incorreta"}}',
                 content_type='application/json',
             )
             self.assertEqual(resposta.status_code, 403)
 
         bloqueada = self.client.post(
             endpoint,
-            data=(
-                '{"usuario":"supervisor-checkout@inoovated.com",'
-                '"senha":"Senha-Supervisor-42"}'
-            ),
+            data=f'{{"usuario_id":{self.supervisor.pk},"senha":"Senha-Supervisor-42"}}',
             content_type='application/json',
         )
         self.assertEqual(bloqueada.status_code, 429)
@@ -466,10 +496,7 @@ assert.deepEqual(acoes, [
         endpoint = reverse('pdv:api_checkout_liberar_busca_nome')
         self.client.post(
             endpoint,
-            data=(
-                '{"usuario":"supervisor-checkout@inoovated.com",'
-                '"senha":"Senha-Supervisor-42"}'
-            ),
+            data=f'{{"usuario_id":{self.supervisor.pk},"senha":"Senha-Supervisor-42"}}',
             content_type='application/json',
         )
         self.assertEqual(self.buscar('Especial Checkout', por_nome='1').status_code, 200)
