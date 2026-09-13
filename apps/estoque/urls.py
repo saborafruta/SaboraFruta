@@ -26,6 +26,8 @@ urlpatterns = [
     path('central-equalizacao/', views.CentralEqualizacaoView.as_view(), name='central-equalizacao'),
     path('recomendacoes/', views.RecomendacoesTransferenciaView.as_view(), name='recomendacoes-transferencia'),
     path('simulador/', views.SimuladorTransferenciaView.as_view(), name='simulador-transferencia'),
+    path('demanda-inteligente/', views.DemandaInteligenteView.as_view(), name='demanda-inteligente'),
+    path('demanda-inteligente/pesos/', views.ConfiguracaoDemandaPonderadaView.as_view(), name='demanda-inteligente-config'),
     path('movimentacoes/', views.MovimentacaoListView.as_view(), name='movimentacao-list'),
 
     # Operacoes

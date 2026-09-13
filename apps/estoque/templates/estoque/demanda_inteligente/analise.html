@@ -1,0 +1,126 @@
+{% extends "_base.html" %}
+
+{% block title %}Inteligência de demanda{% endblock %}
+{% block page_title %}Inteligência de demanda{% endblock %}
+
+{% block content %}
+<div class="space-y-5" x-data="demandaInteligente()">
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <div class="flex gap-2">
+      <a href="{% url 'estoque:equilibrio-estoque' %}" class="btn-secondary">Equilíbrio de estoque</a>
+    </div>
+    <a href="{% url 'estoque:demanda-inteligente-config' %}" class="btn-secondary">Pesos por período</a>
+  </div>
+
+  <form method="get" class="card p-4">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+      <div class="relative">
+        <label class="form-label">Produto</label>
+        <input type="text" class="form-input" x-model="query" @input.debounce.300ms="buscar()"
+               @focus="aberto = true" placeholder="Buscar produto por nome ou código">
+        <input type="hidden" name="produto" x-model="produtoId">
+        <div class="absolute z-10 w-full mt-1 card p-1" x-show="aberto && resultados.length" @click.outside="aberto = false" style="display:none;">
+          <template x-for="item in resultados" :key="item.id">
+            <button type="button" class="w-full text-left px-3 py-2 text-sm rounded hover:bg-black/5" @click="selecionar(item)" x-text="item.label + (item.detalhe ? ' · ' + item.detalhe : '')"></button>
+          </template>
+        </div>
+      </div>
+      <div>
+        <label class="form-label">Filial</label>
+        <select class="form-input" name="filial">
+          <option value="">Selecione</option>
+          {% for filial in filiais %}<option value="{{ filial.pk }}" {% if filial_id == filial.pk %}selected{% endif %}>{{ filial.nome_fantasia|default:filial.razao_social }}</option>{% endfor %}
+        </select>
+      </div>
+      <button class="btn-primary" type="submit">Analisar</button>
+    </div>
+  </form>
+
+  {% if resultado %}
+  <div class="card p-5">
+    <h3 class="font-semibold mb-3">Demanda ponderada</h3>
+    <div class="text-3xl font-bold" style="color:#2563eb;">{{ resultado.demanda.demanda_ponderada }} un./dia</div>
+    <div class="overflow-x-auto mt-4">
+      <table class="w-full text-sm">
+        <thead>
+          <tr :style="temaClaro ? 'background:#f8fafc;color:#475569;' : 'background:#0f172a;color:#94a3b8;'">
+            <th class="text-left font-medium px-3 py-2">Período</th>
+            <th class="text-right font-medium px-3 py-2">Peso</th>
+            <th class="text-right font-medium px-3 py-2">Vendido</th>
+            <th class="text-right font-medium px-3 py-2">Média/dia</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in resultado.demanda.detalhamento %}
+          <tr :style="temaClaro ? 'border-top:1px solid #e2e8f0;' : 'border-top:1px solid #1e293b;'">
+            <td class="px-3 py-2">Últimos {{ item.dias }} dias</td>
+            <td class="px-3 py-2 text-right">{{ item.peso }}%</td>
+            <td class="px-3 py-2 text-right">{{ item.vendido|floatformat:3 }}</td>
+            <td class="px-3 py-2 text-right">{{ item.media_diaria|floatformat:3 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="px-3 py-4 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhum período com peso configurado.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="card p-5">
+      <h3 class="font-semibold mb-3">Venda por dia da semana (últimos 180 dias)</h3>
+      <div class="space-y-2">
+        {% for item in resultado.dia_semana %}
+        <div class="flex items-center gap-3">
+          <span class="w-20 text-sm">{{ item.label }}</span>
+          <div class="flex-1 rounded-full h-2" :style="temaClaro ? 'background:#e2e8f0;' : 'background:#1e293b;'">
+            <div class="h-2 rounded-full" style="background:#2563eb;width:{% widthratio item.indice|default_if_none:0 3 100 %}%;"></div>
+          </div>
+          <span class="text-sm w-16 text-right">{% if item.indice is not None %}{{ item.indice }}x{% else %}—{% endif %}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="text-xs mt-3" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Índice 1,0 = média da semana. Acima de 1,0 vende mais que a média nesse dia.</p>
+    </div>
+
+    <div class="card p-5">
+      <h3 class="font-semibold mb-3">Sazonalidade (vs. mesmo período ano anterior)</h3>
+      {% if resultado.sazonalidade.indice is not None %}
+        <div class="text-3xl font-bold" style="color:{% if resultado.sazonalidade.indice >= 1 %}#16a34a{% else %}#dc2626{% endif %};">{{ resultado.sazonalidade.indice }}x</div>
+        <p class="text-sm mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          Vendeu {{ resultado.sazonalidade.vendido_atual|floatformat:3 }} nos últimos 30 dias, contra {{ resultado.sazonalidade.vendido_ano_anterior|floatformat:3 }} no mesmo período do ano anterior.
+        </p>
+      {% else %}
+        <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Sem venda no mesmo período do ano anterior para comparar.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function demandaInteligente() {
+  return {
+    query: '{{ produto_selecionado.descricao|default:""|escapejs }}',
+    produtoId: '{{ produto_selecionado.pk|default:"" }}',
+    resultados: [],
+    aberto: false,
+    async buscar() {
+      this.produtoId = '';
+      if (this.query.trim().length < 2) { this.resultados = []; return; }
+      try {
+        const res = await fetch(`{% url 'estoque:produto-estoque-search-json' %}?scope=empresa&q=${encodeURIComponent(this.query.trim())}`);
+        const data = await res.json();
+        this.resultados = data.results || [];
+        this.aberto = true;
+      } catch (e) { this.resultados = []; }
+    },
+    selecionar(item) {
+      this.produtoId = item.id;
+      this.query = item.label;
+      this.aberto = false;
+    },
+  };
+}
+</script>
+{% endblock %}
