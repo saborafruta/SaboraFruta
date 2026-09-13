@@ -181,6 +181,13 @@ class ConfiguracaoEtiquetaVenda(TimestampedModel):
         default='Obrigado pela sua preferência!',
         blank=True,
     )
+    tamanho_fonte_mensagem_mm = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=Decimal('2.70'),
+        validators=[MinValueValidator(Decimal('1')), MaxValueValidator(Decimal('8'))],
+        help_text='Tamanho máximo da fonte da mensagem na etiqueta, em milímetros.',
+    )
     exibir_logo = models.BooleanField(default=True)
     exibir_nome_empresa = models.BooleanField(default=True)
     exibir_nome_cliente = models.BooleanField(default=True)

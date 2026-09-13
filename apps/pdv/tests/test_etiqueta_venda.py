@@ -17,6 +17,7 @@ class EtiquetaVendaTests(SimpleTestCase):
             'largura_mm': '60', 'altura_mm': '30', 'margem_interna_mm': '1',
             'deslocamento_horizontal_mm': '-1,5', 'deslocamento_vertical_mm': '−0,5',
             'impressora_nome': 'Zebra', 'texto_rodape': 'Teste',
+            'tamanho_fonte_mensagem_mm': '4,0',
             'layout_elementos': '{}',
         }
         form = ConfiguracaoEtiquetaVendaForm(
@@ -27,6 +28,7 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data['deslocamento_horizontal_mm'], Decimal('-1.5'))
         self.assertEqual(form.cleaned_data['deslocamento_vertical_mm'], Decimal('-0.5'))
+        self.assertEqual(form.cleaned_data['tamanho_fonte_mensagem_mm'], Decimal('4.0'))
 
     def test_ajuste_horizontal_usa_select_nativo_com_valor_negativo(self):
         form = ConfiguracaoEtiquetaVendaForm(
@@ -48,6 +50,7 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertEqual(config.largura_mm, Decimal('60.00'))
         self.assertEqual(config.altura_mm, Decimal('40.00'))
         self.assertEqual(config.texto_rodape, 'Obrigado pela sua preferência!')
+        self.assertEqual(config.tamanho_fonte_mensagem_mm, Decimal('2.70'))
         self.assertFalse(config.ativa)
         self.assertEqual(config.margem_interna_mm, Decimal('1.00'))
         self.assertEqual(config.deslocamento_horizontal_mm, Decimal('-1.00'))
@@ -69,6 +72,7 @@ class EtiquetaVendaTests(SimpleTestCase):
             altura_mm=Decimal('30.00'),
             impressora_nome='Zebra ZD220',
             texto_rodape='Volte sempre!',
+            tamanho_fonte_mensagem_mm=Decimal('4.00'),
             margem_interna_mm=Decimal('1.50'),
             deslocamento_horizontal_mm=Decimal('-1.00'),
             alta_nitidez=True,
@@ -90,6 +94,7 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertIn('Cliente Teste', html)
         self.assertIn('Venda #000644', html)
         self.assertIn('Volte sempre!', html)
+        self.assertIn('font-size:4.00mm', html)
         self.assertIn('Zebra ZD220', html)
         self.assertIn('left:3.0%', html)
         self.assertIn('left:39.0%', html)
@@ -141,6 +146,7 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertIn('id_layout_elementos', editor)
         self.assertIn('id_deslocamento_horizontal_mm', editor)
         self.assertIn('id_alta_nitidez', editor)
+        self.assertIn('id_tamanho_fonte_mensagem_mm', editor)
         self.assertIn('Escolha “esquerda”', editor)
         self.assertNotIn('setHorizontalOffset', editor)
         self.assertNotIn('offset-left-2', editor)
