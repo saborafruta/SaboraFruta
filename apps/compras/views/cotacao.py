@@ -16,8 +16,10 @@ from apps.compras.models import (
     CalculoTributarioCompra, CotacaoCompra, CotacaoCompraPreco,
 )
 from apps.compras.services.cotacao_compra_service import CotacaoCompraService
-from apps.core.constants.tributacao import RegimeIBSCBS, regime_ibs_cbs_padrao
-from apps.core.models import Empresa
+from apps.core.constants.tributacao import (
+    REGIMES_EMPRESARIAIS_COTACAO, RegimeIBSCBS,
+    regime_empresarial_para_seletor, regime_ibs_cbs_padrao,
+)
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.produtos.models import Produto
@@ -43,6 +45,8 @@ class CotacaoCompraNovaView(PermissaoRequiredMixin, View):
 
     def _contexto(self, request):
         filial = request.filial_ativa
+        regime_comprador = _regime_comprador(filial)
+        regime_ibs_comprador = _regime_ibs_comprador(filial)
         produtos = Produto.objects.for_filial(filial).filter(ativo=True).select_related(
             'unidade_medida',
         ).order_by('descricao')
@@ -50,9 +54,11 @@ class CotacaoCompraNovaView(PermissaoRequiredMixin, View):
         return {
             'empresa_nome': filial.empresa.nome_fantasia or filial.empresa.razao_social,
             'filial_nome': filial.nome_fantasia or filial.razao_social,
-            'regime_comprador': _regime_comprador(filial),
-            'regime_ibs_comprador': _regime_ibs_comprador(filial),
-            'regimes_empresariais': Empresa.RegimeTributario.choices,
+            'regime_comprador': regime_empresarial_para_seletor(
+                regime_comprador, regime_ibs_comprador,
+            ),
+            'regime_ibs_comprador': regime_ibs_comprador,
+            'regimes_empresariais': REGIMES_EMPRESARIAIS_COTACAO,
             'regimes_ibs_cbs': RegimeIBSCBS.choices,
             'data_referencia': timezone.localdate().isoformat(),
             'pode_editar_fornecedor': request.user.tem_permissao('cadastros', 'editar'),
@@ -64,13 +70,19 @@ class CotacaoCompraNovaView(PermissaoRequiredMixin, View):
                 'ncm': produto.ncm,
                 'unit': getattr(produto.unidade_medida, 'sigla', '') or '',
             } for produto in produtos],
-            'fornecedores_json': [{
-                'id': fornecedor.pk,
-                'name': str(fornecedor),
-                'cnpj': fornecedor.cpf_cnpj,
-                'regime': _regime_fornecedor(fornecedor),
-                'ibs_cbs': fornecedor.regime_ibs_cbs or regime_ibs_cbs_padrao(_regime_fornecedor(fornecedor)),
-            } for fornecedor in fornecedores],
+            'fornecedores_json': [self._fornecedor_json(fornecedor) for fornecedor in fornecedores],
+        }
+
+    @staticmethod
+    def _fornecedor_json(fornecedor):
+        regime = _regime_fornecedor(fornecedor)
+        regime_ibs = fornecedor.regime_ibs_cbs or regime_ibs_cbs_padrao(regime)
+        return {
+            'id': fornecedor.pk,
+            'name': str(fornecedor),
+            'cnpj': fornecedor.cpf_cnpj,
+            'regime': regime_empresarial_para_seletor(regime, regime_ibs),
+            'ibs_cbs': regime_ibs,
         }
 
     def get(self, request):

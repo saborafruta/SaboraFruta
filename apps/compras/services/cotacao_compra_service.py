@@ -11,7 +11,9 @@ from apps.compras.models import (
     CotacaoCompraItem, CotacaoCompraPreco, EntradaNF, ItemEntradaNF,
 )
 from apps.compras.services.purchase_tax_service import PurchaseTaxService
-from apps.core.constants.tributacao import regime_ibs_cbs_padrao
+from apps.core.constants.tributacao import (
+    normalizar_regimes_cotacao, regime_ibs_cbs_padrao,
+)
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.core.tenant_context import tenant_atomic
 from apps.produtos.models import Produto
@@ -53,8 +55,11 @@ class CotacaoCompraService:
         if len(fornecedores_dados) < 2:
             raise DadosInvalidosError('Selecione ou adicione pelo menos dois fornecedores.')
 
-        regime_comprador = dados.get('buyer_regime', '')
-        regime_ibs_comprador = dados.get('buyer_ibs_cbs', '')
+        regime_comprador_informado = dados.get('buyer_regime', '')
+        regime_comprador, regime_ibs_comprador = normalizar_regimes_cotacao(
+            regime_comprador_informado,
+            dados.get('buyer_ibs_cbs', ''),
+        )
         cls._validar_regimes(regime_comprador, regime_ibs_comprador, 'sua empresa')
         try:
             data_referencia = date.fromisoformat(
@@ -97,6 +102,7 @@ class CotacaoCompraService:
                 'filial_nome': filial.nome_fantasia or filial.razao_social,
                 'regime_tributario': regime_comprador,
                 'regime_ibs_cbs': regime_ibs_comprador,
+                'regime_informado': regime_comprador_informado,
             },
             observacao=str(dados.get('observation') or '')[:2000],
         )
@@ -131,6 +137,14 @@ class CotacaoCompraService:
         fornecedores = {}
         fornecedores_cadastrados = set()
         for fornecedor_dado in fornecedores_dados:
+            fornecedor_dado = dict(fornecedor_dado)
+            regime_informado = fornecedor_dado.get('regime', '')
+            regime_normalizado, ibs_normalizado = normalizar_regimes_cotacao(
+                regime_informado,
+                fornecedor_dado.get('ibs_cbs', ''),
+            )
+            fornecedor_dado['regime'] = regime_normalizado
+            fornecedor_dado['ibs_cbs'] = ibs_normalizado
             chave = str(fornecedor_dado.get('key') or '')
             if not chave or chave in fornecedores:
                 raise DadosInvalidosError('Fornecedor repetido ou sem identificador.')
@@ -180,6 +194,7 @@ class CotacaoCompraService:
                     'supplierCNPJ': cnpj,
                     'supplierTaxRegime': regime,
                     'supplierTaxIBSCBS': regime_ibs,
+                    'supplierTaxRegimeInformado': regime_informado,
                     'observacao': str(fornecedor_dado.get('notes') or '')[:500],
                 },
             )

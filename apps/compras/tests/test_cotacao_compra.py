@@ -112,6 +112,40 @@ class CotacaoCompraTests(TestCase):
         self.assertContains(response, 'Tecido Dry Fit')
         self.assertContains(response, 'Fornecedor Simples')
         self.assertContains(response, 'Adicionar fornecedor manual')
+        self.assertContains(response, 'Simples Nacional Híbrido')
+
+    def test_regime_hibrido_normaliza_simples_com_ibs_cbs_regular(self):
+        dados = self._payload()
+        dados['buyer_regime'] = 'simples_nacional_hibrido'
+        dados['buyer_ibs_cbs'] = 'simples'
+        dados['suppliers'][0]['regime'] = 'simples_nacional_hibrido'
+        dados['suppliers'][0]['ibs_cbs'] = 'simples'
+        dados['suppliers'][0]['update_registration'] = True
+
+        cotacao = CotacaoCompraService.criar_e_analisar(
+            filial=self.filial,
+            usuario=self.usuario,
+            dados=dados,
+            pode_editar_fornecedor=True,
+        )
+
+        self.assertEqual(cotacao.regime_comprador, 'simples_nacional')
+        self.assertEqual(cotacao.regime_ibs_cbs_comprador, 'regular')
+        self.assertEqual(
+            cotacao.empresa_snapshot['regime_informado'],
+            'simples_nacional_hibrido',
+        )
+        participante = cotacao.fornecedores.get(fornecedor=self.simples)
+        self.assertEqual(participante.supplier_tax_regime, 'simples_nacional')
+        self.assertEqual(participante.supplier_tax_ibs_cbs, 'regular')
+        self.assertEqual(
+            participante.supplier_snapshot['supplierTaxRegimeInformado'],
+            'simples_nacional_hibrido',
+        )
+        self.simples.refresh_from_db()
+        self.assertTrue(self.simples.optante_simples)
+        self.assertEqual(self.simples.regime_tributario, 'simples_nacional')
+        self.assertEqual(self.simples.regime_ibs_cbs, 'regular')
 
     def test_recomenda_por_custo_efetivo_e_guarda_snapshot(self):
         cotacao = CotacaoCompraService.criar_e_analisar(
