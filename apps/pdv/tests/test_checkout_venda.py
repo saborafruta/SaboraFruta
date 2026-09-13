@@ -407,7 +407,7 @@ assert.deepEqual(acoes, [
         self.assertEqual(
             tela.context['usuarios_autorizadores'],
             [{
-                'id': self.supervisor.pk,
+                'id': f'usuario:{self.supervisor.pk}',
                 'nome': self.supervisor.nome,
                 'email': self.supervisor.email,
             }],
@@ -420,7 +420,7 @@ assert.deepEqual(acoes, [
 
         resposta = self.client.post(
             endpoint,
-            data=f'{{"usuario_id":{self.usuario.pk},"senha":"teste1234"}}',
+            data=f'{{"usuario_id":"usuario:{self.usuario.pk}","senha":"teste1234"}}',
             content_type='application/json',
         )
         self.assertEqual(resposta.status_code, 403)
@@ -443,7 +443,7 @@ assert.deepEqual(acoes, [
 
         liberacao = self.client.post(
             reverse('pdv:api_checkout_liberar_busca_nome'),
-            data=f'{{"usuario_id":{superusuario.pk},"senha":"Senha-Superuser-42"}}',
+            data=f'{{"usuario_id":"super:{superusuario.pk}","senha":"Senha-Superuser-42"}}',
             content_type='application/json',
         )
 
@@ -456,7 +456,7 @@ assert.deepEqual(acoes, [
 
         liberacao = self.client.post(
             endpoint,
-            data=f'{{"usuario_id":{self.supervisor.pk},"senha":"Senha-Supervisor-42"}}',
+            data=f'{{"usuario_id":"usuario:{self.supervisor.pk}","senha":"Senha-Supervisor-42"}}',
             content_type='application/json',
         )
         self.assertEqual(liberacao.status_code, 200, liberacao.content)
@@ -475,7 +475,7 @@ assert.deepEqual(acoes, [
         self.habilitar_checkout()
         liberacao = self.client.post(
             reverse('pdv:api_checkout_liberar_busca_nome'),
-            data=f'{{"usuario_id":{self.supervisor.pk},"senha":"Senha-Supervisor-42"}}',
+            data=f'{{"usuario_id":"usuario:{self.supervisor.pk}","senha":"Senha-Supervisor-42"}}',
             content_type='application/json',
         )
         self.assertEqual(liberacao.status_code, 200, liberacao.content)
@@ -503,14 +503,14 @@ assert.deepEqual(acoes, [
         for _ in range(5):
             resposta = self.client.post(
                 endpoint,
-                data=f'{{"usuario_id":{self.supervisor.pk},"senha":"incorreta"}}',
+                data=f'{{"usuario_id":"usuario:{self.supervisor.pk}","senha":"incorreta"}}',
                 content_type='application/json',
             )
             self.assertEqual(resposta.status_code, 403)
 
         bloqueada = self.client.post(
             endpoint,
-            data=f'{{"usuario_id":{self.supervisor.pk},"senha":"Senha-Supervisor-42"}}',
+            data=f'{{"usuario_id":"usuario:{self.supervisor.pk}","senha":"Senha-Supervisor-42"}}',
             content_type='application/json',
         )
         self.assertEqual(bloqueada.status_code, 429)
@@ -520,7 +520,7 @@ assert.deepEqual(acoes, [
         endpoint = reverse('pdv:api_checkout_liberar_busca_nome')
         self.client.post(
             endpoint,
-            data=f'{{"usuario_id":{self.supervisor.pk},"senha":"Senha-Supervisor-42"}}',
+            data=f'{{"usuario_id":"usuario:{self.supervisor.pk}","senha":"Senha-Supervisor-42"}}',
             content_type='application/json',
         )
         self.assertEqual(self.buscar('Especial Checkout', por_nome='1').status_code, 200)
