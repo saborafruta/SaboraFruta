@@ -1,0 +1,151 @@
+{% extends "_base.html" %}
+{% load erp_extras %}
+
+{% block title %}Equilíbrio de estoque{% endblock %}
+{% block page_title %}Equilíbrio de estoque{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <style>
+    .eq-info { border:1px solid rgba(59,130,246,.25); background:rgba(59,130,246,.08); }
+    .eq-flow { display:grid; grid-template-columns:minmax(145px,1fr) 52px minmax(145px,1fr); align-items:center; gap:.6rem; }
+    .eq-branch { border:1px solid rgba(148,163,184,.24); border-radius:12px; padding:.7rem; min-width:0; }
+    .eq-arrow { display:flex; align-items:center; justify-content:center; width:38px; height:38px; margin:auto; border-radius:999px; background:#dbeafe; color:#1d4ed8; font-weight:800; }
+    .eq-badge { display:inline-flex; align-items:center; border-radius:999px; padding:.18rem .5rem; font-size:.7rem; font-weight:800; }
+    .eq-warning { background:#fef3c7; color:#92400e; }
+    .eq-critical { background:#fee2e2; color:#b91c1c; }
+    .eq-good { background:#dcfce7; color:#166534; }
+    body:not(.tema-claro) .eq-branch { border-color:rgba(148,163,184,.16); }
+    body:not(.tema-claro) .eq-arrow { background:#1e3a5f; color:#93c5fd; }
+    @media (max-width:720px) {
+      .eq-flow { grid-template-columns:1fr; }
+      .eq-arrow { transform:rotate(90deg); }
+    }
+  </style>
+
+  <div class="eq-info rounded-xl p-4 flex gap-3">
+    <div class="text-xl">⚖</div>
+    <div>
+      <div class="font-semibold" :style="temaClaro ? 'color:#1e3a8a;' : 'color:#bfdbfe;'">Como o equilíbrio é calculado</div>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">
+        O sistema combina estoque disponível, reserva mínima e vendas recentes. A origem só cede o excedente acima de sua própria necessidade; nenhuma transferência é feita automaticamente.
+      </p>
+    </div>
+  </div>
+
+  <form method="get" class="card p-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3 items-end">
+      <div class="xl:col-span-2">
+        <label class="form-label">Produto</label>
+        <input class="form-input" name="busca" value="{{ busca }}" placeholder="Nome, código ou código de barras">
+      </div>
+      <div>
+        <label class="form-label">Analisar vendas</label>
+        <select class="form-input" name="dias_analise">
+          <option value="7" {% if dias_analise == 7 %}selected{% endif %}>Últimos 7 dias</option>
+          <option value="15" {% if dias_analise == 15 %}selected{% endif %}>Últimos 15 dias</option>
+          <option value="30" {% if dias_analise == 30 %}selected{% endif %}>Últimos 30 dias</option>
+          <option value="60" {% if dias_analise == 60 %}selected{% endif %}>Últimos 60 dias</option>
+          <option value="90" {% if dias_analise == 90 %}selected{% endif %}>Últimos 90 dias</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Estoque para</label>
+        <select class="form-input" name="dias_cobertura">
+          <option value="7" {% if dias_cobertura == 7 %}selected{% endif %}>7 dias de venda</option>
+          <option value="14" {% if dias_cobertura == 14 %}selected{% endif %}>14 dias de venda</option>
+          <option value="21" {% if dias_cobertura == 21 %}selected{% endif %}>21 dias de venda</option>
+          <option value="30" {% if dias_cobertura == 30 %}selected{% endif %}>30 dias de venda</option>
+          <option value="45" {% if dias_cobertura == 45 %}selected{% endif %}>45 dias de venda</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Origem</label>
+        <select class="form-input" name="origem">
+          <option value="">Todas</option>
+          {% for filial in filiais %}<option value="{{ filial.pk }}" {% if filial_origem_id == filial.pk %}selected{% endif %}>{{ filial.nome_fantasia|default:filial.razao_social }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Destino</label>
+        <select class="form-input" name="destino">
+          <option value="">Todas</option>
+          {% for filial in filiais %}<option value="{{ filial.pk }}" {% if filial_destino_id == filial.pk %}selected{% endif %}>{{ filial.nome_fantasia|default:filial.razao_social }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="flex flex-wrap justify-end gap-2 mt-4">
+      <a class="btn-secondary" href="{% url 'estoque:equilibrio-estoque' %}">Limpar</a>
+      <button class="btn-primary" type="submit">Atualizar análise</button>
+    </div>
+  </form>
+
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4"><div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produtos analisados</div><div class="text-2xl font-semibold mt-1">{{ produtos_analisados }}</div></div>
+    <div class="card p-4"><div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Transferências sugeridas</div><div class="text-2xl font-semibold mt-1" style="color:#2563eb;">{{ total_sugestoes }}</div></div>
+    <div class="card p-4"><div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Filiais a abastecer</div><div class="text-2xl font-semibold mt-1" style="color:#dc2626;">{{ filiais_criticas }}</div></div>
+    <div class="card p-4"><div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Quantidade sugerida</div><div class="text-2xl font-semibold mt-1" style="color:#16a34a;">{{ total_quantidade|floatformat:3 }}</div></div>
+  </div>
+
+  <div class="space-y-3">
+    {% for item in pagina %}
+      <article class="card p-4">
+        <div class="flex flex-col xl:flex-row xl:items-center gap-4">
+          <div class="xl:w-72 min-w-0">
+            <div class="flex flex-wrap gap-2 mb-1">
+              {% if item.destino_sem_estoque %}<span class="eq-badge eq-critical">Sem estoque no destino</span>{% endif %}
+              {% if item.produto_parado_origem %}<span class="eq-badge eq-warning">Parado na origem</span>{% endif %}
+            </div>
+            <h3 class="font-semibold truncate" title="{{ item.produto.descricao }}">{{ item.produto.descricao }}</h3>
+            <div class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+              ID {{ item.produto.codigo_replicacao }}{% if item.produto.codigo %} · {{ item.produto.codigo }}{% endif %} · {{ item.produto.unidade_medida.sigla }}
+            </div>
+          </div>
+
+          <div class="eq-flow flex-1">
+            <div class="eq-branch">
+              <div class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#166534;' : 'color:#86efac;'">Sai de</div>
+              <div class="font-semibold truncate">{{ item.origem.nome_fantasia|default:item.origem.razao_social }}</div>
+              <div class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo {{ item.origem_saldo|floatformat:3 }} · Vendeu {{ item.origem_vendido|floatformat:3 }}</div>
+              <div class="text-xs">Cobertura: {% if item.origem_cobertura is not None %}{{ item.origem_cobertura }} dias{% else %}sem giro{% endif %}</div>
+            </div>
+            <div class="eq-arrow">→</div>
+            <div class="eq-branch">
+              <div class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#b91c1c;' : 'color:#fca5a5;'">Vai para</div>
+              <div class="font-semibold truncate">{{ item.destino.nome_fantasia|default:item.destino.razao_social }}</div>
+              <div class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo {{ item.destino_saldo|floatformat:3 }} · Vendeu {{ item.destino_vendido|floatformat:3 }}</div>
+              <div class="text-xs">Cobertura: {% if item.destino_cobertura is not None %}{{ item.destino_cobertura }} dias{% else %}sem giro{% endif %} · Meta {{ item.destino_meta|floatformat:3 }}</div>
+            </div>
+          </div>
+
+          <div class="xl:w-52 xl:text-right">
+            <div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Transferir</div>
+            <div class="text-2xl font-bold" style="color:#2563eb;">{{ item.quantidade|floatformat:3 }} {{ item.produto.unidade_medida.sigla }}</div>
+            {% if permissoes_estoque.pode_criar and filial_ativa_id == item.origem.pk %}
+              <a class="btn-primary mt-2 inline-flex" href="{% url 'estoque:transferencia-lojas-create' %}?destino={{ item.destino.pk }}&produto={{ item.produto.pk }}&quantidade={{ item.quantidade|stringformat:'s' }}&origem=equilibrio">Criar transferência</a>
+            {% elif filial_ativa_id != item.origem.pk %}
+              <div class="text-xs mt-2" :style="temaClaro ? 'color:#92400e;' : 'color:#fcd34d;'">Selecione {{ item.origem.nome_fantasia|default:item.origem.razao_social }} no topo para transferir.</div>
+            {% endif %}
+          </div>
+        </div>
+      </article>
+    {% empty %}
+      <div class="card p-10 text-center">
+        <div class="text-4xl">✓</div>
+        <h3 class="text-lg font-semibold mt-3">Nenhuma transferência necessária</h3>
+        <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+          {% if filiais|length < 2 %}Cadastre ao menos duas filiais ativas para comparar o estoque.{% else %}Com os filtros atuais, nenhuma filial possui falta que possa ser coberta com excedente de outra loja.{% endif %}
+        </p>
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if pagina.paginator.num_pages > 1 %}
+    <div class="flex items-center justify-center gap-3">
+      {% if pagina.has_previous %}<a class="btn-secondary" href="?busca={{ busca|urlencode }}&dias_analise={{ dias_analise }}&dias_cobertura={{ dias_cobertura }}&origem={{ filial_origem_id|default:'' }}&destino={{ filial_destino_id|default:'' }}&page={{ pagina.previous_page_number }}">Anterior</a>{% endif %}
+      <span class="text-sm">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+      {% if pagina.has_next %}<a class="btn-secondary" href="?busca={{ busca|urlencode }}&dias_analise={{ dias_analise }}&dias_cobertura={{ dias_cobertura }}&origem={{ filial_origem_id|default:'' }}&destino={{ filial_destino_id|default:'' }}&page={{ pagina.next_page_number }}">Próxima</a>{% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
