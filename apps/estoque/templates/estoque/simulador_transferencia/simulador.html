@@ -1,0 +1,143 @@
+{% extends "_base.html" %}
+
+{% block title %}Simulador de transferência{% endblock %}
+{% block page_title %}Simulador de transferência{% endblock %}
+
+{% block content %}
+<div class="space-y-5" x-data="simuladorTransferencia()">
+  <div class="flex flex-wrap items-center gap-2">
+    <a href="{% url 'estoque:equilibrio-estoque' %}" class="btn-secondary">Equilíbrio de estoque</a>
+    <a href="{% url 'estoque:recomendacoes-transferencia' %}" class="btn-secondary">Tabela de recomendações</a>
+  </div>
+
+  <form method="get" class="card p-4 space-y-3">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div class="md:col-span-2 relative">
+        <label class="form-label">Produto</label>
+        <input type="text" class="form-input" x-model="query" @input.debounce.300ms="buscar()"
+               @focus="aberto = true" placeholder="Buscar produto por nome ou código">
+        <input type="hidden" name="produto" x-model="produtoId">
+        <div class="absolute z-10 w-full mt-1 card p-1" x-show="aberto && resultados.length" @click.outside="aberto = false" style="display:none;">
+          <template x-for="item in resultados" :key="item.id">
+            <button type="button" class="w-full text-left px-3 py-2 text-sm rounded hover:bg-black/5" @click="selecionar(item)" x-text="item.label + (item.detalhe ? ' · ' + item.detalhe : '')"></button>
+          </template>
+        </div>
+      </div>
+      <div>
+        <label class="form-label">Origem</label>
+        <select class="form-input" name="origem">
+          <option value="">Selecione</option>
+          {% for filial in filiais %}<option value="{{ filial.pk }}" {% if origem_id == filial.pk %}selected{% endif %}>{{ filial.nome_fantasia|default:filial.razao_social }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Destino</label>
+        <select class="form-input" name="destino">
+          <option value="">Selecione</option>
+          {% for filial in filiais %}<option value="{{ filial.pk }}" {% if destino_id == filial.pk %}selected{% endif %}>{{ filial.nome_fantasia|default:filial.razao_social }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+      <div>
+        <label class="form-label">Quantidade</label>
+        <input class="form-input" type="number" step="0.001" min="0" name="quantidade" value="{{ quantidade }}">
+      </div>
+      <div class="md:col-span-3 flex justify-end">
+        <button class="btn-primary" type="submit">Simular</button>
+      </div>
+    </div>
+    {% if produto_selecionado %}
+      <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto selecionado: <strong>{{ produto_selecionado.descricao }}</strong></p>
+    {% endif %}
+  </form>
+
+  {% if erro %}
+    <div class="rounded-lg px-4 py-3 text-sm" style="background:rgba(239,68,68,.1);color:#f87171;">{{ erro }}</div>
+  {% endif %}
+
+  {% if simulacao %}
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="card p-5">
+      <h3 class="font-semibold mb-3">Antes</h3>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ simulacao.origem.nome_fantasia|default:simulacao.origem.razao_social }}</div>
+          <div class="text-2xl font-bold mt-1">{{ simulacao.origem_saldo_antes|floatformat:3 }}</div>
+          <div class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{% if simulacao.origem_cobertura_antes is not None %}{{ simulacao.origem_cobertura_antes }} dias de cobertura{% else %}sem giro{% endif %}</div>
+        </div>
+        <div>
+          <div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ simulacao.destino.nome_fantasia|default:simulacao.destino.razao_social }}</div>
+          <div class="text-2xl font-bold mt-1">{{ simulacao.destino_saldo_antes|floatformat:3 }}</div>
+          <div class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{% if simulacao.destino_cobertura_antes is not None %}{{ simulacao.destino_cobertura_antes }} dias{% else %}sem giro{% endif %} · {{ simulacao.destino_classe_antes }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="card p-5">
+      <h3 class="font-semibold mb-3">Depois</h3>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ simulacao.origem.nome_fantasia|default:simulacao.origem.razao_social }}</div>
+          <div class="text-2xl font-bold mt-1" style="color:#2563eb;">{{ simulacao.origem_saldo_depois|floatformat:3 }}</div>
+          <div class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{% if simulacao.origem_cobertura_depois is not None %}{{ simulacao.origem_cobertura_depois }} dias{% else %}sem giro{% endif %}</div>
+        </div>
+        <div>
+          <div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ simulacao.destino.nome_fantasia|default:simulacao.destino.razao_social }}</div>
+          <div class="text-2xl font-bold mt-1" style="color:#16a34a;">{{ simulacao.destino_saldo_depois|floatformat:3 }}</div>
+          <div class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{% if simulacao.destino_cobertura_depois is not None %}{{ simulacao.destino_cobertura_depois }} dias{% else %}sem giro{% endif %} · {{ simulacao.destino_classe_depois_label }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-5">
+    <h3 class="font-semibold mb-3">Impacto</h3>
+    <ul class="space-y-2 text-sm">
+      {% if simulacao.reducao_excesso_dias is not None %}
+        <li>• Redução do excesso na origem: <strong>{{ simulacao.reducao_excesso_dias }} dias</strong></li>
+      {% endif %}
+      {% if simulacao.reduz_risco_ruptura %}
+        <li>• Redução do risco de ruptura no destino ({{ simulacao.destino_classe_antes }} → {{ simulacao.destino_classe_depois_label }})</li>
+      {% endif %}
+      <li>• Melhor utilização do estoque: mercadoria parada na origem passa a girar no destino</li>
+      <li>• Capital redistribuído: <strong>R$ {{ simulacao.capital_redistribuido|floatformat:2 }}</strong></li>
+    </ul>
+    {% if simulacao.excede_saldo_origem %}
+      <p class="text-sm mt-3" style="color:#dc2626;">Atenção: a quantidade simulada é maior que o saldo atual da origem.</p>
+    {% endif %}
+  </div>
+
+  {% if permissoes_estoque.pode_criar %}
+  <div class="flex justify-end">
+    <a class="btn-primary" href="{% url 'estoque:transferencia-lojas-create' %}?destino={{ simulacao.destino.pk }}&produto={{ simulacao.produto.pk }}&quantidade={{ simulacao.quantidade|stringformat:'s' }}&origem=simulador">Aplicar transferência</a>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+
+<script>
+function simuladorTransferencia() {
+  return {
+    query: '{{ produto_selecionado.descricao|default:""|escapejs }}',
+    produtoId: '{{ produto_selecionado.pk|default:"" }}',
+    resultados: [],
+    aberto: false,
+    async buscar() {
+      this.produtoId = '';
+      if (this.query.trim().length < 2) { this.resultados = []; return; }
+      try {
+        const res = await fetch(`{% url 'estoque:produto-estoque-search-json' %}?scope=empresa&q=${encodeURIComponent(this.query.trim())}`);
+        const data = await res.json();
+        this.resultados = data.results || [];
+        this.aberto = true;
+      } catch (e) { this.resultados = []; }
+    },
+    selecionar(item) {
+      this.produtoId = item.id;
+      this.query = item.label;
+      this.aberto = false;
+    },
+  };
+}
+</script>
+{% endblock %}
