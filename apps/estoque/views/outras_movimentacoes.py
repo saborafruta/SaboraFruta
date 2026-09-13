@@ -27,6 +27,7 @@ from apps.estoque.models import (
     LoteProduto,
     MovimentacaoEstoque,
 )
+from apps.estoque.services.conferencia_transferencia import proxima_etapa_manual as _proxima_etapa_manual
 from apps.estoque.services.peso_carga import calcular_peso_bruto, peso_unitario_kg
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.estoque.views.permissoes import permissoes_estoque
@@ -841,6 +842,13 @@ def _transferencias_para_listagem(filial, usuario, limite=500):
                     'status_label': conferencia.get_status_display(),
                     'observacao': conferencia.observacao_conferencia,
                     'conferida_em': conferencia.conferida_em,
+                    'etapa': conferencia.etapa,
+                    'etapa_label': conferencia.get_etapa_display(),
+                    'proxima_etapa': _proxima_etapa_manual(conferencia.etapa),
+                    'proxima_etapa_label': (
+                        ConferenciaTransferencia.Etapa(_proxima_etapa_manual(conferencia.etapa)).label
+                        if _proxima_etapa_manual(conferencia.etapa) else ''
+                    ),
                     'log_url': reverse(
                         'estoque:transferencia-conferencia-log',
                         kwargs={'pk': conferencia.pk},
@@ -1991,6 +1999,48 @@ class TransferenciaCancelarNFeApiView(PermissaoRequiredMixin, View):
                 'status': doc.status,
                 'status_label': doc.get_status_display(),
             },
+        })
+
+
+class TransferenciaAvancarEtapaApiView(PermissaoRequiredMixin, View):
+    """Avança a esteira de acompanhamento (Aprovada→Separando→Expedida→Em trânsito).
+
+    Rastreamento visual apenas -- não move estoque nem mexe no `status` de
+    conferência (aguardando/conferida/etc), que continua vindo só do
+    recebimento/conferência no destino."""
+
+    permissao_modulo = 'estoque'
+    permissao_acao = 'aprovar'
+
+    def post(self, request):
+        from apps.estoque.services.conferencia_transferencia import avancar_etapa_transferencia
+
+        try:
+            body = _json.loads(request.body)
+        except (ValueError, TypeError):
+            return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+
+        conferencia_id = body.get('conferencia_id')
+        nova_etapa = (body.get('etapa') or '').strip()
+        if not conferencia_id or not nova_etapa:
+            return JsonResponse({'erro': 'Informe a transferência e a etapa.'}, status=400)
+
+        try:
+            conferencia = avancar_etapa_transferencia(
+                conferencia_id=conferencia_id,
+                filial_origem=request.filial_ativa,
+                usuario=request.user,
+                nova_etapa=nova_etapa,
+            )
+        except ConferenciaTransferencia.DoesNotExist:
+            return JsonResponse({'erro': 'Transferência não encontrada nesta filial.'}, status=404)
+        except DomainError as exc:
+            return JsonResponse({'erro': str(exc)}, status=400)
+
+        return JsonResponse({
+            'ok': True,
+            'etapa': conferencia.etapa,
+            'etapa_label': conferencia.get_etapa_display(),
         })
 
 

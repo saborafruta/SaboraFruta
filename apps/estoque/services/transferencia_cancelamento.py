@@ -141,6 +141,7 @@ def cancelar_transferencia(documento_numero: str, filial_origem, usuario) -> lis
         status=ConferenciaTransferencia.Status.CANCELADA,
     ).update(
         status=ConferenciaTransferencia.Status.CANCELADA,
+        etapa=ConferenciaTransferencia.Etapa.CANCELADA,
         conferida_por=usuario,
         conferida_em=agora,
     )
@@ -223,11 +224,13 @@ def reativar_transferencia(documento_numero: str, filial_origem, usuario) -> lis
         )
     if conferencia:
         conferencia.status = ConferenciaTransferencia.Status.AGUARDANDO
+        conferencia.etapa = ConferenciaTransferencia.Etapa.APROVADA
         conferencia.conferida_por = None
         conferencia.conferida_em = None
         conferencia.save(
             update_fields=[
                 'status',
+                'etapa',
                 'conferida_por',
                 'conferida_em',
                 'updated_at',

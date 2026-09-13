@@ -20,6 +20,7 @@ urlpatterns = [
     path('faixas-cobertura/nova/', views.FaixaCoberturaCreateView.as_view(), name='faixa-cobertura-create'),
     path('faixas-cobertura/<int:pk>/editar/', views.FaixaCoberturaUpdateView.as_view(), name='faixa-cobertura-update'),
     path('faixas-cobertura/<int:pk>/excluir/', views.FaixaCoberturaDeleteView.as_view(), name='faixa-cobertura-delete'),
+    path('configuracao-abc/', views.ConfiguracaoAbcEstoqueView.as_view(), name='configuracao-abc'),
     path('movimentacoes/', views.MovimentacaoListView.as_view(), name='movimentacao-list'),
 
     # Operacoes
@@ -48,6 +49,7 @@ urlpatterns = [
     path('outras-movimentacoes/transferencia-lojas/consultar-nfe/', views.TransferenciaConsultarNFeApiView.as_view(), name='transferencia-lojas-consultar-nfe'),
     path('outras-movimentacoes/transferencia-lojas/cancelar-nfe/', views.TransferenciaCancelarNFeApiView.as_view(), name='transferencia-lojas-cancelar-nfe'),
     path('outras-movimentacoes/transferencia-lojas/cancelar/', views.TransferenciaCancelarApiView.as_view(), name='transferencia-lojas-cancelar'),
+    path('outras-movimentacoes/transferencia-lojas/avancar-etapa/', views.TransferenciaAvancarEtapaApiView.as_view(), name='transferencia-lojas-avancar-etapa'),
     path('outras-movimentacoes/transferencia-lojas/reativar/', views.TransferenciaReativarApiView.as_view(), name='transferencia-lojas-reativar'),
     path('outras-movimentacoes/transferencia-lojas/excluir/', views.TransferenciaExcluirApiView.as_view(), name='transferencia-lojas-excluir'),
     path('outras-movimentacoes/devolucao/api/', views.DevolucaoClienteApiView.as_view(), name='devolucao-cliente-api'),

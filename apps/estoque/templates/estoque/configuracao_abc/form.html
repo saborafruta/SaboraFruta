@@ -1,0 +1,61 @@
+{% extends "_base.html" %}
+{% load widget_tweaks %}
+{% block title %}{{ title }} — ERP iNoovaTed{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block largura_conteudo %}max-w-3xl{% endblock %}
+
+{% block content %}
+<div class="w-full space-y-5">
+
+  <div>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'estoque:equilibrio-estoque' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Equilíbrio de estoque</a>
+      <span class="mx-1">›</span> {{ title }}
+    </p>
+    <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Ajusta a meta do equilíbrio conforme o giro do produto (curva ABC por volume vendido). Multiplicador 1 e 0 dias extras = sem alteração no comportamento padrão.
+    </p>
+  </div>
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+
+    {% for classe, form in forms.items %}
+      <div class="card p-6 space-y-4">
+        <h3 class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f1f5f9;'">
+          Classe {{ classe }}
+          {% if classe == "A" %}<span class="text-xs ml-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">maior giro — menor tolerância à ruptura</span>{% endif %}
+          {% if classe == "C" %}<span class="text-xs ml-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">menor giro — tolera mais folga</span>{% endif %}
+        </h3>
+        {% if form.non_field_errors %}
+          <div class="rounded-lg px-4 py-3 text-sm" style="background:rgba(239,68,68,.1);color:#f87171;">{{ form.non_field_errors|join:" " }}</div>
+        {% endif %}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Multiplicador do mínimo</label>
+            {{ form.multiplicador_minimo|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
+            {% if form.multiplicador_minimo.errors %}<p class="text-xs mt-1" style="color:#f87171;">{{ form.multiplicador_minimo.errors.0 }}</p>{% endif %}
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Multiplicador do máximo</label>
+            {{ form.multiplicador_maximo|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
+            {% if form.multiplicador_maximo.errors %}<p class="text-xs mt-1" style="color:#f87171;">{{ form.multiplicador_maximo.errors.0 }}</p>{% endif %}
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Dias extras de cobertura</label>
+            {{ form.dias_cobertura_extra|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
+            {% if form.dias_cobertura_extra.errors %}<p class="text-xs mt-1" style="color:#f87171;">{{ form.dias_cobertura_extra.errors.0 }}</p>{% endif %}
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+
+    <div class="flex gap-3 justify-end pt-2">
+      <a href="{% url 'estoque:equilibrio-estoque' %}" class="btn-secondary">Cancelar</a>
+      {% if permissoes_estoque.pode_editar %}<button type="submit" class="btn-primary">Salvar</button>{% endif %}
+    </div>
+  </form>
+
+</div>
+{% endblock %}

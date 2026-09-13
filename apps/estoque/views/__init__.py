@@ -23,6 +23,7 @@ from .analise_estoque import CurvaAbcGiroView, ProdutosExcessoView
 from .faixa_cobertura import (
     FaixaCoberturaListView, FaixaCoberturaCreateView, FaixaCoberturaUpdateView, FaixaCoberturaDeleteView,
 )
+from .configuracao_abc import ConfiguracaoAbcEstoqueView
 from .outras_movimentacoes import (
     OutrasMovimentacoesHubView, DevolucaoClienteView, DevolucaoFornecedorView, SaidaEspecialView,
     FornecedorSearchJsonView, ProdutoEstoqueSearchJsonView,
@@ -34,6 +35,7 @@ from .outras_movimentacoes import (
     TransferenciaConferenciaLogView,
     TransferenciaCancelarNFeApiView, TransferenciaCancelarApiView,
     TransferenciaReativarApiView, TransferenciaExcluirApiView,
+    TransferenciaAvancarEtapaApiView,
 )
 
 __all__ = [
@@ -55,6 +57,7 @@ __all__ = [
     'CurvaAbcGiroView',
     'ProdutosExcessoView',
     'FaixaCoberturaListView', 'FaixaCoberturaCreateView', 'FaixaCoberturaUpdateView', 'FaixaCoberturaDeleteView',
+    'ConfiguracaoAbcEstoqueView',
     'OutrasMovimentacoesHubView', 'DevolucaoClienteView', 'DevolucaoFornecedorView', 'SaidaEspecialView',
     'FornecedorSearchJsonView', 'ProdutoEstoqueSearchJsonView',
     'ClienteSearchJsonView', 'LoteSearchJsonView', 'VendaDevolucaoJsonView', 'DevolucaoClienteApiView',
@@ -65,4 +68,5 @@ __all__ = [
     'TransferenciaConferenciaLogView',
     'TransferenciaCancelarNFeApiView', 'TransferenciaCancelarApiView',
     'TransferenciaReativarApiView', 'TransferenciaExcluirApiView',
+    'TransferenciaAvancarEtapaApiView',
 ]

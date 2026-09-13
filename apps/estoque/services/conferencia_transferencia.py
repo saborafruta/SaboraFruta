@@ -19,6 +19,66 @@ from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.produtos.models import Produto
 
 
+# Ordem manual da esteira -- so' avanca pra frente, e so' ate' EM_TRANSITO:
+# RECEBIDA vem de concluir_conferencia() e CANCELADA de cancelar_na_conferencia()
+# ou do cancelamento fiscal, nunca de um clique manual de "proxima etapa".
+_ORDEM_ETAPA_MANUAL = [
+    ConferenciaTransferencia.Etapa.APROVADA,
+    ConferenciaTransferencia.Etapa.SEPARANDO,
+    ConferenciaTransferencia.Etapa.EXPEDIDA,
+    ConferenciaTransferencia.Etapa.EM_TRANSITO,
+]
+
+
+def proxima_etapa_manual(etapa_atual):
+    """Etapa seguinte que um clique manual pode setar, ou None se não houver."""
+    if etapa_atual not in _ORDEM_ETAPA_MANUAL:
+        return None
+    indice = _ORDEM_ETAPA_MANUAL.index(etapa_atual)
+    if indice + 1 >= len(_ORDEM_ETAPA_MANUAL):
+        return None
+    return _ORDEM_ETAPA_MANUAL[indice + 1]
+
+
+@tenant_atomic
+def avancar_etapa_transferencia(*, conferencia_id, filial_origem, usuario, nova_etapa):
+    """
+    Avança manualmente a esteira de acompanhamento (Aprovada -> Separando
+    -> Expedida -> Em trânsito). Rastreamento apenas -- não move estoque
+    nem altera o `status` de conferência.
+    """
+    conferencia = (
+        ConferenciaTransferencia.objects
+        .select_for_update()
+        .get(pk=conferencia_id, filial_origem=filial_origem)
+    )
+    if conferencia.status == ConferenciaTransferencia.Status.CANCELADA:
+        raise DadosInvalidosError('Esta transferência foi cancelada.')
+    if conferencia.status in {
+        ConferenciaTransferencia.Status.CONFERIDA,
+        ConferenciaTransferencia.Status.COM_DIVERGENCIA,
+    }:
+        raise DadosInvalidosError('Esta transferência já foi recebida e conferida.')
+    esperada = proxima_etapa_manual(conferencia.etapa)
+    if esperada is None or nova_etapa != esperada:
+        raise DadosInvalidosError(
+            f'Não é possível pular direto para "{ConferenciaTransferencia.Etapa(nova_etapa).label}" '
+            f'a partir de "{conferencia.get_etapa_display()}".'
+        )
+    conferencia.etapa = nova_etapa
+    conferencia.save(update_fields=['etapa', 'updated_at'])
+    registrar_auditoria(
+        usuario=usuario,
+        filial=filial_origem,
+        modulo='estoque',
+        acao='editar',
+        objeto=conferencia,
+        descricao=f'Transferência {conferencia.documento_numero}: etapa {conferencia.get_etapa_display()}',
+        metadados={'evento': 'transferencia_etapa_avancada', 'etapa': conferencia.etapa},
+    )
+    return conferencia
+
+
 def _itens_auditoria(conferencia):
     return [
         {
@@ -335,6 +395,7 @@ def concluir_conferencia(*, conferencia_id, filial_destino, usuario, itens, obse
         if tem_divergencia
         else ConferenciaTransferencia.Status.CONFERIDA
     )
+    conferencia.etapa = ConferenciaTransferencia.Etapa.RECEBIDA
     conferencia.observacao_conferencia = (observacao or '').strip()
     conferencia.conferida_por = usuario
     conferencia.conferida_em = timezone.now()
@@ -388,6 +449,7 @@ def cancelar_na_conferencia(*, conferencia_id, filial_destino, usuario):
         usuario,
     )
     conferencia.status = ConferenciaTransferencia.Status.CANCELADA
+    conferencia.etapa = ConferenciaTransferencia.Etapa.CANCELADA
     conferencia.conferida_por = usuario
     conferencia.conferida_em = timezone.now()
     conferencia.save()

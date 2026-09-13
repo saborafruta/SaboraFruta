@@ -20,6 +20,7 @@ from apps.estoque.models import (
     MovimentacaoEstoque,
 )
 from apps.estoque.services.conferencia_transferencia import (
+    avancar_etapa_transferencia,
     concluir_conferencia,
     criar_conferencia_transferencia,
     garantir_conferencias_recebidas,
@@ -437,3 +438,146 @@ class ConferenciaTransferenciaTests(TestCase):
                 usuario=self.usuario,
             ).exists(),
         )
+
+
+class EtapaTransferenciaTests(TestCase):
+    """
+    Fase 9: esteira de acompanhamento (Aprovada -> Separando -> Expedida ->
+    Em trânsito -> Recebida) sobre a transferência já existente --
+    rastreamento apenas, não mexe no estoque nem no status de conferência.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.empresa = Empresa.objects.create(
+            razao_social='Empresa Etapa LTDA', nome_fantasia='Empresa Etapa',
+            cnpj='13345678000191', regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        cls.origem = Filial.objects.create(
+            empresa=cls.empresa, razao_social='Origem Etapa LTDA', nome_fantasia='Origem Etapa',
+            cnpj='13345678000192', uf='RN',
+        )
+        cls.destino = Filial.objects.create(
+            empresa=cls.empresa, razao_social='Destino Etapa LTDA', nome_fantasia='Destino Etapa',
+            cnpj='13345678000273', uf='RN',
+        )
+        perfil = PerfilAcesso.objects.create(empresa=cls.empresa, nome='Administrador', is_admin=True)
+        cls.usuario = Usuario.objects.create_user(
+            email='etapa@inoovated.com', nome='Usuario Etapa', password='teste1234',
+            empresa=cls.empresa, filial=cls.origem, perfil=perfil,
+        )
+        cls.unidade = UnidadeMedida.objects.create(
+            empresa=cls.empresa, sigla='UN', descricao='Unidade', tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        UnidadeMedidaFilial.objects.create(unidade=cls.unidade, filial=cls.origem)
+        UnidadeMedidaFilial.objects.create(unidade=cls.unidade, filial=cls.destino)
+
+    def criar_produto(self, descricao):
+        produto = Produto.objects.create(
+            filial=self.origem, unidade_medida=self.unidade, descricao=descricao,
+            ncm='20089900', permite_venda_sem_estoque=False, preco_custo=Decimal('2.00'),
+        )
+        ProdutoFilial.objects.create(produto=produto, filial=self.origem)
+        ProdutoFilial.objects.create(produto=produto, filial=self.destino)
+        return produto
+
+    def criar_transferencia(self, produto, quantidade='5'):
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=produto.pk, filial_id=self.origem.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('10'), usuario_id=self.usuario.pk, valor_unitario=Decimal('2'),
+        )
+        saida, _ = MovimentacaoService.transferir_entre_filiais(
+            produto_id=produto.pk, filial_origem_id=self.origem.pk, filial_destino_id=self.destino.pk,
+            quantidade=Decimal(quantidade), usuario_id=self.usuario.pk, permitir_sem_lote=True,
+            documento_numero=f'TRF-CONF-{produto.pk}',
+        )
+        return criar_conferencia_transferencia(
+            documento_numero=saida.documento_numero, filial_origem=self.origem,
+            filial_destino=self.destino, usuario=self.usuario,
+        )
+
+    def test_nasce_aprovada_pois_o_estoque_ja_foi_movido_na_criacao(self):
+        produto = self.criar_produto('Produto etapa inicial')
+        conferencia = self.criar_transferencia(produto)
+
+        self.assertEqual(conferencia.etapa, ConferenciaTransferencia.Etapa.APROVADA)
+
+    def test_avanca_em_sequencia_ate_em_transito(self):
+        produto = self.criar_produto('Produto etapa sequencia')
+        conferencia = self.criar_transferencia(produto)
+
+        conferencia = avancar_etapa_transferencia(
+            conferencia_id=conferencia.pk, filial_origem=self.origem,
+            usuario=self.usuario, nova_etapa=ConferenciaTransferencia.Etapa.SEPARANDO,
+        )
+        self.assertEqual(conferencia.etapa, ConferenciaTransferencia.Etapa.SEPARANDO)
+
+        conferencia = avancar_etapa_transferencia(
+            conferencia_id=conferencia.pk, filial_origem=self.origem,
+            usuario=self.usuario, nova_etapa=ConferenciaTransferencia.Etapa.EXPEDIDA,
+        )
+        self.assertEqual(conferencia.etapa, ConferenciaTransferencia.Etapa.EXPEDIDA)
+
+        conferencia = avancar_etapa_transferencia(
+            conferencia_id=conferencia.pk, filial_origem=self.origem,
+            usuario=self.usuario, nova_etapa=ConferenciaTransferencia.Etapa.EM_TRANSITO,
+        )
+        self.assertEqual(conferencia.etapa, ConferenciaTransferencia.Etapa.EM_TRANSITO)
+
+    def test_nao_permite_pular_etapa(self):
+        produto = self.criar_produto('Produto etapa pulada')
+        conferencia = self.criar_transferencia(produto)
+
+        with self.assertRaises(DadosInvalidosError):
+            avancar_etapa_transferencia(
+                conferencia_id=conferencia.pk, filial_origem=self.origem,
+                usuario=self.usuario, nova_etapa=ConferenciaTransferencia.Etapa.EXPEDIDA,
+            )
+
+    def test_nao_permite_voltar_etapa(self):
+        produto = self.criar_produto('Produto etapa volta')
+        conferencia = self.criar_transferencia(produto)
+        conferencia = avancar_etapa_transferencia(
+            conferencia_id=conferencia.pk, filial_origem=self.origem,
+            usuario=self.usuario, nova_etapa=ConferenciaTransferencia.Etapa.SEPARANDO,
+        )
+
+        with self.assertRaises(DadosInvalidosError):
+            avancar_etapa_transferencia(
+                conferencia_id=conferencia.pk, filial_origem=self.origem,
+                usuario=self.usuario, nova_etapa=ConferenciaTransferencia.Etapa.APROVADA,
+            )
+
+    def test_concluir_conferencia_marca_etapa_recebida(self):
+        produto = self.criar_produto('Produto etapa recebida')
+        conferencia = self.criar_transferencia(produto)
+        item = conferencia.itens.get()
+
+        conferencia = concluir_conferencia(
+            conferencia_id=conferencia.pk, filial_destino=self.destino, usuario=self.usuario,
+            itens={str(item.pk): {'ocorrencia': 'ok', 'quantidade_recebida': str(item.quantidade_enviada)}},
+        )
+
+        self.assertEqual(conferencia.etapa, ConferenciaTransferencia.Etapa.RECEBIDA)
+
+    def test_cancelar_transferencia_marca_etapa_cancelada(self):
+        produto = self.criar_produto('Produto etapa cancelada')
+        conferencia = self.criar_transferencia(produto)
+
+        cancelar_transferencia(f'TRF-CONF-{produto.pk}', self.origem, self.usuario)
+
+        conferencia.refresh_from_db()
+        self.assertEqual(conferencia.etapa, ConferenciaTransferencia.Etapa.CANCELADA)
+
+    def test_nao_avanca_apos_cancelada(self):
+        produto = self.criar_produto('Produto etapa apos cancelada')
+        conferencia = self.criar_transferencia(produto)
+        cancelar_transferencia(f'TRF-CONF-{produto.pk}', self.origem, self.usuario)
+
+        with self.assertRaises(DadosInvalidosError):
+            avancar_etapa_transferencia(
+                conferencia_id=conferencia.pk, filial_origem=self.origem,
+                usuario=self.usuario, nova_etapa=ConferenciaTransferencia.Etapa.SEPARANDO,
+            )

@@ -12,6 +12,7 @@ from apps.core.models import Filial
 from apps.estoque.models import Estoque, LoteProduto
 from apps.estoque.services.analise_estoque import classificar_abc_giro
 from apps.estoque.services.cobertura_service import CLASSE_LABEL, carregar_faixas, classificar_cobertura, resolver_faixa
+from apps.estoque.services.configuracao_abc_service import carregar_ajustes_abc, resolver_ajuste_abc
 from apps.pdv.models import ItemVendaPDV
 from apps.produtos.models import Produto, ProdutoFilial
 from apps.vendas.models import ItemPedidoVenda, PedidoVenda
@@ -216,6 +217,7 @@ def calcular_equilibrio(
                     lotes_dias_vencer[chave] = dias
 
     faixas_cobertura = carregar_faixas(empresa=empresa)
+    ajustes_abc = carregar_ajustes_abc(empresa=empresa)
     classe_abc_por_produto = {
         item["produto"].pk: item["classe"]
         for item in classificar_abc_giro(empresa=empresa, dias_analise=dias_analise)["itens"]
@@ -234,14 +236,20 @@ def calcular_equilibrio(
         # do produto: escolher "14 dias" no filtro não pode deixar uma loja
         # descoberta se o fornecedor dela demora 20 -- a reserva existe
         # justamente para o intervalo até a próxima compra chegar.
-        dias_meta = max(dias_cobertura, produto.lead_time_reposicao_dias or 0)
+        #
+        # Curva A gira mais e tolera menos ruptura que C -- o ajuste por
+        # classe soma/tira dias da meta e escala o mínimo/máximo cadastrado
+        # do produto. Sem ajuste configurado pra classe, e' identidade
+        # (multiplicador 1, zero dias extra): comportamento de hoje.
+        ajuste_abc = resolver_ajuste_abc(ajustes_abc, classe_abc_por_produto.get(produto.pk))
+        dias_meta = max(0, max(dias_cobertura, produto.lead_time_reposicao_dias or 0) + ajuste_abc.dias_cobertura_extra)
         faixa = resolver_faixa(faixas_cobertura, produto)
         for filial_id in vinculadas:
             vendido = vendas[(produto.pk, filial_id)]
             demanda_diaria = vendido / divisor
             saldo = saldos[(produto.pk, filial_id)]
             reserva = max(
-                _decimal(produto.estoque_minimo),
+                _decimal(produto.estoque_minimo) * ajuste_abc.multiplicador_minimo,
                 _decimal(produto.estoque_seguranca),
                 demanda_diaria * Decimal(dias_meta),
             )
@@ -273,7 +281,7 @@ def calcular_equilibrio(
         demanda_rede = sum((item["demanda_diaria"] for item in posicoes), ZERO)
         excedente_rede = max(ZERO, estoque_rede - reserva_rede)
         media_demanda_diaria = demanda_rede / len(posicoes) if posicoes else ZERO
-        maximo = _decimal(produto.estoque_maximo)
+        maximo = _decimal(produto.estoque_maximo) * ajuste_abc.multiplicador_maximo
         for item in posicoes:
             adicional = (
                 excedente_rede * item["demanda_diaria"] / demanda_rede
@@ -359,6 +367,11 @@ def calcular_equilibrio(
                     "destino_sem_estoque": destino["saldo"] <= ZERO,
                     "destino_pedido_pendente": tem_pedido_pendente,
                     "origem_lote_dias_vencer": lote_dias_vencer,
+                    "alerta_fefo": (
+                        f"Produto próximo do vencimento na {origem_filial.nome_fantasia or origem_filial.razao_social} "
+                        f"— avaliar transferência para {destino_filial.nome_fantasia or destino_filial.razao_social}."
+                        if lote_dias_vencer is not None else ""
+                    ),
                     "score": score,
                 })
 
