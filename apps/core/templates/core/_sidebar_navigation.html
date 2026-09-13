@@ -10,6 +10,8 @@
       {% url 'compras:entrada-list' as compras_url %}
       {% url 'estoque:sugestao-compras' as sugestao_compras_url %}
       {% url 'estoque:equilibrio-estoque' as equilibrio_estoque_url %}
+      {% url 'estoque:curva-abc-giro' as curva_abc_giro_url %}
+      {% url 'estoque:produtos-excesso' as produtos_excesso_url %}
       {% url 'estoque:outras-mov-hub' as outras_mov_url %}
       {% url 'estoque:deposito-list' as depositos_url %}
       {% url 'lotes:dashboard' as lotes_url %}
@@ -286,6 +288,36 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10M12 3v18M3 7h18M5 7l-3 7h6L5 7zm14 0l-3 7h6l-3-7z"/>
         </svg>
         <span x-show="!collapsed">Equilíbrio</span>
+      </a>
+
+      <a href="{{ curva_abc_giro_url }}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="{% if '/estoque/analise/curva-abc' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
+         {% if '/estoque/analise/curva-abc' not in request.path %}
+         @mouseenter="$el.style.background=temaClaro?'#eff6ff':'#242426'; $el.style.color=temaClaro?'#1d4ed8':'#d4d4d4';"
+         @mouseleave="$el.style.background='transparent'; $el.style.color=temaClaro?'#6b7280':'#f8fafc'; $el.style.fontWeight='';"
+         {% endif %}
+         title="Curva ABC por giro">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17V9m4 8V5m4 12v-4M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+        </svg>
+        <span x-show="!collapsed">Curva ABC</span>
+      </a>
+
+      <a href="{{ produtos_excesso_url }}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="{% if '/estoque/analise/excesso' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#6b7280;' : 'color:#f8fafc;'{% endif %}"
+         {% if '/estoque/analise/excesso' not in request.path %}
+         @mouseenter="$el.style.background=temaClaro?'#eff6ff':'#242426'; $el.style.color=temaClaro?'#1d4ed8':'#d4d4d4';"
+         @mouseleave="$el.style.background='transparent'; $el.style.color=temaClaro?'#6b7280':'#f8fafc'; $el.style.fontWeight='';"
+         {% endif %}
+         title="Produtos em excesso">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+        </svg>
+        <span x-show="!collapsed">Excesso</span>
       </a>
 
       <a href="{{ outras_mov_url }}"

@@ -1,0 +1,110 @@
+{% extends "_base.html" %}
+
+{% block title %}Curva ABC por giro{% endblock %}
+{% block page_title %}Curva ABC por giro{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <style>
+    .abc-badge { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:999px; font-weight:800; font-size:.8rem; }
+    .abc-A { background:#dcfce7; color:#166534; }
+    .abc-B { background:#fef3c7; color:#92400e; }
+    .abc-C { background:#fee2e2; color:#b91c1c; }
+  </style>
+
+  <div class="eq-info rounded-xl p-4 flex gap-3" style="border:1px solid rgba(59,130,246,.25); background:rgba(59,130,246,.08);">
+    <div class="text-xl">🔤</div>
+    <div>
+      <div class="font-semibold" :style="temaClaro ? 'color:#1e3a8a;' : 'color:#bfdbfe;'">Por volume, não por receita</div>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">
+        Classe A concentra 80% das unidades vendidas no período, B chega a 95% e C fecha o resto —
+        um produto de ticket alto e venda rara pode ser A por receita e C aqui: é o que este relatório mostra.
+      </p>
+    </div>
+  </div>
+
+  <form method="get" class="card p-4">
+    <div class="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3 items-end">
+      <div>
+        <label class="form-label">Analisar vendas</label>
+        <select class="form-input" name="dias_analise">
+          <option value="30" {% if dias_analise == 30 %}selected{% endif %}>Últimos 30 dias</option>
+          <option value="60" {% if dias_analise == 60 %}selected{% endif %}>Últimos 60 dias</option>
+          <option value="90" {% if dias_analise == 90 %}selected{% endif %}>Últimos 90 dias</option>
+          <option value="180" {% if dias_analise == 180 %}selected{% endif %}>Últimos 180 dias</option>
+          <option value="365" {% if dias_analise == 365 %}selected{% endif %}>Últimos 365 dias</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Classe</label>
+        <select class="form-input" name="classe">
+          <option value="">Todas</option>
+          <option value="A" {% if classe_filtro == "A" %}selected{% endif %}>A</option>
+          <option value="B" {% if classe_filtro == "B" %}selected{% endif %}>B</option>
+          <option value="C" {% if classe_filtro == "C" %}selected{% endif %}>C</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Filial</label>
+        <select class="form-input" name="filial">
+          <option value="">Todas (rede)</option>
+          {% for filial in filiais %}<option value="{{ filial.pk }}" {% if filial_id == filial.pk %}selected{% endif %}>{{ filial.nome_fantasia|default:filial.razao_social }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="flex flex-wrap justify-end gap-2 mt-4">
+      <a class="btn-secondary" href="{% url 'estoque:curva-abc-giro' %}">Limpar</a>
+      <button class="btn-primary" type="submit">Atualizar análise</button>
+    </div>
+  </form>
+
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4"><div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produtos com venda</div><div class="text-2xl font-semibold mt-1">{{ total_produtos }}</div></div>
+    <div class="card p-4"><div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Classe A</div><div class="text-2xl font-semibold mt-1" style="color:#16a34a;">{{ resumo.A.qtd|default:0 }}</div></div>
+    <div class="card p-4"><div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Classe B</div><div class="text-2xl font-semibold mt-1" style="color:#d97706;">{{ resumo.B.qtd|default:0 }}</div></div>
+    <div class="card p-4"><div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Classe C</div><div class="text-2xl font-semibold mt-1" style="color:#dc2626;">{{ resumo.C.qtd|default:0 }}</div></div>
+  </div>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr :style="temaClaro ? 'border-bottom:1px solid #e5e7eb; background:#f8fafc;' : 'border-bottom:1px solid #2a2a2e; background:#1e1e20;'">
+            <th class="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Classe</th>
+            <th class="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Produto</th>
+            <th class="text-right px-4 py-2.5 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Vendido</th>
+            <th class="text-right px-4 py-2.5 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">% participação</th>
+            <th class="text-right px-4 py-2.5 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">% acumulado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in pagina %}
+          <tr class="border-b" :style="temaClaro ? 'border-color:#f1f5f9;' : 'border-color:#2a2a2e;'">
+            <td class="px-4 py-3"><span class="abc-badge abc-{{ item.classe }}">{{ item.classe }}</span></td>
+            <td class="px-4 py-3">
+              <div class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ item.produto.descricao }}</div>
+              <div class="text-xs" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">{{ item.produto.codigo|default:"—" }}</div>
+            </td>
+            <td class="px-4 py-3 text-right">{{ item.quantidade_vendida|floatformat:3 }} {{ item.produto.unidade_medida.sigla }}</td>
+            <td class="px-4 py-3 text-right">{{ item.pct_participacao }}%</td>
+            <td class="px-4 py-3 text-right font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ item.pct_acumulado }}%</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="px-4 py-10 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
+              Nenhuma venda no período escolhido.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="flex justify-between items-center">
+    {% if pagina.has_previous %}<a class="btn-secondary" href="?dias_analise={{ dias_analise }}&classe={{ classe_filtro }}&filial={{ filial_id|default:'' }}&page={{ pagina.previous_page_number }}">Anterior</a>{% else %}<span></span>{% endif %}
+    <span class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+    {% if pagina.has_next %}<a class="btn-secondary" href="?dias_analise={{ dias_analise }}&classe={{ classe_filtro }}&filial={{ filial_id|default:'' }}&page={{ pagina.next_page_number }}">Próxima</a>{% else %}<span></span>{% endif %}
+  </div>
+</div>
+{% endblock %}

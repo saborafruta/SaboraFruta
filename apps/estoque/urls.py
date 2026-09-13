@@ -14,6 +14,8 @@ urlpatterns = [
     path('reposicao/', views.ReposicaoListView.as_view(), name='reposicao-list'),
     path('sugestao-compras/', views.SugestaoComprasView.as_view(), name='sugestao-compras'),
     path('equilibrio/', views.EquilibrioEstoqueView.as_view(), name='equilibrio-estoque'),
+    path('analise/curva-abc/', views.CurvaAbcGiroView.as_view(), name='curva-abc-giro'),
+    path('analise/excesso/', views.ProdutosExcessoView.as_view(), name='produtos-excesso'),
     path('movimentacoes/', views.MovimentacaoListView.as_view(), name='movimentacao-list'),
 
     # Operacoes
