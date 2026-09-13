@@ -56,11 +56,6 @@
   .co-client-results { position:absolute; z-index:30; left:0; right:0; max-height:180px; overflow:auto; margin-top:4px; padding:4px; border:1px solid var(--co-border); background:var(--co-card); border-radius:9px; box-shadow:0 16px 35px rgba(0,0,0,.3); }
   .co-summary-card { min-height:0; display:flex; flex-direction:column; overflow:hidden; }
   .co-payment-body { flex:1 1 auto; min-height:0; overflow:auto; }
-  .co-payment-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-top:7px; }
-  .co-payment { min-height:45px; padding:6px 8px; border:1px solid var(--co-border); border-radius:9px; background:transparent; color:var(--co-text); cursor:pointer; text-align:left; overflow:hidden; }
-  .co-payment.active { border-color:var(--co-blue); background:color-mix(in srgb,var(--co-blue) 13%,transparent); box-shadow:inset 0 0 0 1px var(--co-blue); }
-  .co-payment strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
-  .co-payment small { display:block; margin-top:1px; color:var(--co-muted); font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .co-summary { flex:0 0 auto; display:grid; gap:6px; padding:9px 10px 10px; border-top:1px solid var(--co-border); }
   .co-summary-row { display:flex; justify-content:space-between; gap:12px; color:var(--co-muted); font-size:13px; }
   .co-summary-row strong { color:var(--co-text); }
@@ -75,7 +70,7 @@
   .co-field label { display:block; margin-bottom:5px; color:var(--co-muted); font-size:11px; font-weight:800; }
   .co-modal-actions { display:flex; justify-content:flex-end; gap:9px; margin-top:18px; }
   [x-cloak] { display:none!important; }
-  @media(max-height:760px) and (min-width:1001px){ .co-shortcut{padding:2px 5px}.co-sub{display:none}.co-payment-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.co-payment{min-height:39px}.co-side-body{padding:7px}.co-summary{padding:7px}.co-input{min-height:36px}.co-btn{min-height:35px} }
+  @media(max-height:760px) and (min-width:1001px){ .co-shortcut{padding:2px 5px}.co-sub{display:none}.co-side-body{padding:7px}.co-summary{padding:7px}.co-input{min-height:36px}.co-btn{min-height:35px} }
   @media(max-width:1000px){ .checkout-page{height:auto;min-height:0;overflow:visible}.co-layout{grid-template-columns:1fr}.co-side{grid-template-columns:1fr 1fr}.co-summary-card{grid-column:1/-1}.co-cart-card{min-height:340px}.co-shortcuts{justify-content:flex-start} }
   @media(max-width:680px){ .co-head{align-items:flex-start;flex-direction:column}.co-side{grid-template-columns:1fr}.co-grid{grid-template-columns:1fr}.co-table th:nth-child(2),.co-table td:nth-child(2){display:none}.co-search-row{grid-template-columns:90px minmax(0,1fr)}.co-search-row .co-btn-primary{grid-column:1/-1}.co-results{top:105px}.co-shortcuts{display:none} }
 </style>
@@ -194,13 +189,6 @@
               <option :value="null">Selecione</option>
               <template x-for="forma in formasPagamento" :key="'select-'+forma.id"><option :value="forma.id" x-text="forma.descricao"></option></template>
             </select>
-          </div>
-          <div class="co-payment-grid">
-            <template x-for="forma in formasPagamento" :key="forma.id">
-              <button type="button" class="co-payment" :class="{'active':formaPagamentoId===forma.id}" @click="selecionarForma(forma)">
-                <strong x-text="forma.descricao"></strong><small x-text="forma.tipo || 'pagamento'"></small>
-              </button>
-            </template>
           </div>
           <p class="co-empty" x-show="!formasPagamento.length" style="padding:20px 0">Nenhuma forma disponível no PDV.</p>
           <div class="co-grid" x-show="formaCartao" x-cloak>

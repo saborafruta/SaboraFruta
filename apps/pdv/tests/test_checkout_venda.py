@@ -168,6 +168,7 @@ class CheckoutVendaTests(TestCase):
         self.assertContains(resposta, 'x-ref="valorPagamento"')
         self.assertContains(resposta, '<kbd>F10</kbd>Finalizar', html=True)
         self.assertContains(resposta, 'quantidadeParaProduto(produto)')
+        self.assertNotContains(resposta, 'class="co-payment-grid"')
 
     @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do checkout')
     def test_javascript_renderizado_tem_sintaxe_valida(self):
