@@ -26,7 +26,10 @@ class ConfiguracaoEtiquetaVendaForm(forms.ModelForm):
         label='Ajuste horizontal (mm)',
         help_text='Use valor negativo para levar toda a impressão para a esquerda.',
         min_value=-10, max_value=10, decimal_places=2, max_digits=5,
-        widget=forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '-1,0'}),
+        widget=forms.TextInput(attrs={
+            'inputmode': 'decimal', 'placeholder': '-1,0', 'dir': 'ltr',
+            'autocomplete': 'off',
+        }),
     )
     deslocamento_vertical_mm = DecimalCalibracaoField(
         label='Ajuste vertical (mm)',

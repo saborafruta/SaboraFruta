@@ -121,4 +121,6 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertIn('id_layout_elementos', editor)
         self.assertIn('id_deslocamento_horizontal_mm', editor)
         self.assertIn('id_alta_nitidez', editor)
-        self.assertIn("setHorizontalOffset('-1')", editor)
+        self.assertIn('data-horizontal-offset="-1"', editor)
+        self.assertIn("button.addEventListener('click'", editor)
+        self.assertIn("return '−' + magnitude + ' mm · esquerda'", editor)

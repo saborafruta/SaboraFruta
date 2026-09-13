@@ -80,12 +80,13 @@
               <label for="{{ form.deslocamento_horizontal_mm.id_for_label }}" class="block text-sm font-semibold mb-2">{{ form.deslocamento_horizontal_mm.label }}</label>
               {{ form.deslocamento_horizontal_mm }}
               <div class="flex flex-wrap gap-1 mt-2" aria-label="Ajustes horizontais rápidos">
-                <button type="button" class="btn-secondary text-xs px-2 py-1" onclick="setHorizontalOffset('-2')">−2</button>
-                <button type="button" class="btn-secondary text-xs px-2 py-1" onclick="setHorizontalOffset('-1')">−1</button>
-                <button type="button" class="btn-secondary text-xs px-2 py-1" onclick="setHorizontalOffset('0')">0</button>
-                <button type="button" class="btn-secondary text-xs px-2 py-1" onclick="setHorizontalOffset('1')">+1</button>
-                <button type="button" class="btn-secondary text-xs px-2 py-1" onclick="setHorizontalOffset('2')">+2</button>
+                <button type="button" class="btn-secondary text-xs px-2 py-1" data-horizontal-offset="-2">−2 · esquerda</button>
+                <button type="button" class="btn-secondary text-xs px-2 py-1" data-horizontal-offset="-1">−1 · esquerda</button>
+                <button type="button" class="btn-secondary text-xs px-2 py-1" data-horizontal-offset="0">0</button>
+                <button type="button" class="btn-secondary text-xs px-2 py-1" data-horizontal-offset="1">+1 · direita</button>
+                <button type="button" class="btn-secondary text-xs px-2 py-1" data-horizontal-offset="2">+2 · direita</button>
               </div>
+              <p id="horizontal-offset-feedback" class="text-xs font-semibold mt-2" aria-live="polite"></p>
               {% if form.deslocamento_horizontal_mm.errors %}<div class="text-sm text-red-500 mt-2">{{ form.deslocamento_horizontal_mm.errors|striptags }}</div>{% endif %}
             </div>
             <div>
@@ -190,6 +191,8 @@
     const offsetY = byId('id_deslocamento_vertical_mm');
     const highSharpness = byId('id_alta_nitidez');
     const layoutInput = byId('id_layout_elementos');
+    const offsetFeedback = byId('horizontal-offset-feedback');
+    const offsetButtons = Array.from(document.querySelectorAll('[data-horizontal-offset]'));
     let layout = JSON.parse(byId('label-layout-initial').textContent);
     const defaultLayout = JSON.parse(byId('label-layout-default').textContent);
     const toggles = {
@@ -203,20 +206,41 @@
       const value = Number(String(input.value || '').replace(',', '.'));
       return value > 0 ? value : fallback;
     }
+    function decimalValue(input, fallback) {
+      const normalized = String(input.value || '')
+        .trim()
+        .replace(/−/g, '-')
+        .replace(',', '.');
+      const value = Number(normalized);
+      return Number.isFinite(value) ? value : fallback;
+    }
+    function formatOffset(value) {
+      const magnitude = Math.abs(value).toLocaleString('pt-BR', {maximumFractionDigits: 2});
+      if (value < 0) return '−' + magnitude + ' mm · esquerda';
+      if (value > 0) return '+' + magnitude + ' mm · direita';
+      return '0 mm · centralizado';
+    }
     function refresh() {
       const w = numberValue(width, 60);
       const h = numberValue(height, 40);
       preview.style.aspectRatio = w + ' / ' + h;
       const marginMm = Math.max(0, numberValue(margin, 0));
-      const offsetXMm = Number(String(offsetX.value || '0').replace(',', '.')) || 0;
-      const offsetYMm = Number(String(offsetY.value || '0').replace(',', '.')) || 0;
+      const offsetXMm = decimalValue(offsetX, 0);
+      const offsetYMm = decimalValue(offsetY, 0);
       content.style.left = (marginMm / w * 100) + '%';
       content.style.right = (marginMm / w * 100) + '%';
       content.style.top = (marginMm / h * 100) + '%';
       content.style.bottom = (marginMm / h * 100) + '%';
       content.style.transform = 'translate(' + ((offsetXMm / w) * preview.clientWidth) + 'px,' + ((offsetYMm / h) * preview.clientHeight) + 'px)';
       preview.classList.toggle('high-sharpness', highSharpness.checked);
-      byId('preview-offset-x').textContent = offsetXMm.toLocaleString('pt-BR') + ' mm';
+      byId('preview-offset-x').textContent = formatOffset(offsetXMm);
+      offsetFeedback.textContent = 'Aplicado: ' + formatOffset(offsetXMm);
+      offsetButtons.forEach(button => {
+        const selected = decimalValue({value: button.dataset.horizontalOffset}, 0) === offsetXMm;
+        button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        button.classList.toggle('ring-2', selected);
+        button.classList.toggle('ring-blue-500', selected);
+      });
       byId('preview-size').textContent = w + ' × ' + h + ' mm (proporção real)';
       byId('preview-message').textContent = message.value || '';
       byId('preview-printer').textContent = printer.value || 'Não informada';
@@ -284,11 +308,16 @@
       Object.keys(layout).forEach(applyPosition);
       persistLayout();
     };
-    window.setHorizontalOffset = function (value) {
-      offsetX.value = value;
+    function setHorizontalOffset(value) {
+      const normalized = String(decimalValue({value: value}, 0));
+      offsetX.value = normalized;
       offsetX.dispatchEvent(new Event('input', {bubbles:true}));
+      offsetX.dispatchEvent(new Event('change', {bubbles:true}));
       offsetX.focus();
-    };
+    }
+    offsetButtons.forEach(button => {
+      button.addEventListener('click', () => setHorizontalOffset(button.dataset.horizontalOffset));
+    });
     [width, height, margin, offsetX, offsetY, highSharpness, message, printer, ...Object.keys(toggles).map(byId)].forEach(input => {
       input.addEventListener('input', refresh);
       input.addEventListener('change', refresh);
