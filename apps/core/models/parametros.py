@@ -84,6 +84,11 @@ class ParametrosSistema(TimestampedModel):
         verbose_name='Acompanhar entrega no contas a receber',
         help_text='Exibe situação e previsão de entrega somente nesta filial. Não altera pagamentos.',
     )
+    checkout_venda_ativo = models.BooleanField(
+        default=False,
+        verbose_name='Utilizar checkout de venda',
+        help_text='Exibe o Checkout no menu desta filial. Quando desativado, a tela fica indisponível.',
+    )
     certificado_digital = models.FileField(
         upload_to='sistema/certificados/',
         blank=True,
