@@ -313,6 +313,8 @@ html.tema-escuro body { background: var(--forn-bg) !important; }
             <label style="margin-bottom:8px">Optante Simples</label>
             <label class="check-row"><input type="checkbox" name="optante_simples" {% if form.optante_simples.value %}checked{% endif %}> Sim</label>
           </div>
+          <div class="erp-field"><label>Regime tributario</label>{{ form.regime_tributario }}</div>
+          <div class="erp-field"><label>Regime IBS/CBS</label>{{ form.regime_ibs_cbs }}</div>
         </div>
         <div class="step-actions" x-show="!isEdit">
           <button type="button" class="btn-next" @click="goNext('obs')">Ir para o proximo passo</button>

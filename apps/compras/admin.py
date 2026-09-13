@@ -1,8 +1,10 @@
 from django.contrib import admin
 
 from apps.compras.models import (
-    AvaliacaoFornecedor, EntradaNF, ItemEntradaNF, ItemPedidoCompra,
-    PedidoCompra,
+    AvaliacaoFornecedor, CalculoTributarioCompra, CotacaoCompra,
+    CotacaoCompraFornecedor, CotacaoCompraItem, CotacaoCompraPreco,
+    EntradaNF, ItemEntradaNF, ItemPedidoCompra, PedidoCompra,
+    RegraTributariaCompra,
 )
 
 
@@ -66,3 +68,47 @@ class AvaliacaoFornecedorAdmin(admin.ModelAdmin):
         'data_prevista', 'data_real', 'dias_atraso', 'entregue_no_prazo',
     ]
     date_hierarchy = 'data_real'
+
+
+@admin.register(RegraTributariaCompra)
+class RegraTributariaCompraAdmin(admin.ModelAdmin):
+    list_display = [
+        'nome', 'empresa', 'data_inicial', 'data_final',
+        'regime_comprador', 'regime_fornecedor', 'classe_fiscal', 'ncm_prefixo', 'ativo',
+    ]
+    list_filter = ['empresa', 'ativo', 'regime_comprador', 'regime_fornecedor', 'classe_fiscal']
+    search_fields = ['nome', 'ncm_prefixo']
+
+
+class CotacaoCompraItemInline(admin.TabularInline):
+    model = CotacaoCompraItem
+    extra = 0
+    readonly_fields = ['produto', 'produto_descricao', 'produto_ncm', 'quantidade']
+
+
+class CotacaoCompraFornecedorInline(admin.TabularInline):
+    model = CotacaoCompraFornecedor
+    extra = 0
+    readonly_fields = [
+        'fornecedor', 'manual_supplier', 'supplier_name', 'supplier_cnpj',
+        'supplier_tax_regime', 'supplier_tax_ibs_cbs',
+    ]
+
+
+@admin.register(CotacaoCompra)
+class CotacaoCompraAdmin(admin.ModelAdmin):
+    list_display = [
+        'numero', 'filial', 'usuario', 'data_referencia',
+        'valor_nominal_total', 'creditos_estimados_total', 'custo_efetivo_total',
+    ]
+    list_filter = ['filial', 'data_referencia', 'regime_comprador']
+    search_fields = ['numero', 'empresa_snapshot']
+    readonly_fields = [
+        'numero', 'usuario', 'empresa_snapshot', 'valor_nominal_total',
+        'creditos_estimados_total', 'custo_efetivo_total', 'economia_estimada',
+    ]
+    inlines = [CotacaoCompraItemInline, CotacaoCompraFornecedorInline]
+
+
+admin.site.register(CotacaoCompraPreco)
+admin.site.register(CalculoTributarioCompra)

@@ -15,6 +15,7 @@ from .entrada import (
     EntradaNFDesvincularItemView,
     EntradaNFVincularItemView, EntradaNFVincularSugestoesView,
 )
+from .cotacao import CotacaoCompraDetailView, CotacaoCompraListView, CotacaoCompraNovaView
 
 __all__ = [
     'PedidoCompraListView', 'PedidoCompraCreateView', 'PedidoCompraDetailView',
@@ -32,4 +33,5 @@ __all__ = [
     'EntradaNFVincularItemView', 'EntradaNFVincularSugestoesView',
     'EntradaNFCriarProdutoItemView', 'AdicionarItemEntradaView', 'RemoverItemEntradaView',
     'EfetivarEntradaView', 'EstornarEntradaView', 'CancelarEntradaView',
+    'CotacaoCompraNovaView', 'CotacaoCompraListView', 'CotacaoCompraDetailView',
 ]

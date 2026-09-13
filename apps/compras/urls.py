@@ -5,6 +5,11 @@ from apps.compras import views
 app_name = 'compras'
 
 urlpatterns = [
+    # Cotacao inteligente
+    path('cotacoes/', views.CotacaoCompraListView.as_view(), name='cotacao-list'),
+    path('cotacoes/nova/', views.CotacaoCompraNovaView.as_view(), name='cotacao-nova'),
+    path('cotacoes/<int:pk>/', views.CotacaoCompraDetailView.as_view(), name='cotacao-detail'),
+
     # Pedidos de compra
     path('', views.PedidoCompraListView.as_view(), name='pedido-list'),
     path('novo/', views.PedidoCompraCreateView.as_view(), name='pedido-create'),

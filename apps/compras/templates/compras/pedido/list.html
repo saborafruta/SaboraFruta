@@ -5,6 +5,7 @@
 {% block page_title %}Pedidos de Compra{% endblock %}
 
 {% block list_actions %}
+  <a href="{% url 'compras:cotacao-list' %}" class="btn-secondary">Analise de custo</a>
   <a href="{% url 'compras:entrada-list' %}" class="btn-secondary">Entradas de NF</a>
   <a href="{% url 'compras:pedido-create' %}" class="btn-primary">+ Novo Pedido</a>
 {% endblock %}

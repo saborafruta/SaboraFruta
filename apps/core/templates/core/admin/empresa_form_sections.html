@@ -85,6 +85,11 @@
           {% if form.regime_tributario.errors %}<p class="form-section-error">{{ form.regime_tributario.errors|join:", " }}</p>{% endif %}
         </div>
         <div>
+          <label for="{{ form.regime_ibs_cbs.id_for_label }}" class="form-section-label">Regime IBS/CBS</label>
+          {{ form.regime_ibs_cbs|add_class:"form-input" }}
+          {% if form.regime_ibs_cbs.errors %}<p class="form-section-error">{{ form.regime_ibs_cbs.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div>
           <label for="{{ form.codigo_regime_tributario.id_for_label }}" class="form-section-label">Codigo do regime tributario <span class="text-red-500">*</span></label>
           {{ form.codigo_regime_tributario|add_class:"form-input" }}
           {% if form.codigo_regime_tributario.help_text %}<p class="form-section-help">{{ form.codigo_regime_tributario.help_text }}</p>{% endif %}

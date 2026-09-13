@@ -6,6 +6,7 @@ from django.core.validators import RegexValidator
 from django.db import models
 
 from apps.core.constants.segmentos import SEGMENTOS
+from apps.core.constants.tributacao import RegimeIBSCBS
 
 from .base import CoordenadaMixin, TimestampedModel
 
@@ -55,6 +56,10 @@ class Empresa(CoordenadaMixin, TimestampedModel):
     )
 
     regime_tributario = models.CharField(max_length=20, choices=RegimeTributario.choices)
+    regime_ibs_cbs = models.CharField(
+        max_length=10, choices=RegimeIBSCBS.choices, blank=True,
+        help_text='Apuracao de IBS/CBS. Em branco, o sistema usa o padrao do regime empresarial.',
+    )
     codigo_regime_tributario = models.SmallIntegerField(
         choices=CodigoRegimeTributario.choices,
         help_text='CRT do emitente: 1=SN, 2=SN excesso, 3=Normal, 4=MEI.',
@@ -135,6 +140,12 @@ class Filial(CoordenadaMixin, TimestampedModel):
         choices=Empresa.RegimeTributario.choices,
         blank=True,
         help_text='Regime fiscal especifico da filial. Se vazio, usa o regime da empresa.',
+    )
+    regime_ibs_cbs = models.CharField(
+        max_length=10,
+        choices=RegimeIBSCBS.choices,
+        blank=True,
+        help_text='Regime IBS/CBS especifico da filial. Se vazio, usa o cadastro da empresa.',
     )
     codigo_regime_tributario = models.SmallIntegerField(
         null=True,

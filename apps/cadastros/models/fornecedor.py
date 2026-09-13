@@ -4,6 +4,7 @@ import uuid
 from django.db import models
 
 from apps.core.constants.choices import TipoPessoa, UF
+from apps.core.constants.tributacao import RegimeIBSCBS
 from apps.core.models.base import CoordenadaMixin, FilialManager, FilialScopedModel, TimestampedModel
 
 
@@ -51,6 +52,23 @@ class Fornecedor(CoordenadaMixin, FilialScopedModel):
     prazo_entrega_dias = models.SmallIntegerField(default=0)
     contribuinte_icms = models.BooleanField(default=True)
     optante_simples = models.BooleanField(default=False)
+    regime_tributario = models.CharField(
+        max_length=20,
+        choices=(
+            ('mei', 'MEI'),
+            ('simples_nacional', 'Simples Nacional'),
+            ('lucro_presumido', 'Lucro Presumido'),
+            ('lucro_real', 'Lucro Real'),
+        ),
+        blank=True,
+        help_text='Usado em calculos fiscais e pode ser informado apenas na cotacao.',
+    )
+    regime_ibs_cbs = models.CharField(
+        max_length=10,
+        choices=RegimeIBSCBS.choices,
+        blank=True,
+        help_text='Apuracao de IBS/CBS do fornecedor.',
+    )
 
     # Avaliação de qualidade (estrelas 1-5)
     nota_qualidade = models.DecimalField(

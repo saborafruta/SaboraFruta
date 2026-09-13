@@ -1,0 +1,21 @@
+{% extends "_list_base.html" %}
+{% load erp_extras %}
+
+{% block list_title %}Análises de Custo de Compra{% endblock %}
+{% block page_title %}Análises de Custo de Compra{% endblock %}
+
+{% block list_actions %}
+  <a href="{% url 'compras:pedido-list' %}" class="btn-secondary">Pedidos de compra</a>
+  <a href="{% url 'compras:cotacao-nova' %}" class="btn-primary">+ Nova análise</a>
+{% endblock %}
+
+{% block list_filters %}
+<div class="card p-4 text-sm text-gray-500">Histórico imutável das informações, regras e resultados usados em cada análise.</div>
+{% endblock %}
+
+{% block table_head %}
+  <th class="text-left px-4 py-3">Número</th><th class="text-left px-4 py-3">Data</th><th class="text-left px-4 py-3">Usuário</th><th class="text-right px-4 py-3">Nominal</th><th class="text-right px-4 py-3">Créditos</th><th class="text-right px-4 py-3">Custo efetivo</th><th class="text-right px-4 py-3">Ações</th>
+{% endblock %}
+{% block table_body %}
+  {% for cotacao in cotacoes %}<tr class="hover:bg-gray-50"><td class="px-4 py-3 font-mono text-xs font-semibold">{{ cotacao.numero }}</td><td class="px-4 py-3 text-sm">{{ cotacao.created_at|date:"d/m/Y H:i" }}</td><td class="px-4 py-3 text-sm">{{ cotacao.usuario }}</td><td class="px-4 py-3 text-right">{{ cotacao.valor_nominal_total|moeda }}</td><td class="px-4 py-3 text-right text-emerald-700">{{ cotacao.creditos_estimados_total|moeda }}</td><td class="px-4 py-3 text-right font-semibold">{{ cotacao.custo_efetivo_total|moeda }}</td><td class="px-4 py-3 text-right"><a class="text-primary-600 hover:underline" href="{% url 'compras:cotacao-detail' cotacao.pk %}">Abrir</a></td></tr>{% empty %}<tr><td colspan="7" class="text-center py-12 text-gray-500">Nenhuma análise realizada.</td></tr>{% endfor %}
+{% endblock %}

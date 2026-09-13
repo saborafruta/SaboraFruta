@@ -24,7 +24,8 @@ FORNECEDOR_CAMPOS_REPLICAVEIS = [
     'complemento', 'bairro', 'cidade', 'uf', 'cep', 'codigo_municipio_ibge',
     'pais', 'codigo_pais_bacen', 'telefone', 'celular', 'email',
     'contato_nome', 'prazo_entrega_dias', 'contribuinte_icms',
-    'optante_simples', 'id_externo', 'observacao', 'ativo',
+    'optante_simples', 'regime_tributario', 'regime_ibs_cbs',
+    'id_externo', 'observacao', 'ativo',
 ]
 
 

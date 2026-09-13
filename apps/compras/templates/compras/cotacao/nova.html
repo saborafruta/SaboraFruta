@@ -1,0 +1,98 @@
+{% extends "_base.html" %}
+
+{% block title %}Análise de Custo de Compra{% endblock %}
+{% block page_title %}Análise de Custo de Compra{% endblock %}
+
+{% block content %}
+{{ produtos_json|json_script:"cotacao-produtos" }}
+{{ fornecedores_json|json_script:"cotacao-fornecedores" }}
+<div class="max-w-7xl mx-auto space-y-5" id="cotacao-app">
+  <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-widest text-primary-600">Compras · Cotação inteligente</p>
+      <h1 class="mt-1 text-2xl font-semibold">Compare o que realmente custa</h1>
+      <p class="mt-1 text-sm text-gray-500">A recomendação é calculada produto por produto e agrupada por fornecedor.</p>
+    </div>
+    <a href="{% url 'compras:cotacao-list' %}" class="btn-secondary">Ver histórico</a>
+  </div>
+
+  <form method="post" id="cotacao-form" class="space-y-5">
+    {% csrf_token %}
+    <input type="hidden" name="payload" id="cotacao-payload">
+
+    <section class="card p-5">
+      <div class="flex items-center gap-3 mb-4"><span class="cotacao-step">1</span><div><h2 class="font-semibold">Empresa compradora</h2><p class="text-xs text-gray-500">{{ empresa_nome }} · {{ filial_nome }}</p></div></div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <label class="form-field"><span>Regime empresarial</span><select id="buyer-regime" class="form-input" required>{% for value, label in regimes_empresariais %}<option value="{{ value }}" {% if value == regime_comprador %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label class="form-field"><span>Regime IBS/CBS</span><select id="buyer-ibs" class="form-input" required>{% for value, label in regimes_ibs_cbs %}<option value="{{ value }}" {% if value == regime_ibs_comprador %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label class="form-field"><span>Data de referência</span><input id="reference-date" type="date" value="{{ data_referencia }}" class="form-input" required></label>
+      </div>
+      <p class="mt-3 text-xs text-gray-500">Você pode ajustar os regimes somente para esta análise; o cadastro principal não será alterado.</p>
+    </section>
+
+    <section class="card p-5">
+      <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+        <div class="flex items-center gap-3"><span class="cotacao-step">2</span><div><h2 class="font-semibold">Produtos e quantidades</h2><p class="text-xs text-gray-500">Use o cadastro existente de produtos.</p></div></div>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="select-all-products"> Selecionar todos filtrados</label>
+      </div>
+      <input id="product-search" class="form-input mb-3" placeholder="Pesquisar por produto, código ou NCM...">
+      <div id="product-list" class="cotacao-choice-list"></div>
+      <p id="product-empty" class="hidden py-6 text-center text-sm text-gray-500">Nenhum produto encontrado.</p>
+    </section>
+
+    <section class="card p-5">
+      <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+        <div class="flex items-center gap-3"><span class="cotacao-step">3</span><div><h2 class="font-semibold">Fornecedores</h2><p class="text-xs text-gray-500">Cadastrados ou válidos somente nesta cotação.</p></div></div>
+        <button type="button" id="add-manual" class="btn-secondary">+ Adicionar fornecedor manual</button>
+      </div>
+      <input id="supplier-search" class="form-input mb-3" placeholder="Pesquisar fornecedor cadastrado...">
+      <div id="supplier-list" class="cotacao-choice-list"></div>
+      <div id="manual-suppliers" class="space-y-3 mt-4"></div>
+    </section>
+
+    <section class="card p-5">
+      <div class="flex items-center gap-3 mb-4"><span class="cotacao-step">4</span><div><h2 class="font-semibold">Matriz de preços</h2><p class="text-xs text-gray-500">Deixe em branco quando o fornecedor não comercializar o produto.</p></div></div>
+      <div class="overflow-x-auto cotacao-matrix-shell"><table class="w-full cotacao-matrix"><thead id="matrix-head"></thead><tbody id="matrix-body"></tbody></table></div>
+      <p id="matrix-empty" class="py-8 text-center text-sm text-gray-500">Selecione produtos e pelo menos dois fornecedores para montar a grade.</p>
+    </section>
+
+    <section class="card p-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <label class="form-field flex-1"><span>Observação (opcional)</span><textarea id="observation" rows="2" class="form-input" placeholder="Contexto desta cotação..."></textarea></label>
+      <button type="submit" class="btn-primary cotacao-analyze">Analisar melhor compra</button>
+    </section>
+  </form>
+
+  <p class="text-xs text-gray-500 text-center">Os valores apresentados representam uma estimativa baseada nas informações tributárias cadastradas. Operações específicas podem exigir validação fiscal ou contábil.</p>
+</div>
+
+<style>
+  .cotacao-step{width:2rem;height:2rem;border-radius:999px;display:grid;place-items:center;background:#eff6ff;color:#1d4ed8;font-weight:700;flex:none}
+  .cotacao-choice-list{max-height:19rem;overflow:auto;border:1px solid #e5e7eb;border-radius:.75rem}
+  .cotacao-choice{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(110px,160px);gap:.75rem;align-items:center;padding:.75rem;border-bottom:1px solid #f1f5f9}
+  .cotacao-choice:last-child{border-bottom:0}.cotacao-choice strong{display:block;font-size:.875rem}.cotacao-choice small{display:block;color:#6b7280;margin-top:.15rem}
+  .cotacao-supplier{grid-template-columns:auto minmax(0,1fr) minmax(140px,190px) minmax(130px,180px)}
+  .cotacao-manual{padding:1rem;border:1px solid #bfdbfe;background:#eff6ff;border-radius:.75rem}.cotacao-manual-grid{display:grid;grid-template-columns:2fr 1.4fr 1fr 1fr;gap:.75rem}
+  .cotacao-matrix{min-width:760px;border-collapse:separate;border-spacing:0}.cotacao-matrix th,.cotacao-matrix td{padding:.7rem;border-bottom:1px solid #e5e7eb;text-align:left}.cotacao-matrix th{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;background:#f8fafc;position:sticky;top:0}.cotacao-matrix th:first-child,.cotacao-matrix td:first-child{position:sticky;left:0;z-index:2;background:white;min-width:220px}.cotacao-matrix th:first-child{background:#f8fafc;z-index:3}.cotacao-price{min-width:120px;text-align:right}.cotacao-analyze{text-transform:uppercase;letter-spacing:.04em;min-height:46px;padding-inline:1.4rem}
+  @media(max-width:768px){.cotacao-choice,.cotacao-supplier{grid-template-columns:auto minmax(0,1fr)}.cotacao-choice>.form-input,.cotacao-supplier>select{grid-column:2}.cotacao-manual-grid{grid-template-columns:1fr}.cotacao-matrix-shell{margin-inline:-1.25rem;padding-inline:1.25rem}}
+</style>
+
+<script>
+(function(){
+  const products=JSON.parse(document.getElementById('cotacao-produtos').textContent), registered=JSON.parse(document.getElementById('cotacao-fornecedores').textContent);
+  const regimes=[['mei','MEI'],['simples_nacional','Simples Nacional'],['lucro_presumido','Lucro Presumido'],['lucro_real','Lucro Real']], ibsRegimes=[['mei','MEI'],['simples','Simples'],['regular','Regular']];
+  const selectedProducts=new Map(), selectedSuppliers=new Map(), prices=new Map(); let manualIndex=0;
+  const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  const options=(items,current,placeholder)=>`<option value="">${placeholder}</option>`+items.map(([v,l])=>`<option value="${v}" ${v===current?'selected':''}>${l}</option>`).join('');
+  function renderProducts(){const q=document.getElementById('product-search').value.toLowerCase(), list=document.getElementById('product-list'); const visible=products.filter(p=>`${p.name} ${p.code} ${p.ncm}`.toLowerCase().includes(q)); list.innerHTML=visible.map(p=>`<label class="cotacao-choice"><input type="checkbox" data-product="${p.id}" ${selectedProducts.has(String(p.id))?'checked':''}><span><strong>${esc(p.name)}</strong><small>${esc(p.code||'Sem código')} · NCM ${esc(p.ncm||'não informado')} · ${esc(p.unit)}</small></span><input class="form-input" type="number" min="0.001" step="0.001" data-quantity="${p.id}" value="${esc(selectedProducts.get(String(p.id))?.quantity||'1')}" ${selectedProducts.has(String(p.id))?'':'disabled'} aria-label="Quantidade de ${esc(p.name)}"></label>`).join(''); document.getElementById('product-empty').classList.toggle('hidden',visible.length>0); bindProductEvents();}
+  function bindProductEvents(){document.querySelectorAll('[data-product]').forEach(el=>el.onchange=()=>{const p=products.find(x=>String(x.id)===el.dataset.product);if(el.checked)selectedProducts.set(String(p.id),{...p,quantity:document.querySelector(`[data-quantity="${p.id}"]`).value||'1'});else selectedProducts.delete(String(p.id));renderProducts();renderMatrix();});document.querySelectorAll('[data-quantity]').forEach(el=>el.oninput=()=>{const p=selectedProducts.get(el.dataset.quantity);if(p)p.quantity=el.value;});}
+  function renderSuppliers(){const q=document.getElementById('supplier-search').value.toLowerCase(), list=document.getElementById('supplier-list');list.innerHTML=registered.filter(s=>`${s.name} ${s.cnpj}`.toLowerCase().includes(q)).map(s=>{const key=`registered-${s.id}`,cur=selectedSuppliers.get(key)||s;return `<div class="cotacao-choice cotacao-supplier"><input type="checkbox" data-supplier="${key}" ${selectedSuppliers.has(key)?'checked':''}><span><strong>${esc(s.name)}</strong><small>${esc(s.cnpj||'CNPJ não informado')}</small><label class="text-xs ${selectedSuppliers.has(key)&&!s.regime?'':'hidden'} {% if not pode_editar_fornecedor %}hidden{% endif %}"><input type="checkbox" data-update="${key}"> Atualizar também o cadastro</label></span><select class="form-input" data-supplier-regime="${key}" ${selectedSuppliers.has(key)?'':'disabled'}>${options(regimes,cur.regime,'Informe o regime')}</select><select class="form-input" data-supplier-ibs="${key}" ${selectedSuppliers.has(key)?'':'disabled'}>${options(ibsRegimes,cur.ibs_cbs,'IBS/CBS')}</select></div>`}).join('');bindSupplierEvents();}
+  function bindSupplierEvents(){document.querySelectorAll('[data-supplier]').forEach(el=>el.onchange=()=>{const s=registered.find(x=>`registered-${x.id}`===el.dataset.supplier);if(el.checked)selectedSuppliers.set(el.dataset.supplier,{...s,key:el.dataset.supplier,type:'registered',update_registration:false});else selectedSuppliers.delete(el.dataset.supplier);renderSuppliers();renderMatrix();});document.querySelectorAll('[data-supplier-regime]').forEach(el=>el.onchange=()=>{const s=selectedSuppliers.get(el.dataset.supplierRegime);if(s)s.regime=el.value;});document.querySelectorAll('[data-supplier-ibs]').forEach(el=>el.onchange=()=>{const s=selectedSuppliers.get(el.dataset.supplierIbs);if(s)s.ibs_cbs=el.value;});document.querySelectorAll('[data-update]').forEach(el=>el.onchange=()=>{const s=selectedSuppliers.get(el.dataset.update);if(s)s.update_registration=el.checked;});}
+  function addManual(){manualIndex++;const key=`manual-${manualIndex}`;selectedSuppliers.set(key,{key,type:'manual',name:'',cnpj:'',regime:'',ibs_cbs:'',notes:'',save_registration:false});renderManual();renderMatrix();}
+  function renderManual(){const box=document.getElementById('manual-suppliers');box.innerHTML=[...selectedSuppliers.values()].filter(s=>s.type==='manual').map(s=>`<div class="cotacao-manual" data-manual-card="${s.key}"><div class="flex items-center justify-between mb-3"><strong>Fornecedor manual</strong><button type="button" class="text-sm text-red-600" data-remove-manual="${s.key}">Remover</button></div><div class="cotacao-manual-grid"><input class="form-input" data-manual-field="name" placeholder="Nome do fornecedor" value="${esc(s.name)}"><input class="form-input" data-manual-field="cnpj" maxlength="18" placeholder="CNPJ (opcional)" value="${esc(s.cnpj)}"><select class="form-input" data-manual-field="regime">${options(regimes,s.regime,'Regime tributário')}</select><select class="form-input" data-manual-field="ibs_cbs">${options(ibsRegimes,s.ibs_cbs,'IBS/CBS')}</select></div><div class="mt-3 flex flex-col md:flex-row gap-3"><input class="form-input flex-1" data-manual-field="notes" placeholder="Observação (opcional)" value="${esc(s.notes)}">{% if pode_criar_fornecedor %}<label class="flex items-center gap-2 text-sm"><input type="checkbox" data-manual-field="save_registration" ${s.save_registration?'checked':''}> Salvar fornecedor no cadastro</label>{% endif %}</div></div>`).join('');document.querySelectorAll('[data-remove-manual]').forEach(el=>el.onclick=()=>{selectedSuppliers.delete(el.dataset.removeManual);renderManual();renderMatrix();});document.querySelectorAll('[data-manual-card]').forEach(card=>card.querySelectorAll('[data-manual-field]').forEach(el=>{el.oninput=el.onchange=()=>{const s=selectedSuppliers.get(card.dataset.manualCard);s[el.dataset.manualField]=el.type==='checkbox'?el.checked:el.value;if(el.dataset.manualField==='name')renderMatrix();};}));}
+  function renderMatrix(){const ps=[...selectedProducts.values()],ss=[...selectedSuppliers.values()];const head=document.getElementById('matrix-head'),body=document.getElementById('matrix-body'),empty=document.getElementById('matrix-empty');if(!ps.length||ss.length<2){head.innerHTML='';body.innerHTML='';empty.classList.remove('hidden');return;}empty.classList.add('hidden');head.innerHTML='<tr><th>Produto / quantidade</th>'+ss.map(s=>`<th>${esc(s.name||'Fornecedor manual')}</th>`).join('')+'</tr>';body.innerHTML=ps.map(p=>`<tr><td><strong class="text-sm">${esc(p.name)}</strong><small class="block text-gray-500">${esc(p.quantity)} ${esc(p.unit)}</small></td>${ss.map(s=>{const key=`${p.id}|${s.key}`;return `<td><div class="flex items-center gap-1"><span class="text-xs text-gray-500">R$</span><input type="number" min="0.0001" step="0.0001" class="form-input cotacao-price" data-price="${esc(key)}" value="${esc(prices.get(key)||'')}" placeholder="0,00"></div></td>`}).join('')}</tr>`).join('');document.querySelectorAll('[data-price]').forEach(el=>el.oninput=()=>prices.set(el.dataset.price,el.value));}
+  document.getElementById('product-search').oninput=renderProducts;document.getElementById('supplier-search').oninput=renderSuppliers;document.getElementById('add-manual').onclick=addManual;document.getElementById('select-all-products').onchange=e=>{const q=document.getElementById('product-search').value.toLowerCase();products.filter(p=>`${p.name} ${p.code} ${p.ncm}`.toLowerCase().includes(q)).forEach(p=>e.target.checked?selectedProducts.set(String(p.id),{...p,quantity:selectedProducts.get(String(p.id))?.quantity||'1'}):selectedProducts.delete(String(p.id)));renderProducts();renderMatrix();};
+  document.getElementById('cotacao-form').onsubmit=e=>{const ps=[...selectedProducts.values()],ss=[...selectedSuppliers.values()];if(!ps.length){e.preventDefault();alert('Selecione pelo menos um produto.');return;}if(ss.length<2){e.preventDefault();alert('Selecione pelo menos dois fornecedores.');return;}if(ss.some(s=>!s.name||!s.regime||!s.ibs_cbs)){e.preventDefault();alert('Informe nome e regimes de todos os fornecedores.');return;}const priceRows=[];ps.forEach(p=>ss.forEach(s=>{const value=prices.get(`${p.id}|${s.key}`);if(value)priceRows.push({product_id:p.id,supplier_key:s.key,unit_price:value});}));if(ps.some(p=>!priceRows.some(row=>String(row.product_id)===String(p.id)))){e.preventDefault();alert('Informe ao menos um preço para cada produto.');return;}document.getElementById('cotacao-payload').value=JSON.stringify({buyer_regime:document.getElementById('buyer-regime').value,buyer_ibs_cbs:document.getElementById('buyer-ibs').value,reference_date:document.getElementById('reference-date').value,observation:document.getElementById('observation').value,products:ps.map(p=>({id:p.id,quantity:p.quantity})),suppliers:ss,prices:priceRows});};
+  renderProducts();renderSuppliers();renderManual();renderMatrix();
+})();
+</script>
+{% endblock %}
