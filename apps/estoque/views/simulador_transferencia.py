@@ -5,6 +5,7 @@ from django.views import View
 
 from apps.core.models import Filial
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.request_scope import empresa_operacional
 from apps.estoque.services.simulador_transferencia import simular_transferencia
 from apps.estoque.views.permissoes import permissoes_estoque
 from apps.produtos.models import Produto
@@ -36,7 +37,7 @@ class SimuladorTransferenciaView(PermissaoRequiredMixin, View):
     template_name = "estoque/simulador_transferencia/simulador.html"
 
     def get(self, request):
-        empresa = request.user.empresa
+        empresa = empresa_operacional(request)
         produto_id = _id_opcional(request.GET.get("produto"))
         origem_id = _id_opcional(request.GET.get("origem"))
         destino_id = _id_opcional(request.GET.get("destino"))

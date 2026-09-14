@@ -3,6 +3,7 @@ from django.shortcuts import render
 from django.views import View
 
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.request_scope import empresa_operacional
 from apps.estoque.services.equilibrio_estoque import calcular_equilibrio
 from apps.estoque.services.motivo_transferencia import enriquecer_para_tabela
 from apps.estoque.views.permissoes import permissoes_estoque
@@ -39,7 +40,7 @@ class RecomendacoesTransferenciaView(PermissaoRequiredMixin, View):
         filial_destino_id = _id_opcional(request.GET.get("destino"))
 
         resultado = calcular_equilibrio(
-            empresa=request.user.empresa, dias_analise=dias_analise, dias_cobertura=dias_cobertura,
+            empresa=empresa_operacional(request), dias_analise=dias_analise, dias_cobertura=dias_cobertura,
             busca=busca, filial_origem_id=filial_origem_id, filial_destino_id=filial_destino_id,
         )
         recomendacoes = [

@@ -7,6 +7,7 @@ from django.views import View
 
 from apps.core.models import Filial
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.request_scope import empresa_operacional
 from apps.estoque.models import LoteProduto
 from apps.estoque.services.equilibrio_estoque import calcular_equilibrio
 from apps.estoque.services.posicoes_estoque import calcular_posicoes
@@ -50,7 +51,7 @@ class CentralEqualizacaoView(PermissaoRequiredMixin, View):
     template_name = "estoque/central_equalizacao/central.html"
 
     def get(self, request):
-        empresa = request.user.empresa
+        empresa = empresa_operacional(request)
         dias_analise = _inteiro_opcao(request.GET.get("dias_analise"), {7, 15, 30, 60, 90}, 30)
         dias_cobertura = _inteiro_opcao(request.GET.get("dias_cobertura"), {7, 14, 21, 30, 45}, 14)
 

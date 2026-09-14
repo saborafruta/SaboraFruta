@@ -5,6 +5,7 @@ from django.views import View
 
 from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.request_scope import empresa_operacional
 from apps.estoque.forms import ConfiguracaoAbcEstoqueForm
 from apps.estoque.models import ConfiguracaoAbcEstoque
 from apps.estoque.views.permissoes import permissoes_estoque
@@ -22,7 +23,7 @@ class ConfiguracaoAbcEstoqueView(PermissaoRequiredMixin, View):
         }
 
     def get(self, request):
-        linhas = self._linhas(request.user.empresa)
+        linhas = self._linhas(empresa_operacional(request))
         forms = {
             classe: ConfiguracaoAbcEstoqueForm(instance=linha, prefix=classe)
             for classe, linha in linhas.items()
@@ -38,7 +39,7 @@ class ConfiguracaoAbcEstoqueView(PermissaoRequiredMixin, View):
             messages.error(request, 'Você não tem permissão para esta ação.')
             return redirect('estoque:configuracao-abc')
 
-        linhas = self._linhas(request.user.empresa)
+        linhas = self._linhas(empresa_operacional(request))
         forms = {
             classe: ConfiguracaoAbcEstoqueForm(request.POST, instance=linha, prefix=classe)
             for classe, linha in linhas.items()
