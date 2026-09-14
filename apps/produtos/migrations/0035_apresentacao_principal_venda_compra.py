@@ -11,14 +11,16 @@ from django.db import migrations, models
 
 def copiar_padrao_para_novas_flags(apps, schema_editor):
     ProdutoApresentacao = apps.get_model("produtos", "ProdutoApresentacao")
-    ProdutoApresentacao.objects.filter(padrao=True).update(
+    ProdutoApresentacao.objects.using(schema_editor.connection.alias).filter(
+        padrao=True,
+    ).update(
         principal_venda=True, principal_compra=True,
     )
 
 
 def copiar_novas_flags_para_padrao(apps, schema_editor):
     ProdutoApresentacao = apps.get_model("produtos", "ProdutoApresentacao")
-    ProdutoApresentacao.objects.filter(
+    ProdutoApresentacao.objects.using(schema_editor.connection.alias).filter(
         models.Q(principal_venda=True) | models.Q(principal_compra=True),
     ).update(padrao=True)
 
