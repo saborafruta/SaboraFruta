@@ -40,6 +40,12 @@ class UnidadeMedida(models.Model):
         max_digits=14, decimal_places=6, default=1,
         help_text='Conversao para a unidade base da categoria (KG=1, G=0.001)',
     )
+    casas_decimais = models.PositiveSmallIntegerField(
+        default=3,
+        help_text='Casas decimais aceitas na quantidade desta unidade ao arredondar '
+                   '(ver apps.produtos.services.conversao). Unidades de contagem '
+                   '(tipo=Unidade) normalmente usam 0.',
+    )
     id_externo = models.CharField(max_length=100, blank=True, db_index=True)
     ativo = models.BooleanField(default=True)
 

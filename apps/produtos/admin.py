@@ -25,7 +25,7 @@ class CategoriaProdutoFilialAdmin(admin.ModelAdmin):
 
 @admin.register(UnidadeMedida)
 class UnidadeMedidaAdmin(admin.ModelAdmin):
-    list_display = ['sigla', 'descricao', 'tipo', 'empresa', 'ativo']
+    list_display = ['sigla', 'descricao', 'tipo', 'casas_decimais', 'empresa', 'ativo']
     list_filter = ['ativo', 'tipo', 'empresa']
     search_fields = ['sigla', 'descricao']
 
@@ -92,7 +92,11 @@ class ProdutoApresentacaoInline(admin.TabularInline):
     model = ProdutoApresentacao
     extra = 0
     autocomplete_fields = ['unidade']
-    fields = ['descricao', 'unidade', 'fator_conversao', 'preco_venda', 'codigo', 'padrao', 'ativo']
+    fields = [
+        'descricao', 'unidade', 'fator_conversao', 'preco_venda', 'preco_minimo', 'codigo',
+        'permite_venda', 'permite_compra', 'permite_estoque',
+        'principal_venda', 'principal_compra', 'ativo',
+    ]
 
 
 @admin.register(Produto)
@@ -146,10 +150,33 @@ class ProdutoFilialAdmin(admin.ModelAdmin):
 
 @admin.register(ProdutoApresentacao)
 class ProdutoApresentacaoAdmin(admin.ModelAdmin):
-    list_display = ['produto', 'descricao', 'unidade', 'fator_conversao', 'preco_venda', 'padrao', 'ativo']
-    list_filter = ['ativo', 'padrao', 'unidade']
+    list_display = [
+        'produto', 'descricao', 'unidade', 'fator_conversao', 'preco_venda',
+        'principal_venda', 'principal_compra', 'ativo',
+    ]
+    list_filter = ['ativo', 'principal_venda', 'principal_compra', 'permite_venda', 'permite_compra', 'unidade']
     search_fields = ['produto__descricao', 'produto__codigo', 'descricao', 'codigo']
     autocomplete_fields = ['produto', 'unidade']
+    fieldsets = (
+        (None, {
+            'fields': (
+                'produto', 'unidade', 'descricao', 'codigo', 'fator_conversao', 'ativo',
+            ),
+        }),
+        ('Preços', {
+            'fields': ('preco_venda', 'preco_minimo'),
+        }),
+        ('Uso', {
+            'fields': (
+                'permite_venda', 'permite_compra', 'permite_estoque',
+                'principal_venda', 'principal_compra',
+            ),
+        }),
+        ('Físico', {
+            'fields': ('peso_bruto', 'peso_liquido', 'largura', 'altura', 'profundidade'),
+            'classes': ('collapse',),
+        }),
+    )
 
 
 class ItemTabelaPrecoInline(admin.TabularInline):

@@ -48,6 +48,7 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
+    'drf_spectacular',
     'widget_tweaks',
     'django_celery_beat',
     'django_celery_results',
@@ -258,6 +259,19 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'ERP iNoovaTed API',
+    'DESCRIPTION': 'Documentacao OpenAPI das APIs REST internas do ERP (produtos, estoque, integracoes).',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    # A doc so descreve o formato da API -- nao expoe dado nenhum -- mas o
+    # ERP e' de uso interno, entao exige login (sessao) mesmo assim, igual
+    # ao resto do sistema. Ver config/urls.py.
+    'SERVE_PERMISSIONS': ['rest_framework.permissions.IsAuthenticated'],
+    'SERVE_AUTHENTICATION': ['rest_framework.authentication.SessionAuthentication'],
 }
 
 INTEGRACAO_API_RATE_LIMIT = env.int('INTEGRACAO_API_RATE_LIMIT', default=120)

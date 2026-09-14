@@ -65,28 +65,86 @@ class ProdutoApresentacaoModelTests(ProdutoApresentacaoTestBase):
         with self.assertRaises(ValidationError):
             apresentacao.full_clean()
 
-    def test_apenas_uma_apresentacao_padrao_por_produto(self):
+    def test_apenas_uma_apresentacao_principal_venda_por_produto(self):
         produto = self.criar_produto()
         ProdutoApresentacao.objects.create(
-            produto=produto, unidade=self.un, descricao='Unidade', fator_conversao=1, padrao=True,
+            produto=produto, unidade=self.un, descricao='Unidade', fator_conversao=1, principal_venda=True,
         )
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 ProdutoApresentacao.objects.create(
                     produto=produto, unidade=self.cx, descricao='Caixa 1.000',
-                    fator_conversao=1000, padrao=True,
+                    fator_conversao=1000, principal_venda=True,
                 )
 
-    def test_duas_apresentacoes_padrao_em_produtos_diferentes_sao_permitidas(self):
+    def test_apenas_uma_apresentacao_principal_compra_por_produto(self):
+        produto = self.criar_produto()
+        ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.cx, descricao='Caixa 1.000', fator_conversao=1000, principal_compra=True,
+        )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                ProdutoApresentacao.objects.create(
+                    produto=produto, unidade=self.un, descricao='Unidade',
+                    fator_conversao=1, principal_compra=True,
+                )
+
+    def test_principal_venda_e_principal_compra_sao_independentes(self):
+        produto = self.criar_produto()
+        # Vende por padrao em UN, compra por padrao em CX -- mesma apresentacao
+        # nao precisa acumular as duas flags.
+        ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.un, descricao='Unidade', fator_conversao=1, principal_venda=True,
+        )
+        # Nao deve levantar: as constraints sao independentes por flag.
+        ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.cx, descricao='Caixa 1.000', fator_conversao=1000, principal_compra=True,
+        )
+
+    def test_duas_apresentacoes_principais_em_produtos_diferentes_sao_permitidas(self):
         produto_a = self.criar_produto(codigo='1001')
         produto_b = self.criar_produto(codigo='1002', descricao='Outro produto')
         ProdutoApresentacao.objects.create(
-            produto=produto_a, unidade=self.un, descricao='Unidade', fator_conversao=1, padrao=True,
+            produto=produto_a, unidade=self.un, descricao='Unidade', fator_conversao=1, principal_venda=True,
         )
         # Nao deve levantar: constraint e por produto, nao global.
         ProdutoApresentacao.objects.create(
-            produto=produto_b, unidade=self.un, descricao='Unidade', fator_conversao=1, padrao=True,
+            produto=produto_b, unidade=self.un, descricao='Unidade', fator_conversao=1, principal_venda=True,
         )
+
+    def test_nao_permite_duas_apresentacoes_ativas_com_mesma_unidade_e_fator(self):
+        produto = self.criar_produto()
+        ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.pct, descricao='Pacote 100', fator_conversao=100,
+        )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                ProdutoApresentacao.objects.create(
+                    produto=produto, unidade=self.pct, descricao='Pacote 100 (duplicado)', fator_conversao=100,
+                )
+
+    def test_permite_duas_apresentacoes_com_mesma_unidade_e_fator_se_uma_estiver_inativa(self):
+        produto = self.criar_produto()
+        ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.pct, descricao='Pacote 100 antigo', fator_conversao=100, ativo=False,
+        )
+        # Nao deve levantar: a constraint so vale entre apresentacoes ativas.
+        ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.pct, descricao='Pacote 100 novo', fator_conversao=100,
+        )
+
+    def test_check_constraint_fator_conversao_no_banco_pega_bypass_do_clean(self):
+        produto = self.criar_produto()
+        apresentacao = ProdutoApresentacao(
+            produto=produto, unidade=self.pct, descricao='Pacote invalido', fator_conversao=100,
+        )
+        apresentacao.save()
+        # Simula quem grava direto no banco sem passar por full_clean():
+        # a CheckConstraint tem que barrar mesmo assim.
+        apresentacao.fator_conversao = 0
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                apresentacao.save(update_fields=['fator_conversao'])
 
     def test_unique_together_produto_unidade_descricao(self):
         produto = self.criar_produto()
@@ -98,6 +156,44 @@ class ProdutoApresentacaoModelTests(ProdutoApresentacaoTestBase):
                 ProdutoApresentacao.objects.create(
                     produto=produto, unidade=self.pct, descricao='Pacote 100', fator_conversao=200,
                 )
+
+    def test_cubagem_calculada_a_partir_das_dimensoes_em_cm(self):
+        produto = self.criar_produto()  # unidade_dimensao default = CM
+        caixa = ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.cx, descricao='Caixa 1.000', fator_conversao=1000,
+            largura=Decimal('40'), altura=Decimal('30'), profundidade=Decimal('25'),
+        )
+        # 40cm x 30cm x 25cm = 30000 cm3 = 0.03 m3
+        self.assertEqual(caixa.cubagem, Decimal('0.03'))
+
+    def test_cubagem_zero_quando_falta_alguma_dimensao(self):
+        produto = self.criar_produto()
+        caixa = ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.cx, descricao='Caixa 1.000', fator_conversao=1000,
+            largura=Decimal('40'), altura=Decimal('30'),
+        )
+        self.assertEqual(caixa.cubagem, 0)
+
+    def test_permite_venda_compra_estoque_default_true(self):
+        produto = self.criar_produto()
+        apresentacao = ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.un, descricao='Unidade', fator_conversao=1,
+        )
+        self.assertTrue(apresentacao.permite_venda)
+        self.assertTrue(apresentacao.permite_compra)
+        self.assertTrue(apresentacao.permite_estoque)
+
+    def test_apresentacao_pode_ser_so_informativa(self):
+        # Ex: "Display com 6 caixas" -- existe pra composicao/exibicao, mas
+        # nao deve ser usada em venda/compra/baixa de estoque direta.
+        produto = self.criar_produto()
+        display = ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.cx, descricao='Display 6 Caixas', fator_conversao=6000,
+            permite_venda=False, permite_compra=False, permite_estoque=False,
+        )
+        self.assertFalse(display.permite_venda)
+        self.assertFalse(display.permite_compra)
+        self.assertFalse(display.permite_estoque)
 
     def test_converter_para_base_e_de_base(self):
         produto = self.criar_produto()
@@ -192,6 +288,29 @@ class ApresentacaoServiceTests(ProdutoApresentacaoTestBase):
         resultado = ApresentacaoService.converter_entre_apresentacoes(caixa, pacote100, 2)
         self.assertEqual(resultado, Decimal('20'))  # 2 CX = 2000 UN = 20 PCT100
 
+    def test_converter_arredonda_pelo_casas_decimais_da_unidade_destino(self):
+        # Regra 5.10: o arredondamento usa ROUND_HALF_UP, centralizado em
+        # services/conversao.py, respeitando casas_decimais da unidade de
+        # destino -- nao o numero de casas "naturais" da divisao.
+        un_contagem = UnidadeMedida.objects.create(
+            empresa=self.empresa, sigla='UNC', descricao='Unidade (contagem)', casas_decimais=0,
+        )
+        produto = self.criar_produto()
+        pacote3 = ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.pct, descricao='Pacote com 3', fator_conversao=3,
+        )
+        unidade_avulsa = ProdutoApresentacao.objects.create(
+            produto=produto, unidade=un_contagem, descricao='Unidade avulsa', fator_conversao=1,
+        )
+        # 1 pacote com 3 = 3 UN base; convertendo pra "unidade avulsa"
+        # (fator 1) da exatamente 3 -- sem fracao, sem precisar arredondar.
+        # Forcamos uma fracao real usando 2 pacotes de 3 dividido por um
+        # fator que nao fecha redondo.
+        resultado = ApresentacaoService.converter_entre_apresentacoes(pacote3, unidade_avulsa, Decimal('2.5'))
+        # 2.5 pacotes de 3 = 7.5 UN base; unidade_avulsa tem casas_decimais=0
+        # -> ROUND_HALF_UP arredonda 7.5 para 8.
+        self.assertEqual(resultado, Decimal('8'))
+
     def test_converter_entre_apresentacoes_de_produtos_diferentes_falha(self):
         produto_a = self.criar_produto(codigo='1001')
         produto_b = self.criar_produto(codigo='1002', descricao='Outro produto')
@@ -204,23 +323,41 @@ class ApresentacaoServiceTests(ProdutoApresentacaoTestBase):
         with self.assertRaises(DadosInvalidosError):
             ApresentacaoService.converter_entre_apresentacoes(caixa, unidade, 1)
 
-    def test_apresentacao_padrao_retorna_a_marcada(self):
+    def test_apresentacao_principal_venda_retorna_a_marcada(self):
         produto = self.criar_produto()
         ProdutoApresentacao.objects.create(
             produto=produto, unidade=self.pct, descricao='Pacote 100', fator_conversao=100,
         )
-        padrao = ProdutoApresentacao.objects.create(
-            produto=produto, unidade=self.un, descricao='Unidade', fator_conversao=1, padrao=True,
+        principal = ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.un, descricao='Unidade', fator_conversao=1, principal_venda=True,
         )
-        self.assertEqual(ApresentacaoService.apresentacao_padrao(produto), padrao)
+        self.assertEqual(ApresentacaoService.apresentacao_principal_venda(produto), principal)
 
-    def test_apresentacao_padrao_ignora_inativas(self):
+    def test_apresentacao_principal_venda_ignora_inativas(self):
         produto = self.criar_produto()
         ProdutoApresentacao.objects.create(
             produto=produto, unidade=self.un, descricao='Unidade', fator_conversao=1,
-            padrao=True, ativo=False,
+            principal_venda=True, ativo=False,
         )
-        self.assertIsNone(ApresentacaoService.apresentacao_padrao(produto))
+        self.assertIsNone(ApresentacaoService.apresentacao_principal_venda(produto))
+
+    def test_apresentacao_principal_compra_retorna_a_marcada(self):
+        produto = self.criar_produto()
+        ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.un, descricao='Unidade', fator_conversao=1,
+        )
+        principal = ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.cx, descricao='Caixa 1.000', fator_conversao=1000, principal_compra=True,
+        )
+        self.assertEqual(ApresentacaoService.apresentacao_principal_compra(produto), principal)
+
+    def test_apresentacao_principal_compra_ignora_inativas(self):
+        produto = self.criar_produto()
+        ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.cx, descricao='Caixa 1.000', fator_conversao=1000,
+            principal_compra=True, ativo=False,
+        )
+        self.assertIsNone(ApresentacaoService.apresentacao_principal_compra(produto))
 
     def test_listar_ativas_ordena_por_fator_e_ignora_inativas(self):
         produto = self.criar_produto()

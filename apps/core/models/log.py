@@ -78,6 +78,7 @@ class RegistroAuditoria(models.Model):
         ESTOQUE = 'estoque', 'Estoque'
         FINANCEIRO = 'financeiro', 'Financeiro'
         LOGISTICA = 'logistica', 'Logística'
+        PRODUTOS = 'produtos', 'Produtos'
 
     class Acao(models.TextChoices):
         VISUALIZAR = 'visualizar', 'Visualizar'

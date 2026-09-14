@@ -13,6 +13,7 @@ from decimal import Decimal, InvalidOperation
 
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.produtos.models import Produto, ProdutoApresentacao
+from apps.produtos.services.conversao import quantizar_para_unidade
 
 
 class ApresentacaoService:
@@ -57,9 +58,11 @@ class ApresentacaoService:
         """
         quantidade = ApresentacaoService._to_decimal(quantidade, campo='Quantidade')
         if para == 'base':
-            return apresentacao.converter_para_base(quantidade)
+            resultado = apresentacao.converter_para_base(quantidade)
+            return quantizar_para_unidade(resultado, apresentacao.produto.unidade_medida)
         if para == 'apresentacao':
-            return apresentacao.converter_de_base(quantidade)
+            resultado = apresentacao.converter_de_base(quantidade)
+            return quantizar_para_unidade(resultado, apresentacao.unidade)
         raise DadosInvalidosError(f"Parametro 'para' invalido: {para!r}. Use 'base' ou 'apresentacao'.")
 
     @staticmethod
@@ -72,14 +75,24 @@ class ApresentacaoService:
                 'Nao e possivel converter entre apresentacoes de produtos diferentes.',
             )
         quantidade_base = ApresentacaoService.converter(origem, quantidade, para='base')
-        return destino.converter_de_base(quantidade_base)
+        resultado = destino.converter_de_base(quantidade_base)
+        return quantizar_para_unidade(resultado, destino.unidade)
 
     @staticmethod
-    def apresentacao_padrao(produto: Produto) -> ProdutoApresentacao | None:
-        """Apresentacao marcada como padrao para o produto, se houver, entre as ativas."""
+    def apresentacao_principal_venda(produto: Produto) -> ProdutoApresentacao | None:
+        """Apresentacao marcada como principal de venda para o produto, entre as ativas."""
         return (
             ProdutoApresentacao.objects.ativas()
-            .filter(produto=produto, padrao=True)
+            .filter(produto=produto, principal_venda=True)
+            .first()
+        )
+
+    @staticmethod
+    def apresentacao_principal_compra(produto: Produto) -> ProdutoApresentacao | None:
+        """Apresentacao marcada como principal de compra para o produto, entre as ativas."""
+        return (
+            ProdutoApresentacao.objects.ativas()
+            .filter(produto=produto, principal_compra=True)
             .first()
         )
 

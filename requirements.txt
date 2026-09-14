@@ -7,6 +7,7 @@ django-widget-tweaks>=1.5
 # Auth
 djangorestframework>=3.15
 djangorestframework-simplejwt>=5.3
+drf-spectacular>=0.27,<0.28
 
 # Async
 celery>=5.3
