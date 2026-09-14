@@ -133,6 +133,52 @@ class ApiVendaPDVCriacaoTests(ApiVendaPDVBase):
         # (10/UN, que daria 200 no total, nao 180) -- regra 5.8.
         self.assertEqual(response.data['itens'][0]['valor_unitario'], '9.0000')
         self.assertEqual(response.data['valor_total'], '180.00')
+        # Snapshot: qual apresentacao/fator foram usados na hora da venda.
+        item = response.data['itens'][0]
+        self.assertEqual(item['apresentacao'], self.apresentacao_caixa.pk)
+        self.assertEqual(item['apresentacao_descricao'], 'Caixa 10')
+        self.assertEqual(item['apresentacao_fator_conversao'], '10.000000')
+        self.assertEqual(item['quantidade_comercial'], '2.000')
+
+    def test_venda_sem_apresentacao_nao_grava_snapshot(self):
+        self.abastecer('10')
+        response = self.criar_venda({
+            'itens': [{'produto_id': self.produto.pk, 'quantidade': '1'}],
+            'pagamentos': [{'forma_id': self.forma_dinheiro.pk, 'valor': '10.00'}],
+        })
+        self.assertEqual(response.status_code, 201, response.data)
+        item = response.data['itens'][0]
+        self.assertIsNone(item['apresentacao'])
+        self.assertIsNone(item['apresentacao_fator_conversao'])
+        self.assertIsNone(item['quantidade_comercial'])
+
+    def test_snapshot_preserva_fator_original_mesmo_apos_apresentacao_mudar(self):
+        # O item 9 da secao 11 do documento: cancelamento/consulta de uma
+        # venda antiga deve continuar mostrando o fator USADO na venda,
+        # mesmo que a apresentacao seja editada depois.
+        self.abastecer('100')
+        response = self.criar_venda({
+            'itens': [{
+                'produto_id': self.produto.pk,
+                'apresentacao_id': self.apresentacao_caixa.pk,
+                'quantidade_comercial': '2',
+            }],
+            'pagamentos': [{'forma_id': self.forma_dinheiro.pk, 'valor': '180.00'}],
+        })
+        self.assertEqual(response.status_code, 201, response.data)
+
+        # Fator da apresentacao muda DEPOIS da venda (ex: erro de cadastro
+        # corrigido, ou reembalagem do produto).
+        self.apresentacao_caixa.fator_conversao = Decimal('5')
+        self.apresentacao_caixa.save(update_fields=['fator_conversao'])
+
+        from apps.pdv.models import ItemVendaPDV
+        item = ItemVendaPDV.objects.get(venda_pdv_id=response.data['id'])
+        # O snapshot continua mostrando o fator DE QUANDO A VENDA ACONTECEU
+        # (10), nao o fator atual da apresentacao (5).
+        self.assertEqual(item.apresentacao_fator_conversao, Decimal('10.000000'))
+        self.assertEqual(item.quantidade, Decimal('20.000'))  # ja convertido, imutavel
+        self.assertEqual(item.quantidade_comercial, Decimal('2.000'))
 
     def test_apresentacao_de_outro_produto_e_rejeitada(self):
         outro_produto = Produto.objects.create(

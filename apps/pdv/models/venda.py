@@ -188,6 +188,29 @@ class ItemVendaPDV(models.Model):
 
     quantidade = models.DecimalField(max_digits=12, decimal_places=3)
     unidade_medida = models.CharField(max_length=6)
+    # SNAPSHOT da apresentacao usada na venda (quando o item veio de uma
+    # apresentacao, nao direto na unidade base). `quantidade` acima ja e'
+    # sempre a quantidade convertida pra unidade base -- por isso o
+    # estorno/cancelamento (ver apps/pdv/services/edicao_venda_service.py)
+    # ja e' seguro mesmo que o fator da apresentacao mude depois: ele
+    # reverte a MovimentacaoEstoque gravada, nunca recalcula pelo fator
+    # atual. Estes tres campos existem pra RASTREABILIDADE/EXIBICAO (ex:
+    # "vendeu 2 Caixa 1.000" no historico, mesmo que a apresentacao seja
+    # editada ou apagada depois) -- nao pra corrigir um bug de calculo,
+    # que ja nao existia.
+    apresentacao = models.ForeignKey(
+        "produtos.ProdutoApresentacao", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="itens_venda_pdv",
+    )
+    apresentacao_fator_conversao = models.DecimalField(
+        max_digits=14, decimal_places=6, null=True, blank=True,
+        help_text="Fator de conversao da apresentacao NO MOMENTO da venda -- nao o atual.",
+    )
+    quantidade_comercial = models.DecimalField(
+        max_digits=12, decimal_places=3, null=True, blank=True,
+        help_text="Quantidade na unidade da apresentacao (ex: 2 caixas). "
+                   "`quantidade` continua sendo a mesma coisa convertida pra unidade base.",
+    )
     valor_unitario = models.DecimalField(max_digits=14, decimal_places=4)
     valor_unitario_tabela = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
     custo_unitario_snapshot = models.DecimalField(max_digits=14, decimal_places=4, default=0)

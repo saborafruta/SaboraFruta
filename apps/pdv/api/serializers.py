@@ -21,11 +21,13 @@ from apps.pdv.models import ItemVendaPDV, PagamentoVendaPDV, VendaPDV
 
 class ItemVendaPDVSerializer(serializers.ModelSerializer):
     produto_descricao = serializers.CharField(source='produto.descricao', read_only=True)
+    apresentacao_descricao = serializers.CharField(source='apresentacao.descricao', read_only=True, default=None)
 
     class Meta:
         model = ItemVendaPDV
         fields = [
             'id', 'numero_item', 'produto', 'produto_descricao', 'quantidade', 'unidade_medida',
+            'apresentacao', 'apresentacao_descricao', 'apresentacao_fator_conversao', 'quantidade_comercial',
             'valor_unitario', 'desconto_valor', 'valor_total', 'observacao',
         ]
 

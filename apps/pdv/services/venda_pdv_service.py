@@ -461,6 +461,9 @@ class VendaPDVService:
             tipo_venda=tipo_venda,
             quantidade=quantidade,
             unidade_medida=unidade,
+            apresentacao=apresentacao,
+            apresentacao_fator_conversao=apresentacao.fator_conversao if apresentacao else None,
+            quantidade_comercial=apresentacao.converter_de_base(quantidade) if apresentacao else None,
             valor_unitario=valor_unitario,
             valor_unitario_tabela=(
                 preco_info["preco"]
