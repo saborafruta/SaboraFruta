@@ -163,6 +163,25 @@ class MovimentacaoEstoque(FilialScopedModel):
     tara = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     peso_liquido = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
 
+    # SNAPSHOT da apresentacao usada para informar a quantidade (ex: ajuste
+    # manual contado "em caixas" em vez de direto na unidade base) -- mesmo
+    # padrao de apps.pdv.models.venda.ItemVenda. `quantidade` acima continua
+    # sempre na unidade base do produto; estes tres campos sao so para
+    # rastreabilidade/exibicao.
+    apresentacao = models.ForeignKey(
+        'produtos.ProdutoApresentacao', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='movimentacoes_estoque',
+    )
+    apresentacao_fator_conversao = models.DecimalField(
+        max_digits=14, decimal_places=6, null=True, blank=True,
+        help_text='Fator de conversao da apresentacao NO MOMENTO da movimentacao -- nao o atual.',
+    )
+    quantidade_comercial = models.DecimalField(
+        max_digits=12, decimal_places=3, null=True, blank=True,
+        help_text='Quantidade na unidade da apresentacao (ex: 2 caixas). '
+                   '`quantidade` continua sendo a mesma coisa convertida pra unidade base.',
+    )
+
     # Rastreio
     usuario = models.ForeignKey(
         'core.Usuario', on_delete=models.PROTECT, related_name='movimentacoes',

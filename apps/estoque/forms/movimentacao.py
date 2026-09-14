@@ -2,7 +2,7 @@ from django import forms
 
 from apps.core.models import Filial
 from apps.estoque.models import LoteProduto, MovimentacaoEstoque
-from apps.produtos.models import Produto
+from apps.produtos.models import Produto, ProdutoApresentacao
 
 
 QUANTIDADE_WIDGET = forms.NumberInput(attrs={
@@ -33,6 +33,11 @@ class AjusteEstoqueForm(forms.Form):
         label='Lote',
         help_text='Obrigatorio quando o produto controla lote.',
     )
+    apresentacao = forms.ModelChoiceField(
+        queryset=ProdutoApresentacao.objects.none(), required=False, label='Apresentação',
+        help_text='Opcional: conte "em caixas" em vez de digitar direto na unidade base. '
+                   '"Nova quantidade atual" abaixo passa a ser a quantidade NESSA apresentação.',
+    )
     quantidade_nova = forms.DecimalField(
         max_digits=12,
         decimal_places=3,
@@ -56,9 +61,23 @@ class AjusteEstoqueForm(forms.Form):
             self.fields['lote'].queryset = LoteProduto.objects.for_filial(filial).filter(
                 status=LoteProduto.Status.ATIVO,
             ).select_related('produto')
+            # Sem filtro dinamico por produto (mesmo padrao de
+            # AdicionarItemEntradaForm em apps/compras) -- todas as
+            # apresentacoes ativas da filial ficam disponiveis, e o
+            # `clean()` confere que a escolhida pertence ao produto.
+            self.fields['apresentacao'].queryset = ProdutoApresentacao.objects.ativas().filter(
+                produto__in=Produto.objects.for_filial(filial), permite_estoque=True,
+            ).select_related('produto', 'unidade').order_by('produto__descricao', 'fator_conversao')
 
     def clean(self):
-        return _validar_lote_produto(super().clean())
+        cleaned = _validar_lote_produto(super().clean())
+        produto = cleaned.get('produto')
+        apresentacao = cleaned.get('apresentacao')
+        if apresentacao and produto and apresentacao.produto_id != produto.pk:
+            raise forms.ValidationError(
+                f'A apresentação "{apresentacao.descricao}" não pertence ao produto selecionado.'
+            )
+        return cleaned
 
 
 class MovimentacaoManualForm(forms.Form):

@@ -1,13 +1,12 @@
 """
 Secao 11 do documento de especificacao -- casos 6 (baixa de estoque por
-apresentacao) e 10 (concorrencia/select_for_update), com os numeros
-exatos do enunciado.
+apresentacao), 9 (cancelamento usando o fator do snapshot) e 10
+(concorrencia/select_for_update), com os numeros exatos do enunciado.
 
-Casos 7, 8 e 9 (compra, devolucao e cancelamento usando o fator do
-snapshot) ficam de fora de proposito: apresentacao ainda nao esta
-conectada em compras nem em devolucao, e nao existe snapshot de
-apresentacao/fator gravado no item de venda hoje -- gaps conhecidos,
-documentados na Fase 15 (ver apps/pdv/api/views.py), nao esquecimento.
+Casos 7 e 8 (compra e devolucao usando apresentacao) tem cobertura
+propria em apps/compras/tests/test_apresentacao_compra.py e
+apps/vendas/tests/test_devolucao.py -- apresentacao ja esta conectada
+nos dois fluxos, entao nao sao repetidos aqui.
 """
 from decimal import Decimal
 from unittest.mock import patch
@@ -21,6 +20,7 @@ from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.financeiro.constants.enums import TipoFormaPagamento
 from apps.financeiro.models import FormaPagamento
 from apps.pdv.models import Caixa, SessaoPDV
+from apps.pdv.services.edicao_venda_service import estornar_venda_para_edicao
 from apps.pdv.services.venda_pdv_service import VendaPDVService
 from apps.produtos.models import Produto, ProdutoApresentacao, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
 
@@ -96,6 +96,39 @@ class Secao11Caso6Tests(Secao11EstoqueBase):
         self.vender_caixas(3)
         estoque = Estoque.objects.get(produto=self.produto, filial=self.filial)
         self.assertEqual(estoque.quantidade_atual, Decimal('7000.000'))
+
+
+class Secao11Caso9Tests(Secao11EstoqueBase):
+    """
+    Caso 9: cancelamento (estorno) de uma venda feita via apresentacao usa
+    o snapshot gravado no item -- nunca recalcula pelo fator ATUAL da
+    apresentacao. Prova disso: muda o fator_conversao DEPOIS da venda e
+    confirma que o estorno ainda devolve exatamente o que a venda baixou.
+    """
+
+    def test_estorno_de_venda_por_apresentacao_ignora_fator_alterado_depois(self):
+        self.abastecer('10000')
+        venda = self.vender_caixas(3)  # baixa 3.000 UN (3 x fator 1000)
+        estoque_apos_venda = Estoque.objects.get(produto=self.produto, filial=self.filial)
+        self.assertEqual(estoque_apos_venda.quantidade_atual, Decimal('7000.000'))
+
+        # Fator da apresentacao muda DEPOIS da venda -- se o estorno
+        # recalculasse por ele, devolveria 3 x 500 = 1.500 UN (errado).
+        self.cx1000.fator_conversao = Decimal('500')
+        self.cx1000.save(update_fields=['fator_conversao', 'updated_at'])
+
+        estornar_venda_para_edicao(venda, self.usuario)
+
+        estoque_apos_estorno = Estoque.objects.get(produto=self.produto, filial=self.filial)
+        self.assertEqual(estoque_apos_estorno.quantidade_atual, Decimal('10000.000'))
+        self.assertTrue(
+            MovimentacaoEstoque.objects.filter(
+                produto=self.produto,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.DEVOLUCAO_CLIENTE,
+                documento_id=venda.pk,
+                quantidade=Decimal('3000.000'),
+            ).exists()
+        )
 
 
 class Secao11Caso10Tests(Secao11EstoqueBase):

@@ -131,6 +131,9 @@ class MovimentacaoService:
         cliente_id: int | None = None,
         documento_fiscal_id: int | None = None,
         deposito_id: int | None = None,
+        apresentacao_id: int | None = None,
+        apresentacao_fator_conversao: Decimal | None = None,
+        quantidade_comercial: Decimal | None = None,
     ) -> MovimentacaoEstoque:
         """
         Registra UMA movimentação de estoque atomicamente.
@@ -278,6 +281,9 @@ class MovimentacaoService:
             documento_fiscal_id=documento_fiscal_id,
             observacao=observacao,
             data_movimentacao=timezone.now(),
+            apresentacao_id=apresentacao_id,
+            apresentacao_fator_conversao=apresentacao_fator_conversao,
+            quantidade_comercial=quantidade_comercial,
         )
         return mov
 
@@ -686,10 +692,34 @@ class MovimentacaoService:
         documento_id: int | None = None,
         documento_numero: str = '',
         deposito_id: int | None = None,
+        apresentacao=None,
     ) -> MovimentacaoEstoque:
-        """Define a quantidade como X (faz ajuste para mais ou menos)."""
+        """
+        Define a quantidade como X (faz ajuste para mais ou menos).
+
+        `apresentacao` (ProdutoApresentacao opcional): quando informada,
+        `quantidade_nova` e' lida na unidade DESSA apresentacao (ex: contou
+        "5 caixas") e convertida pro total na unidade base antes de calcular
+        a diferenca -- o resto do metodo (e o registro em MovimentacaoEstoque)
+        continua sempre em unidade base.
+        """
         if not justificativa.strip():
             raise DadosInvalidosError('Ajuste manual requer justificativa.')
+
+        apresentacao_fator_conversao = None
+        quantidade_comercial = None
+        if apresentacao is not None:
+            if apresentacao.produto_id != produto_id:
+                raise DadosInvalidosError(
+                    f'Apresentacao "{apresentacao.descricao}" nao pertence ao produto informado.'
+                )
+            if not apresentacao.permite_estoque:
+                raise DadosInvalidosError(
+                    f'A apresentacao "{apresentacao.descricao}" nao pode ser usada em movimentacao de estoque.'
+                )
+            quantidade_comercial = quantidade_nova
+            apresentacao_fator_conversao = apresentacao.fator_conversao
+            quantidade_nova = apresentacao.converter_para_base(quantidade_nova)
 
         if not deposito_id:
             deposito_id = Deposito.padrao_id(filial_id)
@@ -719,6 +749,9 @@ class MovimentacaoService:
                 documento_numero=documento_numero,
                 observacao=justificativa,
                 deposito_id=deposito_id,
+                apresentacao_id=apresentacao.pk if apresentacao else None,
+                apresentacao_fator_conversao=apresentacao_fator_conversao,
+                quantidade_comercial=quantidade_comercial,
             )
 
         estoque, _ = Estoque.objects.select_for_update().get_or_create(
@@ -745,6 +778,9 @@ class MovimentacaoService:
             documento_numero=documento_numero,
             observacao=justificativa,
             deposito_id=deposito_id,
+            apresentacao_id=apresentacao.pk if apresentacao else None,
+            apresentacao_fator_conversao=apresentacao_fator_conversao,
+            quantidade_comercial=quantidade_comercial,
         )
 
     @classmethod

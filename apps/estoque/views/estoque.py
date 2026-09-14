@@ -1867,6 +1867,7 @@ class AjusteEstoqueView(PermissaoRequiredMixin, View):
                     usuario_id=request.user.pk,
                     justificativa=form.cleaned_data['justificativa'],
                     lote_id=form.cleaned_data['lote'].pk if form.cleaned_data.get('lote') else None,
+                    apresentacao=form.cleaned_data.get('apresentacao'),
                 )
                 _auditar_estoque(
                     request,
