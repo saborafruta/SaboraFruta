@@ -77,8 +77,24 @@ O Railway faz **deploy automático a cada push** para o GitHub — na prática
 > Para confirmar que algo chegou em `ited.app.br`, olhe o próprio
 > `ited.app.br`.
 >
-> **Falta descobrir**: o projeto/serviço Railway de `ited.app.br` e um token
-> que o alcance. Sem isso não dá para inspecionar nem migrar o banco real.
+> **Achado em 14/09/2026** — projeto e serviço reais de `ited.app.br`:
+>
+> - **Projeto:** `iTed Produção` — Project ID `a3fb123c-a49b-45bd-aece-8d9b75bb03d9`
+> - **Environment:** `production` — Environment ID `8a26d482-10af-4e14-abf1-1c5c2965b0c9`
+> - **Serviço:** `Sitema Ited Produção` — Service ID `80d40f12-cc9e-4e10-a145-f4ce08b25193`
+> - Domínio custom confirmado: `ited.app.br` (`railway domain` lista como
+>   `custom` / `ACTIVE`); domínio interno
+>   `eureka-50649395000126-production.up.railway.app`.
+> - Repo: `saborafruta/SaboraFruta` (mesmo repo do serviço vazio — por
+>   isso os dois sobem sempre juntos a cada push).
+>
+> Não existe (ainda) um `Project-Access-Token` para este serviço — o
+> acesso usado foi login interativo da conta Railway (`railway login`,
+> conta `saborafruta7@gmail.com`) + `railway link -p a3fb123c-a49b-45bd-aece-8d9b75bb03d9 -e 8a26d482-10af-4e14-abf1-1c5c2965b0c9 -s 80d40f12-cc9e-4e10-a145-f4ce08b25193`.
+> Depois de linkado, `railway status --json` e `railway logs` falam com
+> o serviço certo. Se precisar de um `Project-Access-Token` dedicado
+> (para checagem via `curl`/GraphQL sem login interativo), gerar um no
+> dashboard do Railway dentro deste projeto/serviço e documentar aqui.
 
 Serviço que atende `saborafruta-production.up.railway.app` (o vazio, veja
 o aviso acima):
