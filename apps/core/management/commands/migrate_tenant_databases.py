@@ -18,11 +18,19 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--continue-on-error', action='store_true')
+        parser.add_argument(
+            '--retry-errors',
+            action='store_true',
+            help='Tenta novamente bancos que uma migration anterior marcou como erro.',
+        )
 
     def handle(self, *args, **options):
+        statuses = [EmpresaBanco.Status.ATIVO]
+        if options['retry_errors']:
+            statuses.append(EmpresaBanco.Status.ERRO)
         bancos = list(
             EmpresaBanco.objects.using('default')
-            .filter(ativo=True, status=EmpresaBanco.Status.ATIVO, empresa__ativo=True)
+            .filter(ativo=True, status__in=statuses, empresa__ativo=True)
             .select_related('empresa')
             .order_by('pk')
         )
@@ -56,7 +64,10 @@ class Command(BaseCommand):
                 locked = True
             call_command('migrate', database=banco.db_alias, interactive=False, verbosity=0)
             EmpresaBanco.objects.using('default').filter(pk=banco.pk).update(
-                ultima_migracao_em=timezone.now(), ultimo_erro='', updated_at=timezone.now(),
+                status=EmpresaBanco.Status.ATIVO,
+                ultima_migracao_em=timezone.now(),
+                ultimo_erro='',
+                updated_at=timezone.now(),
             )
             self.stdout.write(self.style.SUCCESS(f'{banco.db_alias}: migrations OK'))
         finally:

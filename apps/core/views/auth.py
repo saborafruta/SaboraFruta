@@ -147,6 +147,11 @@ class TrocarFilialView(View):
             messages.success(request, f'Filial alterada para {filial}.')
         except DomainError as e:
             messages.error(request, str(e))
+            referer = request.META.get('HTTP_REFERER', '')
+            if 'selecionar-filial' in referer:
+                return redirect('core:selecionar-filial')
+            return redirect(referer or reverse_lazy('core:selecionar-filial'))
+
         referer = request.META.get('HTTP_REFERER', '')
         if 'selecionar-filial' in referer:
             return redirect('core:dashboard')
