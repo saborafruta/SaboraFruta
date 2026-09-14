@@ -2,6 +2,7 @@
 from decimal import Decimal
 
 from django.db import models
+from django.db.models import Q
 
 from apps.core.models.base import FilialManager, FilialScopedModel, TimestampedModel
 from .produto import Produto
@@ -80,6 +81,13 @@ class ItemTabelaPreco(TimestampedModel):
 
     tabela = models.ForeignKey(TabelaPreco, on_delete=models.CASCADE, related_name='itens')
     produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name='precos_tabela')
+    apresentacao = models.ForeignKey(
+        'produtos.ProdutoApresentacao', on_delete=models.CASCADE, null=True, blank=True,
+        related_name='precos_tabela',
+        help_text='Nulo = preco no nivel do produto (comportamento historico). '
+                   'Preenchido = preco especifico desta apresentacao nesta tabela (== nesta filial, '
+                   'via TabelaPrecoFilial), independente do preco_venda da apresentacao.',
+    )
     preco_unitario = models.DecimalField(max_digits=14, decimal_places=4)
     desconto_maximo = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     desconto_valor = models.DecimalField(
@@ -93,8 +101,24 @@ class ItemTabelaPreco(TimestampedModel):
 
     class Meta:
         db_table = 'itens_tabela_preco'
-        unique_together = [('tabela', 'produto', 'quantidade_minima')]
         ordering = ['produto', 'quantidade_minima']
+        constraints = [
+            # NULL nao colide com NULL numa UniqueConstraint padrao (Postgres
+            # permite varias linhas NULL) -- por isso duas constraints
+            # condicionais em vez de um unique_together simples incluindo
+            # `apresentacao`, que deixaria passar mais de um preco "default"
+            # (apresentacao=None) para o mesmo produto/tabela/faixa.
+            models.UniqueConstraint(
+                fields=['tabela', 'produto', 'quantidade_minima'],
+                condition=Q(apresentacao__isnull=True),
+                name='uniq_item_tabela_preco_sem_apresentacao',
+            ),
+            models.UniqueConstraint(
+                fields=['tabela', 'produto', 'apresentacao', 'quantidade_minima'],
+                condition=Q(apresentacao__isnull=False),
+                name='uniq_item_tabela_preco_com_apresentacao',
+            ),
+        ]
 
     @property
     def valor_final(self):

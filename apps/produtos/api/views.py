@@ -32,6 +32,7 @@ from apps.estoque.models import Estoque
 from apps.produtos.models import ItemTabelaPreco, Produto, ProdutoApresentacao, ProdutoCodigoBarras, TabelaPreco
 from apps.produtos.services.apresentacao_service import ApresentacaoService
 
+from .exceptions import erro_response as _erro
 from .exceptions import formatar_erros_api
 from .permissions import TemPermissaoProdutos
 from .serializers import (
@@ -44,8 +45,9 @@ TTL_LOOKUP_ENCONTRADO = 60
 TTL_LOOKUP_NAO_ENCONTRADO = 30
 
 CAMPOS_CRITICOS_APRESENTACAO = frozenset({
-    'fator_conversao', 'unidade', 'principal_venda', 'principal_compra',
+    'fator_conversao', 'unidade', 'principal_venda', 'principal_compra', 'preco_venda', 'ativo',
 })
+CAMPOS_CRITICOS_PRODUTO = frozenset({'unidade_medida', 'codigo', 'codigo_barras', 'ativo'})
 
 
 class PaginacaoProdutos(PageNumberPagination):
@@ -109,17 +111,55 @@ class ProdutosView(BaseProdutosAPIView):
 
 
 class ProdutoDetalheView(BaseProdutosAPIView):
-    """GET /api/produtos/produtos/{id}/"""
+    """GET/PATCH /api/produtos/produtos/{id}/
 
-    @extend_schema(responses=ProdutoDetalheSerializer)
-    def get(self, request, pk):
-        empresa = empresa_operacional(request)
-        produto = get_object_or_404(
+    PATCH audita explicitamente quando um campo critico e alterado
+    (unidade_medida -- a unidade BASE do produto, da qual todo fator de
+    conversao de apresentacao depende --, codigo, codigo_barras, ativo).
+    Mesmo mecanismo de `ApresentacaoDetalheView.patch`."""
+
+    def get_object(self, empresa, pk):
+        return get_object_or_404(
             Produto.objects.for_empresa(empresa)
             .select_related('categoria', 'subcategoria', 'marca', 'fornecedor', 'unidade_medida')
             .prefetch_related('apresentacoes'),
             pk=pk,
         )
+
+    @extend_schema(responses=ProdutoDetalheSerializer)
+    def get(self, request, pk):
+        empresa = empresa_operacional(request)
+        produto = self.get_object(empresa, pk)
+        return Response(ProdutoDetalheSerializer(produto).data)
+
+    @extend_schema(request=ProdutoSerializer, responses=ProdutoDetalheSerializer)
+    def patch(self, request, pk):
+        empresa = empresa_operacional(request)
+        produto = self.get_object(empresa, pk)
+        antes = ProdutoSerializer(produto).data
+
+        serializer = ProdutoSerializer(produto, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+
+        nova_unidade = serializer.validated_data.get('unidade_medida')
+        if nova_unidade is not None and nova_unidade != produto.unidade_medida and produto.apresentacoes.exists():
+            return _erro(
+                'Nao e possivel trocar a unidade base de um produto que ja tem apresentacoes '
+                'cadastradas -- o fator_conversao de cada uma e absoluto e relativo a unidade base '
+                'atual; trocar a unidade sem recalcular cada fator corromperia a conversao '
+                'silenciosamente. Inative as apresentacoes atuais e recrie-as na unidade nova.',
+                codigo='unidade_base_com_apresentacoes', campo='unidade_medida',
+            )
+
+        campos_alterados_criticos = CAMPOS_CRITICOS_PRODUTO & set(serializer.validated_data)
+        with transaction.atomic():
+            produto = serializer.save()
+            if campos_alterados_criticos:
+                registrar_auditoria(
+                    request=request, modulo='produtos', acao='editar', objeto=produto,
+                    descricao=f'Campo(s) critico(s) alterado(s): {", ".join(sorted(campos_alterados_criticos))}',
+                    antes=antes, depois=ProdutoSerializer(produto).data,
+                )
         return Response(ProdutoDetalheSerializer(produto).data)
 
 
@@ -202,9 +242,11 @@ class ApresentacaoDetalheView(BaseProdutosAPIView):
 class ProdutoPrecosView(BaseProdutosAPIView):
     """GET /api/produtos/produtos/{id}/precos/ -- itens de tabela de preco do produto.
 
-    Filtro opcional `?filial=<id>`: so tabelas vinculadas aquela filial
-    (via `TabelaPreco.objects.for_filial`, mesmo manager usado no resto
-    do ERP)."""
+    Filtros opcionais: `?filial=<id>` (so tabelas vinculadas aquela filial,
+    via `TabelaPreco.objects.for_filial`, mesmo manager usado no resto do
+    ERP) e `?apresentacao=<id>` (so precos daquela apresentacao especifica;
+    `apresentacao=null` -- literal -- traz so os precos "default", no nivel
+    do produto)."""
 
     pagination_class = PaginacaoProdutos
 
@@ -213,12 +255,17 @@ class ProdutoPrecosView(BaseProdutosAPIView):
         empresa = empresa_operacional(request)
         produto = get_object_or_404(Produto.objects.for_empresa(empresa), pk=pk)
 
-        queryset = ItemTabelaPreco.objects.filter(produto=produto).select_related('tabela')
+        queryset = ItemTabelaPreco.objects.filter(produto=produto).select_related('tabela', 'apresentacao')
         filial_id = request.query_params.get('filial')
         if filial_id:
             filial = get_object_or_404(Filial, pk=filial_id, empresa=empresa)
             tabelas_da_filial = TabelaPreco.objects.for_filial(filial).values_list('pk', flat=True)
             queryset = queryset.filter(tabela_id__in=tabelas_da_filial)
+        apresentacao_id = request.query_params.get('apresentacao')
+        if apresentacao_id == 'null':
+            queryset = queryset.filter(apresentacao__isnull=True)
+        elif apresentacao_id:
+            queryset = queryset.filter(apresentacao_id=apresentacao_id)
         queryset = queryset.filter(tabela__ativo=True).order_by('tabela', 'quantidade_minima')
 
         paginador = PaginacaoProdutos()

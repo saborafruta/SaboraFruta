@@ -3,7 +3,7 @@ from django.contrib import admin
 from apps.produtos.models import (
     CategoriaProduto, CategoriaProdutoFilial, ClasseFiscal, ClasseFiscalAliquota, ClasseFiscalFilial,
     ItemTabelaPreco, MarcaProduto, MarcaProdutoFilial, NaturezaOperacao, NaturezaOperacaoFilial, Produto,
-    ProdutoApresentacao, ProdutoFilial,
+    ProdutoApresentacao, ProdutoApresentacaoFilial, ProdutoFilial,
     TabelaPreco, TabelaPrecoFilial, UnidadeMedida, UnidadeMedidaFilial,
 )
 
@@ -179,10 +179,18 @@ class ProdutoApresentacaoAdmin(admin.ModelAdmin):
     )
 
 
+@admin.register(ProdutoApresentacaoFilial)
+class ProdutoApresentacaoFilialAdmin(admin.ModelAdmin):
+    list_display = ['apresentacao', 'filial', 'ativo']
+    list_filter = ['ativo', 'filial']
+    search_fields = ['apresentacao__descricao', 'apresentacao__produto__descricao', 'apresentacao__produto__codigo']
+    autocomplete_fields = ['apresentacao', 'filial']
+
+
 class ItemTabelaPrecoInline(admin.TabularInline):
     model = ItemTabelaPreco
     extra = 0
-    autocomplete_fields = ['produto']
+    autocomplete_fields = ['produto', 'apresentacao']
 
 
 @admin.register(TabelaPreco)

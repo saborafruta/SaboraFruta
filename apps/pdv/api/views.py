@@ -56,6 +56,7 @@ from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficien
 from apps.core.services.request_scope import empresa_operacional
 from apps.pdv.models import SessaoPDV, VendaPDV
 from apps.pdv.services.venda_pdv_service import VendaPDVService
+from apps.produtos.api.exceptions import erro_response as _erro
 from apps.produtos.api.exceptions import formatar_erros_api
 from apps.produtos.models import Produto, ProdutoApresentacao
 from apps.produtos.services.apresentacao_service import ApresentacaoService
@@ -67,10 +68,6 @@ from .serializers import VendaCreateInputSerializer, VendaPDVSerializer
 
 def _sessao_aberta(request, filial):
     return SessaoPDV.objects.for_filial(filial).filter(usuario=request.user, status='aberto').first()
-
-
-def _erro(mensagem, *, codigo='erro', campo=None, status=400):
-    return Response({'erros': [{'codigo': codigo, 'mensagem': mensagem, 'campo': campo}]}, status=status)
 
 
 def _converter_apresentacao_para_base(item, empresa):

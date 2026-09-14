@@ -29,6 +29,22 @@ class ProdutoApresentacaoManager(models.Manager):
     def ativas(self):
         return self.get_queryset().filter(ativo=True)
 
+    def for_filial(self, filial):
+        """
+        Apresentacoes ativas E vinculadas ativamente aquela filial.
+
+        `ProdutoApresentacao.ativo` (global) e a vinculacao por filial
+        (`ProdutoApresentacaoFilial.ativo`) sao independentes -- mesmo
+        padrao de `Produto`/`ProdutoFilial`: uma apresentacao pode estar
+        ativa globalmente mas desligada so numa filial especifica (ou
+        nunca ter sido vinculada aquela filial).
+        """
+        if filial is None:
+            return self.get_queryset().none()
+        return self.ativas().filter(
+            filiais_vinculo__filial=filial, filiais_vinculo__ativo=True,
+        ).distinct()
+
 
 class ProdutoApresentacao(TimestampedModel):
     produto = models.ForeignKey(
@@ -147,3 +163,34 @@ class ProdutoApresentacao(TimestampedModel):
     def converter_de_base(self, quantidade_base):
         """Converte uma quantidade na unidade base do produto para esta apresentacao."""
         return quantidade_base / self.fator_conversao
+
+
+class ProdutoApresentacaoFilial(TimestampedModel):
+    """
+    Ativacao da apresentacao por filial -- mesmo padrao de `ProdutoFilial`/
+    `UnidadeMedidaFilial`. Sem linha aqui, `ProdutoApresentacaoManager.for_filial`
+    nao devolve a apresentacao pra aquela filial, mesmo que ela esteja
+    `ativo=True` globalmente.
+    """
+
+    apresentacao = models.ForeignKey(
+        ProdutoApresentacao, on_delete=models.CASCADE, related_name='filiais_vinculo',
+    )
+    filial = models.ForeignKey(
+        'core.Filial', on_delete=models.CASCADE, related_name='apresentacoes_vinculadas',
+    )
+    ativo = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        db_table = 'produtos_apresentacoes_filiais'
+        ordering = ['apresentacao', 'filial']
+        unique_together = [('apresentacao', 'filial')]
+        indexes = [
+            models.Index(fields=['filial', 'ativo']),
+            models.Index(fields=['apresentacao', 'ativo']),
+        ]
+        verbose_name = 'Apresentacao vinculada a filial'
+        verbose_name_plural = 'Apresentacoes vinculadas a filiais'
+
+    def __str__(self):
+        return f'{self.apresentacao} - {self.filial}'

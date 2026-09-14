@@ -10,7 +10,16 @@ Formato: `{"erros": [{"codigo": ..., "mensagem": ..., "campo": ...}]}`.
 'required', 'invalid', 'max_length'); `campo` e' o nome do campo do
 serializer ou `None` para erros gerais (permissao, autenticacao, 404).
 """
+from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
+
+
+def erro_response(mensagem, *, codigo='erro', campo=None, status=400):
+    """Monta uma Response no mesmo formato de `formatar_erros_api`, pra
+    erros levantados direto na view (DomainError/DadosInvalidosError e
+    afins, que o exception_handler do DRF nao reconhece por nao serem
+    APIException)."""
+    return Response({'erros': [{'codigo': codigo, 'mensagem': mensagem, 'campo': campo}]}, status=status)
 
 
 def _extrair_erros(dados, campo=None):

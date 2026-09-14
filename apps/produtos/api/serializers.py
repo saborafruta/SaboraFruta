@@ -59,7 +59,7 @@ class ProdutoSerializer(serializers.ModelSerializer):
         # diferente -- sem isso o drf-spectacular mistura os dois no doc).
         ref_name = 'ProdutoCadastro'
         fields = [
-            'id', 'codigo', 'descricao', 'descricao_curta',
+            'id', 'codigo', 'codigo_barras', 'descricao', 'descricao_curta',
             'categoria', 'subcategoria', 'marca', 'fornecedor',
             'unidade_medida', 'tipo_produto', 'ncm',
             'preco_custo', 'preco_venda', 'ativo',
@@ -98,6 +98,7 @@ class TabelaPrecoLiteSerializer(serializers.Serializer):
 
 class ItemTabelaPrecoSerializer(serializers.ModelSerializer):
     tabela = TabelaPrecoLiteSerializer(read_only=True)
+    apresentacao = ProdutoApresentacaoLiteSerializer(read_only=True)
     # `valor_final` e' property do model (nao coluna) -- read_only explicito
     # obrigatorio, senao o ModelSerializer nao sabe de onde ele viria num write.
     valor_final = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
@@ -105,7 +106,7 @@ class ItemTabelaPrecoSerializer(serializers.ModelSerializer):
     class Meta:
         model = ItemTabelaPreco
         fields = [
-            'id', 'tabela', 'preco_unitario', 'desconto_maximo', 'desconto_valor',
+            'id', 'tabela', 'apresentacao', 'preco_unitario', 'desconto_maximo', 'desconto_valor',
             'quantidade_minima', 'valor_final',
         ]
 

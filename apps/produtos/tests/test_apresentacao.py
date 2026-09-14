@@ -9,6 +9,7 @@ from apps.core.services.exceptions import DadosInvalidosError
 from apps.produtos.models import (
     Produto,
     ProdutoApresentacao,
+    ProdutoApresentacaoFilial,
     ProdutoCodigoBarras,
     UnidadeMedida,
 )
@@ -374,3 +375,64 @@ class ApresentacaoServiceTests(ProdutoApresentacaoTestBase):
             ApresentacaoService.listar_ativas(produto).values_list('fator_conversao', flat=True)
         )
         self.assertEqual(fatores, [Decimal('1'), Decimal('1000')])
+
+
+class ProdutoApresentacaoFilialTests(ProdutoApresentacaoTestBase):
+    def test_sem_vinculo_nao_aparece_para_a_filial(self):
+        produto = self.criar_produto()
+        ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.un, descricao='Unidade', fator_conversao=1,
+        )
+        self.assertEqual(ProdutoApresentacao.objects.for_filial(self.filial).count(), 0)
+
+    def test_vinculo_ativo_aparece_para_a_filial(self):
+        produto = self.criar_produto()
+        apresentacao = ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.un, descricao='Unidade', fator_conversao=1,
+        )
+        ProdutoApresentacaoFilial.objects.create(apresentacao=apresentacao, filial=self.filial, ativo=True)
+        self.assertIn(apresentacao, ProdutoApresentacao.objects.for_filial(self.filial))
+
+    def test_vinculo_inativo_nao_aparece_para_a_filial(self):
+        produto = self.criar_produto()
+        apresentacao = ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.un, descricao='Unidade', fator_conversao=1,
+        )
+        ProdutoApresentacaoFilial.objects.create(apresentacao=apresentacao, filial=self.filial, ativo=False)
+        self.assertNotIn(apresentacao, ProdutoApresentacao.objects.for_filial(self.filial))
+
+    def test_apresentacao_inativa_globalmente_nao_aparece_mesmo_com_vinculo_ativo(self):
+        produto = self.criar_produto()
+        apresentacao = ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.un, descricao='Unidade', fator_conversao=1, ativo=False,
+        )
+        ProdutoApresentacaoFilial.objects.create(apresentacao=apresentacao, filial=self.filial, ativo=True)
+        self.assertNotIn(apresentacao, ProdutoApresentacao.objects.for_filial(self.filial))
+
+    def test_ativa_numa_filial_e_inativa_em_outra(self):
+        outra_filial = Filial.objects.create(
+            empresa=self.empresa, razao_social='Outra Filial', nome_fantasia='Outra Filial',
+            cnpj='71345678000273', uf='RN',
+        )
+        produto = self.criar_produto()
+        apresentacao = ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.un, descricao='Unidade', fator_conversao=1,
+        )
+        ProdutoApresentacaoFilial.objects.create(apresentacao=apresentacao, filial=self.filial, ativo=True)
+        ProdutoApresentacaoFilial.objects.create(apresentacao=apresentacao, filial=outra_filial, ativo=False)
+
+        self.assertIn(apresentacao, ProdutoApresentacao.objects.for_filial(self.filial))
+        self.assertNotIn(apresentacao, ProdutoApresentacao.objects.for_filial(outra_filial))
+
+    def test_for_filial_com_filial_none_retorna_vazio(self):
+        self.assertEqual(ProdutoApresentacao.objects.for_filial(None).count(), 0)
+
+    def test_unique_together_apresentacao_filial(self):
+        produto = self.criar_produto()
+        apresentacao = ProdutoApresentacao.objects.create(
+            produto=produto, unidade=self.un, descricao='Unidade', fator_conversao=1,
+        )
+        ProdutoApresentacaoFilial.objects.create(apresentacao=apresentacao, filial=self.filial)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                ProdutoApresentacaoFilial.objects.create(apresentacao=apresentacao, filial=self.filial)

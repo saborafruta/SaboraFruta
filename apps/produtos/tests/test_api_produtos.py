@@ -139,6 +139,77 @@ class ApiDetalheProdutoTests(ApiProdutosBase):
         self.assertEqual(response.status_code, 404)
 
 
+class ApiPatchProdutoTests(ApiProdutosBase):
+    """Fase 17: PATCH /produtos/{id}/ com auditoria de campo critico."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.usuario)
+
+    def test_patch_campo_simples_nao_gera_auditoria_extra(self):
+        total_antes = RegistroAuditoria.objects.count()
+        url = reverse('produtos_api:produto_detalhe', args=[self.produto.pk])
+        response = self.client.patch(url, {'descricao_curta': 'Pote 500ml'}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.produto.refresh_from_db()
+        self.assertEqual(self.produto.descricao_curta, 'Pote 500ml')
+        self.assertEqual(RegistroAuditoria.objects.count(), total_antes)
+
+    def test_patch_codigo_gera_auditoria(self):
+        url = reverse('produtos_api:produto_detalhe', args=[self.produto.pk])
+        response = self.client.patch(url, {'codigo': '1099'}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        registro = RegistroAuditoria.objects.filter(
+            objeto_tipo='produtos.produto', objeto_id=self.produto.pk,
+        ).latest('criado_em')
+        self.assertIn('codigo', registro.objeto_descricao)
+        self.assertEqual(registro.dados_anteriores['codigo'], '1001')
+        self.assertEqual(registro.dados_novos['codigo'], '1099')
+
+    def test_patch_codigo_barras_gera_auditoria(self):
+        url = reverse('produtos_api:produto_detalhe', args=[self.produto.pk])
+        response = self.client.patch(url, {'codigo_barras': '7890000000037'}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.produto.refresh_from_db()
+        self.assertEqual(self.produto.codigo_barras, '7890000000037')
+        registro = RegistroAuditoria.objects.filter(
+            objeto_tipo='produtos.produto', objeto_id=self.produto.pk,
+        ).latest('criado_em')
+        self.assertIn('codigo_barras', registro.objeto_descricao)
+
+    def test_patch_ativo_gera_auditoria(self):
+        url = reverse('produtos_api:produto_detalhe', args=[self.produto.pk])
+        response = self.client.patch(url, {'ativo': False}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        registro = RegistroAuditoria.objects.filter(
+            objeto_tipo='produtos.produto', objeto_id=self.produto.pk,
+        ).latest('criado_em')
+        self.assertIn('ativo', registro.objeto_descricao)
+
+    def test_patch_unidade_medida_bloqueado_com_apresentacoes_cadastradas(self):
+        # self.produto ja tem apresentacao_un e apresentacao_cx (ver ApiProdutosBase).
+        url = reverse('produtos_api:produto_detalhe', args=[self.produto.pk])
+        response = self.client.patch(url, {'unidade_medida': self.cx.pk}, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['erros'][0]['codigo'], 'unidade_base_com_apresentacoes')
+        self.produto.refresh_from_db()
+        self.assertEqual(self.produto.unidade_medida, self.un)
+
+    def test_patch_unidade_medida_permitido_sem_apresentacoes(self):
+        # self.produto_inativo nao tem nenhuma apresentacao cadastrada.
+        url = reverse('produtos_api:produto_detalhe', args=[self.produto_inativo.pk])
+        response = self.client.patch(url, {'unidade_medida': self.cx.pk}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.produto_inativo.refresh_from_db()
+        self.assertEqual(self.produto_inativo.unidade_medida, self.cx)
+
+    def test_patch_sem_permissao_retorna_403(self):
+        self.client.force_login(self.usuario_sem_permissao)
+        url = reverse('produtos_api:produto_detalhe', args=[self.produto.pk])
+        response = self.client.patch(url, {'descricao_curta': 'x'}, format='json')
+        self.assertEqual(response.status_code, 403)
+
+
 class ApiCriarProdutoTests(ApiProdutosBase):
     def setUp(self):
         super().setUp()
@@ -215,11 +286,31 @@ class ApiPatchApresentacaoTests(ApiProdutosBase):
     def test_patch_campo_simples_nao_gera_auditoria_extra(self):
         total_antes = RegistroAuditoria.objects.count()
         url = reverse('produtos_api:apresentacao_detalhe', args=[self.apresentacao_cx.pk])
+        response = self.client.patch(url, {'descricao': 'Caixa Fechada'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.apresentacao_cx.refresh_from_db()
+        self.assertEqual(self.apresentacao_cx.descricao, 'Caixa Fechada')
+        self.assertEqual(RegistroAuditoria.objects.count(), total_antes)
+
+    def test_patch_preco_venda_gera_auditoria(self):
+        url = reverse('produtos_api:apresentacao_detalhe', args=[self.apresentacao_cx.pk])
         response = self.client.patch(url, {'preco_venda': '4500.00'}, format='json')
         self.assertEqual(response.status_code, 200)
         self.apresentacao_cx.refresh_from_db()
         self.assertEqual(self.apresentacao_cx.preco_venda, Decimal('4500.00'))
-        self.assertEqual(RegistroAuditoria.objects.count(), total_antes)
+        registro = RegistroAuditoria.objects.filter(
+            objeto_tipo='produtos.produtoapresentacao', objeto_id=self.apresentacao_cx.pk,
+        ).latest('criado_em')
+        self.assertIn('preco_venda', registro.objeto_descricao)
+
+    def test_patch_ativo_gera_auditoria(self):
+        url = reverse('produtos_api:apresentacao_detalhe', args=[self.apresentacao_cx.pk])
+        response = self.client.patch(url, {'ativo': False}, format='json')
+        self.assertEqual(response.status_code, 200)
+        registro = RegistroAuditoria.objects.filter(
+            objeto_tipo='produtos.produtoapresentacao', objeto_id=self.apresentacao_cx.pk,
+        ).latest('criado_em')
+        self.assertIn('ativo', registro.objeto_descricao)
 
     def test_patch_fator_conversao_gera_auditoria(self):
         url = reverse('produtos_api:apresentacao_detalhe', args=[self.apresentacao_cx.pk])
@@ -261,6 +352,10 @@ class ApiPrecosEEstoqueTests(ApiProdutosBase):
             tabela=cls.tabela, produto=cls.produto, preco_unitario=Decimal('5.50'), quantidade_minima=10,
             desconto_valor=Decimal('0.10'),
         )
+        cls.item_preco_caixa = ItemTabelaPreco.objects.create(
+            tabela=cls.tabela, produto=cls.produto, apresentacao=cls.apresentacao_cx,
+            preco_unitario=Decimal('4500.00'), quantidade_minima=0,
+        )
         cls.deposito = Deposito.objects.create(filial=cls.filial, nome='Geral', is_padrao=True)
         cls.estoque = Estoque.objects.create(
             produto=cls.produto, filial=cls.filial, deposito=cls.deposito,
@@ -275,8 +370,24 @@ class ApiPrecosEEstoqueTests(ApiProdutosBase):
         url = reverse('produtos_api:produto_precos', args=[self.produto.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['count'], 2)
+        self.assertEqual(response.data['count'], 3)
         self.assertEqual(response.data['results'][0]['tabela']['descricao'], 'Varejo')
+
+    def test_filtra_precos_por_apresentacao(self):
+        url = reverse('produtos_api:produto_precos', args=[self.produto.pk])
+        response = self.client.get(url, {'apresentacao': self.apresentacao_cx.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['count'], 1)
+        item = response.data['results'][0]
+        self.assertEqual(item['preco_unitario'], '4500.0000')
+        self.assertEqual(item['apresentacao']['descricao'], 'Caixa 1.000')
+
+    def test_filtra_precos_default_com_apresentacao_null(self):
+        url = reverse('produtos_api:produto_precos', args=[self.produto.pk])
+        response = self.client.get(url, {'apresentacao': 'null'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['count'], 2)
+        self.assertTrue(all(item['apresentacao'] is None for item in response.data['results']))
 
     def test_filtra_precos_por_filial_sem_vinculo_retorna_vazio(self):
         outra_filial = Filial.objects.create(
