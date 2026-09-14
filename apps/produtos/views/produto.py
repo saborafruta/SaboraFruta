@@ -36,10 +36,10 @@ from apps.cadastros.models import Fornecedor
 from apps.core.models import Filial, LogSistema
 from apps.estoque.models import Estoque, LoteProduto, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
-from apps.produtos.forms import ProdutoForm
+from apps.produtos.forms import ProdutoApresentacaoForm, ProdutoForm
 from apps.produtos.forms.produto import LIMITE_IMAGEM_PRODUTO_BYTES, LIMITE_IMAGEM_PRODUTO_MB
 from apps.produtos.models import (
-    CategoriaProduto, ClasseFiscal, MarcaProduto, Produto, ProdutoFilial,
+    CategoriaProduto, ClasseFiscal, MarcaProduto, Produto, ProdutoApresentacao, ProdutoFilial,
     ProdutoFornecedorEquivalencia, UnidadeMedida,
 )
 from apps.produtos.services.codigo_barras_service import gerar_codigo_barras_unico
@@ -1759,6 +1759,26 @@ def _vinculos_fornecedor(produto):
         return []
 
 
+def _apresentacoes_produto(produto):
+    """As apresentacoes (Caixa 1.000, Pacote 500, ...) ja cadastradas para
+    este produto. Mesma logica defensiva de `_vinculos_fornecedor`: nunca
+    derruba a tela do produto por causa desta lista auxiliar."""
+    if not produto or not produto.pk:
+        return []
+    try:
+        return list(
+            ProdutoApresentacao.objects
+            .select_related('unidade')
+            .filter(produto=produto)
+            .order_by('-ativo', 'fator_conversao')
+        )
+    except Exception:  # noqa: BLE001 -- a tela abre de qualquer jeito
+        logging.getLogger(__name__).exception(
+            'Falha ao carregar apresentacoes do produto %s', produto.pk,
+        )
+        return []
+
+
 def _campo_do_erro_de_banco(erro):
     """
     Traduz `null value in column "aliquota_cbs"` no rotulo que o usuario ve.
@@ -1828,9 +1848,23 @@ class ProdutoUpdateView(PermissaoRequiredMixin, View):
             # vinculos e o modo popup. Faltava so' quem enchesse o contexto.
             'vinculos_fornecedor': _vinculos_fornecedor(produto),
             'popup_mode': self._popup(request),
+            'apresentacoes': _apresentacoes_produto(produto),
+            'apresentacao_form': self._apresentacao_form(request, produto),
+            'apresentacao_editando': self._apresentacao_editando(request, produto),
         }
         context.update(_produto_log_context(produto, usuario_padrao=request.user))
         return context
+
+    @staticmethod
+    def _apresentacao_editando(request, produto):
+        pk = request.GET.get('editar_apresentacao')
+        if not pk:
+            return None
+        return ProdutoApresentacao.objects.filter(pk=pk, produto=produto).first()
+
+    def _apresentacao_form(self, request, produto):
+        instancia = self._apresentacao_editando(request, produto)
+        return ProdutoApresentacaoForm(empresa=request.user.empresa, instance=instancia)
 
     @staticmethod
     def _popup(request):
@@ -2519,6 +2553,89 @@ class ProdutoExportPdfView(PermissaoRequiredMixin, View):
 ENTRADAS_ABERTAS = (
     'rascunho', 'aguardando_conferencia', 'aguardando_vinculos',
 )
+
+
+class ProdutoApresentacaoCreateView(PermissaoRequiredMixin, View):
+    """Cria uma apresentacao (ex: Caixa 1.000) para um produto ja salvo."""
+    permissao_modulo = 'produtos'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        produto = get_object_or_404(
+            Produto, pk=pk, filial__empresa=request.user.empresa,
+        )
+        form = ProdutoApresentacaoForm(request.POST, empresa=request.user.empresa)
+        if not form.is_valid():
+            messages.error(request, 'Nao foi possivel salvar a apresentacao. Confira os campos.')
+            return redirect(f"{reverse('produtos:produto-update', args=[produto.pk])}?step=8")
+        try:
+            with tenant_atomic():
+                apresentacao = form.save(commit=False)
+                apresentacao.produto = produto
+                apresentacao.save()
+        except IntegrityError:
+            messages.error(
+                request,
+                'Ja existe uma apresentacao ativa com essa unidade e fator para este produto, '
+                'ou ja existe uma apresentacao principal de venda/compra.',
+            )
+            return redirect(f"{reverse('produtos:produto-update', args=[produto.pk])}?step=8")
+
+        messages.success(request, f'Apresentacao "{apresentacao.descricao}" adicionada.')
+        return redirect(f"{reverse('produtos:produto-update', args=[produto.pk])}?step=8")
+
+
+class ProdutoApresentacaoUpdateView(PermissaoRequiredMixin, View):
+    """Edita uma apresentacao existente do produto."""
+    permissao_modulo = 'produtos'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, apresentacao_pk):
+        produto = get_object_or_404(
+            Produto, pk=pk, filial__empresa=request.user.empresa,
+        )
+        apresentacao = get_object_or_404(ProdutoApresentacao, pk=apresentacao_pk, produto=produto)
+        form = ProdutoApresentacaoForm(
+            request.POST, empresa=request.user.empresa, instance=apresentacao,
+        )
+        if not form.is_valid():
+            messages.error(request, 'Nao foi possivel salvar a apresentacao. Confira os campos.')
+            return redirect(
+                f"{reverse('produtos:produto-update', args=[produto.pk])}"
+                f"?step=8&editar_apresentacao={apresentacao.pk}"
+            )
+        try:
+            with tenant_atomic():
+                form.save()
+        except IntegrityError:
+            messages.error(
+                request,
+                'Ja existe uma apresentacao ativa com essa unidade e fator para este produto, '
+                'ou ja existe uma apresentacao principal de venda/compra.',
+            )
+            return redirect(
+                f"{reverse('produtos:produto-update', args=[produto.pk])}"
+                f"?step=8&editar_apresentacao={apresentacao.pk}"
+            )
+
+        messages.success(request, f'Apresentacao "{apresentacao.descricao}" atualizada.')
+        return redirect(f"{reverse('produtos:produto-update', args=[produto.pk])}?step=8")
+
+
+class ProdutoApresentacaoDeleteView(PermissaoRequiredMixin, View):
+    """Remove uma apresentacao do produto."""
+    permissao_modulo = 'produtos'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk, apresentacao_pk):
+        produto = get_object_or_404(
+            Produto, pk=pk, filial__empresa=request.user.empresa,
+        )
+        apresentacao = get_object_or_404(ProdutoApresentacao, pk=apresentacao_pk, produto=produto)
+        descricao = apresentacao.descricao
+        apresentacao.delete()
+        messages.success(request, f'Apresentacao "{descricao}" removida.')
+        return redirect(f"{reverse('produtos:produto-update', args=[produto.pk])}?step=8")
 
 
 class ProdutoFornecedorVinculoDeleteView(PermissaoRequiredMixin, View):

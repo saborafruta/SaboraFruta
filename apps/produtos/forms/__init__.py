@@ -1,4 +1,5 @@
 from .produto import ProdutoForm
+from .apresentacao import ProdutoApresentacaoForm
 from .categoria import CategoriaProdutoForm
 from .marca import MarcaProdutoForm
 from .unidade import UnidadeMedidaForm
@@ -11,7 +12,7 @@ from .promocao import (
 )
 
 __all__ = [
-    'ProdutoForm', 'CategoriaProdutoForm', 'MarcaProdutoForm', 'UnidadeMedidaForm',
+    'ProdutoForm', 'ProdutoApresentacaoForm', 'CategoriaProdutoForm', 'MarcaProdutoForm', 'UnidadeMedidaForm',
     'TabelaPrecoForm', 'ItemTabelaPrecoForm',
     'PromocaoQuantidadeForm', 'PromocaoQuantidadeFaixaFormSet',
     'BrindeProdutoForm', 'BrindeProdutoItemFormSet',

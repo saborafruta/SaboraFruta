@@ -25,6 +25,21 @@ urlpatterns = [
         views.ProdutoFornecedorVinculoDeleteView.as_view(),
         name='produto-fornecedor-vinculo-delete',
     ),
+    path(
+        '<int:pk>/apresentacoes/nova/',
+        views.ProdutoApresentacaoCreateView.as_view(),
+        name='produto-apresentacao-create',
+    ),
+    path(
+        '<int:pk>/apresentacoes/<int:apresentacao_pk>/editar/',
+        views.ProdutoApresentacaoUpdateView.as_view(),
+        name='produto-apresentacao-update',
+    ),
+    path(
+        '<int:pk>/apresentacoes/<int:apresentacao_pk>/excluir/',
+        views.ProdutoApresentacaoDeleteView.as_view(),
+        name='produto-apresentacao-delete',
+    ),
     path('<int:pk>/', views.ProdutoUpdateView.as_view(), name='produto-update'),
     path('<int:pk>/log/exportar/csv/', views.ProdutoLogExportCsvView.as_view(), name='produto-log-export-csv'),
     path('<int:pk>/log/exportar/pdf/', views.ProdutoLogExportPdfView.as_view(), name='produto-log-export-pdf'),

@@ -963,10 +963,143 @@
       </div>
     </section>
 
+    <section x-show="step === 8" class="produto-grid" x-cloak>
+      <div class="space-y-4">
+        {% if not produto %}
+          <div class="produto-empty-state">
+            Salve o produto primeiro (etapa 1 já cadastra o básico) para poder cadastrar apresentações
+            como "Caixa 1.000" ou "Pacote 500".
+          </div>
+        {% else %}
+          <div class="produto-card">
+            <h3 class="produto-card-title"><span>#</span> Apresentações cadastradas</h3>
+            {% if apresentacoes %}
+              <div class="produto-vinculos-desktop">
+                <table class="produto-table produto-vinculos-table">
+                  <thead>
+                    <tr>
+                      <th>Descrição</th>
+                      <th>Unidade</th>
+                      <th>Fator</th>
+                      <th>Preço de venda</th>
+                      <th>Uso</th>
+                      <th>Ativa</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for apresentacao in apresentacoes %}
+                      <tr>
+                        <td>
+                          <span class="produto-vinculo-main">{{ apresentacao.descricao }}</span>
+                          {% if apresentacao.principal_venda %}<span class="produto-vinculo-muted">Padrão venda</span>{% endif %}
+                          {% if apresentacao.principal_compra %}<span class="produto-vinculo-muted">Padrão compra</span>{% endif %}
+                        </td>
+                        <td>{{ apresentacao.unidade.sigla }}</td>
+                        <td>{{ apresentacao.fator_conversao|floatformat:4 }}</td>
+                        <td>R$ {{ apresentacao.preco_venda|floatformat:2 }}</td>
+                        <td>
+                          {% if apresentacao.permite_venda %}Venda{% endif %}
+                          {% if apresentacao.permite_compra %} · Compra{% endif %}
+                          {% if apresentacao.permite_estoque %} · Estoque{% endif %}
+                        </td>
+                        <td>{% if apresentacao.ativo %}Sim{% else %}Não{% endif %}</td>
+                        <td class="text-right">
+                          <a
+                            href="?step=8&editar_apresentacao={{ apresentacao.pk }}"
+                            class="produto-vinculo-remove is-compact"
+                            title="Editar apresentação"
+                            aria-label="Editar apresentação"
+                          >✎</a>
+                          <button
+                            type="submit"
+                            form="produto-apresentacao-delete-{{ apresentacao.pk }}"
+                            class="produto-vinculo-remove is-compact"
+                            title="Remover apresentação"
+                            aria-label="Remover apresentação"
+                            onclick="return confirm('Remover a apresentacao \'{{ apresentacao.descricao }}\'? Vendas/compras/ajustes ja registrados com ela nao sao afetados.')"
+                          >&times;</button>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              <div class="produto-vinculos-mobile">
+                {% for apresentacao in apresentacoes %}
+                  <div class="produto-vinculo-card">
+                    <div>
+                      <span class="produto-vinculo-main">{{ apresentacao.descricao }}</span>
+                      <span class="produto-vinculo-muted">{{ apresentacao.unidade.sigla }} · fator {{ apresentacao.fator_conversao|floatformat:4 }}</span>
+                    </div>
+                    <div class="produto-vinculo-muted">
+                      {% if apresentacao.permite_venda %}Venda{% endif %}
+                      {% if apresentacao.permite_compra %} · Compra{% endif %}
+                      {% if apresentacao.permite_estoque %} · Estoque{% endif %}
+                      · {% if apresentacao.ativo %}Ativa{% else %}Inativa{% endif %}
+                    </div>
+                    <div class="flex gap-3">
+                      <a href="?step=8&editar_apresentacao={{ apresentacao.pk }}" class="produto-vinculo-remove is-compact">Editar</a>
+                      <button
+                        type="submit"
+                        form="produto-apresentacao-delete-{{ apresentacao.pk }}"
+                        class="produto-vinculo-remove is-compact"
+                        onclick="return confirm('Remover a apresentacao \'{{ apresentacao.descricao }}\'? Vendas/compras/ajustes ja registrados com ela nao sao afetados.')"
+                      >Remover</button>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="produto-empty-state">Nenhuma apresentação cadastrada para este produto.</div>
+            {% endif %}
+          </div>
+
+          <div class="produto-card">
+            <h3 class="produto-card-title">
+              <span>#</span>
+              {% if apresentacao_editando %}Editar apresentação "{{ apresentacao_editando.descricao }}"{% else %}Nova apresentação{% endif %}
+            </h3>
+            <form
+              method="post"
+              action="{% if apresentacao_editando %}{% url 'produtos:produto-apresentacao-update' produto.pk apresentacao_editando.pk %}{% else %}{% url 'produtos:produto-apresentacao-create' produto.pk %}{% endif %}"
+            >
+              {% csrf_token %}
+              <div class="produto-field-grid">
+                <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=apresentacao_form.descricao required=True %}</div>
+                <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=apresentacao_form.unidade required=True %}</div>
+                <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=apresentacao_form.fator_conversao required=True %}</div>
+                <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=apresentacao_form.codigo %}</div>
+                <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=apresentacao_form.preco_venda %}</div>
+                <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=apresentacao_form.preco_minimo %}</div>
+                <div class="produto-field md"><label class="produto-toggle-row">{{ apresentacao_form.permite_venda }} <span>Permite venda</span></label></div>
+                <div class="produto-field md"><label class="produto-toggle-row">{{ apresentacao_form.permite_compra }} <span>Permite compra</span></label></div>
+                <div class="produto-field md"><label class="produto-toggle-row">{{ apresentacao_form.permite_estoque }} <span>Permite movimentação de estoque</span></label></div>
+                <div class="produto-field md"><label class="produto-toggle-row">{{ apresentacao_form.principal_venda }} <span>Padrão na venda</span></label></div>
+                <div class="produto-field md"><label class="produto-toggle-row">{{ apresentacao_form.principal_compra }} <span>Padrão na compra</span></label></div>
+                <div class="produto-field md"><label class="produto-toggle-row">{{ apresentacao_form.ativo }} <span>Ativa</span></label></div>
+              </div>
+              {% if apresentacao_form.non_field_errors %}
+                <p class="produto-error">{{ apresentacao_form.non_field_errors|first }}</p>
+              {% endif %}
+              <div class="flex gap-3 mt-3">
+                <button type="submit" class="produto-btn primary">
+                  {% if apresentacao_editando %}Salvar apresentação{% else %}Adicionar apresentação{% endif %}
+                </button>
+                {% if apresentacao_editando %}
+                  <a href="?step=8" class="produto-btn secondary">Cancelar edição</a>
+                {% endif %}
+              </div>
+            </form>
+          </div>
+        {% endif %}
+      </div>
+    </section>
+
     <div class="produto-footer">
       <div class="flex items-center gap-5">
         <div class="produto-footer-stage">
-          <strong>Etapa <span x-text="step"></span> de 7</strong>
+          <strong>Etapa <span x-text="step"></span> de <span x-text="steps.length"></span></strong>
           <div class="produto-progress" aria-hidden="true">
             <template x-for="item in steps" :key="item.id"><span :class="{ done: item.id <= step }"></span></template>
           </div>
@@ -975,12 +1108,12 @@
       <div class="actions flex flex-wrap justify-end gap-3">
         <button type="button" class="produto-btn secondary" x-show="step > 1" @click="previous()">Etapa anterior</button>
         <a href="{{ cancel_url }}" class="produto-btn secondary" x-show="step === 1">Sair</a>
-        <button type="button" class="produto-btn primary" x-show="step < 7" @click="next()">Proximo</button>
-        <button type="submit" class="produto-btn primary" x-show="step < 7" :disabled="loading">
+        <button type="button" class="produto-btn primary" x-show="step < steps.length" @click="next()">Proximo</button>
+        <button type="submit" class="produto-btn primary" x-show="step < steps.length" :disabled="loading">
           <span x-show="!loading">{{ submit_text|default:"Salvar produto" }}</span>
           <span x-show="loading" x-cloak>Salvando...</span>
         </button>
-        <button type="submit" class="produto-btn primary" x-show="step === 7" :disabled="loading">
+        <button type="submit" class="produto-btn primary" x-show="step === steps.length" :disabled="loading">
           <span x-show="!loading">{{ submit_text|default:"Salvar produto" }}</span>
           <span x-show="loading" x-cloak>Salvando...</span>
         </button>
@@ -990,6 +1123,13 @@
   {% if produto and vinculos_fornecedor %}
     {% for vinculo in vinculos_fornecedor %}
       <form id="produto-vinculo-delete-{{ vinculo.pk }}" method="post" action="{% url 'produtos:produto-fornecedor-vinculo-delete' produto.pk vinculo.pk %}">
+        {% csrf_token %}
+      </form>
+    {% endfor %}
+  {% endif %}
+  {% if produto and apresentacoes %}
+    {% for apresentacao in apresentacoes %}
+      <form id="produto-apresentacao-delete-{{ apresentacao.pk }}" method="post" action="{% url 'produtos:produto-apresentacao-delete' produto.pk apresentacao.pk %}">
         {% csrf_token %}
       </form>
     {% endfor %}
@@ -1125,6 +1265,7 @@
         { id: 5, label: 'Estoque', hasError: errorSteps.includes(5) },
         { id: 6, label: 'Peso / Granel', hasError: errorSteps.includes(6) },
         { id: 7, label: 'Fisico / Logistica', hasError: errorSteps.includes(7) },
+        { id: 8, label: 'Apresentacoes', hasError: errorSteps.includes(8) },
       ],
       hints: {
         1: 'Informe os dados basicos utilizados para identificar e classificar o produto no sistema.',
@@ -1134,6 +1275,7 @@
         5: 'Defina parametros de estoque e regras de reposicao para evitar rupturas.',
         6: 'Configure venda por peso, granel e etiquetas de balanca quando necessario.',
         7: 'Informe dados fisicos e logisticos para frete, armazenagem e producao.',
+        8: 'Outras formas de vender/comprar este produto (ex: Caixa 1.000, Pacote 500), com fator de conversao para a unidade base.',
       },
       specs: [],
       specInput: null,

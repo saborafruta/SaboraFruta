@@ -4,6 +4,7 @@ from .produto import (
     ProdutoExportTodosCsvView, ProdutoLogExportCsvView, ProdutoLogExportPdfView,
     ProdutoLogItemsView, ProdutoInlineEditView, ProdutoImagemUpdateView, ProdutoImagemView,
     ProdutoFornecedorVinculoDeleteView, ProdutoGerarCodigoBarrasView,
+    ProdutoApresentacaoCreateView, ProdutoApresentacaoUpdateView, ProdutoApresentacaoDeleteView,
 )
 from .categoria import (
     CategoriaListView, CategoriaCreateView, CategoriaUpdateView,
