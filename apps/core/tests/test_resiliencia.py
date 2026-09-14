@@ -17,6 +17,7 @@ class ResilienciaTests(TestCase):
         self.assertTrue(payload['checks']['database'])
         self.assertTrue(payload['checks']['media_root'])
         self.assertFalse(payload['integrations']['orla_widget'])
+        self.assertEqual(payload['integrations']['orla_widget_identity'], 'anonymous')
 
     def test_health_check_confirma_widget_orla_no_host_autorizado(self):
         with TemporaryDirectory() as media_root, self.settings(
@@ -28,6 +29,19 @@ class ResilienciaTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()['integrations']['orla_widget'])
+
+    def test_health_check_confirma_identidade_orla_ed25519(self):
+        with TemporaryDirectory() as media_root, self.settings(
+            MEDIA_ROOT=Path(media_root),
+            ORLA_WIDGET_SIGNING_PRIVATE_KEY='chave-configurada',
+            ORLA_WIDGET_SIGNING_SECRET='',
+        ):
+            response = self.client.get(reverse('health'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()['integrations']['orla_widget_identity'], 'ed25519',
+        )
 
     def test_backup_database_gera_arquivo(self):
         with TemporaryDirectory() as tmpdir:

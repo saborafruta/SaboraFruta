@@ -138,6 +138,9 @@ def orla_widget_context(request):
     signing_secret = str(
         getattr(settings, 'ORLA_WIDGET_SIGNING_SECRET', '') or ''
     )
+    signing_private_key = str(
+        getattr(settings, 'ORLA_WIDGET_SIGNING_PRIVATE_KEY', '') or ''
+    ).replace('\\n', '\n')
     user = getattr(request, 'user', None)
     if not all((base_url, public_key)) or not getattr(
         user, 'is_authenticated', False,
@@ -185,7 +188,25 @@ def orla_widget_context(request):
             'metadata': metadata,
         }
         user_token = ''
-        if signing_secret:
+        if signing_private_key:
+            from cryptography.hazmat.primitives.serialization import (
+                load_pem_private_key,
+            )
+
+            payload.update({'iss': 'ited', 'alg': 'EdDSA'})
+            encoded = base64.urlsafe_b64encode(
+                json.dumps(
+                    payload, ensure_ascii=False, separators=(',', ':'),
+                ).encode('utf-8')
+            ).rstrip(b'=').decode('ascii')
+            private_key = load_pem_private_key(
+                signing_private_key.encode('utf-8'), password=None,
+            )
+            signature = base64.urlsafe_b64encode(
+                private_key.sign(encoded.encode('ascii'))
+            ).rstrip(b'=').decode('ascii')
+            user_token = f'{encoded}.{signature}'
+        elif signing_secret:
             encoded = base64.urlsafe_b64encode(
                 json.dumps(
                     payload, ensure_ascii=False, separators=(',', ':'),

@@ -33,10 +33,18 @@ def health_check(request):
     if not all(checks.values()):
         status_code = 503
 
+    if getattr(settings, 'ORLA_WIDGET_SIGNING_PRIVATE_KEY', ''):
+        identity_mode = 'ed25519'
+    elif getattr(settings, 'ORLA_WIDGET_SIGNING_SECRET', ''):
+        identity_mode = 'hmac'
+    else:
+        identity_mode = 'anonymous'
+
     return JsonResponse({
         'status': 'ok' if status_code == 200 else 'degraded',
         'checks': checks,
         'integrations': {
             'orla_widget': orla_widget_host_enabled(request),
+            'orla_widget_identity': identity_mode,
         },
     }, status=status_code)

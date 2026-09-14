@@ -6,6 +6,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from django.test import RequestFactory, SimpleTestCase, override_settings
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    NoEncryption,
+    PrivateFormat,
+)
 
 from apps.core.context_processors import orla_widget_context
 
@@ -85,6 +91,26 @@ class OrlaWidgetContextTests(SimpleTestCase):
 
         self.assertTrue(widget['enabled'])
         self.assertEqual(widget['user_token'], '')
+
+    def test_assina_identidade_com_chave_privada_ed25519(self):
+        private_key = Ed25519PrivateKey.generate()
+        private_pem = private_key.private_bytes(
+            Encoding.PEM, PrivateFormat.PKCS8, NoEncryption(),
+        ).decode('ascii')
+
+        with self.settings(
+            ORLA_WIDGET_SIGNING_SECRET='',
+            ORLA_WIDGET_SIGNING_PRIVATE_KEY=private_pem,
+        ):
+            widget = orla_widget_context(self.request)['orla_widget']
+
+        encoded, signature = widget['user_token'].split('.')
+        payload = json.loads(_decode_base64url(encoded).decode('utf-8'))
+        private_key.public_key().verify(
+            _decode_base64url(signature), encoded.encode('ascii'),
+        )
+        self.assertEqual(payload['iss'], 'ited')
+        self.assertEqual(payload['alg'], 'EdDSA')
 
     @override_settings(ORLA_WIDGET_ALLOWED_HOSTS=['ited.app.br'])
     def test_nao_renderiza_em_outra_instalacao(self):
