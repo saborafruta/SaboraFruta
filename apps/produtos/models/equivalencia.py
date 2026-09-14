@@ -1,4 +1,5 @@
 """Codigos de barras e equivalencias de compra por fornecedor."""
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.core.models.base import TimestampedModel
@@ -17,6 +18,14 @@ class ProdutoCodigoBarras(TimestampedModel):
         on_delete=models.CASCADE,
         related_name='codigos_barras',
     )
+    apresentacao = models.ForeignKey(
+        'produtos.ProdutoApresentacao',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='codigos_barras',
+        help_text='Apresentacao a que este EAN pertence. Opcional: nulo para codigos ainda nao migrados/vinculados.',
+    )
     ean = models.CharField(max_length=32, db_index=True)
     tipo = models.CharField(max_length=20, choices=Tipo.choices, default=Tipo.ALTERNATIVO)
     quantidade_conversao = models.DecimalField(max_digits=12, decimal_places=4, default=1)
@@ -29,12 +38,25 @@ class ProdutoCodigoBarras(TimestampedModel):
         indexes = [
             models.Index(fields=['ean', 'ativo'], name='prod_cod_barras_ean_ativo_idx'),
             models.Index(fields=['produto', 'ativo'], name='prod_cod_barras_prod_ativo_idx'),
+            models.Index(fields=['apresentacao', 'ativo'], name='pcb_apresentacao_ativo_idx'),
         ]
         verbose_name = 'Codigo de barras do produto'
         verbose_name_plural = 'Codigos de barras dos produtos'
 
     def __str__(self):
         return f'{self.ean} - {self.produto}'
+
+    def clean(self):
+        super().clean()
+        ean = (self.ean or '').strip()
+        if self.ativo and ean and self.produto_id:
+            duplicado = ProdutoCodigoBarras.objects.filter(
+                produto_id=self.produto_id, ean=ean, ativo=True,
+            ).exclude(pk=self.pk).exists()
+            if duplicado:
+                raise ValidationError({
+                    'ean': 'Ja existe um codigo de barras ativo igual para este produto.',
+                })
 
 
 class ProdutoFornecedorEquivalencia(TimestampedModel):

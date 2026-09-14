@@ -2,7 +2,8 @@ from django.contrib import admin
 
 from apps.produtos.models import (
     CategoriaProduto, CategoriaProdutoFilial, ClasseFiscal, ClasseFiscalAliquota, ClasseFiscalFilial,
-    ItemTabelaPreco, MarcaProduto, MarcaProdutoFilial, NaturezaOperacao, NaturezaOperacaoFilial, Produto, ProdutoFilial,
+    ItemTabelaPreco, MarcaProduto, MarcaProdutoFilial, NaturezaOperacao, NaturezaOperacaoFilial, Produto,
+    ProdutoApresentacao, ProdutoFilial,
     TabelaPreco, TabelaPrecoFilial, UnidadeMedida, UnidadeMedidaFilial,
 )
 
@@ -87,6 +88,13 @@ class NaturezaOperacaoFilialAdmin(admin.ModelAdmin):
     search_fields = ['natureza__descricao', 'natureza__cfop_dentro_estado']
 
 
+class ProdutoApresentacaoInline(admin.TabularInline):
+    model = ProdutoApresentacao
+    extra = 0
+    autocomplete_fields = ['unidade']
+    fields = ['descricao', 'unidade', 'fator_conversao', 'preco_venda', 'codigo', 'padrao', 'ativo']
+
+
 @admin.register(Produto)
 class ProdutoAdmin(admin.ModelAdmin):
     list_display = [
@@ -97,6 +105,7 @@ class ProdutoAdmin(admin.ModelAdmin):
     search_fields = ['codigo', 'codigo_barras', 'descricao', 'ncm']
     readonly_fields = ['preco_custo_medio', 'margem_lucro']
     autocomplete_fields = ['filial', 'categoria', 'subcategoria', 'marca', 'fornecedor', 'unidade_medida', 'classe_fiscal']
+    inlines = [ProdutoApresentacaoInline]
     fieldsets = (
         ('Identificação', {
             'fields': ('filial', 'codigo', 'codigo_barras', 'codigos_barras_extras',
@@ -133,6 +142,14 @@ class ProdutoFilialAdmin(admin.ModelAdmin):
     list_display = ['produto', 'filial', 'ativo']
     list_filter = ['ativo', 'filial']
     search_fields = ['produto__descricao', 'produto__codigo', 'produto__codigo_barras']
+
+
+@admin.register(ProdutoApresentacao)
+class ProdutoApresentacaoAdmin(admin.ModelAdmin):
+    list_display = ['produto', 'descricao', 'unidade', 'fator_conversao', 'preco_venda', 'padrao', 'ativo']
+    list_filter = ['ativo', 'padrao', 'unidade']
+    search_fields = ['produto__descricao', 'produto__codigo', 'descricao', 'codigo']
+    autocomplete_fields = ['produto', 'unidade']
 
 
 class ItemTabelaPrecoInline(admin.TabularInline):
