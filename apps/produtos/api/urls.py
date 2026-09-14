@@ -15,5 +15,7 @@ urlpatterns = [
     path('produtos/', views.ProdutosView.as_view(), name='produtos'),
     path('produtos/<int:pk>/', views.ProdutoDetalheView.as_view(), name='produto_detalhe'),
     path('produtos/<int:pk>/apresentacoes/', views.ProdutoApresentacoesView.as_view(), name='produto_apresentacoes'),
+    path('produtos/<int:pk>/precos/', views.ProdutoPrecosView.as_view(), name='produto_precos'),
+    path('produtos/<int:pk>/estoque/', views.ProdutoEstoqueView.as_view(), name='produto_estoque'),
     path('apresentacoes/<int:pk>/', views.ApresentacaoDetalheView.as_view(), name='apresentacao_detalhe'),
 ]

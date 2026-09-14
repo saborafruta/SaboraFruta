@@ -5,9 +5,10 @@ tem ~80 campos fiscais/logisticos/de granel) -- o essencial pra cadastro
 via API. Campos fiscais detalhados continuam so no admin/formulario HTML
 por enquanto; a API cresce sob demanda.
 """
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.produtos.models import Produto, ProdutoApresentacao, UnidadeMedida
+from apps.produtos.models import ItemTabelaPreco, Produto, ProdutoApresentacao, UnidadeMedida
 
 
 class UnidadeMedidaLiteSerializer(serializers.ModelSerializer):
@@ -68,6 +69,7 @@ class ProdutoSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
+    @extend_schema_field(ProdutoApresentacaoLiteSerializer)
     def get_apresentacao_principal_venda(self, obj):
         # A view faz `.prefetch_related('apresentacoes')`, entao filtrar em
         # Python aqui nao dispara outra query por produto na listagem.
@@ -86,3 +88,57 @@ class ProdutoDetalheSerializer(ProdutoSerializer):
     class Meta(ProdutoSerializer.Meta):
         ref_name = 'ProdutoCadastroDetalhe'
         fields = ProdutoSerializer.Meta.fields + ['apresentacoes']
+
+
+class TabelaPrecoLiteSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source='pk')
+    descricao = serializers.CharField()
+    tipo = serializers.CharField()
+
+
+class ItemTabelaPrecoSerializer(serializers.ModelSerializer):
+    tabela = TabelaPrecoLiteSerializer(read_only=True)
+    # `valor_final` e' property do model (nao coluna) -- read_only explicito
+    # obrigatorio, senao o ModelSerializer nao sabe de onde ele viria num write.
+    valor_final = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = ItemTabelaPreco
+        fields = [
+            'id', 'tabela', 'preco_unitario', 'desconto_maximo', 'desconto_valor',
+            'quantidade_minima', 'valor_final',
+        ]
+
+
+class FilialLiteSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source='pk')
+    nome = serializers.SerializerMethodField()
+
+    @extend_schema_field(str)
+    def get_nome(self, obj):
+        return obj.nome_fantasia or obj.razao_social
+
+
+class DepositoLiteSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source='pk')
+    nome = serializers.CharField()
+    tipo = serializers.CharField()
+
+
+class EstoqueSerializer(serializers.Serializer):
+    # Serializer "solto" (o dado vem do model Estoque, mas nao e' um
+    # ModelSerializer por causa dos dois campos aninhados) -- `ref_name`
+    # evita colisao com apps.integracoes.serializers.EstoqueSerializer.
+    class Meta:
+        ref_name = 'EstoqueProdutoApi'
+
+    id = serializers.IntegerField(source='pk')
+    filial = FilialLiteSerializer()
+    deposito = DepositoLiteSerializer()
+    quantidade_atual = serializers.DecimalField(max_digits=12, decimal_places=3)
+    quantidade_reservada = serializers.DecimalField(max_digits=12, decimal_places=3)
+    quantidade_disponivel = serializers.DecimalField(max_digits=12, decimal_places=3)
+    custo_medio = serializers.DecimalField(max_digits=14, decimal_places=4)
+    ultima_entrada = serializers.DateTimeField(allow_null=True)
+    ultima_saida = serializers.DateTimeField(allow_null=True)
+    updated_at = serializers.DateTimeField()

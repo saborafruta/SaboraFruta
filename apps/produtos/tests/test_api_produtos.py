@@ -7,7 +7,11 @@ from rest_framework.test import APIClient
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
 from apps.core.models import RegistroAuditoria
-from apps.produtos.models import Produto, ProdutoApresentacao, ProdutoFilial, UnidadeMedida
+from apps.estoque.models import Deposito, Estoque
+from apps.produtos.models import (
+    ItemTabelaPreco, Produto, ProdutoApresentacao, ProdutoFilial,
+    TabelaPreco, TabelaPrecoFilial, UnidadeMedida,
+)
 
 
 class ApiProdutosBase(TestCase):
@@ -238,3 +242,78 @@ class ApiPatchApresentacaoTests(ApiProdutosBase):
         url = reverse('produtos_api:apresentacao_detalhe', args=[self.apresentacao_cx.pk])
         response = self.client.patch(url, {'fator_conversao': '-5'}, format='json')
         self.assertEqual(response.status_code, 400)
+
+
+class ApiPrecosEEstoqueTests(ApiProdutosBase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.tabela = TabelaPreco.objects.create(
+            filial=cls.filial, descricao='Varejo', tipo=TabelaPreco.Tipo.VAREJO,
+        )
+        TabelaPrecoFilial.objects.create(tabela=cls.tabela, filial=cls.filial)
+        cls.item_preco = ItemTabelaPreco.objects.create(
+            tabela=cls.tabela, produto=cls.produto, preco_unitario=Decimal('5.90'), quantidade_minima=0,
+        )
+        cls.item_preco_atacado = ItemTabelaPreco.objects.create(
+            tabela=cls.tabela, produto=cls.produto, preco_unitario=Decimal('5.50'), quantidade_minima=10,
+            desconto_valor=Decimal('0.10'),
+        )
+        cls.deposito = Deposito.objects.create(filial=cls.filial, nome='Geral', is_padrao=True)
+        cls.estoque = Estoque.objects.create(
+            produto=cls.produto, filial=cls.filial, deposito=cls.deposito,
+            quantidade_atual=Decimal('100'), quantidade_disponivel=Decimal('100'),
+        )
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.usuario)
+
+    def test_lista_precos_do_produto(self):
+        url = reverse('produtos_api:produto_precos', args=[self.produto.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(response.data[0]['tabela']['descricao'], 'Varejo')
+
+    def test_filtra_precos_por_filial_sem_vinculo_retorna_vazio(self):
+        outra_filial = Filial.objects.create(
+            empresa=self.empresa, razao_social='Loja B', nome_fantasia='Loja B',
+            cnpj='91145678000273', uf='RN',
+        )
+        url = reverse('produtos_api:produto_precos', args=[self.produto.pk])
+        response = self.client.get(url, {'filial': outra_filial.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 0)
+
+    def test_preco_traz_valor_final_com_desconto_aplicado(self):
+        url = reverse('produtos_api:produto_precos', args=[self.produto.pk])
+        response = self.client.get(url)
+        item_atacado = next(i for i in response.data if i['quantidade_minima'] == '10.000')
+        self.assertEqual(item_atacado['valor_final'], '5.40')
+
+    def test_lista_estoque_do_produto(self):
+        url = reverse('produtos_api:produto_estoque', args=[self.produto.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['quantidade_atual'], '100.000')
+        self.assertEqual(response.data[0]['filial']['nome'], 'Loja A')
+        self.assertEqual(response.data[0]['deposito']['nome'], 'Geral')
+
+    def test_filtra_estoque_por_filial(self):
+        outra_filial = Filial.objects.create(
+            empresa=self.empresa, razao_social='Loja B', nome_fantasia='Loja B',
+            cnpj='91145678000273', uf='RN',
+        )
+        url = reverse('produtos_api:produto_estoque', args=[self.produto.pk])
+        response = self.client.get(url, {'filial': outra_filial.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 0)
+
+    def test_precos_e_estoque_sem_permissao_retorna_403(self):
+        self.client.force_login(self.usuario_sem_permissao)
+        url_precos = reverse('produtos_api:produto_precos', args=[self.produto.pk])
+        url_estoque = reverse('produtos_api:produto_estoque', args=[self.produto.pk])
+        self.assertEqual(self.client.get(url_precos).status_code, 403)
+        self.assertEqual(self.client.get(url_estoque).status_code, 403)

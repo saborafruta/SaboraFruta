@@ -20,12 +20,15 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.models import Filial
 from apps.core.services.auditoria import registrar_auditoria
 from apps.core.services.request_scope import empresa_operacional
-from apps.produtos.models import Produto, ProdutoApresentacao
+from apps.estoque.models import Estoque
+from apps.produtos.models import ItemTabelaPreco, Produto, ProdutoApresentacao, TabelaPreco
 
 from .permissions import TemPermissaoProdutos
 from .serializers import (
+    EstoqueSerializer, ItemTabelaPrecoSerializer,
     ProdutoApresentacaoSerializer, ProdutoDetalheSerializer, ProdutoSerializer,
 )
 
@@ -174,3 +177,47 @@ class ApresentacaoDetalheView(BaseProdutosAPIView):
                     depois=ProdutoApresentacaoSerializer(apresentacao).data,
                 )
         return Response(ProdutoApresentacaoSerializer(apresentacao).data)
+
+
+class ProdutoPrecosView(BaseProdutosAPIView):
+    """GET /api/produtos/produtos/{id}/precos/ -- itens de tabela de preco do produto.
+
+    Filtro opcional `?filial=<id>`: so tabelas vinculadas aquela filial
+    (via `TabelaPreco.objects.for_filial`, mesmo manager usado no resto
+    do ERP)."""
+
+    @extend_schema(responses=ItemTabelaPrecoSerializer(many=True))
+    def get(self, request, pk):
+        empresa = empresa_operacional(request)
+        produto = get_object_or_404(Produto.objects.for_empresa(empresa), pk=pk)
+
+        queryset = ItemTabelaPreco.objects.filter(produto=produto).select_related('tabela')
+        filial_id = request.query_params.get('filial')
+        if filial_id:
+            filial = get_object_or_404(Filial, pk=filial_id, empresa=empresa)
+            tabelas_da_filial = TabelaPreco.objects.for_filial(filial).values_list('pk', flat=True)
+            queryset = queryset.filter(tabela_id__in=tabelas_da_filial)
+        queryset = queryset.filter(tabela__ativo=True).order_by('tabela', 'quantidade_minima')
+
+        return Response(ItemTabelaPrecoSerializer(queryset, many=True).data)
+
+
+class ProdutoEstoqueView(BaseProdutosAPIView):
+    """GET /api/produtos/produtos/{id}/estoque/ -- saldo por filial x deposito.
+
+    Filtro opcional `?filial=<id>`."""
+
+    @extend_schema(responses=EstoqueSerializer(many=True))
+    def get(self, request, pk):
+        empresa = empresa_operacional(request)
+        produto = get_object_or_404(Produto.objects.for_empresa(empresa), pk=pk)
+
+        queryset = Estoque.objects.filter(
+            produto=produto, filial__empresa=empresa,
+        ).select_related('filial', 'deposito')
+        filial_id = request.query_params.get('filial')
+        if filial_id:
+            queryset = queryset.filter(filial_id=filial_id)
+        queryset = queryset.order_by('filial', 'deposito')
+
+        return Response(EstoqueSerializer(queryset, many=True).data)
