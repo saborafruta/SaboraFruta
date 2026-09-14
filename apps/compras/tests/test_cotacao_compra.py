@@ -115,8 +115,9 @@ class CotacaoCompraTests(TestCase):
         self.assertContains(response, 'Fornecedor Simples')
         self.assertContains(response, 'Adicionar fornecedor manual')
         self.assertContains(response, 'Simples Nacional Híbrido')
-        self.assertContains(response, '.dark .cotacao-manual')
+        self.assertContains(response, '.tema-escuro #cotacao-app .cotacao-manual')
         self.assertContains(response, 'cotacao-manual-registration')
+        self.assertContains(response, '.tema-escuro #cotacao-app .cotacao-matrix td:first-child')
 
     def test_salvar_cotacao_resolve_usuario_do_banco_operacional(self):
         request = self.factory.post(
@@ -198,6 +199,10 @@ class CotacaoCompraTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Compra otimizada por fornecedor')
         self.assertContains(response, 'Fornecedor Regular')
+        self.assertContains(response, 'id="cotacao-detail"')
+        self.assertContains(response, '.tema-escuro #cotacao-detail .bg-emerald-50')
+        self.assertContains(response, '.tema-escuro #cotacao-detail .bg-gray-50')
+        self.assertContains(response, '.tema-escuro #cotacao-detail .bg-white')
 
     def test_exibe_ultima_compra_efetivada_e_variacao_sem_mudar_historico(self):
         entrada_antiga = EntradaNF.objects.create(
