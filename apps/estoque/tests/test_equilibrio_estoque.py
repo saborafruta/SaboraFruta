@@ -847,3 +847,187 @@ class EquilibrioComPrevisaoDeCompraTests(TestCase):
         self.assertEqual(sugestao["destino_a_caminho"], Decimal("40"))
         self.assertEqual(sugestao["destino_previsao_recebimento"], data_prevista)
         self.assertLess(sugestao["score"], score_sem_compra)
+
+
+class EquilibrioRegrasObrigatoriasTests(TestCase):
+    """
+    Fase 34: testes explicitamente pedidos que ainda não tinham cobertura
+    dedicada -- estoque reservado, abaixo do mínimo e produto perecível
+    (condicao_armazenamento + controle de lote/validade).
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.empresa = Empresa.objects.create(
+            razao_social="Rede Regras LTDA", nome_fantasia="Rede Regras",
+            cnpj="97945678000191", regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        cls.loja_a = Filial.objects.create(
+            empresa=cls.empresa, razao_social="Loja A", nome_fantasia="Loja A",
+            cnpj="97945678000192", uf="RN", is_matriz=True,
+        )
+        cls.loja_b = Filial.objects.create(
+            empresa=cls.empresa, razao_social="Loja B", nome_fantasia="Loja B",
+            cnpj="97945678000273", uf="RN",
+        )
+        cls.perfil = PerfilAcesso.objects.create(empresa=cls.empresa, nome="Admin", is_admin=True)
+        cls.usuario = Usuario.objects.create_user(
+            email="regras@inoovated.com", nome="Usuario Regras", password="teste1234",
+            empresa=cls.empresa, filial=cls.loja_a, perfil=cls.perfil,
+        )
+        cls.unidade = UnidadeMedida.objects.create(
+            empresa=cls.empresa, sigla="UN", descricao="Unidade", tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        UnidadeMedidaFilial.objects.create(unidade=cls.unidade, filial=cls.loja_a)
+        UnidadeMedidaFilial.objects.create(unidade=cls.unidade, filial=cls.loja_b)
+
+    def test_estoque_reservado_nao_conta_como_disponivel_para_transferencia(self):
+        # Fisico = 100, reservado = 90 -> disponivel = 10. O excedente da
+        # origem tem que ser calculado sobre o disponivel, nao o fisico,
+        # senao a sugestao ofereceria estoque que ja' tem dono (pedido
+        # confirmado aguardando faturar).
+        produto = Produto.objects.create(
+            filial=self.loja_a, unidade_medida=self.unidade, descricao="Produto Reservado",
+            ncm="20089900", estoque_minimo=Decimal("0"), preco_venda=Decimal("10"),
+        )
+        ProdutoFilial.objects.create(produto=produto, filial=self.loja_a)
+        ProdutoFilial.objects.create(produto=produto, filial=self.loja_b)
+        deposito_a = Deposito.objects.create(filial=self.loja_a, nome="Geral A", is_padrao=True)
+        deposito_b = Deposito.objects.create(filial=self.loja_b, nome="Geral B", is_padrao=True)
+        estoque_a = Estoque.objects.create(
+            produto=produto, filial=self.loja_a, deposito=deposito_a,
+            quantidade_atual=Decimal("100"), quantidade_reservada=Decimal("90"),
+        )
+        estoque_a.atualizar_disponivel()
+        estoque_a.save()
+        self.assertEqual(estoque_a.quantidade_disponivel, Decimal("10"))
+        Estoque.objects.create(
+            produto=produto, filial=self.loja_b, deposito=deposito_b,
+            quantidade_atual=Decimal("0"), quantidade_disponivel=Decimal("0"),
+        )
+        venda = VendaPDV.objects.create(
+            filial=self.loja_b, numero_venda=1, usuario=self.usuario,
+            data_venda=timezone.now(), status="finalizada", valor_total=Decimal("50"),
+        )
+        ItemVendaPDV.objects.create(
+            venda_pdv=venda, produto=produto, numero_item=1, quantidade=Decimal("5"),
+            unidade_medida="UN", valor_unitario=10, valor_total=Decimal("50"),
+        )
+
+        resultado = calcular_equilibrio(empresa=self.empresa, dias_analise=30, dias_cobertura=14)
+
+        self.assertEqual(len(resultado["sugestoes"]), 1)
+        sugestao = resultado["sugestoes"][0]
+        # Nunca pode sugerir mais do que os 10 disponiveis, mesmo o saldo
+        # fisico sendo 100.
+        self.assertLessEqual(sugestao["quantidade"], Decimal("10"))
+        self.assertEqual(sugestao["origem_saldo"], Decimal("10"))
+
+    def test_produto_abaixo_do_minimo_gera_deficit_mesmo_sem_ruptura(self):
+        produto = Produto.objects.create(
+            filial=self.loja_a, unidade_medida=self.unidade, descricao="Produto Abaixo Minimo",
+            ncm="20089900", estoque_minimo=Decimal("50"), preco_venda=Decimal("10"),
+        )
+        ProdutoFilial.objects.create(produto=produto, filial=self.loja_a)
+        ProdutoFilial.objects.create(produto=produto, filial=self.loja_b)
+        deposito_a = Deposito.objects.create(filial=self.loja_a, nome="Geral A", is_padrao=True)
+        deposito_b = Deposito.objects.create(filial=self.loja_b, nome="Geral B", is_padrao=True)
+        Estoque.objects.create(
+            produto=produto, filial=self.loja_a, deposito=deposito_a,
+            quantidade_atual=Decimal("500"), quantidade_disponivel=Decimal("500"),
+        )
+        # Saldo (20) abaixo do minimo cadastrado (50), sem nenhuma venda no
+        # periodo -- nao e' ruptura (saldo > 0) mas ja' esta' abaixo do
+        # minimo, e o motor precisa sinalizar isso via deficit/classe.
+        Estoque.objects.create(
+            produto=produto, filial=self.loja_b, deposito=deposito_b,
+            quantidade_atual=Decimal("20"), quantidade_disponivel=Decimal("20"),
+        )
+
+        resultado = calcular_equilibrio(empresa=self.empresa, dias_analise=30, dias_cobertura=14)
+
+        self.assertEqual(len(resultado["sugestoes"]), 1)
+        sugestao = resultado["sugestoes"][0]
+        self.assertEqual(sugestao["destino"], self.loja_b)
+        self.assertEqual(sugestao["destino_meta"], Decimal("50.000"))
+        self.assertFalse(sugestao["destino_sem_estoque"])  # tem saldo (20), so' nao o minimo
+
+    def test_produto_perecivel_com_lote_vencido_nao_e_oferecido(self):
+        # "Perecivel" nesta base = condicao_armazenamento diferente de
+        # ambiente + controle de lote/validade ligado -- e' esse par que
+        # a fabrica de fruta usa pra rastrear validade de verdade.
+        produto = Produto.objects.create(
+            filial=self.loja_a, unidade_medida=self.unidade, descricao="Polpa Perecivel",
+            ncm="20089900", estoque_minimo=Decimal("0"), preco_venda=Decimal("10"),
+            controla_lote=True, controla_validade=True,
+            condicao_armazenamento=Produto.CondicaoArmazenamento.CONGELADO,
+        )
+        ProdutoFilial.objects.create(produto=produto, filial=self.loja_a)
+        ProdutoFilial.objects.create(produto=produto, filial=self.loja_b)
+        deposito_a = Deposito.objects.create(filial=self.loja_a, nome="Geral A", is_padrao=True)
+        deposito_b = Deposito.objects.create(filial=self.loja_b, nome="Geral B", is_padrao=True)
+        Estoque.objects.create(
+            produto=produto, filial=self.loja_a, deposito=deposito_a,
+            quantidade_atual=Decimal("100"), quantidade_disponivel=Decimal("100"),
+        )
+        hoje = timezone.localdate()
+        LoteProduto.objects.create(
+            produto=produto, filial=self.loja_a, numero_lote="VENC-1",
+            quantidade_inicial=100, quantidade_atual=100,
+            status=LoteProduto.Status.VENCIDO, data_validade=hoje - timezone.timedelta(days=10),
+        )
+        Estoque.objects.create(
+            produto=produto, filial=self.loja_b, deposito=deposito_b,
+            quantidade_atual=Decimal("0"), quantidade_disponivel=Decimal("0"),
+        )
+        venda = VendaPDV.objects.create(
+            filial=self.loja_b, numero_venda=1, usuario=self.usuario,
+            data_venda=timezone.now(), status="finalizada", valor_total=Decimal("100"),
+        )
+        ItemVendaPDV.objects.create(
+            venda_pdv=venda, produto=produto, numero_item=1, quantidade=Decimal("10"),
+            unidade_medida="UN", valor_unitario=10, valor_total=Decimal("100"),
+        )
+
+        resultado = calcular_equilibrio(empresa=self.empresa, dias_analise=30, dias_cobertura=14)
+
+        # O unico lote existente esta' VENCIDO -- nada pode ser oferecido
+        # da origem, mesmo com saldo fisico de 100.
+        self.assertEqual(resultado["sugestoes"], [])
+
+
+class EquilibrioPermissoesTests(TestCase):
+    """Fase 34: a equalização respeita o mesmo RBAC do resto do ERP."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.empresa = Empresa.objects.create(
+            razao_social="Rede Permissoes Equilibrio LTDA", nome_fantasia="Rede Permissoes",
+            cnpj="97945678000273", regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        cls.filial = Filial.objects.create(
+            empresa=cls.empresa, razao_social="Loja A", nome_fantasia="Loja A",
+            cnpj="97945678000354", uf="RN", is_matriz=True,
+        )
+        cls.perfil_sem_permissao = PerfilAcesso.objects.create(
+            empresa=cls.empresa, nome="Sem Permissao", is_admin=False,
+        )
+        cls.usuario = Usuario.objects.create_user(
+            email="sempermissaoequilibrio@inoovated.com", nome="Usuario Sem Permissao", password="teste1234",
+            empresa=cls.empresa, filial=cls.filial, perfil=cls.perfil_sem_permissao,
+        )
+
+    def test_usuario_sem_permissao_de_estoque_e_bloqueado(self):
+        from django.test import Client
+
+        client = Client()
+        client.force_login(self.usuario)
+
+        for nome_url in ("estoque:equilibrio-estoque", "estoque:dashboard-equalizacao", "estoque:solicitacao-transferencia-list"):
+            response = client.get(reverse(nome_url))
+            self.assertIn(
+                response.status_code, (302, 403),
+                f"{nome_url} deveria bloquear usuario sem permissao (veio {response.status_code})",
+            )

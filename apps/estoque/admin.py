@@ -1,8 +1,11 @@
 from django.contrib import admin
 
 from apps.estoque.models import (
-    AlertaVencimento, Deposito, Estoque, Inventario, ItemInventario,
-    LoteProduto, MovimentacaoEstoque,
+    AlertaVencimento, ConferenciaTransferencia, ConfiguracaoAbcEstoque,
+    ConfiguracaoDemandaPonderada, Deposito, Estoque, FaixaCoberturaEstoque,
+    Inventario, ItemInventario, LoteProduto, MovimentacaoEstoque,
+    NivelAprovacaoTransferencia, SolicitacaoTransferencia,
+    SugestaoEqualizacaoSnapshot,
 )
 
 
@@ -99,3 +102,67 @@ class InventarioAdmin(admin.ModelAdmin):
     list_filter = ['status', 'filial']
     search_fields = ['descricao']
     inlines = [ItemInventarioInline]
+
+
+@admin.register(ConferenciaTransferencia)
+class ConferenciaTransferenciaAdmin(admin.ModelAdmin):
+    list_display = ['documento_numero', 'filial_origem', 'filial_destino', 'status', 'etapa', 'created_at']
+    list_filter = ['status', 'etapa', 'filial_origem', 'filial_destino']
+    search_fields = ['documento_numero']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(FaixaCoberturaEstoque)
+class FaixaCoberturaEstoqueAdmin(admin.ModelAdmin):
+    list_display = ['__str__', 'empresa', 'categoria', 'produto', 'dias_critico', 'dias_baixo', 'dias_normal', 'dias_alto']
+    list_filter = ['empresa']
+    search_fields = ['produto__descricao', 'categoria__nome']
+    autocomplete_fields = ['produto', 'categoria']
+
+
+@admin.register(ConfiguracaoAbcEstoque)
+class ConfiguracaoAbcEstoqueAdmin(admin.ModelAdmin):
+    list_display = ['empresa', 'classe', 'multiplicador_minimo', 'multiplicador_maximo', 'dias_cobertura_extra']
+    list_filter = ['empresa', 'classe']
+
+
+@admin.register(ConfiguracaoDemandaPonderada)
+class ConfiguracaoDemandaPonderadaAdmin(admin.ModelAdmin):
+    list_display = ['empresa', 'peso_7_dias', 'peso_15_dias', 'peso_30_dias', 'peso_60_dias', 'peso_90_dias']
+
+
+@admin.register(NivelAprovacaoTransferencia)
+class NivelAprovacaoTransferenciaAdmin(admin.ModelAdmin):
+    list_display = ['nivel_nome', 'empresa', 'valor_minimo', 'valor_maximo']
+    list_filter = ['empresa']
+
+
+@admin.register(SolicitacaoTransferencia)
+class SolicitacaoTransferenciaAdmin(admin.ModelAdmin):
+    list_display = [
+        'id', 'produto', 'filial_origem', 'filial_destino', 'quantidade',
+        'valor_estimado', 'status', 'solicitante', 'aprovador', 'created_at',
+    ]
+    list_filter = ['status', 'filial_origem', 'filial_destino']
+    search_fields = ['produto__descricao', 'documento_numero']
+    readonly_fields = ['created_at', 'updated_at']
+
+    def has_add_permission(self, request):
+        return False  # Só é criada via fluxo de aprovação (apps.estoque.services.aprovacao_transferencia)
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(SugestaoEqualizacaoSnapshot)
+class SugestaoEqualizacaoSnapshotAdmin(admin.ModelAdmin):
+    list_display = ['produto', 'filial_origem', 'filial_destino', 'quantidade_sugerida', 'score', 'created_at']
+    list_filter = ['empresa', 'filial_origem', 'filial_destino']
+    search_fields = ['produto__descricao']
+    readonly_fields = [f.name for f in SugestaoEqualizacaoSnapshot._meta.fields]
+
+    def has_add_permission(self, request):
+        return False  # Só é gerada pela rotina de automação (apps.estoque.tasks.equalizacao)
+
+    def has_change_permission(self, request, obj=None):
+        return False

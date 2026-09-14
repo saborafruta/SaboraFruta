@@ -78,7 +78,7 @@ class TransferenciaGateView(PermissaoRequiredMixin, View):
             solicitacao = solicitar_transferencia(
                 produto=produto, filial_origem=origem, filial_destino=destino,
                 quantidade=quantidade, motivo=motivo,
-                solicitante=usuario_operacional(request, obrigatorio=True),
+                solicitante=usuario_operacional(request, obrigatorio=True), request=request,
             )
         except DomainError as exc:
             messages.error(request, str(exc))
@@ -117,10 +117,10 @@ class SolicitacaoTransferenciaDecidirView(PermissaoRequiredMixin, View):
         aprovador = usuario_operacional(request, obrigatorio=True)
         try:
             if acao == "aprovar":
-                aprovar_solicitacao(solicitacao_id=pk, aprovador=aprovador, observacao=observacao)
+                aprovar_solicitacao(solicitacao_id=pk, aprovador=aprovador, observacao=observacao, request=request)
                 messages.success(request, "Solicitação aprovada e transferência criada.")
             elif acao == "rejeitar":
-                rejeitar_solicitacao(solicitacao_id=pk, aprovador=aprovador, observacao=observacao)
+                rejeitar_solicitacao(solicitacao_id=pk, aprovador=aprovador, observacao=observacao, request=request)
                 messages.success(request, "Solicitação rejeitada.")
             else:
                 messages.error(request, "Ação inválida.")
