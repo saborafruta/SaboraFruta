@@ -13,6 +13,7 @@ urlpatterns = [
     path('api/v1/', include('apps.integracoes.urls', namespace='integracoes_api')),
     path('api/estoque/equalizacao/', include('apps.estoque.api.urls', namespace='equalizacao_api')),
     path('api/produtos/', include('apps.produtos.api.urls', namespace='produtos_api')),
+    path('api/pdv/', include('apps.pdv.api.urls', namespace='pdv_api')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
