@@ -113,6 +113,8 @@ class CotacaoCompraTests(TestCase):
         self.assertContains(response, 'Fornecedor Simples')
         self.assertContains(response, 'Adicionar fornecedor manual')
         self.assertContains(response, 'Simples Nacional Híbrido')
+        self.assertContains(response, '.dark .cotacao-manual')
+        self.assertContains(response, 'cotacao-manual-registration')
 
     def test_regime_hibrido_normaliza_simples_com_ibs_cbs_regular(self):
         dados = self._payload()
