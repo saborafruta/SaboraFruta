@@ -112,6 +112,7 @@ TEMPLATES = [
                 'apps.core.context_processors.filial_context',
                 'apps.core.context_processors.parametros_sistema',
                 'apps.core.context_processors.notificacoes_context',
+                'apps.core.context_processors.orla_widget_context',
                 'apps.moda.context_processors.moda_menu',
                 'apps.polpa.context_processors.polpa_menu',
             ],
@@ -210,6 +211,19 @@ AUTH_PASSWORD_VALIDATORS = [
 LOGIN_URL = '/auth/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/auth/login/'
+
+# Atendimento Orla. O recurso nasce desligado para que o mesmo código possa
+# continuar atendendo instalações isoladas, como o Sabor a Fruta, sem exibir o
+# Widget por acidente. Quando o segredo compartilhado é configurado, a
+# identidade é assinada no backend e o segredo nunca vai para o navegador.
+ORLA_WIDGET_ENABLED = env.bool('ORLA_WIDGET_ENABLED', default=False)
+ORLA_WIDGET_ALLOWED_HOSTS = env.list('ORLA_WIDGET_ALLOWED_HOSTS', default=[])
+ORLA_WIDGET_URL = env(
+    'ORLA_WIDGET_URL',
+    default='https://orla-helpdesk-production.up.railway.app',
+).rstrip('/')
+ORLA_WIDGET_PUBLIC_KEY = env('ORLA_WIDGET_PUBLIC_KEY', default='pk_orla_demo')
+ORLA_WIDGET_SIGNING_SECRET = env('ORLA_WIDGET_SIGNING_SECRET', default='')
 
 # i18n
 LANGUAGE_CODE = 'pt-br'

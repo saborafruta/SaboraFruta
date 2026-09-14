@@ -1,4 +1,12 @@
 """Context processors: disponibilizam dados em todos os templates."""
+import base64
+import hashlib
+import hmac
+import json
+import time
+
+from django.conf import settings
+
 from apps.core.services.checkout import checkout_venda_ativo as checkout_venda_habilitado
 from apps.core.services.modulos import modulos_ativos
 
@@ -101,3 +109,110 @@ def notificacoes_context(request):
     except Exception:
         pass
     return ctx
+
+
+def orla_widget_context(request):
+    """Prepara o Widget Orla com uma identidade curta assinada no servidor."""
+    disabled = {'orla_widget': {'enabled': False}}
+    if not getattr(settings, 'ORLA_WIDGET_ENABLED', False):
+        return disabled
+
+    base_url = str(getattr(settings, 'ORLA_WIDGET_URL', '') or '').rstrip('/')
+    public_key = str(getattr(settings, 'ORLA_WIDGET_PUBLIC_KEY', '') or '').strip()
+    signing_secret = str(
+        getattr(settings, 'ORLA_WIDGET_SIGNING_SECRET', '') or ''
+    )
+    user = getattr(request, 'user', None)
+    allowed_hosts = {
+        str(host).strip().lower()
+        for host in getattr(settings, 'ORLA_WIDGET_ALLOWED_HOSTS', [])
+        if str(host).strip()
+    }
+    try:
+        request_host = str(request.get_host()).split(':', 1)[0].lower()
+    except Exception:
+        return disabled
+    if allowed_hosts and request_host not in allowed_hosts:
+        return disabled
+    if not all((base_url, public_key)) or not getattr(
+        user, 'is_authenticated', False,
+    ):
+        return disabled
+
+    try:
+        filial = getattr(request, 'filial_ativa', None)
+        empresa = getattr(filial, 'empresa', None) or getattr(user, 'empresa', None)
+        email = str(getattr(user, 'email', '') or '').strip().lower()
+        user_id = str(getattr(user, 'pk', '') or '')
+        if not email and not user_id:
+            return disabled
+
+        metadata = {'system': 'iTED'}
+        if empresa is not None:
+            metadata.update({
+                'empresa_id': str(getattr(empresa, 'pk', '') or ''),
+                'empresa': str(
+                    getattr(empresa, 'nome_fantasia', '')
+                    or getattr(empresa, 'razao_social', '')
+                    or empresa
+                )[:120],
+            })
+        if filial is not None:
+            metadata.update({
+                'filial_id': str(getattr(filial, 'pk', '') or ''),
+                'filial': str(
+                    getattr(filial, 'nome_fantasia', '')
+                    or getattr(filial, 'razao_social', '')
+                    or filial
+                )[:120],
+            })
+        metadata = {key: value for key, value in metadata.items() if value}
+
+        # O e-mail é único no diretório de usuários e continua identificando a
+        # mesma pessoa quando o middleware troca a cópia central pela do tenant.
+        subject = f'ited:user:{email}' if email else f'ited:user-id:{user_id}'
+        payload = {
+            'sub': subject,
+            'name': str(getattr(user, 'nome', '') or email or 'Usuário iTED')[:120],
+            'email': email,
+            'aud': public_key,
+            'exp': int(time.time()) + 300,
+            'metadata': metadata,
+        }
+        user_token = ''
+        if signing_secret:
+            encoded = base64.urlsafe_b64encode(
+                json.dumps(
+                    payload, ensure_ascii=False, separators=(',', ':'),
+                ).encode('utf-8')
+            ).rstrip(b'=').decode('ascii')
+            signature = base64.urlsafe_b64encode(
+                hmac.new(
+                    signing_secret.encode('utf-8'),
+                    encoded.encode('ascii'),
+                    hashlib.sha256,
+                ).digest()
+            ).rstrip(b'=').decode('ascii')
+            user_token = f'{encoded}.{signature}'
+
+        widget_context = {
+            'system': 'iTED',
+            'page': str(getattr(request, 'path', '') or '/')[:500],
+            **metadata,
+        }
+        return {
+            'orla_widget': {
+                'enabled': True,
+                'script_url': f'{base_url}/public/widget/v1/orla-widget.js',
+                'base_url': base_url,
+                'public_key': public_key,
+                'user_token': user_token,
+                'context_json': json.dumps(
+                    widget_context, ensure_ascii=False, separators=(',', ':'),
+                ),
+            }
+        }
+    except Exception:
+        # Atendimento é auxiliar: uma configuração ou relação incompleta nunca
+        # pode impedir a abertura das telas operacionais do ERP.
+        return disabled

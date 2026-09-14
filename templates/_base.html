@@ -1598,5 +1598,15 @@
       });
     }
   </script>
+
+  {% if orla_widget.enabled %}
+    <script
+      src="{{ orla_widget.script_url }}"
+      data-orla-key="{{ orla_widget.public_key }}"
+      data-orla-url="{{ orla_widget.base_url }}"
+      {% if orla_widget.user_token %}data-orla-user-token="{{ orla_widget.user_token }}"{% endif %}
+      data-orla-context="{{ orla_widget.context_json }}"
+    ></script>
+  {% endif %}
 </body>
 </html>

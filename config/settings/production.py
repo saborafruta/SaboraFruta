@@ -7,6 +7,14 @@ DEBUG = False
 
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['.railway.app', '*'])
 
+# Este repositório também publica instalações isoladas. Por padrão, o suporte
+# fica ativo somente no domínio canônico do iTED; cada outro produto precisa se
+# incluir explicitamente em ORLA_WIDGET_ALLOWED_HOSTS.
+ORLA_WIDGET_ENABLED = env.bool('ORLA_WIDGET_ENABLED', default=True)
+ORLA_WIDGET_ALLOWED_HOSTS = env.list(
+    'ORLA_WIDGET_ALLOWED_HOSTS', default=['ited.app.br'],
+)
+
 # Banco de producao.
 # MVP atual: Railway interno pode continuar sem sslmode explicito.
 # Futuro Supabase/Postgres externo: configurar DATABASE_SSL_REQUIRE=True ou
