@@ -310,7 +310,15 @@ class MovimentacaoService:
             # Verificar saldo apenas se NÃO estiver forçando
             if not forcar_estoque_negativo:
                 from apps.estoque.models import Estoque
-                estoque_atual = Estoque.objects.filter(
+                # select_for_update aqui, NAO um .filter() solto: sem o lock,
+                # duas saidas concorrentes do mesmo produto liam o mesmo
+                # saldo, as duas passavam nesta checagem, e as duas
+                # decrementavam de verdade em registrar_movimentacao (que
+                # nunca bloqueia saldo negativo por si so — essa decisao e'
+                # desta funcao, ver comentario la). O lock e' pego dentro da
+                # mesma transacao @tenant_atomic que registrar_movimentacao
+                # vai reusar (mesma conexao, entao nao trava a si mesma).
+                estoque_atual = Estoque.objects.select_for_update().filter(
                     produto_id=produto_id, filial_id=filial_id,
                     deposito_id=deposito_id,
                 ).values_list('quantidade_atual', flat=True).first() or 0

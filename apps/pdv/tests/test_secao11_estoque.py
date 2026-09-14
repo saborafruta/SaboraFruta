@@ -9,7 +9,6 @@ conectada em compras nem em devolucao, e nao existe snapshot de
 apresentacao/fator gravado no item de venda hoje -- gaps conhecidos,
 documentados na Fase 15 (ver apps/pdv/api/views.py), nao esquecimento.
 """
-import unittest
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -113,25 +112,22 @@ class Secao11Caso10Tests(Secao11EstoqueBase):
     em que a segunda venda pede o lock, simulando a serializacao que o
     select_for_update garantiria de verdade contra duas conexoes reais.
 
-    BUG PRE-EXISTENTE ENCONTRADO POR ESTE TESTE (nao introduzido nesta
-    fase, nao corrigido aqui por decisao explicita -- e' codigo central
-    de estoque usado por PDV e pelo pedido B2B, fora do escopo desta
-    fase): `MovimentacaoService.registrar_saida_fefo`, para produto sem
-    controle de lote, checa "estoque insuficiente" com uma leitura SEM
-    lock (`Estoque.objects.filter(...).values_list(...)`) ANTES de
-    chamar `registrar_movimentacao` (que so' entao usa
-    `select_for_update`, sem re-checar suficiencia depois de travar a
-    linha). Duas vendas concorrentes podem passar juntas na checagem
-    (lendo o mesmo saldo desatualizado) e as duas decrementarem de
-    verdade -- o saldo fica aritmeticamente certo (a baixa em si e'
-    protegida pelo lock), mas a REJEICAO por estoque insuficiente nao
-    acontece quando deveria, e o saldo pode ficar negativo mesmo com
-    `forcar_estoque_negativo=False`. `expectedFailure` documenta isso
-    sem quebrar a suite; se alguem corrigir o metodo, este teste vira
-    "unexpected success" e avisa que o `expectedFailure` pode sair.
+    BUG PRE-EXISTENTE ENCONTRADO POR ESTE TESTE, CORRIGIDO: este teste
+    denunciou (e falhava, via `expectedFailure`) uma race condition real
+    em `MovimentacaoService.registrar_saida_fefo` -- para produto sem
+    controle de lote, a checagem de "estoque insuficiente" lia o saldo
+    SEM lock (`Estoque.objects.filter(...).values_list(...)`) antes de
+    chamar `registrar_movimentacao` (que nunca bloqueia saldo negativo
+    por si so -- essa decisao e' desta funcao). Duas vendas concorrentes
+    podiam passar juntas na checagem (lendo o mesmo saldo desatualizado)
+    e as duas decrementarem de verdade -- o saldo ficava aritmeticamente
+    certo (a baixa em si ja era protegida pelo lock dentro de
+    `registrar_movimentacao`), mas a REJEICAO por estoque insuficiente
+    nao acontecia quando deveria. Corrigido adicionando
+    `select_for_update()` na propria checagem, dentro da mesma transacao
+    `@tenant_atomic` que `registrar_movimentacao` reusa.
     """
 
-    @unittest.expectedFailure
     def test_apenas_uma_venda_e_aprovada_quando_a_soma_excede_o_saldo(self):
         # Saldo para exatamente 3 caixas (3.000 UN). Duas vendas de 2 caixas
         # cada (2.000 UN) somam 4.000 -- mais que o saldo.
@@ -157,7 +153,14 @@ class Secao11Caso10Tests(Secao11EstoqueBase):
                 # "primeira venda concorrente" simulada acima).
                 self.vender_caixas(2, forcar_estoque_negativo=False)
 
-        # O saldo final e' o da "primeira venda" que passou -- a segunda
-        # nao decrementou nada por cima.
+        # `registrar_saida_fefo` e' `@tenant_atomic`: quando ele levanta
+        # EstoqueInsuficienteError, a transacao INTEIRA da "segunda venda"
+        # e' desfeita -- inclusive a baixa da "primeira venda concorrente"
+        # simulada aqui dentro do mock, porque neste teste ambas rodam na
+        # mesma conexao/transacao (TestCase nao abre duas conexoes reais).
+        # O saldo volta pro valor de antes da simulacao (3.000): o ponto
+        # que importa e' que a segunda venda NAO decrementou nada por cima
+        # do que a primeira ja tinha vendido -- prova o assertRaises acima,
+        # nao o valor residual aqui.
         estoque = Estoque.objects.get(produto=self.produto, filial=self.filial)
-        self.assertEqual(estoque.quantidade_atual, Decimal('1000.000'))
+        self.assertEqual(estoque.quantidade_atual, Decimal('3000.000'))
