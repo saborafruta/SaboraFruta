@@ -2,7 +2,7 @@
 from decimal import Decimal
 
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
@@ -181,3 +181,33 @@ class LookupCacheTests(LookupCodigoBarrasBase):
         self.client.force_login(outro_usuario)
         resposta_empresa_2 = self.lookup('7899999999999')
         self.assertEqual(resposta_empresa_2.data['produto']['id'], outro_produto.pk)
+
+
+@override_settings(PRODUTOS_LOOKUP_RATE_LIMIT=2)
+class LookupThrottlingTests(LookupCodigoBarrasBase):
+    """Fase 14: throttling dedicado no endpoint mais chamado pelo PDV."""
+
+    def test_throttle_bloqueia_apos_o_limite(self):
+        # DRF cacheia a taxa por classe de throttle na primeira leitura de
+        # `settings` dentro do processo -- limpar o cache do throttle (que
+        # e' o mesmo cache do Django) evita rate residual de outro teste.
+        cache.clear()
+        self.assertEqual(self.lookup('1001').status_code, 200)
+        self.assertEqual(self.lookup('1001').status_code, 200)
+        terceira = self.lookup('1001')
+        self.assertEqual(terceira.status_code, 429)
+
+    def test_throttle_e_por_usuario_nao_global(self):
+        cache.clear()
+        self.assertEqual(self.lookup('1001').status_code, 200)
+        self.assertEqual(self.lookup('1001').status_code, 200)
+        self.assertEqual(self.lookup('1001').status_code, 429)
+
+        outro_perfil = PerfilAcesso.objects.create(empresa=self.empresa, nome='Admin 2', is_admin=True)
+        outro_usuario = Usuario.objects.create_user(
+            email='outro-usuario-throttle@inoovated.com', nome='Outro Usuario', password='teste1234',
+            empresa=self.empresa, filial=self.filial, perfil=outro_perfil,
+        )
+        self.client.force_login(outro_usuario)
+        # Usuario diferente, cota propria -- nao afetado pelo throttle do primeiro.
+        self.assertEqual(self.lookup('1001').status_code, 200)

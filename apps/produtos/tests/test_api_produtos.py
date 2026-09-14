@@ -165,7 +165,8 @@ class ApiCriarProdutoTests(ApiProdutosBase):
             'descricao': 'Produto sem NCM', 'unidade_medida': self.un.pk,
         })
         self.assertEqual(response.status_code, 400)
-        self.assertIn('ncm', response.data)
+        campos_com_erro = {erro['campo'] for erro in response.data['erros']}
+        self.assertIn('ncm', campos_com_erro)
 
 
 class ApiApresentacoesTests(ApiProdutosBase):
@@ -177,7 +178,8 @@ class ApiApresentacoesTests(ApiProdutosBase):
         url = reverse('produtos_api:produto_apresentacoes', args=[self.produto.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 2)
+        self.assertEqual(response.data['count'], 2)
+        self.assertEqual(len(response.data['results']), 2)
 
     def test_filtra_apresentacoes_por_permite_venda(self):
         ProdutoApresentacao.objects.create(
@@ -186,7 +188,7 @@ class ApiApresentacoesTests(ApiProdutosBase):
         )
         url = reverse('produtos_api:produto_apresentacoes', args=[self.produto.pk])
         response = self.client.get(url, {'permite_venda': 'true'})
-        self.assertEqual(len(response.data), 2)
+        self.assertEqual(response.data['count'], 2)
 
     def test_cria_apresentacao_para_o_produto(self):
         url = reverse('produtos_api:produto_apresentacoes', args=[self.produto.pk])
@@ -273,8 +275,8 @@ class ApiPrecosEEstoqueTests(ApiProdutosBase):
         url = reverse('produtos_api:produto_precos', args=[self.produto.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 2)
-        self.assertEqual(response.data[0]['tabela']['descricao'], 'Varejo')
+        self.assertEqual(response.data['count'], 2)
+        self.assertEqual(response.data['results'][0]['tabela']['descricao'], 'Varejo')
 
     def test_filtra_precos_por_filial_sem_vinculo_retorna_vazio(self):
         outra_filial = Filial.objects.create(
@@ -284,22 +286,23 @@ class ApiPrecosEEstoqueTests(ApiProdutosBase):
         url = reverse('produtos_api:produto_precos', args=[self.produto.pk])
         response = self.client.get(url, {'filial': outra_filial.pk})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 0)
+        self.assertEqual(response.data['count'], 0)
 
     def test_preco_traz_valor_final_com_desconto_aplicado(self):
         url = reverse('produtos_api:produto_precos', args=[self.produto.pk])
         response = self.client.get(url)
-        item_atacado = next(i for i in response.data if i['quantidade_minima'] == '10.000')
+        item_atacado = next(i for i in response.data['results'] if i['quantidade_minima'] == '10.000')
         self.assertEqual(item_atacado['valor_final'], '5.40')
 
     def test_lista_estoque_do_produto(self):
         url = reverse('produtos_api:produto_estoque', args=[self.produto.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]['quantidade_atual'], '100.000')
-        self.assertEqual(response.data[0]['filial']['nome'], 'Loja A')
-        self.assertEqual(response.data[0]['deposito']['nome'], 'Geral')
+        self.assertEqual(response.data['count'], 1)
+        item = response.data['results'][0]
+        self.assertEqual(item['quantidade_atual'], '100.000')
+        self.assertEqual(item['filial']['nome'], 'Loja A')
+        self.assertEqual(item['deposito']['nome'], 'Geral')
 
     def test_filtra_estoque_por_filial(self):
         outra_filial = Filial.objects.create(
@@ -309,7 +312,7 @@ class ApiPrecosEEstoqueTests(ApiProdutosBase):
         url = reverse('produtos_api:produto_estoque', args=[self.produto.pk])
         response = self.client.get(url, {'filial': outra_filial.pk})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 0)
+        self.assertEqual(response.data['count'], 0)
 
     def test_precos_e_estoque_sem_permissao_retorna_403(self):
         self.client.force_login(self.usuario_sem_permissao)
@@ -317,3 +320,53 @@ class ApiPrecosEEstoqueTests(ApiProdutosBase):
         url_estoque = reverse('produtos_api:produto_estoque', args=[self.produto.pk])
         self.assertEqual(self.client.get(url_precos).status_code, 403)
         self.assertEqual(self.client.get(url_estoque).status_code, 403)
+
+
+class ApiFormatoDeErroTests(ApiProdutosBase):
+    """Fase 14: {"erros": [{"codigo", "mensagem", "campo"}, ...]} para toda
+    resposta de erro da API de produtos (validacao, permissao, 404)."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.usuario)
+
+    def _assert_formato_padrao(self, response):
+        self.assertIn('erros', response.data)
+        self.assertIsInstance(response.data['erros'], list)
+        self.assertGreater(len(response.data['erros']), 0)
+        for erro in response.data['erros']:
+            self.assertIn('codigo', erro)
+            self.assertIn('mensagem', erro)
+            self.assertIn('campo', erro)
+
+    def test_erro_de_validacao_aponta_o_campo(self):
+        response = self.client.post(reverse('produtos_api:produtos'), {
+            'descricao': 'Produto sem NCM', 'unidade_medida': self.un.pk,
+        })
+        self.assertEqual(response.status_code, 400)
+        self._assert_formato_padrao(response)
+        erro_ncm = next(e for e in response.data['erros'] if e['campo'] == 'ncm')
+        self.assertEqual(erro_ncm['codigo'], 'required')
+
+    def test_erro_de_fator_invalido_aponta_o_campo(self):
+        url = reverse('produtos_api:produto_apresentacoes', args=[self.produto.pk])
+        response = self.client.post(url, {
+            'unidade': self.un.pk, 'descricao': 'Invalida', 'fator_conversao': '0',
+        })
+        self.assertEqual(response.status_code, 400)
+        self._assert_formato_padrao(response)
+        erro = next(e for e in response.data['erros'] if e['campo'] == 'fator_conversao')
+        self.assertIn('maior que zero', erro['mensagem'])
+
+    def test_erro_403_nao_tem_campo(self):
+        self.client.force_login(self.usuario_sem_permissao)
+        response = self.client.get(reverse('produtos_api:produtos'))
+        self.assertEqual(response.status_code, 403)
+        self._assert_formato_padrao(response)
+        self.assertIsNone(response.data['erros'][0]['campo'])
+
+    def test_erro_404_segue_o_mesmo_formato(self):
+        url = reverse('produtos_api:produto_detalhe', args=[999999])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
+        self._assert_formato_padrao(response)

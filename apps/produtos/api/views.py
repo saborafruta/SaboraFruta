@@ -32,11 +32,13 @@ from apps.estoque.models import Estoque
 from apps.produtos.models import ItemTabelaPreco, Produto, ProdutoApresentacao, ProdutoCodigoBarras, TabelaPreco
 from apps.produtos.services.apresentacao_service import ApresentacaoService
 
+from .exceptions import formatar_erros_api
 from .permissions import TemPermissaoProdutos
 from .serializers import (
     EstoqueSerializer, ItemTabelaPrecoSerializer, LookupCodigoBarrasSerializer,
     ProdutoApresentacaoSerializer, ProdutoDetalheSerializer, ProdutoSerializer,
 )
+from .throttling import ThrottleLookupCodigoBarras
 
 TTL_LOOKUP_ENCONTRADO = 60
 TTL_LOOKUP_NAO_ENCONTRADO = 30
@@ -56,9 +58,14 @@ class BaseProdutosAPIView(APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [TemPermissaoProdutos]
 
+    def get_exception_handler(self):
+        return formatar_erros_api
+
 
 class ProdutosView(BaseProdutosAPIView):
     """GET /api/produtos/produtos/ -- lista paginada e filtravel. POST cria."""
+
+    pagination_class = PaginacaoProdutos
 
     def get_queryset(self, empresa):
         queryset = (
@@ -119,6 +126,8 @@ class ProdutoDetalheView(BaseProdutosAPIView):
 class ProdutoApresentacoesView(BaseProdutosAPIView):
     """GET/POST /api/produtos/produtos/{id}/apresentacoes/"""
 
+    pagination_class = PaginacaoProdutos
+
     @extend_schema(responses=ProdutoApresentacaoSerializer(many=True))
     def get(self, request, pk):
         empresa = empresa_operacional(request)
@@ -130,7 +139,9 @@ class ProdutoApresentacoesView(BaseProdutosAPIView):
         permite_venda = request.query_params.get('permite_venda')
         if permite_venda is not None:
             queryset = queryset.filter(permite_venda=permite_venda.lower() in ('1', 'true', 'sim'))
-        return Response(ProdutoApresentacaoSerializer(queryset, many=True).data)
+        paginador = PaginacaoProdutos()
+        pagina = paginador.paginate_queryset(queryset, request, view=self)
+        return paginador.get_paginated_response(ProdutoApresentacaoSerializer(pagina, many=True).data)
 
     @extend_schema(request=ProdutoApresentacaoSerializer, responses={201: ProdutoApresentacaoSerializer})
     def post(self, request, pk):
@@ -195,6 +206,8 @@ class ProdutoPrecosView(BaseProdutosAPIView):
     (via `TabelaPreco.objects.for_filial`, mesmo manager usado no resto
     do ERP)."""
 
+    pagination_class = PaginacaoProdutos
+
     @extend_schema(responses=ItemTabelaPrecoSerializer(many=True))
     def get(self, request, pk):
         empresa = empresa_operacional(request)
@@ -208,13 +221,17 @@ class ProdutoPrecosView(BaseProdutosAPIView):
             queryset = queryset.filter(tabela_id__in=tabelas_da_filial)
         queryset = queryset.filter(tabela__ativo=True).order_by('tabela', 'quantidade_minima')
 
-        return Response(ItemTabelaPrecoSerializer(queryset, many=True).data)
+        paginador = PaginacaoProdutos()
+        pagina = paginador.paginate_queryset(queryset, request, view=self)
+        return paginador.get_paginated_response(ItemTabelaPrecoSerializer(pagina, many=True).data)
 
 
 class ProdutoEstoqueView(BaseProdutosAPIView):
     """GET /api/produtos/produtos/{id}/estoque/ -- saldo por filial x deposito.
 
     Filtro opcional `?filial=<id>`."""
+
+    pagination_class = PaginacaoProdutos
 
     @extend_schema(responses=EstoqueSerializer(many=True))
     def get(self, request, pk):
@@ -229,7 +246,9 @@ class ProdutoEstoqueView(BaseProdutosAPIView):
             queryset = queryset.filter(filial_id=filial_id)
         queryset = queryset.order_by('filial', 'deposito')
 
-        return Response(EstoqueSerializer(queryset, many=True).data)
+        paginador = PaginacaoProdutos()
+        pagina = paginador.paginate_queryset(queryset, request, view=self)
+        return paginador.get_paginated_response(EstoqueSerializer(pagina, many=True).data)
 
 
 def _resolver_produto_apresentacao(empresa, codigo):
@@ -292,6 +311,7 @@ class LookupCodigoBarrasView(BaseProdutosAPIView):
     """
 
     permissao_acao = 'ver'  # POST aqui e' consulta, nao criacao
+    throttle_classes = [ThrottleLookupCodigoBarras]
 
     @extend_schema(request=None, responses={200: LookupCodigoBarrasSerializer, 404: None})
     def post(self, request, codigo):
