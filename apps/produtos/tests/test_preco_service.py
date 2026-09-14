@@ -3,8 +3,13 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 
+from apps.cadastros.models import Cliente, ClienteFilial
+from apps.core.models import Empresa, Filial
+from apps.produtos.models import (
+    ItemTabelaPreco, Produto, ProdutoApresentacao, ProdutoFilial, TabelaPreco, TabelaPrecoFilial, UnidadeMedida,
+)
 from apps.produtos.services.preco_service import PrecoService
 from apps.produtos.views.promocao import _preco_gatilho_brinde, _status_promocao, _validade_texto
 
@@ -334,3 +339,94 @@ class PromocaoListStatusTests(SimpleTestCase):
 
         self.assertEqual(status['texto'], 'Ativo')
         self.assertEqual(status['estado'], 'ativas')
+
+
+class PrecoClienteDetalhadoApresentacaoTests(TestCase):
+    """Apresentacao conectada em PrecoService.preco_cliente_detalhado --
+    o preco de apresentacao e' independente (regra 5.8), so' a tabela de
+    preco do cliente pode ser mais especifica que ele."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.empresa = Empresa.objects.create(
+            razao_social='Empresa Preco Apresentacao LTDA', cnpj='71345678000191',
+            regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL, codigo_regime_tributario=1,
+        )
+        cls.filial = Filial.objects.create(
+            empresa=cls.empresa, razao_social='Filial Preco Apresentacao', cnpj='71345678000192', uf='RN',
+        )
+        cls.un = UnidadeMedida.objects.create(empresa=cls.empresa, sigla='UN', descricao='Unidade')
+        cls.cx = UnidadeMedida.objects.create(empresa=cls.empresa, sigla='CX', descricao='Caixa')
+        cls.produto = Produto.objects.create(
+            filial=cls.filial, unidade_medida=cls.un, descricao='Produto Teste',
+            codigo='1001', ncm='39235000', preco_venda=Decimal('10.00'),
+        )
+        ProdutoFilial.objects.create(produto=cls.produto, filial=cls.filial)
+        cls.apresentacao = ProdutoApresentacao.objects.create(
+            produto=cls.produto, unidade=cls.cx, descricao='Caixa 10', fator_conversao=10,
+            preco_venda=Decimal('90.00'),
+        )
+
+    def test_usa_preco_proprio_da_apresentacao_sem_tabela_de_cliente(self):
+        resultado = PrecoService.preco_cliente_detalhado(
+            self.produto, Decimal('10'), filial=self.filial, apresentacao=self.apresentacao,
+        )
+        # 90 / 10 = 9.00 por unidade base -- nao 10 (preco do produto na
+        # unidade base), que daria a impressao errada de que a caixa nao
+        # tem desconto de atacado nenhum.
+        self.assertEqual(resultado['preco'], Decimal('9.0000'))
+        self.assertEqual(resultado['tipo'], 'apresentacao')
+        self.assertEqual(resultado['apresentacao_id'], self.apresentacao.pk)
+
+    def test_item_de_tabela_especifico_da_apresentacao_tem_prioridade(self):
+        tabela = TabelaPreco.objects.create(filial=self.filial, descricao='Atacado')
+        TabelaPrecoFilial.objects.create(tabela=tabela, filial=self.filial)
+        ItemTabelaPreco.objects.create(
+            tabela=tabela, produto=self.produto, apresentacao=self.apresentacao,
+            preco_unitario=Decimal('8.50'), quantidade_minima=0,
+        )
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='J', razao_social='Cliente Atacado LTDA', tabela_preco=tabela,
+        )
+        ClienteFilial.objects.create(cliente=cliente, filial=self.filial)
+
+        resultado = PrecoService.preco_cliente_detalhado(
+            self.produto, Decimal('10'), cliente=cliente, filial=self.filial, apresentacao=self.apresentacao,
+        )
+        self.assertEqual(resultado['preco'], Decimal('8.50'))
+        self.assertEqual(resultado['tipo'], 'tabela_cliente_apresentacao')
+        self.assertEqual(resultado['apresentacao_id'], self.apresentacao.pk)
+
+    def test_sem_preco_proprio_e_sem_item_de_tabela_cai_para_cascata_padrao(self):
+        apresentacao_sem_preco = ProdutoApresentacao.objects.create(
+            produto=self.produto, unidade=self.cx, descricao='Caixa Avulsa', fator_conversao=20,
+        )
+        resultado = PrecoService.preco_cliente_detalhado(
+            self.produto, Decimal('10'), filial=self.filial, apresentacao=apresentacao_sem_preco,
+        )
+        # Sem preco_venda proprio e sem item de tabela: cai pro preco normal
+        # do produto (cascata padrao), nao fica em zero.
+        self.assertEqual(resultado['preco'], Decimal('10.00'))
+        self.assertEqual(resultado['tipo'], 'normal')
+
+    def test_venda_sem_apresentacao_ignora_item_de_tabela_scoped_a_apresentacao(self):
+        # Regressao do fix: antes de adicionar apresentacao__isnull=True no
+        # filtro da cascata padrao, um item de tabela criado PARA uma
+        # apresentacao especifica podia vazar pra uma venda comum (sem
+        # apresentacao) do mesmo produto/tabela/faixa.
+        tabela = TabelaPreco.objects.create(filial=self.filial, descricao='Atacado')
+        TabelaPrecoFilial.objects.create(tabela=tabela, filial=self.filial)
+        ItemTabelaPreco.objects.create(
+            tabela=tabela, produto=self.produto, apresentacao=self.apresentacao,
+            preco_unitario=Decimal('8.50'), quantidade_minima=0,
+        )
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='J', razao_social='Cliente Atacado LTDA', tabela_preco=tabela,
+        )
+        ClienteFilial.objects.create(cliente=cliente, filial=self.filial)
+
+        resultado = PrecoService.preco_cliente_detalhado(
+            self.produto, Decimal('10'), cliente=cliente, filial=self.filial,
+        )  # sem apresentacao
+        self.assertEqual(resultado['preco'], self.produto.preco_venda)
+        self.assertEqual(resultado['tipo'], 'normal')

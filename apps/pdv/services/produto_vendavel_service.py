@@ -27,6 +27,7 @@ class ProdutoVendavelService:
         incluir_promocoes_aplicaveis: bool = True,
         cliente=None,
         tabela_preco=None,
+        apresentacao=None,
     ) -> dict:
         quantidade = cls._decimal(quantidade, Decimal("0.001"))
         estoque = Estoque.objects.filter(
@@ -42,6 +43,7 @@ class ProdutoVendavelService:
             tabela=tabela_preco,
             filial=filial,
             validar_promocoes=validar_promocoes,
+            apresentacao=apresentacao,
         )
         preco_aplicado = cls._decimal(preco_info.get("preco"), cls.UNIT)
         margem_percentual = cls._margem(preco_aplicado, custo_atual)

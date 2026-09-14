@@ -43,22 +43,88 @@ class PrecoService:
         tabela=None,
         filial=None,
         validar_promocoes: bool = True,
+        apresentacao=None,
     ) -> dict:
         """
         Resolve o preco comercial do cliente, com fallback para a regra padrao.
+
+        `apresentacao` (opcional, `ProdutoApresentacao`): quando informada, o
+        preco dela e' INDEPENDENTE do preco do produto na unidade base --
+        nunca "preco_unitario_base * fator" (regra 5.8 do documento de
+        especificacao). Por isso, quando ha apresentacao, ela substitui TODA
+        a cascata de preco padrao (promocao individual, desconto por
+        categoria, combo por quantidade -- todos conceitos do produto na
+        unidade base, que nao fazem sentido empilhados sobre um preco de
+        apresentacao ja fechado, tipo "caixa fechada com desconto de
+        atacado"). So' a tabela de preco do cliente pode ser mais especifica
+        que a apresentacao (mesma precedencia que ja existia: tabela do
+        cliente > preco padrao) -- por isso ela e' checada primeiro, com
+        `apresentacao` no filtro do item, e so' cai pro `preco_venda` fixo
+        da apresentacao se a tabela nao tiver um item especifico pra ela.
+        `quantidade_minima` do item de tabela continua SEMPRE na unidade
+        base do produto, com ou sem apresentacao -- mesmo campo, mesmo
+        significado, pra nao criar um significado duplo silencioso.
         """
         quantidade = Decimal(str(quantidade or '0'))
+        tabela = cls.tabela_cliente_vigente(
+            cliente=cliente,
+            filial=filial,
+            tabela=tabela,
+        )
+
+        if apresentacao is not None:
+            if tabela:
+                item_apresentacao = (
+                    ItemTabelaPreco.objects
+                    .filter(
+                        tabela=tabela,
+                        produto=produto,
+                        apresentacao=apresentacao,
+                        quantidade_minima__lte=quantidade,
+                    )
+                    .order_by('-quantidade_minima')
+                    .first()
+                )
+                if item_apresentacao:
+                    preco = item_apresentacao.valor_final
+                    if tabela.acrescimo_percentual:
+                        preco *= Decimal('1') + (tabela.acrescimo_percentual / Decimal('100'))
+                    return {
+                        'preco': preco,
+                        'tipo': 'tabela_cliente_apresentacao',
+                        'origem': tabela.descricao,
+                        'detalhe': (
+                            f'Tabela de preco "{tabela.descricao}" para a apresentacao '
+                            f'"{apresentacao.descricao}" (a partir de {item_apresentacao.quantidade_minima} '
+                            f'unidade(s) base).'
+                        ),
+                        'tabela_preco_id': tabela.pk,
+                        'item_tabela_preco_id': item_apresentacao.pk,
+                        'apresentacao_id': apresentacao.pk,
+                    }
+            if apresentacao.preco_venda and apresentacao.preco_venda > 0:
+                preco_por_unidade_base = (apresentacao.preco_venda / apresentacao.fator_conversao).quantize(
+                    Decimal('0.0001'),
+                )
+                return {
+                    'preco': preco_por_unidade_base,
+                    'tipo': 'apresentacao',
+                    'origem': f'Apresentacao "{apresentacao.descricao}"',
+                    'detalhe': (
+                        f'Preco proprio da apresentacao "{apresentacao.descricao}" '
+                        f'(R$ {apresentacao.preco_venda} por {apresentacao.fator_conversao} unidade(s) base).'
+                    ),
+                    'apresentacao_id': apresentacao.pk,
+                }
+            # Apresentacao sem preco proprio e sem item de tabela: cai pra
+            # cascata padrao do produto abaixo, em vez de vender por zero.
+
         preco_padrao = cls.melhor_preco_produto_detalhado(
             produto,
             usar_promocoes=validar_promocoes,
             filial=filial,
             quantidade=quantidade,
             data=timezone.localdate(),
-        )
-        tabela = cls.tabela_cliente_vigente(
-            cliente=cliente,
-            filial=filial,
-            tabela=tabela,
         )
         if not tabela:
             return preco_padrao
@@ -68,6 +134,7 @@ class PrecoService:
             .filter(
                 tabela=tabela,
                 produto=produto,
+                apresentacao__isnull=True,
                 quantidade_minima__lte=quantidade,
             )
             .order_by('-quantidade_minima')

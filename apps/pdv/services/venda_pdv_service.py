@@ -242,12 +242,14 @@ class VendaPDVService:
         filial,
         quantidade: Decimal,
         cliente=None,
+        apresentacao=None,
     ) -> dict:
         contrato = ProdutoVendavelService.consultar(
             produto=produto,
             filial=filial,
             quantidade=quantidade,
             cliente=cliente,
+            apresentacao=apresentacao,
         )
         preco = cls._decimal(contrato["preco_aplicado"], cls.UNIT)
         return {
@@ -373,11 +375,28 @@ class VendaPDVService:
         except Produto.DoesNotExist:
             raise DadosInvalidosError("Produto nao encontrado ou nao vinculado a filial ativa.")
 
+        apresentacao = None
+        apresentacao_id = item_dados.get("apresentacao_id")
+        if apresentacao_id:
+            from apps.produtos.models import ProdutoApresentacao
+            apresentacao = ProdutoApresentacao.objects.select_related("unidade").filter(
+                pk=apresentacao_id, produto_id=produto.pk, ativo=True,
+            ).first()
+            if not apresentacao:
+                raise DadosInvalidosError(
+                    f"Apresentacao {apresentacao_id} nao encontrada para o produto {produto.pk}."
+                )
+            if not apresentacao.permite_venda:
+                raise DadosInvalidosError(
+                    f'A apresentacao "{apresentacao.descricao}" nao pode ser vendida.'
+                )
+
         contrato = ProdutoVendavelService.consultar(
             produto=produto,
             filial=filial,
             quantidade=quantidade,
             cliente=venda.cliente,
+            apresentacao=apresentacao,
         )
         bloqueios_cadastro = [
             item for item in contrato["bloqueios"]
@@ -391,6 +410,7 @@ class VendaPDVService:
             filial,
             quantidade,
             cliente=venda.cliente,
+            apresentacao=apresentacao,
         )
         preco_info = cls.resolver_oferta_selecionada(
             produto=produto,

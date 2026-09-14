@@ -18,16 +18,21 @@ promocao/kit/tabela, FEFO, conta a receber) divergiria de producao. Esta
 view e' uma casca fina: traduz o payload da API pros kwargs que o service
 ja aceita, e devolve o resultado formatado.
 
-APRESENTACAO NA VENDA (novidade desta fase -- nenhum fluxo de venda
-existente usa isso hoje): cada item pode vir com `apresentacao_id` +
-`quantidade_comercial` em vez de `quantidade` direto. A CONVERSAO
-acontece aqui, na borda, via `ApresentacaoService` -- `quantidade`
-(unidade base) e' o que chega no `VendaPDVService`, que continua sem
-saber o que e' uma apresentacao. Efeito colateral aceito: o
-`ItemVendaPDV` resultante grava so a unidade base (como sempre gravou) --
-a apresentacao/fator usados na hora da venda NAO ficam registrados no
-item para auditoria futura. Registrar isso no proprio ItemVendaPDV
-(colunas novas, ou snapshot) ficou fora do escopo desta fase.
+APRESENTACAO NA VENDA: cada item pode vir com `apresentacao_id` +
+`quantidade_comercial` em vez de `quantidade` direto. A CONVERSAO de
+quantidade acontece aqui, na borda, via `ApresentacaoService` --
+`quantidade` (unidade base) e' o que chega no `VendaPDVService`. O PRECO,
+porem, e' resolvido pelo proprio `VendaPDVService`/`PrecoService`
+(`apresentacao_id` e' passado adiante, nao so' a quantidade convertida) --
+respeitando `ItemTabelaPreco.apresentacao` (preco por tabela/cliente/
+filial especifico da apresentacao) com fallback pra
+`ProdutoApresentacao.preco_venda`, sem empilhar promocao/desconto de
+categoria do produto em cima (regra 5.8: preco de apresentacao e'
+independente). Efeito colateral aceito: o `ItemVendaPDV` resultante
+grava a quantidade so em unidade base (como sempre gravou) -- qual
+apresentacao/fator foram usados na venda NAO fica registrado no item
+para auditoria futura. Registrar isso no proprio ItemVendaPDV (colunas
+novas, ou snapshot) continua fora do escopo desta fase.
 
 IDEMPOTENCIA: o campo `VendaPDV.idempotency_key` existe no model desde
 antes desta fase mas nunca foi checado em lugar nenhum (nem no fluxo
@@ -60,7 +65,6 @@ from apps.produtos.api.exceptions import erro_response as _erro
 from apps.produtos.api.exceptions import formatar_erros_api
 from apps.produtos.models import Produto, ProdutoApresentacao
 from apps.produtos.services.apresentacao_service import ApresentacaoService
-from apps.produtos.services.conversao import quantizar
 
 from .permissions import TemPermissaoPDV
 from .serializers import VendaCreateInputSerializer, VendaPDVSerializer
@@ -73,9 +77,16 @@ def _sessao_aberta(request, filial):
 
 def _converter_apresentacao_para_base(item, empresa):
     """Se o item veio com apresentacao_id+quantidade_comercial, resolve a
-    apresentacao e devolve o item com `quantidade` em unidade base. Levanta
-    DadosInvalidosError se a apresentacao nao existir/nao pertencer ao
-    produto informado."""
+    apresentacao e devolve o item com `quantidade` em unidade base (mas
+    mantendo `apresentacao_id`: `VendaPDVService` agora resolve o PRECO da
+    apresentacao sozinho, via `PrecoService`/`ProdutoVendavelService` --
+    ver apps/pdv/services/venda_pdv_service.py e
+    apps/produtos/services/preco_service.py. Antes desta conexao, esta
+    funcao calculava e injetava `preco_manual` aqui; nao precisa mais.
+    Levanta DadosInvalidosError se a apresentacao nao existir/nao
+    pertencer ao produto informado (o service tambem valida isso de novo,
+    mas falhar cedo aqui, antes de chamar o service, da' um erro mais
+    claro pra quem so' errou a conversao de quantidade)."""
     apresentacao_id = item.get('apresentacao_id')
     if not apresentacao_id:
         return item
@@ -101,26 +112,8 @@ def _converter_apresentacao_para_base(item, empresa):
     except (InvalidOperation, ValueError):
         raise DadosInvalidosError(f'quantidade_comercial invalida: {quantidade_comercial!r}.')
 
-    novo_item = {k: v for k, v in item.items() if k not in ('apresentacao_id', 'quantidade_comercial')}
+    novo_item = {k: v for k, v in item.items() if k != 'quantidade_comercial'}
     novo_item['quantidade'] = str(quantidade_base)
-    # Regra 5.8 (preco por apresentacao e' independente, nunca
-    # preco_unitario_base * fator): manda o preco da apresentacao como
-    # `preco_manual`, o unico jeito que VendaPDVService aceita um preco
-    # explicito -- senao ele resolveria o preco pela PrecoService usando
-    # o preco do produto na unidade BASE multiplicado pela quantidade_base
-    # convertida, ignorando que a caixa pode ter preco proprio (desconto de
-    # atacado, por exemplo). So aplica o default quando o chamador nao
-    # mandou o proprio preco_manual.
-    #
-    # ATENCAO: `preco_manual`, assim como todo `valor_unitario` do sistema,
-    # e' SEMPRE por unidade BASE (o service multiplica preco x quantidade,
-    # e quantidade aqui ja' esta' em base) -- por isso divide pelo
-    # fator_conversao. Mandar `apresentacao.preco_venda` direto cobraria
-    # o preco da caixa inteira por CADA unidade base (10x a mais no
-    # exemplo de uma caixa com fator 10).
-    if novo_item.get('preco_manual') in (None, ''):
-        preco_por_unidade_base = quantizar(apresentacao.preco_venda / apresentacao.fator_conversao, 4)
-        novo_item['preco_manual'] = str(preco_por_unidade_base)
     return novo_item
 
 
