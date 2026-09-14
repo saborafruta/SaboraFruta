@@ -9,6 +9,8 @@ from .conferencia_transferencia import (
 from .faixa_cobertura import FaixaCoberturaEstoque
 from .configuracao_abc import ConfiguracaoAbcEstoque
 from .configuracao_demanda import ConfiguracaoDemandaPonderada
+from .solicitacao_transferencia import NivelAprovacaoTransferencia, SolicitacaoTransferencia
+from .snapshot_equalizacao import SugestaoEqualizacaoSnapshot
 
 __all__ = [
     'LoteProduto',
@@ -20,4 +22,7 @@ __all__ = [
     'FaixaCoberturaEstoque',
     'ConfiguracaoAbcEstoque',
     'ConfiguracaoDemandaPonderada',
+    'NivelAprovacaoTransferencia',
+    'SolicitacaoTransferencia',
+    'SugestaoEqualizacaoSnapshot',
 ]

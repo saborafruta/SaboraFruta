@@ -1,0 +1,38 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — ERP iNoovaTed{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block largura_conteudo %}max-w-2xl{% endblock %}
+
+{% block content %}
+<div class="w-full space-y-5">
+  <div>
+    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      <a href="{% url 'estoque:solicitacao-transferencia-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Solicitações de transferência</a>
+      <span class="mx-1">›</span> Alçadas
+    </p>
+    <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      Valor máximo (R$) que cada perfil pode transferir sem precisar de aprovação. Deixe em branco para sem limite. Perfis administradores sempre executam direto, independente deste valor.
+    </p>
+  </div>
+
+  <form method="post" class="card p-6 space-y-4">
+    {% csrf_token %}
+    {% for perfil in perfis %}
+      <div class="grid grid-cols-2 gap-4 items-center">
+        <label class="text-sm font-medium" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
+          {{ perfil.nome }}{% if perfil.is_admin %} <span class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">(admin — sempre sem limite)</span>{% endif %}
+        </label>
+        <input type="text" name="alcada_{{ perfil.pk }}" value="{{ perfil.alcada_transferencia|default_if_none:'' }}"
+               class="w-full rounded-lg border px-3 py-2 text-sm" placeholder="Sem limite" {% if perfil.is_admin %}disabled{% endif %}>
+      </div>
+    {% empty %}
+      <p class="text-sm" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhum perfil ativo cadastrado.</p>
+    {% endfor %}
+    <div class="flex gap-3 justify-end pt-2">
+      <a href="{% url 'estoque:solicitacao-transferencia-list' %}" class="btn-secondary">Cancelar</a>
+      {% if permissoes_estoque.pode_editar %}<button type="submit" class="btn-primary">Salvar</button>{% endif %}
+    </div>
+  </form>
+</div>
+{% endblock %}

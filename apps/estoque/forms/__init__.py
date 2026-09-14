@@ -6,6 +6,7 @@ from .outras_movimentacoes import DevolucaoClienteForm, SaidaEspecialForm
 from .faixa_cobertura import FaixaCoberturaEstoqueForm
 from .configuracao_abc import ConfiguracaoAbcEstoqueForm
 from .configuracao_demanda import ConfiguracaoDemandaPonderadaForm
+from .nivel_aprovacao import NivelAprovacaoTransferenciaForm
 
 __all__ = [
     'LoteProdutoForm',
@@ -16,4 +17,5 @@ __all__ = [
     'FaixaCoberturaEstoqueForm',
     'ConfiguracaoAbcEstoqueForm',
     'ConfiguracaoDemandaPonderadaForm',
+    'NivelAprovacaoTransferenciaForm',
 ]

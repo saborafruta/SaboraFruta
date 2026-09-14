@@ -1,0 +1,102 @@
+{% extends "_base.html" %}
+
+{% block title %}Central de relatórios e indicadores{% endblock %}
+{% block page_title %}Central de relatórios e indicadores{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div class="flex flex-wrap gap-2">
+    <a href="{% url 'estoque:dashboard-equalizacao' %}" class="btn-secondary">Dashboard</a>
+    <a href="{% url 'estoque:produtos-excesso' %}" class="btn-secondary">Relatório de excesso</a>
+    <a href="{% url 'estoque:curva-abc-giro' %}" class="btn-secondary">Curva ABC</a>
+    <a href="{% url 'estoque:transferencia-lojas' %}" class="btn-secondary">Relatório de transferências</a>
+    <a href="{% url 'estoque:central-equalizacao' %}" class="btn-secondary">Relatório de cobertura</a>
+  </div>
+
+  <section>
+    <h3 class="text-lg font-semibold mb-3">Indicadores — estado atual</h3>
+    <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+      <div class="card p-4"><div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Taxa de ruptura</div><div class="text-2xl font-semibold mt-1" style="color:#dc2626;">{% if indicadores.taxa_ruptura_pct is not None %}{{ indicadores.taxa_ruptura_pct }}%{% else %}—{% endif %}</div></div>
+      <div class="card p-4"><div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cobertura média</div><div class="text-2xl font-semibold mt-1">{% if indicadores.cobertura_media_dias is not None %}{{ indicadores.cobertura_media_dias }} dias{% else %}—{% endif %}</div></div>
+      <div class="card p-4"><div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Giro de estoque</div><div class="text-2xl font-semibold mt-1">{% if indicadores.giro_estoque is not None %}{{ indicadores.giro_estoque }}x{% else %}—{% endif %}</div></div>
+      <div class="card p-4"><div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Capital parado</div><div class="text-2xl font-semibold mt-1" style="color:#92400e;">R$ {{ indicadores.capital_parado|floatformat:2 }}</div></div>
+      <div class="card p-4"><div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">% estoque excedente</div><div class="text-2xl font-semibold mt-1" style="color:#2563eb;">{% if indicadores.pct_estoque_excedente is not None %}{{ indicadores.pct_estoque_excedente }}%{% else %}—{% endif %}</div></div>
+      <div class="card p-4"><div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">% abaixo do mínimo</div><div class="text-2xl font-semibold mt-1" style="color:#d97706;">{% if indicadores.pct_estoque_abaixo_minimo is not None %}{{ indicadores.pct_estoque_abaixo_minimo }}%{% else %}—{% endif %}</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h3 class="text-lg font-semibold mb-3">Indicadores — últimos {{ historico.dias_historico }} dias</h3>
+    <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+      <div class="card p-4"><div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Transferências realizadas</div><div class="text-2xl font-semibold mt-1" style="color:#16a34a;">{{ historico.transferencias_realizadas }}</div></div>
+      <div class="card p-4"><div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valor redistribuído</div><div class="text-2xl font-semibold mt-1" style="color:#16a34a;">R$ {{ historico.valor_redistribuido|floatformat:2 }}</div></div>
+      <div class="card p-4">
+        <div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Acuracidade da recomendação</div>
+        <div class="text-2xl font-semibold mt-1">{% if historico.acuracidade_recomendacao_pct is not None %}{{ historico.acuracidade_recomendacao_pct }}%{% else %}—{% endif %}</div>
+        {% if historico.acuracidade_recomendacao_pct is None %}<p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Sem snapshots gerados ainda no período.</p>{% endif %}
+      </div>
+    </div>
+    <p class="text-xs mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+      "Acuracidade" = % das sugestões registradas em snapshot que viraram transferência real. Precisa da rotina diária de automação (Fase 29) rodando para acumular dado -- sugestões calculadas ao vivo na tela do equilíbrio não entram aqui sozinhas.
+    </p>
+  </section>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <section>
+      <h3 class="text-lg font-semibold mb-3">Relatório de ruptura</h3>
+      <div class="card overflow-hidden">
+        <table class="w-full text-sm">
+          <thead><tr :style="temaClaro ? 'background:#f8fafc;color:#475569;' : 'background:#0f172a;color:#94a3b8;'"><th class="text-left px-3 py-2">Produto</th><th class="text-left px-3 py-2">Filial</th><th class="text-right px-3 py-2">Venda/dia</th></tr></thead>
+          <tbody>
+            {% for item in ruptura %}
+            <tr :style="temaClaro ? 'border-top:1px solid #e2e8f0;' : 'border-top:1px solid #1e293b;'"><td class="px-3 py-2">{{ item.produto.descricao }}</td><td class="px-3 py-2">{{ item.filial.nome_fantasia|default:item.filial.razao_social }}</td><td class="px-3 py-2 text-right">{{ item.demanda_diaria|floatformat:2 }}</td></tr>
+            {% empty %}<tr><td colspan="3" class="px-3 py-6 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhum produto em ruptura.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="text-lg font-semibold mb-3">Produtos parados (capital parado)</h3>
+      <div class="card overflow-hidden">
+        <table class="w-full text-sm">
+          <thead><tr :style="temaClaro ? 'background:#f8fafc;color:#475569;' : 'background:#0f172a;color:#94a3b8;'"><th class="text-left px-3 py-2">Produto</th><th class="text-left px-3 py-2">Filial</th><th class="text-right px-3 py-2">Valor parado</th></tr></thead>
+          <tbody>
+            {% for item in parados %}
+            <tr :style="temaClaro ? 'border-top:1px solid #e2e8f0;' : 'border-top:1px solid #1e293b;'"><td class="px-3 py-2">{{ item.produto.descricao }}</td><td class="px-3 py-2">{{ item.filial.nome_fantasia|default:item.filial.razao_social }}</td><td class="px-3 py-2 text-right">R$ {{ item.valor|floatformat:2 }}</td></tr>
+            {% empty %}<tr><td colspan="3" class="px-3 py-6 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhum produto parado.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="text-lg font-semibold mb-3">Transferências por filial ({{ historico.dias_historico }} dias)</h3>
+      <div class="card overflow-hidden">
+        <table class="w-full text-sm">
+          <thead><tr :style="temaClaro ? 'background:#f8fafc;color:#475569;' : 'background:#0f172a;color:#94a3b8;'"><th class="text-left px-3 py-2">Filial (origem)</th><th class="text-right px-3 py-2">Quantidade</th><th class="text-right px-3 py-2">Valor</th></tr></thead>
+          <tbody>
+            {% for item in por_filial %}
+            <tr :style="temaClaro ? 'border-top:1px solid #e2e8f0;' : 'border-top:1px solid #1e293b;'"><td class="px-3 py-2">{{ item.filial.nome_fantasia|default:item.filial.razao_social }}</td><td class="px-3 py-2 text-right">{{ item.quantidade|floatformat:3 }}</td><td class="px-3 py-2 text-right">R$ {{ item.valor|floatformat:2 }}</td></tr>
+            {% empty %}<tr><td colspan="3" class="px-3 py-6 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma transferência no período.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="text-lg font-semibold mb-3">Produtos mais transferidos ({{ historico.dias_historico }} dias)</h3>
+      <div class="card overflow-hidden">
+        <table class="w-full text-sm">
+          <thead><tr :style="temaClaro ? 'background:#f8fafc;color:#475569;' : 'background:#0f172a;color:#94a3b8;'"><th class="text-left px-3 py-2">Produto</th><th class="text-right px-3 py-2">Quantidade</th><th class="text-right px-3 py-2">Valor</th></tr></thead>
+          <tbody>
+            {% for item in mais_transferidos %}
+            <tr :style="temaClaro ? 'border-top:1px solid #e2e8f0;' : 'border-top:1px solid #1e293b;'"><td class="px-3 py-2">{{ item.produto.descricao }}</td><td class="px-3 py-2 text-right">{{ item.quantidade|floatformat:3 }}</td><td class="px-3 py-2 text-right">R$ {{ item.valor|floatformat:2 }}</td></tr>
+            {% empty %}<tr><td colspan="3" class="px-3 py-6 text-center" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma transferência no período.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

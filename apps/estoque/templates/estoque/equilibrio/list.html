@@ -44,6 +44,7 @@
       <a href="{% url 'estoque:demanda-inteligente' %}" class="btn-secondary whitespace-nowrap">Inteligência de demanda</a>
       <a href="{% url 'estoque:faixa-cobertura-list' %}" class="btn-secondary whitespace-nowrap">Faixas de cobertura</a>
       <a href="{% url 'estoque:configuracao-abc' %}" class="btn-secondary whitespace-nowrap">Meta por curva ABC</a>
+      <a href="{% url 'estoque:solicitacao-transferencia-list' %}" class="btn-secondary whitespace-nowrap">Solicitações de transferência</a>
     </div>
   </div>
 
@@ -161,7 +162,7 @@
             <div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Transferir</div>
             <div class="text-2xl font-bold" style="color:#2563eb;">{{ item.quantidade|floatformat:3 }} {{ item.produto.unidade_medida.sigla }}</div>
             {% if permissoes_estoque.pode_criar and filial_ativa_id == item.origem.pk %}
-              <a class="btn-primary mt-2 inline-flex" href="{% url 'estoque:transferencia-lojas-create' %}?destino={{ item.destino.pk }}&produto={{ item.produto.pk }}&quantidade={{ item.quantidade|stringformat:'s' }}&origem=equilibrio">Criar transferência</a>
+              <a class="btn-primary mt-2 inline-flex" href="{% url 'estoque:transferencia-gate' %}?destino={{ item.destino.pk }}&produto={{ item.produto.pk }}&quantidade={{ item.quantidade|stringformat:'s' }}&origem=equilibrio">Criar transferência</a>
             {% elif filial_ativa_id != item.origem.pk %}
               <div class="text-xs mt-2" :style="temaClaro ? 'color:#92400e;' : 'color:#fcd34d;'">Selecione {{ item.origem.nome_fantasia|default:item.origem.razao_social }} no topo para transferir.</div>
             {% endif %}

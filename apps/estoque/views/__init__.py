@@ -30,6 +30,14 @@ from .central_equalizacao import CentralEqualizacaoView
 from .recomendacoes_transferencia import RecomendacoesTransferenciaView
 from .simulador_transferencia import SimuladorTransferenciaView
 from .demanda_inteligente import ConfiguracaoDemandaPonderadaView, DemandaInteligenteView
+from .aprovacao_transferencia import (
+    TransferenciaGateView, SolicitacaoTransferenciaListView, SolicitacaoTransferenciaDecidirView,
+)
+from .alcada_transferencia import AlcadaTransferenciaView
+from .nivel_aprovacao import (
+    NivelAprovacaoListView, NivelAprovacaoCreateView, NivelAprovacaoUpdateView, NivelAprovacaoDeleteView,
+)
+from .relatorios_equalizacao import RelatoriosEqualizacaoView
 from .outras_movimentacoes import (
     OutrasMovimentacoesHubView, DevolucaoClienteView, DevolucaoFornecedorView, SaidaEspecialView,
     FornecedorSearchJsonView, ProdutoEstoqueSearchJsonView,
@@ -71,6 +79,10 @@ __all__ = [
     'SimuladorTransferenciaView',
     'ConfiguracaoDemandaPonderadaView',
     'DemandaInteligenteView',
+    'TransferenciaGateView', 'SolicitacaoTransferenciaListView', 'SolicitacaoTransferenciaDecidirView',
+    'AlcadaTransferenciaView',
+    'NivelAprovacaoListView', 'NivelAprovacaoCreateView', 'NivelAprovacaoUpdateView', 'NivelAprovacaoDeleteView',
+    'RelatoriosEqualizacaoView',
     'OutrasMovimentacoesHubView', 'DevolucaoClienteView', 'DevolucaoFornecedorView', 'SaidaEspecialView',
     'FornecedorSearchJsonView', 'ProdutoEstoqueSearchJsonView',
     'ClienteSearchJsonView', 'LoteSearchJsonView', 'VendaDevolucaoJsonView', 'DevolucaoClienteApiView',

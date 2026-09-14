@@ -28,6 +28,15 @@ urlpatterns = [
     path('simulador/', views.SimuladorTransferenciaView.as_view(), name='simulador-transferencia'),
     path('demanda-inteligente/', views.DemandaInteligenteView.as_view(), name='demanda-inteligente'),
     path('demanda-inteligente/pesos/', views.ConfiguracaoDemandaPonderadaView.as_view(), name='demanda-inteligente-config'),
+    path('transferencia-gate/', views.TransferenciaGateView.as_view(), name='transferencia-gate'),
+    path('solicitacoes-transferencia/', views.SolicitacaoTransferenciaListView.as_view(), name='solicitacao-transferencia-list'),
+    path('solicitacoes-transferencia/<int:pk>/decidir/', views.SolicitacaoTransferenciaDecidirView.as_view(), name='solicitacao-transferencia-decidir'),
+    path('alcada-transferencia/', views.AlcadaTransferenciaView.as_view(), name='alcada-transferencia'),
+    path('niveis-aprovacao/', views.NivelAprovacaoListView.as_view(), name='nivel-aprovacao-list'),
+    path('niveis-aprovacao/nova/', views.NivelAprovacaoCreateView.as_view(), name='nivel-aprovacao-create'),
+    path('niveis-aprovacao/<int:pk>/editar/', views.NivelAprovacaoUpdateView.as_view(), name='nivel-aprovacao-update'),
+    path('niveis-aprovacao/<int:pk>/excluir/', views.NivelAprovacaoDeleteView.as_view(), name='nivel-aprovacao-delete'),
+    path('relatorios-equalizacao/', views.RelatoriosEqualizacaoView.as_view(), name='relatorios-equalizacao'),
     path('movimentacoes/', views.MovimentacaoListView.as_view(), name='movimentacao-list'),
 
     # Operacoes

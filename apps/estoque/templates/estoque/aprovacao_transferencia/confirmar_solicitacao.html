@@ -1,0 +1,39 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} — ERP iNoovaTed{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block largura_conteudo %}max-w-xl{% endblock %}
+
+{% block content %}
+<div class="w-full space-y-5">
+  <div class="rounded-xl p-4" style="border:1px solid rgba(217,119,6,.35);background:rgba(217,119,6,.08);">
+    <div class="font-semibold" style="color:#92400e;">Esta transferência excede sua alçada</div>
+    <p class="text-sm mt-1" :style="temaClaro ? 'color:#78350f;' : 'color:#fcd34d;'">
+      O valor estimado está acima do que seu perfil pode movimentar sem aprovação. Ao confirmar, ela fica pendente até alguém com alçada suficiente aprovar ou rejeitar -- o estoque não muda agora.
+    </p>
+  </div>
+
+  <div class="card p-5 space-y-2 text-sm">
+    <div><strong>Produto:</strong> {{ produto.descricao }}</div>
+    <div><strong>Origem:</strong> {{ origem.nome_fantasia|default:origem.razao_social }}</div>
+    <div><strong>Destino:</strong> {{ destino.nome_fantasia|default:destino.razao_social }}</div>
+    <div><strong>Quantidade:</strong> {{ quantidade|floatformat:3 }}</div>
+    <div><strong>Valor estimado:</strong> R$ {{ valor_estimado|floatformat:2 }}</div>
+  </div>
+
+  <form method="post" class="card p-6 space-y-4">
+    {% csrf_token %}
+    <input type="hidden" name="produto" value="{{ produto.pk }}">
+    <input type="hidden" name="origem" value="{{ origem.pk }}">
+    <input type="hidden" name="destino" value="{{ destino.pk }}">
+    <input type="hidden" name="quantidade" value="{{ quantidade|stringformat:'s' }}">
+    <div>
+      <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Motivo da transferência</label>
+      <textarea name="motivo" rows="3" class="w-full rounded-lg border px-3 py-2 text-sm" placeholder="Por que esta transferência é necessária?"></textarea>
+    </div>
+    <div class="flex gap-3 justify-end pt-2">
+      <a href="{% url 'estoque:equilibrio-estoque' %}" class="btn-secondary">Cancelar</a>
+      <button type="submit" class="btn-primary">Enviar para aprovação</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

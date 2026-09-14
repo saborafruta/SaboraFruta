@@ -1020,7 +1020,7 @@ class TransferenciaLojaView(PermissaoRequiredMixin, View):
         # destino, produto e quantidade preenchidos. Todos os IDs sao
         # revalidados no tenant e na filial ativa; a transferencia continua
         # dependendo da confirmacao normal do operador.
-        if not copia and request.GET.get('origem') == 'equilibrio':
+        if not copia and request.GET.get('origem') in ('equilibrio', 'simulador', 'recomendacoes'):
             try:
                 destino_id = int(request.GET.get('destino') or 0)
                 produto_id = int(request.GET.get('produto') or 0)

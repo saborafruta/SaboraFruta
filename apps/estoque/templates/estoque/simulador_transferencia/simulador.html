@@ -109,7 +109,7 @@
 
   {% if permissoes_estoque.pode_criar %}
   <div class="flex justify-end">
-    <a class="btn-primary" href="{% url 'estoque:transferencia-lojas-create' %}?destino={{ simulacao.destino.pk }}&produto={{ simulacao.produto.pk }}&quantidade={{ simulacao.quantidade|stringformat:'s' }}&origem=simulador">Aplicar transferência</a>
+    <a class="btn-primary" href="{% url 'estoque:transferencia-gate' %}?destino={{ simulacao.destino.pk }}&produto={{ simulacao.produto.pk }}&quantidade={{ simulacao.quantidade|stringformat:'s' }}&origem=simulador">Aplicar transferência</a>
   </div>
   {% endif %}
   {% endif %}

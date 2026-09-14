@@ -38,6 +38,14 @@ class PerfilAcesso(TimestampedModel):
     descricao = models.TextField(blank=True)
     is_admin = models.BooleanField(default=False)
     ativo = models.BooleanField(default=True)
+    alcada_transferencia = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text=(
+            'Valor máximo (R$) que este perfil pode transferir entre filiais sem precisar '
+            'de aprovação de um perfil com alçada maior. Vazio = sem limite (perfis admin '
+            'sempre executam direto, independente deste campo).'
+        ),
+    )
 
     class Meta:
         db_table = 'perfis_acesso'
