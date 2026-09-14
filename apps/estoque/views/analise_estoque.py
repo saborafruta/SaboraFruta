@@ -4,6 +4,7 @@ from django.views import View
 
 from apps.core.models import Filial
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.request_scope import empresa_operacional
 from apps.estoque.services.analise_estoque import classificar_abc_giro, produtos_em_excesso
 from apps.estoque.views.permissoes import permissoes_estoque
 
@@ -38,7 +39,7 @@ class CurvaAbcGiroView(PermissaoRequiredMixin, View):
     template_name = "estoque/analise/curva_abc.html"
 
     def get(self, request):
-        empresa = request.user.empresa
+        empresa = empresa_operacional(request)
         dias_analise = _inteiro_opcao(request.GET.get("dias_analise"), {30, 60, 90, 180, 365}, 90)
         classe_filtro = (request.GET.get("classe") or "").strip().upper()
         if classe_filtro not in {"A", "B", "C"}:
@@ -72,7 +73,7 @@ class ProdutosExcessoView(PermissaoRequiredMixin, View):
     template_name = "estoque/analise/excesso.html"
 
     def get(self, request):
-        empresa = request.user.empresa
+        empresa = empresa_operacional(request)
         filial = _filial_opcional(request, empresa)
 
         itens = produtos_em_excesso(empresa=empresa, filial=filial)

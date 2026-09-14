@@ -118,6 +118,49 @@ class EquilibrioEstoqueTests(TestCase):
         self.assertContains(response, "Produto de alto giro")
         self.assertContains(response, "Transferencia sugerida pelo equilibrio de estoque")
 
+    def test_superusuario_central_usa_empresa_da_filial_ativa(self):
+        from apps.estoque.views.equilibrio_estoque import EquilibrioEstoqueView
+
+        outra_empresa = Empresa.objects.create(
+            razao_social="Empresa alheia LTDA",
+            nome_fantasia="Empresa alheia",
+            cnpj="82345678000991",
+            regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        filial_alheia = Filial.objects.create(
+            empresa=outra_empresa,
+            razao_social="Filial alheia",
+            nome_fantasia="L&R SPORTS",
+            cnpj="82345678000992",
+            uf="RN",
+            is_matriz=True,
+        )
+        perfil_alheio = PerfilAcesso.objects.create(
+            empresa=outra_empresa,
+            nome="Super Admin alheio",
+            is_admin=True,
+        )
+        superusuario_central = Usuario.objects.create_superuser(
+            email="central@inoovated.com",
+            nome="Super Admin",
+            password="teste1234",
+            empresa=outra_empresa,
+            filial=filial_alheia,
+            perfil=perfil_alheio,
+        )
+
+        request = RequestFactory().get(reverse("estoque:equilibrio-estoque"))
+        request.user = superusuario_central
+        request.filial_ativa = self.loja_a
+        request.session = {"filial_ativa_id": self.loja_a.pk}
+        response = EquilibrioEstoqueView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Loja A")
+        self.assertContains(response, "Loja B")
+        self.assertNotContains(response, "L&amp;R SPORTS")
+
 
 class EquilibrioComVendaB2BECompraEmAbertoTests(TestCase):
     """

@@ -6,6 +6,7 @@ from django.views import View
 
 from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.request_scope import empresa_operacional
 from apps.estoque.forms import FaixaCoberturaEstoqueForm
 from apps.estoque.models import FaixaCoberturaEstoque
 from apps.estoque.views.permissoes import permissoes_estoque
@@ -25,8 +26,9 @@ class FaixaCoberturaListView(PermissaoRequiredMixin, View):
     template_name = 'estoque/faixa_cobertura/list.html'
 
     def get(self, request):
+        empresa = empresa_operacional(request)
         faixas = list(
-            FaixaCoberturaEstoque.objects.filter(empresa=request.user.empresa)
+            FaixaCoberturaEstoque.objects.filter(empresa=empresa)
             .select_related('categoria', 'produto')
             .order_by('produto__descricao', 'categoria__nome')
         )
@@ -43,13 +45,15 @@ class FaixaCoberturaCreateView(PermissaoRequiredMixin, View):
     template_name = 'estoque/faixa_cobertura/form.html'
 
     def get(self, request):
+        empresa = empresa_operacional(request)
         return render(request, self.template_name, {
-            'form': FaixaCoberturaEstoqueForm(empresa=request.user.empresa),
+            'form': FaixaCoberturaEstoqueForm(empresa=empresa),
             'title': 'Nova faixa de cobertura',
         })
 
     def post(self, request):
-        form = FaixaCoberturaEstoqueForm(request.POST, empresa=request.user.empresa)
+        empresa = empresa_operacional(request)
+        form = FaixaCoberturaEstoqueForm(request.POST, empresa=empresa)
         if form.is_valid():
             faixa = form.save()
             _auditar_faixa(request, 'criar', faixa, f'Faixa de cobertura {faixa} criada', depois=snapshot_modelo(faixa))
@@ -64,12 +68,14 @@ class FaixaCoberturaUpdateView(PermissaoRequiredMixin, View):
     template_name = 'estoque/faixa_cobertura/form.html'
 
     def _get(self, request, pk):
-        return get_object_or_404(FaixaCoberturaEstoque.objects.filter(empresa=request.user.empresa), pk=pk)
+        empresa = empresa_operacional(request)
+        return get_object_or_404(FaixaCoberturaEstoque.objects.filter(empresa=empresa), pk=pk)
 
     def get(self, request, pk):
         faixa = self._get(request, pk)
+        empresa = empresa_operacional(request)
         return render(request, self.template_name, {
-            'form': FaixaCoberturaEstoqueForm(instance=faixa, empresa=request.user.empresa),
+            'form': FaixaCoberturaEstoqueForm(instance=faixa, empresa=empresa),
             'faixa': faixa,
             'title': f'Editar faixa de cobertura — {faixa}',
         })
@@ -77,7 +83,8 @@ class FaixaCoberturaUpdateView(PermissaoRequiredMixin, View):
     def post(self, request, pk):
         faixa = self._get(request, pk)
         antes = snapshot_modelo(faixa)
-        form = FaixaCoberturaEstoqueForm(request.POST, instance=faixa, empresa=request.user.empresa)
+        empresa = empresa_operacional(request)
+        form = FaixaCoberturaEstoqueForm(request.POST, instance=faixa, empresa=empresa)
         if form.is_valid():
             faixa = form.save()
             _auditar_faixa(request, 'editar', faixa, f'Faixa de cobertura {faixa} atualizada', antes=antes, depois=snapshot_modelo(faixa))
@@ -91,7 +98,8 @@ class FaixaCoberturaDeleteView(PermissaoRequiredMixin, View):
     permissao_acao = 'excluir'
 
     def post(self, request, pk):
-        faixa = get_object_or_404(FaixaCoberturaEstoque.objects.filter(empresa=request.user.empresa), pk=pk)
+        empresa = empresa_operacional(request)
+        faixa = get_object_or_404(FaixaCoberturaEstoque.objects.filter(empresa=empresa), pk=pk)
         descricao = str(faixa)
         antes = snapshot_modelo(faixa)
         _auditar_faixa(request, 'excluir', faixa, f'Faixa de cobertura {descricao} excluída', antes=antes)

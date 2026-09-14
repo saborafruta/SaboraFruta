@@ -2,6 +2,7 @@ from django.shortcuts import render
 from django.views import View
 
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.request_scope import empresa_operacional
 from apps.estoque.services.equilibrio_estoque import calcular_equilibrio
 from apps.estoque.services.mapa_estoque import detalhe_filial, montar_mapa
 from apps.estoque.views.permissoes import permissoes_estoque
@@ -23,7 +24,7 @@ class MapaEstoqueView(PermissaoRequiredMixin, View):
     def get(self, request):
         dias_analise = _inteiro_opcao(request.GET.get("dias_analise"), {7, 15, 30, 60, 90}, 30)
         dias_cobertura = _inteiro_opcao(request.GET.get("dias_cobertura"), {7, 14, 21, 30, 45}, 14)
-        empresa = request.user.empresa
+        empresa = empresa_operacional(request)
         mapa = montar_mapa(empresa=empresa, dias_analise=dias_analise, dias_cobertura=dias_cobertura)
 
         filial_selecionada_id = request.GET.get("filial")
