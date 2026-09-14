@@ -5,6 +5,7 @@ from django.views import View
 
 from apps.core.models import Filial
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.request_scope import empresa_operacional
 from apps.estoque.forms import ConfiguracaoDemandaPonderadaForm
 from apps.estoque.models import ConfiguracaoDemandaPonderada
 from apps.estoque.services.demanda_inteligente import (
@@ -28,7 +29,8 @@ class ConfiguracaoDemandaPonderadaView(PermissaoRequiredMixin, View):
     template_name = "estoque/demanda_inteligente/configuracao.html"
 
     def get(self, request):
-        config, _ = ConfiguracaoDemandaPonderada.objects.get_or_create(empresa=request.user.empresa)
+        empresa = empresa_operacional(request)
+        config, _ = ConfiguracaoDemandaPonderada.objects.get_or_create(empresa=empresa)
         return render(request, self.template_name, {
             "title": "Pesos da demanda ponderada",
             "form": ConfiguracaoDemandaPonderadaForm(instance=config),
@@ -39,7 +41,8 @@ class ConfiguracaoDemandaPonderadaView(PermissaoRequiredMixin, View):
         if not request.user.tem_permissao("estoque", "editar"):
             messages.error(request, "Você não tem permissão para esta ação.")
             return redirect("estoque:demanda-inteligente-config")
-        config, _ = ConfiguracaoDemandaPonderada.objects.get_or_create(empresa=request.user.empresa)
+        empresa = empresa_operacional(request)
+        config, _ = ConfiguracaoDemandaPonderada.objects.get_or_create(empresa=empresa)
         form = ConfiguracaoDemandaPonderadaForm(request.POST, instance=config)
         if form.is_valid():
             form.save()
@@ -58,7 +61,7 @@ class DemandaInteligenteView(PermissaoRequiredMixin, View):
     template_name = "estoque/demanda_inteligente/analise.html"
 
     def get(self, request):
-        empresa = request.user.empresa
+        empresa = empresa_operacional(request)
         produto_id = _id_opcional(request.GET.get("produto"))
         filial_id = _id_opcional(request.GET.get("filial"))
 
