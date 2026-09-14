@@ -46,6 +46,42 @@
   .produto-duplicate-banner strong { color: #bfdbfe; }
   body.tema-claro .produto-duplicate-banner { background: #fff7ed; color: #9a3412; border-color: #fdba74; }
   body.tema-claro .produto-duplicate-banner strong { color: #ea580c; }
+  .produto-tour-backdrop { position: fixed; inset: 0; z-index: 130; }
+  .produto-tour-highlight {
+    position: fixed; z-index: 131; border-radius: 10px; pointer-events: none;
+    box-shadow: 0 0 0 9999px rgba(8,10,14,.68); outline: 2px solid #60a5fa; outline-offset: 3px;
+    transition: top .18s ease, left .18s ease, width .18s ease, height .18s ease;
+  }
+  body.tema-claro .produto-tour-highlight { box-shadow: 0 0 0 9999px rgba(15,23,42,.55); }
+  .produto-tour-card {
+    position: fixed; z-index: 132; width: min(340px, calc(100vw - 2rem)); border-radius: 12px;
+    border: 1px solid rgba(96,165,250,.35); background: #202124; color: #e5e7eb;
+    box-shadow: 0 20px 60px rgba(0,0,0,.4); padding: 1rem 1.1rem;
+    transition: top .18s ease, left .18s ease;
+  }
+  body.tema-claro .produto-tour-card { background: #fff; color: #0f172a; border-color: #bfdbfe; }
+  .produto-tour-step-count { font-size: .74rem; font-weight: 800; color: #60a5fa; letter-spacing: .02em; text-transform: uppercase; }
+  .produto-tour-title { font-size: 1.02rem; font-weight: 800; margin: .3rem 0 .4rem; }
+  .produto-tour-text { font-size: .88rem; line-height: 1.45; color: #cbd5e1; }
+  body.tema-claro .produto-tour-text { color: #475569; }
+  .produto-tour-actions { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-top: .9rem; }
+  .produto-tour-skip { font-size: .8rem; font-weight: 700; color: #94a3b8; background: none; border: none; cursor: pointer; padding: .3rem 0; }
+  body.tema-claro .produto-tour-skip { color: #64748b; }
+  .produto-tour-nav { display: flex; gap: .4rem; }
+  .produto-tour-btn {
+    font-size: .82rem; font-weight: 800; border-radius: 8px; padding: .42rem .8rem; cursor: pointer; border: none;
+  }
+  .produto-tour-btn.primary { background: #2563eb; color: #fff; }
+  .produto-tour-btn.secondary { background: rgba(148,163,184,.16); color: inherit; }
+  .produto-help-btn {
+    display: inline-flex; align-items: center; gap: .35rem; font-size: .82rem; font-weight: 800;
+    color: #60a5fa; background: rgba(96,165,250,.12); border: 1px solid rgba(96,165,250,.3);
+    border-radius: 8px; padding: .38rem .7rem; cursor: pointer;
+  }
+  body.tema-claro .produto-help-btn { color: #2563eb; background: #eff6ff; border-color: #bfdbfe; }
+  @media (max-width: 640px) {
+    .produto-tour-card { left: 1rem !important; right: 1rem; width: auto; }
+  }
   .produto-log-overlay { position: fixed; inset: 0; z-index: 80; background: rgba(15,23,42,.58); display: grid; place-items: center; padding: 1rem; }
   .produto-log-modal { width: min(1080px, 100%); max-height: min(84vh, 820px); overflow: hidden; border-radius: 14px; border: 1px solid rgba(148,163,184,.22); background: #202124; color: #e5e7eb; box-shadow: 0 24px 80px rgba(0,0,0,.36); display: flex; flex-direction: column; }
   body.tema-claro .produto-log-modal { background: #fff; color: #0f172a; border-color: #dfe5ee; }
@@ -388,21 +424,22 @@
     <div>
       <h2 class="produto-title">{{ title }}</h2>
     </div>
-    {% if produto or duplicando %}
-      <div class="produto-head-actions">
-        {% if produto %}
-          <a href="{% url 'produtos:produto-duplicar' produto.pk %}" class="produto-duplicate-btn" title="Duplicar produto">
-            <span class="plus">+</span>
-            <span>Duplicar produto</span>
-          </a>
-          <button type="button" class="produto-log-btn" @click="showLog = true">Log do produto</button>
-          <a href="{% url 'producao:ficha-list' %}?produto_id={{ produto.pk }}" class="produto-log-btn">Ficha tecnica</a>
-          <a href="{% url 'qualidade:analise_list' %}?produto_id={{ produto.pk }}" class="produto-log-btn">Qualidade</a>
-        {% elif duplicando %}
-          <span class="produto-duplicate-badge">Modo duplicacao</span>
-        {% endif %}
-      </div>
-    {% endif %}
+    <div class="produto-head-actions">
+      <button type="button" class="produto-help-btn" @click="startTour()">
+        <span>?</span> Como funciona esse cadastro
+      </button>
+      {% if produto %}
+        <a href="{% url 'produtos:produto-duplicar' produto.pk %}" class="produto-duplicate-btn" title="Duplicar produto">
+          <span class="plus">+</span>
+          <span>Duplicar produto</span>
+        </a>
+        <button type="button" class="produto-log-btn" @click="showLog = true">Log do produto</button>
+        <a href="{% url 'producao:ficha-list' %}?produto_id={{ produto.pk }}" class="produto-log-btn">Ficha tecnica</a>
+        <a href="{% url 'qualidade:analise_list' %}?produto_id={{ produto.pk }}" class="produto-log-btn">Qualidade</a>
+      {% elif duplicando %}
+        <span class="produto-duplicate-badge">Modo duplicacao</span>
+      {% endif %}
+    </div>
   </div>
 
   {% if duplicando and produto_origem %}
@@ -545,7 +582,10 @@
 
     <nav class="produto-stepper mb-4" aria-label="Etapas do produto">
       <template x-for="item in steps" :key="item.id">
-        <button type="button" class="produto-step" :class="{ 'is-active': step === item.id, 'has-error': item.hasError }" @click="step = item.id">
+        <button
+          type="button" class="produto-step" :id="'produto-tour-step-' + item.id"
+          :class="{ 'is-active': step === item.id, 'has-error': item.hasError }" @click="step = item.id"
+        >
           <span class="produto-step-number" x-text="item.id"></span>
           <span x-text="item.label"></span>
         </button>
@@ -1154,6 +1194,27 @@
       </form>
     {% endfor %}
   {% endif %}
+
+  <div class="produto-tour-backdrop" x-show="tourActive" x-cloak @keydown.escape.window="stopTour()"></div>
+  <div
+    class="produto-tour-highlight" x-show="tourActive" x-cloak
+    :style="`top:${tourRect.top}px; left:${tourRect.left}px; width:${tourRect.width}px; height:${tourRect.height}px;`"
+  ></div>
+  <div
+    class="produto-tour-card" x-show="tourActive" x-cloak role="dialog" aria-modal="true" aria-label="Tour do cadastro de produto"
+    :style="`top:${tourCardPos.top}px; left:${tourCardPos.left}px;`"
+  >
+    <div class="produto-tour-step-count" x-text="`Passo ${tourIndex + 1} de ${tourSteps.length}`"></div>
+    <div class="produto-tour-title" x-text="tourSteps[tourIndex] ? tourSteps[tourIndex].title : ''"></div>
+    <div class="produto-tour-text" x-text="tourSteps[tourIndex] ? tourSteps[tourIndex].text : ''"></div>
+    <div class="produto-tour-actions">
+      <button type="button" class="produto-tour-skip" @click="stopTour()">Pular tour</button>
+      <div class="produto-tour-nav">
+        <button type="button" class="produto-tour-btn secondary" x-show="tourIndex > 0" @click="tourPrev()">Voltar</button>
+        <button type="button" class="produto-tour-btn primary" @click="tourNext()" x-text="tourIndex === tourSteps.length - 1 ? 'Concluir' : 'Proximo'"></button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -1304,6 +1365,70 @@
       barcodeMessage: '',
       barcodeError: false,
       showLog: false,
+      tourActive: false,
+      tourIndex: 0,
+      tourRect: { top: 0, left: 0, width: 0, height: 0 },
+      tourCardPos: { top: 0, left: 0 },
+      tourSteps: [
+        { step: null, target: '.produto-stepper', title: 'Bem-vindo ao cadastro de produto', text: 'Esse cadastro tem 8 etapas. Voce pode clicar em qualquer uma delas quando quiser -- nada se perde ao trocar de aba.' },
+        { step: 1, target: '#produto-tour-step-1', title: 'Identificacao', text: 'Nome, categoria e unidade de medida sao obrigatorios. O codigo do produto e gerado automaticamente.' },
+        { step: 2, target: '#produto-tour-step-2', title: 'Industrial', text: 'Armazenamento, controle de lote/validade e especificacoes tecnicas -- so preencha o que o produto realmente precisar.' },
+        { step: 3, target: '#produto-tour-step-3', title: 'Fiscal', text: 'NCM, CFOP e os campos tributarios usados na emissao de notas fiscais.' },
+        { step: 4, target: '#produto-tour-step-4', title: 'Precos', text: 'Custo e preco de venda. A margem de lucro e calculada automaticamente.' },
+        { step: 5, target: '#produto-tour-step-5', title: 'Estoque', text: 'Minimo, maximo, ponto de reposicao e o estoque inicial, se ja tiver.' },
+        { step: 6, target: '#produto-tour-step-6', title: 'Peso / Granel', text: 'So preencha se o produto for vendido por peso, na balanca.' },
+        { step: 7, target: '#produto-tour-step-7', title: 'Fisico / Logistica', text: 'Dimensoes, peso e embalagem -- usados no calculo de frete e cubagem.' },
+        { step: 8, target: '#produto-tour-step-8', title: 'Apresentacoes', text: 'Depois de salvar o produto, cadastre aqui outras formas de vender/comprar ele -- Caixa 1.000, Pacote 500 etc. Cada apresentacao e salva na hora, sem precisar clicar em "Salvar produto".' },
+        { step: null, target: '.produto-footer', title: 'Pronto!', text: 'Quando terminar, clique em "Salvar produto". Voce pode voltar e completar o resto depois, a qualquer momento.' },
+      ],
+      startTour() {
+        this.tourIndex = 0;
+        this.tourActive = true;
+        if (this.tourSteps[0] && this.tourSteps[0].step) this.step = this.tourSteps[0].step;
+        this.$nextTick(() => this.positionTour());
+      },
+      stopTour() {
+        this.tourActive = false;
+        try { localStorage.setItem('produto_onboarding_visto', '1'); } catch (e) { /* localStorage indisponivel */ }
+      },
+      tourNext() {
+        if (this.tourIndex >= this.tourSteps.length - 1) { this.stopTour(); return; }
+        this.tourIndex += 1;
+        this.goToTourStep();
+      },
+      tourPrev() {
+        if (this.tourIndex <= 0) return;
+        this.tourIndex -= 1;
+        this.goToTourStep();
+      },
+      goToTourStep() {
+        const entry = this.tourSteps[this.tourIndex];
+        if (entry && entry.step) this.step = entry.step;
+        this.$nextTick(() => this.positionTour());
+      },
+      positionTour() {
+        const entry = this.tourSteps[this.tourIndex];
+        if (!entry) return;
+        const el = document.querySelector(entry.target);
+        if (!el) { this.tourRect = { top: 0, left: 0, width: 0, height: 0 }; return; }
+        el.scrollIntoView({ block: 'center', behavior: 'auto' });
+        window.requestAnimationFrame(() => {
+          const rect = el.getBoundingClientRect();
+          const pad = 6;
+          this.tourRect = {
+            top: rect.top - pad, left: rect.left - pad,
+            width: rect.width + pad * 2, height: rect.height + pad * 2,
+          };
+          const cardWidth = 340;
+          const cardHeight = 190;
+          let top = rect.bottom + 14;
+          let left = rect.left;
+          if (top + cardHeight > window.innerHeight) top = Math.max(12, rect.top - cardHeight - 14);
+          if (left + cardWidth > window.innerWidth) left = window.innerWidth - cardWidth - 16;
+          if (left < 12) left = 12;
+          this.tourCardPos = { top, left };
+        });
+      },
       init() {
         this.initSpecs();
         this.initBarcodeExtras();
@@ -1320,6 +1445,14 @@
           const expression = section ? section.getAttribute('x-show') : '';
           const found = expression.match(/step === (\d+)/);
           if (found) this.step = Number(found[1]);
+        }
+        const modoCriacao = {% if not produto %}true{% else %}false{% endif %};
+        if (modoCriacao && !errorField) {
+          try {
+            if (!localStorage.getItem('produto_onboarding_visto')) {
+              setTimeout(() => this.startTour(), 450);
+            }
+          } catch (e) { /* localStorage indisponivel */ }
         }
       },
       currentHint() { return this.hints[this.step] || ''; },
