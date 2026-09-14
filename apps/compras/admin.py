@@ -35,7 +35,7 @@ class PedidoCompraAdmin(admin.ModelAdmin):
 class ItemEntradaNFInline(admin.TabularInline):
     model = ItemEntradaNF
     extra = 0
-    autocomplete_fields = ['produto']
+    autocomplete_fields = ['produto', 'apresentacao']
     readonly_fields = ['valor_bruto', 'valor_total', 'lote_gerado']
 
 

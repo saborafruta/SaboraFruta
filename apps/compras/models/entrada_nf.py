@@ -296,6 +296,17 @@ class ItemEntradaNF(TimestampedModel):
     )
     numero_item = models.SmallIntegerField(default=1)
 
+    # SNAPSHOT: qual apresentacao (se veio de uma) originou este item.
+    # `quantidade_xml` ja e' a quantidade na unidade comercial e
+    # `fator_conversao` ja e' o fator usado -- essa dupla ja funciona
+    # como snapshot mesmo sem este campo (imutaveis apos criados). Este
+    # FK existe so' pra rastreabilidade ("essa entrada veio da apresentacao
+    # X"), nao pra recalculo -- ver ProdutoApresentacao.
+    apresentacao = models.ForeignKey(
+        'produtos.ProdutoApresentacao', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='itens_entrada_nf',
+    )
+
     quantidade = models.DecimalField(max_digits=12, decimal_places=3)
     quantidade_xml = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     quantidade_estoque = models.DecimalField(max_digits=12, decimal_places=3, default=0)

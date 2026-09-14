@@ -5,7 +5,7 @@ from django import forms
 from apps.cadastros.models import Fornecedor
 from apps.compras.models import EntradaNF, EntradaNFAjusteFinanceiro, EntradaNFParcela, PedidoCompra
 from apps.estoque.models import Deposito
-from apps.produtos.models import Produto
+from apps.produtos.models import Produto, ProdutoApresentacao
 
 
 class EntradaNFForm(forms.ModelForm):
@@ -174,6 +174,12 @@ class AdicionarItemEntradaForm(forms.Form):
         max_length=80, required=False, label='Código fornecedor',
     )
     descricao_xml = forms.CharField(max_length=255, required=False, label='Descrição da nota')
+    apresentacao = forms.ModelChoiceField(
+        queryset=ProdutoApresentacao.objects.none(), required=False, label='Apresentação',
+        help_text='Opcional: escolha a apresentação de compra do produto (ex: Caixa 1.000) '
+                   'em vez de digitar fator/unidade manualmente. "Quantidade" abaixo passa a '
+                   'ser a quantidade NESSA apresentação (ex: 10 caixas).',
+    )
     quantidade = forms.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal('0.001'))
     unidade_xml = forms.CharField(max_length=10, required=False, initial='UN', label='Unidade nota')
     fator_conversao = forms.DecimalField(
@@ -181,8 +187,10 @@ class AdicionarItemEntradaForm(forms.Form):
         decimal_places=4,
         min_value=Decimal('0.0001'),
         initial=Decimal('1'),
+        required=False,
         label='Fator',
-        help_text='Ex: 10 CX x fator 12 = 120 UN no estoque.',
+        help_text='Obrigatorio se "Apresentação" nao for escolhida. '
+                   'Ex: 10 CX x fator 12 = 120 UN no estoque. Ignorado se "Apresentação" for escolhida.',
     )
     quantidade_recebida = forms.DecimalField(
         max_digits=12,
@@ -220,10 +228,31 @@ class AdicionarItemEntradaForm(forms.Form):
             self.fields['produto'].queryset = Produto.objects.for_filial(filial).filter(
                 ativo=True,
             ).order_by('descricao')
+            # Sem filtro dinamico por produto (o form nao tem JS de
+            # dependent-dropdown) -- todas as apresentacoes ativas da
+            # filial ficam disponiveis, e o `clean()` confere que a
+            # escolhida realmente pertence ao produto selecionado.
+            self.fields['apresentacao'].queryset = ProdutoApresentacao.objects.ativas().filter(
+                produto__in=Produto.objects.for_filial(filial), permite_compra=True,
+            ).select_related('produto', 'unidade').order_by('produto__descricao', 'fator_conversao')
 
     def clean(self):
         cleaned = super().clean()
         produto = cleaned.get('produto')
+        apresentacao = cleaned.get('apresentacao')
+        if apresentacao:
+            if not produto or apresentacao.produto_id != produto.pk:
+                raise forms.ValidationError(
+                    f'A apresentação "{apresentacao.descricao}" não pertence ao produto selecionado.'
+                )
+            # A apresentacao resolve fator/unidade de forma estruturada --
+            # sobrescreve o que foi digitado a mao nesses dois campos.
+            cleaned['fator_conversao'] = apresentacao.fator_conversao
+            cleaned['unidade_xml'] = apresentacao.unidade.sigla
+        elif cleaned.get('fator_conversao') is None and not self.errors.get('fator_conversao'):
+            raise forms.ValidationError(
+                'Informe o fator de conversão manualmente ou escolha uma apresentação.'
+            )
         fator = cleaned.get('fator_conversao') or Decimal('1')
         quantidade = cleaned.get('quantidade') or Decimal('0')
         quantidade_recebida = cleaned.get('quantidade_recebida')

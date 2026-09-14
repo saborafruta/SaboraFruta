@@ -188,6 +188,7 @@ class CompraService:
         unidade_estoque: str = '',
         fator_conversao: Decimal = Decimal('1'),
         quantidade_recebida: Decimal | None = None,
+        apresentacao=None,
     ) -> ItemEntradaNF:
         if entrada.status not in (
             EntradaNF.Status.RASCUNHO,
@@ -208,6 +209,23 @@ class CompraService:
                 f'Produto "{produto}" nao pode entrar com validade vencida.'
             )
 
+        if apresentacao is not None:
+            if not produto or apresentacao.produto_id != produto.pk:
+                raise DadosInvalidosError(
+                    f'Apresentacao "{apresentacao.descricao}" nao pertence ao produto "{produto}".'
+                )
+            if not apresentacao.permite_compra:
+                raise DadosInvalidosError(
+                    f'A apresentacao "{apresentacao.descricao}" nao pode ser usada em compra.'
+                )
+            # `quantidade` aqui e' sempre a quantidade NA unidade comercial
+            # (o que ja significava `quantidade`/`quantidade_xml` antes da
+            # apresentacao existir) -- a apresentacao so' resolve o
+            # fator_conversao/unidade_xml de forma estruturada em vez de
+            # digitado a mao, mesmo mecanismo que o form ja tinha.
+            fator_conversao = apresentacao.fator_conversao
+            unidade_xml = apresentacao.unidade.sigla
+
         fator_conversao = fator_conversao or Decimal('1')
         quantidade_estoque = quantidade * fator_conversao
         valor_bruto_xml = quantidade * valor_unitario
@@ -220,6 +238,7 @@ class CompraService:
             entrada=entrada,
             item_pedido_compra=item_pedido_compra,
             produto=produto,
+            apresentacao=apresentacao,
             numero_item=entrada.itens.count() + 1,
             quantidade=quantidade_estoque,
             quantidade_xml=quantidade,

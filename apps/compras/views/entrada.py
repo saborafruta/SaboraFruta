@@ -1876,6 +1876,7 @@ class AdicionarItemEntradaView(PermissaoRequiredMixin, View):
                     unidade_xml=form.cleaned_data.get('unidade_xml', ''),
                     fator_conversao=form.cleaned_data.get('fator_conversao') or Decimal('1'),
                     quantidade_recebida=form.cleaned_data.get('quantidade_recebida'),
+                    apresentacao=form.cleaned_data.get('apresentacao'),
                 )
                 messages.success(request, 'Item adicionado.')
             except DomainError as e:
