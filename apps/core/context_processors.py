@@ -11,6 +11,22 @@ from apps.core.services.checkout import checkout_venda_ativo as checkout_venda_h
 from apps.core.services.modulos import modulos_ativos
 
 
+def orla_widget_host_enabled(request):
+    """Confirma se o Widget foi habilitado para o host atual."""
+    if not getattr(settings, 'ORLA_WIDGET_ENABLED', False):
+        return False
+    allowed_hosts = {
+        str(host).strip().lower()
+        for host in getattr(settings, 'ORLA_WIDGET_ALLOWED_HOSTS', [])
+        if str(host).strip()
+    }
+    try:
+        request_host = str(request.get_host()).split(':', 1)[0].lower()
+    except Exception:
+        return False
+    return not allowed_hosts or request_host in allowed_hosts
+
+
 def parametros_sistema(request):
     """Injeta os parâmetros do sistema (logo) em todos os templates.
 
@@ -114,7 +130,7 @@ def notificacoes_context(request):
 def orla_widget_context(request):
     """Prepara o Widget Orla com uma identidade curta assinada no servidor."""
     disabled = {'orla_widget': {'enabled': False}}
-    if not getattr(settings, 'ORLA_WIDGET_ENABLED', False):
+    if not orla_widget_host_enabled(request):
         return disabled
 
     base_url = str(getattr(settings, 'ORLA_WIDGET_URL', '') or '').rstrip('/')
@@ -123,17 +139,6 @@ def orla_widget_context(request):
         getattr(settings, 'ORLA_WIDGET_SIGNING_SECRET', '') or ''
     )
     user = getattr(request, 'user', None)
-    allowed_hosts = {
-        str(host).strip().lower()
-        for host in getattr(settings, 'ORLA_WIDGET_ALLOWED_HOSTS', [])
-        if str(host).strip()
-    }
-    try:
-        request_host = str(request.get_host()).split(':', 1)[0].lower()
-    except Exception:
-        return disabled
-    if allowed_hosts and request_host not in allowed_hosts:
-        return disabled
     if not all((base_url, public_key)) or not getattr(
         user, 'is_authenticated', False,
     ):

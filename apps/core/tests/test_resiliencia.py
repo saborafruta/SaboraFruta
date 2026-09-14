@@ -16,6 +16,18 @@ class ResilienciaTests(TestCase):
         self.assertEqual(payload['status'], 'ok')
         self.assertTrue(payload['checks']['database'])
         self.assertTrue(payload['checks']['media_root'])
+        self.assertFalse(payload['integrations']['orla_widget'])
+
+    def test_health_check_confirma_widget_orla_no_host_autorizado(self):
+        with TemporaryDirectory() as media_root, self.settings(
+            MEDIA_ROOT=Path(media_root),
+            ORLA_WIDGET_ENABLED=True,
+            ORLA_WIDGET_ALLOWED_HOSTS=['testserver'],
+        ):
+            response = self.client.get(reverse('health'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['integrations']['orla_widget'])
 
     def test_backup_database_gera_arquivo(self):
         with TemporaryDirectory() as tmpdir:

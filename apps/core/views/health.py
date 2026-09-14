@@ -4,6 +4,8 @@ from django.http import JsonResponse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET
 
+from apps.core.context_processors import orla_widget_host_enabled
+
 
 @never_cache
 @require_GET
@@ -34,4 +36,7 @@ def health_check(request):
     return JsonResponse({
         'status': 'ok' if status_code == 200 else 'degraded',
         'checks': checks,
+        'integrations': {
+            'orla_widget': orla_widget_host_enabled(request),
+        },
     }, status=status_code)
