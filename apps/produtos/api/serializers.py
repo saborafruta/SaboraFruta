@@ -142,3 +142,30 @@ class EstoqueSerializer(serializers.Serializer):
     ultima_entrada = serializers.DateTimeField(allow_null=True)
     ultima_saida = serializers.DateTimeField(allow_null=True)
     updated_at = serializers.DateTimeField()
+
+
+class LookupProdutoLiteSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    codigo = serializers.CharField()
+    descricao = serializers.CharField()
+
+
+class LookupApresentacaoLiteSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    descricao = serializers.CharField()
+
+
+class LookupUnidadeLiteSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    sigla = serializers.CharField()
+
+
+class LookupCodigoBarrasSerializer(serializers.Serializer):
+    """Resposta de POST /api/produtos/lookup-codigo-barras/{codigo}/."""
+
+    produto = LookupProdutoLiteSerializer()
+    apresentacao = LookupApresentacaoLiteSerializer()
+    unidade = LookupUnidadeLiteSerializer()
+    fator = serializers.DecimalField(max_digits=14, decimal_places=6)
+    preco = serializers.DecimalField(max_digits=14, decimal_places=4)
+    estoque_disponivel = serializers.DecimalField(max_digits=12, decimal_places=3, allow_null=True)

@@ -12,7 +12,11 @@ externo) e ja registra `produtos/`/`produtos/<pk>/` com outro proposito e
 outro schema. Reaproveitar o mesmo prefixo colidiria com rotas existentes
 e misturaria dois esquemas de autenticacao sob o mesmo namespace.
 """
+from decimal import Decimal
+
+from django.core.cache import cache
 from django.db import transaction
+from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework.authentication import SessionAuthentication
@@ -23,14 +27,19 @@ from rest_framework.views import APIView
 from apps.core.models import Filial
 from apps.core.services.auditoria import registrar_auditoria
 from apps.core.services.request_scope import empresa_operacional
+from apps.core.tenant_context import get_current_database_alias
 from apps.estoque.models import Estoque
-from apps.produtos.models import ItemTabelaPreco, Produto, ProdutoApresentacao, TabelaPreco
+from apps.produtos.models import ItemTabelaPreco, Produto, ProdutoApresentacao, ProdutoCodigoBarras, TabelaPreco
+from apps.produtos.services.apresentacao_service import ApresentacaoService
 
 from .permissions import TemPermissaoProdutos
 from .serializers import (
-    EstoqueSerializer, ItemTabelaPrecoSerializer,
+    EstoqueSerializer, ItemTabelaPrecoSerializer, LookupCodigoBarrasSerializer,
     ProdutoApresentacaoSerializer, ProdutoDetalheSerializer, ProdutoSerializer,
 )
+
+TTL_LOOKUP_ENCONTRADO = 60
+TTL_LOOKUP_NAO_ENCONTRADO = 30
 
 CAMPOS_CRITICOS_APRESENTACAO = frozenset({
     'fator_conversao', 'unidade', 'principal_venda', 'principal_compra',
@@ -221,3 +230,108 @@ class ProdutoEstoqueView(BaseProdutosAPIView):
         queryset = queryset.order_by('filial', 'deposito')
 
         return Response(EstoqueSerializer(queryset, many=True).data)
+
+
+def _resolver_produto_apresentacao(empresa, codigo):
+    """Resolve (produto, apresentacao) a partir de um EAN ou codigo interno.
+
+    Ordem: EAN cadastrado em ProdutoCodigoBarras (usando a apresentacao
+    vinculada a ele, se houver; senao a principal_venda do produto) ->
+    codigo interno ou codigo_barras "principal" do Produto (usando a
+    apresentacao principal_venda). Nao varre `codigos_barras_extras`
+    (JSON, exige scan Python) -- para esse caso raro, o lookup existente
+    do PDV (`apps/pdv/views/pdv.py`) continua a via.
+    """
+    codigo_barras = (
+        ProdutoCodigoBarras.objects.select_related('produto', 'apresentacao')
+        .filter(ean=codigo, ativo=True, produto__in=Produto.objects.for_empresa(empresa))
+        .first()
+    )
+    if codigo_barras:
+        apresentacao = codigo_barras.apresentacao or ApresentacaoService.apresentacao_principal_venda(
+            codigo_barras.produto,
+        )
+        if apresentacao:
+            return codigo_barras.produto_id, apresentacao.pk
+
+    produto = (
+        Produto.objects.for_empresa(empresa)
+        .filter(Q(codigo=codigo) | Q(codigo_barras=codigo))
+        .first()
+    )
+    if produto:
+        apresentacao = ApresentacaoService.apresentacao_principal_venda(produto)
+        if apresentacao:
+            return produto.pk, apresentacao.pk
+
+    return None
+
+
+class LookupCodigoBarrasView(BaseProdutosAPIView):
+    """
+    POST /api/produtos/lookup-codigo-barras/{codigo}/ -- resolve
+    produto+apresentacao a partir de um EAN/codigo bipado, numa unica
+    chamada. Endpoint dedicado e novo: NAO substitui nem altera o lookup
+    ja existente em `apps/pdv/views/pdv.py`, que continua rodando em
+    producao sem mudanca (decisao registrada -- ver conversa/CLAUDE.md).
+
+    Cache: so a RESOLUCAO (produto_id, apresentacao_id) e' cacheada -- o
+    par produto/EAN muda raramente. `preco` e `estoque_disponivel` sao
+    SEMPRE lidos ao vivo a cada chamada, nunca cacheados: servir estoque
+    ou preco desatualizado pro PDV pode causar venda sem saldo ou com
+    preco errado. Chave de cache inclui o alias do banco do tenant (cada
+    empresa tem seu proprio banco -- ver apps/core/tenant_context.py) e o
+    id da empresa, para nunca vazar resolucao de uma empresa pra outra
+    caso o mesmo Redis seja compartilhado entre tenants.
+
+    Sem invalidacao ativa (nao instrumenta todo caminho de escrita que
+    toca EAN/apresentacao principal -- admin, forms HTML, esta API).
+    TTL curto (60s) em vez disso: uma mudanca de EAN demora no maximo
+    esse tempo pra refletir no PDV. Documentado aqui de proposito --
+    revisar se algum fluxo precisar de consistencia mais forte.
+    """
+
+    permissao_acao = 'ver'  # POST aqui e' consulta, nao criacao
+
+    @extend_schema(request=None, responses={200: LookupCodigoBarrasSerializer, 404: None})
+    def post(self, request, codigo):
+        empresa = empresa_operacional(request)
+        resolucao = self._resolver_com_cache(empresa, codigo)
+        if resolucao is None:
+            return Response({'detail': 'Codigo nao encontrado.'}, status=404)
+
+        produto_id, apresentacao_id = resolucao
+        produto = get_object_or_404(Produto, pk=produto_id)
+        apresentacao = get_object_or_404(
+            ProdutoApresentacao.objects.select_related('unidade'), pk=apresentacao_id,
+        )
+
+        filial = getattr(request, 'filial_ativa', None)
+        estoque_disponivel = None
+        if filial is not None:
+            estoque_disponivel = Estoque.objects.filter(
+                produto=produto, filial=filial,
+            ).aggregate(total=Sum('quantidade_disponivel'))['total'] or Decimal('0')
+
+        dados = {
+            'produto': {'id': produto.pk, 'codigo': produto.codigo, 'descricao': produto.descricao},
+            'apresentacao': {'id': apresentacao.pk, 'descricao': apresentacao.descricao},
+            'unidade': {'id': apresentacao.unidade_id, 'sigla': apresentacao.unidade.sigla},
+            'fator': apresentacao.fator_conversao,
+            'preco': apresentacao.preco_venda,
+            'estoque_disponivel': estoque_disponivel,
+        }
+        return Response(LookupCodigoBarrasSerializer(dados).data)
+
+    def _resolver_com_cache(self, empresa, codigo):
+        chave = f'produtos:lookup_ean:{get_current_database_alias()}:{empresa.pk}:{codigo}'
+        cacheado = cache.get(chave)
+        if cacheado is not None:
+            return tuple(cacheado) if cacheado else None
+
+        resolucao = _resolver_produto_apresentacao(empresa, codigo)
+        cache.set(
+            chave, list(resolucao) if resolucao else [],
+            TTL_LOOKUP_ENCONTRADO if resolucao else TTL_LOOKUP_NAO_ENCONTRADO,
+        )
+        return resolucao

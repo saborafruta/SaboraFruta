@@ -18,4 +18,8 @@ urlpatterns = [
     path('produtos/<int:pk>/precos/', views.ProdutoPrecosView.as_view(), name='produto_precos'),
     path('produtos/<int:pk>/estoque/', views.ProdutoEstoqueView.as_view(), name='produto_estoque'),
     path('apresentacoes/<int:pk>/', views.ApresentacaoDetalheView.as_view(), name='apresentacao_detalhe'),
+    path(
+        'lookup-codigo-barras/<str:codigo>/', views.LookupCodigoBarrasView.as_view(),
+        name='lookup_codigo_barras',
+    ),
 ]

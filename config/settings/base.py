@@ -284,13 +284,31 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# Cache â€” Django nativo (LocMem em dev)
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'erp-inoovated-cache',
+# Cache
+#
+# Usa Redis quando ha' um broker Redis configurado (producao ja' tem --
+# ver CELERY_BROKER_URL abaixo, mesma instancia, nenhuma variavel nova
+# no Railway) e cai pra LocMem quando nao ha' nada configurado (dev local
+# sem Redis rodando, ambiente de teste). `CACHE_REDIS_URL` permite apontar
+# pra uma instancia/DB Redis dedicado ao cache (recomendado a longo prazo,
+# pra nao competir com a fila do Celery), mas nao e' obrigatorio.
+_CACHE_REDIS_URL = env('CACHE_REDIS_URL', default=env('CELERY_BROKER_URL', default=''))
+if _CACHE_REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': _CACHE_REDIS_URL,
+            'OPTIONS': {'CLIENT_CLASS': 'django_redis.client.DefaultClient'},
+            'KEY_PREFIX': 'erp-inoovated',
+        }
     }
-}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'erp-inoovated-cache',
+        }
+    }
 
 # Celery
 CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://localhost:6379/0')
