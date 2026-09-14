@@ -1099,6 +1099,18 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(entrada.entrada, Decimal("95.00"))
         self.assertEqual(posicao_liquidacao["total_entradas"], Decimal("95.00"))
 
+        response = self.client.get(
+            reverse("financeiro:posicao_diaria"), {"data": "2026-08-25"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Conta não definida")
+
+        relatorio = self.client.get(
+            reverse("financeiro:posicao_diaria_relatorio"), {"data": "2026-08-25"},
+        )
+        self.assertEqual(relatorio.status_code, 200)
+        self.assertContains(relatorio, "Conta não definida")
+
     def test_recebimento_usa_conta_padrao_da_forma_quando_baixa_nao_informa_conta(self):
         cliente = Cliente.objects.create(
             filial=self.filial, razao_social="Cliente sem conta direta", tipo_pessoa="F",

@@ -75,6 +75,12 @@ class MovimentoDiario:
     def hora(self):
         return timezone.localtime(self.momento).strftime("%H:%M") if self.momento else "--:--"
 
+    @property
+    def conta_nome(self):
+        if not self.conta:
+            return "Conta não definida"
+        return self.conta.descricao or self.conta.banco_nome or f"Conta #{self.conta.pk}"
+
 
 def _somar(destino, conta_id, valor):
     if conta_id:
