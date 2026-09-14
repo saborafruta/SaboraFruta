@@ -60,6 +60,24 @@ class ItemDevolucao(TimestampedModel):
         related_name='+',
     )
     quantidade = models.DecimalField(max_digits=12, decimal_places=3)
+    # SNAPSHOT da apresentacao usada para informar a quantidade devolvida
+    # (quando o usuario devolve "2 caixas" em vez de digitar direto na
+    # unidade base) -- mesmo padrao de apps.pdv.models.venda.ItemVenda.
+    # `quantidade` acima continua sempre na unidade base do produto; estes
+    # tres campos sao so para rastreabilidade/exibicao.
+    apresentacao = models.ForeignKey(
+        'produtos.ProdutoApresentacao', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='itens_devolucao',
+    )
+    apresentacao_fator_conversao = models.DecimalField(
+        max_digits=14, decimal_places=6, null=True, blank=True,
+        help_text='Fator de conversao da apresentacao NO MOMENTO da devolucao -- nao o atual.',
+    )
+    quantidade_comercial = models.DecimalField(
+        max_digits=12, decimal_places=3, null=True, blank=True,
+        help_text='Quantidade na unidade da apresentacao (ex: 2 caixas). '
+                   '`quantidade` continua sendo a mesma coisa convertida pra unidade base.',
+    )
     valor_unitario = models.DecimalField(max_digits=14, decimal_places=4)
     valor_total = models.DecimalField(max_digits=14, decimal_places=2)
     retornar_ao_estoque = models.BooleanField(

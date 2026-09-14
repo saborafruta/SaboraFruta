@@ -47,7 +47,10 @@ class SeparacaoPedidoAdmin(admin.ModelAdmin):
 class ItemDevolucaoInline(admin.TabularInline):
     model = ItemDevolucao
     extra = 0
-    readonly_fields = ['item_pedido', 'quantidade', 'valor_unitario', 'valor_total']
+    readonly_fields = [
+        'item_pedido', 'quantidade', 'apresentacao', 'quantidade_comercial',
+        'valor_unitario', 'valor_total',
+    ]
 
 
 @admin.register(DevolucaoVenda)

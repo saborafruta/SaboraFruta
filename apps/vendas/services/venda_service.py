@@ -392,7 +392,11 @@ class VendaService:
     ) -> DevolucaoVenda:
         """
         Cria devolução retornando produtos ao estoque.
-        itens_devolvidos = [{'item_pedido_id': int, 'quantidade': Decimal, 'retornar_ao_estoque': bool}, ...]
+        itens_devolvidos = [{'item_pedido_id': int, 'quantidade': Decimal,
+        'retornar_ao_estoque': bool, 'apresentacao': ProdutoApresentacao|None}, ...]
+        Se 'apresentacao' for informada, 'quantidade' e' na unidade dessa
+        apresentacao (ex: 2 caixas) e e' convertida pra unidade base antes
+        de validar contra item.quantidade.
         """
         if pedido.status != PedidoVenda.Status.FATURADO:
             raise DadosInvalidosError(
@@ -418,7 +422,24 @@ class VendaService:
             item = ItemPedidoVenda.objects.get(
                 pk=dev['item_pedido_id'], pedido=pedido,
             )
-            qtd = Decimal(str(dev['quantidade']))
+            qtd_informada = Decimal(str(dev['quantidade']))
+            apresentacao = dev.get('apresentacao')
+            quantidade_comercial = None
+            if apresentacao is not None:
+                if apresentacao.produto_id != item.produto_id:
+                    raise DadosInvalidosError(
+                        f'Apresentacao "{apresentacao.descricao}" nao pertence ao produto '
+                        f'do item {item.numero_item}.'
+                    )
+                if not apresentacao.permite_venda:
+                    raise DadosInvalidosError(
+                        f'A apresentacao "{apresentacao.descricao}" nao pode ser usada em venda/devolucao.'
+                    )
+                quantidade_comercial = qtd_informada
+                qtd = apresentacao.converter_para_base(qtd_informada)
+            else:
+                qtd = qtd_informada
+
             if qtd <= 0 or qtd > item.quantidade:
                 raise DadosInvalidosError(
                     f'Quantidade inválida para item {item.numero_item}.'
@@ -429,6 +450,9 @@ class VendaService:
                 devolucao=devolucao,
                 item_pedido=item,
                 quantidade=qtd,
+                apresentacao=apresentacao,
+                apresentacao_fator_conversao=apresentacao.fator_conversao if apresentacao else None,
+                quantidade_comercial=quantidade_comercial,
                 valor_unitario=item.valor_unitario,
                 valor_total=qtd * item.valor_unitario,
                 retornar_ao_estoque=retornar,

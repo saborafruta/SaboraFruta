@@ -11,6 +11,7 @@ from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.vendas.forms import (
     AdicionarItemForm, CancelarPedidoForm, DevolverPedidoForm, PedidoVendaForm,
 )
+from apps.produtos.models import ProdutoApresentacao
 from apps.vendas.models import PedidoVenda
 from apps.vendas.services.venda_service import VendaService
 
@@ -101,9 +102,17 @@ class PedidoDetailView(PermissaoRequiredMixin, View):
             pk=pk,
         )
         itens = pedido.itens.select_related('produto', 'produto__unidade_medida').all()
+        apresentacoes_por_produto = {}
+        if pedido.status == 'faturado':
+            apresentacoes = ProdutoApresentacao.objects.ativas().filter(
+                produto_id__in=[item.produto_id for item in itens], permite_venda=True,
+            ).select_related('unidade').order_by('produto_id', 'fator_conversao')
+            for apresentacao in apresentacoes:
+                apresentacoes_por_produto.setdefault(apresentacao.produto_id, []).append(apresentacao)
         return render(request, self.template_name, {
             'pedido': pedido,
             'itens': itens,
+            'apresentacoes_por_produto': apresentacoes_por_produto,
             'adicionar_item_form': AdicionarItemForm(filial=request.filial_ativa) if pedido.status == 'rascunho' else None,
             'cancelar_form': CancelarPedidoForm() if pedido.pode_cancelar else None,
             'devolver_form': DevolverPedidoForm() if pedido.status == 'faturado' else None,
@@ -261,10 +270,16 @@ class DevolverPedidoView(PermissaoRequiredMixin, View):
                 qtd = 0
             if qtd > 0:
                 retornar = request.POST.get(f'item_{item.pk}_retornar') == 'on'
+                apresentacao_id = request.POST.get(f'item_{item.pk}_apresentacao', '').strip()
+                apresentacao = (
+                    ProdutoApresentacao.objects.filter(pk=apresentacao_id).first()
+                    if apresentacao_id else None
+                )
                 itens_devolvidos.append({
                     'item_pedido_id': item.pk,
                     'quantidade': qtd,
                     'retornar_ao_estoque': retornar,
+                    'apresentacao': apresentacao,
                 })
 
         if not itens_devolvidos:
