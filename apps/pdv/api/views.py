@@ -64,6 +64,7 @@ from apps.produtos.services.conversao import quantizar
 
 from .permissions import TemPermissaoPDV
 from .serializers import VendaCreateInputSerializer, VendaPDVSerializer
+from .throttling import ThrottleVendaPDV
 
 
 def _sessao_aberta(request, filial):
@@ -129,6 +130,7 @@ class VendaCreateView(APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [TemPermissaoPDV]
     permissao_acao = 'criar'
+    throttle_classes = [ThrottleVendaPDV]
 
     def get_exception_handler(self):
         return formatar_erros_api

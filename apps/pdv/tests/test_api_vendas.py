@@ -2,7 +2,8 @@
 import json
 from decimal import Decimal
 
-from django.test import TestCase
+from django.core.cache import cache
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
@@ -252,3 +253,46 @@ class ApiVendaPDVIdempotenciaTests(ApiVendaPDVBase):
         self.assertEqual(primeira.status_code, 201)
         self.assertEqual(segunda.status_code, 201)
         self.assertNotEqual(primeira.data['id'], segunda.data['id'])
+
+
+@override_settings(PDV_VENDA_RATE_LIMIT=2)
+class ApiVendaPDVThrottlingTests(ApiVendaPDVBase):
+    """Fase 18: throttling dedicado em POST /vendas/."""
+
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+
+    def test_throttle_bloqueia_apos_o_limite(self):
+        self.abastecer('10')
+        payload = {
+            'itens': [{'produto_id': self.produto.pk, 'quantidade': '1'}],
+            'pagamentos': [{'forma_id': self.forma_dinheiro.pk, 'valor': '10.00'}],
+        }
+        self.assertEqual(self.criar_venda(payload).status_code, 201)
+        self.assertEqual(self.criar_venda(payload).status_code, 201)
+        terceira = self.criar_venda(payload)
+        self.assertEqual(terceira.status_code, 429)
+
+    def test_throttle_e_por_usuario_nao_global(self):
+        self.abastecer('10')
+        payload = {
+            'itens': [{'produto_id': self.produto.pk, 'quantidade': '1'}],
+            'pagamentos': [{'forma_id': self.forma_dinheiro.pk, 'valor': '10.00'}],
+        }
+        self.assertEqual(self.criar_venda(payload).status_code, 201)
+        self.assertEqual(self.criar_venda(payload).status_code, 201)
+        self.assertEqual(self.criar_venda(payload).status_code, 429)
+
+        outro_perfil = PerfilAcesso.objects.create(empresa=self.empresa, nome='Admin 2', is_admin=True)
+        outro_usuario = Usuario.objects.create_user(
+            email='outro-caixa-throttle@inoovated.com', nome='Outro Operador', password='teste1234',
+            empresa=self.empresa, filial=self.filial, perfil=outro_perfil,
+        )
+        SessaoPDV.objects.create(
+            filial=self.filial, caixa=self.caixa_pdv, usuario=outro_usuario,
+            valor_abertura=Decimal('0'), status='aberto',
+        )
+        self.client.force_login(outro_usuario)
+        # Usuario diferente, cota propria -- nao afetado pelo throttle do primeiro.
+        self.assertEqual(self.criar_venda(payload).status_code, 201)
