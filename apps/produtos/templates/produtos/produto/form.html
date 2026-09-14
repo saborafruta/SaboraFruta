@@ -29,7 +29,7 @@
   }
   .produto-page { color: #e5e7eb; }
   body.tema-claro .produto-page { color: #0f172a; }
-  .produto-shell { max-width: 1480px; margin: 0 auto; }
+  .produto-shell { max-width: min(1800px, 96vw); margin: 0 auto; }
   .produto-back { color: #60a5fa; font-weight: 700; font-size: .92rem; display: inline-flex; gap: .35rem; align-items: center; }
   body.tema-claro .produto-back { color: #fb6b2f; }
   .produto-title { font-size: clamp(1.45rem, 1.8vw, 1.95rem); font-weight: 800; letter-spacing: 0; margin-top: .45rem; }
@@ -148,6 +148,8 @@
   }
   body.tema-claro .produto-alert.error-alert .pending-fields { color: #b91c1c; }
   .produto-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; }
+  .produto-apresentacoes-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr); gap: .75rem; align-items: start; }
+  @media (max-width: 1180px) { .produto-apresentacoes-layout { grid-template-columns: minmax(0, 1fr); } }
   .produto-card {
     background: #242426; border: 1px solid rgba(148,163,184,.18); border-radius: 10px;
     padding: .82rem; box-shadow: 0 1px 3px rgba(0,0,0,.14);
@@ -964,13 +966,13 @@
     </section>
 
     <section x-show="step === 8" class="produto-grid" x-cloak>
-      <div class="space-y-4">
-        {% if not produto %}
-          <div class="produto-empty-state">
-            Salve o produto primeiro (etapa 1 já cadastra o básico) para poder cadastrar apresentações
-            como "Caixa 1.000" ou "Pacote 500".
-          </div>
-        {% else %}
+      {% if not produto %}
+        <div class="produto-empty-state">
+          Salve o produto primeiro (etapa 1 já cadastra o básico) para poder cadastrar apresentações
+          como "Caixa 1.000" ou "Pacote 500".
+        </div>
+      {% else %}
+        <div class="produto-apresentacoes-layout">
           <div class="produto-card">
             <h3 class="produto-card-title"><span>#</span> Apresentações cadastradas</h3>
             {% if apresentacoes %}
@@ -1060,6 +1062,11 @@
               <span>#</span>
               {% if apresentacao_editando %}Editar apresentação "{{ apresentacao_editando.descricao }}"{% else %}Nova apresentação{% endif %}
             </h3>
+            <p class="produto-help mb-3">
+              Cada apresentação é salva na hora, assim que você clica em
+              {% if apresentacao_editando %}"Salvar apresentação"{% else %}"Adicionar apresentação"{% endif %}
+              — não precisa clicar em "Salvar produto" pra isso.
+            </p>
             <form
               method="post"
               action="{% if apresentacao_editando %}{% url 'produtos:produto-apresentacao-update' produto.pk apresentacao_editando.pk %}{% else %}{% url 'produtos:produto-apresentacao-create' produto.pk %}{% endif %}"
@@ -1092,8 +1099,20 @@
               </div>
             </form>
           </div>
-        {% endif %}
-      </div>
+        </div>
+
+        <div class="produto-footer" style="margin-top:.75rem;">
+          <div class="produto-footer-stage">
+            <strong>Concluir cadastro do produto</strong>
+          </div>
+          <div class="actions flex flex-wrap justify-end gap-3">
+            <button type="submit" class="produto-btn primary" :disabled="loading">
+              <span x-show="!loading">Salvar produto</span>
+              <span x-show="loading" x-cloak>Salvando...</span>
+            </button>
+          </div>
+        </div>
+      {% endif %}
     </section>
 
     <div class="produto-footer">
@@ -1108,15 +1127,16 @@
       <div class="actions flex flex-wrap justify-end gap-3">
         <button type="button" class="produto-btn secondary" x-show="step > 1" @click="previous()">Etapa anterior</button>
         <a href="{{ cancel_url }}" class="produto-btn secondary" x-show="step === 1">Sair</a>
-        <button type="button" class="produto-btn primary" x-show="step < steps.length" @click="next()">Proximo</button>
-        <button type="submit" class="produto-btn primary" x-show="step < steps.length" :disabled="loading">
+        <button type="button" class="produto-btn primary" x-show="step < 7" @click="next()">Proximo</button>
+        <button type="submit" class="produto-btn primary" x-show="step < 7" :disabled="loading">
           <span x-show="!loading">{{ submit_text|default:"Salvar produto" }}</span>
           <span x-show="loading" x-cloak>Salvando...</span>
         </button>
-        <button type="submit" class="produto-btn primary" x-show="step === steps.length" :disabled="loading">
+        <button type="submit" class="produto-btn primary" x-show="step === 7" :disabled="loading">
           <span x-show="!loading">{{ submit_text|default:"Salvar produto" }}</span>
           <span x-show="loading" x-cloak>Salvando...</span>
         </button>
+        <button type="button" class="produto-btn secondary" x-show="step === 8" @click="step = 7">Ver dados do produto</button>
       </div>
     </div>
   </form>
