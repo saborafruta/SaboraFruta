@@ -22,6 +22,7 @@ from apps.core.constants.tributacao import (
 )
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.request_scope import usuario_operacional
 from apps.produtos.models import Produto
 
 
@@ -93,7 +94,7 @@ class CotacaoCompraNovaView(PermissaoRequiredMixin, View):
             dados = json.loads(request.POST.get('payload') or '{}')
             cotacao = CotacaoCompraService.criar_e_analisar(
                 filial=request.filial_ativa,
-                usuario=request.user,
+                usuario=usuario_operacional(request, obrigatorio=True),
                 dados=dados,
                 pode_editar_fornecedor=request.user.tem_permissao('cadastros', 'editar'),
                 pode_criar_fornecedor=request.user.tem_permissao('cadastros', 'criar'),

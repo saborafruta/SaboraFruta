@@ -1,6 +1,8 @@
 from datetime import date, datetime
 from decimal import Decimal
+from unittest.mock import patch
 
+from django.contrib.messages.storage.fallback import FallbackStorage
 from django.test import RequestFactory, TestCase
 from django.utils import timezone
 
@@ -115,6 +117,33 @@ class CotacaoCompraTests(TestCase):
         self.assertContains(response, 'Simples Nacional Híbrido')
         self.assertContains(response, '.dark .cotacao-manual')
         self.assertContains(response, 'cotacao-manual-registration')
+
+    def test_salvar_cotacao_resolve_usuario_do_banco_operacional(self):
+        request = self.factory.post(
+            '/compras/cotacoes/nova/',
+            {'payload': '{}'},
+        )
+        request.user = self.usuario
+        request.filial_ativa = self.filial
+        request.session = {}
+        request._messages = FallbackStorage(request)
+
+        with (
+            patch(
+                'apps.compras.views.cotacao.usuario_operacional',
+                return_value=self.usuario,
+            ) as resolver,
+            patch.object(
+                CotacaoCompraService,
+                'criar_e_analisar',
+                return_value=type('CotacaoSalva', (), {'pk': 123})(),
+            ) as criar,
+        ):
+            response = CotacaoCompraNovaView.as_view()(request)
+
+        self.assertEqual(response.status_code, 302)
+        resolver.assert_called_once_with(request, obrigatorio=True)
+        self.assertIs(criar.call_args.kwargs['usuario'], self.usuario)
 
     def test_regime_hibrido_normaliza_simples_com_ibs_cbs_regular(self):
         dados = self._payload()
