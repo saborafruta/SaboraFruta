@@ -24,7 +24,6 @@ urlpatterns = [
     path('dashboard-equalizacao/', views.DashboardEqualizacaoView.as_view(), name='dashboard-equalizacao'),
     path('mapa-estoque/', views.MapaEstoqueView.as_view(), name='mapa-estoque'),
     path('central-equalizacao/', views.CentralEqualizacaoView.as_view(), name='central-equalizacao'),
-    path('recomendacoes/', views.RecomendacoesTransferenciaView.as_view(), name='recomendacoes-transferencia'),
     path('movimentacoes/', views.MovimentacaoListView.as_view(), name='movimentacao-list'),
 
     # Operacoes
