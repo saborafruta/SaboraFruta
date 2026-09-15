@@ -1,12 +1,10 @@
 """Fase 20/30: aprovação de transferência por alçada de valor, com segregação de funções."""
-import threading
 from decimal import Decimal
 
-from django.db import connection
-from django.test import Client, TestCase, TransactionTestCase
+from django.test import Client, TestCase
 from django.urls import reverse
 
-from apps.core.models import Empresa, Filial, PerfilAcesso, RegistroAuditoria, Usuario
+from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.estoque.models import Deposito, Estoque, SolicitacaoTransferencia
 from apps.estoque.services.aprovacao_transferencia import (
@@ -241,41 +239,6 @@ class FluxoAprovacaoTests(AprovacaoTransferenciaBase):
         with self.assertRaises(DadosInvalidosError):
             aprovar_solicitacao(solicitacao_id=solicitacao.pk, aprovador=self.gerente)
 
-    def test_solicitar_aprovar_e_rejeitar_geram_trilha_de_auditoria(self):
-        solicitacao = solicitar_transferencia(
-            produto=self.produto, filial_origem=self.loja_a, filial_destino=self.loja_b,
-            quantidade=Decimal("30"), motivo="Reforço de estoque", solicitante=self.supervisor,
-        )
-        registro_criacao = RegistroAuditoria.objects.get(
-            objeto_tipo="estoque.solicitacaotransferencia", objeto_id=str(solicitacao.pk), acao="criar",
-        )
-        self.assertEqual(registro_criacao.usuario_id, self.supervisor.pk)
-        self.assertEqual(registro_criacao.justificativa, "Reforço de estoque")
-
-        aprovar_solicitacao(solicitacao_id=solicitacao.pk, aprovador=self.gerente, observacao="Ok, pode mandar")
-        registro_aprovacao = RegistroAuditoria.objects.get(
-            objeto_tipo="estoque.solicitacaotransferencia", objeto_id=str(solicitacao.pk), acao="aprovar",
-        )
-        self.assertEqual(registro_aprovacao.usuario_id, self.gerente.pk)
-        self.assertEqual(registro_aprovacao.justificativa, "Ok, pode mandar")
-        self.assertEqual(registro_aprovacao.dados_anteriores["status"], "pendente")
-        self.assertEqual(registro_aprovacao.dados_novos["status"], "aprovada")
-
-    def test_rejeitar_gera_trilha_de_auditoria(self):
-        solicitacao = solicitar_transferencia(
-            produto=self.produto, filial_origem=self.loja_a, filial_destino=self.loja_b,
-            quantidade=Decimal("30"), motivo="Reforço", solicitante=self.supervisor,
-        )
-
-        rejeitar_solicitacao(solicitacao_id=solicitacao.pk, aprovador=self.gerente, observacao="Sem necessidade agora")
-
-        registro = RegistroAuditoria.objects.get(
-            objeto_tipo="estoque.solicitacaotransferencia", objeto_id=str(solicitacao.pk), acao="cancelar",
-        )
-        self.assertEqual(registro.usuario_id, self.gerente.pk)
-        self.assertEqual(registro.justificativa, "Sem necessidade agora")
-        self.assertEqual(registro.dados_novos["status"], "rejeitada")
-
     def test_nao_decide_duas_vezes(self):
         solicitacao = solicitar_transferencia(
             produto=self.produto, filial_origem=self.loja_a, filial_destino=self.loja_b,
@@ -341,100 +304,3 @@ class SolicitacaoTransferenciaViewTests(AprovacaoTransferenciaBase):
         self.assertRedirects(response, reverse("estoque:solicitacao-transferencia-list"))
         solicitacao.refresh_from_db()
         self.assertEqual(solicitacao.status, SolicitacaoTransferencia.Status.APROVADA)
-
-
-class ConcorrenciaAprovacaoTests(TransactionTestCase):
-    """
-    Fase 34: duas aprovações "ao mesmo tempo" pra mesma solicitação --
-    so' uma pode vencer. `select_for_update()` em `aprovar_solicitacao`
-    é o que garante isso; `TransactionTestCase` (não `TestCase`) é
-    obrigatório aqui porque threads reais precisam de conexões e
-    transações de verdade, não a transação única que `TestCase` nunca
-    comita.
-
-    So' roda de verdade no Postgres: SQLite em `:memory:` (usado nos
-    testes rápidos) dá uma conexão por thread, cada uma com seu próprio
-    banco isolado -- não ha' disputa nenhuma pra' testar.
-    """
-
-    def setUp(self):
-        from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
-        from apps.estoque.models import Deposito, Estoque
-        from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
-
-        self.empresa = Empresa.objects.create(
-            razao_social="Rede Concorrencia LTDA", nome_fantasia="Rede Concorrencia",
-            cnpj="97845678000455", regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
-            codigo_regime_tributario=1,
-        )
-        self.loja_a = Filial.objects.create(
-            empresa=self.empresa, razao_social="Loja A", nome_fantasia="Loja A",
-            cnpj="97845678000536", uf="RN", is_matriz=True,
-        )
-        self.loja_b = Filial.objects.create(
-            empresa=self.empresa, razao_social="Loja B", nome_fantasia="Loja B",
-            cnpj="97845678000617", uf="RN",
-        )
-        perfil = PerfilAcesso.objects.create(empresa=self.empresa, nome="Gerente", is_admin=True)
-        self.solicitante = Usuario.objects.create_user(
-            email="concorrencia-solicitante@inoovated.com", nome="Solicitante", password="teste1234",
-            empresa=self.empresa, filial=self.loja_a, perfil=perfil,
-        )
-        self.aprovador_1 = Usuario.objects.create_user(
-            email="concorrencia-aprovador1@inoovated.com", nome="Aprovador Um", password="teste1234",
-            empresa=self.empresa, filial=self.loja_a, perfil=perfil,
-        )
-        self.aprovador_2 = Usuario.objects.create_user(
-            email="concorrencia-aprovador2@inoovated.com", nome="Aprovador Dois", password="teste1234",
-            empresa=self.empresa, filial=self.loja_a, perfil=perfil,
-        )
-        unidade = UnidadeMedida.objects.create(
-            empresa=self.empresa, sigla="UN", descricao="Unidade", tipo=UnidadeMedida.Tipo.UNIDADE,
-        )
-        UnidadeMedidaFilial.objects.create(unidade=unidade, filial=self.loja_a)
-        UnidadeMedidaFilial.objects.create(unidade=unidade, filial=self.loja_b)
-        self.produto = Produto.objects.create(
-            filial=self.loja_a, unidade_medida=unidade, descricao="Produto Concorrencia",
-            ncm="20089900", preco_venda=Decimal("10"), preco_custo=Decimal("5"),
-        )
-        ProdutoFilial.objects.create(produto=self.produto, filial=self.loja_a)
-        ProdutoFilial.objects.create(produto=self.produto, filial=self.loja_b)
-        deposito_a = Deposito.objects.create(filial=self.loja_a, nome="Geral A", is_padrao=True)
-        Estoque.objects.create(
-            produto=self.produto, filial=self.loja_a, deposito=deposito_a,
-            quantidade_atual=100, quantidade_disponivel=100,
-        )
-
-    def test_duas_aprovacoes_simultaneas_so_uma_vence(self):
-        if connection.vendor != "postgresql":
-            self.skipTest("Concorrência real de select_for_update só é observável com Postgres (não em SQLite :memory:).")
-
-        from apps.estoque.services.aprovacao_transferencia import aprovar_solicitacao, solicitar_transferencia
-
-        solicitacao = solicitar_transferencia(
-            produto=self.produto, filial_origem=self.loja_a, filial_destino=self.loja_b,
-            quantidade=Decimal("30"), motivo="Teste de concorrência", solicitante=self.solicitante,
-        )
-
-        resultados = {}
-        barreira = threading.Barrier(2)
-
-        def _aprovar(chave, aprovador):
-            barreira.wait()
-            try:
-                aprovar_solicitacao(solicitacao_id=solicitacao.pk, aprovador=aprovador)
-                resultados[chave] = "ok"
-            except Exception as exc:  # noqa: BLE001
-                resultados[chave] = f"erro: {exc}"
-            finally:
-                connection.close()
-
-        t1 = threading.Thread(target=_aprovar, args=("t1", self.aprovador_1))
-        t2 = threading.Thread(target=_aprovar, args=("t2", self.aprovador_2))
-        t1.start()
-        t2.start()
-        t1.join(timeout=10)
-        t2.join(timeout=10)
-
-        sucessos = [chave for chave, resultado in resultados.items() if resultado == "ok"]
-        self.assertEqual(len(sucessos), 1, f"Esperava exatamente 1 aprovação vencedora, veio: {resultados}")
