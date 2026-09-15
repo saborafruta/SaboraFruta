@@ -13,7 +13,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("estoque", "0021_nivelaprovacaotransferencia_solicitacaotransferencia_and_more"),
+        ("estoque", "0016_deposito_tipos_material"),
         ("produtos", "0039_apresentacao_filial_e_preco"),
     ]
 

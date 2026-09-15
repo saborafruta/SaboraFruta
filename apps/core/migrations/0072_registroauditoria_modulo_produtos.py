@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("core", "0071_perfilacesso_alcada_transferencia_and_more"),
+        ("core", "0070_parametrossistema_checkout_busca_nome_senha"),
     ]
 
     operations = [

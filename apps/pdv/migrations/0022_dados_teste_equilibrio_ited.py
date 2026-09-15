@@ -340,7 +340,7 @@ def semear_equilibrio_ited(apps, schema_editor):
 class Migration(migrations.Migration):
     dependencies = [
         ("core", "0070_parametrossistema_checkout_busca_nome_senha"),
-        ("estoque", "0019_conferenciatransferencia_etapa"),
+        ("estoque", "0022_movimentacao_apresentacao"),
         ("financeiro", "0067_reaplicar_data_entradas_manuais"),
         ("produtos", "0031_produto_tempo_preparo_minutos"),
         ("pdv", "0021_venda_pdv_viagem"),
