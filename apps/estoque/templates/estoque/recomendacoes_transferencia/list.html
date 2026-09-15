@@ -96,9 +96,8 @@
               <span class="eq-badge" style="{% if r.prioridade_label == 'Alta' %}background:#fee2e2;color:#b91c1c;{% elif r.prioridade_label == 'Média' %}background:#fef3c7;color:#92400e;{% else %}background:#dcfce7;color:#166534;{% endif %}">{{ r.prioridade_label }}</span>
             </td>
             <td class="px-3 py-3">{{ r.status_label }}</td>
-            <td class="px-3 py-3 whitespace-nowrap">
-              <button type="button" class="btn-secondary text-xs" @click="aberto = !aberto">Por que essa transferência?</button>
-              <a class="btn-secondary text-xs" href="{% url 'estoque:simulador-transferencia' %}?produto={{ r.produto.pk }}&origem={{ r.origem.pk }}&destino={{ r.destino.pk }}&quantidade={{ r.quantidade|stringformat:'s' }}">Simular</a>
+            <td class="px-3 py-3">
+              <button type="button" class="btn-secondary text-xs whitespace-nowrap" @click="aberto = !aberto">Por que essa transferência?</button>
             </td>
           </tr>
           <tr x-show="aberto" style="display:none;">
