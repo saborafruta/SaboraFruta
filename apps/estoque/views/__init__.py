@@ -19,7 +19,6 @@ from .alerta import AlertaListView
 from .desperdicio import DesperdicioDashboardView
 from .sugestao_compras import SugestaoComprasView
 from .equilibrio_estoque import EquilibrioEstoqueView
-from .analise_estoque import CurvaAbcGiroView, ProdutosExcessoView
 from .outras_movimentacoes import (
     OutrasMovimentacoesHubView, DevolucaoClienteView, DevolucaoFornecedorView, SaidaEspecialView,
     FornecedorSearchJsonView, ProdutoEstoqueSearchJsonView,
@@ -49,8 +48,6 @@ __all__ = [
     'DesperdicioDashboardView',
     'SugestaoComprasView',
     'EquilibrioEstoqueView',
-    'CurvaAbcGiroView',
-    'ProdutosExcessoView',
     'OutrasMovimentacoesHubView', 'DevolucaoClienteView', 'DevolucaoFornecedorView', 'SaidaEspecialView',
     'FornecedorSearchJsonView', 'ProdutoEstoqueSearchJsonView',
     'ClienteSearchJsonView', 'LoteSearchJsonView', 'VendaDevolucaoJsonView', 'DevolucaoClienteApiView',
