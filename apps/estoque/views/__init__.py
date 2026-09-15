@@ -29,7 +29,6 @@ from .mapa_estoque import MapaEstoqueView
 from .central_equalizacao import CentralEqualizacaoView
 from .recomendacoes_transferencia import RecomendacoesTransferenciaView
 from .simulador_transferencia import SimuladorTransferenciaView
-from .demanda_inteligente import ConfiguracaoDemandaPonderadaView, DemandaInteligenteView
 from .outras_movimentacoes import (
     OutrasMovimentacoesHubView, DevolucaoClienteView, DevolucaoFornecedorView, SaidaEspecialView,
     FornecedorSearchJsonView, ProdutoEstoqueSearchJsonView,
@@ -69,8 +68,6 @@ __all__ = [
     'CentralEqualizacaoView',
     'RecomendacoesTransferenciaView',
     'SimuladorTransferenciaView',
-    'ConfiguracaoDemandaPonderadaView',
-    'DemandaInteligenteView',
     'OutrasMovimentacoesHubView', 'DevolucaoClienteView', 'DevolucaoFornecedorView', 'SaidaEspecialView',
     'FornecedorSearchJsonView', 'ProdutoEstoqueSearchJsonView',
     'ClienteSearchJsonView', 'LoteSearchJsonView', 'VendaDevolucaoJsonView', 'DevolucaoClienteApiView',
