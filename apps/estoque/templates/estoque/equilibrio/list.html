@@ -118,9 +118,6 @@
               {% if item.destino_a_caminho %}
               <div class="text-xs" :style="temaClaro ? 'color:#0369a1;' : 'color:#7dd3fc;'">Já tem {{ item.destino_a_caminho|floatformat:3 }} a caminho por compra em aberto</div>
               {% endif %}
-              {% if item.lead_time_maior_que_cobertura %}
-              <div class="text-xs" :style="temaClaro ? 'color:#7c3aed;' : 'color:#c4b5fd;'">Meta usa {{ item.dias_meta }} dias — o fornecedor deste produto demora mais que a cobertura escolhida no filtro</div>
-              {% endif %}
             </div>
           </div>
 
