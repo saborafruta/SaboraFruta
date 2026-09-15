@@ -7,7 +7,6 @@ from .conferencia_transferencia import (
     ConferenciaTransferencia, ItemConferenciaTransferencia,
 )
 from .faixa_cobertura import FaixaCoberturaEstoque
-from .configuracao_abc import ConfiguracaoAbcEstoque
 
 __all__ = [
     'LoteProduto',
@@ -17,5 +16,4 @@ __all__ = [
     'Inventario', 'ItemInventario',
     'ConferenciaTransferencia', 'ItemConferenciaTransferencia',
     'FaixaCoberturaEstoque',
-    'ConfiguracaoAbcEstoque',
 ]

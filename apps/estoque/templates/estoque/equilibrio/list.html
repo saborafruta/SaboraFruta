@@ -38,24 +38,8 @@
         </p>
       </div>
     </div>
-    <div class="flex flex-col gap-2 shrink-0">
-      <a href="{% url 'estoque:faixa-cobertura-list' %}" class="btn-secondary whitespace-nowrap">Faixas de cobertura</a>
-      <a href="{% url 'estoque:configuracao-abc' %}" class="btn-secondary whitespace-nowrap">Meta por curva ABC</a>
-    </div>
+    <a href="{% url 'estoque:faixa-cobertura-list' %}" class="btn-secondary whitespace-nowrap">Faixas de cobertura</a>
   </div>
-
-  {% if alertas_fefo %}
-  <div class="rounded-xl p-4" style="border:1px solid rgba(220,38,38,.35);background:rgba(220,38,38,.08);">
-    <div class="font-semibold flex items-center gap-2" style="color:#b91c1c;">
-      <span>⏳</span> {{ alertas_fefo|length }} produto{{ alertas_fefo|pluralize }} próximo{{ alertas_fefo|pluralize }} do vencimento — avaliar transferência
-    </div>
-    <ul class="text-sm mt-2 space-y-1" :style="temaClaro ? 'color:#7f1d1d;' : 'color:#fca5a5;'">
-      {% for alerta in alertas_fefo %}
-        <li>{{ alerta.produto.descricao }}: vence em {{ alerta.origem_lote_dias_vencer }} dia{{ alerta.origem_lote_dias_vencer|pluralize }} na {{ alerta.origem.nome_fantasia|default:alerta.origem.razao_social }} — {{ alerta.destino.nome_fantasia|default:alerta.destino.razao_social }} precisa de {{ alerta.quantidade|floatformat:3 }}.</li>
-      {% endfor %}
-    </ul>
-  </div>
-  {% endif %}
 
   <form method="get" class="card p-4">
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3 items-end">
@@ -121,7 +105,6 @@
               {% if item.destino_sem_estoque %}<span class="eq-badge eq-critical">Sem estoque no destino</span>{% endif %}
               {% if item.produto_parado_origem %}<span class="eq-badge eq-warning">Parado na origem</span>{% endif %}
               {% if item.destino_pedido_pendente %}<span class="eq-badge eq-warning">Pedido pendente no destino</span>{% endif %}
-              {% if item.alerta_fefo %}<span class="eq-badge eq-critical" title="{{ item.alerta_fefo }}">⏳ Vencimento próximo</span>{% endif %}
             </div>
             <h3 class="font-semibold truncate" title="{{ item.produto.descricao }}">{{ item.produto.descricao }}</h3>
             <div class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">

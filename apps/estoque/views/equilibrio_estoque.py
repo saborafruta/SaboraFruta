@@ -60,6 +60,5 @@ class EquilibrioEstoqueView(PermissaoRequiredMixin, View):
             "filiais_criticas": len({item["destino"].pk for item in sugestoes}),
             "filial_ativa_id": getattr(request, "filial_ativa", None).pk if getattr(request, "filial_ativa", None) else None,
             "permissoes_estoque": permissoes_estoque(request),
-            "alertas_fefo": [item for item in sugestoes if item["origem_lote_dias_vencer"] is not None],
         }
         return render(request, self.template_name, contexto)

@@ -11,25 +11,6 @@ class ConferenciaTransferencia(TimestampedModel):
         COM_DIVERGENCIA = 'com_divergencia', 'Conferida com divergencia'
         CANCELADA = 'cancelada', 'Cancelada'
 
-    class Etapa(models.TextChoices):
-        """
-        Esteira de acompanhamento visual da transferência (rastreamento
-        apenas -- não é um gate sobre o estoque). Quando este registro é
-        criado, `transferir_entre_filiais` já moveu a mercadoria (saída da
-        origem + entrada no destino na mesma chamada), então a etapa nasce
-        em APROVADA, pulando RASCUNHO/SUGERIDA/AGUARDANDO_APROVACAO -- elas
-        existem no enum para reporting futuro, mas nenhum fluxo hoje as usa.
-        """
-        RASCUNHO = 'rascunho', 'Rascunho'
-        SUGERIDA = 'sugerida', 'Sugerida'
-        AGUARDANDO_APROVACAO = 'aguardando_aprovacao', 'Aguardando aprovação'
-        APROVADA = 'aprovada', 'Aprovada'
-        SEPARANDO = 'separando', 'Separando'
-        EXPEDIDA = 'expedida', 'Expedida'
-        EM_TRANSITO = 'em_transito', 'Em trânsito'
-        RECEBIDA = 'recebida', 'Recebida'
-        CANCELADA = 'cancelada', 'Cancelada'
-
     documento_numero = models.CharField(max_length=20, unique=True)
     filial_origem = models.ForeignKey(
         'core.Filial',
@@ -45,12 +26,6 @@ class ConferenciaTransferencia(TimestampedModel):
         max_length=24,
         choices=Status.choices,
         default=Status.AGUARDANDO,
-        db_index=True,
-    )
-    etapa = models.CharField(
-        max_length=24,
-        choices=Etapa.choices,
-        default=Etapa.APROVADA,
         db_index=True,
     )
     observacao_origem = models.TextField(blank=True)

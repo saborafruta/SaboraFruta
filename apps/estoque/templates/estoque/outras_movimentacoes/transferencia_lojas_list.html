@@ -72,9 +72,6 @@
               {{ item.conferencia.status_label }}
             </span>
             {% if item.conferencia.observacao %}<p class="text-xs mt-2">{{ item.conferencia.observacao }}</p>{% endif %}
-            {% if item.conferencia.etapa_label %}
-            <p class="text-xs mt-2" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">Etapa: <span class="font-semibold">{{ item.conferencia.etapa_label }}</span></p>
-            {% endif %}
           </div>
           {% endif %}
         </div>
@@ -143,9 +140,6 @@
         {% if item.nota.pdf_danfe_url %}<a class="btn-secondary text-xs" href="{{ item.nota.pdf_danfe_url }}" target="_blank" rel="noopener">Ver nota</a>{% endif %}
         {% if item.mdfe %}<a class="btn-secondary text-xs" href="{{ item.mdfe.url }}">Abrir MDF-e</a>{% endif %}
         {% if item.conferencia %}<a class="btn-secondary text-xs" href="{{ item.conferencia.log_url }}">Historico</a>{% endif %}
-        {% if item.conferencia.proxima_etapa and not item.cancelada %}
-        <button type="button" class="btn-secondary text-xs" @click="avancarEtapa({{ item.conferencia.id }}, '{{ item.conferencia.proxima_etapa }}')">Marcar como {{ item.conferencia.proxima_etapa_label }}</button>
-        {% endif %}
         {% if item.pode_reativar_transferencia %}<button type="button" class="btn-primary text-xs" @click="reativarTransferencia('{{ item.chave|escapejs }}')">Reativar transferência</button>{% endif %}
         {% if item.pode_cancelar_nota %}<button type="button" class="btn-secondary text-xs" @click="cancelarNfe('{{ item.chave|escapejs }}')">Cancelar NF-e</button>{% endif %}
         {% if item.pode_cancelar_transferencia %}<button type="button" class="btn-secondary text-xs" @click="cancelarTransferencia('{{ item.chave|escapejs }}')">Cancelar transferência</button>{% endif %}
@@ -235,12 +229,6 @@ async function reativarTransferencia(chave) {
   if (!confirm('Reativar esta transferência e aplicar novamente a saída e a entrada no estoque?')) return;
   try {
     await enviar('{% url "estoque:transferencia-lojas-reativar" %}', {documento_numero: chave});
-    location.reload();
-  } catch (error) { alert(error.message); }
-}
-async function avancarEtapa(conferenciaId, etapa) {
-  try {
-    await enviar('{% url "estoque:transferencia-lojas-avancar-etapa" %}', {conferencia_id: conferenciaId, etapa});
     location.reload();
   } catch (error) { alert(error.message); }
 }

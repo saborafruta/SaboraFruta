@@ -52,9 +52,6 @@
                     style="{% if conferencia.status == 'aguardando' %}background:#fef3c7;color:#92400e;{% elif conferencia.status == 'conferida' %}background:#dcfce7;color:#166534;{% elif conferencia.status == 'com_divergencia' %}background:#fee2e2;color:#991b1b;{% else %}background:#e2e8f0;color:#334155;{% endif %}">
                 {{ conferencia.get_status_display }}
               </span>
-              {% if conferencia.status == 'aguardando' %}
-              <span class="badge" style="background:#e0e7ff;color:#3730a3;">{{ conferencia.get_etapa_display }}</span>
-              {% endif %}
             </div>
             <p class="text-sm mt-2" :style="temaClaro ? 'color:#334155;' : 'color:#cbd5e1;'">
               Origem: <strong>{{ conferencia.filial_origem.nome_fantasia|default:conferencia.filial_origem.razao_social }}</strong>
