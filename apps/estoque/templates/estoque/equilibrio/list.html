@@ -15,11 +15,6 @@
     .eq-warning { background:#fef3c7; color:#92400e; }
     .eq-critical { background:#fee2e2; color:#b91c1c; }
     .eq-good { background:#dcfce7; color:#166534; }
-    .eq-score { display:inline-flex; align-items:center; justify-content:center; min-width:2.4rem; border-radius:8px; padding:.15rem .4rem; font-size:.75rem; font-weight:800; background:#ede9fe; color:#6d28d9; }
-    .eq-classe-ruptura, .eq-classe-critico { background:#fee2e2; color:#b91c1c; }
-    .eq-classe-baixo { background:#fef3c7; color:#92400e; }
-    .eq-classe-normal { background:#dbeafe; color:#1d4ed8; }
-    .eq-classe-alto, .eq-classe-excesso { background:#dcfce7; color:#166534; }
     body:not(.tema-claro) .eq-branch { border-color:rgba(148,163,184,.16); }
     body:not(.tema-claro) .eq-arrow { background:#1e3a5f; color:#93c5fd; }
     @media (max-width:720px) {
@@ -28,17 +23,14 @@
     }
   </style>
 
-  <div class="eq-info rounded-xl p-4 flex gap-3 items-start justify-between">
-    <div class="flex gap-3">
-      <div class="text-xl">⚖</div>
-      <div>
-        <div class="font-semibold" :style="temaClaro ? 'color:#1e3a8a;' : 'color:#bfdbfe;'">Como o equilíbrio é calculado</div>
-        <p class="text-sm mt-1" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">
-          O sistema combina estoque disponível, reserva mínima e vendas recentes. A origem só cede o excedente acima de sua própria necessidade; nenhuma transferência é feita automaticamente. As sugestões são ordenadas pelo score de prioridade (0-100).
-        </p>
-      </div>
+  <div class="eq-info rounded-xl p-4 flex gap-3">
+    <div class="text-xl">⚖</div>
+    <div>
+      <div class="font-semibold" :style="temaClaro ? 'color:#1e3a8a;' : 'color:#bfdbfe;'">Como o equilíbrio é calculado</div>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">
+        O sistema combina estoque disponível, reserva mínima e vendas recentes. A origem só cede o excedente acima de sua própria necessidade; nenhuma transferência é feita automaticamente.
+      </p>
     </div>
-    <a href="{% url 'estoque:faixa-cobertura-list' %}" class="btn-secondary whitespace-nowrap">Faixas de cobertura</a>
   </div>
 
   <form method="get" class="card p-4">
@@ -101,10 +93,8 @@
         <div class="flex flex-col xl:flex-row xl:items-center gap-4">
           <div class="xl:w-72 min-w-0">
             <div class="flex flex-wrap gap-2 mb-1">
-              <span class="eq-score" title="Score de prioridade (0-100)">{{ item.score }}</span>
               {% if item.destino_sem_estoque %}<span class="eq-badge eq-critical">Sem estoque no destino</span>{% endif %}
               {% if item.produto_parado_origem %}<span class="eq-badge eq-warning">Parado na origem</span>{% endif %}
-              {% if item.destino_pedido_pendente %}<span class="eq-badge eq-warning">Pedido pendente no destino</span>{% endif %}
             </div>
             <h3 class="font-semibold truncate" title="{{ item.produto.descricao }}">{{ item.produto.descricao }}</h3>
             <div class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
@@ -117,17 +107,14 @@
               <div class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#166534;' : 'color:#86efac;'">Sai de</div>
               <div class="font-semibold truncate">{{ item.origem.nome_fantasia|default:item.origem.razao_social }}</div>
               <div class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo {{ item.origem_saldo|floatformat:3 }} · Vendeu {{ item.origem_vendido|floatformat:3 }}</div>
-              <div class="text-xs">Cobertura: {% if item.origem_cobertura is not None %}{{ item.origem_cobertura }} dias{% else %}sem giro{% endif %} {% if item.origem_classe_label %}<span class="eq-badge eq-classe-{{ item.origem_classe }}">{{ item.origem_classe_label }}</span>{% endif %}</div>
-              {% if item.origem_lote_dias_vencer is not None %}
-              <div class="text-xs" :style="temaClaro ? 'color:#b91c1c;' : 'color:#fca5a5;'">Lote vence em {{ item.origem_lote_dias_vencer }} dia{{ item.origem_lote_dias_vencer|pluralize }} — priorize a saída</div>
-              {% endif %}
+              <div class="text-xs">Cobertura: {% if item.origem_cobertura is not None %}{{ item.origem_cobertura }} dias{% else %}sem giro{% endif %}</div>
             </div>
             <div class="eq-arrow">→</div>
             <div class="eq-branch">
               <div class="text-xs uppercase font-semibold" :style="temaClaro ? 'color:#b91c1c;' : 'color:#fca5a5;'">Vai para</div>
               <div class="font-semibold truncate">{{ item.destino.nome_fantasia|default:item.destino.razao_social }}</div>
               <div class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo {{ item.destino_saldo|floatformat:3 }} · Vendeu {{ item.destino_vendido|floatformat:3 }}</div>
-              <div class="text-xs">Cobertura: {% if item.destino_cobertura is not None %}{{ item.destino_cobertura }} dias{% else %}sem giro{% endif %} · Meta {{ item.destino_meta|floatformat:3 }} {% if item.destino_classe_label %}<span class="eq-badge eq-classe-{{ item.destino_classe }}">{{ item.destino_classe_label }}</span>{% endif %}</div>
+              <div class="text-xs">Cobertura: {% if item.destino_cobertura is not None %}{{ item.destino_cobertura }} dias{% else %}sem giro{% endif %} · Meta {{ item.destino_meta|floatformat:3 }}</div>
               {% if item.destino_a_caminho %}
               <div class="text-xs" :style="temaClaro ? 'color:#0369a1;' : 'color:#7dd3fc;'">Já tem {{ item.destino_a_caminho|floatformat:3 }} a caminho por compra em aberto</div>
               {% endif %}
