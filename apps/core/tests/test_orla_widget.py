@@ -85,6 +85,13 @@ class OrlaWidgetContextTests(SimpleTestCase):
 
         self.assertFalse(widget['enabled'])
 
+    def test_nao_renderiza_na_tela_de_checkout(self):
+        self.request.resolver_match = SimpleNamespace(view_name='pdv:checkout')
+
+        widget = orla_widget_context(self.request)['orla_widget']
+
+        self.assertFalse(widget['enabled'])
+
     @override_settings(ORLA_WIDGET_SIGNING_SECRET='')
     def test_sem_segredo_usa_identidade_anonima_do_widget(self):
         widget = orla_widget_context(self.request)['orla_widget']

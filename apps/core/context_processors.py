@@ -132,6 +132,9 @@ def orla_widget_context(request):
     disabled = {'orla_widget': {'enabled': False}}
     if not orla_widget_host_enabled(request):
         return disabled
+    resolver_match = getattr(request, 'resolver_match', None)
+    if getattr(resolver_match, 'view_name', '') == 'pdv:checkout':
+        return disabled
 
     base_url = str(getattr(settings, 'ORLA_WIDGET_URL', '') or '').rstrip('/')
     public_key = str(getattr(settings, 'ORLA_WIDGET_PUBLIC_KEY', '') or '').strip()
