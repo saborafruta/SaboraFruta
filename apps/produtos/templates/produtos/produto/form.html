@@ -1155,7 +1155,7 @@
       {% endif %}
     </section>
 
-    <div class="produto-footer">
+    <div class="produto-footer" id="produto-tour-footer">
       <div class="flex items-center gap-5">
         <div class="produto-footer-stage">
           <strong>Etapa <span x-text="step"></span> de <span x-text="steps.length"></span></strong>
@@ -1379,7 +1379,7 @@
         { step: 6, target: '#produto-tour-step-6', title: 'Peso / Granel', text: 'So preencha se o produto for vendido por peso, na balanca.' },
         { step: 7, target: '#produto-tour-step-7', title: 'Fisico / Logistica', text: 'Dimensoes, peso e embalagem -- usados no calculo de frete e cubagem.' },
         { step: 8, target: '#produto-tour-step-8', title: 'Apresentacoes', text: 'Depois de salvar o produto, cadastre aqui outras formas de vender/comprar ele -- Caixa 1.000, Pacote 500 etc. Cada apresentacao e salva na hora, sem precisar clicar em "Salvar produto".' },
-        { step: null, target: '.produto-footer', title: 'Pronto!', text: 'Quando terminar, clique em "Salvar produto". Voce pode voltar e completar o resto depois, a qualquer momento.' },
+        { step: 7, target: '#produto-tour-footer', title: 'Pronto!', text: 'Quando terminar, clique em "Salvar produto". Voce pode voltar e completar o resto depois, a qualquer momento -- inclusive as apresentacoes, que ficam disponiveis so depois que o produto for salvo pela primeira vez.' },
       ],
       startTour() {
         this.tourIndex = 0;
