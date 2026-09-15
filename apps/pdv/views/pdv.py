@@ -17,10 +17,14 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 
 from apps.cadastros.models import Cliente
 from apps.core.services.checkout import (
+    autorizar_checkout_desconto,
     autorizar_checkout_busca_nome,
     checkout_busca_nome_liberada,
+    checkout_desconto_liberado,
     checkout_venda_ativo,
+    consumir_checkout_desconto,
     consumir_checkout_busca_nome,
+    encerrar_checkout_desconto,
     encerrar_checkout_busca_nome,
     usuarios_autorizadores_checkout,
     validar_autorizador_checkout_busca_nome,
@@ -215,6 +219,7 @@ def checkout_venda(request):
     # Uma autorização incompleta não deve sobreviver a recarga ou nova entrada
     # na tela. Cada produto por nome exige uma aprovação própria.
     encerrar_checkout_busca_nome(request)
+    encerrar_checkout_desconto(request)
     caixas = list(
         Caixa.objects.for_filial(request.filial_ativa)
         .filter(ativo=True)
@@ -269,6 +274,49 @@ def checkout_liberar_busca_nome(request):
         )
     request.session.pop(chave_tentativas, None)
     autorizar_checkout_busca_nome(request, autorizador)
+    return JsonResponse({'ok': True})
+
+
+@sensitive_variables('senha')
+@requer_permissao('pdv', 'ver')
+@require_POST
+def checkout_liberar_desconto(request):
+    if not checkout_venda_ativo(request):
+        return JsonResponse({'erro': 'Checkout não habilitado para esta filial.'}, status=404)
+    try:
+        dados = json.loads(request.body or b'{}')
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({'erro': 'Dados inválidos.'}, status=400)
+    usuario_id = dados.get('usuario_id')
+    senha = str(dados.get('senha') or '')
+    agora = timezone.now().timestamp()
+    filial_id = getattr(request.filial_ativa, 'cnpj', None) or request.filial_ativa.pk
+    chave_tentativas = f'checkout_desconto_tentativas:{filial_id}'
+    tentativas = request.session.get(chave_tentativas) or {}
+    bloqueado_ate = float(tentativas.get('bloqueado_ate') or 0)
+    if bloqueado_ate > agora:
+        return JsonResponse(
+            {'erro': 'Muitas tentativas. Aguarde um minuto para tentar novamente.'},
+            status=429,
+        )
+    inicio = float(tentativas.get('inicio') or agora)
+    quantidade = int(tentativas.get('quantidade') or 0)
+    if agora - inicio > 60:
+        inicio, quantidade = agora, 0
+    autorizador = validar_autorizador_checkout_busca_nome(request, usuario_id, senha)
+    if autorizador is None:
+        quantidade += 1
+        request.session[chave_tentativas] = {
+            'inicio': inicio,
+            'quantidade': quantidade,
+            'bloqueado_ate': agora + 60 if quantidade >= 5 else 0,
+        }
+        return JsonResponse(
+            {'erro': 'Usuário, senha ou permissão de aprovação inválidos.'},
+            status=403,
+        )
+    request.session.pop(chave_tentativas, None)
+    autorizar_checkout_desconto(request, autorizador)
     return JsonResponse({'ok': True})
 
 
@@ -1367,9 +1415,7 @@ def _resolver_venda_edicao_origem(request, body):
     return venda_antiga
 
 
-@requer_permissao('pdv', 'ver')
-@require_POST
-def api_venda_finalizar(request):
+def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
     try:
         body = json.loads(request.body)
     except json.JSONDecodeError:
@@ -1394,6 +1440,15 @@ def api_venda_finalizar(request):
     bonificacao = bool(body.get("bonificacao", False))
     venda_fora_estabelecimento = bool(body.get("venda_fora_estabelecimento", False))
     viagem_id = body.get("viagem_id")
+
+    if exigir_autorizacao_desconto:
+        if desconto > 0 and not checkout_desconto_liberado(request):
+            return JsonResponse(
+                {"erro": "Autorize o desconto com um usuário que tenha PDV → Aprovar."},
+                status=403,
+            )
+        if desconto <= 0:
+            encerrar_checkout_desconto(request)
 
     try:
         data_venda = _data_venda_retroativa(request, body)
@@ -1436,7 +1491,23 @@ def api_venda_finalizar(request):
     except Exception as exc:
         return JsonResponse({"erro": str(exc)}, status=500)
 
+    if exigir_autorizacao_desconto and desconto > 0:
+        consumir_checkout_desconto(request)
     return JsonResponse({"ok": True, "numero_venda": venda.numero_venda, "venda_id": venda.id})
+
+
+@requer_permissao('pdv', 'ver')
+@require_POST
+def api_venda_finalizar(request):
+    return _api_venda_finalizar(request)
+
+
+@requer_permissao('pdv', 'ver')
+@require_POST
+def api_checkout_venda_finalizar(request):
+    if not checkout_venda_ativo(request):
+        return JsonResponse({"erro": "Checkout não habilitado para esta filial."}, status=404)
+    return _api_venda_finalizar(request, exigir_autorizacao_desconto=True)
 
 
 def _fechar_comanda_origem(comanda_id, request, venda):

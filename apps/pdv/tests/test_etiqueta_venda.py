@@ -103,6 +103,7 @@ class EtiquetaVendaTests(SimpleTestCase):
         self.assertIn('label high-sharpness', html)
         self.assertEqual(html.count(' data-fit-text '), 4)
         self.assertNotIn('class="element message" data-fit-text', html)
+        self.assertNotIn('border-top:.25mm solid #111', html)
         self.assertIn('<span class="message-text">Volte sempre!</span>', html)
         self.assertIn("window.addEventListener('beforeprint', window.fitLabelText)", html)
         self.assertIn('window.printLabel = function ()', html)

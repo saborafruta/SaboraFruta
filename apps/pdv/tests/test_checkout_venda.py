@@ -17,6 +17,9 @@ from apps.core.models import (
     Usuario,
 )
 from apps.core.services.checkout import checkout_venda_ativo
+from apps.financeiro.constants.enums import TipoFormaPagamento
+from apps.financeiro.models import FormaPagamento
+from apps.pdv.models import Caixa, SessaoPDV, VendaPDV
 from apps.produtos.models import (
     Produto,
     ProdutoCodigoBarras,
@@ -207,6 +210,70 @@ class CheckoutVendaTests(TestCase):
         self.assertContains(resposta, '/pdv/venda/0/comprovante/')
         self.assertContains(resposta, 'class="co-table" data-columns="off"')
         self.assertContains(resposta, "scrollIntoView({block:'nearest'})")
+
+    def test_desconto_exige_aprovacao_e_escape_nao_fecha_modal_pos_venda(self):
+        self.habilitar_checkout()
+
+        resposta = self.client.get(reverse('pdv:checkout'))
+
+        self.assertContains(resposta, 'Autorizar desconto')
+        self.assertContains(resposta, 'Exige PDV → Aprovar')
+        self.assertContains(resposta, ':readonly="!descontoLiberado"')
+        self.assertContains(resposta, reverse('pdv:api_checkout_venda_finalizar'))
+        self.assertContains(resposta, "else if(this.modalDocumento)return;")
+        self.assertContains(resposta, "this.mensagemDocumento=label+' emitida com sucesso.';")
+
+    def test_endpoint_do_checkout_bloqueia_desconto_sem_aprovacao_e_consumo_e_unico(self):
+        self.habilitar_checkout()
+        caixa = Caixa.objects.create(filial=self.filial, numero=41, descricao='Checkout 41')
+        SessaoPDV.objects.create(
+            filial=self.filial,
+            caixa=caixa,
+            usuario=self.usuario,
+            valor_abertura=Decimal('0'),
+            status='aberto',
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            descricao='Dinheiro Checkout',
+            tipo=TipoFormaPagamento.DINHEIRO,
+        )
+        payload = {
+            'cliente_id': None,
+            'desconto': '1.00',
+            'acrescimo': 0,
+            'itens': [{
+                'produto_id': self.produto.pk,
+                'quantidade': 1,
+                'valor_unitario': '18.90',
+                'preco_origem_tipo': 'normal',
+                'preco_origem_detalhe': 'Preço normal',
+                'desconto_valor': 0,
+            }],
+            'pagamentos': [{'forma_id': forma.pk, 'valor': '17.90'}],
+        }
+        endpoint = reverse('pdv:api_checkout_venda_finalizar')
+
+        bloqueada = self.client.post(endpoint, data=payload, content_type='application/json')
+        self.assertEqual(bloqueada.status_code, 403, bloqueada.content)
+        self.assertEqual(VendaPDV.objects.count(), 0)
+
+        liberacao = self.client.post(
+            reverse('pdv:api_checkout_liberar_desconto'),
+            data={
+                'usuario_id': f'usuario:{self.supervisor.pk}',
+                'senha': 'Senha-Supervisor-42',
+            },
+            content_type='application/json',
+        )
+        self.assertEqual(liberacao.status_code, 200, liberacao.content)
+
+        finalizada = self.client.post(endpoint, data=payload, content_type='application/json')
+        self.assertEqual(finalizada.status_code, 200, finalizada.content)
+        self.assertEqual(VendaPDV.objects.count(), 1)
+
+        repetida = self.client.post(endpoint, data=payload, content_type='application/json')
+        self.assertEqual(repetida.status_code, 403, repetida.content)
 
     @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do checkout')
     def test_javascript_renderizado_tem_sintaxe_valida(self):

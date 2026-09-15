@@ -25,6 +25,11 @@ urlpatterns = [
         name="api_checkout_liberar_busca_nome",
     ),
     path(
+        "api/checkout/liberar-desconto/",
+        pdv.checkout_liberar_desconto,
+        name="api_checkout_liberar_desconto",
+    ),
+    path(
         "api/checkout/consumir-busca-nome/",
         pdv.checkout_consumir_busca_nome,
         name="api_checkout_consumir_busca_nome",
@@ -46,6 +51,7 @@ urlpatterns = [
     path("api/caixa/fechar/", pdv.api_caixa_fechar, name="api_caixa_fechar"),
     # Vendas
     path("api/venda/finalizar/", pdv.api_venda_finalizar, name="api_venda_finalizar"),
+    path("api/checkout/venda/finalizar/", pdv.api_checkout_venda_finalizar, name="api_checkout_venda_finalizar"),
     path("api/venda/finalizar/forcado/", pdv.api_venda_finalizar_forcado, name="api_venda_finalizar_forcado"),
     path("api/viagens-remessa-aberta/", pdv.api_viagens_remessa_aberta, name="api_viagens_remessa_aberta"),
     path("api/venda/pendente/", pdv.api_venda_pendente, name="api_venda_pendente"),

@@ -8,6 +8,7 @@ from django.views.decorators.debug import sensitive_variables
 
 
 _SESSION_KEY_BUSCA_NOME = 'checkout_busca_nome_autorizacao'
+_SESSION_KEY_DESCONTO = 'checkout_desconto_autorizacao'
 
 
 def _parametros_checkout(request):
@@ -191,6 +192,16 @@ def autorizar_checkout_busca_nome(request, autorizador) -> None:
     }
 
 
+def autorizar_checkout_desconto(request, autorizador) -> None:
+    """Autoriza um desconto na venda atual do checkout."""
+    request.session[_SESSION_KEY_DESCONTO] = {
+        'escopo': _escopo_busca_nome(request),
+        'usuario_id': autorizador.pk,
+        'banco': autorizador._state.db or DEFAULT_DB_ALIAS,
+        'versao': _versao_senha(autorizador.password),
+    }
+
+
 def checkout_busca_nome_liberada(request) -> bool:
     """Confirma a autorização de uso único vinculada à filial e à senha atual."""
     autorizacao = request.session.get(_SESSION_KEY_BUSCA_NOME) or {}
@@ -216,9 +227,39 @@ def checkout_busca_nome_liberada(request) -> bool:
     return liberada
 
 
+def checkout_desconto_liberado(request) -> bool:
+    """Confirma a aprovação de desconto vinculada à filial e à senha atual."""
+    autorizacao = request.session.get(_SESSION_KEY_DESCONTO) or {}
+    if autorizacao.get('escopo') != _escopo_busca_nome(request):
+        return False
+    from apps.core.models import Usuario
+
+    banco = autorizacao.get('banco') or _banco_operacional(request)
+    if banco not in {DEFAULT_DB_ALIAS, _banco_operacional(request)}:
+        request.session.pop(_SESSION_KEY_DESCONTO, None)
+        return False
+    autorizador = (
+        Usuario.objects.using(banco).select_related('perfil')
+        .filter(pk=autorizacao.get('usuario_id'), ativo=True)
+        .first()
+    )
+    liberada = bool(
+        _autorizador_elegivel(request, autorizador)
+        and autorizacao.get('versao') == _versao_senha(autorizador.password)
+    )
+    if not liberada:
+        request.session.pop(_SESSION_KEY_DESCONTO, None)
+    return liberada
+
+
 def encerrar_checkout_busca_nome(request) -> None:
     """Revoga qualquer autorização ainda não consumida."""
     request.session.pop(_SESSION_KEY_BUSCA_NOME, None)
+
+
+def encerrar_checkout_desconto(request) -> None:
+    """Revoga a aprovação de desconto da venda atual."""
+    request.session.pop(_SESSION_KEY_DESCONTO, None)
 
 
 def consumir_checkout_busca_nome(request) -> bool:
@@ -226,4 +267,12 @@ def consumir_checkout_busca_nome(request) -> bool:
     if not checkout_busca_nome_liberada(request):
         return False
     encerrar_checkout_busca_nome(request)
+    return True
+
+
+def consumir_checkout_desconto(request) -> bool:
+    """Consome a aprovação quando o checkout finaliza uma venda com desconto."""
+    if not checkout_desconto_liberado(request):
+        return False
+    encerrar_checkout_desconto(request)
     return True
