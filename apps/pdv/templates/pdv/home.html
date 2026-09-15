@@ -405,6 +405,7 @@
     cursor:pointer; font-family:inherit; transition:.15s;
   }
   .impr-skip:hover { background:var(--pdv-hover2); color:var(--pdv-t1); border-color:var(--pdv-bd); }
+  .impr-skip kbd { margin-right:8px; padding:2px 6px; border:1px solid var(--pdv-bd4); border-bottom-width:2px; border-radius:5px; font-size:9px; }
   .impr-badge {
     font-size:9px; font-weight:700; padding:2px 7px;
     border-radius:5px; margin-left:auto; flex-shrink:0; white-space:nowrap;
@@ -3696,7 +3697,7 @@
           <span class="impr-badge" style="background:#064e3b;color:#34d399;">Fiscal</span>
         </button>
 
-        <button class="impr-opt" @click="emitirDocumento('nfse', vendaFinalizadaData.id); fecharModalImpressao()">
+        <button class="impr-opt" @click="emitirDocumento('nfse', vendaFinalizadaData.id)">
           <div class="impr-opt-icon" style="background:linear-gradient(135deg,#1e3a5f,#2563eb);">
             <svg fill="none" stroke="#fff" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
@@ -3727,7 +3728,7 @@
         </button>
         {% endif %}
 
-        <button class="impr-opt" @click="imprimirCupom('termica'); fecharModalImpressao()">
+        <button class="impr-opt" @click="imprimirCupom('termica')">
           <div class="impr-opt-icon" style="background:linear-gradient(135deg,#451a03,#b45309);">
             <svg fill="none" stroke="#fff" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
@@ -3744,7 +3745,7 @@
           Mesmo comprovante, formato de folha A4 -- para quem imprime numa
           impressora de escritorio comum, sem bobina termica na loja.
         {% endcomment %}
-        <button class="impr-opt" @click="imprimirCupom('a4'); fecharModalImpressao()">
+        <button class="impr-opt" @click="imprimirCupom('a4')">
           <div class="impr-opt-icon" style="background:linear-gradient(135deg,#1e1b4b,#4338ca);">
             <svg fill="none" stroke="#fff" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2zm7-16v4a1 1 0 001 1h4"/>
@@ -3773,7 +3774,7 @@
       <!-- Footer -->
       <div class="impr-footer">
         <button class="impr-skip" @click="fecharModalImpressao()">
-          Pular &rarr; Nova Venda
+          <kbd>F10</kbd>Pular &rarr; Nova Venda
         </button>
       </div>
 
@@ -5560,7 +5561,6 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           : 'https://web.whatsapp.com/send?' + params.toString();
         janela.location.replace(url);
         this.toast_('WhatsApp aberto com o link do comprovante. Confira a conversa e envie.','ok');
-        if (!origem) this.fecharModalImpressao();
       } catch (e) {
         if (janela && !janela.closed) janela.close();
         if (e.name !== 'AbortError') this.toast_('Não foi possível preparar o comprovante para WhatsApp.','erro');
@@ -5822,7 +5822,6 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
             this.toast_(`${label} enviada! Status: ${d.status}${detalhe}`, 'ok');
             if (d.pdf_danfe_url) window.open(d.pdf_danfe_url, '_blank');
             this.modalFiscal.show = false;
-            this.fecharModalImpressao();
           }
         } catch { this.toast_(`Erro ao emitir ${label}`, 'erro'); }
         finally { this.modalFiscal.carregando = false; }
@@ -5848,7 +5847,6 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         this.toast_(d.mensagem || 'NFC-e emitida em contingencia.', 'ok');
         if (d.pdf_danfe_url) window.open(d.pdf_danfe_url, '_blank');
         this.modalFiscal.show = false;
-        this.fecharModalImpressao();
       } catch {
         this.modalFiscal.erro = 'Sem comunicacao com o servico fiscal. Tente novamente quando a internet voltar.';
       } finally {
@@ -5874,7 +5872,6 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         this.toast_('Permita popups para imprimir a etiqueta.', 'erro');
         return;
       }
-      this.fecharModalImpressao();
     },
 
     novaVenda() {
@@ -6524,6 +6521,10 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
       this._atalhosRegistrados = true;
       document.addEventListener('keydown', e => {
         if (this.showModalEditarCliente) { this.teclaEdicaoCliente(e); return; }
+        if (this.showModalImpressao) {
+          if (e.key==='F10') { e.preventDefault(); this.fecharModalImpressao(); }
+          return;
+        }
         if (e.key==='F2'&&!e.shiftKey) { e.preventDefault(); document.getElementById('barcode-input')?.focus(); document.getElementById('barcode-input')?.select(); }
         if (e.key==='F2'&&e.shiftKey) { e.preventDefault(); this.buscaAvancada(); }
         if (e.key==='F4') { e.preventDefault(); this.clienteQuery=''; this.clienteFoco=-1; this.showModalCliente=true; this.$nextTick(()=>{ this.$refs.inputCliente?.focus(); this.buscarClientes(''); }); }

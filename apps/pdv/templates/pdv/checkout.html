@@ -224,7 +224,8 @@
           <div class="co-grid" style="margin-top:0">
             <div class="co-field">
               <label for="checkout-desconto">Desconto (F6)</label>
-              <input id="checkout-desconto" x-ref="desconto" class="co-input" type="text" inputmode="decimal" x-model="descontoEntrada" @input="normalizarDesconto()" @keydown.enter.prevent="focarValorPagamento()" placeholder="0,00">
+              <input id="checkout-desconto" x-ref="desconto" class="co-input" type="text" inputmode="decimal" x-model="descontoEntrada" :readonly="!descontoLiberado" @focus="solicitarAutorizacaoDesconto()" @input="normalizarDesconto()" @keydown.enter.prevent="focarValorPagamento()" placeholder="Autorização necessária">
+              <small x-text="descontoLiberado ? 'Desconto autorizado para esta venda' : 'Exige PDV → Aprovar'" :style="descontoLiberado ? 'color:#34d399' : ''"></small>
             </div>
             <div class="co-field">
               <label for="checkout-valor-pagamento">Valor recebido (F8)</label>
@@ -279,6 +280,31 @@
         <button type="button" class="co-btn" @click="fecharSenhaBuscaNome()">Cancelar</button>
         <button type="submit" class="co-btn co-btn-primary" :disabled="liberandoBuscaNome || !usuariosAutorizadores.length" x-text="liberandoBuscaNome ? 'Validando...' : 'Autorizar um item'"></button>
       </div>
+    </form>
+  </div>
+
+  <div class="co-backdrop" x-show="modalSenhaDesconto" x-cloak @click.self="fecharSenhaDesconto()">
+    <form class="co-modal" @submit.prevent="liberarDesconto()" role="dialog" aria-modal="true" aria-labelledby="checkout-senha-desconto-titulo">
+      <h3 id="checkout-senha-desconto-titulo">Autorizar desconto</h3>
+      <p class="co-sub">Selecione um usuário desta filial com a permissão PDV → Aprovar. A liberação vale somente para a venda atual.</p>
+      <div class="co-grid">
+        <div class="co-field" style="grid-column:1/-1">
+          <label for="checkout-usuario-desconto">Usuário autorizador</label>
+          <select id="checkout-usuario-desconto" x-ref="usuarioDesconto" class="co-input" x-model="usuarioDescontoId" autocomplete="username">
+            <option value="">Selecione o usuário</option>
+            <template x-for="usuario in usuariosAutorizadores" :key="usuario.id">
+              <option :value="usuario.id" x-text="usuario.nome + ' · ' + usuario.email"></option>
+            </template>
+          </select>
+        </div>
+        <div class="co-field" style="grid-column:1/-1">
+          <label for="checkout-senha-desconto">Senha</label>
+          <input id="checkout-senha-desconto" x-ref="senhaDesconto" class="co-input" type="password" x-model="senhaDesconto" autocomplete="current-password">
+        </div>
+      </div>
+      <div class="co-alert" x-show="!usuariosAutorizadores.length" x-cloak style="margin-top:12px">Nenhum usuário desta filial possui a permissão PDV → Aprovar.</div>
+      <div class="co-alert" x-show="erroSenhaDesconto" x-text="erroSenhaDesconto" x-cloak style="margin-top:12px"></div>
+      <div class="co-modal-actions"><button type="button" class="co-btn" @click="fecharSenhaDesconto()">Cancelar</button><button type="submit" class="co-btn co-btn-primary" :disabled="liberandoDesconto || !usuariosAutorizadores.length" x-text="liberandoDesconto ? 'Autorizando...' : 'Autorizar desconto'"></button></div>
     </form>
   </div>
 
@@ -338,6 +364,7 @@ function checkoutVenda() {
     usuariosAutorizadores:JSON.parse(document.getElementById('checkout-autorizadores').textContent),
     busca:'', quantidadeEntrada:'1', buscarPorNome:false, buscando:false, resultados:[], indiceProduto:-1, erroBusca:'', itens:[],
     buscaNomeLiberada:false, modalSenhaBuscaNome:false, usuarioAutorizadorId:'', senhaBuscaNome:'', erroSenhaBuscaNome:'', liberandoBuscaNome:false,
+    descontoLiberado:false, modalSenhaDesconto:false, usuarioDescontoId:'', senhaDesconto:'', erroSenhaDesconto:'', liberandoDesconto:false,
     formasPagamento:[], formaPagamentoId:null, bandeiraPagamento:'', parcelasPagamento:1, cliente:null, buscaCliente:'', clientes:[], indiceCliente:-1,
     descontoEntrada:'', valorPagamentoEntrada:'', valorPagamentoManual:false, mensagem:'', sucesso:false, finalizando:false,
     modalCliente:false, novoCliente:{razao_social:'',cpf_cnpj:'',celular:'',email:'',tipo_pessoa:'F'}, erroCliente:'', salvandoCliente:false,
@@ -374,17 +401,18 @@ function checkoutVenda() {
       if(tecla==='Escape'){
         evento.preventDefault();
         if(this.modalSenhaBuscaNome)this.fecharSenhaBuscaNome();
-        else if(this.modalDocumento)this.fecharDocumento();
+        else if(this.modalSenhaDesconto)this.fecharSenhaDesconto();
+        else if(this.modalDocumento)return;
         else this.fecharModais();
         return;
       }
-      if(this.modalSenhaBuscaNome)return;
+      if(this.modalSenhaBuscaNome || this.modalSenhaDesconto)return;
       if(this.modalDocumento){ this.atalhoDocumento(evento); return; }
       if(this.modalCliente || !this.sessao || this.carregando)return;
       if(tecla==='F2'){ evento.preventDefault(); this.focarProduto(); }
       else if(tecla==='F3'){ evento.preventDefault(); this.focarQuantidade(); }
       else if(tecla==='F4'){ evento.preventDefault(); evento.shiftKey ? this.abrirCadastroCliente() : this.focarCliente(); }
-      else if(tecla==='F6'){ evento.preventDefault(); this.focar('desconto'); }
+      else if(tecla==='F6'){ evento.preventDefault(); this.solicitarAutorizacaoDesconto(); }
       else if(tecla==='F7'){ evento.preventDefault(); this.focarPagamento(); }
       else if(tecla==='F8'){ evento.preventDefault(); this.focarValorPagamento(); }
       else if(tecla==='F10'){ evento.preventDefault(); this.solicitarFinalizacao(); }
@@ -452,6 +480,22 @@ function checkoutVenda() {
     },
     async encerrarBuscaPorNome(){
       try{await fetch('{% url "pdv:api_checkout_encerrar_busca_nome" %}',{method:'POST',headers:{'X-CSRFToken':this.csrf()}});}catch(e){}
+    },
+    solicitarAutorizacaoDesconto(){
+      if(this.descontoLiberado){this.focar('desconto');return;}
+      this.modalSenhaDesconto=true;this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto='';this.focar('usuarioDesconto');
+    },
+    fecharSenhaDesconto(){this.modalSenhaDesconto=false;this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto='';this.focarProduto();},
+    async liberarDesconto(){
+      if(!this.usuarioDescontoId){this.erroSenhaDesconto='Selecione o usuário autorizador.';this.focar('usuarioDesconto');return;}
+      if(!this.senhaDesconto){this.erroSenhaDesconto='Informe a senha do usuário autorizador.';this.focar('senhaDesconto');return;}
+      this.liberandoDesconto=true;this.erroSenhaDesconto='';
+      try{
+        const r=await fetch('{% url "pdv:api_checkout_liberar_desconto" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({usuario_id:this.usuarioDescontoId,senha:this.senhaDesconto})});
+        const d=await r.json();if(!r.ok)throw new Error(d.erro||'Não foi possível autorizar o desconto.');
+        this.descontoLiberado=true;this.modalSenhaDesconto=false;this.usuarioDescontoId='';this.senhaDesconto='';this.focar('desconto');
+      }catch(e){this.erroSenhaDesconto=e.message;this.senhaDesconto='';this.focar('senhaDesconto');}
+      finally{this.liberandoDesconto=false;}
     },
     async selecionarProduto(produto){
       if(!produto.pode_vender){this.adicionarProduto(produto);return;}
@@ -522,11 +566,12 @@ function checkoutVenda() {
       const pagamentos=this.total>0?[{forma_id:this.formaPagamentoId,valor:this.valorPagamento,parcelas:this.parcelasPagamento,bandeira:this.formaCartao?this.bandeiraPagamento:''}]:[];
       const payload={cliente_id:this.cliente?.id||null,desconto:this.desconto,acrescimo:0,itens:this.itens.map(i=>({produto_id:i.id,quantidade:i.quantidade,valor_unitario:i.preco,preco_origem_tipo:i.preco_origem_tipo,preco_origem_detalhe:i.preco_origem_detalhe,desconto_valor:0})),pagamentos};
       try{
-        const r=await fetch('{% url "pdv:api_venda_finalizar" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify(payload)});
-        const d=await r.json(); if(!r.ok)throw new Error(d.erro||'Não foi possível finalizar a venda.');
+        const r=await fetch('{% url "pdv:api_checkout_venda_finalizar" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify(payload)});
+        const d=await r.json();
+        if(!r.ok){if(r.status===403 && this.desconto>0){this.descontoLiberado=false;this.modalSenhaDesconto=true;this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto=d.erro||'Autorize o desconto novamente.';this.focar('usuarioDesconto');}throw new Error(d.erro||'Não foi possível finalizar a venda.');}
         this.sucesso=true; this.mensagem='Venda #'+String(d.numero_venda).padStart(6,'0')+' finalizada com sucesso.';
         this.vendaFinalizada={id:d.venda_id||d.id||null,numero:d.numero_venda};
-        this.itens=[]; this.quantidadeEntrada='1'; this.descontoEntrada=''; this.valorPagamentoEntrada=''; this.valorPagamentoManual=false;
+        this.itens=[]; this.quantidadeEntrada='1'; this.descontoEntrada=''; this.descontoLiberado=false; this.valorPagamentoEntrada=''; this.valorPagamentoManual=false;
         this.formaPagamentoId=null; this.bandeiraPagamento=''; this.parcelasPagamento=1; this.cliente=null; this.busca='';
         this.mensagemDocumento=''; this.modalDocumento=true; this.focar('imprimirComprovante');
       }catch(e){this.mensagem=e.message;}finally{this.finalizando=false;}
@@ -537,21 +582,18 @@ function checkoutVenda() {
       if(!url){this.mensagemDocumento='Não foi possível identificar a venda finalizada.';return;}
       const janela=window.open(url+(imprimir?'?auto=1':''),'_blank','width=620,height=760,scrollbars=yes');
       if(!janela){this.mensagemDocumento='Permita pop-ups para abrir a impressão.';return;}
-      this.fecharDocumento();
     },
     baixarComprovante(){
       const url=this.urlVenda("{% url 'pdv:comprovante_venda_pdf' 0 %}");
       if(!url){this.mensagemDocumento='Não foi possível identificar a venda finalizada.';return;}
       const janela=window.open(url,'_blank');
       if(!janela){this.mensagemDocumento='Permita pop-ups para baixar o PDF.';return;}
-      this.fecharDocumento();
     },
     imprimirEtiqueta(){
       const url=this.urlVenda("{% url 'pdv:etiqueta_venda' 0 %}");
       if(!url){this.mensagemDocumento='Não foi possível identificar a venda finalizada.';return;}
       const janela=window.open(url+'?auto=1','_blank','width=760,height=720,scrollbars=yes');
       if(!janela){this.mensagemDocumento='Permita pop-ups para imprimir a etiqueta.';return;}
-      this.fecharDocumento();
     },
     async emitirFiscal(tipo){
       if(this.processandoDocumento)return;
@@ -575,7 +617,7 @@ function checkoutVenda() {
         if(!resposta.ok||dados.erro)throw new Error(dados.erro||dados.mensagem||'Falha na emissão fiscal.');
         if(dados.pdf_danfe_url)janela.location.replace(dados.pdf_danfe_url);
         else { janela.document.write('<p>Documento emitido com sucesso. O DANFE ainda não está disponível.</p>'); janela.document.close(); }
-        this.fecharDocumento();
+        this.mensagemDocumento=label+' emitida com sucesso.';
       }catch(e){ if(!janela.closed)janela.close(); this.mensagemDocumento='Erro ao emitir '+label+': '+e.message; }
       finally{this.processandoDocumento=false;}
     },

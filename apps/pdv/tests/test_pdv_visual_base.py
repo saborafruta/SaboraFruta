@@ -6,6 +6,16 @@ from django.test import SimpleTestCase
 
 
 class PDVVisualBaseTests(SimpleTestCase):
+    def test_modal_pos_venda_permanece_aberto_ate_pular_com_f10(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+
+        self.assertIn('<kbd>F10</kbd>Pular &rarr; Nova Venda', template)
+        self.assertIn("if (e.key==='F10') { e.preventDefault(); this.fecharModalImpressao(); }", template)
+        self.assertIn("if (this.showModalImpressao) {", template)
+        self.assertNotIn("imprimirCupom('termica'); fecharModalImpressao()", template)
+        self.assertNotIn("imprimirCupom('a4'); fecharModalImpressao()", template)
+        self.assertNotIn("if (!origem) this.fecharModalImpressao();", template)
+
     def test_descontos_sincronizados_e_botao_remover_com_temas(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
         for field in ['Desconto do item em percentual', 'Desconto do item em reais', 'Desconto geral em percentual', 'Desconto geral em reais']:
