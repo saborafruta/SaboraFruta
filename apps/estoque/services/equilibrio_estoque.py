@@ -93,15 +93,7 @@ def _score_prioridade(
         pontos += 10
     if produto.controla_lote and lote_dias_vencer is not None and lote_dias_vencer <= (produto.dias_aviso_vencimento or 0):
         pontos += 5
-    # Compra em aberto ja' cobrindo parte do deficit desta filial: quanto
-    # mais dela resolvida pela compra, menor a urgencia de tambem puxar
-    # de outra filial -- ate' 15 pontos a menos, proporcional a fatia
-    # coberta (se a compra sozinha ja resolvesse tudo, nao haveria
-    # sugestao aqui pra comecar, entao a fatia nunca chega a 100%).
-    if destino["deficit_bruto"] > ZERO and destino["a_caminho"] > ZERO:
-        fatia_coberta = min(destino["a_caminho"], destino["deficit_bruto"]) / destino["deficit_bruto"]
-        pontos -= int((fatia_coberta * Decimal("15")).to_integral_value())
-    return max(0, min(100, pontos))
+    return min(100, pontos)
 
 
 def calcular_equilibrio(
@@ -201,23 +193,6 @@ def calcular_equilibrio(
     ):
         a_caminho[(row["produto_id"], row["pedido__filial_id"])] += _decimal(row["pendente"])
 
-    # Data mais proxima entre as compras em aberto -- usada pra mostrar
-    # "chega em X" na sugestao e pra pesar a prioridade (compra que chega
-    # logo pesa mais contra a transferencia do que uma sem previsao).
-    previsao_recebimento = {}
-    for produto_id, filial_id_compra, data_prevista in (
-        ItemPedidoCompra.objects.filter(
-            produto_id__in=produto_ids, pedido__filial_id__in=filial_ids,
-            pedido__data_entrega_prevista__isnull=False,
-        )
-        .exclude(pedido__status__in=STATUS_COMPRA_ENCERRADA)
-        .values_list("produto_id", "pedido__filial_id", "pedido__data_entrega_prevista")
-    ):
-        chave = (produto_id, filial_id_compra)
-        atual = previsao_recebimento.get(chave)
-        if atual is None or data_prevista < atual:
-            previsao_recebimento[chave] = data_prevista
-
     # Produtos com controle de lote/validade: soma so' o que esta em lote
     # ATIVO e nao vencido (o que pode de fato sair pra outra filial) e o
     # menor "dias para vencer" entre esses lotes (usado no score -- lote
@@ -294,7 +269,6 @@ def calcular_equilibrio(
                 "demanda_diaria": demanda_diaria,
                 "reserva": reserva,
                 "a_caminho": a_caminho[(produto.pk, filial_id)],
-                "previsao_recebimento": previsao_recebimento.get((produto.pk, filial_id)),
                 "cobertura": cobertura,
             })
 
@@ -323,10 +297,7 @@ def calcular_equilibrio(
             # O que ja esta a caminho cobre parte (ou tudo) do deficit antes
             # de qualquer sugestao nova -- nao conta pro excedente, porque
             # essa mercadoria ainda nao chegou e nao pode ser reenviada.
-            # Guarda o deficit ANTES de descontar a_caminho pra medir, no
-            # score, o quanto a compra em aberto ja resolveu sozinha.
-            item["deficit_bruto"] = max(ZERO, item["meta"] - item["saldo"])
-            item["deficit"] = max(ZERO, item["deficit_bruto"] - item["a_caminho"])
+            item["deficit"] = max(ZERO, item["meta"] - item["saldo"] - item["a_caminho"])
             item["excedente"] = max(ZERO, item["saldo_transferivel"] - item["meta"])
             item["classe"] = classificar_cobertura(item["cobertura"], faixa)
 
@@ -390,7 +361,6 @@ def calcular_equilibrio(
                     "destino_classe_label": CLASSE_LABEL.get(destino["classe"], ""),
                     "destino_meta": destino["meta"].quantize(Decimal("0.001")),
                     "destino_a_caminho": destino["a_caminho"],
-                    "destino_previsao_recebimento": destino["previsao_recebimento"],
                     "dias_meta": dias_meta,
                     "lead_time_maior_que_cobertura": produto.lead_time_reposicao_dias > dias_cobertura,
                     "produto_parado_origem": origem["vendido"] == ZERO,

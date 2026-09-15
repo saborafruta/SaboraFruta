@@ -149,7 +149,7 @@
               <div class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Saldo {{ item.destino_saldo|floatformat:3 }} · Vendeu {{ item.destino_vendido|floatformat:3 }}</div>
               <div class="text-xs">Cobertura: {% if item.destino_cobertura is not None %}{{ item.destino_cobertura }} dias{% else %}sem giro{% endif %} · Meta {{ item.destino_meta|floatformat:3 }} {% if item.destino_classe_label %}<span class="eq-badge eq-classe-{{ item.destino_classe }}">{{ item.destino_classe_label }}</span>{% endif %}</div>
               {% if item.destino_a_caminho %}
-              <div class="text-xs" :style="temaClaro ? 'color:#0369a1;' : 'color:#7dd3fc;'">Já tem {{ item.destino_a_caminho|floatformat:3 }} a caminho por compra em aberto{% if item.destino_previsao_recebimento %} — previsão {{ item.destino_previsao_recebimento|date:"d/m" }}{% endif %}</div>
+              <div class="text-xs" :style="temaClaro ? 'color:#0369a1;' : 'color:#7dd3fc;'">Já tem {{ item.destino_a_caminho|floatformat:3 }} a caminho por compra em aberto</div>
               {% endif %}
               {% if item.lead_time_maior_que_cobertura %}
               <div class="text-xs" :style="temaClaro ? 'color:#7c3aed;' : 'color:#c4b5fd;'">Meta usa {{ item.dias_meta }} dias — o fornecedor deste produto demora mais que a cobertura escolhida no filtro</div>
