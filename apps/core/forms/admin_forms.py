@@ -745,7 +745,7 @@ class UsuarioAdminForm(forms.ModelForm):
                 defaults={
                     'perfil': perfil,
                     'ativo': True,
-                    'is_padrao': filial and filial_item.pk == filial.pk,
+                    'is_padrao': bool(filial and filial_item.pk == filial.pk),
                 },
             )
 

@@ -47,6 +47,7 @@ from apps.core.services.empresa_banco_service import EmpresaBancoService
 from apps.core.services.separacao_filial_service import (
     SeparacaoFilialError, SeparacaoFilialService,
 )
+from apps.core.tenant_context import get_current_database_alias
 from apps.core.views.audit import core_log_context
 from apps.core.views._admin import admin_area_required, superuser_required
 from apps.produtos.services.replicacao_service import ReplicacaoProdutoService
@@ -1194,7 +1195,8 @@ def usuario_form(request, pk=None):
         super_admin_context=super_admin_context,
     )
     if request.method == 'POST' and form.is_valid():
-        obj = form.save()
+        with transaction.atomic(using=get_current_database_alias()):
+            obj = form.save()
         action = 'atualizado' if usuario else 'cadastrado'
         messages.success(request, f'Usuario {action}: {obj.nome}.')
         return redirect(_central_redirect(request, 'core:admin_usuario_list'))

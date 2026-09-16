@@ -1,20 +1,36 @@
 .sidebar-menu-search {
+  --sidebar-search-shelf: rgba(255, 255, 255, 0.96);
   position: sticky;
-  top: 0;
-  z-index: 25;
-  margin: 2px 4px 10px;
-  padding: 2px 0;
+  top: -1px;
+  z-index: 30;
+  margin: 0 -4px 8px;
+  padding: 8px 8px 10px;
+  border-bottom: 1px solid transparent;
+  background: var(--sidebar-search-shelf);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.sidebar-menu-search.is-stuck {
+  border-bottom-color: rgba(148, 163, 184, 0.18);
+  box-shadow: 0 14px 22px -22px rgba(15, 23, 42, 0.72);
 }
 .sidebar-menu-search-field {
   display: flex;
   align-items: center;
   gap: 7px;
-  min-height: 40px;
+  min-height: 36px;
   padding: 0 9px;
   border: 1px solid rgba(148, 163, 184, 0.34);
-  border-radius: 10px;
+  border-radius: 9px;
+  background: rgba(248, 250, 252, 0.86);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+.sidebar-menu-search-field:focus-within {
+  border-color: #3b82f6;
   background: #fff;
-  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
 }
 .sidebar-menu-search-field > svg {
   width: 17px;
@@ -72,6 +88,16 @@ html.tema-escuro .system-nav-drawer .sidebar-menu-search-results {
   border-color: rgba(148, 163, 184, 0.2);
   background: #202023;
 }
+body:not(.tema-claro) .sidebar-menu-search,
+html.tema-escuro .system-nav-drawer .sidebar-menu-search {
+  --sidebar-search-shelf: rgba(24, 24, 27, 0.96);
+}
+body:not(.tema-claro) .sidebar-menu-search-field:focus-within,
+html.tema-escuro .system-nav-drawer .sidebar-menu-search-field:focus-within {
+  border-color: #60a5fa;
+  background: #202023;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.14);
+}
 body:not(.tema-claro) .sidebar-menu-search-field input,
 html.tema-escuro .system-nav-drawer .sidebar-menu-search-field input { color:#f8fafc; }
 body:not(.tema-claro) .sidebar-menu-search-results a,
@@ -82,6 +108,7 @@ html.tema-escuro .system-nav-drawer .sidebar-menu-search-results a:hover,
 html.tema-escuro .system-nav-drawer .sidebar-menu-search-results a.is-selected { background:#1e3a5f; color:#bfdbfe; }
 html.tema-claro .system-nav-drawer .sidebar-menu-search-field,
 html.tema-claro .system-nav-drawer .sidebar-menu-search-results { background:#fff; }
+html.tema-claro .system-nav-drawer .sidebar-menu-search { --sidebar-search-shelf: rgba(255,255,255,0.96); }
 html.tema-claro .system-nav-drawer .sidebar-menu-search-field input { color:#111827; }
 html.tema-claro .system-nav-drawer .sidebar-menu-search-results a { color:#334155; }
 body.sidebar-collapsed .sidebar-desktop .sidebar-menu-search { display:none; }

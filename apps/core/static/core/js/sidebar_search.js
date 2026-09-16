@@ -51,6 +51,12 @@
     var logo = nav.querySelector('.sidebar-branch-logo-card');
     if (logo && logo.nextElementSibling !== box) logo.insertAdjacentElement('afterend', box);
     else if (!logo && nav.firstElementChild !== box) nav.prepend(box);
+    var stickyStart = box.offsetTop;
+    function updateStickyState() {
+      box.classList.toggle('is-stuck', nav.scrollTop >= stickyStart - 1);
+    }
+    nav.addEventListener('scroll', updateStickyState, { passive: true });
+    updateStickyState();
     var input = box.querySelector('[data-sidebar-search-input]');
     var results = box.querySelector('[data-sidebar-search-results]');
     var clear = box.querySelector('[data-sidebar-search-clear]');
