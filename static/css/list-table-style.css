@@ -31,11 +31,8 @@ body:not(.tema-claro) .erp-list-page .table-header {
   font-weight: 700 !important;
   letter-spacing: 0 !important;
   line-height: 1.25 !important;
-  padding-bottom: .72rem !important;
-  padding-top: .72rem !important;
   text-align: center !important;
   text-transform: uppercase !important;
-  vertical-align: middle !important;
 }
 
 .erp-list-page .table-header th,
@@ -43,6 +40,7 @@ body:not(.tema-claro) .erp-list-page .table-header {
   background: var(--erp-list-header-bg) !important;
   border-top: 0 !important;
   border-bottom: 0 !important;
+  vertical-align: middle !important;
 }
 
 .erp-list-page .table-header svg {
@@ -120,17 +118,15 @@ body:not(.tema-claro) .erp-table-sticky-clone {
   font-weight: 700 !important;
   letter-spacing: 0 !important;
   line-height: 1.25 !important;
-  padding-bottom: .72rem !important;
-  padding-top: .72rem !important;
   text-align: center !important;
   text-transform: uppercase !important;
-  vertical-align: middle !important;
-  white-space: normal;
 }
 
 .erp-table-sticky-clone th {
   background: var(--erp-list-header-bg) !important;
   border: 0 !important;
+  vertical-align: middle !important;
+  white-space: normal;
 }
 
 .erp-table-sticky-clone svg {

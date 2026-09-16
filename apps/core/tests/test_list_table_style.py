@@ -26,6 +26,7 @@ class ListTableStyleAssetTests(SimpleTestCase):
         self.assertIn(".erp-list-page .table-header a", css)
         self.assertIn(".erp-list-page .table-header span", css)
         self.assertIn(".erp-table-sticky-clone a", css)
+        self.assertNotIn("padding-bottom: .72rem", css)
 
     def test_sticky_header_is_limited_to_listing_tables(self):
         script = (self.project_dir / "static" / "js" / "list-table-sticky.js").read_text(encoding="utf-8")
@@ -36,3 +37,19 @@ class ListTableStyleAssetTests(SimpleTestCase):
         self.assertIn("aria-hidden", script)
         self.assertIn("erp:table-columns-applied", script)
         self.assertIn("cloneColumns.replaceChildren", script)
+        self.assertIn("copy.style.paddingTop = computed.paddingTop", script)
+
+    def test_product_actions_column_has_no_lateral_shadow(self):
+        template = (
+            self.project_dir
+            / "apps"
+            / "produtos"
+            / "templates"
+            / "produtos"
+            / "produto"
+            / "list.html"
+        ).read_text(encoding="utf-8")
+
+        sticky_rule = template.split('.produto-list-compact th[data-product-column="acoes"],', 1)[1]
+        sticky_rule = sticky_rule.split("}", 1)[0]
+        self.assertIn("box-shadow: none", sticky_rule)

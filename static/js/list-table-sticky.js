@@ -84,7 +84,8 @@
     Array.prototype.slice.call(item.header.children).forEach(function (cell) {
       var copy = cell.cloneNode(true);
       var rect = cell.getBoundingClientRect();
-      var hidden = cell.hidden || getComputedStyle(cell).display === 'none';
+      var computed = getComputedStyle(cell);
+      var hidden = cell.hidden || computed.display === 'none';
       var column = document.createElement('col');
       column.hidden = hidden;
       if (!hidden) column.style.width = rect.width + 'px';
@@ -93,6 +94,10 @@
       copy.style.width = rect.width + 'px';
       copy.style.minWidth = rect.width + 'px';
       copy.style.maxWidth = rect.width + 'px';
+      copy.style.paddingTop = computed.paddingTop;
+      copy.style.paddingRight = computed.paddingRight;
+      copy.style.paddingBottom = computed.paddingBottom;
+      copy.style.paddingLeft = computed.paddingLeft;
       row.appendChild(copy);
     });
     cloneColumns.replaceChildren.apply(cloneColumns, columns);
