@@ -2391,48 +2391,56 @@ class MDFeCreateView(PermissaoRequiredMixin, View):
                 ParametrosSistema,
             )
 
-            with tenant_atomic():
-                parametros, _ = ParametrosSistema.objects.get_or_create(filial=filial)
-                ultimo_numero = (
-                    MDFe.objects.for_filial(filial)
-                    .select_for_update()
-                    .order_by("-numero")
-                    .values_list("numero", flat=True)
-                    .first()
-                ) or 0
-                configuracao, _ = (
-                    ParametroDocumentoFiscal.objects.select_for_update().get_or_create(
-                        parametros=parametros,
-                        tipo_documento=ParametroDocumentoFiscal.TipoDocumento.MDFE,
-                        defaults={
-                            "habilitado": True,
-                            "serie": 1,
-                            "proximo_numero": ultimo_numero + 1,
-                        },
+            try:
+                with tenant_atomic():
+                    parametros, _ = ParametrosSistema.objects.get_or_create(filial=filial)
+                    ultimo_numero = (
+                        MDFe.objects.for_filial(filial)
+                        .select_for_update()
+                        .order_by("-numero")
+                        .values_list("numero", flat=True)
+                        .first()
+                    ) or 0
+                    configuracao, _ = (
+                        ParametroDocumentoFiscal.objects.select_for_update().get_or_create(
+                            parametros=parametros,
+                            tipo_documento=ParametroDocumentoFiscal.TipoDocumento.MDFE,
+                            defaults={
+                                "habilitado": True,
+                                "serie": 1,
+                                "proximo_numero": ultimo_numero + 1,
+                            },
+                        )
                     )
-                )
-                mdfe = form.save(commit=False)
-                mdfe.filial = filial
-                mdfe.viagem = viagem
-                mdfe.responsavel = request.user
-                mdfe.numero = max(configuracao.proximo_numero, ultimo_numero + 1)
-                mdfe.serie = str(configuracao.serie or 1)
-                mdfe.data_encerramento = None
-                mdfe.save()
-                configuracao.proximo_numero = mdfe.numero + 1
-                configuracao.save(update_fields=["proximo_numero", "updated_at"])
+                    mdfe = form.save(commit=False)
+                    mdfe.filial = filial
+                    mdfe.viagem = viagem
+                    mdfe.responsavel = request.user
+                    mdfe.numero = max(configuracao.proximo_numero, ultimo_numero + 1)
+                    mdfe.serie = str(configuracao.serie or 1)
+                    mdfe.data_encerramento = None
+                    mdfe.save()
+                    configuracao.proximo_numero = mdfe.numero + 1
+                    configuracao.save(update_fields=["proximo_numero", "updated_at"])
 
-                if nfe_documento:
-                    _vincular_nfe_ao_mdfe(mdfe, nfe_documento)
-
-            if viagem is not None:
-                LogViagemService.registrar(
-                    viagem, LogViagemService.DOCUMENTO_EMITIDO,
-                    usuario=request.user, documento=mdfe,
-                    motivo=f"MDF-e {mdfe.numero}/{mdfe.serie}",
-                )
-            messages.success(request, f"MDF-e #{mdfe.numero:06d} criado.")
-            return redirect("logistica:mdfe-detail", pk=mdfe.pk)
+                    if nfe_documento:
+                        _vincular_nfe_ao_mdfe(mdfe, nfe_documento)
+            except ValueError as exc:
+                # Mesma NF-e ja' vinculada a outro MDF-e, NF-e de outra
+                # filial etc. -- erro de validacao de negocio, nao de
+                # sistema: o `with tenant_atomic()` ja' desfez a criacao do
+                # MDF-e, entao so' resta mostrar o motivo e devolver o
+                # formulario preenchido pro usuario corrigir.
+                messages.error(request, str(exc))
+            else:
+                if viagem is not None:
+                    LogViagemService.registrar(
+                        viagem, LogViagemService.DOCUMENTO_EMITIDO,
+                        usuario=request.user, documento=mdfe,
+                        motivo=f"MDF-e {mdfe.numero}/{mdfe.serie}",
+                    )
+                messages.success(request, f"MDF-e #{mdfe.numero:06d} criado.")
+                return redirect("logistica:mdfe-detail", pk=mdfe.pk)
         motoristas_json, veiculos_json = _motoristas_veiculos_json(filial)
         return render(request, self.template_name, {
             "title": "Novo MDF-e",
