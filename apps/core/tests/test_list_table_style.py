@@ -23,9 +23,11 @@ class ListTableStyleAssetTests(SimpleTestCase):
         self.assertIn("color: #e5e7eb !important", css)
         self.assertIn("color: #aeb8c7 !important", css)
         self.assertIn("text-transform: uppercase !important", css)
-        self.assertIn(".erp-list-page .table-header a", css)
-        self.assertIn(".erp-list-page .table-header span", css)
-        self.assertIn(".erp-table-sticky-clone a", css)
+        self.assertIn("body.tema-claro .erp-list-page .table-header th", css)
+        self.assertIn("body.tema-claro .erp-list-page .table-header a", css)
+        self.assertIn("body.tema-claro .erp-list-page .table-header span", css)
+        self.assertIn("body.tema-claro .erp-table-sticky-clone th", css)
+        self.assertIn("body.tema-claro .erp-table-sticky-clone a", css)
         self.assertNotIn("padding-bottom: .72rem", css)
 
     def test_sticky_header_is_limited_to_listing_tables(self):
