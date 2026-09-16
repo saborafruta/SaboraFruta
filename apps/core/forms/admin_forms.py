@@ -460,6 +460,8 @@ class UsuarioAdminForm(forms.ModelForm):
         self.scope_filial = scope_filial
         self.super_admin_context = super_admin_context
         self.existing_user = None
+        self.access_groups = []
+        self.central_access_management = False
         self.fields['pin_code'].label = 'PIN do PDV'
         self.fields['pin_code'].help_text = 'Codigo curto usado pelo usuario no PDV, se sua operacao exigir.'
         self.fields['pin_exige_supervisor'].label = 'Exigir supervisor no PDV'
@@ -500,6 +502,11 @@ class UsuarioAdminForm(forms.ModelForm):
             self.fields['is_superuser'].widget = forms.HiddenInput()
 
         if actor and actor.is_superuser and scope_filial:
+            empresas = Empresa.objects.filter(ativo=True).order_by('razao_social')
+            filiais = Filial.objects.filter(
+                ativo=True,
+                empresa__ativo=True,
+            ).select_related('empresa').order_by('empresa__razao_social', 'razao_social')
             self.fields['empresa'].queryset = Empresa.objects.filter(pk=scope_filial.empresa_id)
             self.fields['empresa'].initial = scope_filial.empresa_id
             self.fields['filial'].queryset = Filial.objects.filter(pk=scope_filial.pk)
@@ -508,16 +515,41 @@ class UsuarioAdminForm(forms.ModelForm):
                 empresa_id=scope_filial.empresa_id,
                 ativo=True,
             ).order_by('nome')
-            self.fields['replicar_para_filiais'].queryset = Filial.objects.filter(
-                empresa_id=scope_filial.empresa_id,
-                ativo=True,
-            ).exclude(pk=scope_filial.pk).order_by('razao_social')
+            self.fields['replicar_para_filiais'].queryset = filiais
+            self.fields['replicar_para_filiais'].label = 'Acessos adicionais por empresa'
+            self.fields['replicar_para_filiais'].help_text = (
+                'Cada empresa usa seu proprio perfil. Desmarcar uma filial remove o acesso adicional ao salvar.'
+            )
+            self.central_access_management = True
+            self._configurar_grupos_acesso(empresas, filiais)
             return
 
         if not actor or actor.is_superuser:
-            self.fields['replicar_para_filiais'].queryset = Filial.objects.filter(
+            empresas = Empresa.objects.filter(ativo=True).order_by('razao_social')
+            filiais = Filial.objects.filter(
                 ativo=True,
+                empresa__ativo=True,
             ).select_related('empresa').order_by('empresa__razao_social', 'razao_social')
+            self.fields['empresa'].queryset = empresas
+            self.fields['filial'].queryset = filiais
+            self.fields['perfil'].queryset = PerfilAcesso.objects.filter(
+                ativo=True,
+                empresa__ativo=True,
+            ).select_related('empresa').order_by('empresa__razao_social', 'nome')
+            self.fields['perfil'].label_from_instance = lambda perfil: (
+                f'{perfil.empresa.nome_fantasia or perfil.empresa.razao_social} - {perfil.nome}'
+            )
+            self.fields['empresa'].label = 'Empresa principal'
+            self.fields['filial'].label = 'Filial padrao'
+            self.fields['perfil'].label = 'Perfil padrao'
+            self.fields['replicar_para_filiais'].label = 'Acessos adicionais por empresa'
+            self.fields['replicar_para_filiais'].help_text = (
+                'Cada empresa usa seu proprio perfil. Desmarcar uma filial remove o acesso adicional ao salvar.'
+            )
+            self.fields['replicar_para_filiais'].queryset = filiais
+            self.central_access_management = bool(actor and actor.is_superuser and not scope_filial)
+            if self.central_access_management:
+                self._configurar_grupos_acesso(empresas, filiais)
             return
 
         self.fields.pop('is_staff', None)
@@ -548,6 +580,83 @@ class UsuarioAdminForm(forms.ModelForm):
             empresa_id=actor.empresa_id,
             ativo=True,
         ).exclude(pk=working_filial.pk if working_filial else 0).order_by('razao_social')
+
+    def _configurar_grupos_acesso(self, empresas, filiais):
+        acessos_atuais = {}
+        if self.instance and self.instance.pk:
+            acessos_atuais = {
+                acesso.filial_id: acesso
+                for acesso in self.instance.acessos_filiais.filter(ativo=True).select_related(
+                    'perfil', 'filial__empresa',
+                )
+        }
+
+        if self.is_bound:
+            valores_filiais = (
+                self.data.getlist('replicar_para_filiais')
+                if hasattr(self.data, 'getlist')
+                else self.data.get('replicar_para_filiais', [])
+            )
+            if not isinstance(valores_filiais, (list, tuple)):
+                valores_filiais = [valores_filiais]
+            filiais_selecionadas = {
+                int(value) for value in valores_filiais
+                if str(value).isdigit()
+            }
+        else:
+            filiais_selecionadas = set(acessos_atuais)
+
+        filial_principal_id = self.scope_filial.pk if self.scope_filial else None
+        if self.is_bound:
+            filial_informada = self.data.get('filial')
+            if str(filial_informada).isdigit():
+                filial_principal_id = int(filial_informada)
+        elif not filial_principal_id and self.instance:
+            filial_principal_id = self.instance.filial_id
+        if filial_principal_id:
+            filiais_selecionadas.discard(filial_principal_id)
+        if not self.is_bound:
+            self.initial['replicar_para_filiais'] = list(filiais_selecionadas)
+
+        filiais_por_empresa = {}
+        for filial in filiais:
+            if filial.pk == filial_principal_id:
+                continue
+            filiais_por_empresa.setdefault(filial.empresa_id, []).append(filial)
+
+        for empresa in empresas:
+            filiais_empresa = filiais_por_empresa.get(empresa.pk, [])
+            if not filiais_empresa:
+                continue
+            field_name = f'perfil_empresa_{empresa.pk}'
+            perfis = PerfilAcesso.objects.filter(
+                empresa=empresa,
+                ativo=True,
+            ).order_by('-is_admin', 'nome')
+            initial_perfil = next((
+                acesso.perfil_id for acesso in acessos_atuais.values()
+                if acesso.filial.empresa_id == empresa.pk
+            ), None)
+            if not initial_perfil and self.instance and self.instance.empresa_id == empresa.pk:
+                initial_perfil = self.instance.perfil_id
+            self.fields[field_name] = forms.ModelChoiceField(
+                label='Perfil nesta empresa',
+                queryset=perfis,
+                required=False,
+                initial=initial_perfil,
+                empty_label='Selecione o perfil',
+            )
+            self.access_groups.append({
+                'empresa': empresa,
+                'perfil_field': self[field_name],
+                'filiais': [
+                    {'obj': filial, 'checked': filial.pk in filiais_selecionadas}
+                    for filial in filiais_empresa
+                ],
+                'selected_count': sum(
+                    1 for filial in filiais_empresa if filial.pk in filiais_selecionadas
+                ),
+            })
 
     def clean_cpf(self):
         return _digits(self.cleaned_data.get('cpf'))
@@ -616,9 +725,24 @@ class UsuarioAdminForm(forms.ModelForm):
             cleaned['is_superuser'] = True
             return cleaned
 
+        self.cleaned_access_profiles = {}
         for filial_replicada in filiais_replicadas or []:
-            if perfil and filial_replicada.empresa_id != perfil.empresa_id:
-                raise forms.ValidationError('As filiais replicadas precisam pertencer a empresa do perfil.')
+            if filial and filial_replicada.pk == filial.pk:
+                self.cleaned_access_profiles[filial_replicada.pk] = perfil
+                continue
+            perfil_filial = perfil
+            if self.central_access_management:
+                perfil_filial = cleaned.get(f'perfil_empresa_{filial_replicada.empresa_id}')
+                if not perfil_filial:
+                    self.add_error(
+                        f'perfil_empresa_{filial_replicada.empresa_id}',
+                        'Selecione o perfil para liberar as filiais desta empresa.',
+                    )
+                    continue
+            if perfil_filial and filial_replicada.empresa_id != perfil_filial.empresa_id:
+                raise forms.ValidationError('O perfil de cada acesso precisa pertencer a mesma empresa da filial.')
+            if perfil_filial:
+                self.cleaned_access_profiles[filial_replicada.pk] = perfil_filial
         if perfil and filial and perfil.empresa_id != filial.empresa_id:
             raise forms.ValidationError('Perfil e filial precisam pertencer a mesma empresa.')
         if existing_user:
@@ -627,7 +751,9 @@ class UsuarioAdminForm(forms.ModelForm):
                     raise forms.ValidationError('Este e-mail ja pertence a outro escopo de acesso.')
             if actor and actor.is_superuser and scope_filial and existing_user.empresa_id != scope_filial.empresa_id:
                 raise forms.ValidationError('Este e-mail ja pertence a outra empresa. Use outro e-mail ou ajuste o usuario original.')
-            if perfil and existing_user.empresa_id != perfil.empresa_id:
+            if perfil and existing_user.empresa_id != perfil.empresa_id and not (
+                actor and actor.is_superuser and not scope_filial
+            ):
                 raise forms.ValidationError('O perfil precisa pertencer a empresa original deste usuario.')
         if actor and actor.is_superuser and scope_filial:
             cleaned['empresa'] = scope_filial.empresa
@@ -736,17 +862,25 @@ class UsuarioAdminForm(forms.ModelForm):
             filiais.append(filial)
         filiais.extend(list(self.cleaned_data.get('replicar_para_filiais') or []))
 
+        selected_ids = set()
         for filial_item in filiais:
-            if filial_item.empresa_id != perfil.empresa_id:
+            perfil_item = getattr(self, 'cleaned_access_profiles', {}).get(filial_item.pk, perfil)
+            if filial_item.empresa_id != perfil_item.empresa_id:
                 continue
+            selected_ids.add(filial_item.pk)
             UsuarioFilialAcesso.objects.update_or_create(
                 usuario=usuario,
                 filial=filial_item,
                 defaults={
-                    'perfil': perfil,
+                    'perfil': perfil_item,
                     'ativo': True,
                     'is_padrao': bool(filial and filial_item.pk == filial.pk),
                 },
+            )
+        if self.central_access_management and usuario.pk:
+            usuario.acessos_filiais.exclude(filial_id__in=selected_ids).update(
+                ativo=False,
+                is_padrao=False,
             )
 
 

@@ -171,7 +171,7 @@
         {% endif %}
         {% if form.filial and not form.filial.is_hidden %}
           <div>
-            <label for="{{ form.filial.id_for_label }}" class="form-section-label">Filial padrao</label>
+            <label for="{{ form.filial.id_for_label }}" class="form-section-label">{{ form.filial.label }}</label>
             {{ form.filial|add_class:"form-input" }}
             {% if form.filial.help_text %}<p class="form-section-help">{{ form.filial.help_text }}</p>{% endif %}
             {% if form.filial.errors %}<p class="form-section-error">{{ form.filial.errors|join:", " }}</p>{% endif %}
@@ -179,7 +179,7 @@
         {% endif %}
         {% if form.perfil and not form.perfil.is_hidden %}
           <div>
-            <label for="{{ form.perfil.id_for_label }}" class="form-section-label">Perfil de acesso <span class="text-red-500">*</span></label>
+            <label for="{{ form.perfil.id_for_label }}" class="form-section-label">{{ form.perfil.label }} <span class="text-red-500">*</span></label>
             {{ form.perfil|add_class:"form-input" }}
             {% if form.perfil.errors %}<p class="form-section-error">{{ form.perfil.errors|join:", " }}</p>{% endif %}
           </div>
@@ -194,17 +194,78 @@
         {% if form.replicar_para_filiais and not form.replicar_para_filiais.is_hidden %}
           <div class="lg:col-span-2">
             <label class="form-section-label">{{ form.replicar_para_filiais.label }}</label>
-            <div class="rounded-lg border p-3 max-h-40 overflow-y-auto space-y-2"
-                 :style="temaClaro ? 'border-color:#d1d5db; background:#f9fafb;' : 'border-color:#3f3f46; background:#18181b;'">
-              {% for choice in form.replicar_para_filiais %}
-                <label class="flex items-center gap-2 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
-                  {{ choice.tag }}
-                  <span>{{ choice.choice_label }}</span>
-                </label>
-              {% empty %}
-                <p class="text-sm" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Nenhuma outra filial disponivel.</p>
-              {% endfor %}
-            </div>
+            {% if form.central_access_management %}
+              <div class="mt-2" x-data="{ accessSearch: '' }">
+                <div class="relative">
+                  <svg class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2"
+                       fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"
+                       :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    <circle cx="11" cy="11" r="7" stroke-width="1.7"></circle>
+                    <path stroke-linecap="round" stroke-width="1.7" d="M20 20l-4-4"></path>
+                  </svg>
+                  <input type="search" x-model="accessSearch" autocomplete="off"
+                         placeholder="Buscar empresa por nome ou CNPJ..."
+                         class="form-input h-12 pl-12 pr-10">
+                  <button x-show="accessSearch" x-cloak type="button" @click="accessSearch = ''"
+                          class="absolute right-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center text-lg text-gray-400"
+                          title="Limpar pesquisa" aria-label="Limpar pesquisa">&times;</button>
+                </div>
+                <p class="form-section-help">Digite pelo menos 2 caracteres. Empresas com acesso atual permanecem visiveis.</p>
+
+                <div class="mt-3 overflow-hidden rounded-lg border"
+                     :style="temaClaro ? 'border-color:#d1d5db;' : 'border-color:#3f3f46;'">
+                  {% for grupo in form.access_groups %}
+                    <section class="p-4 {% if not forloop.first %}border-t{% endif %}"
+                             data-company-search="{{ grupo.empresa.nome_fantasia|default:grupo.empresa.razao_social|lower }} {{ grupo.empresa.razao_social|lower }} {{ grupo.empresa.cnpj }}"
+                             x-show="{% if grupo.selected_count %}true || {% endif %}(accessSearch.trim().length >= 2 && $el.dataset.companySearch.includes(accessSearch.trim().toLowerCase()))"
+                             :style="temaClaro ? 'border-color:#e5e7eb; background:#f8fafc;' : 'border-color:#34343a; background:#18181b;'">
+                      <div class="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(240px,0.7fr)] md:items-end">
+                        <div class="min-w-0">
+                          <div class="font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f3f4f6;'">
+                            {{ grupo.empresa.nome_fantasia|default:grupo.empresa.razao_social }}
+                          </div>
+                          <div class="mt-1 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#9ca3af;'">
+                            {% if grupo.filiais|length == 1 %}1 filial disponivel{% else %}{{ grupo.filiais|length }} filiais disponiveis{% endif %}
+                          </div>
+                        </div>
+                        <div>
+                          <label for="{{ grupo.perfil_field.id_for_label }}" class="form-section-label">Perfil nesta empresa</label>
+                          {{ grupo.perfil_field|add_class:"form-input" }}
+                          {% if grupo.perfil_field.errors %}<p class="form-section-error">{{ grupo.perfil_field.errors|join:", " }}</p>{% endif %}
+                        </div>
+                      </div>
+                      <div class="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                        {% for filial_item in grupo.filiais %}
+                          <label class="flex min-w-0 items-start gap-3 rounded-lg border px-3 py-2.5 text-sm"
+                                 :style="temaClaro ? 'border-color:#e2e8f0; background:#fff; color:#374151;' : 'border-color:#34343a; background:#202024; color:#d1d5db;'">
+                            <input type="checkbox" name="replicar_para_filiais" value="{{ filial_item.obj.pk }}"
+                                   class="mt-0.5 h-4 w-4 shrink-0" {% if filial_item.checked %}checked{% endif %}>
+                            <span class="min-w-0">
+                              <span class="block font-medium break-words">{{ filial_item.obj.nome_fantasia|default:filial_item.obj.razao_social }}</span>
+                              <span class="mt-0.5 block text-xs text-gray-400">{{ filial_item.obj.cidade|default:"Cidade nao informada" }}/{{ filial_item.obj.uf }}</span>
+                            </span>
+                          </label>
+                        {% endfor %}
+                      </div>
+                    </section>
+                  {% empty %}
+                    <p class="p-4 text-sm" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Nenhuma outra filial disponivel.</p>
+                  {% endfor %}
+                </div>
+              </div>
+            {% else %}
+              <div class="rounded-lg border p-3 max-h-40 overflow-y-auto space-y-2"
+                   :style="temaClaro ? 'border-color:#d1d5db; background:#f9fafb;' : 'border-color:#3f3f46; background:#18181b;'">
+                {% for choice in form.replicar_para_filiais %}
+                  <label class="flex items-center gap-2 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
+                    {{ choice.tag }}
+                    <span>{{ choice.choice_label }}</span>
+                  </label>
+                {% empty %}
+                  <p class="text-sm" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'">Nenhuma outra filial disponivel.</p>
+                {% endfor %}
+              </div>
+            {% endif %}
             {% if form.replicar_para_filiais.help_text %}<p class="form-section-help">{{ form.replicar_para_filiais.help_text }}</p>{% endif %}
             {% if form.replicar_para_filiais.errors %}<p class="form-section-error">{{ form.replicar_para_filiais.errors|join:", " }}</p>{% endif %}
           </div>
