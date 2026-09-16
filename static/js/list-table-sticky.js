@@ -10,7 +10,7 @@
     clone = document.createElement('div');
     clone.className = 'erp-table-sticky-clone';
     clone.setAttribute('aria-hidden', 'true');
-    clone.innerHTML = '<div class="erp-table-sticky-gap"></div><table><thead></thead></table>';
+    clone.innerHTML = '<div class="erp-table-sticky-gap"></div><table><colgroup></colgroup><thead></thead></table>';
     document.body.appendChild(clone);
     return clone;
   }
@@ -73,20 +73,29 @@
     clone.style.width = (right - left) + 'px';
 
     var cloneTable = clone.querySelector('table');
+    var cloneColumns = clone.querySelector('colgroup');
     var cloneHead = clone.querySelector('thead');
     cloneTable.style.width = tableRect.width + 'px';
     cloneTable.style.marginLeft = (tableRect.left - left) + 'px';
 
     var row = document.createElement('tr');
     row.className = item.header.className;
+    var columns = [];
     Array.prototype.slice.call(item.header.children).forEach(function (cell) {
       var copy = cell.cloneNode(true);
       var rect = cell.getBoundingClientRect();
+      var hidden = cell.hidden || getComputedStyle(cell).display === 'none';
+      var column = document.createElement('col');
+      column.hidden = hidden;
+      if (!hidden) column.style.width = rect.width + 'px';
+      columns.push(column);
+      copy.hidden = hidden;
       copy.style.width = rect.width + 'px';
       copy.style.minWidth = rect.width + 'px';
       copy.style.maxWidth = rect.width + 'px';
       row.appendChild(copy);
     });
+    cloneColumns.replaceChildren.apply(cloneColumns, columns);
     cloneHead.replaceChildren(row);
     clone.classList.add('is-visible');
   }
@@ -144,6 +153,7 @@
     update();
     window.addEventListener('scroll', schedule, { passive: true });
     document.addEventListener('scroll', schedule, { passive: true, capture: true });
+    document.addEventListener('erp:table-columns-applied', schedule);
     window.addEventListener('resize', schedule);
 
     var main = document.querySelector('.app-shell-content main');

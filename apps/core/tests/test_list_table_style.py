@@ -23,6 +23,9 @@ class ListTableStyleAssetTests(SimpleTestCase):
         self.assertIn("color: #e5e7eb !important", css)
         self.assertIn("color: #aeb8c7 !important", css)
         self.assertIn("text-transform: uppercase !important", css)
+        self.assertIn(".erp-list-page .table-header a", css)
+        self.assertIn(".erp-list-page .table-header span", css)
+        self.assertIn(".erp-table-sticky-clone a", css)
 
     def test_sticky_header_is_limited_to_listing_tables(self):
         script = (self.project_dir / "static" / "js" / "list-table-sticky.js").read_text(encoding="utf-8")
@@ -31,3 +34,5 @@ class ListTableStyleAssetTests(SimpleTestCase):
         self.assertIn("[data-no-sticky-table]", script)
         self.assertIn("requestAnimationFrame", script)
         self.assertIn("aria-hidden", script)
+        self.assertIn("erp:table-columns-applied", script)
+        self.assertIn("cloneColumns.replaceChildren", script)
