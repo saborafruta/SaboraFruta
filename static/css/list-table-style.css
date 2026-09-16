@@ -1,0 +1,132 @@
+/* Padrao visual das listagens, adaptado da interface Dev Edu. */
+body {
+  --erp-list-header-bg: #1b326e;
+  --erp-list-header-color: #ffffff;
+  --erp-list-sticky-gap: 6px;
+  --erp-list-page-bg: #1c1c1e;
+}
+
+body.tema-claro {
+  --erp-list-page-bg: #f3f6fb;
+}
+
+.erp-list-page .table-container {
+  border-radius: 18px !important;
+}
+
+.erp-list-page .table-header,
+body.tema-claro .erp-list-page .table-header,
+body:not(.tema-claro) .erp-list-page .table-header {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+.erp-list-page .table-header th,
+.erp-list-page .table-header td {
+  background: var(--erp-list-header-bg) !important;
+  border-top: 0 !important;
+  border-bottom: 0 !important;
+  color: var(--erp-list-header-color) !important;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.25 !important;
+  padding-bottom: .72rem !important;
+  padding-top: .72rem !important;
+  text-align: center !important;
+  text-transform: uppercase !important;
+  vertical-align: middle !important;
+}
+
+.erp-list-page .table-header th:first-child,
+.erp-list-page .table-header td:first-child {
+  border-left: 0 !important;
+  padding-left: 1rem !important;
+}
+
+.erp-list-page .table-header th:last-child,
+.erp-list-page .table-header td:last-child {
+  padding-right: 1rem !important;
+}
+
+body:not(.tema-claro) .erp-list-page .table-container tbody td {
+  color: #e5e7eb !important;
+}
+
+body:not(.tema-claro) .erp-list-page .table-container tbody .text-gray-400,
+body:not(.tema-claro) .erp-list-page .table-container tbody .text-gray-500,
+body:not(.tema-claro) .erp-list-page .table-container tbody .text-gray-600 {
+  color: #aeb8c7 !important;
+}
+
+body.tema-claro .erp-list-page .table-container tbody td {
+  color: #334155 !important;
+}
+
+body.tema-claro .erp-list-page .table-container tbody .text-gray-400,
+body.tema-claro .erp-list-page .table-container tbody .text-gray-500,
+body.tema-claro .erp-list-page .table-container tbody .text-gray-600 {
+  color: #64748b !important;
+}
+
+.erp-table-sticky-clone {
+  background: var(--erp-list-page-bg);
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, .16);
+  display: none;
+  overflow: hidden;
+  pointer-events: none;
+  position: fixed;
+  z-index: 55;
+}
+
+body:not(.tema-claro) .erp-table-sticky-clone {
+  box-shadow: 0 18px 34px rgba(0, 0, 0, .3);
+}
+
+.erp-table-sticky-clone.is-visible {
+  display: block;
+}
+
+.erp-table-sticky-gap {
+  background: var(--erp-list-page-bg);
+  height: var(--erp-list-sticky-gap);
+}
+
+.erp-table-sticky-clone table {
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.erp-table-sticky-clone th {
+  background: var(--erp-list-header-bg) !important;
+  border: 0 !important;
+  color: var(--erp-list-header-color) !important;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.25 !important;
+  padding-bottom: .72rem !important;
+  padding-top: .72rem !important;
+  text-align: center !important;
+  text-transform: uppercase !important;
+  vertical-align: middle !important;
+  white-space: normal;
+}
+
+.erp-table-sticky-clone th:first-child {
+  padding-left: 1rem !important;
+}
+
+.erp-table-sticky-clone th:last-child {
+  padding-right: 1rem !important;
+}
+
+@media (max-width: 767px) {
+  .erp-table-sticky-clone {
+    display: none !important;
+  }
+}
