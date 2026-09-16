@@ -46,8 +46,9 @@ class CategoriaListView(PermissaoRequiredMixin, View):
     template_name = 'produtos/categoria/list.html'
 
     def get(self, request):
+        empresa = request.filial_ativa.empresa
         base_qs = CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-            empresa=request.user.empresa,
+            empresa=empresa,
         )
         busca = request.GET.get('q', '').strip()
         tipo = request.GET.get('tipo', 'categorias')
@@ -88,17 +89,18 @@ class CategoriaCreateView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         tipo = request.GET.get('tipo', 'categoria')
+        empresa = request.filial_ativa.empresa
         initial = {}
         if tipo == 'subcategoria':
             primeira_categoria = CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                empresa=request.user.empresa,
+                empresa=empresa,
                 ativo=True, categoria_pai__isnull=True,
             ).order_by('nome').first()
             if primeira_categoria:
                 initial['categoria_pai'] = primeira_categoria
         return render(request, self.template_name, {
             'form': CategoriaProdutoForm(
-                empresa=request.user.empresa,
+                empresa=empresa,
                 filial=request.filial_ativa,
                 initial=initial,
                 modo=tipo,
@@ -109,22 +111,23 @@ class CategoriaCreateView(PermissaoRequiredMixin, View):
 
     def post(self, request):
         tipo = request.GET.get('tipo', 'categoria')
+        empresa = request.filial_ativa.empresa
         form = CategoriaProdutoForm(
             request.POST,
-            empresa=request.user.empresa,
+            empresa=empresa,
             filial=request.filial_ativa,
             modo=tipo,
         )
         if form.is_valid():
             categoria_pai = None if tipo == 'categoria' else form.cleaned_data.get('categoria_pai')
-            if _duplicidade_categoria(form, request.user.empresa, request.filial_ativa, categoria_pai):
+            if _duplicidade_categoria(form, empresa, request.filial_ativa, categoria_pai):
                 return render(request, self.template_name, {
                     'form': form,
                     'title': 'Nova Subcategoria' if tipo == 'subcategoria' else 'Nova Categoria',
                     'cancel_url': f'{reverse_lazy("produtos:categoria-list")}?tipo={tipo}s' if tipo in ('categoria', 'subcategoria') else reverse_lazy('produtos:categoria-list'),
                 })
             obj = form.save(commit=False)
-            obj.empresa = request.user.empresa
+            obj.empresa = empresa
             obj.filial = request.filial_ativa
             if tipo == 'categoria':
                 obj.categoria_pai = None
@@ -154,14 +157,15 @@ class CategoriaUpdateView(PermissaoRequiredMixin, View):
     template_name = 'produtos/categoria/form.html'
 
     def get(self, request, pk):
+        empresa = request.filial_ativa.empresa
         obj = get_object_or_404(
-            CategoriaProduto.objects.for_filial(request.filial_ativa), pk=pk, empresa=request.user.empresa,
+            CategoriaProduto.objects.for_filial(request.filial_ativa), pk=pk, empresa=empresa,
         )
         modo = 'subcategoria' if obj.categoria_pai_id else 'categoria'
         return render(request, self.template_name, {
             'form': CategoriaProdutoForm(
                 instance=obj,
-                empresa=request.user.empresa,
+                empresa=empresa,
                 filial=request.filial_ativa,
                 modo=modo,
             ),
@@ -170,20 +174,21 @@ class CategoriaUpdateView(PermissaoRequiredMixin, View):
         })
 
     def post(self, request, pk):
+        empresa = request.filial_ativa.empresa
         obj = get_object_or_404(
-            CategoriaProduto.objects.for_filial(request.filial_ativa), pk=pk, empresa=request.user.empresa,
+            CategoriaProduto.objects.for_filial(request.filial_ativa), pk=pk, empresa=empresa,
         )
         modo = 'subcategoria' if obj.categoria_pai_id else 'categoria'
         form = CategoriaProdutoForm(
             request.POST,
             instance=obj,
-            empresa=request.user.empresa,
+            empresa=empresa,
             filial=request.filial_ativa,
             modo=modo,
         )
         if form.is_valid():
             categoria_pai = None if modo == 'categoria' else form.cleaned_data.get('categoria_pai')
-            if _duplicidade_categoria(form, request.user.empresa, request.filial_ativa, categoria_pai, obj):
+            if _duplicidade_categoria(form, empresa, request.filial_ativa, categoria_pai, obj):
                 return render(request, self.template_name, {
                     'form': form,
                     'title': f'Editar â€” {obj}',
