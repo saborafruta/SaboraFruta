@@ -522,7 +522,10 @@ def buscar_produto(request):
         pagina = max(1, int(request.GET.get("pagina", 1)))
     except (TypeError, ValueError):
         pagina = 1
-    tamanho_pagina = 20
+    try:
+        tamanho_pagina = min(200, max(1, int(request.GET.get("tamanho", 20))))
+    except (TypeError, ValueError):
+        tamanho_pagina = 20
     inicio = (pagina - 1) * tamanho_pagina
     fim = inicio + tamanho_pagina
     filial = request.filial_ativa
@@ -618,6 +621,7 @@ def buscar_produto(request):
             "alertas": contrato["alertas"],
             "pode_vender": contrato["pode_vender"],
             "permite_venda_sem_estoque": p.permite_venda_sem_estoque,
+            "linha_id": p.linha_producao_id,
             "linha": p.linha_producao.nome if p.linha_producao else None,
             "icone": p.linha_producao.icone if p.linha_producao else None,
             "cor": p.linha_producao.cor_identificacao if p.linha_producao else None,
@@ -1171,6 +1175,7 @@ def _serializa_produto(
         "bloqueios": contrato["bloqueios"],
         "alertas": contrato["alertas"],
         "pode_vender": contrato["pode_vender"],
+        "linha_id": p.linha_producao_id,
         "linha": p.linha_producao.nome if p.linha_producao else None,
         "icone": p.linha_producao.icone if p.linha_producao else None,
         "cor": p.linha_producao.cor_identificacao if p.linha_producao else None,

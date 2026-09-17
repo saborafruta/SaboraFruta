@@ -119,7 +119,7 @@ class SeletorDeTemaEscuroTests(SimpleTestCase):
         worker = open('static/sw.js', encoding='utf-8').read()
 
         self.assertIn("tailwind-built.css' %}?v=20260917-2", base)
-        self.assertIn("const VERSAO = 'erp-v2'", worker)
+        self.assertIn("const VERSAO = 'erp-v3'", worker)
         self.assertIn('/static/css/tailwind-built.css?v=20260917-2', worker)
 
     def test_regra_documentada_proibe_salto_antes_do_alpine(self):

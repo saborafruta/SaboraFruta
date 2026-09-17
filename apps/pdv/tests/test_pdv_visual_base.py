@@ -227,6 +227,23 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn("navigator.storage.persist()", local_store)
         self.assertIn("indexedDB.open(DB_NAME, DB_VERSION)", local_store)
 
+    def test_pdv_mantem_catalogo_e_fila_offline_com_restricoes(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+        local_store = (Path(__file__).resolve().parents[3] / 'static/js/pdv_local_store.js').read_text(encoding='utf-8')
+        service_worker = (Path(__file__).resolve().parents[3] / 'static/sw.js').read_text(encoding='utf-8')
+
+        self.assertIn("const DB_VERSION = 2", local_store)
+        self.assertIn("const SNAPSHOTS_STORE = 'snapshots'", local_store)
+        self.assertIn("const QUEUE_STORE = 'vendas_pendentes'", local_store)
+        self.assertIn('async enqueueSale(data)', local_store)
+        self.assertIn('async listQueuedSales()', local_store)
+        self.assertIn('async sincronizarCatalogoLocal(estado)', template)
+        self.assertIn('buscarProdutosNoSnapshot(termo, pagina=1)', template)
+        self.assertIn('async sincronizarFilaOffline()', template)
+        self.assertIn("forma.requer_tef", template)
+        self.assertIn("12 * 60 * 60 * 1000", template)
+        self.assertIn("pdv_local_store.js?v=20260917-2", service_worker)
+
     def test_cabecalho_global_preenche_o_canto_sob_a_curva_laranja(self):
         get_template('_base.html')
         base = (Path(__file__).resolve().parents[3] / 'templates' / '_base.html').read_text(

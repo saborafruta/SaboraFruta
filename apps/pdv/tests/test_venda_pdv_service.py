@@ -187,14 +187,18 @@ class VendaPDVServiceTests(TestCase):
 
         primeira = self.client.get(reverse('pdv:api_produtos'), {'q': 'Polo'}).json()
         segunda = self.client.get(reverse('pdv:api_produtos'), {'q': 'Polo', 'pagina': 2}).json()
+        snapshot = self.client.get(reverse('pdv:api_produtos'), {'q': 'Polo', 'tamanho': 200}).json()
 
         self.assertEqual(len(primeira['produtos']), 20)
         self.assertIn('estoque_disponivel', primeira['produtos'][0])
+        self.assertIn('linha_id', primeira['produtos'][0])
         self.assertTrue(primeira['tem_mais'])
         self.assertEqual(primeira['pagina'], 1)
         self.assertEqual(len(segunda['produtos']), 1)
         self.assertFalse(segunda['tem_mais'])
         self.assertEqual(segunda['pagina'], 2)
+        self.assertEqual(len(snapshot['produtos']), 21)
+        self.assertFalse(snapshot['tem_mais'])
         self.assertFalse({item['id'] for item in primeira['produtos']} & {item['id'] for item in segunda['produtos']})
 
     @classmethod

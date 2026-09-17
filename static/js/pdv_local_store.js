@@ -2,9 +2,11 @@
   'use strict';
 
   const DB_NAME = 'saborafruta-pdv-local';
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
   const DRAFTS_STORE = 'rascunhos';
   const META_STORE = 'metadados';
+  const SNAPSHOTS_STORE = 'snapshots';
+  const QUEUE_STORE = 'vendas_pendentes';
 
   function clonePlain(value) {
     return JSON.parse(JSON.stringify(value));
@@ -50,6 +52,13 @@
           if (!db.objectStoreNames.contains(META_STORE)) {
             db.createObjectStore(META_STORE, { keyPath: 'key' });
           }
+          if (!db.objectStoreNames.contains(SNAPSHOTS_STORE)) {
+            db.createObjectStore(SNAPSHOTS_STORE, { keyPath: 'scope' });
+          }
+          if (!db.objectStoreNames.contains(QUEUE_STORE)) {
+            const queue = db.createObjectStore(QUEUE_STORE, { keyPath: 'local_id' });
+            queue.createIndex('scope', 'scope', { unique: false });
+          }
         };
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error || new Error('Falha ao abrir armazenamento local.'));
@@ -93,6 +102,57 @@
       await this._delete(DRAFTS_STORE, this.scope, true);
     }
 
+    async saveSnapshot(data) {
+      const record = clonePlain({
+        ...data,
+        scope: this.scope,
+        filial_id: this.filialId,
+        usuario_id: this.usuarioId,
+        installation_id: this.installationId,
+        updated_at: new Date().toISOString(),
+      });
+      await this._put(SNAPSHOTS_STORE, record, true);
+      return record;
+    }
+
+    async loadSnapshot() {
+      const snapshot = await this._get(SNAPSHOTS_STORE, this.scope);
+      return snapshot ? clonePlain(snapshot) : null;
+    }
+
+    async enqueueSale(data) {
+      if (!data || !data.local_id) throw new Error('Venda local sem identificador.');
+      const record = clonePlain({
+        ...data,
+        scope: this.scope,
+        filial_id: this.filialId,
+        usuario_id: this.usuarioId,
+        installation_id: this.installationId,
+        status: data.status || 'pendente',
+        attempts: Number(data.attempts || 0),
+        created_at: data.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      await this._put(QUEUE_STORE, record, true);
+      return record;
+    }
+
+    async listQueuedSales() {
+      const records = await this._getAllByIndex(QUEUE_STORE, 'scope', this.scope);
+      return records.map(clonePlain).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+    }
+
+    async updateQueuedSale(localId, changes) {
+      const current = await this._get(QUEUE_STORE, localId);
+      if (!current || current.scope !== this.scope) return null;
+      return this.enqueueSale({ ...current, ...changes, local_id: localId });
+    }
+
+    async deleteQueuedSale(localId) {
+      const current = await this._get(QUEUE_STORE, localId);
+      if (current?.scope === this.scope) await this._delete(QUEUE_STORE, localId, true);
+    }
+
     async _getMeta(key) {
       const result = await this._get(META_STORE, key);
       return result ? result.value : null;
@@ -110,6 +170,15 @@
         const request = this._transaction(store, 'readonly', false).objectStore(store).get(key);
         request.onsuccess = () => resolve(request.result || null);
         request.onerror = () => reject(request.error || new Error('Falha ao ler armazenamento local.'));
+      });
+    }
+
+    async _getAllByIndex(store, index, key) {
+      return new Promise((resolve, reject) => {
+        const request = this._transaction(store, 'readonly', false)
+          .objectStore(store).index(index).getAll(key);
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error || new Error('Falha ao listar armazenamento local.'));
       });
     }
 

@@ -1305,11 +1305,15 @@
       </button>
     </div>
 
-    <div class="topbar-chip" style="gap:6px;cursor:default;" :title="statusLocalDetalhe">
+    <div class="topbar-chip" style="gap:6px;" :style="vendasOfflinePendentes ? 'cursor:pointer;' : 'cursor:default;'"
+         :title="statusLocalDetalhe" @click="vendasOfflinePendentes && mostrarFilaOffline()">
       <span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;"
             :style="conectividadeOnline ? 'background:#22c55e;box-shadow:0 0 6px #22c55e;' : 'background:#f59e0b;box-shadow:0 0 6px #f59e0b;'"></span>
       <span style="font-size:10px;font-weight:800;letter-spacing:.04em;" x-text="conectividadeOnline ? 'ONLINE' : 'OFFLINE'"></span>
       <span x-show="localStorePronto" style="font-size:10px;color:var(--pdv-t3);" x-text="localSaveState==='salvando' ? '· salvando' : '· local protegido'"></span>
+      <span x-show="vendasOfflinePendentes>0" x-cloak
+            style="font-size:10px;font-weight:800;color:#f59e0b;"
+            x-text="'· '+vendasOfflinePendentes+' aguardando sincronização'"></span>
     </div>
 
     <div class="topbar-sales-actions">
@@ -3867,7 +3871,7 @@
 {{ favoritos_completos|json_script:"sidebar-favorites-records" }}
 <script src="{% static 'core/js/sidebar_favorites.js' %}?v=20260917-4"></script>
 <script src="{% static 'core/js/sidebar_search.js' %}?v=20260917-3"></script>
-<script src="{% static 'js/pdv_local_store.js' %}?v=20260917-1"></script>
+<script src="{% static 'js/pdv_local_store.js' %}?v=20260917-2"></script>
 <script>
 function pdv() {
   return {
@@ -3883,7 +3887,8 @@ function pdv() {
     sessao: null, sessaoCarregada: false, erroEstado: '', _inicializado: false,
     conectividadeOnline: typeof navigator === 'undefined' ? true : navigator.onLine,
     localStorePronto: false, localSaveState: 'inicializando', localDraftRestaurado: false,
-    _localStore: null, _localSaveChain: Promise.resolve(), _persistenciaSuspensa: false,
+    snapshotLocal: null, snapshotCatalogoEm: null, vendasOfflinePendentes: 0, sincronizandoFilaOffline: false,
+    _localStore: null, _localSaveChain: Promise.resolve(), _persistenciaSuspensa: false, _catalogoSyncEmAndamento: false,
     erroCaixa: '', caixaSelecionada: '', valorAberturaCaixa: '0', caixaAbrindo: false,
     criandoCaixa: false, novoCaixaDescricao: '', criandoCaixaLoading: false,
 
@@ -3992,7 +3997,8 @@ function pdv() {
     },
     get statusLocalDetalhe() {
       if (!this.localStorePronto) return 'Armazenamento local ainda não está disponível.';
-      if (!this.conectividadeOnline) return 'Sem conexão. As alterações deste carrinho continuam salvas neste computador.';
+      if (!this.conectividadeOnline) return 'Sem conexão. Catálogo, carrinho e vendas pendentes continuam neste computador.';
+      if (this.vendasOfflinePendentes) return 'Conectado. Existem vendas locais aguardando sincronização.';
       return 'Conectado. O carrinho também está protegido neste computador.';
     },
     handleFinalizarClick() {
@@ -4142,6 +4148,11 @@ function pdv() {
         await this.aplicarClienteInicial();
         await this.aplicarComandaInicial();
       }
+      await this.atualizarContagemFilaOffline();
+      if (this.conectividadeOnline) this.sincronizarFilaOffline();
+      setInterval(() => {
+        if (navigator.onLine && this.vendasOfflinePendentes) this.sincronizarFilaOffline();
+      }, 30000);
     },
 
     async iniciarLocalFirst() {
@@ -4160,7 +4171,10 @@ function pdv() {
         this.localSaveState = 'erro';
         this.toast_('O navegador não conseguiu ativar a proteção local do carrinho.', 'erro');
       }
-      window.addEventListener?.('online', () => { this.conectividadeOnline = true; });
+      window.addEventListener?.('online', () => {
+        this.conectividadeOnline = true;
+        this.sincronizarFilaOffline();
+      });
       window.addEventListener?.('offline', () => { this.conectividadeOnline = false; });
     },
 
@@ -4322,11 +4336,119 @@ function pdv() {
         this.topProdutos = d.top_produtos || [];
         this.sessaoCarregada = true;
         this.conectividadeOnline = true;
+        if (this._localStore) {
+          const anterior = await this._localStore.loadSnapshot();
+          const snapshot = await this._localStore.saveSnapshot({
+            version: 1,
+            gerado_em: new Date().toISOString(),
+            catalogo_em: anterior?.catalogo_em || anterior?.gerado_em || null,
+            sessao: d.sessao,
+            formas_pagamento: d.formas_pagamento || [],
+            produtos: anterior?.produtos?.length
+              ? anterior.produtos
+              : (d.top_produtos || []).map(produto => this.produtoLocalSeguro(produto)),
+          });
+          this.snapshotLocal = snapshot;
+          this.snapshotCatalogoEm = snapshot.gerado_em;
+          this.sincronizarCatalogoLocal(d);
+        }
       } catch {
         this.conectividadeOnline = false;
-        this.erroEstado = 'Não foi possível consultar o caixa. Tente novamente.';
-        this.toast_('Erro ao carregar estado do PDV','erro');
+        const snapshot = await this._localStore?.loadSnapshot();
+        if (snapshot?.produtos?.length) {
+          this.snapshotLocal = snapshot;
+          this.snapshotCatalogoEm = snapshot.gerado_em;
+          this.sessao = snapshot.sessao || null;
+          this.formasPagamento = snapshot.formas_pagamento || [];
+          this.topProdutos = snapshot.produtos.slice(0, 10);
+          this.sessaoCarregada = true;
+          this.erroEstado = '';
+          this.toast_('PDV em modo offline com o último catálogo protegido neste computador.', 'info');
+        } else {
+          this.erroEstado = 'Não foi possível consultar o caixa e ainda não há catálogo local.';
+          this.toast_('Erro ao carregar estado do PDV','erro');
+        }
       }
+    },
+
+    produtoLocalSeguro(produto) {
+      const {custo_atual: _custo, margem_percentual: _margem, ...dadosPublicos} = produto;
+      const preco = Number(produto.preco_base ?? produto.preco ?? 0);
+      const ofertaNormal = (produto.ofertas || produto.todos_precos || [])
+        .find(oferta => (oferta.oferta_tipo || oferta.tipo || 'normal') === 'normal');
+      const oferta = ofertaNormal
+        ? {...ofertaNormal, preco}
+        : {preco, oferta_tipo:'normal', tipo:'normal', origem:'Preço normal'};
+      return {
+        ...dadosPublicos,
+        preco,
+        preco_base: preco,
+        preco_origem: 'Preço normal armazenado',
+        preco_origem_tipo: 'normal',
+        preco_origem_detalhe: '',
+        promocoes_aplicaveis: [],
+        ofertas: [oferta],
+        todos_precos: [oferta],
+      };
+    },
+
+    async sincronizarCatalogoLocal(estado) {
+      if (!this._localStore || !this.conectividadeOnline || this._catalogoSyncEmAndamento) return;
+      const referencia = this.snapshotLocal?.catalogo_em || this.snapshotLocal?.gerado_em;
+      const idade = referencia ? Date.now() - new Date(referencia).getTime() : Infinity;
+      if (Number.isFinite(idade) && idade >= 0 && idade < 15 * 60 * 1000) return;
+      this._catalogoSyncEmAndamento = true;
+      try {
+        const produtos = [];
+        let pagina = 1;
+        let temMais = true;
+        while (temMais && pagina <= 50) {
+          const response = await fetch('/pdv/api/produtos/?pagina='+pagina+'&tamanho=200', {headers:{'Accept':'application/json'}});
+          if (!response.ok) throw new Error('Falha ao atualizar catálogo local.');
+          const dados = await response.json();
+          produtos.push(...(dados.produtos || []).map(produto => this.produtoLocalSeguro(produto)));
+          temMais = !!dados.tem_mais;
+          pagina += 1;
+        }
+        if (!produtos.length) return;
+        const snapshot = await this._localStore.saveSnapshot({
+          version: 1,
+          gerado_em: new Date().toISOString(),
+          catalogo_em: new Date().toISOString(),
+          sessao: estado.sessao,
+          formas_pagamento: estado.formas_pagamento || [],
+          produtos,
+        });
+        this.snapshotLocal = snapshot;
+        this.snapshotCatalogoEm = snapshot.gerado_em;
+      } catch (_) { /* mantém o último catálogo completo válido */ }
+      finally { this._catalogoSyncEmAndamento = false; }
+    },
+
+    normalizarBuscaLocal(valor) {
+      return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    },
+
+    buscarProdutosNoSnapshot(termo, pagina=1) {
+      const consulta = this.normalizarBuscaLocal(termo);
+      const tokens = consulta.split(/\s+/).filter(Boolean);
+      const linha = this.linhaAtiva ? String(this.linhaAtiva) : '';
+      const encontrados = (this.snapshotLocal?.produtos || []).filter(produto => {
+        if (linha && String(produto.linha_id || '') !== linha && String(produto.linha || '') !== linha) return false;
+        const texto = this.normalizarBuscaLocal([
+          produto.id, produto.descricao, produto.codigo, produto.codigo_barras,
+        ].join(' '));
+        return tokens.every(token => texto.includes(token));
+      });
+      const inicio = (pagina - 1) * 20;
+      return {produtos: encontrados.slice(inicio, inicio + 20), pagina, tem_mais: encontrados.length > inicio + 20};
+    },
+
+    snapshotLocalValido() {
+      const referencia = this.snapshotLocal?.catalogo_em || this.snapshotLocal?.gerado_em;
+      if (!referencia) return false;
+      const idade = Date.now() - new Date(referencia).getTime();
+      return Number.isFinite(idade) && idade >= 0 && idade <= 12 * 60 * 60 * 1000;
     },
 
     async buscarProdutos(q, carregarMais=false) {
@@ -4345,7 +4467,9 @@ function pdv() {
         const params = new URLSearchParams({q:termo,pagina:String(pagina)});
         if (this.linhaAtiva) params.set('linha',this.linhaAtiva);
         if (this.venda.cliente.id) params.set('cliente_id',this.venda.cliente.id);
-        const d = await (await fetch('/pdv/api/produtos/?'+params)).json();
+        const response = await fetch('/pdv/api/produtos/?'+params);
+        if (!response.ok) throw new Error('Busca indisponível.');
+        const d = await response.json();
         if (sequencia !== this._buscaProdutosSeq || this.buscaQuery.trim() !== termo) return;
         const recebidos = d.produtos || [];
         this.produtos = carregarMais ? [...this.produtos, ...recebidos] : recebidos;
@@ -4354,7 +4478,17 @@ function pdv() {
         if (!carregarMais && this.produtos.length===1 && /^\d{8,}$/.test(termo)) {
           this.adicionarItem(this.produtos[0]); this.buscaQuery=''; this.produtos=[];
         }
-      } catch { if (!carregarMais) this.produtos=[]; }
+      } catch {
+        const d = this.buscarProdutosNoSnapshot(termo, pagina);
+        const recebidos = d.produtos || [];
+        this.produtos = carregarMais ? [...this.produtos, ...recebidos] : recebidos;
+        this.produtosPagina = d.pagina || pagina;
+        this.produtosTemMais = !!d.tem_mais;
+        this.conectividadeOnline = false;
+        if (!carregarMais && this.produtos.length===1 && /^\d{8,}$/.test(termo)) {
+          this.adicionarItem(this.produtos[0]); this.buscaQuery=''; this.produtos=[];
+        }
+      }
       finally {
         if (sequencia === this._buscaProdutosSeq) {
           this.buscandoProdutos=false; this.carregandoMaisProdutos=false;
@@ -4396,13 +4530,20 @@ function pdv() {
       try {
         const params = new URLSearchParams({q:code});
         if (this.venda.cliente.id) params.set('cliente_id',this.venda.cliente.id);
-        const d = await (await fetch('/pdv/api/produtos/?'+params)).json();
+        const response = await fetch('/pdv/api/produtos/?'+params);
+        if (!response.ok) throw new Error('Leitura online indisponível.');
+        const d = await response.json();
         const prods = d.produtos || [];
         let p = prods.find(x => String(x.codigo_barras||'') === code);
         if (!p && prods.length === 1) p = prods[0];
         if (p) { this.adicionarItem(p); this.toast_('✓ ' + (p.descricao || 'Item adicionado'), 'ok'); }
         else { this.toast_('Código "' + code + '" não encontrado', 'erro'); }
-      } catch { this.toast_('Erro ao ler código de barras', 'erro'); }
+      } catch {
+        const p = (this.snapshotLocal?.produtos || []).find(produto => String(produto.codigo_barras || '') === code);
+        this.conectividadeOnline = false;
+        if (p) { this.adicionarItem(p); this.toast_('✓ ' + (p.descricao || 'Item adicionado') + ' (catálogo local)', 'ok'); }
+        else this.toast_('Código não encontrado no catálogo local.', 'erro');
+      }
       this.barcodeQuery = '';
       this.$nextTick(() => {
         if (window.matchMedia('(max-width:960px)').matches) this.$refs.buscaInput?.focus({ preventScroll:true });
@@ -4881,6 +5022,123 @@ function pdv() {
       this.modalEstoque = { show: false, msg: '', itens: [] };
     },
 
+    motivoBloqueioFilaOffline(payload) {
+      if (!this._localStore) return 'O armazenamento local não está disponível neste navegador.';
+      if (!this.snapshotLocalValido()) return 'O catálogo local tem mais de 12 horas ou ainda não terminou de sincronizar.';
+      if (!this.sessao?.id) return 'Abra o caixa enquanto houver internet antes de operar offline.';
+      if (this.modo !== 'venda' || payload.bonificacao) return 'Bonificação e orçamento não entram na fila offline.';
+      if (payload.cliente_id) return 'Nesta fase, a fila offline aceita somente Consumidor Final.';
+      if (payload.delivery || payload.venda_fora_estabelecimento || payload.comanda_id || payload.venda_edicao_origem_id) {
+        return 'Delivery, venda fora, comanda e edição precisam de conexão.';
+      }
+      if (Number(payload.credito_valor || 0) > 0) return 'Crédito e cashback precisam de confirmação online.';
+      for (const pagamento of payload.pagamentos || []) {
+        const forma = this.formasPagamento.find(item => Number(item.id) === Number(pagamento.forma_id));
+        const tipo = String(forma?.tipo || pagamento.forma_tipo || '').toLowerCase();
+        if (!forma || forma.requer_tef || ['boleto','vale','cashback','crediario','convenio'].includes(tipo)) {
+          return 'A forma de pagamento selecionada exige validação online.';
+        }
+      }
+      return '';
+    },
+
+    async atualizarContagemFilaOffline() {
+      if (!this._localStore) return;
+      try {
+        this.vendasOfflinePendentes = (await this._localStore.listQueuedSales()).length;
+      } catch (_) { this.vendasOfflinePendentes = 0; }
+    },
+
+    async mostrarFilaOffline() {
+      const fila = await this._localStore?.listQueuedSales() || [];
+      if (!fila.length) return;
+      const resumo = fila.map(registro => {
+        const horario = new Date(registro.created_at).toLocaleString('pt-BR');
+        const identificador = String(registro.local_id || '').slice(-8);
+        return `${horario} · ${identificador} · ${registro.status}${registro.last_error ? ' · '+registro.last_error : ''}`;
+      }).join('\n');
+      if (!confirm('Vendas aguardando sincronização:\n\n'+resumo+'\n\nTentar sincronizar agora?')) return;
+      for (const registro of fila) {
+        await this._localStore.updateQueuedSale(registro.local_id, {status:'pendente', attempts:0});
+      }
+      await this.sincronizarFilaOffline();
+    },
+
+    async enfileirarVendaOffline(payload, endpoint='/pdv/api/venda/finalizar/') {
+      const bloqueio = this.motivoBloqueioFilaOffline(payload);
+      if (bloqueio) {
+        await this.persistirRascunhoLocal('resultado_incerto');
+        this.toast_('Venda preservada, mas não concluída offline: '+bloqueio, 'erro');
+        return false;
+      }
+      await this._localStore.enqueueSale({
+        local_id: payload.idempotency_key,
+        endpoint,
+        payload,
+        status: 'pendente',
+        last_error: '',
+      });
+      await this.concluirRascunhoLocal();
+      await this.atualizarContagemFilaOffline();
+      this.novaVenda();
+      this.toast_('Venda protegida na fila local. Ela será sincronizada automaticamente quando a conexão voltar.', 'info');
+      return true;
+    },
+
+    async sincronizarFilaOffline() {
+      if (!this._localStore || !navigator.onLine || this.sincronizandoFilaOffline) return;
+      this.sincronizandoFilaOffline = true;
+      let sincronizadas = 0;
+      let primeiroErro = '';
+      try {
+        const fila = await this._localStore.listQueuedSales();
+        for (const registro of fila) {
+          if (registro.status === 'erro' && Number(registro.attempts || 0) >= 3) continue;
+          try {
+            const response = await fetch(registro.endpoint || '/pdv/api/venda/finalizar/', {
+              method:'POST',
+              credentials:'same-origin',
+              headers:{
+                'Content-Type':'application/json',
+                'X-CSRFToken':csrf(),
+                'Idempotency-Key':registro.local_id,
+              },
+              body:JSON.stringify(registro.payload),
+            });
+            const dados = await response.json();
+            if (response.ok && dados.ok) {
+              await this._localStore.deleteQueuedSale(registro.local_id);
+              sincronizadas += 1;
+              continue;
+            }
+            await this._localStore.updateQueuedSale(registro.local_id, {
+              status:'erro',
+              attempts:Number(registro.attempts || 0) + 1,
+              last_error:dados.erro || 'Servidor recusou a venda local.',
+            });
+            primeiroErro ||= dados.erro || 'Servidor recusou uma venda local.';
+          } catch (error) {
+            this.conectividadeOnline = false;
+            await this._localStore.updateQueuedSale(registro.local_id, {
+              status:'pendente',
+              attempts:Number(registro.attempts || 0) + 1,
+              last_error:error.message || 'Sem conexão.',
+            });
+            break;
+          }
+        }
+      } finally {
+        this.sincronizandoFilaOffline = false;
+        await this.atualizarContagemFilaOffline();
+      }
+      if (sincronizadas) {
+        this.conectividadeOnline = true;
+        this.toast_(sincronizadas+' venda(s) offline sincronizada(s) com sucesso.', 'ok');
+        await this.carregarEstado();
+      }
+      if (primeiroErro) this.toast_('Venda offline ainda pendente: '+primeiroErro, 'erro');
+    },
+
     confirmarFinalizarVenda() {
       if (!this.podeFinalizar) return;
       const itensNegativos = this.itensComEstoqueInsuficiente();
@@ -4896,9 +5154,10 @@ function pdv() {
       if (!this.podeFinalizar) return;
       if (this._finalizando) return;
       this._finalizando = true;
+      let payload = null;
       try {
         await this.enfileirarPersistenciaLocal('finalizando');
-        const payload = {
+        payload = {
           idempotency_key: this.venda.local_id,
           sessao_id: this.sessao?.id,
           cliente_id: this.venda.cliente?.id||null,
@@ -4917,6 +5176,10 @@ function pdv() {
           comanda_id: this.venda.comanda_id_origem || null,
         };
         payload.forcar_estoque_negativo = true;
+        if (!navigator.onLine) {
+          await this.enfileirarVendaOffline(payload, '/pdv/api/venda/finalizar/');
+          return;
+        }
         const r = await fetch('/pdv/api/venda/finalizar/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf(),'Idempotency-Key':this.venda.local_id},body:JSON.stringify(payload)});
         let d;
         try { d = await r.json(); } catch(jsonErr) {
@@ -4941,8 +5204,7 @@ function pdv() {
         }
       } catch(e) {
         this.conectividadeOnline = false;
-        await this.persistirRascunhoLocal('resultado_incerto');
-        this.toast_('A conexão caiu durante a finalização. A venda foi preservada e será reenviada com a mesma identificação.','info');
+        await this.enfileirarVendaOffline(payload, '/pdv/api/venda/finalizar/');
       }
       finally { this._finalizando = false; }
     },
@@ -4952,9 +5214,10 @@ function pdv() {
       this.showModalConfirmacao=false;
       if (this._finalizando) return;
       this._finalizando = true;
+      let payload = null;
       try {
         await this.enfileirarPersistenciaLocal('finalizando');
-        const payload = {
+        payload = {
           idempotency_key: this.venda.local_id,
           sessao_id: this.sessao?.id,
           cliente_id: this.venda.cliente?.id||null,
@@ -4972,6 +5235,10 @@ function pdv() {
           venda_edicao_origem_id: this.vendaEdicaoOrigemId || null,
           comanda_id: this.venda.comanda_id_origem || null,
         };
+        if (!navigator.onLine) {
+          await this.enfileirarVendaOffline(payload, '/pdv/api/venda/finalizar/forcado/');
+          return;
+        }
         // Endpoint dedicado que sempre ignora verificação de estoque
         const r = await fetch('/pdv/api/venda/finalizar/forcado/', {
           method: 'POST',
@@ -4992,8 +5259,7 @@ function pdv() {
         }
       } catch {
         this.conectividadeOnline = false;
-        await this.persistirRascunhoLocal('resultado_incerto');
-        this.toast_('A conexão caiu durante a finalização. A venda foi preservada e será reenviada com a mesma identificação.','info');
+        await this.enfileirarVendaOffline(payload, '/pdv/api/venda/finalizar/forcado/');
       }
       finally { this._finalizando = false; }
     },
@@ -6049,6 +6315,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
           this.sessao={id:d.sessao_id,caixa_id:d.caixa?.id};
           this.showModalCaixa=false;
           this.toast_('Caixa aberto!','ok');
+          this.sincronizarFilaOffline();
           this.$nextTick(()=>this.focarBuscaProduto());
         }
         else this.erroCaixa=d.erro||'Não foi possível abrir o caixa.';
