@@ -2,13 +2,14 @@
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
 from django.views import View
 from django.views.decorators.http import require_POST
 
 from apps.core.forms import LoginForm
-from apps.core.models import Empresa
+from apps.core.models import Empresa, Filial, FilialFavorita, Usuario
 from apps.core.services.auth_service import AuthService
 from apps.core.services.exceptions import DomainError
 
@@ -53,6 +54,26 @@ def _filiais_permitidas(user):
     # vivia aqui tambem, a tela de escolha oferecia unidade que o vinculo do
     # login nao dava, e clicar entrava.
     return user.filiais_permitidas().order_by('nome_fantasia', 'razao_social')
+
+
+def _filiais_para_selecao(request):
+    """Usa o diretorio central para o Super Admin e o tenant para operadores."""
+    filiais = _filiais_permitidas(request.user)
+    if request.user.is_superuser:
+        return filiais.using('default')
+    return filiais
+
+
+def _usuario_central(request):
+    """Resolve a identidade que pode ser referenciada pelo banco gerencial."""
+    usuario = getattr(request, '_central_authenticated_user', None) or request.user
+    if usuario._state.db == 'default':
+        return usuario
+    return (
+        Usuario.objects.using('default')
+        .filter(email__iexact=usuario.email, ativo=True)
+        .first()
+    )
 
 
 @login_required
@@ -117,7 +138,7 @@ class SelecionarFilialView(View):
         if not request.user.is_authenticated:
             return redirect('core:login')
 
-        filiais = _filiais_permitidas(request.user)
+        filiais = _filiais_para_selecao(request)
 
         if not request.user.is_superuser and filiais.count() == 1:
             request.session['filial_ativa_id'] = filiais.first().pk
@@ -129,17 +150,72 @@ class SelecionarFilialView(View):
             # para o banco daquele tenant. A seleção global do Super Admin,
             # porém, pertence ao diretório gerencial e deve listar todas as
             # empresas e filiais contratadas.
-            filiais = filiais.using('default')
             empresas = Empresa.objects.using('default').filter(
                 filiais__in=filiais,
                 ativo=True,
             ).distinct().order_by('nome_fantasia', 'razao_social')
 
+        filiais = filiais.select_related('empresa')
+        usuario_central = _usuario_central(request)
+        favoritas_cnpjs = set()
+        if usuario_central:
+            # Querysets de tenant e do gerencial nao podem compor uma subquery
+            # entre bancos. CNPJ e o identificador estavel da filial nos dois
+            # diretorios; materializamos apenas esses valores para reconciliar.
+            filiais_cnpjs = list(filiais.values_list('cnpj', flat=True))
+            favoritas_cnpjs = set(
+                FilialFavorita.objects.using('default').filter(
+                    usuario_id=usuario_central.pk,
+                    filial__cnpj__in=filiais_cnpjs,
+                ).values_list('filial__cnpj', flat=True)
+            )
+
         return render(request, self.template_name, {
-            'filiais': filiais.select_related('empresa'),
+            'filiais': filiais,
             'empresas': empresas,
             'is_global_selection': request.user.is_superuser,
+            'filiais_favoritas_ids': list(
+                filiais.filter(cnpj__in=favoritas_cnpjs).values_list('pk', flat=True)
+            ),
         })
+
+
+@login_required
+@require_POST
+def alternar_filial_favorita(request, filial_id):
+    """Alterna uma filial acessivel, persistindo a preferencia no gerencial."""
+    filial = (
+        _filiais_para_selecao(request)
+        .filter(pk=filial_id)
+        .only('pk', 'cnpj')
+        .first()
+    )
+    if filial is None:
+        return JsonResponse(
+            {'detail': 'Voce nao possui acesso a esta filial.'},
+            status=403,
+        )
+
+    usuario_central = _usuario_central(request)
+    filial_central = (
+        Filial.objects.using('default')
+        .filter(cnpj=filial.cnpj, ativo=True)
+        .first()
+    )
+    if usuario_central is None or filial_central is None:
+        return JsonResponse(
+            {'detail': 'A filial nao foi localizada no diretorio central.'},
+            status=409,
+        )
+
+    favorita, criada = FilialFavorita.objects.using('default').get_or_create(
+        usuario_id=usuario_central.pk,
+        filial_id=filial_central.pk,
+    )
+    if not criada:
+        favorita.delete(using='default')
+
+    return JsonResponse({'favorita': criada})
 
 
 class TrocarFilialView(View):

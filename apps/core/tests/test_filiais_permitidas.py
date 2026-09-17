@@ -20,7 +20,8 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.core.models import (
-    Empresa, Filial, PerfilAcesso, Usuario, UsuarioFilialAcesso,
+    Empresa, Filial, FilialFavorita, PerfilAcesso, Usuario,
+    UsuarioFilialAcesso,
 )
 
 
@@ -164,6 +165,62 @@ class TelaDeEscolhaTests(FiliaisBase):
             {f.pk for f in resposta.context['filiais']},
             {self.polpa.pk, self.matriz.pk},
         )
+
+    def test_tela_expoe_favoritas_do_usuario_e_filtro(self):
+        lucas = self._usuario(
+            'lucas-favoritas@grupo.local', self.perfil_admin, self.polpa,
+            acessos=[self.polpa, self.matriz],
+        )
+        FilialFavorita.objects.create(usuario=lucas, filial=self.matriz)
+        self.client.force_login(lucas)
+
+        resposta = self.client.get(reverse('core:selecionar-filial'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.context['filiais_favoritas_ids'], [self.matriz.pk])
+        self.assertContains(resposta, 'filiais-favoritas-data')
+        self.assertContains(resposta, 'Somente favoritas')
+        self.assertContains(resposta, 'Adicionar aos favoritos')
+
+    def test_usuario_pode_favoritar_e_desfavoritar_filial_permitida(self):
+        lucas = self._usuario(
+            'lucas-alterna-favorita@grupo.local', self.perfil_admin, self.polpa,
+            acessos=[self.polpa, self.matriz],
+        )
+        self.client.force_login(lucas)
+        url = reverse('core:alternar-filial-favorita', args=[self.matriz.pk])
+
+        resposta = self.client.post(url)
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertTrue(resposta.json()['favorita'])
+        self.assertTrue(FilialFavorita.objects.filter(
+            usuario=lucas,
+            filial=self.matriz,
+        ).exists())
+
+        resposta = self.client.post(url)
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertFalse(resposta.json()['favorita'])
+        self.assertFalse(FilialFavorita.objects.filter(
+            usuario=lucas,
+            filial=self.matriz,
+        ).exists())
+
+    def test_usuario_nao_pode_favoritar_filial_sem_acesso(self):
+        lucas = self._usuario(
+            'lucas-favorita-negada@grupo.local', self.perfil_operador, self.polpa,
+            acessos=[self.polpa],
+        )
+        self.client.force_login(lucas)
+
+        resposta = self.client.post(
+            reverse('core:alternar-filial-favorita', args=[self.matriz.pk]),
+        )
+
+        self.assertEqual(resposta.status_code, 403)
+        self.assertFalse(FilialFavorita.objects.filter(usuario=lucas).exists())
 
     def test_trocar_para_filial_sem_vinculo_e_recusado(self):
         """

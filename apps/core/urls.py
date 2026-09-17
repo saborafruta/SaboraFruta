@@ -6,7 +6,8 @@ from apps.core.views import parametros as parametros_views
 from apps.core.views.audit import CoreAdminLogExportCsvView, CoreAdminLogExportPdfView, CoreAdminLogItemsView
 from apps.core.views import (
     CurvaAbcRelatorioView, DashboardView, LoginView, RelatoriosHubView, SelecionarFilialView, TrocarFilialView,
-    VendasDowPeriodoView, atualizar_minha_foto, logout_view,
+    VendasDowPeriodoView, alternar_filial_favorita, atualizar_minha_foto,
+    logout_view,
 )
 from apps.core.views.notificacoes import (
     NotificacaoAbrirView, NotificacaoMarcarTodasView, NotificacaoStatusView,
@@ -25,6 +26,11 @@ urlpatterns = [
     path('auth/logout/', logout_view, name='logout'),
     path('auth/minha-foto/', atualizar_minha_foto, name='atualizar_minha_foto'),
     path('auth/selecionar-filial/', SelecionarFilialView.as_view(), name='selecionar-filial'),
+    path(
+        'auth/filiais/<int:filial_id>/favorita/',
+        alternar_filial_favorita,
+        name='alternar-filial-favorita',
+    ),
     path('auth/trocar-filial/<int:filial_id>/', TrocarFilialView.as_view(), name='trocar-filial'),
     path('notificacoes/<int:pk>/abrir/', NotificacaoAbrirView.as_view(), name='notificacao-abrir'),
     path('notificacoes/marcar-todas/', NotificacaoMarcarTodasView.as_view(), name='notificacoes-marcar-todas'),

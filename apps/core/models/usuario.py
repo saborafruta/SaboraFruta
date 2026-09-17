@@ -345,6 +345,30 @@ class UsuarioFilialAcesso(TimestampedModel):
         super().save(*args, **kwargs)
 
 
+class FilialFavorita(TimestampedModel):
+    """Preferencia central de filial favorita por usuario."""
+
+    usuario = models.ForeignKey(
+        Usuario, on_delete=models.CASCADE, related_name='filiais_favoritas',
+    )
+    filial = models.ForeignKey(
+        'core.Filial', on_delete=models.CASCADE, related_name='favoritada_por',
+    )
+
+    class Meta:
+        db_table = 'filiais_favoritas'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['usuario', 'filial'],
+                name='filial_favorita_usuario_filial_unica',
+            ),
+        ]
+        ordering = ['filial__empresa__razao_social', 'filial__razao_social']
+
+    def __str__(self):
+        return f'{self.usuario.email} - {self.filial}'
+
+
 class SessaoUsuario(models.Model):
     """Rastreio de sessões JWT ativas por dispositivo/filial."""
 

@@ -2,7 +2,10 @@ from .base import (
     ActiveModel, CoordenadaMixin, FilialManager, FilialScopedModel, TimestampedModel,
 )
 from .empresa import Empresa, Filial, PoliticaReplicacao, PoliticaReplicacaoFilial
-from .usuario import Usuario, PerfilAcesso, Permissao, SessaoUsuario, UsuarioFilialAcesso
+from .usuario import (
+    FilialFavorita, PerfilAcesso, Permissao, SessaoUsuario, Usuario,
+    UsuarioFilialAcesso,
+)
 from .log import LogSistema, LogAcesso, RegistroAuditoria
 from .parametros import ConfiguracaoEtiquetaVenda, ParametrosSistema, ParametroDocumentoFiscal
 from .notificacao import Notificacao, NotificacaoLeitura
@@ -14,6 +17,7 @@ __all__ = [
     'CoordenadaMixin',
     'Empresa', 'Filial', 'PoliticaReplicacao', 'PoliticaReplicacaoFilial',
     'Usuario', 'PerfilAcesso', 'Permissao', 'SessaoUsuario', 'UsuarioFilialAcesso',
+    'FilialFavorita',
     'LogSistema', 'LogAcesso', 'RegistroAuditoria',
     'ParametrosSistema', 'ParametroDocumentoFiscal', 'ConfiguracaoEtiquetaVenda',
     'Notificacao', 'NotificacaoLeitura',
