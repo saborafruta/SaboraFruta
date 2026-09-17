@@ -244,6 +244,22 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn("12 * 60 * 60 * 1000", template)
         self.assertIn("pdv_local_store.js?v=20260917-2", service_worker)
 
+    def test_indicador_distingue_online_offline_e_sincronizacao(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+
+        self.assertIn("return this.sincronizandoFilaOffline || this._catalogoSyncEmAndamento", template)
+        self.assertIn("return 'SINCRONIZANDO'", template)
+        self.assertIn("conectividadeOnline ? 'ONLINE' : 'SEM INTERNET'", template)
+        self.assertIn('pdv-connection-dot--online', template)
+        self.assertIn('pdv-connection-dot--offline', template)
+        self.assertIn('animation:pdv-offline-pulse', template)
+        self.assertIn('pdv-connection-label--offline', template)
+        self.assertIn('animation:pdv-offline-text', template)
+        self.assertIn('pdv-connection-sync', template)
+        self.assertIn('pdv-connection-label--sync', template)
+        self.assertIn('animation:pdv-sync-spin', template)
+        self.assertIn('prefers-reduced-motion: reduce', template)
+
     def test_cabecalho_global_preenche_o_canto_sob_a_curva_laranja(self):
         get_template('_base.html')
         base = (Path(__file__).resolve().parents[3] / 'templates' / '_base.html').read_text(

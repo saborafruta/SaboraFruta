@@ -17,6 +17,13 @@ const app = context.pdv();
 app._localStore = {};
 app.sessao = {id: 10};
 app.modo = 'venda';
+app.conectividadeOnline = true;
+assert.equal(app.statusConexaoLabel, 'ONLINE');
+app.conectividadeOnline = false;
+assert.equal(app.statusConexaoLabel, 'SEM INTERNET');
+app.sincronizandoFilaOffline = true;
+assert.equal(app.statusConexaoLabel, 'SINCRONIZANDO');
+app.sincronizandoFilaOffline = false;
 app.snapshotLocal = {
   catalogo_em: new Date().toISOString(),
   produtos: [

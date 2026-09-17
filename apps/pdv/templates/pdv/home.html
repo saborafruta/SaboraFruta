@@ -209,6 +209,33 @@
     display:flex;align-items:center;gap:8px;padding:6px 12px;
     background:var(--pdv-card);border:1px solid var(--pdv-bd2);border-radius:8px;
   }
+  .pdv-connection-dot {
+    width:8px;height:8px;border-radius:50%;flex-shrink:0;
+  }
+  .pdv-connection-dot--online {
+    background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,.9);
+  }
+  .pdv-connection-dot--offline {
+    background:#ef4444;box-shadow:0 0 0 rgba(239,68,68,.75);
+    animation:pdv-offline-pulse 1s ease-in-out infinite;
+  }
+  .pdv-connection-sync {
+    width:13px;height:13px;flex-shrink:0;color:#f59e0b;
+    animation:pdv-sync-spin .8s linear infinite;
+  }
+  .pdv-connection-label--offline {
+    color:#f87171;animation:pdv-offline-text 1s ease-in-out infinite;
+  }
+  .pdv-connection-label--sync { color:#fbbf24; }
+  @keyframes pdv-offline-pulse {
+    0%,100% { opacity:1;box-shadow:0 0 0 0 rgba(239,68,68,.75); }
+    50% { opacity:.38;box-shadow:0 0 0 4px rgba(239,68,68,0); }
+  }
+  @keyframes pdv-sync-spin { to { transform:rotate(360deg); } }
+  @keyframes pdv-offline-text { 50% { opacity:.42; } }
+  @media (prefers-reduced-motion: reduce) {
+    .pdv-connection-dot--offline,.pdv-connection-sync,.pdv-connection-label--offline { animation:none; }
+  }
 
   /* Botões ícone do topbar */
   .topbar-icon-btn {
@@ -1307,9 +1334,16 @@
 
     <div class="topbar-chip" style="gap:6px;" :style="vendasOfflinePendentes ? 'cursor:pointer;' : 'cursor:default;'"
          :title="statusLocalDetalhe" @click="vendasOfflinePendentes && mostrarFilaOffline()">
-      <span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;"
-            :style="conectividadeOnline ? 'background:#22c55e;box-shadow:0 0 6px #22c55e;' : 'background:#f59e0b;box-shadow:0 0 6px #f59e0b;'"></span>
-      <span style="font-size:10px;font-weight:800;letter-spacing:.04em;" x-text="conectividadeOnline ? 'ONLINE' : 'OFFLINE'"></span>
+      <span x-show="!sincronizandoConexao" class="pdv-connection-dot"
+            :class="conectividadeOnline ? 'pdv-connection-dot--online' : 'pdv-connection-dot--offline'"
+            aria-hidden="true"></span>
+      <svg x-show="sincronizandoConexao" x-cloak class="pdv-connection-sync" aria-hidden="true"
+           viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M20 7h-5V2M4 17h5v5M5.5 9a7.5 7.5 0 0112.7-3L20 7M4 17l1.8 1A7.5 7.5 0 0018.5 15"/>
+      </svg>
+      <span style="font-size:10px;font-weight:800;letter-spacing:.04em;"
+            :class="sincronizandoConexao ? 'pdv-connection-label--sync' : (conectividadeOnline ? '' : 'pdv-connection-label--offline')"
+            x-text="statusConexaoLabel"></span>
       <span x-show="localStorePronto" style="font-size:10px;color:var(--pdv-t3);" x-text="localSaveState==='salvando' ? '· salvando' : '· local protegido'"></span>
       <span x-show="vendasOfflinePendentes>0" x-cloak
             style="font-size:10px;font-weight:800;color:#f59e0b;"
@@ -3995,8 +4029,16 @@ function pdv() {
       if (this.modo==='bonificacao') return 'FINALIZAR BONIFICAÇÃO (F12)';
       return this.venda.delivery ? 'FINALIZAR DELIVERY (F12)' : 'FINALIZAR VENDA (F12)';
     },
+    get sincronizandoConexao() {
+      return this.sincronizandoFilaOffline || this._catalogoSyncEmAndamento;
+    },
+    get statusConexaoLabel() {
+      if (this.sincronizandoConexao) return 'SINCRONIZANDO';
+      return this.conectividadeOnline ? 'ONLINE' : 'SEM INTERNET';
+    },
     get statusLocalDetalhe() {
       if (!this.localStorePronto) return 'Armazenamento local ainda não está disponível.';
+      if (this.sincronizandoConexao) return 'Sincronizando catálogo e vendas locais com o servidor.';
       if (!this.conectividadeOnline) return 'Sem conexão. Catálogo, carrinho e vendas pendentes continuam neste computador.';
       if (this.vendasOfflinePendentes) return 'Conectado. Existem vendas locais aguardando sincronização.';
       return 'Conectado. O carrinho também está protegido neste computador.';

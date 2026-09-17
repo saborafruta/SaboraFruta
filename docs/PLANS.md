@@ -51,6 +51,8 @@
   - criar QA browser quando houver infraestrutura apropriada.
 
 ### PDV e Sugestão de compras
+- O plano vivo de operação offline, queda de energia e contingência fiscal está em
+  [`PDV_OFFLINE_E_CONTINGENCIA_FISCAL.md`](PDV_OFFLINE_E_CONTINGENCIA_FISCAL.md).
 - Concluído na sessão de 29/05/2026:
   - abertura de caixa corrigida quando a filial não possui caixa ativo;
   - endpoint `POST /pdv/api/caixa/criar/` criando o próximo caixa ativo da filial;
