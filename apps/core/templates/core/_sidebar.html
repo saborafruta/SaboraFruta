@@ -44,6 +44,31 @@
   body:not(.tema-claro) .sidebar-scroll::-webkit-scrollbar-thumb:hover {
     background: rgba(148, 163, 184, 0.5);
   }
+  .app-sidebar {
+    width: 16rem;
+  }
+  html.erp-hydrated .app-sidebar {
+    transition: width 0.18s ease;
+  }
+  html.sidebar-collapsed body .app-sidebar,
+  body.sidebar-collapsed .app-sidebar {
+    width: 4rem;
+  }
+  html.sidebar-collapsed body .app-sidebar [x-show="!collapsed"],
+  html.sidebar-collapsed body .app-sidebar .sidebar-branch-logo-card,
+  body.sidebar-collapsed .app-sidebar .sidebar-branch-logo-card {
+    display: none !important;
+  }
+  html:not(.sidebar-collapsed) body .app-sidebar [x-show="collapsed"] {
+    display: none !important;
+  }
+  html.sidebar-collapsed body .app-sidebar [x-show="collapsed"] {
+    display: flex !important;
+  }
+  html.sidebar-collapsed body .app-sidebar span[x-show="collapsed"],
+  html.sidebar-collapsed body .app-sidebar div[x-show="collapsed"] {
+    display: block !important;
+  }
   .sidebar-favoritable-link {
     min-width: 0;
   }
@@ -447,7 +472,7 @@
     this.mobileOpen = false;
   }
 }" @keydown.escape.window="mobileOpen = false"
-   x-init="document.body.classList.toggle('sidebar-collapsed', collapsed); window.__erpCloseMobileSidebar = function() { mobileOpen = false }"
+   x-init="document.documentElement.classList.toggle('sidebar-collapsed', collapsed); document.body.classList.toggle('sidebar-collapsed', collapsed); window.__erpCloseMobileSidebar = function() { mobileOpen = false }"
    @toggle-mobile-menu.window="toggleMobileMenu()"
    @close-mobile-menu.window="closeMobileMenu()">
 
@@ -466,7 +491,7 @@
   <!-- SIDEBAR DESKTOP -->
   <aside
     :class="collapsed ? 'w-16' : 'w-64'"
-    class="sidebar-desktop hidden lg:flex flex-col transition-all duration-200 flex-shrink-0 fixed left-0 top-0 bottom-0 z-50"
+    class="app-sidebar sidebar-desktop hidden lg:flex flex-col flex-shrink-0 fixed left-0 top-0 bottom-0 z-50"
     :style="temaClaro ? 'background:#ffffff; border-right:1px solid #cbd5e1; border-radius:0; box-shadow:3px 0 14px rgba(15,23,42,0.08); height:100dvh; max-height:100dvh;' : 'background:#161618; border-right:none; border-radius:0; box-shadow:4px 0 16px rgba(0,0,0,0.4); height:100dvh; max-height:100dvh;'"
   >
     <!-- Logo / Toggle -->
@@ -477,7 +502,7 @@
       <a href="{% url 'core:dashboard' %}" x-show="collapsed" x-cloak class="flex items-center justify-center w-full">
         <span class="font-bold" style="font-family:Space Grotesk, sans-serif; font-size:15px; letter-spacing:-0.5px;"><span :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">i</span><span :style="temaClaro ? 'color:#e8824a;' : 'color:#3b82f6;'">T</span></span>
       </a>
-      <button @click="collapsed = !collapsed; localStorage.setItem('sidebar-collapsed', collapsed); document.body.classList.toggle('sidebar-collapsed', collapsed)"
+      <button @click="collapsed = !collapsed; localStorage.setItem('sidebar-collapsed', collapsed); document.documentElement.classList.toggle('sidebar-collapsed', collapsed); document.body.classList.toggle('sidebar-collapsed', collapsed)"
               class="p-1 rounded-lg flex-shrink-0 transition-colors"
               :class="collapsed ? 'mx-auto' : 'ml-auto'"
               :style="temaClaro ? 'color:#aaa;' : 'color:#f8fafc;'"

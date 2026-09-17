@@ -1,6 +1,6 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="pt-BR" style="height:100%;">
+<html lang="pt-BR" class="erp-prehydrate tema-escuro" style="height:100%;">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
@@ -20,19 +20,25 @@
 
   <script>
     (function() {
+      // O tema e a largura da lateral precisam existir antes do primeiro paint.
+      // Alpine apenas assume esse estado depois; ele nao deve defini-lo tarde.
+      document.documentElement.classList.add('erp-prehydrate');
       var navigationStackKey = 'erp-navigation-stack';
       var navigationStackLimit = 40;
 
       window.__erpApplyStoredTheme = function() {
         var temaClaro = localStorage.getItem('erp-tema') === 'claro';
+        var sidebarCollapsed = localStorage.getItem('sidebar-collapsed') === 'true';
         var root = document.documentElement;
         root.classList.toggle('tema-claro', temaClaro);
         root.classList.toggle('tema-escuro', !temaClaro);
+        root.classList.toggle('sidebar-collapsed', sidebarCollapsed);
         root.style.backgroundColor = temaClaro ? '#f3f6fb' : '#1c1c1e';
         root.style.colorScheme = temaClaro ? 'light' : 'dark';
         if (document.body) {
           document.body.classList.toggle('tema-claro', temaClaro);
           document.body.classList.toggle('tema-escuro', !temaClaro);
+          document.body.classList.toggle('sidebar-collapsed', sidebarCollapsed);
         }
         window.__erpTemaClaroInicial = temaClaro;
         return temaClaro;
@@ -47,6 +53,18 @@
         document.documentElement.style.backgroundColor = '#1c1c1e';
         document.documentElement.style.colorScheme = 'dark';
         window.__erpTemaClaroInicial = false;
+      }
+
+      function liberarTransicoesIniciais() {
+        document.documentElement.classList.remove('erp-prehydrate');
+        document.documentElement.classList.add('erp-hydrated');
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+          requestAnimationFrame(liberarTransicoesIniciais);
+        }, { once: true });
+      } else {
+        requestAnimationFrame(liberarTransicoesIniciais);
       }
 
       function currentNavigationUrl() {
@@ -149,6 +167,14 @@
 
   <style>
     [x-cloak] { display: none !important; }
+    /* Evita animar do estado padrao para o estado salvo durante a carga. */
+    html.erp-prehydrate *,
+    html.erp-prehydrate *::before,
+    html.erp-prehydrate *::after {
+      transition: none !important;
+      animation: none !important;
+      scroll-behavior: auto !important;
+    }
 
     html.tema-claro,
     html.tema-claro body {
@@ -164,6 +190,12 @@
     }
     body { background: #1c1c1e; color: #e5e5e5; transition: none; }
     body.tema-ready { transition: background 0.2s, color 0.2s; }
+    /* Alpine ainda nao processou x-show no primeiro frame. O tema no <html>
+       ja sabe qual dos dois controles deve aparecer. */
+    html.tema-claro body [x-show="!temaClaro"],
+    html.tema-escuro body [x-show="temaClaro"] {
+      display: none !important;
+    }
 
     .btn-primary {
       display: inline-flex; align-items: center; gap: 8px;
@@ -539,10 +571,13 @@
     @media (min-width: 1024px) {
       .app-shell-content {
         margin-left: 16rem;
-        transition: margin-left 0.2s ease;
       }
+      html.sidebar-collapsed body .app-shell-content,
       body.sidebar-collapsed .app-shell-content {
         margin-left: 4rem;
+      }
+      html.erp-hydrated .app-shell-content {
+        transition: margin-left 0.18s ease;
       }
     }
   </style>
@@ -561,9 +596,6 @@
       document.body.classList.toggle('tema-claro', temaClaro);
       document.body.classList.toggle('tema-escuro', !temaClaro);
       document.body.classList.toggle('sidebar-collapsed', localStorage.getItem('sidebar-collapsed') === 'true');
-      requestAnimationFrame(function() {
-        document.body.classList.add('tema-ready');
-      });
     })();
   </script>
 

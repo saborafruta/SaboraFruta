@@ -72,6 +72,30 @@ class SeletorDeTemaEscuroTests(SimpleTestCase):
         self.assertIn("classList.toggle('tema-escuro'", base)
         self.assertIn("classList.toggle('tema-claro'", base)
 
+    def test_tema_e_lateral_sao_aplicados_antes_do_primeiro_paint(self):
+        """Impedimos o flash do tema claro e da lateral aberta no refresh."""
+        base = open('templates/_base.html', encoding='utf-8').read()
+        sidebar = open(
+            'apps/core/templates/core/_sidebar.html', encoding='utf-8'
+        ).read()
+
+        self.assertIn('class="erp-prehydrate tema-escuro"', base)
+        self.assertIn("root.classList.toggle('sidebar-collapsed'", base)
+        self.assertIn('html.erp-prehydrate *', base)
+        self.assertIn('html.erp-hydrated .app-shell-content', base)
+        self.assertIn('html.tema-escuro body [x-show="temaClaro"]', base)
+        self.assertLess(
+            base.index("localStorage.getItem('erp-tema')"),
+            base.index("tailwind-built.css"),
+            'O tema salvo precisa ser lido antes de carregar o CSS principal.',
+        )
+        self.assertIn('html.erp-hydrated .app-sidebar', sidebar)
+        self.assertIn('class="app-sidebar sidebar-desktop', sidebar)
+        self.assertIn(
+            "document.documentElement.classList.toggle('sidebar-collapsed', collapsed)",
+            sidebar,
+        )
+
 
 class EstrategiaDoDarkDoTailwindTests(SimpleTestCase):
     """
