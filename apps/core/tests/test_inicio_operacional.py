@@ -36,13 +36,15 @@ class InicioVisualTests(SimpleTestCase):
         template = (raiz / 'templates' / 'core' / 'inicio.html').read_text(encoding='utf-8')
         styles = (raiz / 'static' / 'core' / 'css' / 'inicio.css').read_text(encoding='utf-8')
 
-        self.assertIn('?v=20260917-2', template)
+        self.assertIn('?v=20260917-3', template)
         self.assertNotIn('quick-access-arrow', template)
         self.assertIn("{% if '/clientes/' in acesso.caminho %}", template)
         self.assertIn('body.tema-claro .manage-shortcuts', styles)
-        self.assertIn('background:#c2410c; color:#fff;', styles)
+        self.assertIn('background:#1d4ed8; color:#fff;', styles)
         self.assertIn('body.tema-claro .quick-access-icon', styles)
-        self.assertIn('background:#9a3412; color:#fff;', styles)
+        self.assertIn('background:#1e3a5f; color:#fff;', styles)
+        self.assertIn('background-image:radial-gradient(circle,rgba(37,99,235,.2)', styles)
+        self.assertNotIn('body.tema-claro .quick-access-icon { background:#9a3412', styles)
 
 
 class InicioOperacionalTests(TestCase):
