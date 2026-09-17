@@ -35,6 +35,19 @@ class UiAttentionContrastTests(SimpleTestCase):
         self.assertIn('const top = Math.max(', javascript)
         self.assertIn('instance.panel.style.top = `${top}px`', javascript)
 
+    def test_dashboard_comparison_uses_aligned_compact_controls(self):
+        css = self._read('static/css/ui-attention-contrast.css')
+        dashboard = self._read('apps/core/templates/core/dashboard.html')
+
+        self.assertIn('dashboard-sales-breakdown', dashboard)
+        self.assertEqual(dashboard.count('class="dashboard-sales-pane"'), 2)
+        self.assertEqual(dashboard.count('dashboard-sales-pane-head'), 2)
+        self.assertIn('.dashboard-sales-breakdown .dashboard-sales-pane-head', css)
+        self.assertIn('min-height: 48px', css)
+        self.assertIn('min-height: 30px !important', css)
+        self.assertIn('height: 30px !important', css)
+        self.assertIn('border-width: 1px !important', css)
+
     def test_dark_theme_repairs_legacy_pills_and_muted_text(self):
         css = self._read('static/css/ui-attention-contrast.css')
 

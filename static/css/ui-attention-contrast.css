@@ -38,6 +38,51 @@ body.tema-claro :is(.erp-table-columns-toolbar .btn-secondary, [data-product-col
   stroke: currentColor !important;
 }
 
+/*
+ * Comparativos compactos do dashboard: as duas faixas têm a mesma altura e o
+ * controle chama atenção sem competir com os filtros e indicadores do quadro.
+ */
+.dashboard-sales-breakdown .dashboard-sales-pane {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.dashboard-sales-breakdown .dashboard-sales-pane-head {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+}
+
+.dashboard-sales-breakdown .dashboard-sales-pane > .erp-table-columns-toolbar {
+  min-height: 40px;
+  margin: 0;
+  padding: 4px 10px;
+  align-items: center;
+  border-bottom: 1px solid rgba(148, 163, 184, .2);
+}
+
+.dashboard-sales-breakdown .erp-table-columns-toolbar .btn-secondary {
+  min-height: 30px !important;
+  height: 30px !important;
+  padding: 0 10px !important;
+  border-width: 1px !important;
+  border-radius: 8px !important;
+  gap: 6px !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, .10) !important;
+}
+
+.dashboard-sales-breakdown .erp-table-columns-toolbar .btn-secondary svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+body.tema-claro .dashboard-sales-breakdown .dashboard-sales-pane > .erp-table-columns-toolbar {
+  border-bottom-color: #e5e7eb;
+}
+
 /* O seletor proprio de Produtos ficava para fora da tela quando estava a direita. */
 [data-product-column-picker] .produto-column-picker-panel {
   right: 0 !important;

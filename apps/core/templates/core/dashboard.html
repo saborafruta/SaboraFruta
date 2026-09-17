@@ -361,11 +361,11 @@
       </div>
     {% else %}
 
-      <div class="grid grid-cols-1 xl:grid-cols-2 gap-0" style="border-top:none;">
+      <div class="dashboard-sales-breakdown grid grid-cols-1 xl:grid-cols-2 gap-0" style="border-top:none;">
 
         <!-- Por Filial -->
-        <div style="border-right:1px solid #2a2a2e;">
-          <div class="px-5 py-3" style="border-bottom:1px solid #2a2a2e;">
+        <div class="dashboard-sales-pane" style="border-right:1px solid #2a2a2e;">
+          <div class="dashboard-sales-pane-head px-5 py-3" style="border-bottom:1px solid #2a2a2e;">
             <span class="text-xs font-medium uppercase tracking-widest" style="color:#888; letter-spacing:0.08em;">Por Filial</span>
           </div>
           <div class="overflow-x-auto">
@@ -396,8 +396,8 @@
 
         <!-- Por Forma de Pagamento -->
         {{ vendas_acumuladas.por_pagamento|json_script:"pgto-linhas" }}
-        <div x-data="pagamentoPeriodo()" x-init="iniciar()">
-          <div class="px-5 py-3 flex items-center gap-2 flex-wrap" style="border-bottom:1px solid #2a2a2e;">
+        <div class="dashboard-sales-pane" x-data="pagamentoPeriodo()" x-init="iniciar()">
+          <div class="dashboard-sales-pane-head px-5 py-3 flex items-center gap-2 flex-wrap" style="border-bottom:1px solid #2a2a2e;">
             <span class="text-xs font-medium uppercase tracking-widest" style="color:#888; letter-spacing:0.08em;">Por Forma de Pagamento</span>
 
             <div class="ml-auto flex items-center gap-1.5">

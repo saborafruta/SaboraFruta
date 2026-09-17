@@ -62,6 +62,8 @@ Toda tela deve:
 ## Cadastros com listagem
 - O botao `Colunas` usa sempre o destaque global de descoberta (borda amarela,
   fundo suave e foco visivel). Nao substituir por um botao secundario neutro.
+- Em paineis comparativos compactos, o mesmo botao pode usar a variante de
+  30 px, desde que todas as tabelas lado a lado reservem a mesma faixa para ele.
 - Tags de status, tipo e categoria devem usar `.erp-tag` com uma variante
   semantica. Em codigo legado, combinacoes de fundo `*-100` e texto colorido
   precisam manter contraste equivalente nos temas claro e escuro.
