@@ -83,6 +83,22 @@ def _usuario_operacional(request, *, obrigatorio=False):
     return usuario
 
 
+def _rascunho_op_acessivel(request, chave, *, com_imagens=False):
+    """Rascunho do próprio usuário ou, para superadmin, de qualquer autor."""
+    try:
+        chave = UUID(str(chave))
+    except (TypeError, ValueError):
+        return None
+    rascunhos = RascunhoOP.objects.filter(
+        filial=_filial(request), chave=chave,
+    )
+    if not request.user.is_superuser:
+        rascunhos = rascunhos.filter(usuario=_usuario_operacional(request))
+    if com_imagens:
+        rascunhos = rascunhos.prefetch_related('imagens')
+    return rascunhos.first()
+
+
 def _pedido(request, pk):
     return get_object_or_404(
         PedidoProducao.objects.for_filial(_filial(request)).select_related(
@@ -657,13 +673,14 @@ class Op2CreateView(ModaBaseView):
         rascunho_chave = (request.POST.get('rascunho_chave') or '').strip()
         rascunho_op = None
         if rascunho_chave:
-            rascunho_op = RascunhoOP.objects.filter(
-                filial=_filial(request), usuario=usuario_operacional, chave=rascunho_chave,
-            ).prefetch_related('imagens').first()
+            rascunho_op = _rascunho_op_acessivel(
+                request, rascunho_chave, com_imagens=True,
+            )
 
         with tenant_atomic():
             pedido = PedidoProducao.objects.create(
-                filial=_filial(request), cliente=cliente, vendedor=usuario_operacional,
+                filial=_filial(request), cliente=cliente,
+                vendedor=rascunho_op.usuario if rascunho_op else usuario_operacional,
                 status=PedidoProducao.Status.ORCAMENTO,
                 contato_nome=request.POST.get('contato_nome') or cliente.contato_nome or '',
                 contato_telefone=(
@@ -821,10 +838,7 @@ class Op2CreateView(ModaBaseView):
                 if rascunho_op:
                     for imagem_rascunho in rascunho_op.imagens.all():
                         imagem_rascunho.arquivo.delete(save=False)
-                RascunhoOP.objects.filter(
-                    filial=_filial(request), usuario=usuario_operacional,
-                    chave=rascunho_chave,
-                ).delete()
+                    rascunho_op.delete()
             else:
                 # Compatibilidade com uma aba aberta antes de cada rascunho
                 # ganhar sua própria chave.
@@ -901,10 +915,9 @@ class Op2CreateView(ModaBaseView):
             chave = uuid4()
         rascunho = None
         if chave_retomada or chave_sessao:
-            rascunho = RascunhoOP.objects.filter(
-                filial=_filial(request),
-                usuario=_usuario_operacional(request), chave=chave,
-            ).first()
+            rascunho = _rascunho_op_acessivel(
+                request, chave, com_imagens=True,
+            )
             if chave_retomada and rascunho is None:
                 chave = uuid4()
         return {
@@ -1316,9 +1329,15 @@ class Op2RascunhoView(ModaBaseView):
                 return JsonResponse({'ok': False, 'erro': 'Produto ou imagem inválida.'}, status=400)
             if any(upload.size > self.limite_imagem for upload in uploads):
                 return JsonResponse({'ok': False, 'erro': 'Cada imagem pode ter até 15 MB.'}, status=413)
-            rascunho, _ = RascunhoOP.objects.get_or_create(
-                filial=_filial(request), usuario=usuario_operacional, chave=chave,
-            )
+            rascunho = _rascunho_op_acessivel(request, chave)
+            if rascunho is None:
+                if RascunhoOP.objects.filter(chave=chave).exists():
+                    return JsonResponse({
+                        'ok': False, 'erro': 'Você não tem acesso a este rascunho.',
+                    }, status=403)
+                rascunho = RascunhoOP.objects.create(
+                    filial=_filial(request), usuario=usuario_operacional, chave=chave,
+                )
             for imagem in list(rascunho.imagens.filter(item_uid=item_uid)):
                 imagem.arquivo.delete(save=False)
                 imagem.delete()
@@ -1349,10 +1368,19 @@ class Op2RascunhoView(ModaBaseView):
                 filial=_filial(request), usuario=usuario_operacional,
             ).order_by('-updated_at').first()
             chave = existente.chave if existente else uuid4()
-        rascunho, _ = RascunhoOP.objects.update_or_create(
-            filial=_filial(request), usuario=usuario_operacional, chave=chave,
-            defaults={'dados': dados},
-        )
+        rascunho = _rascunho_op_acessivel(request, chave)
+        if rascunho is None:
+            if RascunhoOP.objects.filter(chave=chave).exists():
+                return JsonResponse({
+                    'ok': False, 'erro': 'Você não tem acesso a este rascunho.',
+                }, status=403)
+            rascunho = RascunhoOP.objects.create(
+                filial=_filial(request), usuario=usuario_operacional,
+                chave=chave, dados=dados,
+            )
+        else:
+            rascunho.dados = dados
+            rascunho.save(update_fields=['dados', 'updated_at'])
         return JsonResponse({
             'ok': True,
             'atualizado_em': rascunho.updated_at.isoformat(),
@@ -1363,21 +1391,22 @@ class Op2RascunhoView(ModaBaseView):
             usuario_operacional = _usuario_operacional(request, obrigatorio=True)
         except DomainError as erro:
             return JsonResponse({'ok': False, 'erro': str(erro)}, status=400)
-        filtros = {
-            'filial': _filial(request),
-            'usuario': usuario_operacional,
-        }
         chave_texto = (request.GET.get('chave') or '').strip()
         if chave_texto:
-            try:
-                filtros['chave'] = UUID(chave_texto)
-            except ValueError:
+            rascunho = _rascunho_op_acessivel(
+                request, chave_texto, com_imagens=True,
+            )
+            if rascunho is None:
                 return JsonResponse({'ok': False, 'erro': 'Rascunho inválido.'}, status=400)
-        rascunhos = RascunhoOP.objects.filter(**filtros).prefetch_related('imagens')
+            rascunhos = [rascunho]
+        else:
+            rascunhos = RascunhoOP.objects.filter(
+                filial=_filial(request), usuario=usuario_operacional,
+            ).prefetch_related('imagens')
         for rascunho in rascunhos:
             for imagem in rascunho.imagens.all():
                 imagem.arquivo.delete(save=False)
-        rascunhos.delete()
+            rascunho.delete()
         return JsonResponse({'ok': True})
 
 

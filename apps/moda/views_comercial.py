@@ -65,10 +65,13 @@ class ComercialView(ModaBaseView):
             for cliente in Cliente.objects.for_filial(_filial(request)).filter(pk__in=clientes_ids)
         }
         for rascunho in rascunhos:
-            # O superadministrador enxerga o trabalho em andamento de toda a
-            # filial, mas um rascunho alheio continua somente para consulta no
-            # quadro. Abrir, alterar ou excluir permanece reservado ao autor.
-            rascunho.pode_gerenciar = rascunho.usuario_id == request.user.pk
+            # O superadministrador pode abrir o trabalho em andamento de toda
+            # a filial. O atalho de exclusão continua reservado ao autor para
+            # evitar descarte acidental direto no quadro.
+            rascunho.pode_abrir = (
+                request.user.is_superuser or rascunho.usuario_id == request.user.pk
+            )
+            rascunho.pode_excluir = rascunho.usuario_id == request.user.pk
             dados_rascunho = rascunho.dados or {}
             itens = dados_rascunho.get('itens') or []
             item_incompleto = dados_rascunho.get('itemRascunho') or dados_rascunho.get('draft') or {}

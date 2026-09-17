@@ -1065,7 +1065,7 @@ class Op2Tests(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertFalse(RascunhoOP.objects.filter(pk=rascunho.pk).exists())
 
-    def test_superadmin_ve_rascunhos_de_todos_os_usuarios_sem_gerenciar_alheios(self):
+    def test_superadmin_abre_e_atualiza_rascunho_alheio_sem_trocar_autor(self):
         self._login_op2()
         outro_usuario = Usuario.objects.create_user(
             email='vendedor.rascunho@teste.local', nome='Vendedor do Rascunho',
@@ -1081,7 +1081,7 @@ class Op2Tests(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'Vendedor do Rascunho')
         self.assertIn(rascunho_alheio, resposta.context['rascunhos_op'])
-        self.assertNotContains(
+        self.assertContains(
             resposta,
             f'data-url="{reverse("moda:op2-create")}?rascunho={rascunho_alheio.chave}"',
         )
@@ -1090,8 +1090,45 @@ class Op2Tests(TestCase):
             f'data-rascunho="{rascunho_alheio.chave}"',
         )
 
+        pagina = self.client.get(
+            reverse('moda:op2-create') + f'?rascunho={rascunho_alheio.chave}'
+        )
+        self.assertEqual(pagina.status_code, 200)
+        self.assertIsNotNone(pagina.context['rascunho_op'])
+
+        autosave = self.client.post(
+            reverse('moda:op2-rascunho'),
+            data=json.dumps({
+                'rascunhoChave': str(rascunho_alheio.chave),
+                'buscaCliente': 'Atualizado pelo superadmin',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(autosave.status_code, 200)
+        rascunho_alheio.refresh_from_db()
+        self.assertEqual(rascunho_alheio.usuario, outro_usuario)
+        self.assertEqual(
+            rascunho_alheio.dados['buscaCliente'], 'Atualizado pelo superadmin',
+        )
+        self.assertEqual(RascunhoOP.objects.filter(chave=rascunho_alheio.chave).count(), 1)
+
+        conclusao = self.client.post(reverse('moda:op2-create'), {
+            **self._modelo_completo('item_0_'),
+            'cliente': str(self.cliente.pk),
+            'rascunho_chave': str(rascunho_alheio.chave),
+            'item_0_produto_id': str(self.produto.pk),
+            'item_0_quantidade': '2',
+            'pagamento_0_forma': 'nao_informado',
+            'pagamento_0_valor': '20.00',
+        })
+        self.assertEqual(conclusao.status_code, 302)
+        pedido_criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
+        self.assertEqual(pedido_criado.vendedor, outro_usuario)
+        self.assertFalse(RascunhoOP.objects.filter(pk=rascunho_alheio.pk).exists())
+
     def test_usuario_comum_continua_vendo_somente_os_proprios_rascunhos(self):
         from apps.moda.views_comercial import _rascunhos_visiveis
+        from apps.moda.views_op2 import _rascunho_op_acessivel
 
         usuario = Usuario.objects.create_user(
             email='vendedor.proprio@teste.local', nome='Vendedor Próprio',
@@ -1111,6 +1148,9 @@ class Op2Tests(TestCase):
 
         self.assertEqual(visiveis, [proprio])
         self.assertNotIn(alheio, visiveis)
+        request = SimpleNamespace(filial_ativa=self.filial, user=usuario)
+        self.assertEqual(_rascunho_op_acessivel(request, proprio.chave), proprio)
+        self.assertIsNone(_rascunho_op_acessivel(request, alheio.chave))
 
     def test_finaliza_op_e_vincula_item_incompleto_sem_somar_no_total(self):
         self._login_op2()
