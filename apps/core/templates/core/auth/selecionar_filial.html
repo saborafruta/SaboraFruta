@@ -67,7 +67,7 @@
      x-data="{
        busca: '',
        empresa: '',
-       modo: 'grid',
+       modo: 'list',
        soFavoritas: false,
        favoritas: JSON.parse(document.getElementById('filiais-favoritas-data').textContent),
        salvandoFavorito: null,
@@ -318,7 +318,7 @@
         {% endfor %}
       </div>
 
-      <div class="mt-5 space-y-3" x-show="modo === 'list'" x-cloak>
+      <div class="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-2" x-show="modo === 'list'" x-cloak>
         {% for f in filiais %}
           <article class="rounded-xl border p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between selecao-card"
                    data-empresa="{{ f.empresa_id }}"

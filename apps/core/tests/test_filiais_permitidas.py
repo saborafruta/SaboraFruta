@@ -181,6 +181,8 @@ class TelaDeEscolhaTests(FiliaisBase):
         self.assertContains(resposta, 'filiais-favoritas-data')
         self.assertContains(resposta, 'Somente favoritas')
         self.assertContains(resposta, 'Adicionar aos favoritos')
+        self.assertContains(resposta, "modo: 'list'")
+        self.assertContains(resposta, 'grid-cols-1 gap-3 lg:grid-cols-2')
 
     def test_usuario_pode_favoritar_e_desfavoritar_filial_permitida(self):
         lucas = self._usuario(
