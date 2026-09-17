@@ -187,6 +187,10 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertEqual(sidebar.count('sidebar-module-button'), 13)  # 5 regras CSS + 8 botoes mobile
         self.assertEqual(navegacao.count('sidebar-module-button'), 8)
         self.assertIn('class="sidebar-home-link flex items-center gap-3', navegacao)
+        self.assertIn(
+            '<span class="sidebar-home-label" x-show="!collapsed">{{ pagina_inicial_nome }}</span>',
+            navegacao,
+        )
         self.assertIn('aria-current="page"', navegacao)
         self.assertNotIn('data-sidebar-dashboard\n         class="flex items-center', navegacao)
         self.assertIn('.sidebar-module-button > span:first-child', sidebar)
