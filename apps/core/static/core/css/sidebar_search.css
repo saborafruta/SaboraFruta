@@ -14,10 +14,10 @@
 .sidebar-menu-search::before {
   content: "";
   position: absolute;
-  right: 0;
+  right: -16px;
   bottom: 100%;
-  left: 0;
-  height: 10px;
+  left: -16px;
+  height: 24px;
   background: var(--sidebar-search-shelf);
   pointer-events: none;
 }

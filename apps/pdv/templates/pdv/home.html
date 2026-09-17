@@ -3,7 +3,7 @@
 {% block title %}PDV{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'core/css/sidebar_search.css' %}?v=20260916-2">
+<link rel="stylesheet" href="{% static 'core/css/sidebar_search.css' %}?v=20260917-1">
 <style>
   .payment-confirm { align-self:center;min-height:38px;padding:8px 15px;border:1px solid #15803d;border-radius:7px;background:#15803d;color:#fff;font-size:13px;font-weight:600;cursor:pointer;box-shadow:none; }
   .payment-confirm:hover { background:#166534;border-color:#166534; }
@@ -3859,7 +3859,7 @@
 {% favoritos_menu_completo as favoritos_completos %}
 {{ favoritos_completos|json_script:"sidebar-favorites-records" }}
 <script src="{% static 'core/js/sidebar_favorites.js' %}?v=20260913-2"></script>
-<script src="{% static 'core/js/sidebar_search.js' %}?v=20260916-2"></script>
+<script src="{% static 'core/js/sidebar_search.js' %}?v=20260917-1"></script>
 <script>
 function pdv() {
   return {
