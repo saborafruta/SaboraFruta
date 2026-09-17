@@ -87,3 +87,6 @@ CSRF_COOKIE_SECURE = True
 # sido executada ou uma nova vigencia tenha comecado.
 IBPT_AUTO_SYNC = env.bool('IBPT_AUTO_SYNC', default=True)
 IBPT_INTERNAL_SCHEDULER = env.bool('IBPT_INTERNAL_SCHEDULER', default=True)
+NFCE_RECONCILIATION_INTERNAL_SCHEDULER = env.bool(
+    'NFCE_RECONCILIATION_INTERNAL_SCHEDULER', default=True,
+)
