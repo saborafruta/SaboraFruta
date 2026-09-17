@@ -172,13 +172,14 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertIn(estado_fechado, sidebar)
         self.assertNotIn("localStorage.setItem('sidebar-secoes'", sidebar)
         self.assertIn("{% if '/moda/' in request.path %}s.moda = true;{% endif %}", sidebar)
-        self.assertEqual(sidebar.count('sidebar-module-button'), 12)  # 4 regras CSS + 8 botoes mobile
+        self.assertEqual(sidebar.count('sidebar-module-button'), 13)  # 5 regras CSS + 8 botoes mobile
         self.assertEqual(navegacao.count('sidebar-module-button'), 8)
         self.assertIn('.sidebar-module-button > span:first-child', sidebar)
-        self.assertIn('font-size: 12px;', sidebar)
-        self.assertIn('font-weight: 500;', sidebar)
-        self.assertIn('line-height: 1rem;', sidebar)
-        self.assertIn('repeating-linear-gradient(135deg', sidebar)
+        self.assertIn('font-family: Inter, ui-sans-serif, system-ui, sans-serif !important;', sidebar)
+        self.assertIn('font-size: 13px !important;', sidebar)
+        self.assertIn('font-weight: 600 !important;', sidebar)
+        self.assertNotIn('repeating-linear-gradient(135deg', sidebar)
+        self.assertIn('box-shadow: 0 3px 9px', sidebar)
 
     def test_produtos_principais_nao_ficam_ativos_dentro_de_moda(self):
         raiz = Path(__file__).resolve().parents[1]

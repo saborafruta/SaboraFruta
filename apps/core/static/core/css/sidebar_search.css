@@ -38,7 +38,6 @@
   border: 1px solid rgba(100, 116, 139, 0.62);
   border-radius: 9px;
   background-color: rgba(248, 250, 252, 0.96);
-  background-image: repeating-linear-gradient(135deg, rgba(100, 116, 139, 0.035) 0 1px, transparent 1px 6px);
   box-shadow: 0 2px 7px rgba(15, 23, 42, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.82);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
@@ -102,7 +101,6 @@ html.tema-escuro .system-nav-drawer .sidebar-menu-search-field,
 html.tema-escuro .system-nav-drawer .sidebar-menu-search-results {
   border-color: rgba(148, 163, 184, 0.48);
   background-color: #202023;
-  background-image: repeating-linear-gradient(135deg, rgba(226, 232, 240, 0.035) 0 1px, transparent 1px 6px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 body:not(.tema-claro) .sidebar-menu-search,

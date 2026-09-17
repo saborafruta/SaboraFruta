@@ -12,7 +12,7 @@ class SidebarSearchTemplateTests(SimpleTestCase):
 
         self.assertIn('core/js/sidebar_search.js', sidebar)
         self.assertIn('core/css/sidebar_search.css', sidebar)
-        self.assertIn('?v=20260917-4', sidebar)
+        self.assertIn('?v=20260917-5', sidebar)
         self.assertIn('placeholder="Buscar"', busca)
         self.assertIn("border-right:1px solid #cbd5e1", sidebar)
         self.assertIn("color:#1f2937", sidebar)
@@ -51,7 +51,7 @@ class SidebarSearchTemplateTests(SimpleTestCase):
         self.assertIn('--sidebar-search-shelf: #18181b', styles)
         self.assertIn('color: #475569', styles)
         self.assertIn('color: #64748b', styles)
-        self.assertIn('background-image: repeating-linear-gradient(135deg', styles)
+        self.assertNotIn('repeating-linear-gradient', styles)
         self.assertIn('border-color: #64748b', styles)
         self.assertIn('color: #334155', styles)
 
@@ -60,7 +60,7 @@ class SidebarSearchTemplateTests(SimpleTestCase):
         template = (raiz_apps / "pdv" / "templates" / "pdv" / "home.html").read_text(encoding="utf-8")
 
         self.assertIn('core/css/sidebar_search.css', template)
-        self.assertIn('?v=20260917-4', template)
+        self.assertIn('?v=20260917-5', template)
         self.assertIn('core/js/sidebar_search.js', template)
         self.assertIn('sidebar_favorites.js', template)
         self.assertIn('v=20260917-3', template)
