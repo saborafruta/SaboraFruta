@@ -160,8 +160,13 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertEqual(template.count('data-sidebar-dashboard'), 1)
         self.assertIn('class="sidebar-home-link flex items-center gap-3', template)
         self.assertIn('sidebar-home-link.is-active', template)
-        home_rule = template.split('.sidebar-home-link {', 1)[1].split('}', 1)[0]
-        self.assertNotIn('font-family:', home_rule)
+        self.assertIn('.sidebar-home-link > span {', template)
+        home_label_rule = template.split('.sidebar-home-link > span {', 1)[1].split('}', 1)[0]
+        self.assertIn('font-family: Inter, ui-sans-serif, system-ui, sans-serif;', home_label_rule)
+        self.assertIn('font-size: 13px;', home_label_rule)
+        self.assertIn('font-weight: 600;', home_label_rule)
+        self.assertIn('letter-spacing: 0.1em;', home_label_rule)
+        self.assertIn('text-transform: uppercase;', home_label_rule)
         self.assertIn('aria-current="page"', template)
         self.assertIn('nav.appendChild(panel)', script)
         self.assertNotIn("dashboard.insertAdjacentElement('afterend', panel)", script)
