@@ -176,6 +176,8 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertEqual(navegacao.count('sidebar-module-button'), 8)
         self.assertIn('body.tema-claro .sidebar-module-button > span:first-child', sidebar)
         self.assertIn('font-size: 12px;', sidebar)
+        self.assertIn('font-weight: 500;', sidebar)
+        self.assertIn('line-height: 1rem;', sidebar)
 
     def test_produtos_principais_nao_ficam_ativos_dentro_de_moda(self):
         raiz = Path(__file__).resolve().parents[1]
