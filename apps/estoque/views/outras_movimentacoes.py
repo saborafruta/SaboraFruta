@@ -18,6 +18,7 @@ from apps.core.models import Filial
 from apps.core.services.auditoria import auditoria_para_objeto
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE, PermissaoRequiredMixin
+from apps.core.services.request_scope import empresa_operacional
 from apps.core.services.search import normalize_search_text, ranked_search_ids
 from apps.estoque.forms.outras_movimentacoes import DevolucaoClienteForm, DevolucaoFornecedorForm, SaidaEspecialForm
 from apps.estoque.models import (
@@ -384,7 +385,7 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
         prefixo = request.GET.get('prefixo') == '1'
         filial = request.filial_ativa
         if scope == 'empresa':
-            empresa = request.user.empresa
+            empresa = empresa_operacional(request)
             if hasattr(Produto.objects, 'for_empresa'):
                 qs = Produto.objects.for_empresa(empresa).filter(ativo=True)
             else:
@@ -965,7 +966,7 @@ class TransferenciaLojaView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         filial = request.filial_ativa
-        empresa = request.user.empresa
+        empresa = empresa_operacional(request)
         copiar_documento = (request.GET.get('copiar') or '').strip()
         copia = {}
 
@@ -1188,7 +1189,7 @@ class TransferenciaLojaApiView(PermissaoRequiredMixin, View):
         if not itens:
             return JsonResponse({'erro': 'Adicione ao menos um produto.'}, status=400)
         filial = request.filial_ativa
-        empresa = request.user.empresa
+        empresa = empresa_operacional(request)
 
         if filial_destino_id == filial.pk:
             return JsonResponse({'erro': 'Loja de destino deve ser diferente da origem.'}, status=400)

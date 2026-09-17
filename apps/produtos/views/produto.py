@@ -31,6 +31,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 
 from apps.core.tenant_context import tenant_atomic
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.request_scope import empresa_operacional
 from apps.core.services.search import filter_queryset_by_terms
 from apps.cadastros.models import Fornecedor
 from apps.core.models import Filial, LogSistema
@@ -287,12 +288,12 @@ def _produto_queryset_filtrado(
     if categoria_id:
         categoria = CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
             pk=categoria_id,
-            empresa=request.user.empresa,
+            empresa=empresa_operacional(request),
         ).first()
         subcategoria = CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
             pk=subcategoria_id,
             categoria_pai_id=categoria_id,
-            empresa=request.user.empresa,
+            empresa=empresa_operacional(request),
         ).first() if subcategoria_id else None
         if subcategoria:
             filtro_categoria = (
@@ -322,7 +323,7 @@ def _produto_queryset_filtrado(
     elif subcategoria_id and (
         subcategoria := CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
         pk=subcategoria_id,
-        empresa=request.user.empresa,
+        empresa=empresa_operacional(request),
         categoria_pai__isnull=False,
         ).first()
     ):
@@ -348,7 +349,7 @@ def _produto_queryset_filtrado(
     if marca_id:
         marca = MarcaProduto.objects.for_filial(request.filial_ativa).filter(
             pk=marca_id,
-            empresa=request.user.empresa,
+            empresa=empresa_operacional(request),
         ).first()
         if marca:
             filtro_marca = Q(marca_id=marca_id)
@@ -1337,7 +1338,7 @@ class ProdutoListView(PermissaoRequiredMixin, View):
                 filiais_para_ativar.get(produto.pk, []),
                 ensure_ascii=False,
             )
-        multi_filial = request.user.empresa.filiais.filter(ativo=True).count() > 1
+        multi_filial = empresa_operacional(request).filiais.filter(ativo=True).count() > 1
         if (ver_todos or carregar_lote) and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return render(request, self.template_name, {
                 'ver_todos': ver_todos,
@@ -1400,15 +1401,15 @@ class ProdutoListView(PermissaoRequiredMixin, View):
             'somente_com_estoque': somente_com_estoque,
             'ordem': ordem,
             'categorias': CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                empresa=request.user.empresa,
+                empresa=empresa_operacional(request),
                 ativo=True, categoria_pai__isnull=True,
             ).order_by('nome'),
             'subcategorias': CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                empresa=request.user.empresa,
+                empresa=empresa_operacional(request),
                 ativo=True,
                 categoria_pai_id=categoria_id,
             ).order_by('nome') if categoria_id else CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                empresa=request.user.empresa,
+                empresa=empresa_operacional(request),
                 ativo=True,
                 categoria_pai__isnull=False,
             ).order_by('categoria_pai__nome', 'nome'),
@@ -1416,7 +1417,7 @@ class ProdutoListView(PermissaoRequiredMixin, View):
                 '': [
                     {'id': item.id, 'nome': item.nome}
                     for item in CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                        empresa=request.user.empresa,
+                        empresa=empresa_operacional(request),
                         ativo=True,
                         categoria_pai__isnull=False,
                     ).order_by('categoria_pai__nome', 'nome')
@@ -1425,20 +1426,20 @@ class ProdutoListView(PermissaoRequiredMixin, View):
                     str(categoria_id): [
                         {'id': item.id, 'nome': item.nome}
                         for item in CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                            empresa=request.user.empresa,
+                            empresa=empresa_operacional(request),
                             ativo=True,
                             categoria_pai_id=categoria_id,
                         ).order_by('nome')
                     ]
                     for categoria_id in CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                        empresa=request.user.empresa,
+                        empresa=empresa_operacional(request),
                         ativo=True,
                         categoria_pai__isnull=True,
                     ).values_list('id', flat=True)
                 },
             }),
             'marcas': MarcaProduto.objects.for_filial(request.filial_ativa).filter(
-                empresa=request.user.empresa,
+                empresa=empresa_operacional(request),
                 ativo=True,
             ).order_by('nome'),
             'fornecedores': Fornecedor.objects.for_filial(request.filial_ativa).filter(
@@ -1451,13 +1452,13 @@ class ProdutoListView(PermissaoRequiredMixin, View):
             'inline_categorias_json': json.dumps([
                 {'id': item.id, 'nome': item.nome}
                 for item in CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                    empresa=request.user.empresa, ativo=True, categoria_pai__isnull=True,
+                    empresa=empresa_operacional(request), ativo=True, categoria_pai__isnull=True,
                 ).order_by('nome')
             ]),
             'inline_subcategorias_json': json.dumps([
                 {'id': item.id, 'nome': item.nome, 'categoria_id': item.categoria_pai_id}
                 for item in CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                    empresa=request.user.empresa, ativo=True, categoria_pai__isnull=False,
+                    empresa=empresa_operacional(request), ativo=True, categoria_pai__isnull=False,
                 ).order_by('categoria_pai__nome', 'nome')
             ]),
             'inline_tipos_produto_json': json.dumps([
@@ -1467,7 +1468,7 @@ class ProdutoListView(PermissaoRequiredMixin, View):
             'inline_unidades_json': json.dumps([
                 {'id': item.id, 'nome': str(item)}
                 for item in UnidadeMedida.objects.for_filial(request.filial_ativa).filter(
-                    empresa=request.user.empresa, ativo=True,
+                    empresa=empresa_operacional(request), ativo=True,
                 ).order_by('sigla')
             ]),
         })
@@ -1525,7 +1526,7 @@ class ProdutoFiscalListView(PermissaoRequiredMixin, View):
             'pis_cofins': pis_cofins,
             'regime_fiscal_badge': _filial_regime_fiscal_badge(request.filial_ativa),
             'categorias': CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                empresa=request.user.empresa,
+                empresa=empresa_operacional(request),
                 ativo=True, categoria_pai__isnull=True,
             ).order_by('nome'),
             'fornecedores': Fornecedor.objects.for_filial(request.filial_ativa).filter(
@@ -1535,19 +1536,19 @@ class ProdutoFiscalListView(PermissaoRequiredMixin, View):
             'inline_categorias_json': json.dumps([
                 {'id': item.id, 'nome': item.nome}
                 for item in CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                    empresa=request.user.empresa, ativo=True, categoria_pai__isnull=True,
+                    empresa=empresa_operacional(request), ativo=True, categoria_pai__isnull=True,
                 ).order_by('nome')
             ]),
             'inline_subcategorias_json': json.dumps([
                 {'id': item.id, 'nome': item.nome, 'categoria_id': item.categoria_pai_id}
                 for item in CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                    empresa=request.user.empresa, ativo=True, categoria_pai__isnull=False,
+                    empresa=empresa_operacional(request), ativo=True, categoria_pai__isnull=False,
                 ).order_by('categoria_pai__nome', 'nome')
             ]),
             'inline_unidades_json': json.dumps([
                 {'id': item.id, 'nome': str(item)}
                 for item in UnidadeMedida.objects.for_filial(request.filial_ativa).filter(
-                    empresa=request.user.empresa, ativo=True,
+                    empresa=empresa_operacional(request), ativo=True,
                 ).order_by('sigla')
             ]),
             'inline_origens_produto_json': json.dumps([
@@ -1599,17 +1600,17 @@ class ProdutoCreateView(PermissaoRequiredMixin, View):
             'error_fields': error_fields,
             'error_steps_json': error_steps_json,
             'imagem_preview_url': imagem_preview_url,
-            'subcategorias_form_json': _subcategorias_form_json(request.user.empresa, request.filial_ativa) if request else '{}',
+            'subcategorias_form_json': _subcategorias_form_json(empresa_operacional(request), request.filial_ativa) if request else '{}',
         }
 
     def get(self, request):
-        form = ProdutoForm(empresa=request.user.empresa, filial=request.filial_ativa, estoque_atual=0)
+        form = ProdutoForm(empresa=empresa_operacional(request), filial=request.filial_ativa, estoque_atual=0)
         return render(request, self.template_name, self.get_context(form, request=request))
 
     def post(self, request):
         form = ProdutoForm(
             request.POST, request.FILES,
-            empresa=request.user.empresa,
+            empresa=empresa_operacional(request),
             filial=request.filial_ativa,
             estoque_atual=0,
         )
@@ -1647,7 +1648,7 @@ class ProdutoGerarCodigoBarrasView(PermissaoRequiredMixin, View):
 
     def post(self, request):
         try:
-            codigo = gerar_codigo_barras_unico(empresa=request.user.empresa)
+            codigo = gerar_codigo_barras_unico(empresa=empresa_operacional(request))
         except RuntimeError as erro:
             return JsonResponse({'ok': False, 'error': str(erro)}, status=503)
         return JsonResponse({
@@ -1679,7 +1680,7 @@ class ProdutoDuplicarView(ProdutoCreateView):
     def get(self, request, pk):
         produto_origem = self.get_produto_origem(request, pk)
         form = ProdutoForm(
-            empresa=request.user.empresa,
+            empresa=empresa_operacional(request),
             filial=request.filial_ativa,
             estoque_atual=0,
             initial=_produto_duplicate_initial(produto_origem),
@@ -1695,7 +1696,7 @@ class ProdutoDuplicarView(ProdutoCreateView):
         form = ProdutoForm(
             request.POST,
             request.FILES,
-            empresa=request.user.empresa,
+            empresa=empresa_operacional(request),
             filial=request.filial_ativa,
             estoque_atual=0,
         )
@@ -1843,7 +1844,7 @@ class ProdutoUpdateView(PermissaoRequiredMixin, View):
                 reverse('produtos:produto-image-file', kwargs={'pk': produto.pk})
                 if produto.foto_url else ''
             ),
-            'subcategorias_form_json': _subcategorias_form_json(request.user.empresa, request.filial_ativa),
+            'subcategorias_form_json': _subcategorias_form_json(empresa_operacional(request), request.filial_ativa),
             # O template ja' desenhava as duas coisas ha' tempo -- a tabela de
             # vinculos e o modo popup. Faltava so' quem enchesse o contexto.
             'vinculos_fornecedor': _vinculos_fornecedor(produto),
@@ -1864,7 +1865,7 @@ class ProdutoUpdateView(PermissaoRequiredMixin, View):
 
     def _apresentacao_form(self, request, produto):
         instancia = self._apresentacao_editando(request, produto)
-        return ProdutoApresentacaoForm(empresa=request.user.empresa, instance=instancia)
+        return ProdutoApresentacaoForm(empresa=empresa_operacional(request), instance=instancia)
 
     @staticmethod
     def _popup(request):
@@ -1885,7 +1886,7 @@ class ProdutoUpdateView(PermissaoRequiredMixin, View):
         vinculo = _produto_vinculo_filial(produto, request.filial_ativa)
         form = ProdutoForm(
             instance=produto,
-            empresa=request.user.empresa,
+            empresa=empresa_operacional(request),
             filial=request.filial_ativa,
             estoque_atual=self.get_estoque_atual(request, produto),
         )
@@ -1905,7 +1906,7 @@ class ProdutoUpdateView(PermissaoRequiredMixin, View):
             request.POST,
             request.FILES,
             instance=produto,
-            empresa=request.user.empresa,
+            empresa=empresa_operacional(request),
             filial=request.filial_ativa,
             estoque_atual=estoque_atual,
         )
@@ -2194,7 +2195,7 @@ class ProdutoInlineEditView(PermissaoRequiredMixin, View):
                 setattr(produto, field, _decimal_from_request(value))
             elif field == 'categoria':
                 categoria = CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                    empresa=request.user.empresa, ativo=True, categoria_pai__isnull=True, pk=value,
+                    empresa=empresa_operacional(request), ativo=True, categoria_pai__isnull=True, pk=value,
                 ).first() if value else None
                 produto.categoria = categoria
                 if produto.subcategoria and (
@@ -2203,21 +2204,21 @@ class ProdutoInlineEditView(PermissaoRequiredMixin, View):
                     produto.subcategoria = None
             elif field == 'subcategoria':
                 subcategoria = CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                    empresa=request.user.empresa, ativo=True, categoria_pai__isnull=False, pk=value,
+                    empresa=empresa_operacional(request), ativo=True, categoria_pai__isnull=False, pk=value,
                 ).first() if value else None
                 if subcategoria and produto.categoria_id and subcategoria.categoria_pai_id != produto.categoria_id:
                     return JsonResponse({'ok': False, 'error': 'Sub categoria nao pertence a categoria atual.'}, status=400)
                 produto.subcategoria = subcategoria
             elif field == 'unidade_medida':
                 unidade = UnidadeMedida.objects.for_filial(request.filial_ativa).filter(
-                    empresa=request.user.empresa, ativo=True, pk=value,
+                    empresa=empresa_operacional(request), ativo=True, pk=value,
                 ).first()
                 if not unidade:
                     return JsonResponse({'ok': False, 'error': 'Unidade obrigatoria.'}, status=400)
                 produto.unidade_medida = unidade
             elif field == 'classe_fiscal':
                 classe = ClasseFiscal.objects.for_filial(request.filial_ativa).filter(
-                    empresa=request.user.empresa, ativo=True, pk=value,
+                    empresa=empresa_operacional(request), ativo=True, pk=value,
                 ).first() if value else None
                 produto.classe_fiscal = classe
             elif field == 'tipo_produto':
@@ -2505,7 +2506,7 @@ class ProdutoExportCsvView(PermissaoRequiredMixin, View):
         return _produto_csv_response(
             _produto_queryset_filtrado(request, usar_flag_mostrar_inativos=True),
             'produtos_filtrados.csv',
-            empresa=request.user.empresa,
+            empresa=empresa_operacional(request),
         )
 
 
@@ -2521,7 +2522,7 @@ class ProdutoExportTodosCsvView(PermissaoRequiredMixin, View):
             _produto_queryset_filtrado(request, incluir_inativos_por_padrao=True),
             'produtos_todos.csv',
             completo=True,
-            empresa=request.user.empresa,
+            empresa=empresa_operacional(request),
         )
 
 
@@ -2535,7 +2536,7 @@ class ProdutoExportPdfView(PermissaoRequiredMixin, View):
             return redirect('produtos:produto-list')
         return _produto_pdf_response(
             _produto_queryset_filtrado(request, usar_flag_mostrar_inativos=True),
-            request.user.empresa,
+            empresa_operacional(request),
         )
 
 
@@ -2562,9 +2563,9 @@ class ProdutoApresentacaoCreateView(PermissaoRequiredMixin, View):
 
     def post(self, request, pk):
         produto = get_object_or_404(
-            Produto, pk=pk, filial__empresa=request.user.empresa,
+            Produto, pk=pk, filial__empresa=empresa_operacional(request),
         )
-        form = ProdutoApresentacaoForm(request.POST, empresa=request.user.empresa)
+        form = ProdutoApresentacaoForm(request.POST, empresa=empresa_operacional(request))
         if not form.is_valid():
             messages.error(request, 'Nao foi possivel salvar a apresentacao. Confira os campos.')
             return redirect(f"{reverse('produtos:produto-update', args=[produto.pk])}?step=8")
@@ -2592,11 +2593,11 @@ class ProdutoApresentacaoUpdateView(PermissaoRequiredMixin, View):
 
     def post(self, request, pk, apresentacao_pk):
         produto = get_object_or_404(
-            Produto, pk=pk, filial__empresa=request.user.empresa,
+            Produto, pk=pk, filial__empresa=empresa_operacional(request),
         )
         apresentacao = get_object_or_404(ProdutoApresentacao, pk=apresentacao_pk, produto=produto)
         form = ProdutoApresentacaoForm(
-            request.POST, empresa=request.user.empresa, instance=apresentacao,
+            request.POST, empresa=empresa_operacional(request), instance=apresentacao,
         )
         if not form.is_valid():
             messages.error(request, 'Nao foi possivel salvar a apresentacao. Confira os campos.')
@@ -2629,7 +2630,7 @@ class ProdutoApresentacaoDeleteView(PermissaoRequiredMixin, View):
 
     def post(self, request, pk, apresentacao_pk):
         produto = get_object_or_404(
-            Produto, pk=pk, filial__empresa=request.user.empresa,
+            Produto, pk=pk, filial__empresa=empresa_operacional(request),
         )
         apresentacao = get_object_or_404(ProdutoApresentacao, pk=apresentacao_pk, produto=produto)
         descricao = apresentacao.descricao
@@ -2653,7 +2654,7 @@ class ProdutoFornecedorVinculoDeleteView(PermissaoRequiredMixin, View):
         # qualquer outra coisa: o botão "remover vínculo" do formulário do
         # produto devolvia 500, sempre.
         produto = get_object_or_404(
-            Produto, pk=pk, filial__empresa=request.user.empresa,
+            Produto, pk=pk, filial__empresa=empresa_operacional(request),
         )
         vinculo = get_object_or_404(ProdutoFornecedorEquivalencia, pk=vinculo_pk, produto=produto)
 

@@ -8,6 +8,7 @@ from django.urls import reverse_lazy
 from django.views import View
 
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.request_scope import empresa_operacional
 from apps.core.tenant_context import tenant_atomic
 from apps.produtos.forms import UnidadeMedidaForm
 from apps.produtos.models import UnidadeMedida
@@ -20,7 +21,7 @@ class UnidadeListView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         qs = UnidadeMedida.objects.for_filial(request.filial_ativa).filter(
-            empresa=request.user.empresa,
+            empresa=empresa_operacional(request),
         ).order_by('sigla')
         page_obj = Paginator(qs, 25).get_page(request.GET.get('page'))
         return render(request, self.template_name, {
@@ -45,7 +46,7 @@ class UnidadeCreateView(PermissaoRequiredMixin, View):
         form = UnidadeMedidaForm(request.POST)
         if form.is_valid():
             obj = form.save(commit=False)
-            obj.empresa = request.user.empresa
+            obj.empresa = empresa_operacional(request)
             obj.save()
             ReplicacaoProdutoService.sincronizar_unidade(obj, request.filial_ativa)
             messages.success(request, f'Unidade "{obj}" criada.')
@@ -85,7 +86,7 @@ class UnidadeInlineCreateView(PermissaoRequiredMixin, View):
             return JsonResponse({'ok': False, 'error': erro or 'Dados inválidos.'}, status=400)
 
         obj = form.save(commit=False)
-        obj.empresa = request.user.empresa
+        obj.empresa = empresa_operacional(request)
         # `empresa` não é campo do form (só é atribuído aqui), então a
         # validação automática de `unique_together` do ModelForm não pega
         # sigla repetida -- só o banco pega, no save. Sem o try/except essa
@@ -111,7 +112,7 @@ class UnidadeUpdateView(PermissaoRequiredMixin, View):
         obj = get_object_or_404(
             UnidadeMedida.objects.for_filial(request.filial_ativa),
             pk=pk,
-            empresa=request.user.empresa,
+            empresa=empresa_operacional(request),
         )
         return render(request, self.template_name, {
             'form': UnidadeMedidaForm(instance=obj),
@@ -123,7 +124,7 @@ class UnidadeUpdateView(PermissaoRequiredMixin, View):
         obj = get_object_or_404(
             UnidadeMedida.objects.for_filial(request.filial_ativa),
             pk=pk,
-            empresa=request.user.empresa,
+            empresa=empresa_operacional(request),
         )
         form = UnidadeMedidaForm(request.POST, instance=obj)
         if form.is_valid():

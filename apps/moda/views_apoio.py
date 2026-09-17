@@ -17,6 +17,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
+from apps.core.services.request_scope import empresa_operacional
+
 from . import forms as f
 from . import models as m
 from .views import ModaBaseView
@@ -297,7 +299,7 @@ class NovoProdutoEstoqueView(ModaBaseView):
         obj = self._obter(request, cadastro, pk)
         form = f.NovoProdutoEstoqueForm(
             initial={'nome': obj.nome, 'codigo': getattr(obj, 'codigo', '')},
-            empresa=request.user.empresa,
+            empresa=empresa_operacional(request),
         )
         return render(request, 'moda/apoio_produto_estoque_form.html', {
             'cadastro': cadastro, 'obj': obj, 'form': form,
@@ -306,7 +308,7 @@ class NovoProdutoEstoqueView(ModaBaseView):
     def post(self, request, slug, pk, grupo=None):
         cadastro = _cadastro(slug)
         obj = self._obter(request, cadastro, pk)
-        form = f.NovoProdutoEstoqueForm(request.POST, empresa=request.user.empresa)
+        form = f.NovoProdutoEstoqueForm(request.POST, empresa=empresa_operacional(request))
         if not form.is_valid():
             return render(request, 'moda/apoio_produto_estoque_form.html', {
                 'cadastro': cadastro, 'obj': obj, 'form': form,

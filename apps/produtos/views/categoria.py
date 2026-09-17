@@ -7,6 +7,7 @@ from django.urls import reverse_lazy
 from django.views import View
 
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.request_scope import empresa_operacional
 from apps.produtos.forms import CategoriaProdutoForm
 from apps.produtos.models import CategoriaProduto
 from apps.produtos.services.replicacao_service import ReplicacaoProdutoService
@@ -46,7 +47,7 @@ class CategoriaListView(PermissaoRequiredMixin, View):
     template_name = 'produtos/categoria/list.html'
 
     def get(self, request):
-        empresa = request.filial_ativa.empresa
+        empresa = empresa_operacional(request)
         base_qs = CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
             empresa=empresa,
         )
@@ -89,7 +90,7 @@ class CategoriaCreateView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         tipo = request.GET.get('tipo', 'categoria')
-        empresa = request.filial_ativa.empresa
+        empresa = empresa_operacional(request)
         initial = {}
         if tipo == 'subcategoria':
             primeira_categoria = CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
@@ -111,7 +112,7 @@ class CategoriaCreateView(PermissaoRequiredMixin, View):
 
     def post(self, request):
         tipo = request.GET.get('tipo', 'categoria')
-        empresa = request.filial_ativa.empresa
+        empresa = empresa_operacional(request)
         form = CategoriaProdutoForm(
             request.POST,
             empresa=empresa,
@@ -157,7 +158,7 @@ class CategoriaUpdateView(PermissaoRequiredMixin, View):
     template_name = 'produtos/categoria/form.html'
 
     def get(self, request, pk):
-        empresa = request.filial_ativa.empresa
+        empresa = empresa_operacional(request)
         obj = get_object_or_404(
             CategoriaProduto.objects.for_filial(request.filial_ativa), pk=pk, empresa=empresa,
         )
@@ -174,7 +175,7 @@ class CategoriaUpdateView(PermissaoRequiredMixin, View):
         })
 
     def post(self, request, pk):
-        empresa = request.filial_ativa.empresa
+        empresa = empresa_operacional(request)
         obj = get_object_or_404(
             CategoriaProduto.objects.for_filial(request.filial_ativa), pk=pk, empresa=empresa,
         )

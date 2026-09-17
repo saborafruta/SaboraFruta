@@ -1,5 +1,5 @@
 .sidebar-menu-search {
-  --sidebar-search-shelf: rgba(255, 255, 255, 0.96);
+  --sidebar-search-shelf: #fff;
   position: sticky;
   top: -1px;
   z-index: 30;
@@ -10,6 +10,16 @@
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.sidebar-menu-search::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: 10px;
+  background: var(--sidebar-search-shelf);
+  pointer-events: none;
 }
 .sidebar-menu-search.is-stuck {
   border-bottom-color: rgba(148, 163, 184, 0.18);
@@ -90,7 +100,7 @@ html.tema-escuro .system-nav-drawer .sidebar-menu-search-results {
 }
 body:not(.tema-claro) .sidebar-menu-search,
 html.tema-escuro .system-nav-drawer .sidebar-menu-search {
-  --sidebar-search-shelf: rgba(24, 24, 27, 0.96);
+  --sidebar-search-shelf: #18181b;
 }
 body:not(.tema-claro) .sidebar-menu-search-field:focus-within,
 html.tema-escuro .system-nav-drawer .sidebar-menu-search-field:focus-within {
@@ -108,7 +118,7 @@ html.tema-escuro .system-nav-drawer .sidebar-menu-search-results a:hover,
 html.tema-escuro .system-nav-drawer .sidebar-menu-search-results a.is-selected { background:#1e3a5f; color:#bfdbfe; }
 html.tema-claro .system-nav-drawer .sidebar-menu-search-field,
 html.tema-claro .system-nav-drawer .sidebar-menu-search-results { background:#fff; }
-html.tema-claro .system-nav-drawer .sidebar-menu-search { --sidebar-search-shelf: rgba(255,255,255,0.96); }
+html.tema-claro .system-nav-drawer .sidebar-menu-search { --sidebar-search-shelf: #fff; }
 html.tema-claro .system-nav-drawer .sidebar-menu-search-field input { color:#111827; }
 html.tema-claro .system-nav-drawer .sidebar-menu-search-results a { color:#334155; }
 body.sidebar-collapsed .sidebar-desktop .sidebar-menu-search { display:none; }

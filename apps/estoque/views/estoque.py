@@ -31,6 +31,7 @@ from apps.compras.services.entrada_custo_service import EntradaCustoService
 from apps.core.services.auditoria import auditoria_para_objeto, auditoria_relacionada, registrar_auditoria, snapshot_modelo
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE, PermissaoRequiredMixin
+from apps.core.services.request_scope import empresa_operacional
 from apps.core.services.search import filter_queryset_by_terms
 from apps.estoque.forms import AjusteEstoqueForm, MovimentacaoManualForm, TransferenciaForm
 from apps.estoque.models import (
@@ -212,12 +213,12 @@ class EstoqueListView(PermissaoRequiredMixin, View):
         if categoria_id:
             categoria = CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
                 pk=categoria_id,
-                empresa=request.user.empresa,
+                empresa=empresa_operacional(request),
             ).first()
             subcategoria = CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
                 pk=subcategoria_id,
                 categoria_pai_id=categoria_id,
-                empresa=request.user.empresa,
+                empresa=empresa_operacional(request),
             ).first() if subcategoria_id else None
             if subcategoria:
                 filtro_categoria = (
@@ -247,7 +248,7 @@ class EstoqueListView(PermissaoRequiredMixin, View):
         elif subcategoria_id and (
             subcategoria := CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
                 pk=subcategoria_id,
-                empresa=request.user.empresa,
+                empresa=empresa_operacional(request),
                 categoria_pai__isnull=False,
             ).first()
         ):
@@ -268,7 +269,7 @@ class EstoqueListView(PermissaoRequiredMixin, View):
         if marca_id:
             marca = MarcaProduto.objects.for_filial(request.filial_ativa).filter(
                 pk=marca_id,
-                empresa=request.user.empresa,
+                empresa=empresa_operacional(request),
             ).first()
             if marca:
                 filtro_marca = Q(marca_id=marca_id)
@@ -409,16 +410,16 @@ class EstoqueListView(PermissaoRequiredMixin, View):
             'deposito_id': deposito_id,
             'tem_varios_depositos': len(depositos) > 1,
             'categorias': CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                empresa=request.user.empresa,
+                empresa=empresa_operacional(request),
                 ativo=True,
                 categoria_pai__isnull=True,
             ).order_by('nome'),
             'subcategorias': CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                empresa=request.user.empresa,
+                empresa=empresa_operacional(request),
                 ativo=True,
                 categoria_pai_id=categoria_id,
             ).order_by('nome') if categoria_id else CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                empresa=request.user.empresa,
+                empresa=empresa_operacional(request),
                 ativo=True,
                 categoria_pai__isnull=False,
             ).order_by('categoria_pai__nome', 'nome'),
@@ -426,7 +427,7 @@ class EstoqueListView(PermissaoRequiredMixin, View):
                 '': [
                     {'id': item.id, 'nome': item.nome}
                     for item in CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                        empresa=request.user.empresa,
+                        empresa=empresa_operacional(request),
                         ativo=True,
                         categoria_pai__isnull=False,
                     ).order_by('categoria_pai__nome', 'nome')
@@ -435,20 +436,20 @@ class EstoqueListView(PermissaoRequiredMixin, View):
                     str(categoria_id): [
                         {'id': item.id, 'nome': item.nome}
                         for item in CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                            empresa=request.user.empresa,
+                            empresa=empresa_operacional(request),
                             ativo=True,
                             categoria_pai_id=categoria_id,
                         ).order_by('nome')
                     ]
                     for categoria_id in CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                        empresa=request.user.empresa,
+                        empresa=empresa_operacional(request),
                         ativo=True,
                         categoria_pai__isnull=True,
                     ).values_list('id', flat=True)
                 },
             }),
             'marcas': MarcaProduto.objects.for_filial(request.filial_ativa).filter(
-                empresa=request.user.empresa,
+                empresa=empresa_operacional(request),
                 ativo=True,
             ).order_by('nome'),
             'fornecedores': Fornecedor.objects.for_filial(request.filial_ativa).filter(
@@ -461,7 +462,7 @@ class EstoqueListView(PermissaoRequiredMixin, View):
             'inline_categorias_json': json.dumps([
                 {'id': item.id, 'nome': item.nome}
                 for item in CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                    empresa=request.user.empresa,
+                    empresa=empresa_operacional(request),
                     ativo=True,
                     categoria_pai__isnull=True,
                 ).order_by('nome')
@@ -908,7 +909,7 @@ class EstoqueInlineEditView(PermissaoRequiredMixin, View):
                     produto.descricao = value[:150]
                 elif field == 'categoria':
                     categoria = CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
-                        empresa=request.user.empresa,
+                        empresa=empresa_operacional(request),
                         ativo=True,
                         categoria_pai__isnull=True,
                         pk=value,
@@ -1320,7 +1321,7 @@ class RelatorioEstoqueView(PermissaoRequiredMixin, View):
         )
         saldos_filiais = (
             Estoque.objects
-            .filter(filial__empresa=request.user.empresa)
+            .filter(filial__empresa=empresa_operacional(request))
             .values('filial_id', 'filial__nome_fantasia', 'filial__razao_social', 'filial__uf')
             .annotate(
                 skus=Count('produto_id', distinct=True),
@@ -2256,7 +2257,7 @@ class TransferenciaView(PermissaoRequiredMixin, View):
         return render(request, self.template_name, {
             'form': TransferenciaForm(
                 filial=request.filial_ativa,
-                empresa=request.user.empresa,
+                empresa=empresa_operacional(request),
             ),
             'title': 'Transferencia entre filiais',
             'cancel_url': reverse_lazy('estoque:estoque-list'),
@@ -2266,7 +2267,7 @@ class TransferenciaView(PermissaoRequiredMixin, View):
         form = TransferenciaForm(
             request.POST,
             filial=request.filial_ativa,
-            empresa=request.user.empresa,
+            empresa=empresa_operacional(request),
         )
         if form.is_valid():
             try:

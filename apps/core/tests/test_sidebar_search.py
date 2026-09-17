@@ -11,7 +11,7 @@ class SidebarSearchTemplateTests(SimpleTestCase):
 
         self.assertIn('core/js/sidebar_search.js', sidebar)
         self.assertIn('core/css/sidebar_search.css', sidebar)
-        self.assertIn('?v=20260916-1', sidebar)
+        self.assertIn('?v=20260916-2', sidebar)
         self.assertIn('{% include "core/_sidebar_search.html" %}', sidebar)
         self.assertIn('{% include "core/_sidebar_search.html" %}', navegacao)
 
@@ -34,13 +34,15 @@ class SidebarSearchTemplateTests(SimpleTestCase):
         self.assertIn('.sidebar-menu-search.is-stuck', styles)
         self.assertIn('backdrop-filter:', styles)
         self.assertIn('.sidebar-menu-search-field:focus-within', styles)
+        self.assertIn('.sidebar-menu-search::before', styles)
+        self.assertIn('--sidebar-search-shelf: #18181b', styles)
 
     def test_menu_especial_do_pdv_carrega_busca_completa(self):
         raiz_apps = Path(__file__).resolve().parents[2]
         template = (raiz_apps / "pdv" / "templates" / "pdv" / "home.html").read_text(encoding="utf-8")
 
         self.assertIn('core/css/sidebar_search.css', template)
-        self.assertIn('?v=20260916-1', template)
+        self.assertIn('?v=20260916-2', template)
         self.assertIn('core/js/sidebar_search.js', template)
         self.assertIn('sidebar_favorites.js', template)
-        self.assertIn('v=20260916-1', template)
+        self.assertIn('v=20260916-2', template)

@@ -105,6 +105,19 @@ class BuscaProdutoSemCategoriaTests(TestCase):
                     {self.basqueteira.pk, self.regata.pk, self.regata_gg.pk},
                 )
 
+    def test_filtro_usa_empresa_da_filial_ativa_para_super_admin(self):
+        outra_empresa = Empresa.objects.create(
+            razao_social='Empresa do super admin', cnpj='12345678000193',
+            regime_tributario='simples_nacional', codigo_regime_tributario=1,
+        )
+        request = self.request(categoria=self.categoria.pk)
+        request.user.empresa = outra_empresa
+
+        self.assertSetEqual(
+            set(_produto_queryset_filtrado(request).values_list('pk', flat=True)),
+            {self.basqueteira.pk, self.regata.pk, self.regata_gg.pk},
+        )
+
     def test_filtro_explicito_nao_amplia_busca_textual(self):
         request = self.request(q='regata', categoria=self.categoria.pk, subcategoria=self.subcategoria.pk)
         self.assertSetEqual(

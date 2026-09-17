@@ -7,6 +7,7 @@ from django.urls import reverse_lazy
 from django.views import View
 
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.request_scope import empresa_operacional
 from apps.produtos.forms import MarcaProdutoForm
 from apps.produtos.models import MarcaProduto
 from apps.produtos.services.replicacao_service import ReplicacaoProdutoService
@@ -46,7 +47,7 @@ class MarcaListView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         marcas = MarcaProduto.objects.for_filial(request.filial_ativa).filter(
-            empresa=request.user.empresa,
+            empresa=empresa_operacional(request),
         )
         busca = request.GET.get('q', '').strip()
         if busca:
@@ -72,14 +73,14 @@ class MarcaCreateView(PermissaoRequiredMixin, View):
     def post(self, request):
         form = MarcaProdutoForm(request.POST)
         if form.is_valid():
-            if _duplicidade_marca(form, request.user.empresa, request.filial_ativa):
+            if _duplicidade_marca(form, empresa_operacional(request), request.filial_ativa):
                 return render(request, self.template_name, {
                     'form': form,
                     'title': 'Nova Marca / Fabricante',
                     'cancel_url': reverse_lazy('produtos:marca-list'),
                 })
             marca = form.save(commit=False)
-            marca.empresa = request.user.empresa
+            marca.empresa = empresa_operacional(request)
             marca.filial = request.filial_ativa
             try:
                 marca.save()
@@ -107,7 +108,7 @@ class MarcaUpdateView(PermissaoRequiredMixin, View):
 
     def get(self, request, pk):
         marca = get_object_or_404(
-            MarcaProduto.objects.for_filial(request.filial_ativa), pk=pk, empresa=request.user.empresa,
+            MarcaProduto.objects.for_filial(request.filial_ativa), pk=pk, empresa=empresa_operacional(request),
         )
         return render(request, self.template_name, {
             'form': MarcaProdutoForm(instance=marca),
@@ -117,18 +118,18 @@ class MarcaUpdateView(PermissaoRequiredMixin, View):
 
     def post(self, request, pk):
         marca = get_object_or_404(
-            MarcaProduto.objects.for_filial(request.filial_ativa), pk=pk, empresa=request.user.empresa,
+            MarcaProduto.objects.for_filial(request.filial_ativa), pk=pk, empresa=empresa_operacional(request),
         )
         form = MarcaProdutoForm(request.POST, instance=marca)
         if form.is_valid():
-            if _duplicidade_marca(form, request.user.empresa, request.filial_ativa, marca):
+            if _duplicidade_marca(form, empresa_operacional(request), request.filial_ativa, marca):
                 return render(request, self.template_name, {
                     'form': form,
                     'title': f'Editar - {marca}',
                     'cancel_url': reverse_lazy('produtos:marca-list'),
                 })
             marca = form.save(commit=False)
-            marca.empresa = request.user.empresa
+            marca.empresa = empresa_operacional(request)
             marca.filial = request.filial_ativa
             try:
                 marca.save()
