@@ -3040,6 +3040,8 @@ def api_emitir_nfce(request, pk):
         "chave": documento.chave or "",
         "pdf_danfe_url": documento.pdf_danfe_url or "",
         "mensagem": documento.mensagem_sefaz or "",
+        "em_contingencia": documento.em_contingencia,
+        "resultado_incerto": documento.resultado_envio_incerto,
     })
 
 
@@ -3077,6 +3079,8 @@ def api_emitir_nfce_contingencia(request, pk):
         "chave": documento.chave or "",
         "pdf_danfe_url": documento.pdf_danfe_url or "",
         "mensagem": documento.mensagem_sefaz or "NFC-e emitida em contingencia; acompanhe a autorizacao.",
+        "em_contingencia": documento.em_contingencia,
+        "resultado_incerto": documento.resultado_envio_incerto,
     })
 
 

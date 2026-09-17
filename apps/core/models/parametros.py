@@ -9,7 +9,7 @@ o e-mail secundário e a configuração de emissão por documento fiscal.
 from decimal import Decimal
 from math import isfinite
 
-from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.validators import FileExtensionValidator, MaxValueValidator, MinValueValidator
 from django.db import models
 
 from .base import TimestampedModel
@@ -121,6 +121,33 @@ class ParametrosSistema(TimestampedModel):
     )
     nfce_csc_id = models.CharField(max_length=20, blank=True)
     nfce_csc_token = models.CharField(max_length=120, blank=True)
+    nfce_contingencia_automatica = models.BooleanField(
+        default=True,
+        verbose_name='Ativar contingencia automatica da NFC-e na Focus',
+        help_text=(
+            'Permite que a Focus alterne para contingencia offline quando a SEFAZ '
+            'estiver indisponivel. Nao cobre queda total da internet da loja.'
+        ),
+    )
+    comunicador_offline_instalador = models.FileField(
+        upload_to='fiscal/comunicador-offline/',
+        blank=True,
+        null=True,
+        max_length=500,
+        validators=[FileExtensionValidator(allowed_extensions=['exe', 'msi', 'zip'])],
+        help_text='Instalador oficial fornecido pela Focus NFe (.exe, .msi ou .zip).',
+    )
+    comunicador_offline_versao = models.CharField(
+        max_length=40,
+        blank=True,
+        help_text='Versao informada pela Focus para este instalador.',
+    )
+    comunicador_offline_sha256 = models.CharField(
+        max_length=64,
+        blank=True,
+        editable=False,
+        help_text='Assinatura SHA-256 calculada no upload para conferir a integridade.',
+    )
     email_envio_automatico = models.BooleanField(default=False)
     email_resposta = models.EmailField(max_length=120, blank=True)
     texto_padrao_email = models.TextField(blank=True)

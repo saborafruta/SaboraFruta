@@ -5819,7 +5819,10 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
             }
           } else {
             const detalhe = d.mensagem ? ` - ${d.mensagem}` : '';
-            this.toast_(`${label} enviada! Status: ${d.status}${detalhe}`, 'ok');
+            const estado = d.resultado_incerto
+              ? 'resultado incerto; sera consultada sem trocar o numero'
+              : (d.em_contingencia ? 'em contingencia, aguardando autorizacao' : d.status);
+            this.toast_(`${label}: ${estado}${detalhe}`, d.resultado_incerto ? 'info' : 'ok');
             if (d.pdf_danfe_url) window.open(d.pdf_danfe_url, '_blank');
             this.modalFiscal.show = false;
           }

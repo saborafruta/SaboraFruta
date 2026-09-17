@@ -212,6 +212,10 @@ class DocumentoFiscal(TimestampedModel):
     idempotency_key = models.CharField(max_length=100, unique=True, null=True, blank=True)
     tentativas_envio = models.PositiveSmallIntegerField(default=0)
 
+    em_contingencia = models.BooleanField(default=False)
+    data_entrada_contingencia = models.DateTimeField(null=True, blank=True)
+    resultado_envio_incerto = models.BooleanField(default=False)
+
     data_emissao = models.DateTimeField()
     data_entrada_saida = models.DateTimeField(null=True, blank=True)
     data_autorizacao = models.DateTimeField(null=True, blank=True)

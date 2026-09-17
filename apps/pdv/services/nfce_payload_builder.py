@@ -27,6 +27,7 @@ from django.utils import timezone
 
 from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DadosInvalidosError
+from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeNetworkError, FocusNFeServerError
 from apps.fiscal.services.ibpt_service import obter_aliquota_ibpt
 
 _BRT = ZoneInfo("America/Sao_Paulo")
@@ -984,6 +985,15 @@ def emitir_nfce_para_venda(
 
     filial = venda.filial
 
+    filial_token = getattr(filial, "focusnfe_token", "") or ""
+    filial_ambiente = getattr(filial, "focusnfe_ambiente", None)
+    if filial_token:
+        config = FocusNFeConfig.from_env(token=filial_token, ambiente=filial_ambiente)
+        client = FocusNFeClient(config=config)
+        service = FocusNFeService(client=client)
+    else:
+        service = FocusNFeService()
+
     # Verifica se já existe documento fiscal para esta venda
     existente = DocumentoFiscal.objects.filter(
         origem_tipo="venda_pdv",
@@ -992,6 +1002,10 @@ def emitir_nfce_para_venda(
     ).exclude(status=StatusDocumentoFiscal.CANCELADA).first()
     if existente and existente.status == StatusDocumentoFiscal.AUTORIZADA:
         return existente
+    if existente and existente.status == StatusDocumentoFiscal.PROCESSANDO:
+        # Uma falha de rede pode acontecer depois que a Focus recebeu a nota.
+        # Consulte a mesma referencia antes de pensar em reservar outro numero.
+        return service.consultar(existente)
 
     # Reserva número atômico via ParametroDocumentoFiscal
     params, _ = ParametrosSistema.objects.get_or_create(filial=filial)
@@ -1050,21 +1064,19 @@ def emitir_nfce_para_venda(
         valor_desconto=payload["valor_desconto"],
         valor_total=payload["valor_total"],
         status=StatusDocumentoFiscal.PENDENTE,
+        payload_envio=payload,
         data_emissao=_momento_emissao(venda),
         usuario=usuario,
     )
 
-    # Usa token da filial se configurado, senão usa o global (env var)
-    filial_token = getattr(filial, "focusnfe_token", "") or ""
-    filial_ambiente = getattr(filial, "focusnfe_ambiente", None)
-    if filial_token:
-        config = FocusNFeConfig.from_env(token=filial_token, ambiente=filial_ambiente)
-        client = FocusNFeClient(config=config)
-        service = FocusNFeService(client=client)
-    else:
-        service = FocusNFeService()
-
-    documento = service.emitir(doc, payload, contingencia=contingencia)
+    try:
+        documento = service.emitir(doc, payload, contingencia=contingencia)
+    except (FocusNFeNetworkError, FocusNFeServerError):
+        # O HTTP pode ter falhado depois de a Focus receber a nota. Manter o
+        # documento e seu numero permite consultar a mesma referencia depois,
+        # sem criar uma NFC-e potencialmente duplicada.
+        doc.refresh_from_db()
+        documento = doc
     venda.documento_fiscal = documento
     venda.save(update_fields=["documento_fiscal"])
     return documento

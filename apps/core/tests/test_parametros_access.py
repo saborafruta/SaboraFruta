@@ -1,4 +1,7 @@
 from types import SimpleNamespace
+from tempfile import TemporaryDirectory
+from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import SimpleUploadedFile
 from unittest.mock import patch
 
 from django.core.exceptions import PermissionDenied
@@ -8,7 +11,7 @@ from django.test import RequestFactory, TestCase
 from apps.core.forms.parametros import FilialIdentidadeForm, ParametrosSistemaForm
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.core.models.parametros import ParametrosSistema
-from apps.core.views.parametros import parametros_sistema
+from apps.core.views.parametros import baixar_comunicador_offline, parametros_sistema
 from apps.fiscal.services.focusnfe_service import FocusNFeService
 
 
@@ -156,6 +159,7 @@ class ParametrosSistemaAccessTests(TestCase):
             senha_certificado='',
             nfce_csc_token='csc-producao',
             nfce_csc_id='2',
+            nfce_contingencia_automatica=True,
         )
 
         FocusNFeService().sincronizar_empresa(filial, params)
@@ -164,3 +168,39 @@ class ParametrosSistemaAccessTests(TestCase):
         payload = client_mock.return_value.empresas.upsert.call_args.args[1]
         self.assertEqual(payload['csc_nfce_producao'], 'csc-producao')
         self.assertEqual(payload['id_token_nfce_producao'], '2')
+        self.assertTrue(payload['habilita_contingencia_offline_nfce'])
+        self.assertFalse(payload['habilita_consulta_automatica_nfce'])
+
+    def test_instalador_aceita_somente_formatos_distribuiveis(self):
+        params = ParametrosSistema.objects.create(filial=self.filial)
+        form = ParametrosSistemaForm(
+            data={},
+            files={
+                'comunicador_offline_instalador': SimpleUploadedFile(
+                    'comunicador.txt', b'arquivo-invalido', content_type='text/plain'
+                )
+            },
+            instance=params,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('comunicador_offline_instalador', form.errors)
+
+    def test_admin_baixa_instalador_cadastrado_na_filial(self):
+        with TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
+            params = ParametrosSistema.objects.create(filial=self.filial)
+            params.comunicador_offline_instalador.save(
+                'focus-offline.zip', ContentFile(b'instalador-oficial'), save=True,
+            )
+            request = RequestFactory().get('/gestao/parametros/comunicador-offline/download/')
+            request.user = self.admin
+            request.user._perfil_ativo = self.perfil_admin
+            request.filial_ativa = self.filial
+
+            response = baixar_comunicador_offline(request)
+            conteudo = b''.join(response.streaming_content)
+            response.close()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(conteudo, b'instalador-oficial')
+        self.assertIn('attachment;', response['Content-Disposition'])

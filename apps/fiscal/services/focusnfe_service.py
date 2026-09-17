@@ -25,7 +25,9 @@ from apps.fiscal.integrations.focusnfe.config import HOMOLOGACAO, PRODUCAO, URLS
 from apps.fiscal.integrations.focusnfe.exceptions import (
     FocusNFeAuthError,
     FocusNFeError,
+    FocusNFeNetworkError,
     FocusNFeProcessingError,
+    FocusNFeServerError,
 )
 
 logger = logging.getLogger(__name__)
@@ -183,11 +185,16 @@ class FocusNFeService:
         Usado tanto após emitir/consultar quanto pelo webhook.
         """
         retorno = retorno or {}
+        documento.resultado_envio_incerto = False
 
         status_focus = str(retorno.get("status") or "").lower()
         novo_status = STATUS_FOCUS_PARA_ERP.get(status_focus)
         if novo_status:
             documento.status = novo_status
+        if status_focus in {'contingencia_offline', 'autorizado_contingencia'}:
+            documento.em_contingencia = True
+            if not documento.data_entrada_contingencia:
+                documento.data_entrada_contingencia = timezone.now()
 
         for k in _CHAVE_KEYS:
             if retorno.get(k):
@@ -261,13 +268,25 @@ class FocusNFeService:
                 documento, "emitir", endpoint=endpoint, request=payload,
                 response=exc.response_json, http=exc.status_code, sucesso=False, ms=ms,
             )
-            documento.status = StatusDocumentoFiscal.REJEITADA
+            resultado_incerto = isinstance(exc, (FocusNFeNetworkError, FocusNFeServerError))
+            documento.status = (
+                StatusDocumentoFiscal.PROCESSANDO
+                if resultado_incerto
+                else StatusDocumentoFiscal.REJEITADA
+            )
+            documento.resultado_envio_incerto = resultado_incerto
             resposta = exc.response_json if isinstance(exc.response_json, dict) else {}
             codigo = str(resposta.get("status_sefaz") or resposta.get("codigo_status_sefaz") or "")
             # str(exc) ja traz a mensagem base + o detalhamento campo a campo
             # do array "erros" (ex.: erros de Schema XML 422). So caimos para
             # mensagem_sefaz especifica da SEFAZ quando ela existir.
             mensagem = str(resposta.get("mensagem_sefaz") or exc)
+            if resultado_incerto:
+                mensagem = (
+                    'A Focus pode ter recebido a NFC-e, mas o ERP nao obteve a resposta. '
+                    'O mesmo numero sera consultado antes de qualquer nova emissao. '
+                    f'Detalhe: {mensagem}'
+                )
             if codigo:
                 documento.codigo_status_sefaz = codigo[:3]
             documento.mensagem_sefaz = _mensagem_sefaz_diagnostica(codigo, mensagem)
@@ -516,8 +535,13 @@ class FocusNFeService:
             "inscricao_estadual": (filial.inscricao_estadual or "").strip() or "ISENTO",
             "habilita_nfce": True,
             "habilita_nfe": True,
-            "habilita_contingencia_offline_nfce": True,
+            "habilita_contingencia_offline_nfce": bool(
+                getattr(params, 'nfce_contingencia_automatica', True)
+            ),
             "reaproveita_numero_nfce_contingencia": True,
+            "habilita_consulta_automatica_nfce": not bool(
+                getattr(params, 'nfce_contingencia_automatica', True)
+            ),
         }
 
         # Regime tributário (1=SN, 2=SN excesso, 3=Normal)

@@ -87,6 +87,11 @@ urlpatterns = [
     path('gestao/empresas/bancos/<int:pk>/backup/', admin_area.empresa_banco_backup, name='admin_empresa_banco_backup'),
     path('gestao/empresas/bancos/<int:pk>/excluir/', admin_area.empresa_banco_excluir, name='admin_empresa_banco_excluir'),
     path('gestao/parametros/', parametros_views.parametros_sistema, name='admin_parametros'),
+    path(
+        'gestao/parametros/comunicador-offline/download/',
+        parametros_views.baixar_comunicador_offline,
+        name='admin_parametros_comunicador_download',
+    ),
     path('gestao/parametros/sincronizar-focus/', parametros_views.api_sincronizar_focus, name='admin_parametros_sincronizar_focus'),
     path('gestao/parametros/revelar-segredo/', parametros_views.api_revelar_segredo, name='admin_parametros_revelar_segredo'),
     path('gestao/parametros/gerar-chave-iprint/', parametros_views.api_gerar_chave_iprint, name='admin_parametros_gerar_chave_iprint'),

@@ -1,12 +1,14 @@
 """System parameters screen: identity, contacts and fiscal setup."""
 import base64
+import hashlib
 import json
+from pathlib import Path
 
 from django.contrib import messages
 from django.db import transaction
-from django.http import JsonResponse
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import redirect, render
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from apps.core.forms.parametros import FilialIdentidadeForm, ParametrosSistemaForm
 from apps.core.models import Filial
@@ -240,6 +242,15 @@ def parametros_sistema(request):
                     params_salvos.certificado_base64 = base64.b64encode(cert_bytes).decode('ascii')
                 except Exception:
                     pass
+            instalador = request.FILES.get('comunicador_offline_instalador')
+            if instalador:
+                digest = hashlib.sha256()
+                for chunk in instalador.chunks():
+                    digest.update(chunk)
+                instalador.seek(0)
+                params_salvos.comunicador_offline_sha256 = digest.hexdigest()
+            elif request.POST.get('comunicador_offline_instalador-clear'):
+                params_salvos.comunicador_offline_sha256 = ''
             params_salvos.save()
             _salvar_documentos(request, documentos)
             if request.POST.get('acao') == 'salvar_sincronizar_focus':
@@ -289,6 +300,33 @@ def parametros_sistema(request):
         'prontidao': _prontidao_fiscal(filial, params, documentos),
         'iprint_credencial': iprint_credencial,
     })
+
+
+@admin_area_required
+@require_GET
+def baixar_comunicador_offline(request):
+    """Entrega somente a administradores o instalador oficial salvo na filial."""
+    filial = getattr(request, 'filial_ativa', None)
+    if filial is None:
+        raise Http404('Filial nao selecionada.')
+    try:
+        params = filial.parametros_sistema
+    except ParametrosSistema.DoesNotExist as exc:
+        raise Http404('Configuracao fiscal nao encontrada.') from exc
+
+    arquivo = params.comunicador_offline_instalador
+    if not arquivo or not arquivo.name:
+        raise Http404('Instalador do Comunicador Offline ainda nao cadastrado.')
+    try:
+        arquivo.open('rb')
+    except (FileNotFoundError, OSError) as exc:
+        raise Http404('Arquivo do instalador indisponivel no armazenamento.') from exc
+    return FileResponse(
+        arquivo,
+        as_attachment=True,
+        filename=Path(arquivo.name).name,
+        content_type='application/octet-stream',
+    )
 
 
 @admin_area_required

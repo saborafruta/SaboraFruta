@@ -11,6 +11,10 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 app.autodiscover_tasks()
 
 app.conf.beat_schedule = {
+    'reconciliar-nfce-processando': {
+        'task': 'apps.fiscal.tasks.reconciliar_nfce_processando',
+        'schedule': crontab(minute='*/2'),
+    },
     'verificar-vencimentos-diario': {
         'task': 'apps.estoque.tasks.alertas.verificar_vencimentos',
         'schedule': crontab(hour=7, minute=0),

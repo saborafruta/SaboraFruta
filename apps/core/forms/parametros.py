@@ -1,5 +1,7 @@
 """Forms for the system parameters screen."""
 from django import forms
+from django.conf import settings
+from django.core.files.uploadedfile import UploadedFile
 
 from apps.core.constants.choices import UF
 from apps.core.models import Empresa, Filial
@@ -92,7 +94,8 @@ class ParametrosSistemaForm(forms.ModelForm):
             'logo_url',
             'certificado_digital', 'senha_certificado',
             'focusnfe_token_principal',
-            'nfce_csc_id', 'nfce_csc_token',
+            'nfce_csc_id', 'nfce_csc_token', 'nfce_contingencia_automatica',
+            'comunicador_offline_instalador', 'comunicador_offline_versao',
             'email_envio_automatico', 'email_resposta',
             'texto_padrao_email', 'informacoes_complementares_padrao',
         ]
@@ -121,6 +124,7 @@ class ParametrosSistemaForm(forms.ModelForm):
                     'placeholder': 'Configurado; deixe em branco para manter',
                 },
             ),
+            'comunicador_offline_versao': forms.TextInput(attrs={'placeholder': 'Ex.: 3.0.0'}),
             'email_resposta': forms.EmailInput(attrs={'placeholder': 'fiscal@empresa.com.br'}),
             'texto_padrao_email': forms.Textarea(attrs={
                 'rows': 3,
@@ -152,3 +156,12 @@ class ParametrosSistemaForm(forms.ModelForm):
 
     def clean_nfce_csc_token(self):
         return self._segredo_ou_atual('nfce_csc_token')
+
+    def clean_comunicador_offline_instalador(self):
+        arquivo = self.cleaned_data.get('comunicador_offline_instalador')
+        if not arquivo or not isinstance(arquivo, UploadedFile):
+            return arquivo
+        limite = int(getattr(settings, 'COMUNICADOR_OFFLINE_MAX_UPLOAD_BYTES', 250 * 1024 * 1024))
+        if arquivo.size > limite:
+            raise forms.ValidationError('O instalador excede o limite de 250 MB.')
+        return arquivo

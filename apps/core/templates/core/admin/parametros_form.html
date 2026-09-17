@@ -624,6 +624,38 @@
             <div class="param-secret-popover" style="display:none;"></div>
           </div>
         </div>
+        <div class="lg:col-span-2">
+          <label class="param-switch">
+            {{ form_params.nfce_contingencia_automatica }}
+            <span class="param-label" style="margin:0;">Contingencia automatica da NFC-e</span>
+          </label>
+          <p class="param-card-sub mt-1">A Focus assume a contingencia quando a SEFAZ estiver indisponivel. Requer salvar e sincronizar com a Focus.</p>
+        </div>
+      </div>
+
+      <div class="param-subpanel mt-5">
+        <div class="param-card-title">Comunicador Offline nos caixas</div>
+        <p class="param-card-sub">Cadastre aqui somente o instalador oficial recebido do suporte da Focus. O arquivo fica disponivel para download autenticado nesta configuracao.</p>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+          <div class="lg:col-span-2">
+            <label class="param-label">Instalador oficial (.exe, .msi ou .zip)</label>
+            {{ form_params.comunicador_offline_instalador }}
+            {% for e in form_params.comunicador_offline_instalador.errors %}<p class="param-erro">{{ e }}</p>{% endfor %}
+          </div>
+          <div>
+            <label class="param-label">Versao do instalador</label>
+            {{ form_params.comunicador_offline_versao }}
+          </div>
+        </div>
+        <div class="mt-4 flex flex-wrap items-center gap-3">
+          {% if parametros.comunicador_offline_instalador %}
+            <a class="btn-secondary" href="{% url 'core:admin_parametros_comunicador_download' %}">Baixar Comunicador Offline{% if parametros.comunicador_offline_versao %} v{{ parametros.comunicador_offline_versao }}{% endif %}</a>
+            {% if parametros.comunicador_offline_sha256 %}<code class="text-xs break-all">SHA-256: {{ parametros.comunicador_offline_sha256 }}</code>{% endif %}
+          {% else %}
+            <span class="param-card-sub">Instalador ainda nao cadastrado.</span>
+          {% endif %}
+          <a class="text-sm text-blue-500" href="mailto:suporte@focusnfe.com.br">Solicitar instalador e codigo de ativacao a Focus</a>
+        </div>
       </div>
 
       <div class="mt-5 flex items-center gap-3">

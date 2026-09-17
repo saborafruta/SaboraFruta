@@ -13,6 +13,7 @@ from apps.financeiro.constants.enums import StatusDocumentoFiscal, TipoDocumento
 from apps.financeiro.models import FormaPagamento
 from apps.financeiro.models.fiscal import DocumentoFiscal
 from apps.fiscal.services.focusnfe_service import FocusNFeService
+from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeNetworkError
 from apps.fiscal.models import AliquotaIBPT
 from apps.pdv.models import ItemVendaPDV, PagamentoVendaPDV, VendaPDV
 from apps.pdv.services.nfce_payload_builder import (
@@ -725,3 +726,60 @@ class NfePayloadBuilderTests(TestCase):
 
         documento.refresh_from_db()
         self.assertEqual(documento.status, StatusDocumentoFiscal.REJEITADA)
+
+    def test_status_focus_contingencia_fica_identificado(self):
+        documento = DocumentoFiscal.objects.create(
+            filial=self.filial,
+            tipo_documento=TipoDocumentoFiscal.NFCE,
+            origem_tipo='venda_pdv',
+            origem_id=2,
+            numero=3,
+            serie=1,
+            emitente_cnpj=self.filial.cnpj,
+            destinatario_snapshot={'nome': 'Consumidor Final'},
+            data_emissao=timezone.now(),
+            status=StatusDocumentoFiscal.PENDENTE,
+            valor_total=Decimal('4.00'),
+            usuario=self.usuario,
+        )
+
+        FocusNFeService().aplicar_retorno(documento, {
+            'status': 'contingencia_offline',
+            'mensagem_sefaz': 'Aguardando efetivacao',
+        })
+
+        documento.refresh_from_db()
+        self.assertEqual(documento.status, StatusDocumentoFiscal.PROCESSANDO)
+        self.assertTrue(documento.em_contingencia)
+        self.assertIsNotNone(documento.data_entrada_contingencia)
+        self.assertFalse(documento.resultado_envio_incerto)
+
+    def test_falha_de_rede_nao_declara_nota_rejeitada(self):
+        documento = DocumentoFiscal.objects.create(
+            filial=self.filial,
+            tipo_documento=TipoDocumentoFiscal.NFCE,
+            origem_tipo='venda_pdv',
+            origem_id=3,
+            numero=4,
+            serie=1,
+            emitente_cnpj=self.filial.cnpj,
+            destinatario_snapshot={'nome': 'Consumidor Final'},
+            data_emissao=timezone.now(),
+            status=StatusDocumentoFiscal.PENDENTE,
+            valor_total=Decimal('4.00'),
+            usuario=self.usuario,
+        )
+        recurso = Mock()
+        recurso.endpoint = 'nfce'
+        recurso.autorizar.side_effect = FocusNFeNetworkError('timeout')
+        cliente = Mock()
+        cliente.nfce = recurso
+        cliente.config.base_url = 'https://focus.test'
+
+        with self.assertRaises(FocusNFeNetworkError):
+            FocusNFeService(client=cliente).emitir(documento, {'numero': 4})
+
+        documento.refresh_from_db()
+        self.assertEqual(documento.status, StatusDocumentoFiscal.PROCESSANDO)
+        self.assertTrue(documento.resultado_envio_incerto)
+        self.assertIn('mesmo numero', documento.mensagem_sefaz)
