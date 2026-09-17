@@ -1065,6 +1065,53 @@ class Op2Tests(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertFalse(RascunhoOP.objects.filter(pk=rascunho.pk).exists())
 
+    def test_superadmin_ve_rascunhos_de_todos_os_usuarios_sem_gerenciar_alheios(self):
+        self._login_op2()
+        outro_usuario = Usuario.objects.create_user(
+            email='vendedor.rascunho@teste.local', nome='Vendedor do Rascunho',
+            empresa=self.filial.empresa, filial=self.filial, perfil=self.perfil,
+        )
+        rascunho_alheio = RascunhoOP.objects.create(
+            filial=self.filial, usuario=outro_usuario,
+            dados={'clienteId': str(self.cliente.pk), 'itens': []},
+        )
+
+        resposta = self.client.get(reverse('moda:comercial'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Vendedor do Rascunho')
+        self.assertIn(rascunho_alheio, resposta.context['rascunhos_op'])
+        self.assertNotContains(
+            resposta,
+            f'data-url="{reverse("moda:op2-create")}?rascunho={rascunho_alheio.chave}"',
+        )
+        self.assertNotContains(
+            resposta,
+            f'data-rascunho="{rascunho_alheio.chave}"',
+        )
+
+    def test_usuario_comum_continua_vendo_somente_os_proprios_rascunhos(self):
+        from apps.moda.views_comercial import _rascunhos_visiveis
+
+        usuario = Usuario.objects.create_user(
+            email='vendedor.proprio@teste.local', nome='Vendedor Próprio',
+            empresa=self.filial.empresa, filial=self.filial, perfil=self.perfil,
+        )
+        outro_usuario = Usuario.objects.create_user(
+            email='vendedor.outro@teste.local', nome='Outro Vendedor',
+            empresa=self.filial.empresa, filial=self.filial, perfil=self.perfil,
+        )
+        proprio = RascunhoOP.objects.create(
+            filial=self.filial, usuario=usuario, dados={'buscaCliente': 'Cliente próprio'},
+        )
+        alheio = RascunhoOP.objects.create(
+            filial=self.filial, usuario=outro_usuario, dados={'buscaCliente': 'Cliente alheio'},
+        )
+        visiveis = list(_rascunhos_visiveis(self.filial, usuario))
+
+        self.assertEqual(visiveis, [proprio])
+        self.assertNotIn(alheio, visiveis)
+
     def test_finaliza_op_e_vincula_item_incompleto_sem_somar_no_total(self):
         self._login_op2()
         grupos = opcoes_estrutura_filial(self.filial)

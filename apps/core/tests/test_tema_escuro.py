@@ -107,6 +107,10 @@ class SeletorDeTemaEscuroTests(SimpleTestCase):
         self.assertNotIn(
             "card.classList.add('sidebar-branch-logo-card--square')", sidebar
         )
+        self.assertIn(
+            '.sidebar-branch-logo-card--square .sidebar-branch-logo-img', sidebar
+        )
+        self.assertNotIn('object-fit: cover;', sidebar)
         self.assertIn('html.tema-escuro body .app-topbar', base)
 
     def test_cache_do_casco_visual_e_versionado(self):

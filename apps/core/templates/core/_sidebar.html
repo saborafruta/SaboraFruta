@@ -388,7 +388,10 @@
   .sidebar-branch-logo-card--square .sidebar-branch-logo-img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    /* Mesmo arquivos quadrados podem conter uma marca horizontal. `cover`
+       ampliava a imagem e cortava as laterais ou a base em algumas logos. */
+    object-fit: contain;
+    object-position: center;
     border-radius: 14px;
   }
   .sidebar-branch-logo-card--square .sidebar-branch-logo-info {

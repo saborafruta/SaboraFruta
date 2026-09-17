@@ -34,6 +34,13 @@ def _filial(request):
     return request.filial_ativa
 
 
+def _rascunhos_visiveis(filial, usuario):
+    rascunhos = RascunhoOP.objects.filter(filial=filial).select_related('usuario')
+    if not usuario.is_superuser:
+        rascunhos = rascunhos.filter(usuario=usuario)
+    return rascunhos.order_by('-updated_at')
+
+
 class ComercialView(ModaBaseView):
     """Quadro de pedidos — a porta de entrada do grupo Comercial."""
 
@@ -47,9 +54,7 @@ class ComercialView(ModaBaseView):
             'atrasados': request.GET.get('atrasados') == '1',
         }
         dados = KanbanComercialService.quadro(_filial(request), filtros)
-        rascunhos = list(RascunhoOP.objects.filter(
-            filial=_filial(request), usuario=request.user,
-        ).order_by('-updated_at'))
+        rascunhos = list(_rascunhos_visiveis(_filial(request), request.user))
         clientes_ids = {
             int(rascunho.dados.get('clienteId'))
             for rascunho in rascunhos
@@ -60,6 +65,10 @@ class ComercialView(ModaBaseView):
             for cliente in Cliente.objects.for_filial(_filial(request)).filter(pk__in=clientes_ids)
         }
         for rascunho in rascunhos:
+            # O superadministrador enxerga o trabalho em andamento de toda a
+            # filial, mas um rascunho alheio continua somente para consulta no
+            # quadro. Abrir, alterar ou excluir permanece reservado ao autor.
+            rascunho.pode_gerenciar = rascunho.usuario_id == request.user.pk
             dados_rascunho = rascunho.dados or {}
             itens = dados_rascunho.get('itens') or []
             item_incompleto = dados_rascunho.get('itemRascunho') or dados_rascunho.get('draft') or {}
@@ -84,6 +93,7 @@ class ComercialView(ModaBaseView):
             'prioridades': PedidoProducao.Prioridade.choices,
             'colunas': COLUNAS,
             'rascunhos_op': rascunhos,
+            'exibe_autor_rascunho': request.user.is_superuser,
             # Sem permissão de editar, o quadro é leitura: os cartões não
             # ganham `draggable` e nenhum POST passa pelo serviço.
             'pode_mover': request.user.tem_permissao('moda', 'editar'),
