@@ -112,10 +112,10 @@ def notificacoes_context(request):
 
         garantir_conferencias_recebidas(filial)
         base = Notificacao.objects.filter(filial=filial, ativa=True)
-        nao_lidas = base.exclude(leituras__usuario=request.user)
+        nao_lidas = base.exclude(leituras__usuario_id=request.user.pk)
         ctx['notificacoes_nao_lidas'] = nao_lidas.count()
         ids_lidas = set(
-            base.filter(leituras__usuario=request.user)
+            base.filter(leituras__usuario_id=request.user.pk)
             .values_list('pk', flat=True)
         )
         recentes = list(base[:15])

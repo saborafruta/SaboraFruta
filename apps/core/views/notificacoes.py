@@ -17,8 +17,8 @@ class NotificacaoAbrirView(LoginRequiredMixin, View):
             ativa=True,
         )
         NotificacaoLeitura.objects.get_or_create(
-            notificacao=notificacao,
-            usuario=request.user,
+            notificacao_id=notificacao.pk,
+            usuario_id=request.user.pk,
         )
         destino = notificacao.url or reverse('core:dashboard')
         if not url_has_allowed_host_and_scheme(
@@ -35,10 +35,13 @@ class NotificacaoMarcarTodasView(LoginRequiredMixin, View):
         notificacoes = Notificacao.objects.filter(
             filial=getattr(request, 'filial_ativa', None),
             ativa=True,
-        ).exclude(leituras__usuario=request.user)
+        ).exclude(leituras__usuario_id=request.user.pk)
         NotificacaoLeitura.objects.bulk_create(
             [
-                NotificacaoLeitura(notificacao=item, usuario=request.user)
+                NotificacaoLeitura(
+                    notificacao_id=item.pk,
+                    usuario_id=request.user.pk,
+                )
                 for item in notificacoes
             ],
             ignore_conflicts=True,
@@ -59,12 +62,14 @@ class NotificacaoStatusView(LoginRequiredMixin, View):
 
         base = Notificacao.objects.filter(filial=filial, ativa=True)
         ids_lidas = set(
-            base.filter(leituras__usuario=request.user)
+            base.filter(leituras__usuario_id=request.user.pk)
             .values_list('pk', flat=True)
         )
         recentes = list(base[:15])
         return JsonResponse({
-            'nao_lidas': base.exclude(leituras__usuario=request.user).count(),
+            'nao_lidas': base.exclude(
+                leituras__usuario_id=request.user.pk,
+            ).count(),
             'notificacoes': [
                 {
                     'id': item.pk,
