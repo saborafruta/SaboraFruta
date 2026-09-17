@@ -1085,7 +1085,7 @@ class Op2Tests(TestCase):
             resposta,
             f'data-url="{reverse("moda:op2-create")}?rascunho={rascunho_alheio.chave}"',
         )
-        self.assertNotContains(
+        self.assertContains(
             resposta,
             f'data-rascunho="{rascunho_alheio.chave}"',
         )
@@ -1125,6 +1125,15 @@ class Op2Tests(TestCase):
         pedido_criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
         self.assertEqual(pedido_criado.vendedor, outro_usuario)
         self.assertFalse(RascunhoOP.objects.filter(pk=rascunho_alheio.pk).exists())
+
+        rascunho_cancelado = RascunhoOP.objects.create(
+            filial=self.filial, usuario=outro_usuario, dados={'itens': []},
+        )
+        cancelamento = self.client.delete(
+            reverse('moda:op2-rascunho') + f'?chave={rascunho_cancelado.chave}',
+        )
+        self.assertEqual(cancelamento.status_code, 200)
+        self.assertFalse(RascunhoOP.objects.filter(pk=rascunho_cancelado.pk).exists())
 
     def test_usuario_comum_continua_vendo_somente_os_proprios_rascunhos(self):
         from apps.moda.views_comercial import _rascunhos_visiveis
