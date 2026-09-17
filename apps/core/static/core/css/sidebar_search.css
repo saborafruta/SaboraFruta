@@ -13,6 +13,7 @@
 }
 .sidebar-menu-search::before {
   content: "";
+  display: none;
   position: absolute;
   right: -16px;
   bottom: 100%;
@@ -20,6 +21,9 @@
   height: 24px;
   background: var(--sidebar-search-shelf);
   pointer-events: none;
+}
+.sidebar-menu-search.is-stuck::before {
+  display: block;
 }
 .sidebar-menu-search.is-stuck {
   border-bottom-color: rgba(148, 163, 184, 0.18);

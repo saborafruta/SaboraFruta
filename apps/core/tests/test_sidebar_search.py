@@ -11,7 +11,7 @@ class SidebarSearchTemplateTests(SimpleTestCase):
 
         self.assertIn('core/js/sidebar_search.js', sidebar)
         self.assertIn('core/css/sidebar_search.css', sidebar)
-        self.assertIn('?v=20260917-2', sidebar)
+        self.assertIn('?v=20260917-3', sidebar)
         self.assertIn("border-right:1px solid #cbd5e1", sidebar)
         self.assertIn("color:#1f2937", sidebar)
         self.assertIn("color:#1f2937", navegacao)
@@ -40,6 +40,9 @@ class SidebarSearchTemplateTests(SimpleTestCase):
         self.assertIn('backdrop-filter:', styles)
         self.assertIn('.sidebar-menu-search-field:focus-within', styles)
         self.assertIn('.sidebar-menu-search::before', styles)
+        self.assertIn('display: none', styles)
+        self.assertIn('.sidebar-menu-search.is-stuck::before', styles)
+        self.assertIn('display: block', styles)
         self.assertIn('right: -16px', styles)
         self.assertIn('left: -16px', styles)
         self.assertIn('height: 24px', styles)
@@ -53,7 +56,7 @@ class SidebarSearchTemplateTests(SimpleTestCase):
         template = (raiz_apps / "pdv" / "templates" / "pdv" / "home.html").read_text(encoding="utf-8")
 
         self.assertIn('core/css/sidebar_search.css', template)
-        self.assertIn('?v=20260917-2', template)
+        self.assertIn('?v=20260917-3', template)
         self.assertIn('core/js/sidebar_search.js', template)
         self.assertIn('sidebar_favorites.js', template)
-        self.assertIn('v=20260917-2', template)
+        self.assertIn('v=20260917-3', template)
