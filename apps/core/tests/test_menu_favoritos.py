@@ -172,7 +172,7 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertIn('nav.appendChild(panel)', script)
         self.assertNotIn("dashboard.insertAdjacentElement('afterend', panel)", script)
 
-    def test_sanfonas_iniciam_fechadas_e_destacam_modulo_atual(self):
+    def test_sanfonas_iniciam_fechadas_e_exibem_somente_tela_atual(self):
         raiz = Path(__file__).resolve().parents[1]
         sidebar = (raiz / 'templates' / 'core' / '_sidebar.html').read_text(encoding='utf-8')
         navegacao = (raiz / 'templates' / 'core' / '_sidebar_navigation.html').read_text(encoding='utf-8')
@@ -183,7 +183,17 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         )
         self.assertIn(estado_fechado, sidebar)
         self.assertNotIn("localStorage.setItem('sidebar-secoes'", sidebar)
-        self.assertIn("{% if '/moda/' in request.path %}s.moda = true;{% endif %}", sidebar)
+        self.assertNotIn("s.moda = true", sidebar)
+        self.assertIn('grupoTemTelaAtual: function(grupo)', sidebar)
+        self.assertIn(
+            '.sidebar-group-current-only a:not(.sidebar-current-screen)',
+            sidebar,
+        )
+        self.assertIn("atual.indexOf(destino + '/') === 0", sidebar)
+        self.assertEqual(sidebar.count('grupoTemTelaAtual($el)'), 8)
+        self.assertEqual(navegacao.count('grupoTemTelaAtual($el)'), 8)
+        self.assertEqual(sidebar.count("'sidebar-group-current-only'"), 8)
+        self.assertEqual(navegacao.count("'sidebar-group-current-only'"), 8)
         self.assertEqual(sidebar.count('sidebar-module-button'), 13)  # 5 regras CSS + 8 botoes mobile
         self.assertEqual(navegacao.count('sidebar-module-button'), 8)
         self.assertIn('class="sidebar-home-link flex items-center gap-3', navegacao)

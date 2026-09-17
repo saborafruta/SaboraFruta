@@ -181,6 +181,11 @@
   body.sidebar-collapsed .sidebar-desktop .sidebar-favorite-toggle {
     display: none;
   }
+  /* Com o módulo fechado, preserva somente o caminho da tela atual. */
+  .sidebar-group-current-only a:not(.sidebar-current-screen),
+  .sidebar-group-current-only > :not(a):not(.sidebar-current-branch) {
+    display: none !important;
+  }
   aside nav > a > svg:first-child,
   aside nav > div > button > svg:first-child {
     box-sizing: content-box;
@@ -510,17 +515,9 @@
   mobileOpen: false,
   secoes: (function(){
     try {
-      // Cada acesso comeca recolhido. A secao da tela atual e reaberta para
-      // que continue visivel enquanto o usuario trabalha naquele modulo.
+      // Cada acesso começa com todos os módulos recolhidos. A tela atual
+      // continua visível sozinha; o clique no módulo revela as demais opções.
       var s = {cadastros:false, operacoes:false, financeiro:false, logistica:false, avancado:false, food_service:false, moda:false, polpa:false};
-      {% if '/cadastros/' in request.path or '/produtos/' in request.path %}s.cadastros = true;{% endif %}
-      {% if '/estoque/' in request.path or '/compras/' in request.path or '/lotes/' in request.path %}s.operacoes = true;{% endif %}
-      {% if '/financeiro/' in request.path %}s.financeiro = true;{% endif %}
-      {% if '/logistica/' in request.path %}s.logistica = true;{% endif %}
-      {% if '/pdv/' in request.path or '/fiscal/' in request.path or '/qualidade/' in request.path or '/analytics/' in request.path %}s.avancado = true;{% endif %}
-      {% if '/food-service/' in request.path %}s.food_service = true;{% endif %}
-      {% if '/moda/' in request.path %}s.moda = true;{% endif %}
-      {% if '/polpa/' in request.path %}s.polpa = true;{% endif %}
       return s;
     } catch(e) {
       return {cadastros:false, operacoes:false, financeiro:false, logistica:false, avancado:false, food_service:false, moda:false, polpa:false};
@@ -528,6 +525,37 @@
   })(),
   toggleSecao: function(nome) {
     this.secoes[nome] = !this.secoes[nome];
+  },
+  grupoTemTelaAtual: function(grupo) {
+    if (!grupo) return false;
+    var atual = window.location.pathname.replace(/\/+$/, '') || '/';
+    var melhor = null;
+    var tamanho = -1;
+    grupo.querySelectorAll('a[href]').forEach(function(link) {
+      var destino;
+      try { destino = new URL(link.href, window.location.origin).pathname; }
+      catch (e) { return; }
+      destino = destino.replace(/\/+$/, '') || '/';
+      var corresponde = destino !== '/' && (
+        atual === destino || atual.indexOf(destino + '/') === 0
+      );
+      if (corresponde && destino.length > tamanho) {
+        melhor = link;
+        tamanho = destino.length;
+      }
+    });
+    grupo.querySelectorAll('.sidebar-current-screen').forEach(function(link) {
+      link.classList.remove('sidebar-current-screen');
+    });
+    Array.from(grupo.children).forEach(function(filho) {
+      filho.classList.remove('sidebar-current-branch');
+    });
+    if (!melhor) return false;
+    melhor.classList.add('sidebar-current-screen');
+    var ramo = melhor;
+    while (ramo.parentElement && ramo.parentElement !== grupo) ramo = ramo.parentElement;
+    ramo.classList.add('sidebar-current-branch');
+    return true;
   },
   menuBloqueado: function() {
     return Date.now() < (window.__erpMobileMenuBlockedUntil || 0);
@@ -699,7 +727,7 @@
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Cadastros</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.cadastros ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
-      <div x-show="secoes.cadastros">
+      <div x-show="secoes.cadastros || grupoTemTelaAtual($el)" :class="!secoes.cadastros ? 'sidebar-group-current-only' : ''">
 
       <a href="{{ clientes_url }}" @click="mobileOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
@@ -795,7 +823,7 @@
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Operações</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.operacoes ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
-      <div x-show="secoes.operacoes">
+      <div x-show="secoes.operacoes || grupoTemTelaAtual($el)" :class="!secoes.operacoes ? 'sidebar-group-current-only' : ''">
 
       <a href="{{ estoque_url }}" @click="mobileOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
@@ -919,7 +947,7 @@
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Financeiro</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.financeiro ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
-      <div class="finance-menu" x-show="secoes.financeiro">
+      <div class="finance-menu" x-show="secoes.financeiro || grupoTemTelaAtual($el)" :class="!secoes.financeiro ? 'sidebar-group-current-only' : ''">
 
       {% url 'financeiro:receber_list' as financeiro_url %}
       {% url 'financeiro:pagar_list' as pagar_url %}
@@ -1116,7 +1144,7 @@
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Logistica</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.logistica ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
-      <div x-show="secoes.logistica">
+      <div x-show="secoes.logistica || grupoTemTelaAtual($el)" :class="!secoes.logistica ? 'sidebar-group-current-only' : ''">
       <a href="{{ pedido_expedicao_url }}" @click="mobileOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :style="{% if '/logistica/pedidos' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
@@ -1189,7 +1217,7 @@
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Avançado</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.avancado ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
-      <div x-show="secoes.avancado">
+      <div x-show="secoes.avancado || grupoTemTelaAtual($el)" :class="!secoes.avancado ? 'sidebar-group-current-only' : ''">
       <a href="{{ fiscal_consultas_url }}" @click="mobileOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :style="{% if '/fiscal/consultas/' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}">
@@ -1266,7 +1294,7 @@
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Food Service</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.food_service ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
-      <div x-show="secoes.food_service">
+      <div x-show="secoes.food_service || grupoTemTelaAtual($el)" :class="!secoes.food_service ? 'sidebar-group-current-only' : ''">
       <a href="{% url 'food_service:painel' %}" @click="mobileOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :style="{% if request.path == '/food-service/' %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
@@ -1359,7 +1387,7 @@
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Moda e Confecção</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.moda ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
-      <div x-show="secoes.moda">
+      <div x-show="secoes.moda || grupoTemTelaAtual($el)" :class="!secoes.moda ? 'sidebar-group-current-only' : ''">
       {% for grupo in moda_grupos %}
       <a href="{% url 'moda:grupo' grupo.slug %}"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
@@ -1382,7 +1410,7 @@
         <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Polpa de Frutas</span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.polpa ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
-      <div x-show="secoes.polpa">
+      <div x-show="secoes.polpa || grupoTemTelaAtual($el)" :class="!secoes.polpa ? 'sidebar-group-current-only' : ''">
       {% for grupo in polpa_grupos %}
       <a href="{% url 'polpa:grupo' grupo.slug %}"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
