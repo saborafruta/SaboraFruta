@@ -155,6 +155,50 @@ table.erp-configurable-table {
   min-width: 100% !important;
   table-layout: fixed;
 }
+/*
+ * A largura configurada pertence a coluna inteira. Sem estas restricoes,
+ * textos longos e pills preservavam a largura do conteudo e eram pintados
+ * por cima da celula seguinte quando o usuario estreitava a divisoria.
+ */
+table.erp-configurable-table > tbody > tr > td {
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal !important;
+}
+table.erp-configurable-table > tbody > tr > td > * {
+  min-width: 0;
+  max-width: 100%;
+}
+table.erp-configurable-table > tbody > tr > td .soft-pill {
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+table.erp-configurable-table .erp-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .4rem;
+  min-width: 0;
+  max-width: 100%;
+}
+table.erp-configurable-table .erp-table-actions > * {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0 !important;
+}
+table.erp-configurable-table .erp-table-actions .btn-table {
+  max-width: 100%;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
 table.erp-configurable-table > thead > tr > th { position: relative; }
 .erp-table-column-resizer {
   position: absolute;

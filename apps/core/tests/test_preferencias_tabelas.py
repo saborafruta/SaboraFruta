@@ -100,6 +100,9 @@ class TabelaPreferenciasFrontendTests(SimpleTestCase):
         script = (raiz.parent / 'static' / 'js' / 'tabelas-configuraveis.js').read_text(
             encoding='utf-8',
         )
+        styles = (raiz.parent / 'static' / 'css' / 'tabelas-configuraveis.css').read_text(
+            encoding='utf-8',
+        )
 
         self.assertIn('request.user.preferencias_tabelas|json_script', template)
         self.assertIn('name="erp-table-user-id"', template)
@@ -111,3 +114,15 @@ class TabelaPreferenciasFrontendTests(SimpleTestCase):
         self.assertIn("class=\"erp-table-columns-warning\"", script)
         self.assertIn("Existem ${hiddenCount} colunas ocultas nesta listagem.", script)
         self.assertIn("instance.warning.hidden = hiddenCount === 0", script)
+        self.assertIn('overflow-wrap: anywhere;', styles)
+        self.assertIn('white-space: normal !important;', styles)
+        self.assertIn('.erp-table-actions', styles)
+
+    def test_lista_usuarios_agrupa_acoes_para_quebrar_dentro_da_coluna(self):
+        raiz = Path(__file__).resolve().parents[1]
+        template = (raiz / 'templates' / 'core' / 'admin' / 'usuario_list.html').read_text(
+            encoding='utf-8',
+        )
+
+        self.assertIn('class="erp-table-actions"', template)
+        self.assertNotIn('text-right whitespace-nowrap', template)
