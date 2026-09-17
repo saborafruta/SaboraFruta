@@ -1,0 +1,90 @@
+/*
+ * Contraste tipografico do tema claro
+ * ------------------------------------
+ * Esta camada e carregada depois dos estilos historicos para manter uma unica
+ * regra de legibilidade em todo o ERP. Em telas claras e ambientes com muita
+ * luz, cinzas como #94a3b8 e #9ca3af ficam fracos demais para textos de apoio.
+ *
+ * Hierarquia adotada:
+ *   - forte:      #111827 (titulos e informacao de maior destaque);
+ *   - principal:  #1f2937 (texto comum);
+ *   - secundario: #475569 (rotulos, descricoes e metadados);
+ *   - discreto:   #64748b (placeholder e informacao realmente auxiliar).
+ *
+ * O escopo em body.tema-claro e intencional: o tema escuro e as cores
+ * semanticas (sucesso, erro, alerta, links e totais) nao devem ser alterados.
+ * O !important e necessario para superar utilitarios do Tailwind e cores
+ * inline antigas geradas por Alpine sem editar centenas de templates.
+ */
+body.tema-claro {
+  --erp-text-strong: #111827;
+  --erp-text-primary: #1f2937;
+  --erp-text-secondary: #475569;
+  --erp-text-muted: #64748b;
+}
+
+/* Cinzas de texto do Tailwind usados nas telas antigas e novas. */
+body.tema-claro :is(
+  .text-gray-600,
+  .text-gray-500,
+  .text-slate-600,
+  .text-slate-500,
+  .text-zinc-600,
+  .text-zinc-500
+) {
+  color: var(--erp-text-secondary) !important;
+}
+
+body.tema-claro :is(
+  .text-gray-400,
+  .text-slate-400,
+  .text-zinc-400
+) {
+  color: var(--erp-text-muted) !important;
+}
+
+/*
+ * Compatibilidade com componentes Alpine que ainda produzem style="color:...".
+ * O seletor exige que a declaracao seja o inicio do atributo ou venha depois
+ * de ponto e virgula, evitando confundir "color" com "background-color".
+ */
+body.tema-claro :is(
+  [style^="color:#64748b"], [style*=";color:#64748b"], [style*="; color:#64748b"],
+  [style^="color: #64748b"], [style*=";color: #64748b"], [style*="; color: #64748b"],
+  [style^="color:#6b7280"], [style*=";color:#6b7280"], [style*="; color:#6b7280"],
+  [style^="color: #6b7280"], [style*=";color: #6b7280"], [style*="; color: #6b7280"]
+) {
+  color: var(--erp-text-secondary) !important;
+}
+
+body.tema-claro :is(
+  [style^="color:#94a3b8"], [style*=";color:#94a3b8"], [style*="; color:#94a3b8"],
+  [style^="color: #94a3b8"], [style*=";color: #94a3b8"], [style*="; color: #94a3b8"],
+  [style^="color:#9ca3af"], [style*=";color:#9ca3af"], [style*="; color:#9ca3af"],
+  [style^="color: #9ca3af"], [style*=";color: #9ca3af"], [style*="; color: #9ca3af"]
+) {
+  color: var(--erp-text-muted) !important;
+}
+
+/* Placeholders continuam distintos do valor digitado, mas permanecem legiveis. */
+body.tema-claro :is(input, textarea)::placeholder {
+  color: var(--erp-text-muted) !important;
+  opacity: 1;
+}
+
+/* Componentes globais com nomes semanticos, fora dos utilitarios Tailwind. */
+body.tema-claro :is(
+  .form-label,
+  .dd-cidade,
+  .dd-filial-cidade,
+  .erp-date-weekday,
+  .cadastro-log-help,
+  .cadastro-log-tools label,
+  .cadastro-log-label
+) {
+  color: var(--erp-text-secondary) !important;
+}
+
+body.tema-claro .erp-table-columns-heading span {
+  color: var(--erp-text-secondary) !important;
+}
