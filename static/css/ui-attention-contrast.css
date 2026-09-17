@@ -50,7 +50,8 @@ body.tema-claro :is(.erp-table-columns-toolbar .btn-secondary, [data-product-col
 
 .dashboard-sales-breakdown .dashboard-sales-pane-head {
   display: flex;
-  min-height: 48px;
+  height: 56px;
+  min-height: 56px;
   align-items: center;
 }
 
