@@ -47,6 +47,16 @@
   .app-sidebar {
     width: 16rem;
   }
+  html.tema-claro body .app-sidebar {
+    background: #ffffff;
+    border-right: 1px solid #cbd5e1;
+    box-shadow: 3px 0 14px rgba(15, 23, 42, 0.08);
+  }
+  html.tema-escuro body .app-sidebar {
+    background: #161618;
+    border-right: 0;
+    box-shadow: 4px 0 16px rgba(0, 0, 0, 0.4);
+  }
   html.erp-hydrated .app-sidebar {
     transition: width 0.18s ease;
   }
@@ -411,19 +421,15 @@
   window.ajustarLogoFilialSidebar = function(img) {
     var card = img && img.closest ? img.closest('.sidebar-branch-logo-card') : null;
     if (!card || !img.naturalWidth || !img.naturalHeight) return;
+    // A classe estrutural ja vem do servidor por logo_sidebar_classe. O onload
+    // pode refinar somente o foco visual; mudar largura/altura aqui causa salto.
+    if (!card.classList.contains('sidebar-branch-logo-card--wide')) return;
 
     var proporcaoNatural = img.naturalWidth / img.naturalHeight;
     var conteudo = detectarConteudoLogoSidebar(img, proporcaoNatural);
-    var proporcao = proporcaoNatural;
-
-    if (card.classList.contains('sidebar-branch-logo-card--wide') || proporcao >= 2.25) {
-      card.classList.add('sidebar-branch-logo-card--wide');
-      if (conteudo) {
-        card.style.setProperty('--sidebar-logo-focus-x', conteudo.focoX.toFixed(2) + '%');
-        card.style.setProperty('--sidebar-logo-focus-y', conteudo.focoY.toFixed(2) + '%');
-      }
-    } else if (card.classList.contains('sidebar-branch-logo-card--square') || (proporcao >= 0.85 && proporcao <= 1.25)) {
-      card.classList.add('sidebar-branch-logo-card--square');
+    if (conteudo) {
+      card.style.setProperty('--sidebar-logo-focus-x', conteudo.focoX.toFixed(2) + '%');
+      card.style.setProperty('--sidebar-logo-focus-y', conteudo.focoY.toFixed(2) + '%');
     }
   };
 </script>

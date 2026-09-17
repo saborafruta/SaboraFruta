@@ -148,9 +148,22 @@ Toda tela deve:
 - Produto com preco promocional em lote e combos/kits/descontos por categoria podem ter campos diferentes; por isso a visao inicial deve agrupar por tipo quando as colunas nao forem equivalentes.
 
 ## Sidebar
-- nao quebrar
-- nao travar
-- nao abrir ao trocar tema
+- A sidebar nao pode quebrar, travar, abrir sozinha ao trocar tema nem dar "salto" visual ao trocar de tela.
+- Tema, largura, fundo e geometria iniciais da sidebar devem nascer definidos no CSS/HTML antes do Alpine/JS aplicar estado.
+- Transicoes de largura e margem so podem ser habilitadas depois da hidratacao inicial; refresh e troca de tela nao devem animar do estado padrao para o estado salvo.
+- A largura inicial da sidebar deve respeitar `sidebar-collapsed` antes do primeiro paint, evitando deslocar o header e o conteudo.
+- O `onload` da imagem pode apenas refinar enquadramento/foco. Ele nao pode adicionar classes que alterem largura ou altura do card.
+- Classes de proporcao da logo devem vir do servidor quando possivel; quando a dimensao nao estiver disponivel, usar um layout padrao estavel.
+- A logomarca operacional e a imagem da filial (`Filial.imagem`), a mesma configurada nos parametros locais e na central administrativa.
+- A logo do sistema `iNoovaTed` permanece no topo da sidebar. A imagem da filial fica em card proprio abaixo do topo.
+- A imagem da filial deve aparecer em todas as telas autenticadas, nao apenas no dashboard.
+- Nao remover fundo automaticamente da imagem. Preservar o fundo original em tema claro e escuro.
+- Imagens com cantos pontudos precisam ter bordas arredondadas no elemento visivel da imagem, nao apenas no container.
+- Logos horizontais devem ocupar a largura disponivel sem estourar e com o nome da filial abaixo.
+- Logos quadradas/menos horizontais devem ocupar mais area vertical e tambem deixar o nome da filial abaixo, centralizado.
+- Nomes longos de filial devem ser centralizados, com quebra controlada ou truncamento; nunca devem empurrar o menu nem esconder acoes.
+- A tela de selecao de filial deve seguir o mesmo criterio visual de logo: fundo branco real da imagem preservado, bordas arredondadas e espaco suficiente para nomes maiores.
+- Ao trocar de filial, refreshar ou navegar entre telas, validar que a logo nao aparece gigante e que sidebar, header e conteudo ja nascem na posicao final.
 
 ## Logs e modais
 - Modal de log precisa funcionar em mobile e desktop.

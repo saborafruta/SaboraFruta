@@ -95,6 +95,22 @@ class SeletorDeTemaEscuroTests(SimpleTestCase):
             "document.documentElement.classList.toggle('sidebar-collapsed', collapsed)",
             sidebar,
         )
+        self.assertIn('html.tema-claro body .app-sidebar', sidebar)
+        self.assertIn('html.tema-escuro body .app-sidebar', sidebar)
+        self.assertNotIn(
+            "card.classList.add('sidebar-branch-logo-card--wide')", sidebar
+        )
+        self.assertNotIn(
+            "card.classList.add('sidebar-branch-logo-card--square')", sidebar
+        )
+        self.assertIn('html.tema-escuro body .app-topbar', base)
+
+    def test_regra_documentada_proibe_salto_antes_do_alpine(self):
+        regras = open('docs/UI_RULES.md', encoding='utf-8').read()
+
+        self.assertIn('antes do primeiro paint', regras)
+        self.assertIn('O `onload` da imagem pode apenas refinar', regras)
+        self.assertIn('depois da hidratacao inicial', regras)
 
 
 class EstrategiaDoDarkDoTailwindTests(SimpleTestCase):
