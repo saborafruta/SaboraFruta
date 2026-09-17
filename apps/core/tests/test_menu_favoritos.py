@@ -157,6 +157,25 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertIn('if (!record.mobileReadonly)', script)
         self.assertIn("'Accept': 'application/json'", script)
         self.assertIn('readJsonResponse', script)
+        self.assertEqual(template.count('data-sidebar-dashboard'), 1)
+        self.assertIn("dashboard.insertAdjacentElement('afterend', panel)", script)
+
+    def test_sanfonas_iniciam_fechadas_e_destacam_modulo_atual(self):
+        raiz = Path(__file__).resolve().parents[1]
+        sidebar = (raiz / 'templates' / 'core' / '_sidebar.html').read_text(encoding='utf-8')
+        navegacao = (raiz / 'templates' / 'core' / '_sidebar_navigation.html').read_text(encoding='utf-8')
+
+        estado_fechado = (
+            'var s = {cadastros:false, operacoes:false, financeiro:false, '
+            'logistica:false, avancado:false, food_service:false, moda:false, polpa:false};'
+        )
+        self.assertIn(estado_fechado, sidebar)
+        self.assertNotIn("localStorage.setItem('sidebar-secoes'", sidebar)
+        self.assertIn("{% if '/moda/' in request.path %}s.moda = true;{% endif %}", sidebar)
+        self.assertEqual(sidebar.count('sidebar-module-button'), 9)  # CSS + 8 botoes mobile
+        self.assertEqual(navegacao.count('sidebar-module-button'), 8)
+        self.assertIn('body.tema-claro .sidebar-module-button > span:first-child', sidebar)
+        self.assertIn('font-size: 12px;', sidebar)
 
     def test_produtos_principais_nao_ficam_ativos_dentro_de_moda(self):
         raiz = Path(__file__).resolve().parents[1]
