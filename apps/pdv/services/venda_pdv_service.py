@@ -50,6 +50,7 @@ class VendaPDVService:
         bonificacao: bool = False,
         venda_fora_estabelecimento: bool = False,
         viagem_id: int | None = None,
+        idempotency_key: str | None = None,
     ) -> VendaPDV:
         if not sessao:
             raise DadosInvalidosError("Nenhuma sessao de caixa aberta.")
@@ -113,6 +114,7 @@ class VendaPDVService:
             usuario_id=usuario.pk,
             data_venda=data_venda_efetiva,
             observacao=(observacao or "").strip(),
+            idempotency_key=idempotency_key or None,
         )
 
         subtotal = Decimal("0.00")

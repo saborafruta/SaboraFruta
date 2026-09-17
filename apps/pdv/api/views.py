@@ -34,20 +34,11 @@ apresentacao/fator foram usados na venda NAO fica registrado no item
 para auditoria futura. Registrar isso no proprio ItemVendaPDV (colunas
 novas, ou snapshot) continua fora do escopo desta fase.
 
-IDEMPOTENCIA: o campo `VendaPDV.idempotency_key` existe no model desde
-antes desta fase mas nunca foi checado em lugar nenhum (nem no fluxo
-HTML existente do PDV). Esta e' a PRIMEIRA vez que ele e' usado de
-verdade. Header opcional `Idempotency-Key`: se ja existir uma venda com
-essa chave, devolve ela (200) em vez de criar outra. Limitacao honesta:
-isso cobre o caso comum (cliente reenvia apos timeout de rede, bem depois
-da primeira requisicao ja ter terminado) mas NAO e' um lock atomico --
-duas requisicoes verdadeiramente simultaneas com a mesma chave ainda
-podem, em tese, criar duas vendas antes que a constraint UNIQUE barre a
-segunda gravacao da chave (nesse caso a segunda venda fica sem
-idempotency_key salva e um erro e' devolvido, mas ela ja existe no banco
-com estoque baixado -- precisaria de estorno manual). Mesma familia de
-tradeoff documentado no cache do lookup de codigo de barras (Fase 12):
-decisao consciente de nao construir um lock distribuido para isto agora.
+IDEMPOTENCIA: o header opcional `Idempotency-Key` e' gravado junto com a
+propria venda, antes de qualquer baixa de estoque. A constraint UNIQUE
+decide corridas reais: a requisicao perdedora falha antes dos efeitos da
+venda e recupera o registro vencedor. O mesmo contrato e' usado pelo PDV
+visual e pela API REST.
 """
 from decimal import Decimal, InvalidOperation
 
@@ -136,7 +127,7 @@ class VendaCreateView(APIView):
 
         chave_idempotencia = request.headers.get('Idempotency-Key', '').strip()
         if chave_idempotencia:
-            venda_existente = VendaPDV.objects.filter(idempotency_key=chave_idempotencia).first()
+            venda_existente = VendaPDV.objects.for_filial(filial).filter(idempotency_key=chave_idempotencia).first()
             if venda_existente:
                 return Response(VendaPDVSerializer(venda_existente).data, status=200)
 
@@ -167,26 +158,17 @@ class VendaCreateView(APIView):
                 observacao=dados.get('observacao') or '',
                 bonificacao=dados.get('bonificacao') or False,
                 forcar_estoque_negativo=dados.get('forcar_estoque_negativo', True),
+                idempotency_key=chave_idempotencia or None,
                 request=request,
             )
         except EstoqueInsuficienteError as exc:
             return _erro(str(exc), codigo='estoque_insuficiente', campo=None)
         except DadosInvalidosError as exc:
             return _erro(str(exc))
-
-        if chave_idempotencia:
-            venda.idempotency_key = chave_idempotencia
-            try:
-                venda.save(update_fields=['idempotency_key'])
-            except IntegrityError:
-                # Corrida real: outra requisicao com a mesma chave venceu
-                # entre a checagem la em cima e este save. A venda que
-                # acabamos de criar e' de verdade (estoque ja baixado) --
-                # ver docstring do modulo sobre esse limite conhecido.
-                return _erro(
-                    'Requisicao concorrente com a mesma Idempotency-Key. '
-                    f'Venda {venda.numero_venda} foi criada; verifique manualmente possivel duplicidade.',
-                    codigo='idempotencia_concorrente', status=409,
-                )
+        except IntegrityError:
+            venda_existente = VendaPDV.objects.for_filial(filial).filter(idempotency_key=chave_idempotencia).first()
+            if venda_existente:
+                return Response(VendaPDVSerializer(venda_existente).data, status=200)
+            raise
 
         return Response(VendaPDVSerializer(venda).data, status=201)

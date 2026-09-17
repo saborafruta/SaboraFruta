@@ -1305,6 +1305,13 @@
       </button>
     </div>
 
+    <div class="topbar-chip" style="gap:6px;cursor:default;" :title="statusLocalDetalhe">
+      <span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;"
+            :style="conectividadeOnline ? 'background:#22c55e;box-shadow:0 0 6px #22c55e;' : 'background:#f59e0b;box-shadow:0 0 6px #f59e0b;'"></span>
+      <span style="font-size:10px;font-weight:800;letter-spacing:.04em;" x-text="conectividadeOnline ? 'ONLINE' : 'OFFLINE'"></span>
+      <span x-show="localStorePronto" style="font-size:10px;color:var(--pdv-t3);" x-text="localSaveState==='salvando' ? '· salvando' : '· local protegido'"></span>
+    </div>
+
     <div class="topbar-sales-actions">
     <button @click="abrirPendentes()" class="topbar-btn">
       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
@@ -3860,6 +3867,7 @@
 {{ favoritos_completos|json_script:"sidebar-favorites-records" }}
 <script src="{% static 'core/js/sidebar_favorites.js' %}?v=20260917-4"></script>
 <script src="{% static 'core/js/sidebar_search.js' %}?v=20260917-3"></script>
+<script src="{% static 'js/pdv_local_store.js' %}?v=20260917-1"></script>
 <script>
 function pdv() {
   return {
@@ -3873,11 +3881,15 @@ function pdv() {
     get hojeISO() { return new Date().toISOString().slice(0,10); },
 
     sessao: null, sessaoCarregada: false, erroEstado: '', _inicializado: false,
+    conectividadeOnline: typeof navigator === 'undefined' ? true : navigator.onLine,
+    localStorePronto: false, localSaveState: 'inicializando', localDraftRestaurado: false,
+    _localStore: null, _localSaveChain: Promise.resolve(), _persistenciaSuspensa: false,
     erroCaixa: '', caixaSelecionada: '', valorAberturaCaixa: '0', caixaAbrindo: false,
     criandoCaixa: false, novoCaixaDescricao: '', criandoCaixaLoading: false,
 
     venda: {
       id: null, numero: null,
+      local_id: (window.PDVLocalStore?.generateId?.('pdv') || ('pdv'+Date.now()+Math.random().toString(16).slice(2))),
       cliente: { id: null, nome: 'Consumidor Final', cpf_cnpj: '' },
       itens: [], pagamentos: [],
       subtotal: 0, desconto: 0, acrescimo: 0,
@@ -3977,6 +3989,11 @@ function pdv() {
       if (this.modo==='orcamento') return 'GERAR ORÇAMENTO (F12)';
       if (this.modo==='bonificacao') return 'FINALIZAR BONIFICAÇÃO (F12)';
       return this.venda.delivery ? 'FINALIZAR DELIVERY (F12)' : 'FINALIZAR VENDA (F12)';
+    },
+    get statusLocalDetalhe() {
+      if (!this.localStorePronto) return 'Armazenamento local ainda não está disponível.';
+      if (!this.conectividadeOnline) return 'Sem conexão. As alterações deste carrinho continuam salvas neste computador.';
+      return 'Conectado. O carrinho também está protegido neste computador.';
     },
     handleFinalizarClick() {
       if (this.modo==='orcamento') return this.gerarOrcamento();
@@ -4117,10 +4134,109 @@ function pdv() {
       setInterval(()=>{ this.horaAtual=this._hora(); }, 1000);
       this.registrarAtalhos();
       this.$nextTick(()=>this.focarBuscaProduto());
+      await this.iniciarLocalFirst();
       await this.carregarEstado();
+      const restaurado = await this.restaurarRascunhoLocal();
       await this.atualizarListasTopo();
-      await this.aplicarClienteInicial();
-      await this.aplicarComandaInicial();
+      if (!restaurado) {
+        await this.aplicarClienteInicial();
+        await this.aplicarComandaInicial();
+      }
+    },
+
+    async iniciarLocalFirst() {
+      if (!window.PDVLocalStore) {
+        this.localSaveState = 'indisponivel';
+        return;
+      }
+      try {
+        this._localStore = await new window.PDVLocalStore({
+          filialId: '{{ filial_ativa.pk }}',
+          usuarioId: '{{ request.user.pk }}',
+        }).init();
+        this.localStorePronto = true;
+        this.localSaveState = 'salvo';
+      } catch (error) {
+        this.localSaveState = 'erro';
+        this.toast_('O navegador não conseguiu ativar a proteção local do carrinho.', 'erro');
+      }
+      window.addEventListener?.('online', () => { this.conectividadeOnline = true; });
+      window.addEventListener?.('offline', () => { this.conectividadeOnline = false; });
+    },
+
+    async restaurarRascunhoLocal() {
+      if (!this._localStore) return false;
+      try {
+        const draft = await this._localStore.loadDraft();
+        if (!draft?.venda || (!draft.venda.itens?.length && !draft.venda.pagamentos?.length)) return false;
+        this._persistenciaSuspensa = true;
+        this.venda = draft.venda;
+        this.venda.local_id = this.venda.local_id || this._localStore.newSaleId();
+        this.modo = draft.modo || 'venda';
+        this.creditoAplicado = Number(draft.credito_aplicado || 0);
+        this.dataVendaRetroativa = draft.data_venda_retroativa || '';
+        this.vendaEdicaoOrigemId = draft.venda_edicao_origem_id || null;
+        this.vendaEdicaoOrigemNumero = draft.venda_edicao_origem_numero || null;
+        this._persistenciaSuspensa = false;
+        this.recalcularTotais();
+        this.localDraftRestaurado = true;
+        const incerto = draft.status === 'resultado_incerto';
+        this.toast_(incerto
+          ? 'Venda recuperada com resultado incerto. Reenvie para consultar a mesma identificação.'
+          : 'Venda em andamento recuperada deste computador.', incerto ? 'info' : 'ok');
+        return true;
+      } catch (_) {
+        this._persistenciaSuspensa = false;
+        this.localSaveState = 'erro';
+        return false;
+      }
+    },
+
+    agendarPersistenciaLocal(status='rascunho') {
+      if (!this._localStore || this._persistenciaSuspensa) return;
+      this.localSaveState = 'salvando';
+      this.enfileirarPersistenciaLocal(status);
+    },
+
+    enfileirarPersistenciaLocal(status='rascunho') {
+      if (!this._localStore || this._persistenciaSuspensa) return Promise.resolve();
+      this.localSaveState = 'salvando';
+      this._localSaveChain = this._localSaveChain
+        .catch(() => undefined)
+        .then(() => this.persistirRascunhoLocal(status));
+      return this._localSaveChain;
+    },
+
+    async persistirRascunhoLocal(status='rascunho') {
+      if (!this._localStore || this._persistenciaSuspensa) return;
+      try {
+        if (!this.venda.itens.length && !this.venda.pagamentos.length) {
+          await this._localStore.deleteDraft();
+        } else {
+          await this._localStore.saveDraft({
+            version: 1,
+            status,
+            venda: this.venda,
+            modo: this.modo,
+            sessao_id: this.sessao?.id || null,
+            caixa_id: this.sessao?.caixa_id || null,
+            credito_aplicado: this.creditoAplicado || 0,
+            data_venda_retroativa: this.dataVendaRetroativa || '',
+            venda_edicao_origem_id: this.vendaEdicaoOrigemId || null,
+            venda_edicao_origem_numero: this.vendaEdicaoOrigemNumero || null,
+          });
+        }
+        this.localSaveState = 'salvo';
+      } catch (_) {
+        this.localSaveState = 'erro';
+      }
+    },
+
+    async concluirRascunhoLocal() {
+      this._persistenciaSuspensa = true;
+      try { await this._localSaveChain; } catch (_) { /* a exclusao abaixo e' a confirmacao final */ }
+      try { await this._localStore?.deleteDraft(); } catch (_) { /* nova tentativa ao limpar a venda */ }
+      this.localSaveState = 'sincronizado';
     },
 
     // Itens vindos de ?comanda_id=<id> (botao "Ir para o PDV e fechar a
@@ -4205,7 +4321,9 @@ function pdv() {
         this.formasPagamento = d.formas_pagamento || [];
         this.topProdutos = d.top_produtos || [];
         this.sessaoCarregada = true;
+        this.conectividadeOnline = true;
       } catch {
+        this.conectividadeOnline = false;
         this.erroEstado = 'Não foi possível consultar o caixa. Tente novamente.';
         this.toast_('Erro ao carregar estado do PDV','erro');
       }
@@ -4534,6 +4652,7 @@ function pdv() {
       const r = this.venda.total - this.venda.valor_pago;
       this.venda.restante = r > 0 ? r : 0;
       this.rateioDescontoVenda=this.calcularRateioDescontoVenda();
+      this.agendarPersistenciaLocal();
     },
 
     calcularRateioDescontoVenda() {
@@ -4778,7 +4897,9 @@ function pdv() {
       if (this._finalizando) return;
       this._finalizando = true;
       try {
+        await this.enfileirarPersistenciaLocal('finalizando');
         const payload = {
+          idempotency_key: this.venda.local_id,
           sessao_id: this.sessao?.id,
           cliente_id: this.venda.cliente?.id||null,
           itens: this.venda.itens,
@@ -4796,7 +4917,7 @@ function pdv() {
           comanda_id: this.venda.comanda_id_origem || null,
         };
         payload.forcar_estoque_negativo = true;
-        const r = await fetch('/pdv/api/venda/finalizar/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(payload)});
+        const r = await fetch('/pdv/api/venda/finalizar/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf(),'Idempotency-Key':this.venda.local_id},body:JSON.stringify(payload)});
         let d;
         try { d = await r.json(); } catch(jsonErr) {
           if (r.redirected || r.status === 200) {
@@ -4807,6 +4928,8 @@ function pdv() {
           this._finalizando = false; return;
         }
         if (d.ok) {
+          this.conectividadeOnline = true;
+          await this.concluirRascunhoLocal();
           this.fecharModalEstoque();
           this.vendaFinalizadaData = { id: d.venda_id || d.id || null, numero: d.numero_venda };
           this.toast_('✓ Venda #'+String(d.numero_venda).padStart(6,'0')+' finalizada!','ok');
@@ -4816,7 +4939,11 @@ function pdv() {
         } else {
           this.toast_('Erro: '+(d.erro||''),'erro');
         }
-      } catch(e) { this.toast_('Erro de comunicação: '+e.message,'erro'); }
+      } catch(e) {
+        this.conectividadeOnline = false;
+        await this.persistirRascunhoLocal('resultado_incerto');
+        this.toast_('A conexão caiu durante a finalização. A venda foi preservada e será reenviada com a mesma identificação.','info');
+      }
       finally { this._finalizando = false; }
     },
 
@@ -4826,7 +4953,9 @@ function pdv() {
       if (this._finalizando) return;
       this._finalizando = true;
       try {
+        await this.enfileirarPersistenciaLocal('finalizando');
         const payload = {
+          idempotency_key: this.venda.local_id,
           sessao_id: this.sessao?.id,
           cliente_id: this.venda.cliente?.id||null,
           itens: this.venda.itens,
@@ -4846,11 +4975,13 @@ function pdv() {
         // Endpoint dedicado que sempre ignora verificação de estoque
         const r = await fetch('/pdv/api/venda/finalizar/forcado/', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+          headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf(), 'Idempotency-Key':this.venda.local_id},
           body: JSON.stringify(payload),
         });
         const d = await r.json();
         if (d.ok) {
+          this.conectividadeOnline = true;
+          await this.concluirRascunhoLocal();
           this.fecharModalEstoque();
           this.vendaFinalizadaData = { id: d.venda_id || d.id || null, numero: d.numero_venda };
           this.toast_('✓ Venda #'+String(d.numero_venda).padStart(6,'0')+' finalizada!','ok');
@@ -4859,7 +4990,11 @@ function pdv() {
         } else {
           this.toast_('Erro: '+(d.erro||''),'erro');
         }
-      } catch { this.toast_('Erro de comunicação','erro'); }
+      } catch {
+        this.conectividadeOnline = false;
+        await this.persistirRascunhoLocal('resultado_incerto');
+        this.toast_('A conexão caiu durante a finalização. A venda foi preservada e será reenviada com a mesma identificação.','info');
+      }
       finally { this._finalizando = false; }
     },
 
@@ -4883,7 +5018,9 @@ function pdv() {
       if (this._finalizando) return;
       this._finalizando = true;
       try {
+        await this.enfileirarPersistenciaLocal('finalizando');
         const payload = {
+          idempotency_key: this.venda.local_id,
           sessao_id: this.sessao?.id,
           cliente_id: this.venda.cliente?.id||null,
           itens: this.venda.itens,
@@ -4900,7 +5037,7 @@ function pdv() {
           bonificacao: true,
           forcar_estoque_negativo: true,
         };
-        const r = await fetch('/pdv/api/venda/finalizar/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(payload)});
+        const r = await fetch('/pdv/api/venda/finalizar/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf(),'Idempotency-Key':this.venda.local_id},body:JSON.stringify(payload)});
         let d;
         try { d = await r.json(); } catch(jsonErr) {
           if (r.redirected || r.status === 200) {
@@ -4911,13 +5048,19 @@ function pdv() {
           this._finalizando = false; return;
         }
         if (d.ok) {
+          this.conectividadeOnline = true;
+          await this.concluirRascunhoLocal();
           this.vendaFinalizadaData = { id: d.venda_id || d.id || null, numero: d.numero_venda };
           this.toast_('✓ Bonificação #'+String(d.numero_venda).padStart(6,'0')+' finalizada!','ok');
           this.showModalImpressao = true;
         } else {
           this.toast_('Erro: '+(d.erro||''),'erro');
         }
-      } catch(e) { this.toast_('Erro de comunicação: '+e.message,'erro'); }
+      } catch(e) {
+        this.conectividadeOnline = false;
+        await this.persistirRascunhoLocal('resultado_incerto');
+        this.toast_('A conexão caiu durante a finalização. A bonificação foi preservada localmente.','info');
+      }
       finally { this._finalizando = false; }
     },
 
@@ -5878,13 +6021,17 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
     },
 
     novaVenda() {
-      this.venda={id:null,numero:null,cliente:{id:null,nome:'Consumidor Final',cpf_cnpj:''},
+      this._persistenciaSuspensa=true;
+      this.venda={id:null,numero:null,local_id:(this._localStore?.newSaleId?.() || window.PDVLocalStore?.generateId?.('pdv') || ('pdv'+Date.now()+Math.random().toString(16).slice(2))),cliente:{id:null,nome:'Consumidor Final',cpf_cnpj:''},
         itens:[],pagamentos:[],subtotal:0,desconto:0,acrescimo:0,total:0,valor_pago:0,restante:0,delivery:false,endereco_entrega:{},fora_estabelecimento:false,viagem_id:null,viagem_numero:null,observacao:''};
       this.creditoDisponivel=0; this.creditoAplicado=0; this.cashbackDisponivel=0;
       this.buscaQuery=''; this.produtos=[]; this.formaPgtoSelecionada=null;
       this.dataVendaRetroativa='';
       this.vendaEdicaoOrigemId=null; this.vendaEdicaoOrigemNumero=null;
       this.historicoCliente=[]; this.produtosFrequentes=[]; this.historicoClienteTotal=0; this.historicoClienteAberto=null;
+      this.localDraftRestaurado=false;
+      this._persistenciaSuspensa=false;
+      this.persistirRascunhoLocal();
       this.$nextTick(()=>document.getElementById('busca-produto')?.focus());
     },
 

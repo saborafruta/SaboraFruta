@@ -38,6 +38,8 @@
     })();
   </script>
   <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
+  <link rel="manifest" href="{% static 'pdv-manifest.json' %}">
+  <meta name="theme-color" content="#0d0d16">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/tailwind-built.css' %}">
@@ -69,5 +71,12 @@
 <body>
   {% block body %}{% endblock %}
   {% block extra_scripts %}{% endblock %}
+  <script>
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function() {});
+      });
+    }
+  </script>
 </body>
 </html>

@@ -212,6 +212,20 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn('erp-prehydrate tema-escuro', base)
         self.assertIn('window.__erpApplyPdvTheme', base)
         self.assertIn('Space+Grotesk', base)
+        self.assertIn("navigator.serviceWorker.register('/sw.js'", base)
+        self.assertIn("static 'pdv-manifest.json'", base)
+
+    def test_pdv_persiste_rascunho_local_e_envia_idempotencia(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+        local_store = (Path(__file__).resolve().parents[3] / 'static/js/pdv_local_store.js').read_text(encoding='utf-8')
+        self.assertIn("static 'js/pdv_local_store.js'", template)
+        self.assertIn("await this.restaurarRascunhoLocal()", template)
+        self.assertIn("this.agendarPersistenciaLocal();", template)
+        self.assertIn("'Idempotency-Key':this.venda.local_id", template)
+        self.assertIn("persistirRascunhoLocal('resultado_incerto')", template)
+        self.assertIn("durability: 'strict'", local_store)
+        self.assertIn("navigator.storage.persist()", local_store)
+        self.assertIn("indexedDB.open(DB_NAME, DB_VERSION)", local_store)
 
     def test_cabecalho_global_preenche_o_canto_sob_a_curva_laranja(self):
         get_template('_base.html')

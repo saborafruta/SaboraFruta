@@ -4,7 +4,7 @@ from collections import defaultdict
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.contrib import messages
-from django.db import connections
+from django.db import IntegrityError, connections
 from django.db.models import Max, Min, Q, Sum
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
@@ -1415,11 +1415,40 @@ def _resolver_venda_edicao_origem(request, body):
     return venda_antiga
 
 
+def _chave_idempotencia(request, body):
+    chave = (request.headers.get("Idempotency-Key") or body.get("idempotency_key") or "").strip()
+    if len(chave) > 100:
+        raise DadosInvalidosError("Identificador local da venda inválido.")
+    return chave or None
+
+
+def _resposta_venda_existente(chave, filial):
+    if not chave:
+        return None
+    venda = VendaPDV.objects.for_filial(filial).filter(idempotency_key=chave).first()
+    if not venda:
+        return None
+    return JsonResponse({
+        "ok": True,
+        "numero_venda": venda.numero_venda,
+        "venda_id": venda.id,
+        "repetida": True,
+    })
+
+
 def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
     try:
         body = json.loads(request.body)
     except json.JSONDecodeError:
         return JsonResponse({"erro": "JSON inválido."}, status=400)
+
+    try:
+        chave_idempotencia = _chave_idempotencia(request, body)
+    except DadosInvalidosError as exc:
+        return JsonResponse({"erro": str(exc)}, status=400)
+    existente = _resposta_venda_existente(chave_idempotencia, request.filial_ativa)
+    if existente:
+        return existente
 
     sessao = _sessao_aberta(request)
     if not sessao:
@@ -1481,6 +1510,7 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
                 bonificacao=bonificacao,
                 venda_fora_estabelecimento=venda_fora_estabelecimento,
                 viagem_id=viagem_id,
+                idempotency_key=chave_idempotencia,
             )
             if comanda_id:
                 _fechar_comanda_origem(comanda_id, request, venda)
@@ -1488,6 +1518,11 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
         return JsonResponse({"erro": str(exc), "tipo": "estoque_insuficiente"}, status=400)
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
+    except IntegrityError:
+        existente = _resposta_venda_existente(chave_idempotencia, request.filial_ativa)
+        if existente:
+            return existente
+        return JsonResponse({"erro": "Conflito ao registrar a venda. Consulte o histórico antes de tentar novamente."}, status=409)
     except Exception as exc:
         return JsonResponse({"erro": str(exc)}, status=500)
 
@@ -1540,6 +1575,14 @@ def api_venda_finalizar_forcado(request):
     except json.JSONDecodeError:
         return JsonResponse({"erro": "JSON inválido."}, status=400)
 
+    try:
+        chave_idempotencia = _chave_idempotencia(request, body)
+    except DadosInvalidosError as exc:
+        return JsonResponse({"erro": str(exc)}, status=400)
+    existente = _resposta_venda_existente(chave_idempotencia, request.filial_ativa)
+    if existente:
+        return existente
+
     sessao = _sessao_aberta(request)
     if not sessao:
         return JsonResponse({"erro": "Nenhuma sessão de caixa aberta."}, status=400)
@@ -1588,11 +1631,17 @@ def api_venda_finalizar_forcado(request):
                 request=request,
                 venda_fora_estabelecimento=venda_fora_estabelecimento,
                 viagem_id=viagem_id,
+                idempotency_key=chave_idempotencia,
             )
             if comanda_id:
                 _fechar_comanda_origem(comanda_id, request, venda)
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
+    except IntegrityError:
+        existente = _resposta_venda_existente(chave_idempotencia, request.filial_ativa)
+        if existente:
+            return existente
+        return JsonResponse({"erro": "Conflito ao registrar a venda. Consulte o histórico antes de tentar novamente."}, status=409)
     except Exception as exc:
         return JsonResponse({"erro": str(exc)}, status=500)
 

@@ -1,0 +1,141 @@
+(function (global) {
+  'use strict';
+
+  const DB_NAME = 'saborafruta-pdv-local';
+  const DB_VERSION = 1;
+  const DRAFTS_STORE = 'rascunhos';
+  const META_STORE = 'metadados';
+
+  function clonePlain(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function randomHex(bytes) {
+    const values = new Uint8Array(bytes);
+    if (global.crypto && global.crypto.getRandomValues) {
+      global.crypto.getRandomValues(values);
+    } else {
+      for (let index = 0; index < values.length; index += 1) {
+        values[index] = Math.floor(Math.random() * 256);
+      }
+    }
+    return Array.from(values, value => value.toString(16).padStart(2, '0')).join('');
+  }
+
+  function generateId(prefix) {
+    const uuid = global.crypto && typeof global.crypto.randomUUID === 'function'
+      ? global.crypto.randomUUID().replace(/-/g, '')
+      : randomHex(16);
+    return `${prefix || 'pdv'}${uuid}`;
+  }
+
+  class PDVLocalStore {
+    constructor(options) {
+      this.filialId = String(options.filialId);
+      this.usuarioId = String(options.usuarioId);
+      this.scope = `${this.filialId}:${this.usuarioId}`;
+      this.db = null;
+      this.installationId = null;
+    }
+
+    async init() {
+      if (!global.indexedDB) throw new Error('IndexedDB indisponivel neste navegador.');
+      this.db = await new Promise((resolve, reject) => {
+        const request = global.indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains(DRAFTS_STORE)) {
+            db.createObjectStore(DRAFTS_STORE, { keyPath: 'scope' });
+          }
+          if (!db.objectStoreNames.contains(META_STORE)) {
+            db.createObjectStore(META_STORE, { keyPath: 'key' });
+          }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error('Falha ao abrir armazenamento local.'));
+        request.onblocked = () => reject(new Error('Atualizacao do armazenamento local bloqueada.'));
+      });
+      this.db.onversionchange = () => this.db.close();
+      this.installationId = await this._getMeta('installation_id');
+      if (!this.installationId) {
+        this.installationId = generateId('inst');
+        await this._put(META_STORE, { key: 'installation_id', value: this.installationId });
+      }
+      if (global.navigator && global.navigator.storage && global.navigator.storage.persist) {
+        try { await global.navigator.storage.persist(); } catch (_) { /* best effort */ }
+      }
+      return this;
+    }
+
+    newSaleId() {
+      return generateId('pdv');
+    }
+
+    async loadDraft() {
+      const draft = await this._get(DRAFTS_STORE, this.scope);
+      return draft ? clonePlain(draft) : null;
+    }
+
+    async saveDraft(data) {
+      const record = clonePlain({
+        ...data,
+        scope: this.scope,
+        filial_id: this.filialId,
+        usuario_id: this.usuarioId,
+        installation_id: this.installationId,
+        updated_at: new Date().toISOString(),
+      });
+      await this._put(DRAFTS_STORE, record, true);
+      return record;
+    }
+
+    async deleteDraft() {
+      await this._delete(DRAFTS_STORE, this.scope, true);
+    }
+
+    async _getMeta(key) {
+      const result = await this._get(META_STORE, key);
+      return result ? result.value : null;
+    }
+
+    _transaction(store, mode, strict) {
+      if (strict) {
+        try { return this.db.transaction(store, mode, { durability: 'strict' }); } catch (_) { /* compat */ }
+      }
+      return this.db.transaction(store, mode);
+    }
+
+    async _get(store, key) {
+      return new Promise((resolve, reject) => {
+        const request = this._transaction(store, 'readonly', false).objectStore(store).get(key);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error || new Error('Falha ao ler armazenamento local.'));
+      });
+    }
+
+    async _put(store, value, strict) {
+      return new Promise((resolve, reject) => {
+        const transaction = this._transaction(store, 'readwrite', strict);
+        transaction.objectStore(store).put(value);
+        transaction.oncomplete = () => resolve();
+        transaction.onabort = transaction.onerror = () => reject(
+          transaction.error || new Error('Falha ao gravar armazenamento local.'),
+        );
+      });
+    }
+
+    async _delete(store, key, strict) {
+      return new Promise((resolve, reject) => {
+        const transaction = this._transaction(store, 'readwrite', strict);
+        transaction.objectStore(store).delete(key);
+        transaction.oncomplete = () => resolve();
+        transaction.onabort = transaction.onerror = () => reject(
+          transaction.error || new Error('Falha ao limpar armazenamento local.'),
+        );
+      });
+    }
+  }
+
+  PDVLocalStore.generateId = generateId;
+  global.PDVLocalStore = PDVLocalStore;
+})(window);

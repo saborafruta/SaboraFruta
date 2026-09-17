@@ -493,6 +493,40 @@ class VendaPDVServiceTests(TestCase):
                     0,
                 )
 
+    def test_pdv_visual_reenvia_mesma_venda_sem_duplicar(self):
+        self.client.force_login(self.usuario)
+        session = self.client.session
+        session['filial_ativa_id'] = self.filial.pk
+        session.save()
+        produto = self.criar_produto('Venda local idempotente')
+        self.abastecer(produto, '2')
+        payload = {
+            'idempotency_key': 'pdv00112233445566778899aabbccddeeff',
+            'itens': [{'produto_id': produto.pk, 'quantidade': 1, 'preco_manual': 0}],
+            'pagamentos': [],
+        }
+
+        primeira = self.client.post(
+            reverse('pdv:api_venda_finalizar'), data=json.dumps(payload),
+            content_type='application/json',
+            HTTP_IDEMPOTENCY_KEY=payload['idempotency_key'],
+        )
+        self.assertEqual(primeira.status_code, 200, primeira.content)
+        venda_id = primeira.json()['venda_id']
+        self.sessao.status = 'fechado'
+        self.sessao.save(update_fields=['status'])
+
+        segunda = self.client.post(
+            reverse('pdv:api_venda_finalizar'), data=json.dumps(payload),
+            content_type='application/json',
+            HTTP_IDEMPOTENCY_KEY=payload['idempotency_key'],
+        )
+        self.assertEqual(segunda.status_code, 200, segunda.content)
+        self.assertTrue(segunda.json()['repetida'])
+        self.assertEqual(segunda.json()['venda_id'], venda_id)
+        self.assertEqual(VendaPDV.objects.filter(idempotency_key=payload['idempotency_key']).count(), 1)
+        self.assertEqual(Estoque.objects.get(produto=produto, filial=self.filial).quantidade_atual, 1)
+
     def test_venda_mista_cobra_apenas_itens_pagos(self):
         produto = self.criar_produto()
         self.abastecer(produto, '3')
