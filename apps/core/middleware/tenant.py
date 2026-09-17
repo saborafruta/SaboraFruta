@@ -10,6 +10,7 @@ from apps.core.models import EmpresaBanco, Usuario
 from apps.core.tenant_context import reset_current_tenant_db, set_current_tenant_db
 from apps.core.tenant_registry import register_tenant_database
 from apps.core.services.tenant_public_link_service import TenantPublicLinkService
+from apps.core.services.tenant_user_service import TenantUserService
 
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ AUTH_DATABASE_SESSION_KEY = 'auth_database_alias'
 class TenantContextMiddleware:
     SESSION_KEY = 'tenant_db_alias'
     CENTRAL_PATHS = ('/gestao/', '/admin/', '/api/v1/', '/static/', '/media/')
+    GLOBAL_IDENTITY_PATHS = ('/auth/',)
 
     def __init__(self, get_response):
         if settings.TENANT_DATABASE_ROUTING_ENABLED:
@@ -91,7 +93,9 @@ class TenantContextMiddleware:
             ):
                 request.session[AUTH_DATABASE_SESSION_KEY] = 'default'
 
-        # O superusuário continua autenticado pelo banco gerencial.
+        # A credencial do superusuário continua autenticada pelo Banco
+        # Gerencial. A identidade usada nas rotas operacionais será traduzida
+        # para uma linha local do tenant logo depois de ativar o roteador.
         if request.session.get(AUTH_DATABASE_SESSION_KEY) == 'default':
             request.user.is_authenticated
             if request.user.is_authenticated and request.user.is_superuser:
@@ -103,6 +107,26 @@ class TenantContextMiddleware:
         request.tenant_db_alias = alias
         token = set_current_tenant_db(alias)
         try:
+            if (
+                alias
+                and request.user.is_authenticated
+                and request.session.get(AUTH_DATABASE_SESSION_KEY) == 'default'
+                and request.user.is_superuser
+                and not request.path.startswith(self.GLOBAL_IDENTITY_PATHS)
+            ):
+                # A sessão e a credencial continuam no Banco Gerencial, mas
+                # toda gravação operacional precisa referenciar um Usuario do
+                # mesmo banco do tenant. Sem esta tradução centralizada, cada
+                # FK para request.user pode gerar allow_relation ou violação
+                # de chave estrangeira.
+                usuario_central = getattr(request.user, '_wrapped', request.user)
+                request._central_authenticated_user = usuario_central
+                request.user = TenantUserService.resolver_superusuario(
+                    alias=alias,
+                    usuario_central=usuario_central,
+                    filial_id=request.session.get('filial_ativa_id'),
+                )
+                request._cached_user = request.user
             if (
                 alias
                 and request.user.is_authenticated

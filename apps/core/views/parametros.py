@@ -321,7 +321,13 @@ def api_gerar_chave_iprint(request):
         if credencial:
             token = credencial.rotacionar(escopos=escopos)
         else:
-            usuario_central = request.user if request.user._state.db == 'default' else None
+            usuario_central = getattr(
+                request,
+                '_central_authenticated_user',
+                None,
+            )
+            if usuario_central is None and request.user._state.db == 'default':
+                usuario_central = request.user
             credencial, token = CredencialIntegracao.criar(
                 empresa=filial_central.empresa,
                 nome=nome,

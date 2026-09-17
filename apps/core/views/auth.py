@@ -75,7 +75,10 @@ def atualizar_minha_foto(request):
         if user.foto:
             user.foto.delete(save=False)
             user.foto = None
-            user.save(update_fields=['foto', 'updated_at'])
+            user.save(
+                using=user._state.db or 'default',
+                update_fields=['foto', 'updated_at'],
+            )
             messages.success(request, 'Foto removida.')
         return redirect(voltar_para)
 
@@ -93,7 +96,10 @@ def atualizar_minha_foto(request):
 
     foto_antiga = user.foto.name if user.foto else ''
     user.foto = foto
-    user.save(update_fields=['foto', 'updated_at'])
+    user.save(
+        using=user._state.db or 'default',
+        update_fields=['foto', 'updated_at'],
+    )
 
     if foto_antiga and foto_antiga != user.foto.name:
         user.foto.storage.delete(foto_antiga)

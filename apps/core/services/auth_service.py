@@ -182,11 +182,16 @@ class AuthService:
         if not request.user.is_authenticated:
             return
         db_alias = request.session.get(AUTH_DATABASE_SESSION_KEY) or request.user._state.db or 'default'
+        usuario = (
+            getattr(request, '_central_authenticated_user', None)
+            if db_alias == 'default'
+            else None
+        ) or request.user
         filial = getattr(request, 'filial_ativa', None)
         filial_id = filial.pk if filial is not None and filial._state.db == db_alias else None
         try:
             LogAcesso.objects.using(db_alias).create(
-                usuario_id=request.user.pk,
+                usuario_id=usuario.pk,
                 filial_id=filial_id,
                 tipo=LogAcesso.Tipo.LOGOUT,
                 ip_acesso=get_client_ip(request),

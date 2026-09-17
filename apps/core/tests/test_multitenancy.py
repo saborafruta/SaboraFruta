@@ -21,6 +21,7 @@ from apps.core.services.exceptions import DadosInvalidosError
 from apps.core.services.railway_provisioner import RailwayProvisioner
 from apps.core.services.tenant_public_link_service import TenantPublicLinkService
 from apps.core.services.tenant_task_service import TenantTaskService
+from apps.core.services.tenant_user_service import TenantUserService
 from apps.core.tenant_context import get_current_tenant_db, tenant_atomic, tenant_db
 from apps.core.views.auth import SelecionarFilialView
 from apps.core.views.admin_area import central_administrativa
@@ -259,12 +260,56 @@ class MultitenancyFoundationTests(TestCase):
         TENANT_PUBLIC_LINK_ROUTING_READY=True,
         TENANT_BACKGROUND_TASKS_READY=True,
     )
-    def test_middleware_recupera_sessao_antiga_de_superadmin_central(self):
+    def test_middleware_traduz_superadmin_central_para_usuario_do_tenant(self):
+        self.usuario.is_superuser = True
+        self.usuario.is_staff = True
+        self.usuario.save(update_fields=['is_superuser', 'is_staff'])
+        request = RequestFactory().get('/dashboard/')
+        request.session = {'tenant_db_alias': self.banco.db_alias}
+        request.user = SimpleLazyObject(lambda: self.usuario)
+
+        tenant_user = Mock(
+            email=self.usuario.email,
+            is_authenticated=True,
+            is_superuser=True,
+        )
+
+        with (
+            patch(
+                'apps.core.middleware.tenant.register_tenant_database',
+                return_value=True,
+            ),
+            patch(
+                'apps.core.middleware.tenant.TenantUserService.resolver_superusuario',
+                return_value=tenant_user,
+            ) as resolver,
+        ):
+            response = TenantContextMiddleware(lambda req: req.user)(request)
+
+        self.assertIs(response, tenant_user)
+        self.assertIs(request.user, tenant_user)
+        self.assertIs(request._central_authenticated_user, self.usuario)
+        self.assertEqual(request.session['auth_database_alias'], 'default')
+        resolver.assert_called_once_with(
+            alias=self.banco.db_alias,
+            usuario_central=self.usuario,
+            filial_id=None,
+        )
+
+    @override_settings(
+        TENANT_DATABASE_ROUTING_ENABLED=True,
+        TENANT_PUBLIC_LINK_ROUTING_READY=True,
+        TENANT_BACKGROUND_TASKS_READY=True,
+    )
+    def test_middleware_preserva_usuario_global_nas_rotas_de_autenticacao(self):
         self.usuario.is_superuser = True
         self.usuario.is_staff = True
         self.usuario.save(update_fields=['is_superuser', 'is_staff'])
         request = RequestFactory().get('/auth/selecionar-filial/')
-        request.session = {'tenant_db_alias': self.banco.db_alias}
+        request.session = {
+            'tenant_db_alias': self.banco.db_alias,
+            'auth_database_alias': 'default',
+        }
         request.user = SimpleLazyObject(lambda: self.usuario)
 
         with (
@@ -272,14 +317,58 @@ class MultitenancyFoundationTests(TestCase):
                 'apps.core.middleware.tenant.register_tenant_database',
                 return_value=True,
             ),
-            patch.object(Usuario.objects, 'using') as using,
+            patch(
+                'apps.core.middleware.tenant.TenantUserService.resolver_superusuario',
+            ) as resolver,
         ):
             response = TenantContextMiddleware(lambda req: req.user)(request)
 
         self.assertIs(response, request.user)
         self.assertEqual(request.user.pk, self.usuario.pk)
-        self.assertEqual(request.session['auth_database_alias'], 'default')
-        using.assert_not_called()
+        self.assertEqual(request.user._state.db, 'default')
+        resolver.assert_not_called()
+
+    def test_identidade_operacional_global_e_local_e_idempotente(self):
+        usuario_central = Usuario(
+            email='global@example.com',
+            nome='Administrador Global',
+            cpf='12345678901',
+            telefone='84999999999',
+            menu_favoritos=['financeiro:posicao-diaria'],
+            preferencias_tabelas={'produtos': {'colunas': ['nome']}},
+            empresa=self.empresa,
+            filial=self.filial,
+            perfil=self.perfil,
+            is_superuser=True,
+            is_staff=True,
+        )
+
+        primeiro = TenantUserService.resolver_superusuario(
+            alias='default',
+            usuario_central=usuario_central,
+            filial_id=self.filial.pk,
+        )
+        segundo = TenantUserService.resolver_superusuario(
+            alias='default',
+            usuario_central=usuario_central,
+            filial_id=self.filial.pk,
+        )
+
+        self.assertEqual(primeiro.pk, segundo.pk)
+        self.assertEqual(primeiro._state.db, 'default')
+        self.assertEqual(primeiro.empresa_id, self.empresa.pk)
+        self.assertEqual(primeiro.filial_id, self.filial.pk)
+        self.assertTrue(primeiro.perfil.is_admin)
+        self.assertTrue(primeiro.is_superuser)
+        self.assertFalse(primeiro.has_usable_password())
+        self.assertEqual(
+            primeiro.menu_favoritos,
+            ['financeiro:posicao-diaria'],
+        )
+        self.assertEqual(
+            primeiro.preferencias_tabelas,
+            {'produtos': {'colunas': ['nome']}},
+        )
 
     def test_selecao_global_consulta_filiais_no_banco_gerencial(self):
         self.usuario.is_superuser = True
