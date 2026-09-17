@@ -177,7 +177,7 @@ def orla_widget_context(request):
         if not email and not user_id:
             return disabled
 
-        metadata = {'system': 'iTED'}
+        metadata = {'system': 'Ited'}
         if empresa is not None:
             metadata.update({
                 'empresa_id': str(getattr(empresa, 'pk', '') or ''),
@@ -243,10 +243,15 @@ def orla_widget_context(request):
             ).rstrip(b'=').decode('ascii')
             user_token = f'{encoded}.{signature}'
 
+        view_name = str(getattr(resolver_match, 'view_name', '') or '')[:160]
         widget_context = {
-            'system': 'iTED',
+            'system': 'Ited',
             'page': str(getattr(request, 'path', '') or '/')[:500],
+            'screen': view_name,
             **metadata,
+        }
+        widget_context = {
+            key: value for key, value in widget_context.items() if value
         }
         return {
             'orla_widget': {

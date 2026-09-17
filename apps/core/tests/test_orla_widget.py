@@ -31,6 +31,9 @@ def _decode_base64url(value):
 class OrlaWidgetContextTests(SimpleTestCase):
     def setUp(self):
         self.request = RequestFactory().get('/compras/pedidos/?pagina=2')
+        self.request.resolver_match = SimpleNamespace(
+            view_name='compras:pedido_list',
+        )
         empresa = SimpleNamespace(
             pk=10,
             nome_fantasia='Empresa Teste',
@@ -75,8 +78,9 @@ class OrlaWidgetContextTests(SimpleTestCase):
         self.assertNotIn('segredo-de-teste', json.dumps(widget))
 
         context = json.loads(widget['context_json'])
-        self.assertEqual(context['system'], 'iTED')
+        self.assertEqual(context['system'], 'Ited')
         self.assertEqual(context['page'], '/compras/pedidos/')
+        self.assertEqual(context['screen'], 'compras:pedido_list')
 
     def test_nao_renderiza_para_visitante(self):
         self.request.user = SimpleNamespace(is_authenticated=False)
