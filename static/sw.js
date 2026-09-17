@@ -18,12 +18,14 @@
  * resolveria isso e traria o risco acima.
  */
 
-const VERSAO = 'erp-v1';
+// Mude esta versao sempre que o casco visual global mudar. Isso impede que
+// um F5 reutilize CSS antigo e mostre por um instante a geometria anterior.
+const VERSAO = 'erp-v2';
 const CACHE_ESTATICO = `estatico-${VERSAO}`;
 
 // Só o casco: o que é igual para qualquer usuário.
 const PRE_CACHE = [
-  '/static/css/tailwind-built.css',
+  '/static/css/tailwind-built.css?v=20260917-2',
   '/static/favicon.svg',
   '/static/pwa-icon-192.png',
   '/static/pwa-icon-512.png',

@@ -82,6 +82,9 @@ class SeletorDeTemaEscuroTests(SimpleTestCase):
         self.assertIn('class="erp-prehydrate tema-escuro"', base)
         self.assertIn("root.classList.toggle('sidebar-collapsed'", base)
         self.assertIn('html.erp-prehydrate *', base)
+        self.assertIn('html.erp-prehydrate body', base)
+        self.assertIn("window.addEventListener('alpine:initialized'", base)
+        self.assertIn('requestAnimationFrame(function()', base)
         self.assertIn('html.erp-hydrated .app-shell-content', base)
         self.assertIn('html.tema-escuro body [x-show="temaClaro"]', base)
         self.assertLess(
@@ -90,11 +93,12 @@ class SeletorDeTemaEscuroTests(SimpleTestCase):
             'O tema salvo precisa ser lido antes de carregar o CSS principal.',
         )
         self.assertIn('html.erp-hydrated .app-sidebar', sidebar)
+        self.assertIn('width: var(--erp-sidebar-width, 16rem)', sidebar)
+        self.assertIn('Boolean(window.__erpSidebarCollapsedInitial)', sidebar)
+        self.assertIn('window.__erpSetSidebarCollapsed(collapsed, true)', sidebar)
         self.assertIn('class="app-sidebar sidebar-desktop', sidebar)
-        self.assertIn(
-            "document.documentElement.classList.toggle('sidebar-collapsed', collapsed)",
-            sidebar,
-        )
+        self.assertIn("window.__erpSetSidebarCollapsed = function", base)
+        self.assertIn("root.classList.toggle('sidebar-collapsed'", base)
         self.assertIn('html.tema-claro body .app-sidebar', sidebar)
         self.assertIn('html.tema-escuro body .app-sidebar', sidebar)
         self.assertNotIn(
@@ -104,6 +108,15 @@ class SeletorDeTemaEscuroTests(SimpleTestCase):
             "card.classList.add('sidebar-branch-logo-card--square')", sidebar
         )
         self.assertIn('html.tema-escuro body .app-topbar', base)
+
+    def test_cache_do_casco_visual_e_versionado(self):
+        """F5 nao pode reutilizar indefinidamente o CSS global anterior."""
+        base = open('templates/_base.html', encoding='utf-8').read()
+        worker = open('static/sw.js', encoding='utf-8').read()
+
+        self.assertIn("tailwind-built.css' %}?v=20260917-2", base)
+        self.assertIn("const VERSAO = 'erp-v2'", worker)
+        self.assertIn('/static/css/tailwind-built.css?v=20260917-2', worker)
 
     def test_regra_documentada_proibe_salto_antes_do_alpine(self):
         regras = open('docs/UI_RULES.md', encoding='utf-8').read()

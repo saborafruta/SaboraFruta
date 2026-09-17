@@ -151,6 +151,9 @@ Toda tela deve:
 - A sidebar nao pode quebrar, travar, abrir sozinha ao trocar tema nem dar "salto" visual ao trocar de tela.
 - Tema, largura, fundo e geometria iniciais da sidebar devem nascer definidos no CSS/HTML antes do Alpine/JS aplicar estado.
 - Transicoes de largura e margem so podem ser habilitadas depois da hidratacao inicial; refresh e troca de tela nao devem animar do estado padrao para o estado salvo.
+- O primeiro quadro antes do Alpine concluir a hidratacao deve permanecer oculto. Liberar a interface apenas depois de `alpine:initialized` (com fallback para falha do script), evitando mostrar simultaneamente controles de estados opostos.
+- A largura salva deve alimentar uma variavel CSS estrutural antes do CSS principal (`--erp-sidebar-width`); Alpine apenas assume e persiste esse mesmo estado, sem recalcular outra fonte da verdade.
+- Alteracoes no casco visual global exigem URL versionada dos assets e incremento do cache do service worker. F5 nao pode reaproveitar CSS estrutural de uma versao anterior.
 - A largura inicial da sidebar deve respeitar `sidebar-collapsed` antes do primeiro paint, evitando deslocar o header e o conteudo.
 - O `onload` da imagem pode apenas refinar enquadramento/foco. Ele nao pode adicionar classes que alterem largura ou altura do card.
 - Classes de proporcao da logo devem vir do servidor quando possivel; quando a dimensao nao estiver disponivel, usar um layout padrao estavel.

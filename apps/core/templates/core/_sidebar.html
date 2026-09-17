@@ -45,7 +45,7 @@
     background: rgba(148, 163, 184, 0.5);
   }
   .app-sidebar {
-    width: 16rem;
+    width: var(--erp-sidebar-width, 16rem);
   }
   html.tema-claro body .app-sidebar {
     background: #ffffff;
@@ -495,7 +495,7 @@
      data-favorites-url="{% url 'core:menu-favoritos' %}"
      data-csrf-token="{{ csrf_token }}"
      x-data="{
-  collapsed: localStorage.getItem('sidebar-collapsed') === 'true',
+  collapsed: Boolean(window.__erpSidebarCollapsedInitial),
   mobileOpen: false,
   secoes: (function(){
     try {
@@ -532,7 +532,7 @@
     this.mobileOpen = false;
   }
 }" @keydown.escape.window="mobileOpen = false"
-   x-init="document.documentElement.classList.toggle('sidebar-collapsed', collapsed); document.body.classList.toggle('sidebar-collapsed', collapsed); window.__erpCloseMobileSidebar = function() { mobileOpen = false }"
+   x-init="window.__erpSetSidebarCollapsed(collapsed, false); window.__erpCloseMobileSidebar = function() { mobileOpen = false }"
    @toggle-mobile-menu.window="toggleMobileMenu()"
    @close-mobile-menu.window="closeMobileMenu()">
 
@@ -562,7 +562,7 @@
       <a href="{{ pagina_inicial_url }}" x-show="collapsed" x-cloak class="flex items-center justify-center w-full">
         <span class="font-bold" style="font-family:Space Grotesk, sans-serif; font-size:15px; letter-spacing:-0.5px;"><span :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">i</span><span :style="temaClaro ? 'color:#e8824a;' : 'color:#3b82f6;'">T</span></span>
       </a>
-      <button @click="collapsed = !collapsed; localStorage.setItem('sidebar-collapsed', collapsed); document.documentElement.classList.toggle('sidebar-collapsed', collapsed); document.body.classList.toggle('sidebar-collapsed', collapsed)"
+      <button @click="collapsed = !collapsed; window.__erpSetSidebarCollapsed(collapsed, true)"
               class="p-1 rounded-lg flex-shrink-0 transition-colors"
               :class="collapsed ? 'mx-auto' : 'ml-auto'"
               :style="temaClaro ? 'color:#aaa;' : 'color:#f8fafc;'"

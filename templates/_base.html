@@ -33,6 +33,7 @@
         root.classList.toggle('tema-claro', temaClaro);
         root.classList.toggle('tema-escuro', !temaClaro);
         root.classList.toggle('sidebar-collapsed', sidebarCollapsed);
+        root.style.setProperty('--erp-sidebar-width', sidebarCollapsed ? '4rem' : '16rem');
         root.style.backgroundColor = temaClaro ? '#f3f6fb' : '#1c1c1e';
         root.style.colorScheme = temaClaro ? 'light' : 'dark';
         if (document.body) {
@@ -41,7 +42,21 @@
           document.body.classList.toggle('sidebar-collapsed', sidebarCollapsed);
         }
         window.__erpTemaClaroInicial = temaClaro;
+        window.__erpSidebarCollapsedInitial = sidebarCollapsed;
         return temaClaro;
+      };
+      window.__erpSetSidebarCollapsed = function(collapsed, persistir) {
+        var recolhida = Boolean(collapsed);
+        var root = document.documentElement;
+        root.classList.toggle('sidebar-collapsed', recolhida);
+        root.style.setProperty('--erp-sidebar-width', recolhida ? '4rem' : '16rem');
+        if (document.body) {
+          document.body.classList.toggle('sidebar-collapsed', recolhida);
+        }
+        window.__erpSidebarCollapsedInitial = recolhida;
+        if (persistir) {
+          localStorage.setItem('sidebar-collapsed', recolhida ? 'true' : 'false');
+        }
       };
       try {
         window.__erpApplyStoredTheme();
@@ -55,17 +70,24 @@
         window.__erpTemaClaroInicial = false;
       }
 
+      var hidratacaoInicialLiberada = false;
       function liberarTransicoesIniciais() {
+        if (hidratacaoInicialLiberada) return;
+        hidratacaoInicialLiberada = true;
         document.documentElement.classList.remove('erp-prehydrate');
         document.documentElement.classList.add('erp-hydrated');
       }
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function() {
+      function agendarLiberacaoInicial() {
+        requestAnimationFrame(function() {
           requestAnimationFrame(liberarTransicoesIniciais);
-        }, { once: true });
-      } else {
-        requestAnimationFrame(liberarTransicoesIniciais);
+        });
       }
+      window.addEventListener('alpine:initialized', agendarLiberacaoInicial, { once: true });
+      document.addEventListener('DOMContentLoaded', function() {
+        // Fallback para login/paginas sem componente Alpine ou indisponibilidade
+        // temporaria do CDN. O segundo frame evita exibir o DOM intermediario.
+        window.setTimeout(agendarLiberacaoInicial, 80);
+      }, { once: true });
 
       function currentNavigationUrl() {
         return window.location.pathname + window.location.search + window.location.hash;
@@ -147,7 +169,7 @@
     })();
   </script>
 
-  <link rel="stylesheet" href="{% static 'css/tailwind-built.css' %}">
+  <link rel="stylesheet" href="{% static 'css/tailwind-built.css' %}?v=20260917-2">
   <link rel="stylesheet" href="{% static 'css/tabelas-configuraveis.css' %}?v=20260917-4">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -176,6 +198,11 @@
       transition: none !important;
       animation: none !important;
       scroll-behavior: auto !important;
+    }
+    /* O HTML chega antes do Alpine. Nao exponha esse quadro incompleto: nele
+       x-show ainda nao foi resolvido e a lateral pode parecer abrir sozinha. */
+    html.erp-prehydrate body {
+      visibility: hidden !important;
     }
 
     html.tema-claro,
@@ -577,7 +604,7 @@
     }
     @media (min-width: 1024px) {
       .app-shell-content {
-        margin-left: 16rem;
+        margin-left: var(--erp-sidebar-width, 16rem);
       }
       html.sidebar-collapsed body .app-shell-content,
       body.sidebar-collapsed .app-shell-content {
