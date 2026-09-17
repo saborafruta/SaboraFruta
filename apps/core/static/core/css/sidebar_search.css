@@ -121,4 +121,25 @@ html.tema-claro .system-nav-drawer .sidebar-menu-search-results { background:#ff
 html.tema-claro .system-nav-drawer .sidebar-menu-search { --sidebar-search-shelf: #fff; }
 html.tema-claro .system-nav-drawer .sidebar-menu-search-field input { color:#111827; }
 html.tema-claro .system-nav-drawer .sidebar-menu-search-results a { color:#334155; }
+body.tema-claro .sidebar-menu-search {
+  border-bottom-color: #e2e8f0;
+}
+body.tema-claro .sidebar-menu-search-field,
+html.tema-claro .system-nav-drawer .sidebar-menu-search-field {
+  border-color: #94a3b8;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), inset 0 0 0 1px rgba(148, 163, 184, 0.08);
+}
+body.tema-claro .sidebar-menu-search-field > svg,
+html.tema-claro .system-nav-drawer .sidebar-menu-search-field > svg {
+  color: #475569;
+}
+body.tema-claro .sidebar-menu-search-field input::placeholder,
+html.tema-claro .system-nav-drawer .sidebar-menu-search-field input::placeholder {
+  color: #64748b;
+}
+body.tema-claro .sidebar-menu-search.is-stuck {
+  border-bottom-color: #cbd5e1;
+  box-shadow: 0 10px 20px -18px rgba(15, 23, 42, 0.6);
+}
 body.sidebar-collapsed .sidebar-desktop .sidebar-menu-search { display:none; }

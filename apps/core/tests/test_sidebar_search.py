@@ -11,7 +11,12 @@ class SidebarSearchTemplateTests(SimpleTestCase):
 
         self.assertIn('core/js/sidebar_search.js', sidebar)
         self.assertIn('core/css/sidebar_search.css', sidebar)
-        self.assertIn('?v=20260917-1', sidebar)
+        self.assertIn('?v=20260917-2', sidebar)
+        self.assertIn("border-right:1px solid #cbd5e1", sidebar)
+        self.assertIn("color:#1f2937", sidebar)
+        self.assertIn("color:#1f2937", navegacao)
+        self.assertNotIn("color:#6b7280", sidebar)
+        self.assertNotIn("color:#6b7280", navegacao)
         self.assertIn('{% include "core/_sidebar_search.html" %}', sidebar)
         self.assertIn('{% include "core/_sidebar_search.html" %}', navegacao)
 
@@ -39,13 +44,16 @@ class SidebarSearchTemplateTests(SimpleTestCase):
         self.assertIn('left: -16px', styles)
         self.assertIn('height: 24px', styles)
         self.assertIn('--sidebar-search-shelf: #18181b', styles)
+        self.assertIn('border-color: #94a3b8', styles)
+        self.assertIn('color: #475569', styles)
+        self.assertIn('color: #64748b', styles)
 
     def test_menu_especial_do_pdv_carrega_busca_completa(self):
         raiz_apps = Path(__file__).resolve().parents[2]
         template = (raiz_apps / "pdv" / "templates" / "pdv" / "home.html").read_text(encoding="utf-8")
 
         self.assertIn('core/css/sidebar_search.css', template)
-        self.assertIn('?v=20260917-1', template)
+        self.assertIn('?v=20260917-2', template)
         self.assertIn('core/js/sidebar_search.js', template)
         self.assertIn('sidebar_favorites.js', template)
-        self.assertIn('v=20260917-1', template)
+        self.assertIn('v=20260917-2', template)
