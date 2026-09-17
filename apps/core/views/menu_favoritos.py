@@ -111,6 +111,17 @@ def resolver_favoritos(caminhos, html):
     ]
 
 
+def listar_links_menu(html):
+    parser = _MenuLinks()
+    parser.feed(html)
+    bloqueados = {'/dashboard/', '/inicio/'}
+    return [
+        {'caminho': caminho, 'nome': nome}
+        for caminho, nome in parser.links.items()
+        if caminho not in bloqueados
+    ]
+
+
 class _MenuLinks(HTMLParser):
     def __init__(self):
         super().__init__()

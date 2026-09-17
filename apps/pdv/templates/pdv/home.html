@@ -1225,7 +1225,7 @@
 {% block body %}
 <div id="pdv-app" x-data="pdv()" style="display:flex;flex-direction:column;height:100vh;background:#0a0a12;">
   {% csrf_token %}
-  {% url 'core:dashboard' as dashboard_url %}
+  {% firstof pagina_inicial_url "/dashboard/" as dashboard_url %}
   {% url 'cadastros:cliente-list' as clientes_url %}
   {% url 'cadastros:fornecedor-list' as fornecedores_url %}
   {% url 'produtos:produto-list' as produtos_url %}
@@ -1247,7 +1247,7 @@
   <header class="pdv-topbar" style="height:54px;background:#0d0d16;border-bottom:1px solid #1a1a28;display:flex;align-items:center;padding:0 12px;gap:9px;flex-shrink:0;">
 
     <!-- Voltar + marca que abre a navegação lateral -->
-    <a href="{{ dashboard_url }}" class="topbar-icon-btn topbar-back" style="text-decoration:none;" title="Voltar ao dashboard">
+    <a href="{{ dashboard_url }}" class="topbar-icon-btn topbar-back" style="text-decoration:none;" title="Voltar ao início">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
     </a>
     <div class="topbar-brand" style="position:relative;flex-shrink:0;">

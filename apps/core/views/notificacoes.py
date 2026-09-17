@@ -49,6 +49,21 @@ class NotificacaoMarcarTodasView(LoginRequiredMixin, View):
         return JsonResponse({'ok': True})
 
 
+class NotificacaoMarcarLidaView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        notificacao = get_object_or_404(
+            Notificacao,
+            pk=pk,
+            filial=getattr(request, 'filial_ativa', None),
+            ativa=True,
+        )
+        NotificacaoLeitura.objects.get_or_create(
+            notificacao_id=notificacao.pk,
+            usuario_id=request.user.pk,
+        )
+        return JsonResponse({'ok': True, 'id': notificacao.pk})
+
+
 class NotificacaoStatusView(LoginRequiredMixin, View):
     def get(self, request):
         filial = getattr(request, 'filial_ativa', None)

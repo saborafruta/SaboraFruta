@@ -1,0 +1,147 @@
+{% extends "_base.html" %}
+{% load static %}
+
+{% block title %}Início — ERP iNoovaTed{% endblock %}
+{% block page_title %}Início{% endblock %}
+{% block global_back %}{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'core/css/inicio.css' %}?v=20260917-1">
+{% endblock %}
+
+{% block content %}
+<div class="inicio-page" data-favorites-url="{% url 'core:menu-favoritos' %}">
+  <section class="inicio-hero">
+    <div class="inicio-hero-copy">
+      <span class="inicio-eyebrow">ÁREA DE TRABALHO</span>
+      <h2>{{ saudacao }}, {{ primeiro_nome }}</h2>
+      <p>{% firstof filial_ativa.nome_fantasia filial_ativa.razao_social %}{% if filial_ativa.cidade %} · Filial {{ filial_ativa.cidade }}{% endif %}</p>
+    </div>
+    <div class="inicio-date">
+      <span>Hoje</span>
+      <strong>{% now "d \d\e F" %}</strong>
+    </div>
+  </section>
+
+  <div class="inicio-grid">
+    <section class="inicio-panel inicio-panel-work">
+      <div class="inicio-section-head">
+        <div>
+          <span class="inicio-kicker">RETOMAR</span>
+          <h3>Continuar trabalhando</h3>
+          <p>Suas telas acessadas recentemente nesta filial.</p>
+        </div>
+      </div>
+      <div id="recent-pages" class="recent-pages" aria-live="polite">
+        <div class="inicio-empty compact">
+          <p>As telas que você acessar aparecerão aqui.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="inicio-panel inicio-panel-quick">
+      <div class="inicio-section-head quick-heading">
+        <div>
+          <span class="inicio-kicker">ATALHOS</span>
+          <h3>Acessos rápidos</h3>
+          <p>Abra as áreas mais usadas sem procurar no menu.</p>
+        </div>
+        <button type="button" class="manage-shortcuts" id="open-shortcuts" aria-haspopup="dialog">
+          Personalizar
+        </button>
+      </div>
+      <div class="quick-access-grid" id="quick-access-grid">
+        {% for acesso in acessos_rapidos %}
+          <a href="{{ acesso.caminho }}" class="quick-access-card">
+            <span class="quick-access-icon" aria-hidden="true">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M5 12h14M13 6l6 6-6 6"/>
+              </svg>
+            </span>
+            <span class="quick-access-name">{{ acesso.nome }}</span>
+            <span class="quick-access-arrow" aria-hidden="true">›</span>
+          </a>
+        {% endfor %}
+        <button type="button" class="quick-access-card quick-access-add" id="add-shortcut" aria-label="Adicionar acesso rápido">
+          <span class="quick-access-icon" aria-hidden="true">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M12 5v14M5 12h14"/>
+            </svg>
+          </span>
+          <span class="quick-access-name">Adicionar acesso</span>
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <section class="inicio-panel notifications-panel">
+    <div class="inicio-section-head notifications-heading">
+      <div>
+        <span class="inicio-kicker">PENDÊNCIAS</span>
+        <h3>Notificações do sistema</h3>
+        <p>Somente avisos que ainda precisam da sua atenção.</p>
+      </div>
+      {% if notificacoes_pendentes %}
+        <button type="button" class="mark-all" data-url="{% url 'core:notificacoes-marcar-todas' %}">Marcar todas como lidas</button>
+      {% endif %}
+    </div>
+    <div id="home-notifications" class="home-notifications">
+      {% for notificacao in notificacoes_pendentes %}
+        <article class="notification-row" data-notification-id="{{ notificacao.pk }}">
+          <span class="notification-indicator" aria-hidden="true"></span>
+          <a href="{% url 'core:notificacao-abrir' notificacao.pk %}" class="notification-copy">
+            <strong>{{ notificacao.titulo }}</strong>
+            {% if notificacao.mensagem %}<span>{{ notificacao.mensagem }}</span>{% endif %}
+            <small>{{ notificacao.created_at|timesince }} atrás</small>
+          </a>
+          <button type="button" class="notification-check"
+                  data-url="{% url 'core:notificacao-marcar-lida' notificacao.pk %}"
+                  title="Marcar como lida" aria-label="Marcar {{ notificacao.titulo }} como lida">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+          </button>
+        </article>
+      {% empty %}
+        <div class="inicio-empty notifications-empty">
+          <span class="empty-check" aria-hidden="true">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 13l4 4L19 7"/></svg>
+          </span>
+          <div><strong>Tudo em dia</strong><p>Você não tem notificações pendentes.</p></div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <dialog id="shortcut-dialog" class="shortcut-dialog">
+    <div class="dialog-head">
+      <div><span class="inicio-kicker">PERSONALIZAÇÃO</span><h3>Escolha seus acessos rápidos</h3></div>
+      <button type="button" id="close-shortcuts" class="dialog-close" aria-label="Fechar">×</button>
+    </div>
+    <p class="dialog-description">Os atalhos escolhidos também ficam destacados no menu lateral.</p>
+    <label class="shortcut-search">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input type="search" id="shortcut-search" placeholder="Buscar uma tela" autocomplete="off">
+    </label>
+    <div class="shortcut-options" id="shortcut-options">
+      {% for acesso in acessos_disponiveis %}
+        <button type="button" class="shortcut-option{% if acesso.caminho in caminhos_favoritos %} is-selected{% endif %}"
+                data-path="{{ acesso.caminho }}" data-name="{{ acesso.nome|lower }}"
+                aria-pressed="{% if acesso.caminho in caminhos_favoritos %}true{% else %}false{% endif %}">
+          <span>{{ acesso.nome }}</span>
+          <span class="shortcut-option-state">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          </span>
+        </button>
+      {% endfor %}
+    </div>
+    <div class="dialog-footer"><button type="button" id="finish-shortcuts" class="btn-primary">Concluir</button></div>
+  </dialog>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script src="{% static 'core/js/inicio.js' %}?v=20260917-1" defer></script>
+{% endblock %}

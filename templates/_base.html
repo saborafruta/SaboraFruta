@@ -106,7 +106,7 @@
           event.preventDefault();
         }
 
-        var fallbackUrl = "{% url 'core:dashboard' %}";
+        var fallbackUrl = "{{ pagina_inicial_url|default:'/dashboard/' }}";
         var currentUrl = currentNavigationUrl();
         var stack = readNavigationStack();
         var targetUrl = null;
@@ -160,6 +160,8 @@
     <meta name="erp-table-preferences-url" content="{% url 'core:preferencias-tabelas' %}">
     <meta name="erp-csrf-token" content="{{ csrf_token }}">
     <meta name="erp-table-user-id" content="{{ request.user.pk }}">
+    <meta name="erp-home-url" content="{{ pagina_inicial_url }}">
+    <meta name="erp-active-branch-id" content="{{ filial_ativa.pk|default:'' }}">
     {{ request.user.preferencias_tabelas|json_script:"erp-table-preferences" }}
   {% endif %}
 
@@ -585,6 +587,7 @@
   <link rel="stylesheet" href="{% static 'css/light-theme-contrast.css' %}?v=20260917-1">
   <link rel="stylesheet" href="{% static 'css/ui-attention-contrast.css' %}?v=20260917-3">
   <script defer src="{% static 'js/list-table-sticky.js' %}?v=20260917-1"></script>
+  <script defer src="{% static 'core/js/recent_pages.js' %}?v=20260917-1"></script>
 </head>
 <body class="font-sans antialiased" style="min-height:100vh; height:100%"
       x-data="temaApp()"
@@ -713,7 +716,7 @@
         {% firstof filial_ativa.nome_fantasia filial_ativa.razao_social filial_ativa '' %}
       </span>
     {% endif %}
-    <a href="{% url 'core:dashboard' %}"
+    <a href="{{ pagina_inicial_url }}"
        class="flex items-center justify-center w-9 h-9 rounded-lg transition-all"
        :style="temaClaro
          ? 'background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.25); color:#fff;'
@@ -908,7 +911,7 @@
           <div class="app-content-frame {% block largura_conteudo %}max-w-7xl{% endblock %} mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {% include 'core/_messages.html' %}
             {% block global_back %}
-              {% if request.resolver_match.url_name != 'dashboard' and request.GET.modal != '1' %}
+              {% if request.resolver_match.url_name != 'dashboard' and request.resolver_match.url_name != 'inicio' and request.GET.modal != '1' %}
                 <button type="button"
                         class="app-back-link mb-3"
                         onclick="return window.__erpGoBack(event);">

@@ -496,10 +496,10 @@
   >
     <!-- Logo / Toggle -->
     <div class="flex items-center h-14 px-4 flex-shrink-0" :style="temaClaro ? 'border-bottom:1px solid #e5e5e5;' : 'border-bottom:1px solid #2a2a2e;'">
-      <a href="{% url 'core:dashboard' %}" class="flex items-center flex-1 min-w-0" x-show="!collapsed" x-cloak>
+      <a href="{{ pagina_inicial_url }}" class="flex items-center flex-1 min-w-0" x-show="!collapsed" x-cloak>
         <span class="font-bold truncate" style="font-family:Space Grotesk, sans-serif; letter-spacing:-1px; font-size:20px;"><span :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">iNoova</span><span :style="temaClaro ? 'color:#e8824a;' : 'color:#3b82f6;'">Ted</span></span>
       </a>
-      <a href="{% url 'core:dashboard' %}" x-show="collapsed" x-cloak class="flex items-center justify-center w-full">
+      <a href="{{ pagina_inicial_url }}" x-show="collapsed" x-cloak class="flex items-center justify-center w-full">
         <span class="font-bold" style="font-family:Space Grotesk, sans-serif; font-size:15px; letter-spacing:-0.5px;"><span :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">i</span><span :style="temaClaro ? 'color:#e8824a;' : 'color:#3b82f6;'">T</span></span>
       </a>
       <button @click="collapsed = !collapsed; localStorage.setItem('sidebar-collapsed', collapsed); document.documentElement.classList.toggle('sidebar-collapsed', collapsed); document.body.classList.toggle('sidebar-collapsed', collapsed)"
@@ -551,7 +551,7 @@
 
     <!-- Header do drawer -->
     <div class="flex items-center justify-between px-4 h-14" :style="temaClaro ? 'border-bottom:1px solid #e5e5e5;' : 'border-bottom:1px solid #2a2a2e;'">
-      <a href="{% url 'core:dashboard' %}" class="flex items-center">
+      <a href="{{ pagina_inicial_url }}" class="flex items-center">
         <span class="font-bold" style="font-family:Space Grotesk, sans-serif; letter-spacing:-1px; font-size:20px;"><span :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">iNoova</span><span :style="temaClaro ? 'color:#e8824a;' : 'color:#3b82f6;'">Ted</span></span>
       </a>
       <button @click="mobileOpen = false" class="p-1.5 rounded-lg transition-all"
@@ -566,7 +566,7 @@
 
     <!-- Nav mobile -->
     <nav class="sidebar-scroll sidebar-favorites-nav flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-0.5">
-      {% url 'core:dashboard' as dashboard_url %}
+      {% firstof pagina_inicial_url "/dashboard/" as dashboard_url %}
       {% url 'cadastros:cliente-list' as clientes_url %}
       {% url 'cadastros:fornecedor-list' as fornecedores_url %}
       {% url 'cadastros:funcionario-list' as funcionarios_url %}
@@ -621,7 +621,7 @@
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
         </svg>
-        Dashboard
+        {{ pagina_inicial_nome }}
       </a>
 
       {% if 'cadastros' in modulos_ativos %}

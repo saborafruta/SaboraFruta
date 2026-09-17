@@ -1,7 +1,7 @@
 """Dashboard principal — KPIs do dia, estoque por filial e RFM de clientes."""
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, Max, Q, Sum
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views import View
 from django.views.generic import TemplateView
@@ -12,10 +12,16 @@ from apps.financeiro.services.receita import (
     ajuste_por_cliente, ajuste_por_grupo, ajuste_por_produto, ajuste_total,
     formas_nao_contabilizadas,
 )
+from apps.core.services.home import usuario_e_administrador
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'core/dashboard.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        if not usuario_e_administrador(request.user, getattr(request, 'filial_ativa', None)):
+            return redirect('core:inicio')
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

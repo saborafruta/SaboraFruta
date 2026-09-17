@@ -1,5 +1,5 @@
 {% load erp_extras %}
-      {% url 'core:dashboard' as dashboard_url %}
+      {% firstof pagina_inicial_url "/dashboard/" as dashboard_url %}
       {% url 'cadastros:cliente-list' as clientes_url %}
       {% url 'cadastros:fornecedor-list' as fornecedores_url %}
       {% url 'cadastros:funcionario-list' as funcionarios_url %}
@@ -47,7 +47,7 @@
 
       {% include "core/_sidebar_search.html" %}
 
-      <!-- Dashboard -->
+      <!-- Pagina inicial adequada ao perfil -->
       <a href="{{ dashboard_url }}" data-sidebar-dashboard
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :class="collapsed ? 'justify-center' : ''"
@@ -56,11 +56,11 @@
          @mouseenter="$el.style.background=temaClaro?'#eff6ff':'#242426'; $el.style.color=temaClaro?'#1d4ed8':'#d4d4d4';"
          @mouseleave="$el.style.background='transparent'; $el.style.color=temaClaro?'#1f2937':'#f8fafc'; $el.style.fontWeight='';"
          {% endif %}
-         title="Dashboard">
+         title="{{ pagina_inicial_nome }}">
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
         </svg>
-        <span x-show="!collapsed">Dashboard</span>
+        <span x-show="!collapsed">{{ pagina_inicial_nome }}</span>
       </a>
 
       <!-- Seção Cadastros -->

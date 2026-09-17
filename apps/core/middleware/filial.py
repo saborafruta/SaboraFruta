@@ -13,6 +13,7 @@ from django.urls import reverse
 
 from apps.core.models import EmpresaBanco, Filial
 from apps.core.services.modulos import modulo_da_url, modulos_ativos
+from apps.core.services.home import nome_rota_inicial
 from apps.core.tenant_registry import register_tenant_database
 
 
@@ -127,6 +128,6 @@ class FilialMiddleware:
                 messages.error(
                     request, 'Este módulo não está disponível para esta filial.'
                 )
-                return redirect('core:dashboard')
+                return redirect(nome_rota_inicial(request.user, filial))
 
         return self.get_response(request)

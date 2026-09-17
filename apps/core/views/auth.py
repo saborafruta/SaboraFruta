@@ -12,6 +12,7 @@ from apps.core.forms import LoginForm
 from apps.core.models import Empresa, Filial, FilialFavorita, Usuario
 from apps.core.services.auth_service import AuthService
 from apps.core.services.exceptions import DomainError
+from apps.core.services.home import nome_rota_inicial
 
 
 class LoginView(View):
@@ -19,7 +20,7 @@ class LoginView(View):
 
     def get(self, request):
         if request.user.is_authenticated:
-            return redirect('core:dashboard')
+            return redirect(nome_rota_inicial(request.user, getattr(request, 'filial_ativa', None)))
         return render(request, self.template_name, {'form': LoginForm()})
 
     def post(self, request):
@@ -44,8 +45,9 @@ class LoginView(View):
             request.session.pop('filial_ativa_id', None)
             return redirect('core:selecionar-filial')
         if filiais.count() == 1:
-            request.session['filial_ativa_id'] = filiais.first().pk
-            return redirect('core:dashboard')
+            filial = filiais.first()
+            request.session['filial_ativa_id'] = filial.pk
+            return redirect(nome_rota_inicial(operational_user, filial))
         return redirect('core:selecionar-filial')
 
 
@@ -141,8 +143,9 @@ class SelecionarFilialView(View):
         filiais = _filiais_para_selecao(request)
 
         if not request.user.is_superuser and filiais.count() == 1:
-            request.session['filial_ativa_id'] = filiais.first().pk
-            return redirect('core:dashboard')
+            filial = filiais.first()
+            request.session['filial_ativa_id'] = filial.pk
+            return redirect(nome_rota_inicial(request.user, filial))
 
         empresas = []
         if request.user.is_superuser:
@@ -236,5 +239,5 @@ class TrocarFilialView(View):
 
         referer = request.META.get('HTTP_REFERER', '')
         if 'selecionar-filial' in referer:
-            return redirect('core:dashboard')
-        return redirect(referer or reverse_lazy('core:dashboard'))
+            return redirect(nome_rota_inicial(request.user, filial))
+        return redirect(referer or reverse_lazy(nome_rota_inicial(request.user, filial)))

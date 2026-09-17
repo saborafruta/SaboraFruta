@@ -5,12 +5,12 @@ from apps.core.views import admin_area
 from apps.core.views import parametros as parametros_views
 from apps.core.views.audit import CoreAdminLogExportCsvView, CoreAdminLogExportPdfView, CoreAdminLogItemsView
 from apps.core.views import (
-    CurvaAbcRelatorioView, DashboardView, LoginView, RelatoriosHubView, SelecionarFilialView, TrocarFilialView,
+    CurvaAbcRelatorioView, DashboardView, InicioView, LoginView, RelatoriosHubView, SelecionarFilialView, TrocarFilialView,
     VendasDowPeriodoView, alternar_filial_favorita, atualizar_minha_foto,
     logout_view,
 )
 from apps.core.views.notificacoes import (
-    NotificacaoAbrirView, NotificacaoMarcarTodasView, NotificacaoStatusView,
+    NotificacaoAbrirView, NotificacaoMarcarLidaView, NotificacaoMarcarTodasView, NotificacaoStatusView,
 )
 from apps.core.views.menu_favoritos import MenuFavoritosView
 from apps.core.views.preferencias_tabelas import TabelaPreferenciasView
@@ -19,6 +19,7 @@ app_name = 'core'
 
 urlpatterns = [
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
+    path('inicio/', InicioView.as_view(), name='inicio'),
     path('dashboard/vendas-dia-semana/', VendasDowPeriodoView.as_view(), name='dashboard-vendas-dow-periodo'),
     path('dashboard/curva-abc/relatorio/', CurvaAbcRelatorioView.as_view(), name='dashboard-curva-abc-relatorio'),
     path('relatorios/', RelatoriosHubView.as_view(), name='relatorios-hub'),
@@ -33,6 +34,7 @@ urlpatterns = [
     ),
     path('auth/trocar-filial/<int:filial_id>/', TrocarFilialView.as_view(), name='trocar-filial'),
     path('notificacoes/<int:pk>/abrir/', NotificacaoAbrirView.as_view(), name='notificacao-abrir'),
+    path('notificacoes/<int:pk>/marcar-lida/', NotificacaoMarcarLidaView.as_view(), name='notificacao-marcar-lida'),
     path('notificacoes/marcar-todas/', NotificacaoMarcarTodasView.as_view(), name='notificacoes-marcar-todas'),
     path('notificacoes/status/', NotificacaoStatusView.as_view(), name='notificacoes-status'),
     path('auth/menu-favoritos/', MenuFavoritosView.as_view(), name='menu-favoritos'),

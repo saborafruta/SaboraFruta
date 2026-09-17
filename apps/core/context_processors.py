@@ -97,6 +97,25 @@ def filial_context(request):
     return ctx
 
 
+def navegacao_context(request):
+    """Define o Home conforme o perfil efetivo da filial ativa."""
+    if not request.user.is_authenticated:
+        return {
+            'pagina_inicial_url': '/auth/login/',
+            'pagina_inicial_nome': 'Início',
+            'usuario_e_admin': False,
+        }
+    from apps.core.services.home import url_inicial, usuario_e_administrador
+
+    filial = getattr(request, 'filial_ativa', None)
+    admin = usuario_e_administrador(request.user, filial)
+    return {
+        'pagina_inicial_url': url_inicial(request.user, filial),
+        'pagina_inicial_nome': 'Dashboard' if admin else 'Início',
+        'usuario_e_admin': admin,
+    }
+
+
 def notificacoes_context(request):
     ctx = {'notificacoes_recentes': [], 'notificacoes_nao_lidas': 0}
     if not request.user.is_authenticated:

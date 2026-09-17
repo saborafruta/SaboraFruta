@@ -3,10 +3,10 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path, re_path
 from django.views.static import serve
-from django.views.generic import RedirectView
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 from apps.core.views.health import health_check
 from apps.core.views.pwa import service_worker
+from apps.core.views import HomeRedirectView
 
 urlpatterns = [
     path('health/', health_check, name='health'),
@@ -20,7 +20,7 @@ urlpatterns = [
     # diretorio de onde ele foi baixado (ver apps/core/views/pwa.py).
     path('sw.js', service_worker, name='service-worker'),
     path('admin/', admin.site.urls),
-    path('', RedirectView.as_view(url='/dashboard/', permanent=False)),
+    path('', HomeRedirectView.as_view(), name='home'),
     path('', include('apps.core.urls', namespace='core')),
     path('cadastros/', include('apps.cadastros.urls', namespace='cadastros')),
     path('produtos/', include('apps.produtos.urls', namespace='produtos')),

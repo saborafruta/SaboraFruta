@@ -110,6 +110,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'apps.core.context_processors.filial_context',
+                'apps.core.context_processors.navegacao_context',
                 'apps.core.context_processors.parametros_sistema',
                 'apps.core.context_processors.notificacoes_context',
                 'apps.core.context_processors.orla_widget_context',
