@@ -49,13 +49,9 @@
 
       <!-- Pagina inicial adequada ao perfil -->
       <a href="{{ dashboard_url }}" data-sidebar-dashboard
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         class="sidebar-home-link flex items-center gap-3{% if request.path == dashboard_url %} is-active{% endif %}"
          :class="collapsed ? 'justify-center' : ''"
-         :style="{% if request.path == dashboard_url %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
-         {% if request.path != dashboard_url %}
-         @mouseenter="$el.style.background=temaClaro?'#eff6ff':'#242426'; $el.style.color=temaClaro?'#1d4ed8':'#d4d4d4';"
-         @mouseleave="$el.style.background='transparent'; $el.style.color=temaClaro?'#1f2937':'#f8fafc'; $el.style.fontWeight='';"
-         {% endif %}
+         {% if request.path == dashboard_url %}aria-current="page"{% endif %}
          title="{{ pagina_inicial_nome }}">
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
