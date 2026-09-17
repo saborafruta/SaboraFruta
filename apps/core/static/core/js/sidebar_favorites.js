@@ -259,13 +259,8 @@
         status.setAttribute('aria-live', 'polite');
         panel.appendChild(status);
 
-        var dashboard = nav.querySelector('[data-sidebar-dashboard]');
-        var search = nav.querySelector('[data-sidebar-search]');
-        var logo = nav.querySelector('.sidebar-branch-logo-card');
-        if (dashboard) dashboard.insertAdjacentElement('afterend', panel);
-        else if (search) search.insertAdjacentElement('afterend', panel);
-        else if (logo) logo.insertAdjacentElement('afterend', panel);
-        else nav.prepend(panel);
+        // Favoritos ficam depois de todos os modulos e de seus itens.
+        nav.appendChild(panel);
       });
     }
 

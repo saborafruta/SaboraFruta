@@ -7,7 +7,7 @@
 
 {% block extra_head %}
 {{ block.super }}
-<link rel="stylesheet" href="{% static 'core/css/inicio.css' %}?v=20260917-1">
+<link rel="stylesheet" href="{% static 'core/css/inicio.css' %}?v=20260917-2">
 {% endblock %}
 
 {% block content %}
@@ -55,12 +55,23 @@
         {% for acesso in acessos_rapidos %}
           <a href="{{ acesso.caminho }}" class="quick-access-card">
             <span class="quick-access-icon" aria-hidden="true">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M5 12h14M13 6l6 6-6 6"/>
-              </svg>
+              {% if '/clientes/' in acesso.caminho %}
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zm8-1v6m3-3h-6"/></svg>
+              {% elif '/produtos/' in acesso.caminho %}
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.3 7L12 12l8.7-5M12 22V12"/></svg>
+              {% elif '/estoque/' in acesso.caminho %}
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M4 7h16v13H4zM2 4h20v3H2zm7 7h6"/></svg>
+              {% elif '/pdv/' in acesso.caminho %}
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M3 3h2l2.4 10.2a2 2 0 002 1.6h7.7a2 2 0 001.9-1.4L21 6H6m4 13a1 1 0 100-2 1 1 0 000 2zm7 0a1 1 0 100-2 1 1 0 000 2z"/></svg>
+              {% elif '/financeiro/' in acesso.caminho %}
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M6 2h9l4 4v16H6zM14 2v5h5M9 13h6m-6 4h6"/></svg>
+              {% elif '/moda/comercial/' in acesso.caminho %}
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M4 7h16v12H4zM9 7V5a3 3 0 016 0v2m-3 4v4m-2-2h4"/></svg>
+              {% else %}
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              {% endif %}
             </span>
             <span class="quick-access-name">{{ acesso.nome }}</span>
-            <span class="quick-access-arrow" aria-hidden="true">›</span>
           </a>
         {% endfor %}
         <button type="button" class="quick-access-card quick-access-add" id="add-shortcut" aria-label="Adicionar acesso rápido">

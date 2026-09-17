@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 from django.test import Client, SimpleTestCase, TestCase
@@ -27,6 +28,21 @@ class RotaInicialTests(SimpleTestCase):
         usuario._perfil_ativo = administrador
         self.assertTrue(usuario_e_administrador(usuario))
         self.assertEqual(nome_rota_inicial(usuario), 'core:dashboard')
+
+
+class InicioVisualTests(SimpleTestCase):
+    def test_tema_claro_usa_acoes_legiveis_e_icones_contextuais(self):
+        raiz = Path(__file__).resolve().parents[1]
+        template = (raiz / 'templates' / 'core' / 'inicio.html').read_text(encoding='utf-8')
+        styles = (raiz / 'static' / 'core' / 'css' / 'inicio.css').read_text(encoding='utf-8')
+
+        self.assertIn('?v=20260917-2', template)
+        self.assertNotIn('quick-access-arrow', template)
+        self.assertIn("{% if '/clientes/' in acesso.caminho %}", template)
+        self.assertIn('body.tema-claro .manage-shortcuts', styles)
+        self.assertIn('background:#c2410c; color:#fff;', styles)
+        self.assertIn('body.tema-claro .quick-access-icon', styles)
+        self.assertIn('background:#9a3412; color:#fff;', styles)
 
 
 class InicioOperacionalTests(TestCase):

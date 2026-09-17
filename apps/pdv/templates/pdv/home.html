@@ -3858,7 +3858,7 @@
 {{ request.user.menu_favoritos|default_if_none:''|json_script:"sidebar-favorites-data" }}
 {% favoritos_menu_completo as favoritos_completos %}
 {{ favoritos_completos|json_script:"sidebar-favorites-records" }}
-<script src="{% static 'core/js/sidebar_favorites.js' %}?v=20260917-3"></script>
+<script src="{% static 'core/js/sidebar_favorites.js' %}?v=20260917-4"></script>
 <script src="{% static 'core/js/sidebar_search.js' %}?v=20260917-3"></script>
 <script>
 function pdv() {

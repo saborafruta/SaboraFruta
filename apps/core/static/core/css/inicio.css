@@ -20,14 +20,14 @@
 .recent-page-copy strong { display:block; overflow:hidden; color:#e4e4e7; font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
 .recent-page-copy small { display:block; margin-top:3px; color:#757580; font-size:10px; }
 .recent-page svg { width:15px; color:#676773; }
-.manage-shortcuts,.mark-all { flex:none; padding:7px 10px; border:1px solid #3d4f70; border-radius:8px; background:rgba(37,99,235,.1); color:#93c5fd; font-size:11px; font-weight:600; cursor:pointer; }
+.manage-shortcuts,.mark-all { flex:none; padding:8px 12px; border:1px solid #2563eb; border-radius:8px; background:#1d4ed8; color:#fff; box-shadow:0 4px 12px rgba(37,99,235,.22); font-size:11px; font-weight:700; cursor:pointer; transition:background .15s,transform .15s,box-shadow .15s; }
+.manage-shortcuts:hover,.mark-all:hover { background:#2563eb; transform:translateY(-1px); box-shadow:0 6px 16px rgba(37,99,235,.3); }
 .quick-access-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; padding:18px; }
 .quick-access-card { position:relative; display:flex; align-items:center; gap:10px; min-width:0; min-height:68px; padding:12px; border:1px solid #34343b; border-radius:12px; background:#29292d; color:#e4e4e7; text-decoration:none; cursor:pointer; transition:transform .15s,border-color .15s,background .15s; }
 .quick-access-card:hover { transform:translateY(-1px); border-color:#4a68a0; background:#2d3038; }
 .quick-access-icon { display:flex; align-items:center; justify-content:center; width:34px; height:34px; flex:none; border-radius:9px; background:#1e3a5f; color:#93c5fd; }
 .quick-access-icon svg { width:17px; height:17px; }
 .quick-access-name { min-width:0; overflow:hidden; font-size:12px; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
-.quick-access-arrow { margin-left:auto; color:#71717a; font-size:18px; }
 .quick-access-add { border-style:dashed; background:transparent; }
 .quick-access-add .quick-access-icon { background:transparent; border:1px solid #41414a; color:#a1a1aa; }
 .notifications-panel { min-height:170px; }
@@ -71,8 +71,16 @@ body.tema-claro .inicio-hero h2 { color:#111827; } body.tema-claro .inicio-hero 
 body.tema-claro .inicio-panel { background:#fff; } body.tema-claro .inicio-section-head h3,body.tema-claro .dialog-head h3 { color:#111827; }
 body.tema-claro .recent-page:hover { background:#f8fafc; } body.tema-claro .recent-page-index { border-color:#dbe4f0; color:#2563eb; }
 body.tema-claro .recent-page-copy strong,body.tema-claro .notification-copy strong { color:#1f2937; }
-body.tema-claro .quick-access-card { border-color:#e2e8f0; background:#f8fafc; color:#1f2937; } body.tema-claro .quick-access-card:hover { border-color:#93b4ea; background:#f4f7fb; }
+body.tema-claro .inicio-eyebrow,body.tema-claro .inicio-kicker { color:#c2410c; }
+body.tema-claro .inicio-section-head p,body.tema-claro .dialog-description { color:#475569; }
+body.tema-claro .manage-shortcuts,body.tema-claro .mark-all { border-color:#c2410c; background:#c2410c; color:#fff; box-shadow:0 4px 12px rgba(194,65,12,.22); }
+body.tema-claro .manage-shortcuts:hover,body.tema-claro .mark-all:hover { background:#9a3412; box-shadow:0 6px 16px rgba(154,52,18,.28); }
+body.tema-claro .quick-access-card { border-color:#cbd5e1; background:#fff; color:#172033; box-shadow:0 2px 7px rgba(15,23,42,.07); } body.tema-claro .quick-access-card:hover { border-color:#f97316; background:#fff7ed; box-shadow:0 5px 14px rgba(154,52,18,.13); }
+body.tema-claro .quick-access-icon { background:#9a3412; color:#fff; }
+body.tema-claro .quick-access-name { color:#172033; }
 body.tema-claro .quick-access-add { background:#fff; } body.tema-claro .notification-row { border-color:#eef2f7; }
+body.tema-claro .quick-access-add .quick-access-icon { border-color:#9a3412; background:#fff7ed; color:#9a3412; }
+body.tema-claro .notification-copy span { color:#475569; } body.tema-claro .notification-copy small { color:#64748b; }
 body.tema-claro .shortcut-dialog { border-color:#dce3ec; background:#fff; color:#1f2937; } body.tema-claro .shortcut-search { border-color:#dce3ec; background:#f8fafc; }
 body.tema-claro .shortcut-search input { color:#111827; } body.tema-claro .shortcut-option { border-color:#e1e7ef; background:#f8fafc; color:#334155; }
 body.tema-claro .shortcut-option.is-selected { border-color:#93b4ea; background:#eff6ff; color:#1e3a8a; }

@@ -158,7 +158,8 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertIn("'Accept': 'application/json'", script)
         self.assertIn('readJsonResponse', script)
         self.assertEqual(template.count('data-sidebar-dashboard'), 1)
-        self.assertIn("dashboard.insertAdjacentElement('afterend', panel)", script)
+        self.assertIn('nav.appendChild(panel)', script)
+        self.assertNotIn("dashboard.insertAdjacentElement('afterend', panel)", script)
 
     def test_sanfonas_iniciam_fechadas_e_destacam_modulo_atual(self):
         raiz = Path(__file__).resolve().parents[1]
