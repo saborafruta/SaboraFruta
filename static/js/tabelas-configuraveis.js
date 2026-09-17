@@ -157,7 +157,11 @@
     const width = Math.min(360, window.innerWidth - margin * 2);
     const left = Math.max(margin, Math.min(trigger.right - width, window.innerWidth - width - margin));
     instance.panel.style.left = `${left}px`;
-    instance.panel.style.top = `${Math.min(trigger.bottom + 8, window.innerHeight - instance.panel.offsetHeight - margin)}px`;
+    const top = Math.max(
+      margin,
+      Math.min(trigger.bottom + 8, window.innerHeight - instance.panel.offsetHeight - margin),
+    );
+    instance.panel.style.top = `${top}px`;
   }
 
   function close(instance) {

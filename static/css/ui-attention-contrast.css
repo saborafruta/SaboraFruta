@@ -1,0 +1,139 @@
+/*
+ * Acoes descobríveis e contraste legado
+ * --------------------------------------
+ * Esta camada fica por ultimo para que telas antigas e novas obedeçam ao
+ * mesmo padrão, inclusive quando ainda usam utilitarios ou cores inline.
+ */
+
+/* "Colunas" e uma ferramenta importante da listagem, nao uma acao secundaria. */
+:is(.erp-table-columns-toolbar .btn-secondary, [data-product-column-picker-trigger]) {
+  border: 2px solid #f59e0b !important;
+  background: rgba(245, 158, 11, .13) !important;
+  color: #fde68a !important;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, .11), 0 7px 18px rgba(0, 0, 0, .14) !important;
+  font-weight: 800 !important;
+}
+
+body.tema-claro :is(.erp-table-columns-toolbar .btn-secondary, [data-product-column-picker-trigger]) {
+  background: #fffbeb !important;
+  color: #92400e !important;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, .12), 0 7px 16px rgba(146, 64, 14, .09) !important;
+}
+
+:is(.erp-table-columns-toolbar .btn-secondary, [data-product-column-picker-trigger]):is(:hover, :focus-visible),
+:is(.erp-table-columns-toolbar .btn-secondary, [data-product-column-picker-trigger])[aria-expanded="true"] {
+  border-color: #fb923c !important;
+  background: rgba(245, 158, 11, .22) !important;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, .16), 0 9px 22px rgba(0, 0, 0, .18) !important;
+}
+
+body.tema-claro :is(.erp-table-columns-toolbar .btn-secondary, [data-product-column-picker-trigger]):is(:hover, :focus-visible),
+body.tema-claro :is(.erp-table-columns-toolbar .btn-secondary, [data-product-column-picker-trigger])[aria-expanded="true"] {
+  background: #fef3c7 !important;
+  color: #78350f !important;
+}
+
+:is(.erp-table-columns-toolbar .btn-secondary, [data-product-column-picker-trigger]) svg {
+  color: currentColor !important;
+  stroke: currentColor !important;
+}
+
+/* O seletor proprio de Produtos ficava para fora da tela quando estava a direita. */
+[data-product-column-picker] .produto-column-picker-panel {
+  right: 0 !important;
+  left: auto !important;
+  max-height: calc(100vh - 24px) !important;
+  overflow: auto !important;
+}
+
+/* Tags semanticas para as telas novas ou corrigidas. */
+.erp-tag {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: .16rem .52rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.erp-tag-neutral { border-color: #94a3b8; background: #334155; color: #f8fafc; }
+.erp-tag-blue { border-color: #60a5fa; background: #1e3a8a; color: #eff6ff; }
+.erp-tag-purple { border-color: #a78bfa; background: #4c1d95; color: #faf5ff; }
+
+body.tema-claro .erp-tag-neutral { border-color: #cbd5e1; background: #f1f5f9; color: #334155; }
+body.tema-claro .erp-tag-blue { border-color: #93c5fd; background: #dbeafe; color: #1e40af; }
+body.tema-claro .erp-tag-purple { border-color: #c4b5fd; background: #ede9fe; color: #5b21b6; }
+
+/*
+ * Compatibilidade: tags antigas feitas com fundos Tailwind "100" recebem uma
+ * combinacao escura equivalente. Assim o texto nunca fica claro sobre branco.
+ */
+body:not(.tema-claro) .app-content-frame :is(.badge, [class*="-badge"], .rounded-full).bg-gray-100,
+body:not(.tema-claro) .app-content-frame :is(.badge, [class*="-badge"], .rounded-full).bg-slate-100,
+body:not(.tema-claro) .app-content-frame :is(.badge, [class*="-badge"], .rounded-full).bg-zinc-100 {
+  border: 1px solid #64748b !important;
+  background: #334155 !important;
+  color: #f8fafc !important;
+}
+
+body:not(.tema-claro) .app-content-frame :is(.badge, [class*="-badge"], .rounded-full).bg-blue-100,
+body:not(.tema-claro) .app-content-frame :is(.badge, [class*="-badge"], .rounded-full).bg-indigo-100 {
+  border: 1px solid #60a5fa !important;
+  background: #1e3a8a !important;
+  color: #eff6ff !important;
+}
+
+body:not(.tema-claro) .app-content-frame :is(.badge, [class*="-badge"], .rounded-full).bg-purple-100,
+body:not(.tema-claro) .app-content-frame :is(.badge, [class*="-badge"], .rounded-full).bg-pink-100 {
+  border: 1px solid #a78bfa !important;
+  background: #4c1d95 !important;
+  color: #faf5ff !important;
+}
+
+body:not(.tema-claro) .app-content-frame :is(.badge, [class*="-badge"], .rounded-full).bg-green-100,
+body:not(.tema-claro) .app-content-frame :is(.badge, [class*="-badge"], .rounded-full).bg-emerald-100 {
+  border: 1px solid #34d399 !important;
+  background: #064e3b !important;
+  color: #ecfdf5 !important;
+}
+
+body:not(.tema-claro) .app-content-frame :is(.badge, [class*="-badge"], .rounded-full).bg-red-100 {
+  border: 1px solid #f87171 !important;
+  background: #7f1d1d !important;
+  color: #fef2f2 !important;
+}
+
+body:not(.tema-claro) .app-content-frame :is(.badge, [class*="-badge"], .rounded-full).bg-yellow-100,
+body:not(.tema-claro) .app-content-frame :is(.badge, [class*="-badge"], .rounded-full).bg-amber-100 {
+  border: 1px solid #fbbf24 !important;
+  background: #78350f !important;
+  color: #fffbeb !important;
+}
+
+/* Textos auxiliares herdados de telas antigas precisam continuar legiveis. */
+body:not(.tema-claro) .app-content-frame :is(
+  .text-gray-400, .text-gray-500, .text-gray-600,
+  .text-slate-400, .text-slate-500, .text-slate-600,
+  .text-zinc-400, .text-zinc-500, .text-zinc-600
+) {
+  color: #cbd5e1 !important;
+}
+
+body:not(.tema-claro) .app-content-frame :is(
+  [style^="color:#444"], [style*=";color:#444"], [style*="; color:#444"],
+  [style^="color: #444"], [style*=";color: #444"], [style*="; color: #444"],
+  [style^="color:#555"], [style*=";color:#555"], [style*="; color:#555"],
+  [style^="color: #555"], [style*=";color: #555"], [style*="; color: #555"],
+  [style^="color:#666"], [style*=";color:#666"], [style*="; color:#666"],
+  [style^="color: #666"], [style*=";color: #666"], [style*="; color: #666"],
+  [style^="color:#777"], [style*=";color:#777"], [style*="; color:#777"],
+  [style^="color: #777"], [style*=";color: #777"], [style*="; color: #777"],
+  [style^="color:#888"], [style*=";color:#888"], [style*="; color:#888"],
+  [style^="color: #888"], [style*=";color: #888"], [style*="; color: #888"]
+) {
+  color: #cbd5e1 !important;
+}

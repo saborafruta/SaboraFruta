@@ -60,6 +60,13 @@ Toda tela deve:
 - Dias da semana em combos/promocoes devem ficar proximos da vigencia, em controle recolhivel/compacto, com todos os dias pre-selecionados por padrao, acoes de marcar/desmarcar todos e visual coerente nos temas claro/escuro.
 
 ## Cadastros com listagem
+- O botao `Colunas` usa sempre o destaque global de descoberta (borda amarela,
+  fundo suave e foco visivel). Nao substituir por um botao secundario neutro.
+- Tags de status, tipo e categoria devem usar `.erp-tag` com uma variante
+  semantica. Em codigo legado, combinacoes de fundo `*-100` e texto colorido
+  precisam manter contraste equivalente nos temas claro e escuro.
+- Texto secundario nunca deve usar cinza escuro fixo no tema escuro. Preferir os
+  utilitarios `text-gray-*` cobertos pelas camadas globais de contraste.
 - Todo cabecalho de tabela renderizado dentro do conteudo principal usa
   automaticamente o padrao global de Produtos: fundo azul, texto branco,
   centralizado, em caixa alta e com a mesma tipografia nos temas claro e escuro.
