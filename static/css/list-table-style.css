@@ -14,21 +14,21 @@ body.tema-claro {
   border-radius: 18px !important;
 }
 
-.erp-list-page .table-header,
-body.tema-claro .erp-list-page .table-header,
-body:not(.tema-claro) .erp-list-page .table-header {
+.app-content-frame .table-header,
+body.tema-claro .app-content-frame .table-header,
+body:not(.tema-claro) .app-content-frame .table-header {
   background: transparent !important;
   border-color: transparent !important;
 }
 
-body.tema-claro .erp-list-page .table-header th,
-body.tema-claro .erp-list-page .table-header td,
-body.tema-claro .erp-list-page .table-header a,
-body.tema-claro .erp-list-page .table-header span,
-body:not(.tema-claro) .erp-list-page .table-header th,
-body:not(.tema-claro) .erp-list-page .table-header td,
-body:not(.tema-claro) .erp-list-page .table-header a,
-body:not(.tema-claro) .erp-list-page .table-header span {
+body.tema-claro .app-content-frame .table-header th,
+body.tema-claro .app-content-frame .table-header td,
+body.tema-claro .app-content-frame .table-header a,
+body.tema-claro .app-content-frame .table-header span,
+body:not(.tema-claro) .app-content-frame .table-header th,
+body:not(.tema-claro) .app-content-frame .table-header td,
+body:not(.tema-claro) .app-content-frame .table-header a,
+body:not(.tema-claro) .app-content-frame .table-header span {
   color: var(--erp-list-header-color) !important;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   font-size: 12px !important;
@@ -39,27 +39,27 @@ body:not(.tema-claro) .erp-list-page .table-header span {
   text-transform: uppercase !important;
 }
 
-.erp-list-page .table-header th,
-.erp-list-page .table-header td {
+.app-content-frame .table-header th,
+.app-content-frame .table-header td {
   background: var(--erp-list-header-bg) !important;
   border-top: 0 !important;
   border-bottom: 0 !important;
   vertical-align: middle !important;
 }
 
-.erp-list-page .table-header svg {
+.app-content-frame .table-header svg {
   color: var(--erp-list-header-color) !important;
   stroke: currentColor !important;
 }
 
-.erp-list-page .table-header th:first-child,
-.erp-list-page .table-header td:first-child {
+.app-content-frame .table-header th:first-child,
+.app-content-frame .table-header td:first-child {
   border-left: 0 !important;
   padding-left: 1rem !important;
 }
 
-.erp-list-page .table-header th:last-child,
-.erp-list-page .table-header td:last-child {
+.app-content-frame .table-header th:last-child,
+.app-content-frame .table-header td:last-child {
   padding-right: 1rem !important;
 }
 

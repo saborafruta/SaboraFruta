@@ -60,6 +60,14 @@ Toda tela deve:
 - Dias da semana em combos/promocoes devem ficar proximos da vigencia, em controle recolhivel/compacto, com todos os dias pre-selecionados por padrao, acoes de marcar/desmarcar todos e visual coerente nos temas claro/escuro.
 
 ## Cadastros com listagem
+- Todo cabecalho de tabela renderizado dentro do conteudo principal usa
+  automaticamente o padrao global de Produtos: fundo azul, texto branco,
+  centralizado, em caixa alta e com a mesma tipografia nos temas claro e escuro.
+- Nao criar cor, fonte ou espacamento proprio para `<thead>`. Quando uma tabela
+  realmente precisar de apresentacao diferente, declarar explicitamente
+  `data-erp-table-style="custom"` na tabela e justificar a excecao no template.
+- Listagens longas devem usar `data-sticky-list-table` e o contêiner deve usar
+  `data-sticky-list-container`, para manter o cabecalho visivel na rolagem.
 - Nunca criar uma faixa, gradiente ou cabecalho colorido dentro do conteudo para repetir o titulo da pagina. O titulo oficial vem apenas de `page_title` no layout base.
 - Templates de pagina nao devem usar `<header>` para barras locais de titulo/acoes, pois o CSS global de cabecalho pode colori-las. Acoes locais devem ficar em um `<nav>` ou `<div>` neutro, compacto e sem repetir titulo/subtitulo.
 - Listagens operacionais devem usar tabela ou linhas compactas. Nao transformar cada registro em um card alto de largura total quando os dados cabem em colunas.

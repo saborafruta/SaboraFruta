@@ -210,7 +210,7 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
 
 {% block content %}
 {% load i18n %}
-<div x-data="hvApp()" x-init="init()">
+<div class="erp-list-page" x-data="hvApp()" x-init="init()">
 
   <!-- Cabeçalho -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
@@ -331,8 +331,8 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
 
   <!-- Tabela -->
   {% if page_obj %}
-  <div class="hv-table-wrap" style="overflow-x:auto;">
-    <table class="hv-table" data-table-key="historico-vendas">
+  <div class="hv-table-wrap table-container" data-sticky-list-container style="overflow-x:auto;">
+    <table class="hv-table" data-table-key="historico-vendas" data-sticky-list-table>
       <thead>
         <tr>
           <th class="hv-th" data-column-width="80"><a class="hv-sort" href="?{{ sort_urls.pedido }}">Pedido <span>{% if ordem == 'pedido' %}↑{% elif ordem == '-pedido' %}↓{% endif %}</span></a></th>

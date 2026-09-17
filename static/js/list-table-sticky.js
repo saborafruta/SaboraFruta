@@ -20,6 +20,16 @@
     if (clone) clone.classList.remove('is-visible');
   }
 
+  function normalizeTableHeaders(root) {
+    var scope = root && root.querySelectorAll ? root : document;
+    var selector = '.app-content-frame table:not([data-erp-table-style="custom"])';
+    Array.prototype.slice.call(scope.querySelectorAll(selector)).forEach(function (table) {
+      if (table.closest('[data-erp-table-style="custom"], .erp-table-sticky-clone')) return;
+      var header = table.querySelector('thead > tr');
+      if (header && header.querySelector('th')) header.classList.add('table-header');
+    });
+  }
+
   function listTables() {
     var selector = '.erp-list-page .table-container table, table[data-sticky-list-table]';
     return Array.prototype.slice.call(document.querySelectorAll(selector)).map(function (table) {
@@ -106,6 +116,7 @@
   }
 
   function update() {
+    normalizeTableHeaders(document);
     if (!document.body || document.body.classList.contains('erp-embedded') ||
         !window.matchMedia('(min-width: 768px)').matches) {
       if (document.body) document.body.classList.remove('has-sticky-list');
@@ -183,4 +194,5 @@
   }
 
   window.erpUpdateStickyListHeaders = update;
+  window.erpNormalizeTableHeaders = normalizeTableHeaders;
 })();
