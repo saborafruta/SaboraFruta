@@ -268,6 +268,38 @@ class MultitenancyFoundationTests(TestCase):
         TENANT_PUBLIC_LINK_ROUTING_READY=True,
         TENANT_BACKGROUND_TASKS_READY=True,
     )
+    def test_middleware_redireciona_sessao_com_filial_invalida_para_selecao(self):
+        request = RequestFactory().get('/dashboard/')
+        request.session = {
+            'tenant_db_alias': self.banco.db_alias,
+            'filial_ativa_id': 999,
+            'auth_database_alias': 'default',
+        }
+        request.user = SimpleLazyObject(lambda: self.usuario)
+
+        with (
+            patch(
+                'apps.core.middleware.tenant.register_tenant_database',
+                return_value=True,
+            ),
+            patch(
+                'apps.core.middleware.tenant.TenantUserService.resolver_usuario',
+                side_effect=Filial.DoesNotExist,
+            ),
+        ):
+            response = TenantContextMiddleware(lambda req: req.user)(request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], '/auth/selecionar-filial/')
+        self.assertNotIn('tenant_db_alias', request.session)
+        self.assertNotIn('filial_ativa_id', request.session)
+        self.assertEqual(request.session['auth_database_alias'], 'default')
+
+    @override_settings(
+        TENANT_DATABASE_ROUTING_ENABLED=True,
+        TENANT_PUBLIC_LINK_ROUTING_READY=True,
+        TENANT_BACKGROUND_TASKS_READY=True,
+    )
     def test_middleware_traduz_superadmin_central_para_usuario_do_tenant(self):
         self.usuario.is_superuser = True
         self.usuario.is_staff = True

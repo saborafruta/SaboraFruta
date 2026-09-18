@@ -6,7 +6,7 @@ from django.db import connections
 from django.http import HttpResponseRedirect, JsonResponse
 from django.core.exceptions import ImproperlyConfigured
 
-from apps.core.models import EmpresaBanco, Usuario
+from apps.core.models import EmpresaBanco, Filial, PerfilAcesso, Usuario
 from apps.core.tenant_context import reset_current_tenant_db, set_current_tenant_db
 from apps.core.tenant_registry import register_tenant_database
 from apps.core.services.tenant_public_link_service import TenantPublicLinkService
@@ -116,18 +116,32 @@ class TenantContextMiddleware:
                 # de chave estrangeira.
                 usuario_central = getattr(request.user, '_wrapped', request.user)
                 request._central_authenticated_user = usuario_central
-                if usuario_central.is_superuser:
-                    request.user = TenantUserService.resolver_superusuario(
-                        alias=alias,
-                        usuario_central=usuario_central,
-                        filial_id=request.session.get('filial_ativa_id'),
-                    )
-                else:
-                    request.user = TenantUserService.resolver_usuario(
-                        alias=alias,
-                        usuario_central=usuario_central,
-                        filial_id=request.session.get('filial_ativa_id'),
-                    )
+                try:
+                    if usuario_central.is_superuser:
+                        request.user = TenantUserService.resolver_superusuario(
+                            alias=alias,
+                            usuario_central=usuario_central,
+                            filial_id=request.session.get('filial_ativa_id'),
+                        )
+                    else:
+                        request.user = TenantUserService.resolver_usuario(
+                            alias=alias,
+                            usuario_central=usuario_central,
+                            filial_id=request.session.get('filial_ativa_id'),
+                        )
+                except (
+                    Filial.DoesNotExist,
+                    PerfilAcesso.DoesNotExist,
+                    Usuario.DoesNotExist,
+                ):
+                    # Uma sessão anterior à ativação do multibanco pode guardar
+                    # o PK da filial do diretório central. Como os bancos são
+                    # independentes, esse PK não identifica necessariamente a
+                    # filial local. Remover somente o contexto operacional faz
+                    # o usuário escolher uma filial válida, sem perder o login.
+                    request.session.pop(self.SESSION_KEY, None)
+                    request.session.pop('filial_ativa_id', None)
+                    return HttpResponseRedirect('/auth/selecionar-filial/')
                 request._cached_user = request.user
             if (
                 alias
