@@ -131,6 +131,7 @@ class TenantUserService:
                     nome=usuario_central.nome,
                     cpf=usuario_central.cpf,
                     telefone=usuario_central.telefone,
+                    foto=usuario_central.foto.name if usuario_central.foto else '',
                     menu_favoritos=list(usuario_central.menu_favoritos or []),
                     preferencias_tabelas=dict(
                         usuario_central.preferencias_tabelas or {},
@@ -148,6 +149,7 @@ class TenantUserService:
                     'nome': usuario_central.nome,
                     'cpf': usuario_central.cpf,
                     'telefone': usuario_central.telefone,
+                    'foto': usuario_central.foto.name if usuario_central.foto else '',
                     'menu_favoritos': list(usuario_central.menu_favoritos or []),
                     'preferencias_tabelas': dict(
                         usuario_central.preferencias_tabelas or {},
@@ -303,6 +305,7 @@ class TenantUserService:
                         'nome': usuario_central.nome,
                         'cpf': usuario_central.cpf,
                         'telefone': usuario_central.telefone,
+                        'foto': usuario_central.foto.name if usuario_central.foto else '',
                         'menu_favoritos': list(usuario_central.menu_favoritos or []),
                         'preferencias_tabelas': dict(
                             usuario_central.preferencias_tabelas or {},
@@ -320,6 +323,7 @@ class TenantUserService:
                 'nome': usuario_central.nome,
                 'cpf': usuario_central.cpf,
                 'telefone': usuario_central.telefone,
+                'foto': usuario_central.foto.name if usuario_central.foto else '',
                 'menu_favoritos': list(usuario_central.menu_favoritos or []),
                 'preferencias_tabelas': dict(
                     usuario_central.preferencias_tabelas or {},
