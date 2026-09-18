@@ -1,5 +1,6 @@
 import csv
 import json
+import logging
 import re
 from datetime import timedelta
 from pathlib import Path
@@ -10,10 +11,10 @@ from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.core.files.storage import default_storage
 from django.core.paginator import Paginator
-from django.db import transaction
+from django.db import connections, transaction
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Min, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -49,6 +50,7 @@ from apps.core.services.empresa_banco_service import EmpresaBancoService
 from apps.core.services.separacao_filial_service import (
     SeparacaoFilialError, SeparacaoFilialService,
 )
+from apps.core.tenant_registry import register_tenant_database
 from apps.core.tenant_context import get_current_database_alias
 from apps.core.views.audit import core_log_context
 from apps.core.views._admin import admin_area_required, superuser_required
@@ -60,6 +62,7 @@ from apps.pdv.models import (
 
 
 PER_PAGE = 10
+logger = logging.getLogger(__name__)
 
 BANCO_STATUS_FILTERS = [('sem_banco', 'Sem banco')] + list(EmpresaBanco.Status.choices)
 
@@ -77,6 +80,157 @@ def _page_querystring(request):
     params.pop('page', None)
     params.pop('all', None)
     return params.urlencode()
+
+
+def _resumo_fiscal_operacional():
+    """Resume NFC-e realmente atrasadas sem deixar um tenant derrubar o painel."""
+    from apps.financeiro.constants.enums import StatusDocumentoFiscal
+    from apps.financeiro.models.fiscal import DocumentoFiscal
+
+    limite = timezone.now() - timedelta(minutes=5)
+    fontes = []
+    if settings.TENANT_DATABASE_ROUTING_ENABLED:
+        bancos = EmpresaBanco.objects.using('default').filter(
+            ativo=True,
+            status=EmpresaBanco.Status.ATIVO,
+        ).select_related('empresa').order_by('empresa__razao_social')
+        fontes = [
+            {
+                'alias': banco.db_alias,
+                'empresa': banco.empresa.nome_fantasia or banco.empresa.razao_social,
+                'banco': banco,
+            }
+            for banco in bancos
+        ]
+    else:
+        fontes = [{'alias': get_current_database_alias(), 'empresa': 'Banco atual', 'banco': None}]
+
+    linhas = []
+    totais = {'pendentes': 0, 'contingencia': 0, 'bancos_indisponiveis': 0}
+    for fonte in fontes:
+        alias = fonte['alias']
+        banco = fonte['banco']
+        if banco is not None and not register_tenant_database(banco):
+            totais['bancos_indisponiveis'] += 1
+            linhas.append({**fonte, 'disponivel': False, 'erro': 'Conexão não configurada'})
+            continue
+        try:
+            resultado = DocumentoFiscal.objects.using(alias).filter(
+                tipo_documento='nfce',
+                status=StatusDocumentoFiscal.PROCESSANDO,
+                updated_at__lte=limite,
+            ).aggregate(
+                pendentes=Count('pk'),
+                contingencia=Count('pk', filter=Q(em_contingencia=True)),
+                mais_antiga=Min('updated_at'),
+            )
+            pendentes = resultado['pendentes'] or 0
+            contingencia = resultado['contingencia'] or 0
+            totais['pendentes'] += pendentes
+            totais['contingencia'] += contingencia
+            linhas.append({
+                **fonte,
+                'disponivel': True,
+                'pendentes': pendentes,
+                'contingencia': contingencia,
+                'mais_antiga': resultado['mais_antiga'],
+            })
+        except Exception:  # O painel precisa mostrar a falha, não virar erro 500.
+            totais['bancos_indisponiveis'] += 1
+            linhas.append({**fonte, 'disponivel': False, 'erro': 'Falha ao consultar'})
+            logger.exception('Falha ao resumir pendências fiscais de %s', alias)
+        finally:
+            if alias != 'default' and alias in connections:
+                connections[alias].close()
+    return totais, linhas
+
+
+def _resumo_operacional_pdv(base_queryset):
+    agora = timezone.now()
+    limite_online = agora - timedelta(minutes=2)
+    limite_sem_contato = agora - timedelta(minutes=10)
+    limite_catalogo = agora - timedelta(hours=12)
+    monitoradas = base_queryset.exclude(status=InstalacaoPDVOffline.Status.REVOGADA)
+
+    # installation_id identifica o navegador. Mantemos somente o heartbeat mais
+    # recente para não contar duas vezes o mesmo computador usado por operadores diferentes.
+    dispositivos = {}
+    for instalacao in monitoradas.order_by('-visto_por_ultimo_em'):
+        chave = (instalacao.tenant_alias, instalacao.filial_id_origem, instalacao.installation_id)
+        dispositivos.setdefault(chave, instalacao)
+    dispositivos = list(dispositivos.values())
+
+    resumo = {
+        'monitorados': len(dispositivos),
+        'online': sum(item.visto_por_ultimo_em >= limite_online for item in dispositivos),
+        'sem_contato': sum(item.visto_por_ultimo_em < limite_online for item in dispositivos),
+        'sem_contato_critico': sum(item.visto_por_ultimo_em < limite_sem_contato for item in dispositivos),
+        'protecao_ativa': sum(item.status == InstalacaoPDVOffline.Status.ATIVA for item in dispositivos),
+        'pwa_instalado': sum(item.pwa_instalado for item in dispositivos),
+        'pwa_pendente': sum(not item.pwa_instalado for item in dispositivos),
+        'armazenamento_persistente': sum(item.armazenamento_persistente is True for item in dispositivos),
+        'armazenamento_fragil': sum(item.armazenamento_persistente is False for item in dispositivos),
+        'armazenamento_desconhecido': sum(item.armazenamento_persistente is None for item in dispositivos),
+        'catalogo_vencido': sum(
+            not item.catalogo_atualizado_em or item.catalogo_atualizado_em < limite_catalogo
+            for item in dispositivos
+        ),
+    }
+    resumo.update(monitoradas.aggregate(
+        vendas_pendentes=Sum('fila_pendente_quantidade'),
+        vendas_com_erro=Sum('fila_erro_quantidade'),
+    ))
+    resumo['vendas_pendentes'] = resumo['vendas_pendentes'] or 0
+    resumo['vendas_com_erro'] = resumo['vendas_com_erro'] or 0
+
+    ocorrencias = OcorrenciaPDVOffline.objects.using('default').exclude(
+        status=OcorrenciaPDVOffline.Status.RESOLVIDA,
+    )
+    resumo['ocorrencias_abertas'] = ocorrencias.filter(
+        status=OcorrenciaPDVOffline.Status.ABERTA,
+    ).count()
+    resumo['ocorrencias_em_tratamento'] = ocorrencias.filter(
+        status=OcorrenciaPDVOffline.Status.EM_TRATAMENTO,
+    ).count()
+    resumo['retries_aguardando'] = ocorrencias.filter(
+        retry_solicitado_em__isnull=False,
+        retry_processado_em__isnull=True,
+    ).count()
+
+    por_filial = {}
+    for item in dispositivos:
+        chave = (item.tenant_alias, item.filial_id_origem)
+        linha = por_filial.setdefault(chave, {
+            'tenant_alias': item.tenant_alias,
+            'filial_id_origem': item.filial_id_origem,
+            'filial_nome': item.filial_nome,
+            'monitorados': 0,
+            'online': 0,
+            'sem_contato': 0,
+            'pwa_pendente': 0,
+            'armazenamento_fragil': 0,
+            'catalogo_vencido': 0,
+            'vendas_pendentes': 0,
+            'vendas_com_erro': 0,
+        })
+        linha['monitorados'] += 1
+        linha['online' if item.visto_por_ultimo_em >= limite_online else 'sem_contato'] += 1
+        linha['pwa_pendente'] += int(not item.pwa_instalado)
+        linha['armazenamento_fragil'] += int(item.armazenamento_persistente is False)
+        linha['catalogo_vencido'] += int(
+            not item.catalogo_atualizado_em or item.catalogo_atualizado_em < limite_catalogo
+        )
+
+    filas_por_filial = monitoradas.values('tenant_alias', 'filial_id_origem').annotate(
+        vendas_pendentes=Sum('fila_pendente_quantidade'),
+        vendas_com_erro=Sum('fila_erro_quantidade'),
+    )
+    for fila in filas_por_filial:
+        linha = por_filial.get((fila['tenant_alias'], fila['filial_id_origem']))
+        if linha:
+            linha['vendas_pendentes'] = fila['vendas_pendentes'] or 0
+            linha['vendas_com_erro'] = fila['vendas_com_erro'] or 0
+    return resumo, sorted(por_filial.values(), key=lambda item: item['filial_nome'].lower())
 
 
 def _empresa_filtros(request):
@@ -421,6 +575,31 @@ def central_administrativa(request):
 def instalacoes_pdv_offline(request):
     """Painel global de revogação e liberação de novo PIN local."""
     base_queryset = InstalacaoPDVOffline.objects.using('default').all()
+    resumo_operacional, operacao_por_filial = _resumo_operacional_pdv(base_queryset)
+    resumo_fiscal, operacao_fiscal_por_empresa = _resumo_fiscal_operacional()
+    resumo_operacional['nfce_pendentes'] = resumo_fiscal['pendentes']
+    resumo_operacional['nfce_contingencia'] = resumo_fiscal['contingencia']
+    resumo_operacional['bancos_indisponiveis'] = resumo_fiscal['bancos_indisponiveis']
+    if (
+        resumo_operacional['vendas_com_erro']
+        or resumo_operacional['nfce_pendentes']
+        or resumo_operacional['bancos_indisponiveis']
+    ):
+        estado_operacional = 'critico'
+    elif (
+        resumo_operacional['vendas_pendentes']
+        or resumo_operacional['sem_contato_critico']
+        or resumo_operacional['armazenamento_fragil']
+        or resumo_operacional['pwa_pendente']
+        or resumo_operacional['catalogo_vencido']
+        or resumo_operacional['ocorrencias_abertas']
+        or resumo_operacional['ocorrencias_em_tratamento']
+    ):
+        estado_operacional = 'atencao'
+    elif resumo_operacional['monitorados']:
+        estado_operacional = 'saudavel'
+    else:
+        estado_operacional = 'sem_dados'
     queryset = base_queryset
     busca = request.GET.get('q', '').strip()
     status = request.GET.get('status', '').strip()
@@ -482,6 +661,11 @@ def instalacoes_pdv_offline(request):
         'status_filtro': status,
         'somente_pendencias': somente_pendencias,
         'status_choices': InstalacaoPDVOffline.Status.choices,
+        'resumo_operacional': resumo_operacional,
+        'estado_operacional': estado_operacional,
+        'operacao_por_filial': operacao_por_filial,
+        'operacao_fiscal_por_empresa': operacao_fiscal_por_empresa,
+        'painel_atualizado_em': timezone.now(),
         'total_instalacoes_offline': base_queryset.count(),
         'total_vendas_pendentes': base_queryset.aggregate(total=Sum('fila_pendente_quantidade'))['total'] or 0,
         'total_vendas_com_erro': base_queryset.aggregate(total=Sum('fila_erro_quantidade'))['total'] or 0,

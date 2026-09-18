@@ -107,6 +107,32 @@ class InstalacaoOfflineTests(TestCase):
         self.assertContains(painel, "1 com erro")
         self.assertContains(painel, "Estoque insuficiente")
 
+    def test_painel_resume_saude_operacional_em_uma_unica_visao(self):
+        self.post_api(
+            "activate",
+            recuperacao_configurada=True,
+            pwa_instalado=True,
+            armazenamento_persistente=True,
+            catalogo_atualizado_em=timezone.now().isoformat(),
+            fila_pendente_quantidade=2,
+            fila_erro_quantidade=0,
+        )
+        self.client.force_login(self.superuser)
+
+        painel = self.client.get(reverse("core:admin_instalacoes_pdv_offline"))
+
+        self.assertEqual(painel.status_code, 200)
+        resumo = painel.context["resumo_operacional"]
+        self.assertEqual(resumo["monitorados"], 1)
+        self.assertEqual(resumo["online"], 1)
+        self.assertEqual(resumo["pwa_instalado"], 1)
+        self.assertEqual(resumo["armazenamento_persistente"], 1)
+        self.assertEqual(resumo["vendas_pendentes"], 2)
+        self.assertEqual(painel.context["estado_operacional"], "atencao")
+        self.assertContains(painel, "Resumo operacional")
+        self.assertContains(painel, "Situação por filial")
+        self.assertContains(painel, "Saúde fiscal")
+
     def test_heartbeat_registra_pdv_sem_ativar_protecao_offline(self):
         response = self.post_api(
             "heartbeat",

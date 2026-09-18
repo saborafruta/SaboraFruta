@@ -283,6 +283,8 @@ Para evitar crescimento indefinido, eventos e ocorrências resolvidas têm reten
 
 O endpoint de monitoramento aceita no máximo 768 KB e limita heartbeats excessivos por usuário e instalação. O navegador também informa se o armazenamento persistente foi concedido, estimativa de espaço e se a tela está sendo executada como PWA. Quando a persistência não foi concedida ou a aplicação está aberta como aba comum, o operador recebe orientação visível e o suporte enxerga o risco no painel.
 
+O resumo operacional da Central consolida em uma única visão: caixas com heartbeat recente, caixas sem contato, instalação do PWA, persistência do armazenamento, filas pendentes ou com erro, ocorrências em tratamento, retries aguardando o caixa e NFC-e processando há mais de cinco minutos. A situação também é aberta por filial e por banco fiscal. Uma falha de conexão com um banco aparece como indisponibilidade no próprio painel e não impede a consulta das demais empresas.
+
 Há um E2E executado em Chrome real em `tests/browser/test_pdv_offline_browser.py`. Ele valida IndexedDB após uma nova instância do navegador, fila, carrinho, exportação/importação criptografada e pré-cache do casco pelo service worker. O teste usa o Chrome já instalado e aceita `CHROME_PATH` em ambientes onde o executável não esteja no caminho padrão.
 
 ### Fase 4 — operação e auditoria (implementada)
@@ -305,6 +307,8 @@ Há um E2E executado em Chrome real em `tests/browser/test_pdv_offline_browser.p
 ### Fase 5 — Comunicador Focus
 
 Esta fase foi deliberadamente excluída desta entrega. Nenhum binário, download, detecção ou integração com o Comunicador foi criado enquanto o arquivo oficial não é fornecido e homologado.
+
+A Focus fornece um instalador comum, mas o código de instalação é individual por CNPJ. Portanto, cada CNPJ precisa ser solicitado e acompanhado separadamente, mesmo quando pertence ao mesmo grupo empresarial. Códigos de instalação são credenciais operacionais: não devem ser gravados no repositório, em templates ou em documentação versionada. Quando essa fase começar, serão armazenados de forma protegida na configuração fiscal de cada empresa.
 
 - download versionado na configuração fiscal;
 - verificação automática de presença e versão;

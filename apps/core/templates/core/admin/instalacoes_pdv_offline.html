@@ -1,25 +1,123 @@
 {% extends "_base.html" %}
 
-{% block title %}PDVs offline - ERP iNoovaTed{% endblock %}
-{% block page_title %}PDVs offline{% endblock %}
+{% block title %}Operação PDV - ERP iNoovaTed{% endblock %}
+{% block page_title %}Operação PDV{% endblock %}
+
+{% block extra_head %}
+<style>
+  .ops-hero { position:relative; overflow:hidden; }
+  .ops-hero::after { content:""; position:absolute; width:260px; height:260px; right:-100px; top:-150px; border-radius:999px; background:radial-gradient(circle,rgba(59,130,246,.22),transparent 70%); pointer-events:none; }
+  .ops-status { width:12px; height:12px; border-radius:999px; box-shadow:0 0 0 5px rgba(148,163,184,.12); }
+  .ops-status--green { background:#22c55e; box-shadow:0 0 0 5px rgba(34,197,94,.14); }
+  .ops-status--amber { background:#f59e0b; box-shadow:0 0 0 5px rgba(245,158,11,.14); }
+  .ops-status--red { background:#ef4444; box-shadow:0 0 0 5px rgba(239,68,68,.14); }
+  .ops-status--slate { background:#94a3b8; }
+  .ops-metric { min-height:126px; position:relative; overflow:hidden; }
+  .ops-metric::after { content:""; position:absolute; width:72px; height:72px; border-radius:999px; right:-30px; bottom:-34px; background:var(--ops-accent,rgba(148,163,184,.13)); }
+  .ops-metric-value { font-size:1.75rem; line-height:1; font-weight:800; letter-spacing:-.04em; }
+  .ops-progress { height:7px; border-radius:999px; overflow:hidden; background:rgba(148,163,184,.2); }
+  .ops-progress > span { display:block; height:100%; border-radius:inherit; background:#22c55e; }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="space-y-5">
-  <section class="card p-6">
-    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+  <section class="card p-6 ops-hero">
+    <div class="relative z-10 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
       <div>
-        <h2 class="text-xl font-bold">Instalações autorizadas para abertura offline</h2>
-        <p class="text-sm mt-2 text-slate-500">O suporte pode invalidar o PIN local ou liberar a criação de um novo. PIN e código de emergência nunca são enviados ao servidor.</p>
+        <div class="flex items-center gap-3">
+          <span class="ops-status {% if estado_operacional == 'saudavel' %}ops-status--green{% elif estado_operacional == 'atencao' %}ops-status--amber{% elif estado_operacional == 'critico' %}ops-status--red{% else %}ops-status--slate{% endif %}"></span>
+          <h2 class="text-xl font-bold">Resumo operacional</h2>
+          <span class="soft-pill no-dot {% if estado_operacional == 'saudavel' %}is-green{% elif estado_operacional == 'atencao' %}is-amber{% elif estado_operacional == 'critico' %}is-red{% else %}is-slate{% endif %}">
+            {% if estado_operacional == 'saudavel' %}Operação saudável{% elif estado_operacional == 'atencao' %}Requer atenção{% elif estado_operacional == 'critico' %}Ação necessária{% else %}Aguardando telemetria{% endif %}
+          </span>
+        </div>
+        <p class="text-sm mt-2 text-slate-500">Visão central de conectividade, proteção local, sincronização e NFC-e. Atualizado em {{ painel_atualizado_em|date:"d/m/Y H:i:s" }}.</p>
       </div>
-      <a href="{% url 'core:admin_central' %}" class="btn-secondary">Voltar à Central</a>
+      <div class="flex flex-wrap gap-2">
+        <a href="{% url 'core:admin_instalacoes_pdv_offline' %}" class="btn-secondary">Atualizar agora</a>
+        <a href="{% url 'core:admin_central' %}" class="btn-secondary">Voltar à Central</a>
+      </div>
     </div>
   </section>
 
-  <section class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-    <div class="card p-4"><div class="text-xs text-slate-500">Instalações</div><div class="text-2xl font-bold mt-1">{{ total_instalacoes_offline }}</div></div>
-    <div class="card p-4"><div class="text-xs text-slate-500">Vendas aguardando</div><div class="text-2xl font-bold mt-1 {% if total_vendas_pendentes %}text-amber-600{% endif %}">{{ total_vendas_pendentes }}</div></div>
-    <div class="card p-4"><div class="text-xs text-slate-500">Vendas com erro</div><div class="text-2xl font-bold mt-1 {% if total_vendas_com_erro %}text-red-600{% endif %}">{{ total_vendas_com_erro }}</div></div>
-    <div class="card p-4"><div class="text-xs text-slate-500">Sem código emergencial</div><div class="text-2xl font-bold mt-1 {% if instalacoes_sem_recuperacao %}text-amber-600{% endif %}">{{ instalacoes_sem_recuperacao }}</div></div>
+  <section class="grid grid-cols-2 xl:grid-cols-4 gap-3">
+    <div class="card p-4 ops-metric" style="--ops-accent:rgba(34,197,94,.16)">
+      <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Caixas online</div>
+      <div class="ops-metric-value mt-3 text-green-600">{{ resumo_operacional.online }}</div>
+      <div class="text-xs text-slate-500 mt-2">de {{ resumo_operacional.monitorados }} monitorados · contato até 2 min</div>
+    </div>
+    <div class="card p-4 ops-metric" style="--ops-accent:rgba(245,158,11,.16)">
+      <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Sem contato</div>
+      <div class="ops-metric-value mt-3 {% if resumo_operacional.sem_contato %}text-amber-600{% endif %}">{{ resumo_operacional.sem_contato }}</div>
+      <div class="text-xs text-slate-500 mt-2">{{ resumo_operacional.sem_contato_critico }} há mais de 10 min</div>
+    </div>
+    <div class="card p-4 ops-metric" style="--ops-accent:rgba(239,68,68,.15)">
+      <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Fila de vendas</div>
+      <div class="ops-metric-value mt-3 {% if resumo_operacional.vendas_com_erro %}text-red-600{% elif resumo_operacional.vendas_pendentes %}text-amber-600{% endif %}">{{ resumo_operacional.vendas_pendentes }}</div>
+      <div class="text-xs text-slate-500 mt-2">{{ resumo_operacional.vendas_com_erro }} com erro</div>
+    </div>
+    <div class="card p-4 ops-metric" style="--ops-accent:rgba(239,68,68,.15)">
+      <div class="text-xs font-bold uppercase tracking-wide text-slate-500">NFC-e pendentes</div>
+      <div class="ops-metric-value mt-3 {% if resumo_operacional.nfce_pendentes %}text-red-600{% endif %}">{{ resumo_operacional.nfce_pendentes }}</div>
+      <div class="text-xs text-slate-500 mt-2">{{ resumo_operacional.nfce_contingencia }} em contingência · acima de 5 min</div>
+    </div>
+    <div class="card p-4 ops-metric" style="--ops-accent:rgba(59,130,246,.15)">
+      <div class="text-xs font-bold uppercase tracking-wide text-slate-500">PWA instalado</div>
+      <div class="ops-metric-value mt-3 text-blue-600">{{ resumo_operacional.pwa_instalado }}</div>
+      <div class="text-xs text-slate-500 mt-2">{{ resumo_operacional.pwa_pendente }} em aba comum ou sem informação</div>
+    </div>
+    <div class="card p-4 ops-metric" style="--ops-accent:rgba(139,92,246,.15)">
+      <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Armazenamento seguro</div>
+      <div class="ops-metric-value mt-3 text-purple-600">{{ resumo_operacional.armazenamento_persistente }}</div>
+      <div class="text-xs text-slate-500 mt-2">{{ resumo_operacional.armazenamento_fragil }} frágeis · {{ resumo_operacional.armazenamento_desconhecido }} sem informação</div>
+    </div>
+    <div class="card p-4 ops-metric" style="--ops-accent:rgba(245,158,11,.15)">
+      <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Ocorrências</div>
+      <div class="ops-metric-value mt-3 {% if resumo_operacional.ocorrencias_abertas %}text-amber-600{% endif %}">{{ resumo_operacional.ocorrencias_abertas }}</div>
+      <div class="text-xs text-slate-500 mt-2">{{ resumo_operacional.ocorrencias_em_tratamento }} em tratamento · {{ resumo_operacional.retries_aguardando }} retries</div>
+    </div>
+    <div class="card p-4 ops-metric" style="--ops-accent:rgba(100,116,139,.15)">
+      <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Proteção local</div>
+      <div class="ops-metric-value mt-3">{{ resumo_operacional.protecao_ativa }}</div>
+      <div class="text-xs text-slate-500 mt-2">{{ instalacoes_sem_recuperacao }} sem código emergencial · {{ resumo_operacional.catalogo_vencido }} catálogos vencidos</div>
+    </div>
+  </section>
+
+  <section class="grid grid-cols-1 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.75fr)] gap-4">
+    <div class="card p-5">
+      <div class="flex items-center justify-between gap-3">
+        <div><h2 class="font-bold">Situação por filial</h2><p class="text-sm text-slate-500 mt-1">O online é inferido pelo heartbeat recebido nos últimos dois minutos.</p></div>
+        <span class="soft-pill no-dot is-blue">{{ resumo_operacional.monitorados }} caixas</span>
+      </div>
+      <div class="overflow-x-auto mt-4">
+        <table class="w-full text-sm">
+          <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-3">Filial</th><th class="py-2 pr-3">Conectividade</th><th class="py-2 pr-3">Proteção local</th><th class="py-2">Fila</th></tr></thead>
+          <tbody>
+          {% for filial in operacao_por_filial %}
+            <tr class="border-b border-slate-200 align-top">
+              <td class="py-3 pr-3"><strong>{{ filial.filial_nome }}</strong><div class="text-xs text-slate-500 mt-1">{{ filial.monitorados }} caixa{{ filial.monitorados|pluralize }}</div></td>
+              <td class="py-3 pr-3"><span class="soft-pill is-green">{{ filial.online }} online</span>{% if filial.sem_contato %} <span class="soft-pill is-amber">{{ filial.sem_contato }} sem contato</span>{% endif %}</td>
+              <td class="py-3 pr-3">{% if filial.pwa_pendente %}<span class="soft-pill is-amber">{{ filial.pwa_pendente }} sem PWA</span>{% else %}<span class="soft-pill is-green">PWA OK</span>{% endif %}{% if filial.armazenamento_fragil %} <span class="soft-pill is-red">{{ filial.armazenamento_fragil }} armazenamento frágil</span>{% endif %}{% if filial.catalogo_vencido %} <span class="soft-pill is-red">{{ filial.catalogo_vencido }} catálogo vencido</span>{% endif %}</td>
+              <td class="py-3">{% if filial.vendas_com_erro %}<span class="soft-pill is-red">{{ filial.vendas_com_erro }} erros</span>{% elif filial.vendas_pendentes %}<span class="soft-pill is-amber">{{ filial.vendas_pendentes }} aguardando</span>{% else %}<span class="soft-pill is-green">Sincronizada</span>{% endif %}</td>
+            </tr>
+          {% empty %}<tr><td colspan="4" class="py-5 text-center text-slate-500">Nenhum caixa enviou telemetria ainda.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card p-5">
+      <div class="flex items-center justify-between gap-3"><div><h2 class="font-bold">Saúde fiscal</h2><p class="text-sm text-slate-500 mt-1">NFC-e processando há mais de cinco minutos.</p></div>{% if resumo_operacional.bancos_indisponiveis %}<span class="soft-pill is-red">{{ resumo_operacional.bancos_indisponiveis }} indisponível</span>{% endif %}</div>
+      <div class="mt-4 space-y-3">
+        {% for empresa in operacao_fiscal_por_empresa %}
+          <div class="p-3 rounded-xl border border-slate-200 flex items-center justify-between gap-3">
+            <div class="min-w-0"><div class="font-bold truncate">{{ empresa.empresa }}</div>{% if empresa.disponivel and empresa.mais_antiga %}<div class="text-xs text-slate-500 mt-1">mais antiga há {{ empresa.mais_antiga|timesince }}</div>{% elif not empresa.disponivel %}<div class="text-xs text-red-600 mt-1">{{ empresa.erro }}</div>{% endif %}</div>
+            {% if not empresa.disponivel %}<span class="soft-pill is-red">Banco indisponível</span>{% elif empresa.pendentes %}<div class="text-right"><span class="soft-pill is-red">{{ empresa.pendentes }} pendente{{ empresa.pendentes|pluralize }}</span>{% if empresa.contingencia %}<div class="text-xs text-amber-600 mt-1">{{ empresa.contingencia }} em contingência</div>{% endif %}</div>{% else %}<span class="soft-pill is-green">Em dia</span>{% endif %}
+          </div>
+        {% empty %}<div class="text-sm text-slate-500">Nenhum banco fiscal ativo encontrado.</div>{% endfor %}
+      </div>
+    </div>
   </section>
 
   <section class="card p-5">
