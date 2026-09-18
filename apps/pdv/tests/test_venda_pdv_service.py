@@ -24,6 +24,40 @@ from apps.produtos.models import (
 
 
 class VendaPDVServiceTests(TestCase):
+    def test_pagamento_excluido_nao_aparece_no_detalhe_nem_no_comprovante(self):
+        from apps.pdv.services.comprovante_service import dados_comprovante
+
+        produto = self.criar_produto('Produto com pagamento corrigido')
+        self.abastecer(produto, '5')
+        venda = VendaPDVService.finalizar_venda(
+            sessao=self.sessao, filial=self.filial, usuario=self.usuario,
+            itens=[{'produto_id': produto.pk, 'quantidade': '1'}],
+            pagamentos=[{'forma_id': self.forma.pk, 'valor': '10'}],
+        )
+        pagamento_ativo = venda.pagamentos.get()
+        PagamentoVendaPDV.objects.create(
+            venda_pdv=venda,
+            forma_pagamento=self.forma,
+            valor=Decimal('2.00'),
+            valor_liquido=Decimal('2.00'),
+            status='excluido',
+        )
+
+        self.client.force_login(self.usuario)
+        session = self.client.session
+        session['filial_ativa_id'] = self.filial.pk
+        session.save()
+        detalhe = self.client.get(reverse('pdv:api_venda_detalhe', args=[venda.pk])).json()
+
+        self.assertEqual(detalhe['pagamentos'], [{
+            'forma_descricao': pagamento_ativo.forma_pagamento.descricao,
+            'valor': float(pagamento_ativo.valor),
+            'troco': float(pagamento_ativo.troco),
+        }])
+        self.assertEqual(dados_comprovante(venda)['pagamentos'], [
+            (pagamento_ativo.forma_pagamento.descricao, '10,00'),
+        ])
+
     def test_observacao_item_persiste_na_venda_e_orcamento(self):
         produto = self.criar_produto('Produto com observação')
         self.abastecer(produto, '5')

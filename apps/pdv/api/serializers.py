@@ -42,7 +42,11 @@ class PagamentoVendaPDVSerializer(serializers.ModelSerializer):
 
 class VendaPDVSerializer(serializers.ModelSerializer):
     itens = ItemVendaPDVSerializer(many=True, read_only=True)
-    pagamentos = PagamentoVendaPDVSerializer(many=True, read_only=True)
+    pagamentos = serializers.SerializerMethodField()
+
+    def get_pagamentos(self, venda):
+        pagamentos = venda.pagamentos.exclude(status='excluido').select_related('forma_pagamento')
+        return PagamentoVendaPDVSerializer(pagamentos, many=True).data
 
     class Meta:
         model = VendaPDV

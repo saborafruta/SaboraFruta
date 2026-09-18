@@ -121,7 +121,8 @@ def estornar_venda_para_edicao(venda: VendaPDV, usuario, *, justificativa=None) 
         # Doação/Permuta (movimenta_caixa=False) nunca entraram no total do
         # caixa — só descontamos a parte que de fato foi contabilizada.
         valor_nao_contabilizado = sum(
-            (pg.valor - pg.troco) for pg in venda.pagamentos.select_related("forma_pagamento")
+            (pg.valor - pg.troco)
+            for pg in venda.pagamentos.exclude(status="excluido").select_related("forma_pagamento")
             if not pg.forma_pagamento.movimenta_caixa
         ) or 0
         valor_contabilizado = max(0, (venda.valor_total or 0) - valor_nao_contabilizado)
