@@ -19,6 +19,14 @@ class RailwayProvisionerTests(SimpleTestCase):
             'Banco Kairos Produtos e Servicos',
         )
 
+    def test_dominio_privado_usa_formato_seguro_do_nome_visivel(self):
+        self.assertEqual(
+            RailwayProvisioner._private_domain_for_service(
+                'Banco Kairos Produtos e Servicos',
+            ),
+            'banco-kairos-produtos-e-servicos',
+        )
+
     @override_settings(
         RAILWAY_TENANT_DATABASE_IMAGE='postgres:16-alpine',
         RAILWAY_TENANT_DATABASE_VOLUME_PATH='/var/lib/postgresql/data',

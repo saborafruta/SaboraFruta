@@ -8,6 +8,7 @@ import environ
 import requests
 from django.conf import settings
 from django.db import connections
+from django.utils.text import slugify
 
 from apps.core.models import RailwayProjectPool
 from apps.core.services.railway_pool_service import RailwayPoolService
@@ -257,8 +258,9 @@ class RailwayProvisioner:
             runtime_url = cls._public_database_url(proxy, credentials)
             variable_value = runtime_url
         else:
+            private_domain = cls._private_domain_for_service(service_name)
             runtime_url = (
-                f'postgresql://postgres:{password}@{service_name}.railway.internal:5432/railway'
+                f'postgresql://postgres:{password}@{private_domain}.railway.internal:5432/railway'
                 if created else ''
             )
             variable_value = (
@@ -351,7 +353,8 @@ class RailwayProvisioner:
             cls._deploy_service(service_id)
 
         private_url = (
-            f'postgresql://postgres:{password}@{service_name}.railway.internal:5432/railway'
+            f'postgresql://postgres:{password}@'
+            f'{cls._private_domain_for_service(service_name)}.railway.internal:5432/railway'
         )
         reference_url = (
             f'postgresql://${{{{{service_name}.POSTGRES_USER}}}}:'
@@ -482,6 +485,10 @@ class RailwayProvisioner:
             for connector in (' E ', ' Da ', ' De ', ' Do ', ' Das ', ' Dos '):
                 name = name.replace(connector, connector.lower())
         return f'Banco {name}'[:cls.SERVICE_NAME_MAX_LENGTH].rstrip()
+
+    @staticmethod
+    def _private_domain_for_service(service_name):
+        return slugify(service_name)
 
     # Compatibilidade de baixo nível para testes e integrações existentes.
     @classmethod
