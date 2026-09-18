@@ -1378,6 +1378,16 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, 'op2-conjunto-multi-summary')
         self.assertContains(resposta, 'Tamanho camisa')
         self.assertContains(resposta, "draft.estrutura_tipo!=='conjunto'")
+        self.assertContains(
+            resposta,
+            'Os tamanhos informados aqui também são aplicados ao calção automaticamente.',
+        )
+        self.assertContains(resposta, 'op2EspelharGradeCamisaNoCalcao')
+        self.assertContains(
+            resposta,
+            "if(componente==='camisa')this.espelharGradeCamisaNoCalcao()",
+            count=2,
+        )
         self.assertLess(
             html.index('Etiquetas'),
             html.index('Copiar camisa para o calção'),

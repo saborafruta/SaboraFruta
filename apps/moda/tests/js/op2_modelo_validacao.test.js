@@ -4,6 +4,7 @@ const {
   validarModeloOp2, op2AlternarMultisselecao, op2ResumoMultisselecao,
   op2EstruturaPadraoNaoMultipla, op2NormalizarUidsItens,
   op2NovaConfiguracaoConjunto, op2CopiarCamisaParaCalcao,
+  op2EspelharGradeCamisaNoCalcao,
   op2TotalComponenteConjunto, op2PreservarEstruturaAoTrocarTipo, validarConjuntoOp2,
 } = require('../../../../static/js/op2_modelo_validacao.js');
 
@@ -34,6 +35,25 @@ test('conjunto copia campos compatíveis e a grade da camisa para o calção', (
   assert.equal(configuracao.calcao.observacoes_campos.cor, 'Tom aprovado');
   assert.deepEqual(configuracao.calcao.gradePorGrade, { 1: { 9: 3 } });
   assert.equal(op2TotalComponenteConjunto(configuracao, 'calcao'), 3);
+});
+
+test('grade da camisa é espelhada no calção sem alterar a ficha própria', () => {
+  const configuracao = {
+    camisa: { grades: ['1'], gradePorGrade: { 1: { 9: 2, 10: 3 } } },
+    calcao: {
+      estrutura: { cor: 'PRETO' }, observacoes: 'Com cordão',
+      grades: ['2'], gradePorGrade: { 2: { 11: 5 } },
+    },
+  };
+
+  const espelhada = op2EspelharGradeCamisaNoCalcao(configuracao);
+
+  assert.deepEqual(espelhada.calcao.grades, ['1']);
+  assert.deepEqual(espelhada.calcao.gradePorGrade, { 1: { 9: 2, 10: 3 } });
+  assert.deepEqual(espelhada.calcao.estrutura, { cor: 'PRETO' });
+  assert.equal(espelhada.calcao.observacoes, 'Com cordão');
+  espelhada.camisa.gradePorGrade[1][9] = 7;
+  assert.equal(espelhada.calcao.gradePorGrade[1][9], 2);
 });
 
 test('conjunto preserva como Outro uma gola da camisa ausente no catálogo do calção', () => {

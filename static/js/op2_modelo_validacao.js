@@ -108,6 +108,19 @@ function op2PrepararConfiguracaoConjunto(grupos, configuracao) {
   return resultado;
 }
 
+function op2EspelharGradeCamisaNoCalcao(configuracao) {
+  const origem = configuracao?.camisa || {};
+  const destino = configuracao?.calcao || {};
+  return {
+    ...(configuracao || {}),
+    calcao: {
+      ...destino,
+      grades: [...(origem.grades || [])].map(String),
+      gradePorGrade: JSON.parse(JSON.stringify(origem.gradePorGrade || {})),
+    },
+  };
+}
+
 function op2AplicarEstruturaVisivel(grupos, tipoDestino, destino, origem) {
   const estrutura = { ...(destino?.estrutura || {}) };
   const outros = { ...(destino?.outros || {}) };
@@ -263,6 +276,7 @@ if (typeof module !== 'undefined') module.exports = {
   op2EstruturaPadraoNaoMultipla,
   op2NovoComponenteConjunto, op2NovaConfiguracaoConjunto,
   op2PrepararConfiguracaoConjunto,
+  op2EspelharGradeCamisaNoCalcao,
   op2PreservarEstruturaAoTrocarTipo,
   op2CopiarCamisaParaCalcao, op2TotalComponenteConjunto, validarConjuntoOp2,
 };

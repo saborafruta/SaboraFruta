@@ -6,7 +6,7 @@
 {% block extra_head %}<script>localStorage.setItem('sidebar-collapsed','true');</script>{% endblock %}
 {% block content %}
 {{ estrutura_opcoes|json_script:"op2-estrutura-opcoes" }}
-<script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260904-2"></script>
+<script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260918-1"></script>
 <script src="{% static 'js/op2_clientes.js' %}"></script>
 {{ modelos_grade|json_script:"op2-modelos-grade" }}
 {{ grades_json|json_script:"op2-grades" }}
@@ -309,13 +309,19 @@ function op2NovaMelhorada(){
     const grade=this.grades.find(g=>g.id===gradeId);
     dados.gradePorGrade={...dados.gradePorGrade,[gradeId]:Object.fromEntries((grade?.tamanhos||[]).map(id=>[String(id),0]))};
   };
+  estado.espelharGradeCamisaNoCalcao=function(){
+    this.draft.configuracao_conjunto=op2EspelharGradeCamisaNoCalcao(
+      this.draft.configuracao_conjunto,
+    );
+  };
   estado.alternarGradeConjunto=function(componente,gradeId){
     gradeId=String(gradeId);const dados=this.componenteConjunto(componente);
     if(dados.grades.includes(gradeId)){dados.grades=dados.grades.filter(id=>id!==gradeId);const mapas={...dados.gradePorGrade};delete mapas[gradeId];dados.gradePorGrade=mapas}
     else{dados.grades=[...dados.grades,gradeId];this.garantirGradeConjunto(componente,gradeId)}
+    if(componente==='camisa')this.espelharGradeCamisaNoCalcao();
   };
   estado.quantidadeConjunto=function(componente,gradeId,tamanhoId){return Number(this.componenteConjunto(componente).gradePorGrade?.[String(gradeId)]?.[String(tamanhoId)]||0)};
-  estado.definirQuantidadeConjunto=function(componente,gradeId,tamanhoId,valor){this.garantirGradeConjunto(componente,gradeId);this.componenteConjunto(componente).gradePorGrade[String(gradeId)][String(tamanhoId)]=Math.max(0,parseInt(valor,10)||0)};
+  estado.definirQuantidadeConjunto=function(componente,gradeId,tamanhoId,valor){this.garantirGradeConjunto(componente,gradeId);this.componenteConjunto(componente).gradePorGrade[String(gradeId)][String(tamanhoId)]=Math.max(0,parseInt(valor,10)||0);if(componente==='camisa')this.espelharGradeCamisaNoCalcao()};
   estado.alterarQuantidadeConjunto=function(componente,gradeId,tamanhoId,delta){this.definirQuantidadeConjunto(componente,gradeId,tamanhoId,this.quantidadeConjunto(componente,gradeId,tamanhoId)+Number(delta||0))};
   estado.totalGradeConjunto=function(componente,gradeId){return Object.values(this.componenteConjunto(componente).gradePorGrade?.[String(gradeId)]||{}).reduce((s,q)=>s+Number(q||0),0)};
   estado.totalComponenteConjunto=function(componente){return op2TotalComponenteConjunto(this.draft.configuracao_conjunto,componente)};
@@ -374,6 +380,7 @@ function op2NovaMelhorada(){
       if(!novaGradeId){camisa.grades=[];camisa.gradePorGrade={}}
       else if(!gradeCamisaCompativel){camisa.grades=[novaGradeId];camisa.gradePorGrade={}}
       if(novaGradeId)this.garantirGradeConjunto('camisa',novaGradeId);
+      this.espelharGradeCamisaNoCalcao();
     }
     this.somarDraftGrade();
   };
