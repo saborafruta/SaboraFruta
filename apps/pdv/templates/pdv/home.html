@@ -1351,7 +1351,8 @@
       <span style="font-size:10px;font-weight:800;letter-spacing:.04em;"
             :class="sincronizandoConexao ? 'pdv-connection-label--sync' : (conectividadeOnline ? '' : 'pdv-connection-label--offline')"
             x-text="statusConexaoLabel"></span>
-      <span x-show="localStorePronto" style="font-size:10px;color:var(--pdv-t3);" x-text="localSaveState==='salvando' ? '· salvando' : '· local protegido'"></span>
+      <span x-show="localStorePronto && localSaveState==='salvando'" x-cloak
+            style="font-size:10px;color:var(--pdv-t3);">· salvando</span>
       <span x-show="vendasOfflinePendentes>0" x-cloak
             style="font-size:10px;font-weight:800;color:#f59e0b;"
             x-text="'· '+vendasOfflinePendentes+' aguardando sincronização'"></span>

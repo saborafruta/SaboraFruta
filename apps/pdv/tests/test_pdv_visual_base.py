@@ -227,6 +227,8 @@ class PDVVisualBaseTests(SimpleTestCase):
     def test_pdv_persiste_rascunho_local_e_envia_idempotencia(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
         local_store = (Path(__file__).resolve().parents[3] / 'static/js/pdv_local_store.js').read_text(encoding='utf-8')
+        self.assertNotIn('local protegido', template)
+        self.assertIn("x-show=\"localStorePronto && localSaveState==='salvando'\"", template)
         self.assertIn("static 'js/pdv_local_store.js'", template)
         self.assertIn("await this.restaurarRascunhoLocal()", template)
         self.assertIn("this.agendarPersistenciaLocal();", template)
