@@ -36,7 +36,6 @@ from apps.financeiro.models.caixa_historico import DiaCaixaHistorico
 from apps.financeiro.services.caixa_historico_service import consultar_historico
 from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaService
 from apps.financeiro.services.receber_service import ContaReceberService
-from apps.financeiro.services.taxas_transacao_service import sincronizar_taxa_transacao
 from apps.financeiro.views.contas_bancarias import ContaBancariaListView, _usuario_admin
 from apps.financeiro.views.pagar import _contexto_meta_despesa_pessoal
 from apps.moda.models import PedidoProducao
@@ -236,18 +235,6 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 detalhe_forcado=(origem, int(registro_id)),
                 data_referencia_forcada=data_referencia,
             )
-        if acao == "excluir_pagamento_venda":
-            registro_id = request.POST.get("movimento_id")
-            motivo = (request.POST.get("justificativa") or "").strip()
-            if not str(registro_id).isdigit():
-                messages.error(request, "Entrada financeira invalida.")
-                return redirect(destino)
-            if not motivo:
-                messages.error(request, "Informe o motivo da exclusao.")
-                return redirect(destino)
-            self._excluir_pagamento_venda(request, filial, int(registro_id), motivo, auxiliar)
-            messages.success(request, "Pagamento da venda excluido da posicao diaria.")
-            return redirect(destino)
         if acao == "excluir_conta_receber":
             conta = get_object_or_404(ContaReceber.all_objects.for_filial(filial), pk=request.POST.get("conta_id"))
             motivo = (request.POST.get("motivo") or "").strip()
@@ -840,73 +827,6 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             auxiliar._atualizar_saldo_conta(conta_anterior)
         if not conta_anterior or conta_anterior.pk != nova_conta.pk:
             auxiliar._atualizar_saldo_conta(nova_conta)
-
-    @staticmethod
-    def _excluir_pagamento_venda(request, filial, registro_id, motivo, auxiliar):
-        """
-        So' exclui a ENTRADA financeira (o pagamento na posicao diaria) --
-        a venda em si, o estoque baixado e a nota fiscal continuam intactos.
-        Por isso e' um "excluido" no pagamento (status), nao um cancelamento
-        da venda: os dois fluxos ja existem no sistema com efeitos bem
-        diferentes, e misturar os dois aqui apagaria informacao fiscal e de
-        estoque que ninguem pediu pra apagar.
-        """
-        from apps.pdv.models import PagamentoVendaPDV
-
-        item = get_object_or_404(
-            PagamentoVendaPDV.objects.filter(venda_pdv__filial=filial),
-            pk=registro_id,
-        )
-        if item.status == "excluido":
-            messages.error(request, "Este pagamento ja foi excluido.")
-            return
-        conta_anterior = item.conta_bancaria or (
-            item.forma_pagamento.conta_bancaria_padrao if item.forma_pagamento_id else None
-        )
-        antes = snapshot_modelo(item, ["status"])
-        item.status = "excluido"
-        item.save(update_fields=["status"])
-        sincronizar_taxa_transacao(
-            origem="pdv",
-            origem_id=item.pk,
-            filial=item.venda_pdv.filial,
-            data=item.data_liquidacao_prevista,
-            valor=Decimal("0.00"),
-            forma_pagamento=item.forma_pagamento,
-            conta_bancaria=conta_anterior,
-        )
-
-        venda = item.venda_pdv
-        venda.valor_pago = sum(
-            (pagamento.valor_bruto_recebido for pagamento in venda.pagamentos.exclude(status="excluido")),
-            0,
-        )
-        venda.troco = sum(
-            (
-                pagamento.troco or Decimal("0.00")
-                for pagamento in venda.pagamentos.exclude(status="excluido")
-            ),
-            Decimal("0.00"),
-        )
-        venda.save(update_fields=["valor_pago", "troco", "updated_at"])
-
-        registrar_auditoria(
-            request=request,
-            modulo=RegistroAuditoria.Modulo.FINANCEIRO,
-            acao=RegistroAuditoria.Acao.EXCLUIR,
-            objeto=item,
-            relacionado=conta_anterior,
-            descricao=f"Pagamento da Venda #{venda.numero_venda} excluido da posicao diaria",
-            justificativa=motivo,
-            antes=antes,
-            depois=snapshot_modelo(item, ["status"]),
-            metadados={
-                "contas_envolvidas": [conta_anterior.pk] if conta_anterior else [],
-                "origem_movimento": "venda",
-            },
-        )
-        if conta_anterior:
-            auxiliar._atualizar_saldo_conta(conta_anterior)
 
     @staticmethod
     def _resolver_periodo(periodo, referencia, inicio_texto=None, fim_texto=None):
