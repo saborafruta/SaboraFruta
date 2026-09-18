@@ -157,7 +157,7 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertIn('if (!record.mobileReadonly)', script)
         self.assertIn("'Accept': 'application/json'", script)
         self.assertIn('readJsonResponse', script)
-        self.assertEqual(template.count('data-sidebar-dashboard'), 1)
+        self.assertEqual(template.count('data-sidebar-dashboard'), 2)  # link + regra de alinhamento
         self.assertIn('class="flex items-center gap-3 px-3 py-2.5', template)
         self.assertNotIn('sidebar-home-link.is-active', template)
         self.assertIn('.sidebar-home-label {', template)
@@ -180,6 +180,9 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertIn('link.appendChild(favoriteIcon(record))', script)
         self.assertIn('.sidebar-favorites-list[hidden]', template)
         self.assertIn('.sidebar-favorites-chevron', template)
+        self.assertIn('.sidebar-favorites-panel.is-collapsed {', template)
+        self.assertIn('border: 1px solid rgba(245, 158, 11, 0.28);', template)
+        self.assertIn('background: rgba(245, 158, 11, 0.08);', template)
 
     def test_sanfonas_restauram_estado_expandido_e_visual_simples(self):
         raiz = Path(__file__).resolve().parents[1]
@@ -208,6 +211,18 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertIn('data-sidebar-dashboard\n         class="flex items-center', navegacao)
         self.assertIn('.sidebar-module-button > .sidebar-module-label', sidebar)
         self.assertIn('.sidebar-module-icon {', sidebar)
+        self.assertIn('gap: 12px;', sidebar)
+        self.assertIn(
+            'aside nav > a[data-sidebar-dashboard] > svg:first-child',
+            sidebar,
+        )
+        dashboard_icon_rule = sidebar.split(
+            'aside nav > a[data-sidebar-dashboard] > svg:first-child {', 1
+        )[1].split('}', 1)[0]
+        self.assertIn('width: 18px !important;', dashboard_icon_rule)
+        self.assertIn('padding: 0;', dashboard_icon_rule)
+        self.assertIn('background: transparent !important;', dashboard_icon_rule)
+        self.assertIn('box-shadow: none !important;', dashboard_icon_rule)
         self.assertEqual(
             sidebar.count('include "core/_sidebar_module_icon.html"'),
             8,
@@ -223,6 +238,19 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertIn('font-family: Inter, ui-sans-serif, system-ui, sans-serif !important;', sidebar)
         self.assertIn('font-size: 13px !important;', sidebar)
         self.assertIn('font-weight: 600 !important;', sidebar)
+        for base_relativo in (
+            Path('..') / 'templates' / '_base.html',
+            Path('..') / '..' / 'templates' / '_base.html',
+        ):
+            base = (raiz / base_relativo).resolve().read_text(encoding='utf-8')
+            regra_tema_claro = base.split(
+                'body.tema-claro .sidebar-section-label {', 1
+            )[1].split('}', 1)[0]
+            self.assertIn('color: #2563eb !important;', regra_tema_claro)
+            self.assertNotIn('font-family:', regra_tema_claro)
+            self.assertNotIn('font-size:', regra_tema_claro)
+            self.assertNotIn('font-weight:', regra_tema_claro)
+            self.assertNotIn('letter-spacing:', regra_tema_claro)
         self.assertNotIn('repeating-linear-gradient(135deg', sidebar)
         self.assertNotIn('.sidebar-module-button:hover', sidebar)
 
