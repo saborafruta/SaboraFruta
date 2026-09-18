@@ -1,7 +1,9 @@
 import json
+from datetime import timedelta
 
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.pdv.models import EventoInstalacaoPDVOffline, InstalacaoPDVOffline
@@ -69,6 +71,53 @@ class InstalacaoOfflineTests(TestCase):
 
         status = self.post_api("status", recuperacao_configurada=True)
         self.assertEqual(status.json()["status"], "ativa")
+
+    def test_heartbeat_atualiza_monitoramento_sem_receber_conteudo_da_venda(self):
+        self.post_api("activate", recuperacao_configurada=True)
+        catalogo_em = timezone.now() - timedelta(hours=2)
+        ultima_sync = timezone.now() - timedelta(minutes=3)
+        ultimo_backup = timezone.now() - timedelta(minutes=1)
+
+        response = self.post_api(
+            "status",
+            recuperacao_configurada=True,
+            fila_pendente_quantidade=3,
+            fila_erro_quantidade=1,
+            catalogo_atualizado_em=catalogo_em.isoformat(),
+            ultima_sincronizacao_em=ultima_sync.isoformat(),
+            ultimo_backup_em=ultimo_backup.isoformat(),
+            ultimo_erro_sincronizacao="Estoque insuficiente",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        instalacao = InstalacaoPDVOffline.objects.get()
+        self.assertEqual(instalacao.fila_pendente_quantidade, 3)
+        self.assertEqual(instalacao.fila_erro_quantidade, 1)
+        self.assertEqual(instalacao.ultimo_erro_sincronizacao, "Estoque insuficiente")
+        self.assertAlmostEqual(instalacao.catalogo_atualizado_em, catalogo_em, delta=timedelta(seconds=1))
+        self.assertAlmostEqual(instalacao.ultima_sincronizacao_em, ultima_sync, delta=timedelta(seconds=1))
+        self.assertAlmostEqual(instalacao.ultimo_backup_em, ultimo_backup, delta=timedelta(seconds=1))
+
+        self.client.force_login(self.superuser)
+        painel = self.client.get(reverse("core:admin_instalacoes_pdv_offline"), {"pendencias": "1"})
+        self.assertContains(painel, "3 aguardando")
+        self.assertContains(painel, "1 com erro")
+        self.assertContains(painel, "Estoque insuficiente")
+
+    def test_heartbeat_registra_pdv_sem_ativar_protecao_offline(self):
+        response = self.post_api(
+            "heartbeat",
+            fila_pendente_quantidade=2,
+            ultimo_erro_sincronizacao="Sem conexão.",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        instalacao = InstalacaoPDVOffline.objects.get()
+        self.assertEqual(instalacao.status, InstalacaoPDVOffline.Status.INATIVA)
+        self.assertFalse(instalacao.recuperacao_configurada)
+        self.assertEqual(instalacao.fila_pendente_quantidade, 2)
+        self.assertEqual(instalacao.ultimo_erro_sincronizacao, "Sem conexão.")
+        self.assertFalse(EventoInstalacaoPDVOffline.objects.exists())
 
     def test_superusuario_libera_novo_pin_e_operador_reativa(self):
         self.post_api("activate", recuperacao_configurada=True)

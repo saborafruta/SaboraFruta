@@ -244,13 +244,33 @@ Se houver internet, um superusuário acessa `Central Administrativa > PDVs offli
 
 O painel registra dispositivo, filial, operador, caixa, último contato, revisão, responsável e motivo. Não existe senha mestra universal e o suporte nunca consegue visualizar o PIN antigo. Uma máquina formatada recebe outro `installation_id`; o registro antigo deve ser revogado no painel para manter o inventário limpo.
 
+### Backup emergencial e monitoramento
+
+O PDV conectado e o casco offline permitem exportar fila e carrinho local para um arquivo `.ited-pdv`. O conteúdo usa AES-GCM com chave derivada por PBKDF2-SHA-256 (310.000 iterações) a partir de uma senha de no mínimo oito caracteres. A senha não acompanha o arquivo, não é armazenada e não pode ser recuperada pelo suporte.
+
+A importação valida a autenticação do arquivo, limita o tamanho a 15 MB e aceita o conteúdo somente no mesmo usuário e filial. As vendas preservam o `local_id`, portanto uma importação ou reenvio repetido continua protegido pela idempotência do servidor. Registros já existentes são ignorados, e um carrinho importado não substitui outro carrinho local em andamento.
+
+O painel `Central Administrativa > PDVs offline` recebe apenas metadados operacionais quando o caixa está conectado:
+
+- quantidade de vendas aguardando e com erro;
+- última mensagem de erro;
+- horário do catálogo local;
+- última sincronização concluída;
+- último backup exportado;
+- último contato da instalação.
+
+O servidor não recebe produtos, pagamentos ou conteúdo das vendas para formar esse painel. Durante uma queda completa de internet, os números permanecem no último estado conhecido e são atualizados quando o caixa reconectar.
+
+O heartbeat também registra navegadores que abriram o PDV sem ativar a proteção offline. Eles aparecem como inativos e sem código emergencial; assim, um caixa esquecido na implantação não fica invisível para o suporte. Após formatação, o navegador gera outra instalação: a nova aparece sem proteção e a antiga passa a acusar contato atrasado até ser revogada.
+
 ### Fase 4 — operação e auditoria (parcialmente implementada)
 
 - painel administrativo global de instalações/caixas (implementado);
 - liberação online de novo PIN e revogação de instalação perdida ou formatada (implementado);
 - código emergencial local, de uso único, com rotação obrigatória (implementado);
-- exportação de emergência da fila local;
-- alerta central de vendas presas ou catálogo vencido;
+- exportação e importação criptografada da fila/carrinho local (implementado);
+- painel central de vendas presas, erros, catálogo e último contato (implementado);
+- notificações proativas para vendas presas ou catálogo vencido;
 - relatório de testes de contingência por filial;
 - trilha de auditoria de tentativas e reconciliações.
 

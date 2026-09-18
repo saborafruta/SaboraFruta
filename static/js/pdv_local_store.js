@@ -74,6 +74,24 @@
     );
   }
 
+  async function deriveBackupKey(password, salt) {
+    if (!global.crypto?.subtle) throw new Error('Criptografia local indisponivel neste navegador.');
+    const material = await global.crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(String(password)),
+      'PBKDF2',
+      false,
+      ['deriveKey'],
+    );
+    return global.crypto.subtle.deriveKey(
+      {name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256'},
+      material,
+      {name: 'AES-GCM', length: 256},
+      false,
+      ['encrypt', 'decrypt'],
+    );
+  }
+
   class PDVLocalStore {
     constructor(options) {
       this.filialId = String(options.filialId);
@@ -197,6 +215,126 @@
     async deleteQueuedSale(localId) {
       const current = await this._get(QUEUE_STORE, localId);
       if (current?.scope === this.scope) await this._delete(QUEUE_STORE, localId, true);
+    }
+
+    async operationalSummary() {
+      const queue = await this.listQueuedSales();
+      const snapshot = await this.loadSnapshot();
+      const errors = queue.filter(item => item.status === 'erro');
+      const latestError = queue.slice().reverse().find(item => item.last_error);
+      return {
+        fila_pendente_quantidade: queue.length,
+        fila_erro_quantidade: errors.length,
+        catalogo_atualizado_em: snapshot?.catalogo_em || snapshot?.gerado_em || null,
+        ultimo_erro_sincronizacao: String(latestError?.last_error || '').slice(0, 1000),
+        ultima_sincronizacao_em: await this._getMeta('ultima_sincronizacao_em'),
+        ultimo_backup_em: await this._getMeta('ultimo_backup_em'),
+      };
+    }
+
+    async markQueueSynchronized() {
+      const value = new Date().toISOString();
+      await this._put(META_STORE, {key: 'ultima_sincronizacao_em', value}, true);
+      return value;
+    }
+
+    async exportEmergencyBackup(password) {
+      if (String(password || '').length < 8) {
+        throw new Error('Crie uma senha de backup com pelo menos 8 caracteres.');
+      }
+      const queue = await this.listQueuedSales();
+      const draft = await this.loadDraft();
+      if (!queue.length && !draft) throw new Error('Nao ha vendas ou carrinho local para exportar.');
+      const payload = {
+        format: 'ited-pdv-emergency-backup',
+        version: 1,
+        created_at: new Date().toISOString(),
+        scope: this.scope,
+        filial_id: this.filialId,
+        usuario_id: this.usuarioId,
+        source_installation_id: this.installationId,
+        queued_sales: queue,
+        draft,
+      };
+      const salt = global.crypto.getRandomValues(new Uint8Array(16));
+      const iv = global.crypto.getRandomValues(new Uint8Array(12));
+      const key = await deriveBackupKey(password, salt);
+      const aad = new TextEncoder().encode('ited-pdv-emergency-backup:v1');
+      const encrypted = new Uint8Array(await global.crypto.subtle.encrypt(
+        {name: 'AES-GCM', iv, additionalData: aad},
+        key,
+        new TextEncoder().encode(JSON.stringify(payload)),
+      ));
+      const exportedAt = new Date().toISOString();
+      await this._put(META_STORE, {key: 'ultimo_backup_em', value: exportedAt}, true);
+      return JSON.stringify({
+        format: 'ited-pdv-emergency-backup',
+        version: 1,
+        kdf: {name: 'PBKDF2', hash: 'SHA-256', iterations: 310000},
+        cipher: 'AES-GCM-256',
+        salt: bytesToBase64(salt),
+        iv: bytesToBase64(iv),
+        ciphertext: bytesToBase64(encrypted),
+      });
+    }
+
+    async importEmergencyBackup(fileText, password) {
+      if (String(password || '').length < 8) throw new Error('Informe a senha usada ao exportar o backup.');
+      if (String(fileText || '').length > 15 * 1024 * 1024) throw new Error('Arquivo de backup maior que o limite de 15 MB.');
+      let envelope;
+      try { envelope = JSON.parse(String(fileText || '')); }
+      catch (_) { throw new Error('Arquivo de backup invalido.'); }
+      if (envelope?.format !== 'ited-pdv-emergency-backup' || Number(envelope?.version) !== 1) {
+        throw new Error('Formato de backup nao reconhecido.');
+      }
+      let payload;
+      try {
+        const salt = base64ToBytes(envelope.salt);
+        const iv = base64ToBytes(envelope.iv);
+        const key = await deriveBackupKey(password, salt);
+        const clear = await global.crypto.subtle.decrypt(
+          {name: 'AES-GCM', iv, additionalData: new TextEncoder().encode('ited-pdv-emergency-backup:v1')},
+          key,
+          base64ToBytes(envelope.ciphertext),
+        );
+        payload = JSON.parse(new TextDecoder().decode(clear));
+      } catch (_) {
+        throw new Error('Senha incorreta ou arquivo de backup corrompido.');
+      }
+      if (payload?.format !== 'ited-pdv-emergency-backup' || Number(payload?.version) !== 1) {
+        throw new Error('Conteudo do backup invalido.');
+      }
+      if (String(payload.filial_id) !== this.filialId || String(payload.usuario_id) !== this.usuarioId || payload.scope !== this.scope) {
+        throw new Error('Este backup pertence a outro usuario ou filial.');
+      }
+      const imported = {queued: 0, skipped: 0, draft: false};
+      const queuedSales = Array.isArray(payload.queued_sales) ? payload.queued_sales.slice(0, 1000) : [];
+      for (const source of queuedSales) {
+        const localId = String(source?.local_id || '');
+        if (!/^pdv[a-f0-9]{32}$/.test(localId)) { imported.skipped += 1; continue; }
+        if (await this._get(QUEUE_STORE, localId)) { imported.skipped += 1; continue; }
+        await this.enqueueSale({
+          ...clonePlain(source),
+          local_id: localId,
+          endpoint: '/pdv/api/venda/finalizar/',
+          status: source.status === 'erro' ? 'erro' : 'pendente',
+          imported_at: new Date().toISOString(),
+          source_installation_id: String(payload.source_installation_id || ''),
+        });
+        imported.queued += 1;
+      }
+      const currentDraft = await this.loadDraft();
+      if (!currentDraft && payload.draft?.venda) {
+        const draft = clonePlain(payload.draft);
+        delete draft.scope;
+        delete draft.filial_id;
+        delete draft.usuario_id;
+        delete draft.installation_id;
+        await this.saveDraft({...draft, imported_at: new Date().toISOString()});
+        imported.draft = true;
+      }
+      await this._put(META_STORE, {key: 'ultimo_backup_importado_em', value: new Date().toISOString()}, true);
+      return imported;
     }
 
     async configureOfflineAccess(pin, profile) {

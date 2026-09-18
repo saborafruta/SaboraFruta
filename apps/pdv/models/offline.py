@@ -1,5 +1,6 @@
 """Registro central das autorizações locais do PDV."""
 from django.db import models
+from django.utils import timezone
 
 
 class InstalacaoPDVOffline(models.Model):
@@ -24,6 +25,12 @@ class InstalacaoPDVOffline(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ATIVA, db_index=True)
     revisao = models.PositiveIntegerField(default=1)
     recuperacao_configurada = models.BooleanField(default=False)
+    fila_pendente_quantidade = models.PositiveIntegerField(default=0)
+    fila_erro_quantidade = models.PositiveIntegerField(default=0)
+    catalogo_atualizado_em = models.DateTimeField(null=True, blank=True)
+    ultima_sincronizacao_em = models.DateTimeField(null=True, blank=True)
+    ultimo_backup_em = models.DateTimeField(null=True, blank=True)
+    ultimo_erro_sincronizacao = models.TextField(blank=True)
     autorizado_em = models.DateTimeField(auto_now_add=True)
     visto_por_ultimo_em = models.DateTimeField(auto_now=True, db_index=True)
     revogado_em = models.DateTimeField(null=True, blank=True)
@@ -42,10 +49,21 @@ class InstalacaoPDVOffline(models.Model):
         ]
         indexes = [
             models.Index(fields=["status", "-visto_por_ultimo_em"], name="pdv_off_status_visto_idx"),
+            models.Index(fields=["fila_pendente_quantidade", "-visto_por_ultimo_em"], name="pdv_off_fila_visto_idx"),
         ]
 
     def __str__(self):
         return f"{self.nome_dispositivo} - {self.filial_nome} - {self.usuario_nome}"
+
+    @property
+    def catalogo_vencido(self):
+        if not self.catalogo_atualizado_em:
+            return True
+        return self.catalogo_atualizado_em < timezone.now() - timezone.timedelta(hours=12)
+
+    @property
+    def contato_atrasado(self):
+        return self.visto_por_ultimo_em < timezone.now() - timezone.timedelta(minutes=10)
 
 
 class EventoInstalacaoPDVOffline(models.Model):

@@ -15,7 +15,14 @@
     </div>
   </section>
 
-  <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-[1fr_220px_auto] gap-3 items-end">
+  <section class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4"><div class="text-xs text-slate-500">Instalações</div><div class="text-2xl font-bold mt-1">{{ total_instalacoes_offline }}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500">Vendas aguardando</div><div class="text-2xl font-bold mt-1 {% if total_vendas_pendentes %}text-amber-600{% endif %}">{{ total_vendas_pendentes }}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500">Vendas com erro</div><div class="text-2xl font-bold mt-1 {% if total_vendas_com_erro %}text-red-600{% endif %}">{{ total_vendas_com_erro }}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500">Sem código emergencial</div><div class="text-2xl font-bold mt-1 {% if instalacoes_sem_recuperacao %}text-amber-600{% endif %}">{{ instalacoes_sem_recuperacao }}</div></div>
+  </section>
+
+  <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-[1fr_220px_auto_auto] gap-3 items-end">
     <label class="block">
       <span class="block text-xs font-bold mb-1">Buscar</span>
       <input class="form-input" type="search" name="q" value="{{ busca }}" placeholder="Filial, operador, caixa ou instalação">
@@ -26,6 +33,10 @@
         <option value="">Todos</option>
         {% for valor, rotulo in status_choices %}<option value="{{ valor }}" {% if status_filtro == valor %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
       </select>
+    </label>
+    <label class="flex items-center gap-2 h-11 px-3 rounded-lg border border-slate-300 text-sm font-bold">
+      <input type="checkbox" name="pendencias" value="1" {% if somente_pendencias %}checked{% endif %}>
+      Só com pendências
     </label>
     <button class="btn-primary" type="submit">Filtrar</button>
   </form>
@@ -50,6 +61,14 @@
             <div class="mt-2 text-sm text-slate-500 space-y-1">
               <p><strong>{{ instalacao.filial_nome }}</strong> · {{ instalacao.usuario_nome }}{% if instalacao.usuario_login %} ({{ instalacao.usuario_login }}){% endif %}</p>
               <p>{{ instalacao.caixa_descricao|default:"Caixa não informado" }} · último contato {{ instalacao.visto_por_ultimo_em|date:"d/m/Y H:i" }}</p>
+              <div class="flex flex-wrap gap-2 py-1">
+                {% if instalacao.fila_pendente_quantidade %}<span class="soft-pill is-amber">{{ instalacao.fila_pendente_quantidade }} aguardando</span>{% endif %}
+                {% if instalacao.fila_erro_quantidade %}<span class="soft-pill is-red">{{ instalacao.fila_erro_quantidade }} com erro</span>{% endif %}
+                {% if instalacao.catalogo_vencido %}<span class="soft-pill is-red">Catálogo vencido/sem informação</span>{% else %}<span class="soft-pill is-green">Catálogo {{ instalacao.catalogo_atualizado_em|timesince }}</span>{% endif %}
+                {% if instalacao.contato_atrasado %}<span class="soft-pill is-slate">Sem contato há {{ instalacao.visto_por_ultimo_em|timesince }}</span>{% endif %}
+              </div>
+              {% if instalacao.ultimo_erro_sincronizacao %}<p class="text-red-600"><strong>Erro:</strong> {{ instalacao.ultimo_erro_sincronizacao }}</p>{% endif %}
+              <p>Última sincronização: {{ instalacao.ultima_sincronizacao_em|date:"d/m/Y H:i"|default:"não informada" }} · último backup: {{ instalacao.ultimo_backup_em|date:"d/m/Y H:i"|default:"não informado" }}</p>
               <p>Código emergencial: {% if instalacao.recuperacao_configurada %}configurado{% else %}<strong class="text-amber-600">não configurado</strong>{% endif %}</p>
               <p class="font-mono text-xs break-all">{{ instalacao.installation_id }} · revisão {{ instalacao.revisao }}</p>
               {% if instalacao.motivo_revogacao %}<p class="text-amber-600">Última ação: {{ instalacao.motivo_revogacao }} — {{ instalacao.revogado_por_nome }}</p>{% endif %}
@@ -78,9 +97,9 @@
 
   {% if instalacoes.paginator.num_pages > 1 %}
     <nav class="flex justify-center gap-2">
-      {% if instalacoes.has_previous %}<a class="btn-secondary" href="?q={{ busca|urlencode }}&status={{ status_filtro|urlencode }}&page={{ instalacoes.previous_page_number }}">Anterior</a>{% endif %}
+      {% if instalacoes.has_previous %}<a class="btn-secondary" href="?q={{ busca|urlencode }}&status={{ status_filtro|urlencode }}&pendencias={% if somente_pendencias %}1{% endif %}&page={{ instalacoes.previous_page_number }}">Anterior</a>{% endif %}
       <span class="px-4 py-2">{{ instalacoes.number }} / {{ instalacoes.paginator.num_pages }}</span>
-      {% if instalacoes.has_next %}<a class="btn-secondary" href="?q={{ busca|urlencode }}&status={{ status_filtro|urlencode }}&page={{ instalacoes.next_page_number }}">Próxima</a>{% endif %}
+      {% if instalacoes.has_next %}<a class="btn-secondary" href="?q={{ busca|urlencode }}&status={{ status_filtro|urlencode }}&pendencias={% if somente_pendencias %}1{% endif %}&page={{ instalacoes.next_page_number }}">Próxima</a>{% endif %}
     </nav>
   {% endif %}
 </div>

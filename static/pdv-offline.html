@@ -14,6 +14,7 @@
     .layout{display:grid;grid-template-columns:minmax(250px,340px) minmax(320px,1fr) minmax(280px,360px);height:calc(100vh - 58px)}.pane{padding:14px;border-right:1px solid var(--bd);overflow:auto}.pane:last-child{border-right:0}.search{width:100%;padding:12px;border:1px solid var(--bd);border-radius:9px;background:#11141a;color:var(--text);outline:none}.search:focus{border-color:#3b82f6}.list{display:grid;gap:8px;margin-top:12px}.card{width:100%;text-align:left;padding:11px;border:1px solid var(--bd);border-radius:10px;background:var(--panel);color:var(--text)}.card:hover{border-color:#3b82f6}.desc{font-weight:750}.sub{font-size:11px;color:var(--muted);margin-top:4px}.price{color:#60a5fa;font-weight:850;margin-top:5px}
     h2{font-size:14px;margin:0 0 12px}.empty{color:#71717a;text-align:center;padding:54px 16px}.line{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid var(--bd)}.qty{display:flex;align-items:center;gap:8px}.qty button,.remove{border:1px solid var(--bd);background:var(--panel2);color:var(--text);border-radius:7px;width:30px;height:30px}.remove{color:#f87171}.totals{margin-top:14px;padding-top:12px;border-top:1px solid var(--bd);display:grid;gap:7px}.total-row{display:flex;justify-content:space-between}.total-row.main{font-size:18px;font-weight:850}.payments{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.pay{padding:11px 8px;border:1px solid var(--bd);border-radius:9px;background:var(--panel);color:var(--text)}.pay:disabled{opacity:.35;cursor:not-allowed}.queue{font-size:12px;color:var(--yellow);margin:10px 0}.finish{width:100%;padding:14px;border:0;border-radius:10px;background:var(--blue);color:#fff;font-weight:850;margin-top:14px}.finish:disabled{opacity:.35;cursor:not-allowed}.secondary{padding:9px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--panel2);color:var(--text)}.notice{padding:10px 12px;border:1px solid #854d0e;border-radius:9px;background:#42200655;color:#fde68a;font-size:12px;line-height:1.45;margin-bottom:12px}
     .lock{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(circle at top,#1e293b,#101116 55%)}.lock-card{width:min(460px,100%);padding:25px;border:1px solid var(--bd);border-radius:16px;background:#171a21;box-shadow:0 24px 70px #0008}.lock h1{font-size:22px;margin:0 0 8px}.lock p{color:var(--muted);line-height:1.5}.profiles{display:grid;gap:8px;margin:16px 0}.profile{width:100%;padding:12px;text-align:left;border:1px solid var(--bd);border-radius:9px;background:var(--panel2);color:var(--text)}.profile.selected{border-color:#3b82f6;background:#172554}.pin{width:100%;padding:13px;text-align:center;letter-spacing:.35em;border:1px solid var(--bd);border-radius:9px;background:#0f1116;color:#fff;font-size:20px}.unlock{width:100%;margin-top:10px;padding:12px;border:0;border-radius:9px;background:var(--blue);color:#fff;font-weight:800}.link-button{width:100%;padding:9px;border:0;background:transparent;color:#93c5fd}.recovery{margin-top:12px;padding:14px;border:1px solid #854d0e;border-radius:10px;background:#42200633}.recovery input{width:100%;margin-top:8px;padding:11px;border:1px solid var(--bd);border-radius:8px;background:#0f1116;color:#fff}.recovery-code{padding:10px;border:1px dashed #eab308;border-radius:8px;color:#fde047;text-align:center;font:800 16px ui-monospace,monospace;letter-spacing:.08em}.error{color:#f87171;font-size:12px;min-height:18px;margin-top:8px}.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);padding:11px 16px;border-radius:9px;background:#272b35;border:1px solid var(--bd);box-shadow:0 12px 35px #0008;z-index:20}.age{font-size:11px;color:var(--muted)}
+    .backup-box{margin-top:14px;padding:12px;border:1px solid var(--bd);border-radius:10px;background:var(--panel)}.backup-box summary{cursor:pointer;font-weight:800}.backup-box input{width:100%;margin-top:8px;padding:10px;border:1px solid var(--bd);border-radius:8px;background:#0f1116;color:#fff}.backup-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.file-button{display:flex;align-items:center;justify-content:center;padding:9px;border:1px solid var(--bd);border-radius:8px;background:var(--panel2);color:var(--text);font-size:12px;font-weight:750;cursor:pointer}.file-name{margin-top:7px;color:var(--muted);font-size:11px;overflow-wrap:anywhere}
     @keyframes pulse{50%{opacity:.28;transform:scale(.75)}}@media(prefers-reduced-motion:reduce){.dot{animation:none}}@media(max-width:900px){.layout{grid-template-columns:1fr;height:auto}.pane{border-right:0;border-bottom:1px solid var(--bd);max-height:none}.context{display:none}}
   </style>
 </head>
@@ -78,11 +79,23 @@
         <div id="queue" class="queue"></div>
         <button id="finish" class="finish" type="button" disabled>Salvar venda na fila offline</button>
         <button id="clear" class="secondary" type="button" style="width:100%;margin-top:8px">Limpar carrinho</button>
+        <details class="backup-box">
+          <summary>Backup emergencial</summary>
+          <p class="age">Proteja fila e carrinho em um arquivo criptografado. Guarde a senha separadamente.</p>
+          <input id="backup-password" type="password" autocomplete="new-password" placeholder="Senha do backup (mín. 8)">
+          <input id="backup-confirm" type="password" autocomplete="new-password" placeholder="Repita para exportar">
+          <div class="backup-actions">
+            <button id="export-backup" class="secondary" type="button">Exportar</button>
+            <label class="file-button">Selecionar arquivo<input id="backup-file" type="file" accept=".ited-pdv,application/json" hidden></label>
+          </div>
+          <div id="backup-file-name" class="file-name"></div>
+          <button id="import-backup" class="secondary hidden" style="width:100%;margin-top:8px" type="button">Importar neste perfil</button>
+        </details>
       </aside>
     </div>
   </main>
   <div id="toast" class="toast hidden" role="status"></div>
-  <script src="/static/js/pdv_local_store.js?v=20260918-2"></script>
-  <script src="/static/js/pdv_offline_app.js?v=20260918-2"></script>
+  <script src="/static/js/pdv_local_store.js?v=20260918-3"></script>
+  <script src="/static/js/pdv_offline_app.js?v=20260918-3"></script>
 </body>
 </html>

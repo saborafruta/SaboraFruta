@@ -13,6 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.core.paginator import Paginator
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.views.decorators.debug import sensitive_variables
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
@@ -137,6 +138,25 @@ def _usuario_e_admin(request) -> bool:
     usuario = request.user
     perfil = getattr(usuario, "_perfil_ativo", None) or getattr(usuario, "perfil", None)
     return bool(usuario.is_superuser or (perfil and perfil.is_admin))
+
+
+def _data_cliente_segura(value):
+    if not value:
+        return None
+    try:
+        parsed = parse_datetime(str(value))
+        if parsed and timezone.is_naive(parsed):
+            parsed = timezone.make_aware(parsed, datetime.timezone.utc)
+        return parsed
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _quantidade_cliente_segura(value, limite=100000):
+    try:
+        return max(0, min(int(value or 0), limite))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _data_venda_retroativa(request, body):
@@ -1287,7 +1307,7 @@ def api_instalacao_offline(request):
     if not re.fullmatch(r"inst[a-f0-9]{32}", installation_id):
         return JsonResponse({"erro": "Identificador da instalacao invalido."}, status=400)
     action = str(body.get("action") or "status").strip().lower()
-    if action not in {"status", "activate", "deactivate"}:
+    if action not in {"status", "heartbeat", "activate", "deactivate"}:
         return JsonResponse({"erro": "Acao invalida."}, status=400)
 
     filial = request.filial_ativa
@@ -1322,10 +1342,64 @@ def api_instalacao_offline(request):
         instalacao.usuario_login = request.user.email
         instalacao.user_agent = request.META.get("HTTP_USER_AGENT", "")[:1000]
         instalacao.recuperacao_configurada = bool(body.get("recuperacao_configurada"))
+        instalacao.fila_pendente_quantidade = _quantidade_cliente_segura(body.get("fila_pendente_quantidade"))
+        instalacao.fila_erro_quantidade = _quantidade_cliente_segura(body.get("fila_erro_quantidade"))
+        instalacao.catalogo_atualizado_em = _data_cliente_segura(body.get("catalogo_atualizado_em"))
+        instalacao.ultima_sincronizacao_em = _data_cliente_segura(body.get("ultima_sincronizacao_em"))
+        instalacao.ultimo_backup_em = _data_cliente_segura(body.get("ultimo_backup_em"))
+        instalacao.ultimo_erro_sincronizacao = str(body.get("ultimo_erro_sincronizacao") or "")[:1000]
         instalacao.save(using="default", update_fields=[
             "filial_nome", "usuario_nome", "usuario_login", "user_agent",
-            "recuperacao_configurada", "visto_por_ultimo_em",
+            "recuperacao_configurada", "fila_pendente_quantidade",
+            "fila_erro_quantidade", "catalogo_atualizado_em",
+            "ultima_sincronizacao_em", "ultimo_backup_em",
+            "ultimo_erro_sincronizacao", "visto_por_ultimo_em",
         ])
+        return JsonResponse({
+            "status": instalacao.status,
+            "revisao": instalacao.revisao,
+            "nome_dispositivo": instalacao.nome_dispositivo,
+        })
+
+    if action == "heartbeat":
+        sessao = _sessao_aberta(request)
+        caixa = getattr(sessao, "caixa", None) if sessao else None
+        nome_dispositivo = str(body.get("nome_dispositivo") or "").strip()[:120]
+        if not nome_dispositivo:
+            nome_dispositivo = f"Caixa {getattr(caixa, 'numero', '') or 'PDV'}"
+        campos = {
+            "empresa_id_origem": filial.empresa_id,
+            "filial_nome": filial.nome_fantasia or filial.razao_social,
+            "usuario_nome": getattr(request.user, "nome", "") or request.user.email,
+            "usuario_login": request.user.email,
+            "nome_dispositivo": nome_dispositivo,
+            "caixa_id_origem": getattr(caixa, "pk", None),
+            "caixa_descricao": (
+                f"Caixa {caixa.numero}" + (f" - {caixa.descricao}" if caixa.descricao else "")
+                if caixa else ""
+            ),
+            "user_agent": request.META.get("HTTP_USER_AGENT", "")[:1000],
+            "fila_pendente_quantidade": _quantidade_cliente_segura(body.get("fila_pendente_quantidade")),
+            "fila_erro_quantidade": _quantidade_cliente_segura(body.get("fila_erro_quantidade")),
+            "catalogo_atualizado_em": _data_cliente_segura(body.get("catalogo_atualizado_em")),
+            "ultima_sincronizacao_em": _data_cliente_segura(body.get("ultima_sincronizacao_em")),
+            "ultimo_backup_em": _data_cliente_segura(body.get("ultimo_backup_em")),
+            "ultimo_erro_sincronizacao": str(body.get("ultimo_erro_sincronizacao") or "")[:1000],
+        }
+        if instalacao:
+            for field, value in campos.items():
+                setattr(instalacao, field, value)
+            instalacao.recuperacao_configurada = bool(body.get("recuperacao_configurada"))
+            instalacao.save(using="default", update_fields=[
+                *campos.keys(), "recuperacao_configurada", "visto_por_ultimo_em",
+            ])
+        else:
+            instalacao = InstalacaoPDVOffline.objects.using("default").create(
+                **lookup,
+                **campos,
+                status=InstalacaoPDVOffline.Status.INATIVA,
+                recuperacao_configurada=False,
+            )
         return JsonResponse({
             "status": instalacao.status,
             "revisao": instalacao.revisao,
@@ -1358,6 +1432,12 @@ def api_instalacao_offline(request):
         "user_agent": request.META.get("HTTP_USER_AGENT", "")[:1000],
         "status": InstalacaoPDVOffline.Status.ATIVA,
         "recuperacao_configurada": bool(body.get("recuperacao_configurada")),
+        "fila_pendente_quantidade": _quantidade_cliente_segura(body.get("fila_pendente_quantidade")),
+        "fila_erro_quantidade": _quantidade_cliente_segura(body.get("fila_erro_quantidade")),
+        "catalogo_atualizado_em": _data_cliente_segura(body.get("catalogo_atualizado_em")),
+        "ultima_sincronizacao_em": _data_cliente_segura(body.get("ultima_sincronizacao_em")),
+        "ultimo_backup_em": _data_cliente_segura(body.get("ultimo_backup_em")),
+        "ultimo_erro_sincronizacao": str(body.get("ultimo_erro_sincronizacao") or "")[:1000],
         "revogado_em": None,
         "revogado_por_id": None,
         "revogado_por_nome": "",

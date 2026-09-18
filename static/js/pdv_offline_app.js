@@ -3,7 +3,7 @@
 
   const MAX_CATALOG_AGE = 12 * 60 * 60 * 1000;
   const blockedPaymentTypes = ['boleto', 'vale', 'cashback', 'crediario', 'convenio'];
-  const state = {profiles: [], selectedScope: '', profile: null, store: null, snapshot: null, sale: null, draftMode: 'venda', query: ''};
+  const state = {profiles: [], selectedScope: '', profile: null, store: null, snapshot: null, sale: null, draftMode: 'venda', query: '', backupFile: null};
   const el = id => document.getElementById(id);
   const money = value => Number(value || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
   const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
@@ -309,6 +309,56 @@
     recalculate(); renderAll();
   }
 
+  async function exportBackup() {
+    const password = el('backup-password').value;
+    if (password !== el('backup-confirm').value) return toast('As senhas do backup não são iguais.');
+    try {
+      await persistDraft();
+      const content = await state.store.exportEmergencyBackup(password);
+      const url = URL.createObjectURL(new Blob([content], {type: 'application/json;charset=utf-8'}));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `backup-pdv-${new Date().toISOString().replace(/[:.]/g, '-')}.ited-pdv`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      el('backup-password').value = el('backup-confirm').value = '';
+      toast('Backup criptografado criado. Guarde o arquivo e a senha separados.');
+    } catch (error) {
+      toast(error.message || 'Não foi possível exportar o backup.');
+    }
+  }
+
+  function selectBackup(event) {
+    state.backupFile = event.target.files?.[0] || null;
+    el('backup-file-name').textContent = state.backupFile?.name || '';
+    el('import-backup').classList.toggle('hidden', !state.backupFile);
+  }
+
+  async function importBackup() {
+    if (!state.backupFile) return;
+    if (state.backupFile.size > 15 * 1024 * 1024) return toast('O arquivo ultrapassa o limite de 15 MB.');
+    try {
+      const result = await state.store.importEmergencyBackup(
+        await state.backupFile.text(), el('backup-password').value,
+      );
+      state.backupFile = null;
+      el('backup-file').value = '';
+      el('backup-file-name').textContent = '';
+      el('import-backup').classList.add('hidden');
+      el('backup-password').value = el('backup-confirm').value = '';
+      const draft = await state.store.loadDraft();
+      if (result.draft && !state.sale.itens.length && !state.sale.pagamentos.length && draft?.venda) {
+        state.sale = draft.venda;
+        state.draftMode = draft.modo || 'venda';
+        recalculate();
+      }
+      renderAll();
+      toast(`${result.queued} venda(s) importada(s), ${result.skipped} ignorada(s).`);
+    } catch (error) {
+      toast(error.message || 'Não foi possível importar o backup.');
+    }
+  }
+
   function tryOnline() { window.location.href = '/pdv/'; }
 
   el('unlock').addEventListener('click', unlock);
@@ -324,6 +374,9 @@
   });
   el('finish').addEventListener('click', finishSale);
   el('clear').addEventListener('click', clearSale);
+  el('export-backup').addEventListener('click', exportBackup);
+  el('backup-file').addEventListener('change', selectBackup);
+  el('import-backup').addEventListener('click', importBackup);
   el('go-online').addEventListener('click', tryOnline);
   window.addEventListener('online', () => { toast('Conexão recuperada. Voltando ao PDV para sincronizar…'); setTimeout(tryOnline, 900); });
   loadProfiles();

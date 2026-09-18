@@ -11,7 +11,7 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -415,9 +415,11 @@ def central_administrativa(request):
 @superuser_required
 def instalacoes_pdv_offline(request):
     """Painel global de revogação e liberação de novo PIN local."""
-    queryset = InstalacaoPDVOffline.objects.using('default').all()
+    base_queryset = InstalacaoPDVOffline.objects.using('default').all()
+    queryset = base_queryset
     busca = request.GET.get('q', '').strip()
     status = request.GET.get('status', '').strip()
+    somente_pendencias = request.GET.get('pendencias') == '1'
     if busca:
         queryset = queryset.filter(
             Q(nome_dispositivo__icontains=busca)
@@ -429,11 +431,18 @@ def instalacoes_pdv_offline(request):
         )
     if status in InstalacaoPDVOffline.Status.values:
         queryset = queryset.filter(status=status)
+    if somente_pendencias:
+        queryset = queryset.filter(Q(fila_pendente_quantidade__gt=0) | Q(fila_erro_quantidade__gt=0))
     return render(request, 'core/admin/instalacoes_pdv_offline.html', {
         'instalacoes': _paginate(request, queryset),
         'busca': busca,
         'status_filtro': status,
+        'somente_pendencias': somente_pendencias,
         'status_choices': InstalacaoPDVOffline.Status.choices,
+        'total_instalacoes_offline': base_queryset.count(),
+        'total_vendas_pendentes': base_queryset.aggregate(total=Sum('fila_pendente_quantidade'))['total'] or 0,
+        'total_vendas_com_erro': base_queryset.aggregate(total=Sum('fila_erro_quantidade'))['total'] or 0,
+        'instalacoes_sem_recuperacao': base_queryset.filter(recuperacao_configurada=False).count(),
     })
 
 

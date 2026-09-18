@@ -3900,7 +3900,7 @@
   <div x-show="showModalProtecaoOffline" x-cloak
        :style="showModalProtecaoOffline ? 'position:fixed;inset:0;z-index:9400;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.84);backdrop-filter:blur(4px);' : 'display:none;'"
        @keydown.escape.window="fecharProtecaoOffline()">
-    <div style="width:min(480px,100%);padding:22px;border:1px solid var(--pdv-bd3);border-radius:15px;background:var(--pdv-modal);box-shadow:0 24px 70px rgba(0,0,0,.55);">
+    <div style="width:min(520px,100%);max-height:90vh;overflow:auto;padding:22px;border:1px solid var(--pdv-bd3);border-radius:15px;background:var(--pdv-modal);box-shadow:0 24px 70px rgba(0,0,0,.55);">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;">
         <div><h2 style="margin:0;color:var(--pdv-t1);font-size:18px;">Abertura offline neste computador</h2><p style="margin:7px 0 0;color:var(--pdv-t3);font-size:12px;line-height:1.5;">Permite reabrir o PDV após reiniciar sem internet. A autorização é exclusiva desta instalação.</p></div>
         <button type="button" @click="fecharProtecaoOffline()" class="cli-modal-close" aria-label="Fechar">✕</button>
@@ -3925,6 +3925,20 @@
           <button type="button" @click="baixarCodigoRecuperacao()" style="flex:1;padding:8px;border:1px solid var(--pdv-bd3);border-radius:8px;background:var(--pdv-card);color:var(--pdv-t1);">Baixar .txt</button>
         </div>
       </div>
+      <details style="margin-top:14px;padding:12px;border:1px solid var(--pdv-bd2);border-radius:10px;background:var(--pdv-bg);">
+        <summary style="cursor:pointer;color:var(--pdv-t1);font-size:12px;font-weight:750;">Backup emergencial de vendas locais</summary>
+        <p style="margin:9px 0;color:var(--pdv-t3);font-size:11px;line-height:1.5;">Exporta fila e carrinho em um arquivo criptografado. A senha não é recuperável e deve ser guardada separadamente. O arquivo só pode ser importado pelo mesmo usuário e filial.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <input type="password" autocomplete="new-password" x-model="backupPassword" placeholder="Senha do backup (mín. 8)" style="padding:10px;border:1px solid var(--pdv-bd2);border-radius:8px;background:var(--pdv-card);color:var(--pdv-t1);">
+          <input type="password" autocomplete="new-password" x-model="backupPasswordConfirmacao" placeholder="Repita para exportar" style="padding:10px;border:1px solid var(--pdv-bd2);border-radius:8px;background:var(--pdv-card);color:var(--pdv-t1);">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:9px;">
+          <button type="button" @click="exportarBackupEmergencial()" :disabled="backupProcessando" style="flex:1;padding:9px;border:1px solid #2563eb;border-radius:8px;background:rgba(37,99,235,.12);color:#93c5fd;font-weight:700;">Exportar backup</button>
+          <label style="flex:1;padding:9px;border:1px solid var(--pdv-bd3);border-radius:8px;background:var(--pdv-card);color:var(--pdv-t1);font-size:12px;font-weight:700;text-align:center;cursor:pointer;">Selecionar arquivo<input type="file" accept=".ited-pdv,application/json" @change="selecionarBackupEmergencial($event)" style="display:none;"></label>
+        </div>
+        <div x-show="backupFileName" style="margin-top:8px;color:var(--pdv-t3);font-size:11px;overflow-wrap:anywhere;" x-text="'Arquivo: '+backupFileName"></div>
+        <button type="button" x-show="backupFile" @click="importarBackupEmergencial()" :disabled="backupProcessando" style="width:100%;margin-top:8px;padding:9px;border:1px solid #a16207;border-radius:8px;background:rgba(161,98,7,.12);color:#fde68a;font-weight:700;">Importar neste usuário e filial</button>
+      </details>
       <p x-show="offlineProfileErro" x-text="offlineProfileErro" style="margin:10px 0 0;color:#f87171;font-size:12px;"></p>
       <div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:9px;margin-top:16px;">
         <button type="button" x-show="vendasOfflinePendentes" @click="mostrarFilaOffline()" style="padding:9px 12px;border:1px solid #854d0e;border-radius:8px;background:#42200655;color:#fde68a;">Ver fila (<span x-text="vendasOfflinePendentes"></span>)</button>
@@ -3943,7 +3957,7 @@
 {{ favoritos_completos|json_script:"sidebar-favorites-records" }}
 <script src="{% static 'core/js/sidebar_favorites.js' %}?v=20260917-4"></script>
 <script src="{% static 'core/js/sidebar_search.js' %}?v=20260917-3"></script>
-<script src="{% static 'js/pdv_local_store.js' %}?v=20260918-2"></script>
+<script src="{% static 'js/pdv_local_store.js' %}?v=20260918-3"></script>
 <script>
 function pdv() {
   return {
@@ -3964,6 +3978,7 @@ function pdv() {
     showModalProtecaoOffline: false, offlineProfileEnabled: false, offlineProfileValidoAte: '', offlineRecoveryAvailable: false,
     offlinePin: '', offlinePinConfirmacao: '', offlineProfileErro: '', offlineProfileSalvando: false,
     offlineInstallationName: '', offlineRecoveryCode: '',
+    backupPassword: '', backupPasswordConfirmacao: '', backupFile: null, backupFileName: '', backupProcessando: false,
     erroCaixa: '', caixaSelecionada: '', valorAberturaCaixa: '0', caixaAbrindo: false,
     criandoCaixa: false, novoCaixaDescricao: '', criandoCaixaLoading: false,
 
@@ -4238,7 +4253,9 @@ function pdv() {
         if (navigator.onLine && this.vendasOfflinePendentes) this.sincronizarFilaOffline();
       }, 30000);
       setInterval(() => {
-        if (navigator.onLine && this.conectividadeOnline && this.offlineProfileEnabled) this.renovarProtecaoOffline();
+        if (!navigator.onLine || !this.conectividadeOnline) return;
+        if (this.offlineProfileEnabled) this.renovarProtecaoOffline();
+        else this.sincronizarInstalacaoOffline('heartbeat').catch(() => {});
       }, 60000);
     },
 
@@ -4312,6 +4329,8 @@ function pdv() {
     },
 
     async sincronizarInstalacaoOffline(action, profile={}) {
+      if (!profile?.scope) profile = await this._localStore?.getOfflineProfile() || profile;
+      const operational = await this._localStore?.operationalSummary().catch(() => ({})) || {};
       const response = await fetch('/pdv/api/offline/instalacao/', {
         method: 'POST',
         headers: {'Content-Type':'application/json', 'X-CSRFToken':csrf()},
@@ -4320,6 +4339,7 @@ function pdv() {
           installation_id: this._localStore?.installationId,
           nome_dispositivo: this.offlineInstallationName || profile.nome_dispositivo || `Caixa ${this.sessao?.caixa_id || 'PDV'}`,
           recuperacao_configurada: !!profile.recovery_proof,
+          ...operational,
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -4341,6 +4361,9 @@ function pdv() {
       this.showModalProtecaoOffline = false;
       this.offlineRecoveryCode = '';
       this.offlinePin = this.offlinePinConfirmacao = '';
+      this.backupPassword = this.backupPasswordConfirmacao = '';
+      this.backupFile = null;
+      this.backupFileName = '';
     },
 
     async ativarProtecaoOffline() {
@@ -4418,6 +4441,73 @@ function pdv() {
       link.download = 'codigo-emergencia-pdv.txt';
       link.click();
       URL.revokeObjectURL(url);
+    },
+
+    async exportarBackupEmergencial() {
+      this.offlineProfileErro = '';
+      if (this.backupPassword.length < 8) {
+        this.offlineProfileErro = 'A senha do backup precisa ter pelo menos 8 caracteres.';
+        return;
+      }
+      if (this.backupPassword !== this.backupPasswordConfirmacao) {
+        this.offlineProfileErro = 'As senhas do backup não são iguais.';
+        return;
+      }
+      this.backupProcessando = true;
+      try {
+        await this.enfileirarPersistenciaLocal('backup_emergencial');
+        const content = await this._localStore.exportEmergencyBackup(this.backupPassword);
+        const url = URL.createObjectURL(new Blob([content], {type:'application/json;charset=utf-8'}));
+        const link = document.createElement('a');
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        link.href = url;
+        link.download = `backup-pdv-${stamp}.ited-pdv`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        this.backupPassword = this.backupPasswordConfirmacao = '';
+        if (navigator.onLine) await this.sincronizarInstalacaoOffline('heartbeat');
+        this.toast_('Backup criptografado gerado. Guarde o arquivo e a senha separados.', 'ok');
+      } catch (error) {
+        this.offlineProfileErro = error.message || 'Não foi possível exportar o backup.';
+      } finally {
+        this.backupProcessando = false;
+      }
+    },
+
+    selecionarBackupEmergencial(event) {
+      const file = event?.target?.files?.[0] || null;
+      this.backupFile = file;
+      this.backupFileName = file?.name || '';
+      this.offlineProfileErro = '';
+    },
+
+    async importarBackupEmergencial() {
+      this.offlineProfileErro = '';
+      if (!this.backupFile) return;
+      if (this.backupFile.size > 15 * 1024 * 1024) {
+        this.offlineProfileErro = 'O arquivo ultrapassa o limite de 15 MB.';
+        return;
+      }
+      if (this.backupPassword.length < 8) {
+        this.offlineProfileErro = 'Informe a senha usada para criar o backup.';
+        return;
+      }
+      this.backupProcessando = true;
+      try {
+        const result = await this._localStore.importEmergencyBackup(await this.backupFile.text(), this.backupPassword);
+        this.backupPassword = this.backupPasswordConfirmacao = '';
+        this.backupFile = null;
+        this.backupFileName = '';
+        await this.atualizarContagemFilaOffline();
+        if (result.draft && !this.venda.itens.length && !this.venda.pagamentos.length) await this.restaurarRascunhoLocal();
+        if (navigator.onLine) await this.sincronizarInstalacaoOffline('heartbeat');
+        this.toast_(`${result.queued} venda(s) importada(s), ${result.skipped} já existente(s) ou inválida(s).`, 'ok');
+        if (navigator.onLine && result.queued) this.sincronizarFilaOffline();
+      } catch (error) {
+        this.offlineProfileErro = error.message || 'Não foi possível importar o backup.';
+      } finally {
+        this.backupProcessando = false;
+      }
     },
 
     async restaurarRascunhoLocal() {
@@ -5391,6 +5481,10 @@ function pdv() {
       } finally {
         this.sincronizandoFilaOffline = false;
         await this.atualizarContagemFilaOffline();
+        if (sincronizadas) await this._localStore.markQueueSynchronized();
+        if (navigator.onLine) {
+          try { await this.sincronizarInstalacaoOffline('heartbeat'); } catch (_) { /* próximo heartbeat tenta novamente */ }
+        }
       }
       if (sincronizadas) {
         this.conectividadeOnline = true;
