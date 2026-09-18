@@ -26,8 +26,19 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         filial = getattr(self.request, 'filial_ativa', None)
+        agora = timezone.localtime()
+        if agora.hour < 12:
+            saudacao = 'Bom dia'
+        elif agora.hour < 18:
+            saudacao = 'Boa tarde'
+        else:
+            saudacao = 'Boa noite'
 
         ctx['filial'] = filial
+        ctx['saudacao'] = saudacao
+        ctx['primeiro_nome'] = (
+            self.request.user.nome or self.request.user.email
+        ).split()[0]
         ctx['kpis'] = self._calcular_kpis(filial)
         ctx['alertas'] = self._coletar_alertas(filial)
         ctx['estoque_filiais'] = self._estoque_por_filiais(filial)
