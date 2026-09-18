@@ -53,6 +53,32 @@
     });
   }
 
+  function initialFavoritesCollapsed() {
+    try {
+      return window.localStorage.getItem('sidebar-favorites-collapsed') === 'true';
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function favoriteIcon(record) {
+    var original = record.anchor.querySelector('svg');
+    if (original) {
+      var clone = original.cloneNode(true);
+      clone.setAttribute('class', 'sidebar-favorite-icon');
+      clone.setAttribute('aria-hidden', 'true');
+      return clone;
+    }
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'sidebar-favorite-icon');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M7 3h8l4 4v14H7zM15 3v5h4M10 13h6M10 17h6"/>';
+    return svg;
+  }
+
   function start() {
     var root = document.getElementById('sidebar-root');
     if (!root || root.dataset.favoritesReady === 'true') return;
@@ -68,6 +94,30 @@
     var extraRecords = new Map();
     var revision = 0;
     var refreshing = false;
+    var favoritesCollapsed = initialFavoritesCollapsed();
+
+    function applyFavoritesPanelState(panel) {
+      if (!panel) return;
+      var heading = panel.querySelector('.sidebar-favorites-heading');
+      var list = panel.querySelector('.sidebar-favorites-list');
+      panel.classList.toggle('is-collapsed', favoritesCollapsed);
+      if (heading) heading.setAttribute('aria-expanded', favoritesCollapsed ? 'false' : 'true');
+      if (list) list.hidden = favoritesCollapsed;
+    }
+
+    function setFavoritesCollapsed(collapsed) {
+      favoritesCollapsed = Boolean(collapsed);
+      try {
+        window.localStorage.setItem(
+          'sidebar-favorites-collapsed', favoritesCollapsed ? 'true' : 'false'
+        );
+      } catch (error) {
+        // O menu continua funcionando quando o armazenamento estiver bloqueado.
+      }
+      navs.forEach(function (nav) {
+        applyFavoritesPanelState(nav.querySelector('.sidebar-favorites-panel'));
+      });
+    }
 
     function loadRecords(items) {
       extraRecords.clear();
@@ -210,9 +260,14 @@
         panel.className = 'sidebar-favorites-panel';
         panel.setAttribute('aria-label', 'Telas favoritas');
 
-        var heading = document.createElement('div');
+        var heading = document.createElement('button');
+        heading.type = 'button';
         heading.className = 'sidebar-favorites-heading';
-        heading.innerHTML = '<span aria-hidden="true">\u2605</span><span>Favoritos</span>';
+        heading.setAttribute('aria-label', 'Abrir ou recolher favoritos');
+        heading.innerHTML = '<span class="sidebar-favorites-heading-label"><span aria-hidden="true">\u2605</span><span>Favoritos</span></span><svg class="sidebar-favorites-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>';
+        heading.addEventListener('click', function () {
+          setFavoritesCollapsed(!favoritesCollapsed);
+        });
         panel.appendChild(heading);
 
         var list = document.createElement('div');
@@ -224,8 +279,12 @@
           var link = document.createElement('a');
           link.className = 'sidebar-favorite-link';
           link.href = record.anchor.href;
-          link.textContent = record.label;
           link.title = record.label;
+          link.appendChild(favoriteIcon(record));
+          var label = document.createElement('span');
+          label.className = 'sidebar-favorite-label';
+          label.textContent = record.label;
+          link.appendChild(label);
           row.appendChild(link);
 
           var remove = document.createElement('span');
@@ -258,6 +317,7 @@
         status.className = 'sidebar-favorites-status';
         status.setAttribute('aria-live', 'polite');
         panel.appendChild(status);
+        applyFavoritesPanelState(panel);
 
         // Mantem os atalhos favoritos logo abaixo da busca, antes do inicio e dos modulos.
         var search = nav.querySelector('[data-sidebar-search]');

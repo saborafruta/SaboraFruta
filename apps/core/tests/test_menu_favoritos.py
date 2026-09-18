@@ -172,6 +172,14 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertIn("nav.querySelector('[data-sidebar-search]')", script)
         self.assertIn("search.insertAdjacentElement('afterend', panel)", script)
         self.assertNotIn('nav.appendChild(panel)', script)
+        self.assertIn("localStorage.getItem('sidebar-favorites-collapsed')", script)
+        self.assertIn("localStorage.setItem(\n          'sidebar-favorites-collapsed'", script)
+        self.assertIn("heading.setAttribute('aria-expanded'", script)
+        self.assertIn('list.hidden = favoritesCollapsed', script)
+        self.assertIn("heading.addEventListener('click'", script)
+        self.assertIn('link.appendChild(favoriteIcon(record))', script)
+        self.assertIn('.sidebar-favorites-list[hidden]', template)
+        self.assertIn('.sidebar-favorites-chevron', template)
 
     def test_sanfonas_restauram_estado_expandido_e_visual_simples(self):
         raiz = Path(__file__).resolve().parents[1]
@@ -198,7 +206,16 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         )
         self.assertIn('aria-current="page"', navegacao)
         self.assertIn('data-sidebar-dashboard\n         class="flex items-center', navegacao)
-        self.assertIn('.sidebar-module-button > span:first-child', sidebar)
+        self.assertIn('.sidebar-module-button > .sidebar-module-label', sidebar)
+        self.assertIn('.sidebar-module-icon {', sidebar)
+        self.assertEqual(
+            sidebar.count('include "core/_sidebar_module_icon.html"'),
+            8,
+        )
+        self.assertEqual(
+            navegacao.count('include "core/_sidebar_module_icon.html"'),
+            8,
+        )
         self.assertIn('color: #1d4ed8 !important;', sidebar)
         self.assertNotIn('border: 1px solid #d7e2f2 !important;', sidebar)
         self.assertNotIn('inset 3px 0 0 #2563eb', sidebar)
