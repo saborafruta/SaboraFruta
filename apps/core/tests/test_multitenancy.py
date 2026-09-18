@@ -13,7 +13,7 @@ from apps.core.db_router import TenantDatabaseRouter
 from apps.core.middleware.filial import FilialMiddleware
 from apps.core.middleware.tenant import TenantContextMiddleware
 from apps.core.models import (
-    Empresa, EmpresaBanco, Filial, PerfilAcesso, TenantPublicLink, Usuario,
+    Empresa, EmpresaBanco, Filial, LogAcesso, PerfilAcesso, TenantPublicLink, Usuario,
 )
 from apps.core.services.empresa_banco_service import EmpresaBancoService
 from apps.core.services.auth_service import AuthService
@@ -606,6 +606,45 @@ class MultitenancyFoundationTests(TestCase):
         self.assertIs(request._tenant_authenticated_user, tenant_user)
         self.assertEqual(request.session['tenant_db_alias'], self.banco.db_alias)
         logs.using.assert_called_once_with(self.banco.db_alias)
+        logs.using.return_value.create.assert_called_once_with(
+            usuario_id=tenant_user.pk,
+            filial_id=tenant_user.filial_id,
+            tipo=LogAcesso.Tipo.LOGIN,
+            ip_acesso='127.0.0.1',
+            user_agent='',
+            sucesso=True,
+        )
+
+    def test_falha_login_tenant_registra_ids_no_banco_da_empresa(self):
+        request = RequestFactory().post('/auth/login/')
+        tenant_user = SimpleNamespace(
+            pk=101,
+            tentativas_login_falhas=0,
+            filial_id=22,
+        )
+        tenant_manager = Mock()
+        tenant_manager.get.return_value = tenant_user
+
+        with (
+            patch.object(Usuario.objects, 'using', return_value=tenant_manager),
+            patch('apps.core.services.auth_service.get_client_ip', return_value='127.0.0.1'),
+            patch('apps.core.services.auth_service.LogAcesso.objects') as logs,
+        ):
+            AuthService._registrar_falha(
+                request,
+                'tenant@example.com',
+                self.banco.db_alias,
+            )
+
+        logs.using.assert_called_once_with(self.banco.db_alias)
+        logs.using.return_value.create.assert_called_once_with(
+            usuario_id=tenant_user.pk,
+            filial_id=tenant_user.filial_id,
+            tipo=LogAcesso.Tipo.SENHA_ERRADA,
+            ip_acesso='127.0.0.1',
+            user_agent='',
+            sucesso=False,
+        )
 
     @override_settings(TENANT_DATABASE_ROUTING_ENABLED=True)
     def test_nova_empresa_recebe_admin_local_e_nao_superusuario_global(self):

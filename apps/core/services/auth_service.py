@@ -60,8 +60,8 @@ class AuthService:
             ip_ultimo_acesso=get_client_ip(request),
         )
         LogAcesso.objects.using(db_alias).create(
-            usuario=user,
-            filial=user.filial,
+            usuario_id=user.pk,
+            filial_id=user.filial_id,
             tipo=LogAcesso.Tipo.LOGIN,
             ip_acesso=get_client_ip(request),
             user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
@@ -118,8 +118,8 @@ class AuthService:
             tentativas_login_falhas=tentativas, bloqueado_ate=bloqueado_ate,
         )
         LogAcesso.objects.using(db_alias).create(
-            usuario=user,
-            filial=user.filial,
+            usuario_id=user.pk,
+            filial_id=user.filial_id,
             tipo=LogAcesso.Tipo.BLOQUEIO if bloqueado_ate else LogAcesso.Tipo.SENHA_ERRADA,
             ip_acesso=get_client_ip(request),
             user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
