@@ -132,9 +132,11 @@ class PosicaoDiariaCaixaService:
         self.data = data_referencia
         self.data_inicio = data_inicio or data_referencia
         self.data_fim = data_referencia
+        # A posição diária é um livro histórico. Desativar uma conta impede
+        # novos lançamentos, mas não pode apagar visualmente saldos e
+        # movimentos que já foram registrados nela.
         self.contas = list(
             ContaBancaria.objects.for_filial(filial)
-            .filter(ativo=True)
             .order_by("descricao", "banco_nome", "pk")
         )
         self.conta_ids = {conta.pk for conta in self.contas}

@@ -123,6 +123,21 @@ class PosicaoDiariaCaixaTests(TestCase):
             {item["nome"] for item in posicao["totais_forma_saida"]},
         )
 
+    def test_conta_inativa_nao_oculta_historico_financeiro(self):
+        self._criar_cenario()
+        self.banco.ativo = False
+        self.banco.save(update_fields=["ativo", "updated_at"])
+
+        posicao = PosicaoDiariaCaixaService(self.filial, date(2026, 8, 21)).gerar()
+
+        self.assertIn(self.banco, posicao["contas"])
+        self.assertEqual(posicao["total_entradas"], Decimal("80.00"))
+        self.assertEqual(posicao["total_abertura"], Decimal("170.00"))
+        self.assertTrue(any(
+            movimento.descricao.startswith("Venda #1")
+            for movimento in posicao["entradas"]
+        ))
+
     def test_comprovante_usa_venda_de_origem_e_nao_id_do_pagamento(self):
         self._criar_cenario()
         venda = VendaPDV.objects.get(filial=self.filial)
