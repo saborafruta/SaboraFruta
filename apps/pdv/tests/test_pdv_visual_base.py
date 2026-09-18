@@ -128,10 +128,11 @@ class PDVVisualBaseTests(SimpleTestCase):
         for fg, bg in [('#15803d', '#ffffff'), ('#b45309', '#ffffff'), ('#475569', '#e2e8f0')]:
             self.assertGreaterEqual((luminance(bg) + .05) / (luminance(fg) + .05), 4.5)
 
-    def test_tema_claro_replica_cabecalho_laranja_e_pagamento_sem_cores_fixas(self):
+    def test_tema_claro_replica_cabecalho_azul_e_pagamento_sem_cores_fixas(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
         claro = template.split('html.tema-claro body {', 1)[1].split('}', 1)[0]
-        self.assertIn('#f15a24', claro)
+        self.assertIn('linear-gradient(90deg,#0f172a 0%,#172554 42%,#1e3a8a 58%,#0f172a 100%)', claro)
+        self.assertNotIn('linear-gradient(90deg,#f15a24 0%,#e8824a 55%,#c2410c 100%)', claro)
         self.assertIn('html.tema-claro .cat-tab.active { background:#ff8a4c', template)
         entrada = template.split('<!-- Input valor quando forma selecionada -->', 1)[1].split('<!-- Crédito do cliente', 1)[0]
         self.assertIn('class="payment-entry"', entrada)
@@ -189,9 +190,9 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn('sidebar-favorites-data', template)
         self.assertIn('data-full-favorites="true"', template)
         self.assertIn('outline:2px solid var(--pdv-accent)', template)
-        self.assertIn('linear-gradient(90deg,#f15a24 0%,#e8824a 55%,#c2410c 100%)', template)
-        self.assertIn('background:#c2410c !important;border-radius:0;', template)
-        self.assertIn('border-radius:0 0 18px 0;', template)
+        self.assertGreaterEqual(template.count('linear-gradient(90deg,#0f172a 0%,#172554 42%,#1e3a8a 58%,#0f172a 100%)'), 2)
+        self.assertNotIn('background:#c2410c !important;border-radius:0;', template)
+        self.assertNotIn('linear-gradient(90deg,#f15a24 0%,#e8824a 55%,#c2410c 100%)', template)
         self.assertNotIn('#f97316', template)
         self.assertIn("static 'core/js/sidebar_favorites.js'", template)
         self.assertIn("core:trocar-filial", template)
