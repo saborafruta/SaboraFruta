@@ -198,9 +198,12 @@ class PDVVisualBaseTests(SimpleTestCase):
 
         self.assertIn('class="topbar-chip pdv-status-chip" :class="{\'pdv-status-chip--online\':conectividadeOnline}"', template)
         self.assertIn('html.tema-claro .pdv-topbar .pdv-status-chip--online {', template)
-        self.assertIn('background:#9a3412 !important;border-color:#fdba74 !important;color:#fff !important;', template)
-        self.assertIn('html.tema-claro .pdv-topbar .topbar-sales-actions > .topbar-btn {', template)
+        self.assertIn('--pdv-header-orange-block:rgba(194,65,12,.36);', template)
+        self.assertIn('background:var(--pdv-header-orange-block) !important;', template)
+        self.assertIn('.topbar-sales-actions { display:flex;align-items:center;gap:4px;', template)
+        self.assertIn('.topbar-sales-actions > .topbar-btn {', template)
         self.assertIn('display:inline-flex !important;visibility:visible !important;opacity:1 !important;', template)
+        self.assertNotIn('.topbar-sales-actions { display:contents; }', template)
 
     def test_pdv_integra_favoritos_filial_perfil_e_pagamentos(self):
         template = (

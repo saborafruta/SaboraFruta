@@ -972,6 +972,8 @@
     --pdv-pgto-outro-bg:#f8fafc;
     --pdv-pgto-outro-fg:#111827;
     --pdv-pgto-outro-bd:#cbd5e1;
+    --pdv-header-orange-block:rgba(194,65,12,.36);
+    --pdv-header-orange-block-hover:rgba(194,65,12,.50);
   }
   #pdv-app { background:var(--pdv-bg) !important; color:var(--pdv-t1); }
   #pdv-app > .pdv-topbar {
@@ -1008,16 +1010,14 @@
   html.tema-claro #pdv-app > .pdv-topbar > * { position:relative;z-index:1; }
   html.tema-claro .pdv-topbar .mode-seg { background:rgba(194,65,12,.42);border-color:rgba(255,255,255,.34);box-shadow:none; }
   html.tema-claro .pdv-topbar .mode-btn:not(.act-venda):not(.act-delivery):not(.act-orcamento):not(.act-bonificacao):not(.act-venda-fora),
-  html.tema-claro .pdv-topbar .topbar-btn { background:rgba(194,65,12,.36) !important;border-color:rgba(255,231,213,.36) !important;color:#fff !important; }
-  html.tema-claro .pdv-topbar .topbar-btn:hover { background:rgba(194,65,12,.50) !important; }
-  html.tema-claro .pdv-topbar .topbar-sales-actions > .topbar-btn {
-    display:inline-flex !important;visibility:visible !important;opacity:1 !important;
-    background:#9a3412 !important;border-color:#fdba74 !important;color:#fff !important;
-  }
+  html.tema-claro .pdv-topbar .topbar-btn,
   html.tema-claro .pdv-topbar .pdv-status-chip--online {
-    background:#9a3412 !important;border-color:#fdba74 !important;color:#fff !important;
-    box-shadow:0 2px 8px rgba(124,45,18,.24);
+    background:var(--pdv-header-orange-block) !important;
+    border-color:rgba(255,231,213,.36) !important;
+    color:#fff !important;
   }
+  html.tema-claro .pdv-topbar .topbar-btn:hover,
+  html.tema-claro .pdv-topbar .pdv-status-chip--online:hover { background:var(--pdv-header-orange-block-hover) !important; }
   html.tema-claro .pdv-topbar .pdv-status-chip--online > span { color:#fff !important; }
   .brand-switch {
     display:flex;align-items:center;gap:12px;min-width:0;padding:6px 10px 6px 9px;
@@ -1110,7 +1110,11 @@
   .topbar-branch .topbar-chip,.topbar-user .topbar-chip { height:34px;padding:5px 10px;gap:8px; }
   #pdv-app .pdv-topbar .topbar-chip { background:var(--pdv-header-control-bg);border-color:var(--pdv-header-control-border);color:var(--pdv-header-text); }
   .pdv-topbar > .topbar-icon-btn { flex-shrink:0; }
-  .topbar-sales-actions { display:contents; }
+  .topbar-sales-actions { display:flex;align-items:center;gap:4px;flex:0 0 auto;min-width:max-content; }
+  .topbar-sales-actions > .topbar-btn {
+    display:inline-flex !important;visibility:visible !important;opacity:1 !important;
+    flex:0 0 auto;min-width:max-content;
+  }
   @media (max-width:1100px) {
     /* Scroll only the toolbar; the system drawer is its sibling, outside this scroller. */
     #pdv-app > .pdv-topbar {
