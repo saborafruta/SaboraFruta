@@ -50,10 +50,7 @@ def dados_comprovante(venda):
     if venda.valor_acrescimo:
         resumo.append(('Acréscimo', moeda(venda.valor_acrescimo)))
     resumo.append(('TOTAL', moeda(venda.valor_total)))
-    pagamentos = [
-        (p.forma_pagamento.descricao, moeda(p.valor))
-        for p in venda.pagamentos.exclude(status="excluido")
-    ]
+    pagamentos = [(p.forma_pagamento.descricao, moeda(p.valor)) for p in venda.pagamentos.all()]
     if venda.troco:
         pagamentos.append(('Troco', moeda(venda.troco)))
     return {

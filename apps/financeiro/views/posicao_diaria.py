@@ -796,14 +796,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
                 ),
                 0,
             )
-            venda.troco = sum(
-                (
-                    pagamento.troco or Decimal("0.00")
-                    for pagamento in venda.pagamentos.exclude(status="excluido")
-                ),
-                Decimal("0.00"),
-            )
-            venda.save(update_fields=["valor_pago", "troco", "updated_at"])
+            venda.save(update_fields=["valor_pago", "updated_at"])
 
         nova_conta = item.conta_bancaria
         registrar_auditoria(

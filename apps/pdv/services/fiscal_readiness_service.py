@@ -187,11 +187,7 @@ class FiscalReadinessService:
                 )
 
     def _pagamentos(self):
-        pagamentos = list(
-            self.venda.pagamentos.exclude(status="excluido").select_related(
-                "forma_pagamento", "tef_transacao"
-            )
-        )
+        pagamentos = list(self.venda.pagamentos.select_related("forma_pagamento", "tef_transacao"))
         if not pagamentos:
             self.add("pagamento", "Informe a forma de pagamento", "A nota precisa mostrar como a venda foi paga.", "Voltar ao PDV", reverse("pdv:home"))
             return

@@ -2278,7 +2278,7 @@ def api_historico_cliente(request, cliente_id):
                 "valor": float(pg.valor),
                 "troco": float(pg.troco or 0),
             }
-            for pg in v.pagamentos.exclude(status="excluido")
+            for pg in v.pagamentos.all()
         ]
         compras.append({
             "id": v.id,
@@ -2379,7 +2379,7 @@ def api_venda_detalhe(request, pk):
             "valor": float(pg.valor),
             "troco": float(pg.troco or 0),
         }
-        for pg in venda.pagamentos.exclude(status="excluido").select_related("forma_pagamento").order_by("id")
+        for pg in venda.pagamentos.select_related("forma_pagamento").order_by("id")
     ]
 
     return JsonResponse({
@@ -2694,7 +2694,7 @@ def _resumo_sessao(sessao):
         # Formas como Doação/Permuta (movimenta_caixa=False) dão baixa no
         # estoque normalmente, mas não devem contar no total do caixa.
         valor_nao_contabilizado_venda = sum(
-            (pg.valor - pg.troco) for pg in v.pagamentos.exclude(status="excluido")
+            (pg.valor - pg.troco) for pg in v.pagamentos.all()
             if not pg.forma_pagamento.movimenta_caixa
         ) or Decimal("0")
         valor_contabilizado_venda = max(
@@ -2713,7 +2713,7 @@ def _resumo_sessao(sessao):
         for it in v.itens.all():
             qtd_itens += it.quantidade
 
-        for pg in v.pagamentos.exclude(status="excluido"):
+        for pg in v.pagamentos.all():
             fp = pg.forma_pagamento
             acc = formas_acc.setdefault(fp.id, {
                 "descricao": fp.descricao, "tipo": fp.tipo,
@@ -3072,7 +3072,7 @@ def delivery_kanban(request):
                 'valor': float(pg.valor),
                 'troco': float(pg.troco or 0),
             }
-            for pg in v.pagamentos.exclude(status="excluido")
+            for pg in v.pagamentos.all()
         ]
         itens = [
             {

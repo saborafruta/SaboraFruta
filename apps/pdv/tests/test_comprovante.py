@@ -148,7 +148,7 @@ class ComprovanteDadosTests(SimpleTestCase):
             filial=SimpleNamespace(parametros_sistema=None, imagem=None, empresa=SimpleNamespace(logo_url=''), nome_fantasia='Loja teste', razao_social='Loja teste'),
             numero_venda=1, data_venda=timezone.now(),
             cliente=SimpleNamespace(razao_social='Cliente teste', celular=celular, telefone=telefone) if com_cliente else None,
-            itens=SimpleNamespace(all=lambda: []), pagamentos=SimpleNamespace(exclude=lambda **kwargs: []),
+            itens=SimpleNamespace(all=lambda: []), pagamentos=SimpleNamespace(all=lambda: []),
             valor_desconto=Decimal(0), valor_acrescimo=Decimal(0), valor_total=Decimal(0), troco=Decimal(0),
         )
 

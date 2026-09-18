@@ -845,7 +845,7 @@ class NfcePayloadBuilder:
             venda.itens.select_related("produto__unidade_medida").order_by("numero_item")
         )
         pagamentos_qs = list(
-            venda.pagamentos.exclude(status="excluido").select_related("forma_pagamento").order_by("id")
+            venda.pagamentos.select_related("forma_pagamento").order_by("id")
         )
 
         if not itens_qs:
@@ -918,7 +918,7 @@ class NfePayloadBuilder:
             venda.itens.select_related("produto__unidade_medida").order_by("numero_item")
         )
         pagamentos_qs = list(
-            venda.pagamentos.exclude(status="excluido").select_related("forma_pagamento").order_by("id")
+            venda.pagamentos.select_related("forma_pagamento").order_by("id")
         )
 
         if not itens_qs:
