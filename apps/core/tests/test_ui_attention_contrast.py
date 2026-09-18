@@ -66,6 +66,14 @@ class UiAttentionContrastTests(SimpleTestCase):
         self.assertIn('erp-tag-blue', template)
         self.assertNotIn('style="color:#555;"', template)
 
+    def test_client_columns_control_uses_free_space_in_the_filters(self):
+        template = self._read('apps/cadastros/templates/cadastros/cliente/list.html')
+        javascript = self._read('static/js/tabelas-configuraveis.js')
+
+        self.assertIn('data-erp-table-columns-slot', template)
+        self.assertIn('const columnsSlot =', javascript)
+        self.assertIn('erp-table-columns-toolbar--in-filter', javascript)
+
     def test_global_layer_is_loaded_after_existing_contrast_styles(self):
         template = self._read('templates/_base.html')
         light_index = template.index('light-theme-contrast.css')
@@ -73,4 +81,4 @@ class UiAttentionContrastTests(SimpleTestCase):
 
         self.assertLess(light_index, global_index)
         self.assertIn('ui-attention-contrast.css', template)
-        self.assertIn("tabelas-configuraveis.js' %}?v=20260917-1", template)
+        self.assertIn("tabelas-configuraveis.js' %}?v=20260918-1", template)

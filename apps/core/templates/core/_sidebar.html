@@ -533,6 +533,14 @@
     return true;
   };
 
+  window.sincronizarSecoesSidebar = function(secoes, secaoAtual) {
+    if (!secoes || !secaoAtual) return;
+    Object.keys(secoes).forEach(function(nome) {
+      secoes[nome] = nome === secaoAtual;
+    });
+    localStorage.setItem('sidebar-secoes', JSON.stringify(secoes));
+  };
+
   window.ajustarLogoFilialSidebar = function(img) {
     var card = img && img.closest ? img.closest('.sidebar-branch-logo-card') : null;
     if (!card || !img.naturalWidth || !img.naturalHeight) return;
@@ -585,7 +593,7 @@
     this.mobileOpen = false;
   }
 }" @keydown.escape.window="mobileOpen = false"
-   x-init="window.__erpSetSidebarCollapsed(collapsed, false); window.__erpCloseMobileSidebar = function() { mobileOpen = false }; $nextTick(function() { var secaoAtual = window.aplicarFocoTelaAtualSidebar($root); if (secaoAtual) secoes[secaoAtual] = true; })"
+   x-init="window.__erpSetSidebarCollapsed(collapsed, false); window.__erpCloseMobileSidebar = function() { mobileOpen = false }; $nextTick(function() { var secaoAtual = window.aplicarFocoTelaAtualSidebar($root); window.sincronizarSecoesSidebar(secoes, secaoAtual); })"
    @toggle-mobile-menu.window="toggleMobileMenu()"
    @close-mobile-menu.window="closeMobileMenu()">
 

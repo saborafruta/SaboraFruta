@@ -197,10 +197,12 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertIn("localStorage.getItem('sidebar-secoes')", sidebar)
         self.assertIn("localStorage.setItem('sidebar-secoes'", sidebar)
         self.assertIn('window.aplicarFocoTelaAtualSidebar', sidebar)
+        self.assertIn('window.sincronizarSecoesSidebar', sidebar)
         self.assertIn('window.expandirSecaoAtualSidebar', sidebar)
         self.assertIn('.sidebar-group-current-only > a:not(.sidebar-current-entry)', sidebar)
         self.assertIn("melhorLink.setAttribute('aria-current', 'page')", sidebar)
         self.assertIn('window.aplicarFocoTelaAtualSidebar($root)', sidebar)
+        self.assertIn('window.sincronizarSecoesSidebar(secoes, secaoAtual)', sidebar)
         for nome_secao in (
             'cadastros', 'operacoes', 'financeiro', 'logistica',
             'avancado', 'food_service', 'moda', 'polpa',

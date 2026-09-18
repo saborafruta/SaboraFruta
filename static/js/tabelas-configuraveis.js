@@ -212,10 +212,17 @@
     reset.textContent = 'Restaurar padrão';
     panel.append(options, reset);
 
+    const listPage = instance.table.closest('.erp-list-page');
+    const columnsSlot = listPage?.querySelector('[data-erp-table-columns-slot]');
     const tableContainer = instance.table.closest('.table-container');
     const scroller = instance.table.parentElement;
     const anchor = tableContainer || scroller;
-    anchor.parentNode.insertBefore(toolbar, anchor);
+    if (columnsSlot) {
+      columnsSlot.appendChild(toolbar);
+      toolbar.classList.add('erp-table-columns-toolbar--in-filter');
+    } else {
+      anchor.parentNode.insertBefore(toolbar, anchor);
+    }
     document.body.appendChild(panel);
     instance.toolbar = toolbar;
     instance.trigger = trigger;

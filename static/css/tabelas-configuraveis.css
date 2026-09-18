@@ -3,6 +3,10 @@
   justify-content: flex-end;
   margin: 0 0 .55rem;
 }
+.erp-table-columns-toolbar--in-filter {
+  width: 100%;
+  margin: 0;
+}
 
 .erp-table-columns-toolbar .btn-secondary { overflow: visible; }
 .erp-table-columns-warning {
