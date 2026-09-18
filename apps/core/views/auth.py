@@ -39,15 +39,15 @@ class LoginView(View):
             return render(request, self.template_name, {'form': form})
 
         login(request, user)
-        operational_user = getattr(request, '_tenant_authenticated_user', user)
-        filiais = _filiais_permitidas(operational_user)
+        filiais = _filiais_permitidas(user)
         if user.is_superuser:
             request.session.pop('filial_ativa_id', None)
             return redirect('core:selecionar-filial')
         if filiais.count() == 1:
-            filial = filiais.first()
-            request.session['filial_ativa_id'] = filial.pk
-            return redirect(nome_rota_inicial(operational_user, filial))
+            filial_central = filiais.first()
+            rota_inicial = nome_rota_inicial(user, filial_central)
+            AuthService.trocar_filial(request, filial_central.pk)
+            return redirect(rota_inicial)
         return redirect('core:selecionar-filial')
 
 
@@ -59,9 +59,9 @@ def _filiais_permitidas(user):
 
 
 def _filiais_para_selecao(request):
-    """Usa o diretorio central para o Super Admin e o tenant para operadores."""
+    """Usa o diretorio central quando a sessao possui identidade central."""
     filiais = _filiais_permitidas(request.user)
-    if request.user.is_superuser:
+    if request.user._state.db == 'default':
         return filiais.using('default')
     return filiais
 
@@ -143,20 +143,18 @@ class SelecionarFilialView(View):
         filiais = _filiais_para_selecao(request)
 
         if not request.user.is_superuser and filiais.count() == 1:
-            filial = filiais.first()
-            request.session['filial_ativa_id'] = filial.pk
-            return redirect(nome_rota_inicial(request.user, filial))
+            filial_central = filiais.first()
+            rota_inicial = nome_rota_inicial(request.user, filial_central)
+            AuthService.trocar_filial(request, filial_central.pk)
+            return redirect(rota_inicial)
 
-        empresas = []
-        if request.user.is_superuser:
-            # Ao voltar de uma empresa, o contexto operacional ainda aponta
-            # para o banco daquele tenant. A seleção global do Super Admin,
-            # porém, pertence ao diretório gerencial e deve listar todas as
-            # empresas e filiais contratadas.
-            empresas = Empresa.objects.using('default').filter(
-                filiais__in=filiais,
-                ativo=True,
-            ).distinct().order_by('nome_fantasia', 'razao_social')
+        # Ao voltar de uma empresa, o contexto operacional ainda pode apontar
+        # para o tenant anterior. A selecao pertence ao diretorio gerencial e
+        # inclui todas as empresas explicitamente liberadas para a identidade.
+        empresas = Empresa.objects.using('default').filter(
+            filiais__in=filiais,
+            ativo=True,
+        ).distinct().order_by('nome_fantasia', 'razao_social')
 
         filiais = filiais.select_related('empresa')
         usuario_central = _usuario_central(request)
@@ -177,6 +175,7 @@ class SelecionarFilialView(View):
             'filiais': filiais,
             'empresas': empresas,
             'is_global_selection': request.user.is_superuser,
+            'show_empresa_filter': empresas.count() > 1,
             'filiais_favoritas_ids': list(
                 filiais.filter(cnpj__in=favoritas_cnpjs).values_list('pk', flat=True)
             ),

@@ -280,16 +280,21 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
         """
         from apps.core.models.empresa import Filial
 
-        qs = Filial.objects.filter(ativo=True)
+        db_alias = self._state.db or 'default'
+        qs = Filial.objects.using(db_alias).filter(ativo=True)
         if self.is_superuser:
             return qs
-        qs = qs.filter(empresa_id=self.empresa_id)
 
-        acessos = self.acessos_filiais.filter(ativo=True).values_list(
+        acessos = self.acessos_filiais.using(db_alias).filter(ativo=True).values_list(
             'filial_id', flat=True,
         )
         if acessos:
+            # No diretorio gerencial os vinculos podem atravessar empresas.
+            # A empresa do usuario e apenas a principal, nao uma fronteira de
+            # autorizacao quando existem acessos explicitos.
             return qs.filter(pk__in=list(acessos))
+
+        qs = qs.filter(empresa_id=self.empresa_id)
 
         perfil = getattr(self, 'perfil', None)
         if perfil is not None and perfil.is_admin:
@@ -307,7 +312,8 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
     def perfil_para_filial(self, filial):
         if not filial:
             return self.perfil
-        acesso = self.acessos_filiais.select_related('perfil').filter(
+        db_alias = self._state.db or 'default'
+        acesso = self.acessos_filiais.using(db_alias).select_related('perfil').filter(
             filial_id=filial.id,
             ativo=True,
         ).first()

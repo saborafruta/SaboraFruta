@@ -135,6 +135,37 @@ class FiliaisPermitidasTests(FiliaisBase):
 
         self.assertFalse(lucas.pode_acessar_filial(de_fora))
 
+    def test_vinculos_explicitos_liberam_filiais_de_outra_empresa(self):
+        outra = Empresa.objects.create(
+            razao_social='Outra LTDA', nome_fantasia='Outra',
+            cnpj='94345678000191',
+            regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        outra_filial = Filial.objects.create(
+            empresa=outra, razao_social='Outra Filial',
+            cnpj='94345678000272', uf='RN',
+        )
+        outro_perfil = PerfilAcesso.objects.create(
+            empresa=outra, nome='Gestor', is_admin=True,
+        )
+        lucas = self._usuario(
+            'lucas-multi@grupo.local', self.perfil_operador, self.filial,
+            acessos=[self.filial],
+        )
+        UsuarioFilialAcesso.objects.create(
+            usuario=lucas,
+            filial=outra_filial,
+            perfil=outro_perfil,
+            ativo=True,
+        )
+
+        self.assertEqual(
+            set(lucas.filiais_permitidas()),
+            {self.filial, outra_filial},
+        )
+        self.assertTrue(lucas.pode_acessar_filial(outra_filial))
+
 
 class TelaDeEscolhaTests(FiliaisBase):
     """A tela mostra a mesma lista -- e uma unidade so' nem chega a aparecer."""

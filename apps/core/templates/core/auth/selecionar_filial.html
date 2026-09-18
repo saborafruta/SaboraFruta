@@ -158,7 +158,7 @@
       </div>
 
       <div class="grid gap-3 sm:grid-cols-2">
-        {% if is_global_selection %}
+        {% if show_empresa_filter %}
           <select x-model="empresa" class="h-11 rounded-lg border px-4 text-sm font-medium outline-none transition"
                   :style="temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#0f172a;' : 'background:#202024; border-color:#3f3f46; color:#f4f4f5;'">
             <option value="">Todas as empresas</option>
@@ -167,10 +167,10 @@
             {% endfor %}
           </select>
         {% endif %}
-        <label class="relative block {% if not is_global_selection %}sm:col-span-2{% endif %}">
+        <label class="relative block {% if not show_empresa_filter %}sm:col-span-2{% endif %}">
           <input x-model.debounce.150ms="busca" type="search"
                  class="w-full h-11 rounded-lg border px-4 pr-10 text-sm outline-none transition"
-                 placeholder="{% if is_global_selection %}Buscar empresa, filial ou cidade...{% else %}Buscar filial ou cidade...{% endif %}"
+                 placeholder="{% if show_empresa_filter %}Buscar empresa, filial ou cidade...{% else %}Buscar filial ou cidade...{% endif %}"
                  :style="temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#0f172a;' : 'background:#202024; border-color:#3f3f46; color:#f4f4f5;'">
           <button x-show="busca" x-cloak @click="busca = ''" type="button"
                   class="absolute right-3 top-1/2 -translate-y-1/2 text-lg leading-none"

@@ -86,11 +86,7 @@ class TenantContextMiddleware:
             # LazyUser foi resolvido acima enquanto o router apontava para o
             # gerencial, podemos reconhecê-las com segurança e atualizar a
             # sessão sem obrigar o usuário a sair e entrar novamente.
-            if (
-                request.user.is_authenticated
-                and request.user.is_superuser
-                and request.user._state.db == 'default'
-            ):
+            if request.user.is_authenticated and request.user._state.db == 'default':
                 request.session[AUTH_DATABASE_SESSION_KEY] = 'default'
 
         # A credencial do superusuário continua autenticada pelo Banco
@@ -98,7 +94,7 @@ class TenantContextMiddleware:
         # para uma linha local do tenant logo depois de ativar o roteador.
         if request.session.get(AUTH_DATABASE_SESSION_KEY) == 'default':
             request.user.is_authenticated
-            if request.user.is_authenticated and request.user.is_superuser:
+            if request.user.is_authenticated:
                 request.user.perfil
                 request.user.empresa
                 if request.user.filial_id:
@@ -111,7 +107,6 @@ class TenantContextMiddleware:
                 alias
                 and request.user.is_authenticated
                 and request.session.get(AUTH_DATABASE_SESSION_KEY) == 'default'
-                and request.user.is_superuser
                 and not request.path.startswith(self.GLOBAL_IDENTITY_PATHS)
             ):
                 # A sessão e a credencial continuam no Banco Gerencial, mas
@@ -121,11 +116,18 @@ class TenantContextMiddleware:
                 # de chave estrangeira.
                 usuario_central = getattr(request.user, '_wrapped', request.user)
                 request._central_authenticated_user = usuario_central
-                request.user = TenantUserService.resolver_superusuario(
-                    alias=alias,
-                    usuario_central=usuario_central,
-                    filial_id=request.session.get('filial_ativa_id'),
-                )
+                if usuario_central.is_superuser:
+                    request.user = TenantUserService.resolver_superusuario(
+                        alias=alias,
+                        usuario_central=usuario_central,
+                        filial_id=request.session.get('filial_ativa_id'),
+                    )
+                else:
+                    request.user = TenantUserService.resolver_usuario(
+                        alias=alias,
+                        usuario_central=usuario_central,
+                        filial_id=request.session.get('filial_ativa_id'),
+                    )
                 request._cached_user = request.user
             if (
                 alias

@@ -230,7 +230,10 @@ class MultitenancyFoundationTests(TestCase):
     )
     def test_middleware_substitui_usuario_central_pelo_usuario_do_tenant(self):
         request = RequestFactory().get('/dashboard/')
-        request.session = {'tenant_db_alias': self.banco.db_alias}
+        request.session = {
+            'tenant_db_alias': self.banco.db_alias,
+            'auth_database_alias': 'default',
+        }
         contextos_ao_carregar_sessao = []
 
         def carregar_usuario_central():
@@ -239,21 +242,26 @@ class MultitenancyFoundationTests(TestCase):
 
         request.user = SimpleLazyObject(carregar_usuario_central)
         tenant_user = Mock(email=self.usuario.email, is_authenticated=True)
-        tenant_manager = Mock()
-        tenant_manager.get.return_value = tenant_user
-
         with (
             patch(
                 'apps.core.middleware.tenant.register_tenant_database',
                 return_value=True,
             ),
-            patch.object(Usuario.objects, 'using', return_value=tenant_manager),
+            patch(
+                'apps.core.middleware.tenant.TenantUserService.resolver_usuario',
+                return_value=tenant_user,
+            ) as resolver,
         ):
             response = TenantContextMiddleware(lambda req: req.user)(request)
 
         self.assertIs(response, tenant_user)
         self.assertIs(request.user, tenant_user)
         self.assertEqual(contextos_ao_carregar_sessao, [None])
+        resolver.assert_called_once_with(
+            alias=self.banco.db_alias,
+            usuario_central=self.usuario,
+            filial_id=None,
+        )
 
     @override_settings(
         TENANT_DATABASE_ROUTING_ENABLED=True,
@@ -571,44 +579,37 @@ class MultitenancyFoundationTests(TestCase):
         self.assertNotIn('filial_ativa_id', request.session)
 
     @override_settings(TENANT_DATABASE_ROUTING_ENABLED=True)
-    def test_login_tenant_mantem_sessao_no_usuario_do_diretorio_central(self):
+    def test_login_autentica_e_registra_no_diretorio_central(self):
         request = RequestFactory().post('/auth/login/')
         request.session = {}
         request.tenant_db_alias = None
-        tenant_user = Mock(
+        central_user = Mock(
             pk=101,
-            email='tenant@example.com',
+            email='central@example.com',
             ativo=True,
             bloqueado_ate=None,
             filial=None,
             filial_id=None,
             is_superuser=False,
         )
-        central_user = Mock(pk=999, email=tenant_user.email, is_superuser=False)
         default_manager = Mock()
-        default_manager.get.return_value = central_user
 
         with (
-            patch.object(
-                AuthService,
-                '_resolver_tenant_por_email',
-                return_value=self.banco.db_alias,
-            ),
-            patch('apps.core.services.auth_service.authenticate', return_value=tenant_user),
+            patch('apps.core.services.auth_service.authenticate', return_value=central_user),
             patch('apps.core.services.auth_service.get_client_ip', return_value='127.0.0.1'),
             patch.object(Usuario.objects, 'using') as using,
             patch('apps.core.services.auth_service.LogAcesso.objects') as logs,
         ):
             using.side_effect = lambda alias: default_manager if alias == 'default' else Mock()
-            user = AuthService.login(request, tenant_user.email, 'senha')
+            user = AuthService.login(request, central_user.email, 'senha')
 
         self.assertIs(user, central_user)
-        self.assertIs(request._tenant_authenticated_user, tenant_user)
-        self.assertEqual(request.session['tenant_db_alias'], self.banco.db_alias)
-        logs.using.assert_called_once_with(self.banco.db_alias)
+        self.assertNotIn('tenant_db_alias', request.session)
+        self.assertEqual(request.session['auth_database_alias'], 'default')
+        logs.using.assert_called_once_with('default')
         logs.using.return_value.create.assert_called_once_with(
-            usuario_id=tenant_user.pk,
-            filial_id=tenant_user.filial_id,
+            usuario_id=central_user.pk,
+            filial_id=central_user.filial_id,
             tipo=LogAcesso.Tipo.LOGIN,
             ip_acesso='127.0.0.1',
             user_agent='',
