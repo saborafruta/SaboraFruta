@@ -8,7 +8,6 @@ import environ
 import requests
 from django.conf import settings
 from django.db import connections
-from django.utils.text import slugify
 
 from apps.core.models import RailwayProjectPool
 from apps.core.services.railway_pool_service import RailwayPoolService
@@ -475,13 +474,14 @@ class RailwayProvisioner:
     @classmethod
     def _service_name_for_banco(cls, banco):
         empresa = banco.empresa
-        name = slugify(
-            empresa.nome_fantasia or empresa.razao_social or f'empresa-{empresa.pk}'
-        )
-        document = ''.join(char for char in (empresa.cnpj or '') if char.isdigit())
-        suffix = f'-{document}' if document else ''
-        max_base = cls.SERVICE_NAME_MAX_LENGTH - len(suffix)
-        return f'{name[:max_base].strip("-")}{suffix}'
+        name = ' '.join(str(
+            empresa.nome_fantasia or empresa.razao_social or f'Empresa {empresa.pk}'
+        ).split())
+        if name.isupper():
+            name = name.title()
+            for connector in (' E ', ' Da ', ' De ', ' Do ', ' Das ', ' Dos '):
+                name = name.replace(connector, connector.lower())
+        return f'Banco {name}'[:cls.SERVICE_NAME_MAX_LENGTH].rstrip()
 
     # Compatibilidade de baixo nível para testes e integrações existentes.
     @classmethod

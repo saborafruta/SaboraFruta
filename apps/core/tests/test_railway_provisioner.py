@@ -7,6 +7,18 @@ from apps.core.services.railway_provisioner import RailwayApiClient, RailwayProv
 
 
 class RailwayProvisionerTests(SimpleTestCase):
+    def test_nome_do_servico_comeca_com_banco_e_nome_da_empresa(self):
+        banco = SimpleNamespace(empresa=SimpleNamespace(
+            nome_fantasia='KAIROS PRODUTOS E SERVICOS',
+            razao_social='KAIROS PRODUTOS E SERVICOS LTDA',
+            pk=7,
+        ))
+
+        self.assertEqual(
+            RailwayProvisioner._service_name_for_banco(banco),
+            'Banco Kairos Produtos e Servicos',
+        )
+
     @override_settings(
         RAILWAY_TENANT_DATABASE_IMAGE='postgres:16-alpine',
         RAILWAY_TENANT_DATABASE_VOLUME_PATH='/var/lib/postgresql/data',
@@ -140,7 +152,7 @@ class RailwayProvisionerTests(SimpleTestCase):
             result = RailwayProvisioner.provision_postgres(banco)
 
         find_service.assert_called_once_with(
-            'lr-sports-50649395000126', service_id='tenant-importado',
+            'Banco L&R Sports', service_id='tenant-importado',
         )
         create_service.assert_not_called()
         deploy_service.assert_not_called()
