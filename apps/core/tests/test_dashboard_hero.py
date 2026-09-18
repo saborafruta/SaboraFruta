@@ -22,7 +22,16 @@ class DashboardHeroTemplateTests(SimpleTestCase):
         template = (raiz / 'templates' / 'core' / 'dashboard.html').read_text(
             encoding='utf-8'
         )
+        inicio_css = (raiz / 'static' / 'core' / 'css' / 'inicio.css').read_text(
+            encoding='utf-8'
+        )
 
         self.assertIn('body.tema-claro .dashboard-shell .dashboard-hero {', template)
+        self.assertIn('border-color: #fdba8c;', template)
+        self.assertIn('rgba(241,90,36,.2)', template)
+        self.assertIn('color: #c2410c;', template)
+        self.assertIn('body.tema-claro .inicio-hero { border-color:#fdba8c;', inicio_css)
+        self.assertIn('rgba(241,90,36,.2)', inicio_css)
+        self.assertIn('body.tema-claro .inicio-eyebrow { color:#c2410c; }', inicio_css)
         self.assertIn('@media (max-width: 600px)', template)
         self.assertIn('.dashboard-shell .dashboard-hero-date { display: none; }', template)
