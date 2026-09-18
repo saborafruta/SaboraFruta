@@ -68,7 +68,7 @@
 .shortcut-option.is-selected .shortcut-option-state { border-color:#2563eb; background:#2563eb; color:#fff; }
 .dialog-footer { display:flex; justify-content:flex-end; padding:15px 24px 20px; border-top:1px solid #303038; }
 body.tema-claro .inicio-page { --inicio-border:#e1e7ef; }
-body.tema-claro .inicio-hero { border-color:rgba(255,237,213,.72); background:radial-gradient(circle at 82% 8%,rgba(255,237,213,.24),transparent 31%),radial-gradient(circle at 56% 135%,rgba(255,186,117,.2),transparent 42%),linear-gradient(135deg,#d86535 0%,#e85d24 46%,#f97316 100%); box-shadow:0 18px 42px rgba(194,65,12,.16),inset 0 1px 0 rgba(255,255,255,.2); }
+body.tema-claro .inicio-hero { border-color:rgba(255,237,213,.72); background:radial-gradient(circle at 82% 8%,rgba(255,237,213,.24),transparent 31%),radial-gradient(circle at 56% 135%,rgba(255,186,117,.2),transparent 42%),linear-gradient(135deg,#f16028 0%,#f17843 46%,#f97316 100%); box-shadow:0 18px 42px rgba(194,65,12,.16),inset 0 1px 0 rgba(255,255,255,.2); }
 body.tema-claro .inicio-hero:before { background-image:radial-gradient(circle,rgba(255,255,255,.38) 1px,transparent 1.35px); opacity:.48; }
 body.tema-claro .inicio-hero:after { border-color:rgba(255,255,255,.13); }
 body.tema-claro .inicio-hero h2 { color:#fff; text-shadow:0 2px 14px rgba(124,45,18,.2); } body.tema-claro .inicio-hero p { color:rgba(255,247,237,.82); } body.tema-claro .inicio-date { border-left-color:rgba(255,255,255,.25); } body.tema-claro .inicio-date span { color:#ffedd5; } body.tema-claro .inicio-date strong { color:#fff; }
