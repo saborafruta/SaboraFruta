@@ -22,6 +22,26 @@
     <div class="card p-4"><div class="text-xs text-slate-500">Sem código emergencial</div><div class="text-2xl font-bold mt-1 {% if instalacoes_sem_recuperacao %}text-amber-600{% endif %}">{{ instalacoes_sem_recuperacao }}</div></div>
   </section>
 
+  <section class="card p-5">
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div>
+        <h2 class="font-bold">Homologação de contingência</h2>
+        <p class="text-sm text-slate-500 mt-1">{{ resumo_testes.total|default:0 }} execuções · {{ resumo_testes.aprovados|default:0 }} aprovadas · {{ resumo_testes.falhas|default:0 }} falhas.</p>
+      </div>
+      <a href="{% url 'core:admin_testes_contingencia_pdv_csv' %}" class="btn-secondary">Exportar relatório CSV</a>
+    </div>
+    <div class="overflow-x-auto mt-4">
+      <table class="w-full text-sm">
+        <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-4">Filial</th><th class="py-2 pr-4">Cenários aprovados</th><th class="py-2 pr-4">Execuções</th><th class="py-2 pr-4">Falhas</th><th class="py-2">Bloqueados</th></tr></thead>
+        <tbody>
+          {% for filial in cobertura_filiais %}
+            <tr class="border-b border-slate-200"><td class="py-2 pr-4 font-bold">{{ filial.filial_nome }}</td><td class="py-2 pr-4"><span class="soft-pill {% if filial.cenarios_aprovados == total_cenarios_obrigatorios %}is-green{% else %}is-amber{% endif %}">{{ filial.cenarios_aprovados }}/{{ total_cenarios_obrigatorios }}</span></td><td class="py-2 pr-4">{{ filial.executados }}</td><td class="py-2 pr-4 {% if filial.falhas %}text-red-600 font-bold{% endif %}">{{ filial.falhas }}</td><td class="py-2">{{ filial.bloqueados }}</td></tr>
+          {% empty %}<tr><td colspan="5" class="py-4 text-slate-500">Nenhum caixa identificado ainda.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
   <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-[1fr_220px_auto_auto] gap-3 items-end">
     <label class="block">
       <span class="block text-xs font-bold mb-1">Buscar</span>
@@ -43,7 +63,7 @@
 
   <section class="space-y-3">
     {% for instalacao in instalacoes %}
-      <article class="card p-5" x-data="{acao:''}">
+      <article class="card p-5" x-data="{acao:'', teste:false}">
         <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
@@ -75,6 +95,7 @@
             </div>
           </div>
           <div class="flex flex-wrap gap-2 shrink-0">
+            <button type="button" class="btn-secondary" @click="teste=!teste; acao=''">Registrar teste</button>
             <button type="button" class="btn-secondary" @click="acao = acao === 'redefinir' ? '' : 'redefinir'">Liberar novo PIN</button>
             <button type="button" class="px-4 py-2 rounded-lg border border-red-300 text-red-600 font-bold" @click="acao = acao === 'revogar' ? '' : 'revogar'">Revogar</button>
           </div>
@@ -89,11 +110,39 @@
             <button type="submit" class="btn-primary" x-text="acao === 'redefinir' ? 'Confirmar novo PIN' : 'Confirmar revogação'"></button>
           </div>
         </form>
+        <form x-show="teste" x-cloak method="post" action="{% url 'core:admin_instalacao_pdv_offline_teste' instalacao.pk %}" class="mt-4 p-4 rounded-xl border border-blue-300 space-y-3">
+          {% csrf_token %}
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <label class="block"><span class="block text-sm font-bold mb-1">Cenário obrigatório</span><select class="form-input" name="cenario" required><option value="">Selecione</option>{% for valor, rotulo in cenarios_teste %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}</select></label>
+            <label class="block"><span class="block text-sm font-bold mb-1">Resultado</span><select class="form-input" name="resultado" required><option value="">Selecione</option>{% for valor, rotulo in resultados_teste %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}</select></label>
+          </div>
+          <label class="block"><span class="block text-sm font-bold mb-1">Resultado esperado</span><textarea class="form-input" name="resultado_esperado" rows="2" maxlength="4000" required></textarea></label>
+          <label class="block"><span class="block text-sm font-bold mb-1">Resultado obtido / evidência</span><textarea class="form-input" name="resultado_obtido" rows="2" maxlength="4000" required></textarea></label>
+          <label class="block"><span class="block text-sm font-bold mb-1">local_id da venda, se aplicável</span><input class="form-input font-mono" name="local_id" maxlength="35" placeholder="pdv..."></label>
+          <div class="flex justify-end gap-2"><button type="button" class="btn-secondary" @click="teste=false">Cancelar</button><button type="submit" class="btn-primary">Salvar evidência</button></div>
+        </form>
+        <details class="mt-4 text-sm">
+          <summary class="cursor-pointer font-bold text-slate-600">Auditoria desta instalação</summary>
+          <div class="mt-2 space-y-2">
+            {% for evento in instalacao.eventos.all|slice:":12" %}
+              <div class="p-3 rounded-lg border border-slate-200"><strong>{{ evento.tipo }}</strong> · {{ evento.criado_em|date:"d/m/Y H:i:s" }}{% if evento.ator_nome %} · {{ evento.ator_nome }}{% endif %}<div class="text-slate-500 mt-1">{{ evento.detalhe }}{% if evento.metadados.local_id %} · <span class="font-mono">{{ evento.metadados.local_id }}</span>{% endif %}</div></div>
+            {% empty %}<div class="text-slate-500">Nenhum evento registrado.</div>{% endfor %}
+          </div>
+        </details>
       </article>
     {% empty %}
       <div class="card p-8 text-center text-slate-500">Nenhuma instalação encontrada.</div>
     {% endfor %}
   </section>
+
+  {% if testes_recentes %}
+  <section class="card p-5">
+    <h2 class="font-bold">Testes recentes</h2>
+    <div class="overflow-x-auto mt-3"><table class="w-full text-sm"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-3">Quando</th><th class="py-2 pr-3">Filial/caixa</th><th class="py-2 pr-3">Cenário</th><th class="py-2 pr-3">Resultado</th><th class="py-2">Responsável</th></tr></thead><tbody>
+      {% for teste in testes_recentes %}<tr class="border-b border-slate-200"><td class="py-2 pr-3 whitespace-nowrap">{{ teste.executado_em|date:"d/m/Y H:i" }}</td><td class="py-2 pr-3">{{ teste.instalacao.filial_nome }} · {{ teste.instalacao.caixa_descricao|default:teste.instalacao.nome_dispositivo }}</td><td class="py-2 pr-3">{{ teste.get_cenario_display }}</td><td class="py-2 pr-3"><span class="soft-pill {% if teste.resultado == 'aprovado' %}is-green{% elif teste.resultado == 'falhou' %}is-red{% else %}is-amber{% endif %}">{{ teste.get_resultado_display }}</span></td><td class="py-2">{{ teste.responsavel_nome }}</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  {% endif %}
 
   {% if instalacoes.paginator.num_pages > 1 %}
     <nav class="flex justify-center gap-2">

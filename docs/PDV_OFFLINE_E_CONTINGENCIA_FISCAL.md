@@ -261,18 +261,28 @@ O painel `Central Administrativa > PDVs offline` recebe apenas metadados operaci
 
 O servidor não recebe produtos, pagamentos ou conteúdo das vendas para formar esse painel. Durante uma queda completa de internet, os números permanecem no último estado conhecido e são atualizados quando o caixa reconectar.
 
+Além das contagens, o heartbeat envia no máximo 1.000 registros técnicos da fila (`local_id`, estado, número de tentativas, horário local e último erro), o mesmo limite aceito na importação emergencial. Não envia produtos, clientes, valores ou pagamentos. Essa lista permite registrar automaticamente quando uma venda entrou na fila, teve nova tentativa, foi recusada ou saiu da fila após a confirmação idempotente do servidor.
+
 O heartbeat também registra navegadores que abriram o PDV sem ativar a proteção offline. Eles aparecem como inativos e sem código emergencial; assim, um caixa esquecido na implantação não fica invisível para o suporte. Após formatação, o navegador gera outra instalação: a nova aparece sem proteção e a antiga passa a acusar contato atrasado até ser revogada.
 
-### Fase 4 — operação e auditoria (parcialmente implementada)
+### Alertas, auditoria e homologação
+
+Quando houver venda pendente ou com erro, o ERP mantém uma notificação ativa para a filial. A notificação é encerrada automaticamente quando a fila zera e volta a aparecer como não lida se o problema ocorrer novamente. Uma instalação ativa com catálogo superior a 12 horas também gera alerta até a renovação do catálogo.
+
+O painel `Central Administrativa > PDVs offline` mostra os últimos eventos de cada instalação. A auditoria diferencia venda enfileirada, tentativa de sincronização, erro, reconciliação, exportação de backup, ativação, recuperação, redefinição e revogação. Para vendas locais, a referência é sempre o `local_id`; o conteúdo comercial continua apenas no caixa e no banco transacional após a sincronização.
+
+O mesmo painel permite registrar cada cenário obrigatório de homologação como `Aprovado`, `Falhou` ou `Bloqueado`, incluindo resultado esperado, resultado obtido, responsável e `local_id` quando aplicável. A cobertura é resumida por filial e pode ser exportada em CSV.
+
+### Fase 4 — operação e auditoria (implementada)
 
 - painel administrativo global de instalações/caixas (implementado);
 - liberação online de novo PIN e revogação de instalação perdida ou formatada (implementado);
 - código emergencial local, de uso único, com rotação obrigatória (implementado);
 - exportação e importação criptografada da fila/carrinho local (implementado);
 - painel central de vendas presas, erros, catálogo e último contato (implementado);
-- notificações proativas para vendas presas ou catálogo vencido;
-- relatório de testes de contingência por filial;
-- trilha de auditoria de tentativas e reconciliações.
+- notificações proativas para vendas presas ou catálogo vencido (implementado);
+- relatório de testes de contingência por filial (implementado);
+- trilha de auditoria de tentativas e reconciliações (implementado).
 
 ### Fase 5 — Comunicador Focus
 
@@ -304,6 +314,8 @@ Antes de liberar operação offline ampla em uma filial, testar:
 
 Cada teste deve registrar filial, caixa, instalação, horário, `local_id`, resultado esperado, resultado obtido e responsável.
 
+Os testes são registrados no painel global do suporte. Uma filial somente deve ser considerada homologada quando os 14 cenários estiverem aprovados. Cenários fiscais que dependem do Comunicador Focus devem permanecer como `Bloqueado` até a entrega e homologação formal do componente.
+
 ## 13. Arquivos de referência no código
 
 - `static/js/pdv_local_store.js`: IndexedDB, instalação, rascunho, snapshot e fila.
@@ -311,6 +323,7 @@ Cada teste deve registrar filial, caixa, instalação, horário, `local_id`, res
 - `apps/pdv/templates/pdv/home.html`: experiência local-first e sincronização.
 - `apps/pdv/services/venda_pdv_service.py`: criação transacional e idempotência.
 - `apps/pdv/views/pdv.py`: endpoints do PDV e contingência fiscal.
+- `apps/pdv/services/offline_monitoring.py`: alertas condicionais e auditoria da fila.
 - `apps/pdv/services/nfce_payload_builder.py`: emissão NFC-e e preservação de resultado incerto.
 - `apps/fiscal/services/focusnfe_service.py`: integração e estados Focus.
 - `apps/fiscal/tasks.py`: reconciliação automática.
@@ -327,3 +340,7 @@ O projeto será considerado maduro quando uma filial conseguir operar durante qu
 - misturar dados entre filial, usuário ou instalação;
 - depender de intervenção técnica para uma reconciliação normal;
 - deixar documento fiscal pendente sem alerta e responsável.
+
+### Estado atual
+
+O modo comercial local-first, a recuperação local, o backup criptografado, o monitoramento, os alertas, a auditoria e a homologação assistida estão implementados. A conclusão fiscal integral continua condicionada ao recebimento do Comunicador Offline da Focus, sua distribuição versionada na configuração fiscal e a validação do contador para as regras aplicáveis ao RN.

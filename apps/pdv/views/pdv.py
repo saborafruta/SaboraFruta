@@ -1,5 +1,6 @@
 import datetime
 import json
+import logging
 import re
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -49,6 +50,7 @@ from apps.pdv.models import (
     MovimentacaoCaixa, PagamentoVendaPDV, SessaoPDV, VendaPDV,
 )
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
+from apps.pdv.services.offline_monitoring import atualizar_alertas_pdv, registrar_auditoria_fila
 from apps.pdv.services.oferta_contexto_service import (
     aplicar_contexto_oferta,
     contexto_oferta_do_payload,
@@ -75,6 +77,9 @@ from apps.produtos.models import (
     PromocaoQuantidade,
 )
 from apps.produtos.services.preco_service import PrecoService
+
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -157,6 +162,42 @@ def _quantidade_cliente_segura(value, limite=100000):
         return max(0, min(int(value or 0), limite))
     except (TypeError, ValueError):
         return 0
+
+
+def _resumo_fila_cliente_seguro(value, limite=1000):
+    if not isinstance(value, list):
+        return []
+    resultado = []
+    ids = set()
+    for item in value[:limite]:
+        if not isinstance(item, dict):
+            continue
+        local_id = str(item.get("local_id") or "")
+        if not re.fullmatch(r"pdv[a-f0-9]{32}", local_id) or local_id in ids:
+            continue
+        ids.add(local_id)
+        criado_em = _data_cliente_segura(item.get("created_at"))
+        resultado.append({
+            "local_id": local_id,
+            "status": "erro" if item.get("status") == "erro" else "pendente",
+            "attempts": _quantidade_cliente_segura(item.get("attempts"), limite=1000),
+            "created_at": criado_em.isoformat() if criado_em else None,
+            "last_error": str(item.get("last_error") or "")[:300],
+        })
+    return resultado
+
+
+def _processar_monitoramento_offline(*, filial, tenant_alias, instalacao, fila_anterior, backup_anterior):
+    try:
+        registrar_auditoria_fila(
+            instalacao=instalacao,
+            fila_anterior=fila_anterior,
+            fila_atual=instalacao.fila_resumo,
+            backup_anterior=backup_anterior,
+        )
+        atualizar_alertas_pdv(alias=tenant_alias, filial=filial, instalacao=instalacao)
+    except Exception:
+        logger.exception("Falha ao registrar monitoramento offline da instalacao %s", instalacao.pk)
 
 
 def _data_venda_retroativa(request, body):
@@ -1319,9 +1360,16 @@ def api_instalacao_offline(request):
         "installation_id": installation_id,
     }
     instalacao = InstalacaoPDVOffline.objects.using("default").filter(**lookup).first()
+    fila_resumo_recebido = isinstance(body.get("fila_resumo"), list)
+    fila_resumo = (
+        _resumo_fila_cliente_seguro(body.get("fila_resumo"))
+        if fila_resumo_recebido else (instalacao.fila_resumo if instalacao else [])
+    )
 
     if action == "deactivate":
         if instalacao:
+            fila_anterior = instalacao.fila_resumo
+            backup_anterior = instalacao.ultimo_backup_em
             instalacao.status = InstalacaoPDVOffline.Status.INATIVA
             instalacao.revisao += 1
             instalacao.save(using="default", update_fields=["status", "revisao", "visto_por_ultimo_em"])
@@ -1332,11 +1380,17 @@ def api_instalacao_offline(request):
                 ator_nome=getattr(request.user, "nome", "") or request.user.email,
                 detalhe="Abertura offline desativada no proprio dispositivo.",
             )
+            _processar_monitoramento_offline(
+                filial=filial, tenant_alias=tenant_alias, instalacao=instalacao,
+                fila_anterior=fila_anterior, backup_anterior=backup_anterior,
+            )
         return JsonResponse({"status": "inativa", "revisao": getattr(instalacao, "revisao", 0)})
 
     if action == "status":
         if not instalacao:
             return JsonResponse({"status": "nao_registrada", "revisao": 0})
+        fila_anterior = instalacao.fila_resumo
+        backup_anterior = instalacao.ultimo_backup_em
         instalacao.filial_nome = filial.nome_fantasia or filial.razao_social
         instalacao.usuario_nome = getattr(request.user, "nome", "") or request.user.email
         instalacao.usuario_login = request.user.email
@@ -1348,13 +1402,18 @@ def api_instalacao_offline(request):
         instalacao.ultima_sincronizacao_em = _data_cliente_segura(body.get("ultima_sincronizacao_em"))
         instalacao.ultimo_backup_em = _data_cliente_segura(body.get("ultimo_backup_em"))
         instalacao.ultimo_erro_sincronizacao = str(body.get("ultimo_erro_sincronizacao") or "")[:1000]
+        instalacao.fila_resumo = fila_resumo
         instalacao.save(using="default", update_fields=[
             "filial_nome", "usuario_nome", "usuario_login", "user_agent",
             "recuperacao_configurada", "fila_pendente_quantidade",
             "fila_erro_quantidade", "catalogo_atualizado_em",
             "ultima_sincronizacao_em", "ultimo_backup_em",
-            "ultimo_erro_sincronizacao", "visto_por_ultimo_em",
+            "ultimo_erro_sincronizacao", "fila_resumo", "visto_por_ultimo_em",
         ])
+        _processar_monitoramento_offline(
+            filial=filial, tenant_alias=tenant_alias, instalacao=instalacao,
+            fila_anterior=fila_anterior, backup_anterior=backup_anterior,
+        )
         return JsonResponse({
             "status": instalacao.status,
             "revisao": instalacao.revisao,
@@ -1385,7 +1444,10 @@ def api_instalacao_offline(request):
             "ultima_sincronizacao_em": _data_cliente_segura(body.get("ultima_sincronizacao_em")),
             "ultimo_backup_em": _data_cliente_segura(body.get("ultimo_backup_em")),
             "ultimo_erro_sincronizacao": str(body.get("ultimo_erro_sincronizacao") or "")[:1000],
+            "fila_resumo": fila_resumo,
         }
+        fila_anterior = instalacao.fila_resumo if instalacao else []
+        backup_anterior = instalacao.ultimo_backup_em if instalacao else None
         if instalacao:
             for field, value in campos.items():
                 setattr(instalacao, field, value)
@@ -1400,6 +1462,10 @@ def api_instalacao_offline(request):
                 status=InstalacaoPDVOffline.Status.INATIVA,
                 recuperacao_configurada=False,
             )
+        _processar_monitoramento_offline(
+            filial=filial, tenant_alias=tenant_alias, instalacao=instalacao,
+            fila_anterior=fila_anterior, backup_anterior=backup_anterior,
+        )
         return JsonResponse({
             "status": instalacao.status,
             "revisao": instalacao.revisao,
@@ -1438,11 +1504,14 @@ def api_instalacao_offline(request):
         "ultima_sincronizacao_em": _data_cliente_segura(body.get("ultima_sincronizacao_em")),
         "ultimo_backup_em": _data_cliente_segura(body.get("ultimo_backup_em")),
         "ultimo_erro_sincronizacao": str(body.get("ultimo_erro_sincronizacao") or "")[:1000],
+        "fila_resumo": fila_resumo,
         "revogado_em": None,
         "revogado_por_id": None,
         "revogado_por_nome": "",
         "motivo_revogacao": "",
     }
+    fila_anterior = instalacao.fila_resumo if instalacao else []
+    backup_anterior = instalacao.ultimo_backup_em if instalacao else None
     if instalacao:
         for field, value in defaults.items():
             setattr(instalacao, field, value)
@@ -1458,6 +1527,10 @@ def api_instalacao_offline(request):
         ator_id=request.user.pk,
         ator_nome=getattr(request.user, "nome", "") or request.user.email,
         detalhe="Autorizacao offline configurada no proprio PDV.",
+    )
+    _processar_monitoramento_offline(
+        filial=filial, tenant_alias=tenant_alias, instalacao=instalacao,
+        fila_anterior=fila_anterior, backup_anterior=backup_anterior,
     )
     return JsonResponse({
         "status": instalacao.status,

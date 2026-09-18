@@ -5,8 +5,8 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
-from apps.pdv.models import EventoInstalacaoPDVOffline, InstalacaoPDVOffline
+from apps.core.models import Empresa, Filial, Notificacao, PerfilAcesso, Usuario
+from apps.pdv.models import EventoInstalacaoPDVOffline, InstalacaoPDVOffline, TesteContingenciaPDV
 
 
 class InstalacaoOfflineTests(TestCase):
@@ -118,6 +118,100 @@ class InstalacaoOfflineTests(TestCase):
         self.assertEqual(instalacao.fila_pendente_quantidade, 2)
         self.assertEqual(instalacao.ultimo_erro_sincronizacao, "Sem conexão.")
         self.assertFalse(EventoInstalacaoPDVOffline.objects.exists())
+
+    def test_fila_gera_alerta_e_auditoria_ate_reconciliacao(self):
+        catalogo_em = timezone.now().isoformat()
+        local_id = "pdv" + "b" * 32
+        self.post_api("activate", recuperacao_configurada=True, catalogo_atualizado_em=catalogo_em)
+
+        self.post_api(
+            "heartbeat",
+            recuperacao_configurada=True,
+            catalogo_atualizado_em=catalogo_em,
+            fila_pendente_quantidade=1,
+            fila_erro_quantidade=0,
+            fila_resumo=[{
+                "local_id": local_id,
+                "status": "pendente",
+                "attempts": 0,
+                "created_at": timezone.now().isoformat(),
+            }],
+        )
+        alerta = Notificacao.objects.get(referencia_tipo="pdv_offline_fila")
+        self.assertTrue(alerta.ativa)
+        self.assertTrue(EventoInstalacaoPDVOffline.objects.filter(
+            tipo="venda_enfileirada", metadados__local_id=local_id,
+        ).exists())
+
+        self.post_api(
+            "heartbeat",
+            recuperacao_configurada=True,
+            catalogo_atualizado_em=catalogo_em,
+            fila_pendente_quantidade=1,
+            fila_erro_quantidade=1,
+            ultimo_erro_sincronizacao="Estoque insuficiente",
+            fila_resumo=[{
+                "local_id": local_id,
+                "status": "erro",
+                "attempts": 1,
+                "created_at": timezone.now().isoformat(),
+                "last_error": "Estoque insuficiente",
+            }],
+        )
+        self.assertTrue(EventoInstalacaoPDVOffline.objects.filter(tipo="tentativa_sincronizacao").exists())
+        self.assertTrue(EventoInstalacaoPDVOffline.objects.filter(tipo="erro_sincronizacao").exists())
+
+        self.post_api(
+            "heartbeat",
+            recuperacao_configurada=True,
+            catalogo_atualizado_em=catalogo_em,
+            fila_pendente_quantidade=0,
+            fila_erro_quantidade=0,
+            fila_resumo=[],
+        )
+        alerta.refresh_from_db()
+        self.assertFalse(alerta.ativa)
+        self.assertTrue(EventoInstalacaoPDVOffline.objects.filter(
+            tipo="venda_reconciliada", metadados__local_id=local_id,
+        ).exists())
+
+    def test_superusuario_registra_e_exporta_teste_de_contingencia(self):
+        self.post_api("activate", recuperacao_configurada=True)
+        instalacao = InstalacaoPDVOffline.objects.get()
+        self.client.force_login(self.superuser)
+        response = self.client.post(
+            reverse("core:admin_instalacao_pdv_offline_teste", args=[instalacao.pk]),
+            {
+                "cenario": TesteContingenciaPDV.Cenario.QUEDA_ENERGIA,
+                "resultado": TesteContingenciaPDV.Resultado.APROVADO,
+                "resultado_esperado": "Carrinho deve ser restaurado.",
+                "resultado_obtido": "Carrinho restaurado após reiniciar.",
+                "local_id": "pdv" + "c" * 32,
+            },
+        )
+        self.assertRedirects(response, reverse("core:admin_instalacoes_pdv_offline"))
+        teste = TesteContingenciaPDV.objects.get()
+        self.assertEqual(teste.responsavel_id, self.superuser.pk)
+        self.assertTrue(EventoInstalacaoPDVOffline.objects.filter(tipo="teste_contingencia").exists())
+
+        csv_response = self.client.get(reverse("core:admin_testes_contingencia_pdv_csv"))
+        self.assertEqual(csv_response.status_code, 200)
+        conteudo = csv_response.content.decode("utf-8-sig")
+        self.assertIn("Desligamento abrupto com carrinho aberto", conteudo)
+        self.assertIn("Carrinho restaurado após reiniciar.", conteudo)
+
+        self.client.post(
+            reverse("core:admin_instalacao_pdv_offline_teste", args=[instalacao.pk]),
+            {
+                "cenario": TesteContingenciaPDV.Cenario.QUEDA_ENERGIA,
+                "resultado": TesteContingenciaPDV.Resultado.FALHOU,
+                "resultado_esperado": "Carrinho deve ser restaurado.",
+                "resultado_obtido": "Novo teste não restaurou o carrinho.",
+            },
+        )
+        painel = self.client.get(reverse("core:admin_instalacoes_pdv_offline"))
+        self.assertContains(painel, "0/14")
+        self.assertContains(painel, "2 execuções · 1 aprovadas · 1 falhas")
 
     def test_superusuario_libera_novo_pin_e_operador_reativa(self):
         self.post_api("activate", recuperacao_configurada=True)

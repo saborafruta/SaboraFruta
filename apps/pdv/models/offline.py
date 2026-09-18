@@ -31,6 +31,7 @@ class InstalacaoPDVOffline(models.Model):
     ultima_sincronizacao_em = models.DateTimeField(null=True, blank=True)
     ultimo_backup_em = models.DateTimeField(null=True, blank=True)
     ultimo_erro_sincronizacao = models.TextField(blank=True)
+    fila_resumo = models.JSONField(default=list, blank=True)
     autorizado_em = models.DateTimeField(auto_now_add=True)
     visto_por_ultimo_em = models.DateTimeField(auto_now=True, db_index=True)
     revogado_em = models.DateTimeField(null=True, blank=True)
@@ -82,3 +83,49 @@ class EventoInstalacaoPDVOffline(models.Model):
     class Meta:
         db_table = "pdv_instalacoes_offline_eventos"
         ordering = ["-criado_em"]
+
+
+class TesteContingenciaPDV(models.Model):
+    class Cenario(models.TextChoices):
+        QUEDA_DURANTE_CARRINHO = "queda_carrinho", "Queda durante a montagem do carrinho"
+        QUEDA_ANTES_FINALIZAR = "queda_antes_finalizar", "Queda imediatamente antes de finalizar"
+        RESPOSTA_PERDIDA = "resposta_perdida", "Venda concluída com resposta perdida"
+        DUAS_VENDAS = "duas_vendas", "Duas vendas offline e reconexão"
+        REABERTURA_NAVEGADOR = "reabertura_navegador", "Fechar e reabrir com venda na fila"
+        QUEDA_ENERGIA = "queda_energia", "Desligamento abrupto com carrinho aberto"
+        CATALOGO_VENCIDO = "catalogo_vencido", "Catálogo local vencido"
+        PAGAMENTO_BLOQUEADO = "pagamento_bloqueado", "Pagamento/cliente dependente de internet"
+        ERRO_ESTOQUE = "erro_estoque", "Erro de estoque na sincronização"
+        CAIXA_FECHADO = "caixa_fechado", "Caixa fechado antes da sincronização"
+        QUEDA_NFCE = "queda_nfce", "Queda durante emissão normal de NFC-e"
+        CONTINGENCIA_FISCAL = "contingencia_fiscal", "Entrada e saída da contingência fiscal"
+        TROCA_MAQUINA = "troca_maquina", "Formatação ou substituição da máquina"
+        DOIS_CAIXAS = "dois_caixas", "Dois caixas simultâneos na filial"
+
+    class Resultado(models.TextChoices):
+        APROVADO = "aprovado", "Aprovado"
+        FALHOU = "falhou", "Falhou"
+        BLOQUEADO = "bloqueado", "Bloqueado"
+
+    instalacao = models.ForeignKey(
+        InstalacaoPDVOffline,
+        on_delete=models.CASCADE,
+        related_name="testes_contingencia",
+    )
+    cenario = models.CharField(max_length=40, choices=Cenario.choices, db_index=True)
+    resultado = models.CharField(max_length=20, choices=Resultado.choices, db_index=True)
+    resultado_esperado = models.TextField()
+    resultado_obtido = models.TextField()
+    local_id = models.CharField(max_length=40, blank=True)
+    responsavel_id = models.BigIntegerField(null=True, blank=True)
+    responsavel_nome = models.CharField(max_length=160)
+    executado_em = models.DateTimeField(default=timezone.now, db_index=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "pdv_testes_contingencia"
+        ordering = ["-executado_em", "-pk"]
+        indexes = [
+            models.Index(fields=["instalacao", "cenario", "-executado_em"], name="pdv_teste_inst_cen_idx"),
+            models.Index(fields=["resultado", "-executado_em"], name="pdv_teste_result_idx"),
+        ]

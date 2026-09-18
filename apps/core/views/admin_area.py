@@ -1,4 +1,6 @@
+import csv
 import json
+import re
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlencode
@@ -51,7 +53,7 @@ from apps.core.tenant_context import get_current_database_alias
 from apps.core.views.audit import core_log_context
 from apps.core.views._admin import admin_area_required, superuser_required
 from apps.produtos.services.replicacao_service import ReplicacaoProdutoService
-from apps.pdv.models import EventoInstalacaoPDVOffline, InstalacaoPDVOffline
+from apps.pdv.models import EventoInstalacaoPDVOffline, InstalacaoPDVOffline, TesteContingenciaPDV
 
 
 PER_PAGE = 10
@@ -433,6 +435,44 @@ def instalacoes_pdv_offline(request):
         queryset = queryset.filter(status=status)
     if somente_pendencias:
         queryset = queryset.filter(Q(fila_pendente_quantidade__gt=0) | Q(fila_erro_quantidade__gt=0))
+    testes = TesteContingenciaPDV.objects.using('default').select_related('instalacao')
+    resumo_testes = testes.aggregate(
+        total=Count('pk'),
+        aprovados=Count('pk', filter=Q(resultado=TesteContingenciaPDV.Resultado.APROVADO)),
+        falhas=Count('pk', filter=Q(resultado=TesteContingenciaPDV.Resultado.FALHOU)),
+    )
+    metricas_por_filial = {}
+    cenarios_com_resultado_atual = set()
+    for linha in testes.values(
+        'instalacao__tenant_alias', 'instalacao__filial_id_origem', 'cenario', 'resultado',
+    ).order_by('-executado_em', '-pk'):
+        chave_filial = (linha['instalacao__tenant_alias'], linha['instalacao__filial_id_origem'])
+        metrica = metricas_por_filial.setdefault(chave_filial, {
+            'executados': 0, 'cenarios_aprovados': 0, 'falhas': 0, 'bloqueados': 0,
+        })
+        metrica['executados'] += 1
+        chave_cenario = (*chave_filial, linha['cenario'])
+        if chave_cenario in cenarios_com_resultado_atual:
+            continue
+        cenarios_com_resultado_atual.add(chave_cenario)
+        if linha['resultado'] == TesteContingenciaPDV.Resultado.APROVADO:
+            metrica['cenarios_aprovados'] += 1
+        elif linha['resultado'] == TesteContingenciaPDV.Resultado.FALHOU:
+            metrica['falhas'] += 1
+        else:
+            metrica['bloqueados'] += 1
+    cobertura_filiais = []
+    for filial in base_queryset.values(
+        'tenant_alias', 'filial_id_origem', 'filial_nome',
+    ).distinct().order_by('filial_nome'):
+        metrica = metricas_por_filial.get((filial['tenant_alias'], filial['filial_id_origem']), {})
+        cobertura_filiais.append({
+            **filial,
+            'executados': metrica.get('executados', 0),
+            'cenarios_aprovados': metrica.get('cenarios_aprovados', 0),
+            'falhas': metrica.get('falhas', 0),
+            'bloqueados': metrica.get('bloqueados', 0),
+        })
     return render(request, 'core/admin/instalacoes_pdv_offline.html', {
         'instalacoes': _paginate(request, queryset),
         'busca': busca,
@@ -443,7 +483,86 @@ def instalacoes_pdv_offline(request):
         'total_vendas_pendentes': base_queryset.aggregate(total=Sum('fila_pendente_quantidade'))['total'] or 0,
         'total_vendas_com_erro': base_queryset.aggregate(total=Sum('fila_erro_quantidade'))['total'] or 0,
         'instalacoes_sem_recuperacao': base_queryset.filter(recuperacao_configurada=False).count(),
+        'cenarios_teste': TesteContingenciaPDV.Cenario.choices,
+        'resultados_teste': TesteContingenciaPDV.Resultado.choices,
+        'testes_recentes': testes[:30],
+        'resumo_testes': resumo_testes,
+        'cobertura_filiais': cobertura_filiais,
+        'total_cenarios_obrigatorios': len(TesteContingenciaPDV.Cenario.choices),
     })
+
+
+@superuser_required
+@require_POST
+def instalacao_pdv_offline_registrar_teste(request, pk):
+    instalacao = get_object_or_404(InstalacaoPDVOffline.objects.using('default'), pk=pk)
+    cenario = request.POST.get('cenario', '').strip()
+    resultado = request.POST.get('resultado', '').strip()
+    esperado = request.POST.get('resultado_esperado', '').strip()[:4000]
+    obtido = request.POST.get('resultado_obtido', '').strip()[:4000]
+    local_id = request.POST.get('local_id', '').strip()
+    if cenario not in TesteContingenciaPDV.Cenario.values:
+        messages.error(request, 'Selecione um cenário de teste válido.')
+    elif resultado not in TesteContingenciaPDV.Resultado.values:
+        messages.error(request, 'Selecione o resultado do teste.')
+    elif not esperado or not obtido:
+        messages.error(request, 'Informe o resultado esperado e o resultado obtido.')
+    elif local_id and not re.fullmatch(r'pdv[a-f0-9]{32}', local_id):
+        messages.error(request, 'O local_id informado é inválido.')
+    else:
+        responsavel_nome = getattr(request.user, 'nome', '') or request.user.email
+        with transaction.atomic(using='default'):
+            teste = TesteContingenciaPDV.objects.using('default').create(
+                instalacao=instalacao,
+                cenario=cenario,
+                resultado=resultado,
+                resultado_esperado=esperado,
+                resultado_obtido=obtido,
+                local_id=local_id,
+                responsavel_id=request.user.pk,
+                responsavel_nome=responsavel_nome,
+            )
+            EventoInstalacaoPDVOffline.objects.using('default').create(
+                instalacao=instalacao,
+                tipo='teste_contingencia',
+                ator_id=request.user.pk,
+                ator_nome=responsavel_nome,
+                detalhe=f'{teste.get_cenario_display()}: {teste.get_resultado_display()}.',
+                metadados={'teste_id': teste.pk, 'cenario': cenario, 'resultado': resultado, 'local_id': local_id},
+            )
+        messages.success(request, 'Teste de contingência registrado na auditoria.')
+    return redirect('core:admin_instalacoes_pdv_offline')
+
+
+@superuser_required
+def testes_contingencia_pdv_csv(request):
+    def valor_seguro(value):
+        texto = str(value or '')
+        return f"'{texto}" if texto.startswith(('=', '+', '-', '@')) else texto
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="testes-contingencia-pdv.csv"'
+    response.write('\ufeff')
+    writer = csv.writer(response, delimiter=';')
+    writer.writerow([
+        'Filial', 'Caixa', 'Instalação', 'Cenário', 'Resultado', 'Resultado esperado',
+        'Resultado obtido', 'local_id', 'Responsável', 'Executado em',
+    ])
+    testes = TesteContingenciaPDV.objects.using('default').select_related('instalacao')
+    for teste in testes.iterator():
+        writer.writerow([valor_seguro(valor) for valor in [
+            teste.instalacao.filial_nome,
+            teste.instalacao.caixa_descricao or teste.instalacao.nome_dispositivo,
+            teste.instalacao.installation_id,
+            teste.get_cenario_display(),
+            teste.get_resultado_display(),
+            teste.resultado_esperado,
+            teste.resultado_obtido,
+            teste.local_id,
+            teste.responsavel_nome,
+            timezone.localtime(teste.executado_em).strftime('%d/%m/%Y %H:%M:%S'),
+        ]])
+    return response
 
 
 @superuser_required

@@ -225,6 +225,13 @@
       return {
         fila_pendente_quantidade: queue.length,
         fila_erro_quantidade: errors.length,
+        fila_resumo: queue.slice(0, 1000).map(item => ({
+          local_id: item.local_id,
+          status: item.status === 'erro' ? 'erro' : 'pendente',
+          attempts: Number(item.attempts || 0),
+          created_at: item.created_at || null,
+          last_error: String(item.last_error || '').slice(0, 300),
+        })),
         catalogo_atualizado_em: snapshot?.catalogo_em || snapshot?.gerado_em || null,
         ultimo_erro_sincronizacao: String(latestError?.last_error || '').slice(0, 1000),
         ultima_sincronizacao_em: await this._getMeta('ultima_sincronizacao_em'),
