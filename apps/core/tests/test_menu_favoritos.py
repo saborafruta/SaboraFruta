@@ -158,8 +158,8 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertIn("'Accept': 'application/json'", script)
         self.assertIn('readJsonResponse', script)
         self.assertEqual(template.count('data-sidebar-dashboard'), 1)
-        self.assertIn('class="sidebar-home-link flex items-center gap-3', template)
-        self.assertIn('sidebar-home-link.is-active', template)
+        self.assertIn('class="flex items-center gap-3 px-3 py-2.5', template)
+        self.assertNotIn('sidebar-home-link.is-active', template)
         self.assertIn('.sidebar-home-label {', template)
         self.assertIn('<span class="sidebar-home-label">{{ pagina_inicial_nome }}</span>', template)
         home_label_rule = template.split('.sidebar-home-label {', 1)[1].split('}', 1)[0]
@@ -172,47 +172,41 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertIn('nav.appendChild(panel)', script)
         self.assertNotIn("dashboard.insertAdjacentElement('afterend', panel)", script)
 
-    def test_sanfonas_iniciam_fechadas_e_exibem_somente_tela_atual(self):
+    def test_sanfonas_restauram_estado_expandido_e_visual_simples(self):
         raiz = Path(__file__).resolve().parents[1]
         sidebar = (raiz / 'templates' / 'core' / '_sidebar.html').read_text(encoding='utf-8')
         navegacao = (raiz / 'templates' / 'core' / '_sidebar_navigation.html').read_text(encoding='utf-8')
 
-        estado_fechado = (
-            'var s = {cadastros:false, operacoes:false, financeiro:false, '
-            'logistica:false, avancado:false, food_service:false, moda:false, polpa:false};'
+        estado_aberto = (
+            'var padrao = {cadastros:true, operacoes:true, financeiro:true, '
+            'logistica:true, avancado:true, food_service:true, moda:true, polpa:true};'
         )
-        self.assertIn(estado_fechado, sidebar)
-        self.assertNotIn("localStorage.setItem('sidebar-secoes'", sidebar)
-        self.assertNotIn("s.moda = true", sidebar)
-        self.assertIn('grupoTemTelaAtual: function(grupo)', sidebar)
-        self.assertIn(
-            '.sidebar-group-current-only a:not(.sidebar-current-screen)',
-            sidebar,
-        )
-        self.assertIn("atual.indexOf(destino + '/') === 0", sidebar)
-        self.assertEqual(sidebar.count('grupoTemTelaAtual($el)'), 8)
-        self.assertEqual(navegacao.count('grupoTemTelaAtual($el)'), 8)
-        self.assertEqual(sidebar.count("'sidebar-group-current-only'"), 8)
-        self.assertEqual(navegacao.count("'sidebar-group-current-only'"), 8)
-        self.assertEqual(sidebar.count('sidebar-module-button'), 13)  # 5 regras CSS + 8 botoes mobile
+        self.assertIn(estado_aberto, sidebar)
+        self.assertIn("localStorage.getItem('sidebar-secoes')", sidebar)
+        self.assertIn("localStorage.setItem('sidebar-secoes'", sidebar)
+        self.assertNotIn('grupoTemTelaAtual', sidebar)
+        self.assertNotIn('grupoTemTelaAtual', navegacao)
+        self.assertNotIn('sidebar-group-current-only', sidebar)
+        self.assertNotIn('sidebar-group-current-only', navegacao)
+        self.assertEqual(sidebar.count('sidebar-module-button'), 9)  # 1 regra tipografica + 8 botoes mobile
         self.assertEqual(navegacao.count('sidebar-module-button'), 8)
-        self.assertIn('class="sidebar-home-link flex items-center gap-3', navegacao)
+        self.assertIn('class="flex items-center gap-3 px-3 py-2.5', navegacao)
         self.assertIn(
             '<span class="sidebar-home-label" x-show="!collapsed">{{ pagina_inicial_nome }}</span>',
             navegacao,
         )
         self.assertIn('aria-current="page"', navegacao)
-        self.assertNotIn('data-sidebar-dashboard\n         class="flex items-center', navegacao)
+        self.assertIn('data-sidebar-dashboard\n         class="flex items-center', navegacao)
         self.assertIn('.sidebar-module-button > span:first-child', sidebar)
         self.assertIn('color: #1d4ed8 !important;', sidebar)
-        self.assertIn('border: 1px solid #d7e2f2 !important;', sidebar)
-        self.assertIn('inset 3px 0 0 #2563eb', sidebar)
+        self.assertNotIn('border: 1px solid #d7e2f2 !important;', sidebar)
+        self.assertNotIn('inset 3px 0 0 #2563eb', sidebar)
         self.assertNotIn('border: 1px solid #fed7aa !important;', sidebar)
         self.assertIn('font-family: Inter, ui-sans-serif, system-ui, sans-serif !important;', sidebar)
         self.assertIn('font-size: 13px !important;', sidebar)
         self.assertIn('font-weight: 600 !important;', sidebar)
         self.assertNotIn('repeating-linear-gradient(135deg', sidebar)
-        self.assertIn('box-shadow: 0 3px 9px', sidebar)
+        self.assertNotIn('.sidebar-module-button:hover', sidebar)
 
     def test_produtos_principais_nao_ficam_ativos_dentro_de_moda(self):
         raiz = Path(__file__).resolve().parents[1]
