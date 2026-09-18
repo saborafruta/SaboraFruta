@@ -196,10 +196,20 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertIn(estado_aberto, sidebar)
         self.assertIn("localStorage.getItem('sidebar-secoes')", sidebar)
         self.assertIn("localStorage.setItem('sidebar-secoes'", sidebar)
-        self.assertNotIn('grupoTemTelaAtual', sidebar)
-        self.assertNotIn('grupoTemTelaAtual', navegacao)
-        self.assertNotIn('sidebar-group-current-only', sidebar)
-        self.assertNotIn('sidebar-group-current-only', navegacao)
+        self.assertIn('window.aplicarFocoTelaAtualSidebar', sidebar)
+        self.assertIn('window.expandirSecaoAtualSidebar', sidebar)
+        self.assertIn('.sidebar-group-current-only > a:not(.sidebar-current-entry)', sidebar)
+        self.assertIn("melhorLink.setAttribute('aria-current', 'page')", sidebar)
+        self.assertIn('window.aplicarFocoTelaAtualSidebar($root)', sidebar)
+        for nome_secao in (
+            'cadastros', 'operacoes', 'financeiro', 'logistica',
+            'avancado', 'food_service', 'moda', 'polpa',
+        ):
+            marcador = f'data-sidebar-page-group="{nome_secao}"'
+            self.assertEqual(sidebar.count(marcador), 1)
+            self.assertEqual(navegacao.count(marcador), 1)
+        self.assertEqual(sidebar.count('window.expandirSecaoAtualSidebar($root,'), 8)
+        self.assertEqual(navegacao.count('window.expandirSecaoAtualSidebar($root,'), 8)
         self.assertEqual(sidebar.count('sidebar-module-button'), 9)  # 1 regra tipografica + 8 botoes mobile
         self.assertEqual(navegacao.count('sidebar-module-button'), 8)
         self.assertIn('class="flex items-center gap-3 px-3 py-2.5', navegacao)
@@ -270,8 +280,14 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         template = (raiz / 'templates' / 'core' / '_sidebar.html').read_text(encoding='utf-8')
         drawer_mobile = template.split('<!-- DRAWER MOBILE -->', 1)[1]
 
-        self.assertIn("@click=\"toggleSecao('moda')\"", drawer_mobile)
-        self.assertIn("@click=\"toggleSecao('polpa')\"", drawer_mobile)
+        self.assertIn(
+            "@click=\"window.expandirSecaoAtualSidebar($root, 'moda') || toggleSecao('moda')\"",
+            drawer_mobile,
+        )
+        self.assertIn(
+            "@click=\"window.expandirSecaoAtualSidebar($root, 'polpa') || toggleSecao('polpa')\"",
+            drawer_mobile,
+        )
         self.assertNotIn("@click=\"!collapsed && toggleSecao('moda')\"", drawer_mobile)
         self.assertNotIn("@click=\"!collapsed && toggleSecao('polpa')\"", drawer_mobile)
         self.assertNotIn('<span x-show="!collapsed">{{ grupo.label }}</span>', drawer_mobile)

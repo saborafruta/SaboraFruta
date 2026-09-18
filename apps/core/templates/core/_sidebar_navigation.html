@@ -65,12 +65,12 @@
 
       <!-- Seção Cadastros -->
       {% if 'cadastros' in modulos_ativos %}
-      <button type="button" @click="!collapsed && toggleSecao('cadastros')" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
+      <button type="button" @click="!collapsed && (window.expandirSecaoAtualSidebar($root, 'cadastros') || toggleSecao('cadastros'))" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
         <span class="sidebar-module-label" :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">{% include "core/_sidebar_module_icon.html" with nome="cadastros" %}<span>Cadastros</span></span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.cadastros ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div class="my-2 mx-3" x-show="collapsed" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
-      <div x-show="collapsed || secoes.cadastros">
+      <div x-show="collapsed || secoes.cadastros" data-sidebar-page-group="cadastros">
 
       <a href="{{ clientes_url }}"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
@@ -209,12 +209,12 @@
       {% endif %}
 
       {% if 'operacoes' in modulos_ativos %}
-      <button type="button" @click="!collapsed && toggleSecao('operacoes')" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
+      <button type="button" @click="!collapsed && (window.expandirSecaoAtualSidebar($root, 'operacoes') || toggleSecao('operacoes'))" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
         <span class="sidebar-module-label" :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">{% include "core/_sidebar_module_icon.html" with nome="operacoes" %}<span>Operações</span></span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.operacoes ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div class="my-2 mx-3" x-show="collapsed" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
-      <div x-show="collapsed || secoes.operacoes">
+      <div x-show="collapsed || secoes.operacoes" data-sidebar-page-group="operacoes">
 
       <a href="{{ estoque_url }}"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
@@ -433,7 +433,7 @@
 
       <!-- â”€â”€ SEÃ‡ÃƒO AVANÃ‡ADO â”€â”€ -->
       {% if 'financeiro' in modulos_ativos %}
-      <button type="button" @click="!collapsed && toggleSecao('financeiro')" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
+      <button type="button" @click="!collapsed && (window.expandirSecaoAtualSidebar($root, 'financeiro') || toggleSecao('financeiro'))" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
         <span class="sidebar-module-label" :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">{% include "core/_sidebar_module_icon.html" with nome="financeiro" %}<span>Financeiro</span></span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.financeiro ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
@@ -448,7 +448,7 @@
         .finance-menu > .finance-order-5 { order: 5; }
         .finance-menu > .finance-order-6 { order: 6; }
       </style>
-      <div class="finance-menu" x-show="collapsed || secoes.financeiro">
+      <div class="finance-menu" x-show="collapsed || secoes.financeiro" data-sidebar-page-group="financeiro">
 
       {% url 'financeiro:receber_list' as financeiro_url %}
       {% url 'financeiro:pagar_list' as pagar_url %}
@@ -692,12 +692,12 @@
       {% endif %}
 
       {% if 'logistica' in modulos_ativos %}
-      <button type="button" @click="!collapsed && toggleSecao('logistica')" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
+      <button type="button" @click="!collapsed && (window.expandirSecaoAtualSidebar($root, 'logistica') || toggleSecao('logistica'))" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
         <span class="sidebar-module-label" :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">{% include "core/_sidebar_module_icon.html" with nome="logistica" %}<span>Logistica</span></span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.logistica ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div class="my-2 mx-3" x-show="collapsed" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
-      <div x-show="collapsed || secoes.logistica">
+      <div x-show="collapsed || secoes.logistica" data-sidebar-page-group="logistica">
       <a href="{{ pedido_expedicao_url }}"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :class="collapsed ? 'justify-center' : ''"
@@ -780,12 +780,12 @@
       {% endif %}
 
       {% if 'avancado' in modulos_ativos %}
-      <button type="button" @click="!collapsed && toggleSecao('avancado')" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
+      <button type="button" @click="!collapsed && (window.expandirSecaoAtualSidebar($root, 'avancado') || toggleSecao('avancado'))" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
         <span class="sidebar-module-label" :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">{% include "core/_sidebar_module_icon.html" with nome="avancado" %}<span>Avançado</span></span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.avancado ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div class="my-2 mx-3" x-show="collapsed" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
-      <div x-show="collapsed || secoes.avancado">
+      <div x-show="collapsed || secoes.avancado" data-sidebar-page-group="avancado">
       <a href="{{ fiscal_consultas_url }}"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :class="collapsed ? 'justify-center' : ''"
@@ -913,12 +913,12 @@
       {% endif %}
 
       {% if 'food_service' in modulos_ativos %}
-      <button type="button" @click="!collapsed && toggleSecao('food_service')" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
+      <button type="button" @click="!collapsed && (window.expandirSecaoAtualSidebar($root, 'food_service') || toggleSecao('food_service'))" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
         <span class="sidebar-module-label" :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">{% include "core/_sidebar_module_icon.html" with nome="food_service" %}<span>Food Service</span></span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.food_service ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div class="my-2 mx-3" x-show="collapsed" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
-      <div x-show="collapsed || secoes.food_service">
+      <div x-show="collapsed || secoes.food_service" data-sidebar-page-group="food_service">
       <a href="{% url 'food_service:painel' %}"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :class="collapsed ? 'justify-center' : ''"
@@ -1023,12 +1023,12 @@
         apps/moda/menu.py, então acrescentar um grupo é uma linha lá, e não
         mais um bloco de HTML aqui.
       {% endcomment %}
-      <button type="button" @click="!collapsed && toggleSecao('moda')" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
+      <button type="button" @click="!collapsed && (window.expandirSecaoAtualSidebar($root, 'moda') || toggleSecao('moda'))" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
         <span class="sidebar-module-label" :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">{% include "core/_sidebar_module_icon.html" with nome="moda" %}<span>Moda e Confecção</span></span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.moda ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div class="my-2 mx-3" x-show="collapsed" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
-      <div x-show="collapsed || secoes.moda">
+      <div x-show="collapsed || secoes.moda" data-sidebar-page-group="moda">
       {% for grupo in moda_grupos %}
       <a href="{% url 'moda:grupo' grupo.slug %}"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
@@ -1048,12 +1048,12 @@
         apps/polpa/menu.py, então acrescentar um grupo é uma linha lá, e não
         mais um bloco de HTML aqui.
       {% endcomment %}
-      <button type="button" @click="!collapsed && toggleSecao('polpa')" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
+      <button type="button" @click="!collapsed && (window.expandirSecaoAtualSidebar($root, 'polpa') || toggleSecao('polpa'))" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
         <span class="sidebar-module-label" :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">{% include "core/_sidebar_module_icon.html" with nome="polpa" %}<span>Polpa de Frutas</span></span>
         <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.polpa ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div class="my-2 mx-3" x-show="collapsed" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
-      <div x-show="collapsed || secoes.polpa">
+      <div x-show="collapsed || secoes.polpa" data-sidebar-page-group="polpa">
       {% for grupo in polpa_grupos %}
       <a href="{% url 'polpa:grupo' grupo.slug %}"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
