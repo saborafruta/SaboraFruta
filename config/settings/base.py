@@ -196,6 +196,7 @@ TENANT_GLOBAL_MODELS = [
     'core.tenantpubliclink',
     'pdv.instalacaopdvoffline',
     'pdv.eventoinstalacaopdvoffline',
+    'pdv.testecontingenciapdv',
     'sessions.session',
 ]
 DATABASE_ROUTERS = ['apps.core.db_router.TenantDatabaseRouter']

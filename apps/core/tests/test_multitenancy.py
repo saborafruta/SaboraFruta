@@ -25,6 +25,7 @@ from apps.core.services.tenant_user_service import TenantUserService
 from apps.core.tenant_context import get_current_tenant_db, tenant_atomic, tenant_db
 from apps.core.views.auth import SelecionarFilialView
 from apps.core.views.admin_area import central_administrativa
+from apps.pdv.models import TesteContingenciaPDV
 
 
 class MultitenancyFoundationTests(TestCase):
@@ -92,6 +93,18 @@ class MultitenancyFoundationTests(TestCase):
             self.assertEqual(router.db_for_read(EmpresaBanco), 'default')
             self.assertEqual(router.db_for_read(Session), 'default')
         self.assertIsNone(get_current_tenant_db())
+
+    @override_settings(
+        TENANT_DATABASE_ROUTING_ENABLED=True,
+        TENANT_DATABASE_ALIASES=['empresa_tenant_99888777000166'],
+    )
+    def test_teste_contingencia_pdv_permanece_no_banco_central(self):
+        router = TenantDatabaseRouter()
+        self.assertEqual(router.db_for_read(TesteContingenciaPDV), 'default')
+        self.assertTrue(router.allow_migrate('default', 'pdv', 'testecontingenciapdv'))
+        self.assertFalse(router.allow_migrate(
+            self.banco.db_alias, 'pdv', 'testecontingenciapdv',
+        ))
 
     @override_settings(
         TENANT_DATABASE_ROUTING_ENABLED=True,
