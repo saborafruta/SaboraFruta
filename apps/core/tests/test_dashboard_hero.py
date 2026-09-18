@@ -27,10 +27,10 @@ class DashboardHeroTemplateTests(SimpleTestCase):
         )
 
         self.assertIn('body.tema-claro .dashboard-shell .dashboard-hero {', template)
-        self.assertIn('linear-gradient(135deg, #dc6b3f 0%, #ee7d4c 46%, #f7955c 100%)', template)
+        self.assertIn('linear-gradient(135deg, #d86535 0%, #e85d24 46%, #f97316 100%)', template)
         self.assertIn('body.tema-claro .dashboard-shell .dashboard-hero h2 { color: #fff;', template)
         self.assertIn('body.tema-claro .dashboard-shell .dashboard-hero-eyebrow { color: #fed7aa; }', template)
-        self.assertIn('linear-gradient(135deg,#dc6b3f 0%,#ee7d4c 46%,#f7955c 100%)', inicio_css)
+        self.assertIn('linear-gradient(135deg,#d86535 0%,#e85d24 46%,#f97316 100%)', inicio_css)
         self.assertIn('body.tema-claro .inicio-hero h2 { color:#fff;', inicio_css)
         self.assertIn('body.tema-claro .inicio-eyebrow { color:#fed7aa; }', inicio_css)
         self.assertIn('@media (max-width: 600px)', template)
