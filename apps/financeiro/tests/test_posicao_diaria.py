@@ -1942,7 +1942,54 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertEqual(pagamento.conta_bancaria, self.caixa)
         self.assertEqual(venda.valor_pago, Decimal("100.00"))
 
+    def test_edicao_de_cartao_remove_troco_antigo_sem_somar_no_valor(self):
+        cartao = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            filial=self.filial,
+            descricao="Cartão crédito parcelado",
+            tipo=TipoFormaPagamento.CARTAO_CREDITO,
+            conta_bancaria_padrao=self.banco,
+        )
+        TaxaParcelamento.objects.create(
+            forma_pagamento=cartao,
+            parcelas=2,
+            bandeira="mastercard",
+            taxa=Decimal("4.3571"),
+        )
+        venda = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=89, status="finalizada",
+            valor_total=Decimal("140.00"), valor_pago=Decimal("140.00"),
+            usuario=self.usuario,
+            data_venda=datetime(2026, 8, 21, 12, tzinfo=timezone.get_current_timezone()),
+        )
+        pagamento = PagamentoVendaPDV.objects.create(
+            venda_pdv=venda, forma_pagamento=cartao,
+            valor=Decimal("142.00"), troco=Decimal("2.00"),
+            bandeira="mastercard", numero_parcelas=2,
+        )
+
+        response = self.client.post(reverse("financeiro:posicao_diaria"), {
+            "acao": "editar_entrada", "origem": "venda",
+            "movimento_id": pagamento.pk, "data_referencia": "2026-08-21",
+            "valor": "140.00", "valor_taxa": "6.10",
+            "valor_liquido": "133.90", "forma_pagamento": cartao.pk,
+            "conta_bancaria": self.banco.pk, "data_entrada": "2026-08-22",
+            "bandeira": "mastercard", "numero_parcelas": "2",
+            "justificativa": "Corrigir troco indevido no cartão",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        pagamento.refresh_from_db()
+        venda.refresh_from_db()
+        self.assertEqual(pagamento.valor, Decimal("140.00"))
+        self.assertEqual(pagamento.troco, Decimal("0.00"))
+        self.assertEqual(pagamento.valor_taxa, Decimal("6.10"))
+        self.assertEqual(pagamento.valor_liquido, Decimal("133.90"))
+        self.assertEqual(venda.valor_pago, Decimal("140.00"))
+
     def test_admin_exclui_pagamento_de_venda_da_posicao_diaria(self):
+        self.forma.taxa_administrativa = Decimal("1.00")
+        self.forma.save(update_fields=["taxa_administrativa"])
         venda = VendaPDV.objects.create(
             filial=self.filial, numero_venda=90, status="finalizada",
             valor_total=Decimal("180.00"), valor_pago=Decimal("180.00"), usuario=self.usuario,
@@ -1955,6 +2002,11 @@ class PosicaoDiariaCaixaTests(TestCase):
         pagamento_errado = PagamentoVendaPDV.objects.create(
             venda_pdv=venda, forma_pagamento=self.forma, conta_bancaria=self.banco,
             valor=Decimal("100.00"),
+        )
+        self.assertTrue(
+            ContaPagar.objects.filter(
+                documento_tipo="taxa_pdv", documento_id=pagamento_errado.pk,
+            ).exists()
         )
         self.banco.saldo_atual = Decimal("280.00")
         self.banco.save(update_fields=["saldo_atual"])
@@ -1970,7 +2022,12 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.banco.refresh_from_db()
         self.assertEqual(pagamento_errado.status, "excluido")
         self.assertEqual(venda.valor_pago, Decimal("80.00"))
-        self.assertEqual(self.banco.saldo_atual, Decimal("180.00"))
+        self.assertEqual(self.banco.saldo_atual, Decimal("179.20"))
+        self.assertFalse(
+            ContaPagar.objects.filter(
+                documento_tipo="taxa_pdv", documento_id=pagamento_errado.pk,
+            ).exists()
+        )
 
         listagem = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-08-21"})
         registros_venda = [

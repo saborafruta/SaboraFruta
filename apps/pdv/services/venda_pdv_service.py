@@ -775,7 +775,16 @@ class VendaPDVService:
                     "Esta forma de pagamento está oculta no PDV. Atualize o caixa e escolha outra forma."
                 )
 
-            troco = max(Decimal("0.00"), valor_pgto - (valor_total - valor_pago))
+            restante = max(Decimal("0.00"), valor_total - valor_pago)
+            if valor_pgto > restante and forma.tipo != TipoFormaPagamento.DINHEIRO:
+                raise DadosInvalidosError(
+                    "Pagamento acima do valor restante só é permitido em dinheiro, para troco."
+                )
+            troco = (
+                max(Decimal("0.00"), valor_pgto - restante)
+                if forma.tipo == TipoFormaPagamento.DINHEIRO
+                else Decimal("0.00")
+            )
             numero_parcelas = int(pgto.get("numero_parcelas") or pgto.get("parcelas") or 1)
             bandeira = (pgto.get("bandeira") or "").strip()
             if forma.tipo == TipoFormaPagamento.CARTAO_DEBITO:

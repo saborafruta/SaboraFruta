@@ -177,6 +177,62 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(pagamento.valor_taxa, Decimal("0.11"))
         self.assertEqual(pagamento.valor_liquido, Decimal("9.89"))
 
+    def test_cartao_nao_aceita_valor_acima_do_restante_como_troco(self):
+        produto = self.criar_produto("Produto sem troco no cartão")
+        self.abastecer(produto, "10")
+        cartao = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            filial=self.filial,
+            descricao="Cartão crédito parcelado",
+            tipo=TipoFormaPagamento.CARTAO_CREDITO,
+        )
+        TaxaParcelamento.objects.create(
+            forma_pagamento=cartao,
+            parcelas=2,
+            bandeira="mastercard",
+            taxa=Decimal("4.35"),
+        )
+
+        with self.assertRaisesMessage(
+            DadosInvalidosError,
+            "só é permitido em dinheiro",
+        ):
+            VendaPDVService.finalizar_venda(
+                sessao=self.sessao,
+                filial=self.filial,
+                usuario=self.usuario,
+                itens=[{"produto_id": produto.pk, "quantidade": "1"}],
+                pagamentos=[
+                    {"forma_id": self.forma.pk, "valor": "2.00"},
+                    {
+                        "forma_id": cartao.pk,
+                        "valor": "10.00",
+                        "bandeira": "mastercard",
+                        "numero_parcelas": 2,
+                    },
+                ],
+            )
+
+        self.assertFalse(VendaPDV.objects.filter(sessao_pdv=self.sessao).exists())
+
+    def test_dinheiro_continua_aceitando_valor_acima_do_total_como_troco(self):
+        produto = self.criar_produto("Produto com troco em dinheiro")
+        self.abastecer(produto, "10")
+
+        venda = VendaPDVService.finalizar_venda(
+            sessao=self.sessao,
+            filial=self.filial,
+            usuario=self.usuario,
+            itens=[{"produto_id": produto.pk, "quantidade": "1"}],
+            pagamentos=[{"forma_id": self.forma.pk, "valor": "20.00"}],
+        )
+
+        pagamento = venda.pagamentos.get()
+        self.assertEqual(pagamento.valor, Decimal("20.00"))
+        self.assertEqual(pagamento.troco, Decimal("10.00"))
+        self.assertEqual(venda.valor_pago, Decimal("20.00"))
+        self.assertEqual(venda.troco, Decimal("10.00"))
+
     def test_busca_produtos_permite_carregar_resultados_apos_os_primeiros_vinte(self):
         for indice in range(21):
             self.criar_produto(f'Polo paginação {indice:02d}')

@@ -26,7 +26,7 @@ from apps.financeiro.forms import (
     EditarTaxaTransacaoForm,
     MovimentoContaBancariaForm,
 )
-from apps.financeiro.constants.enums import StatusContaPagar
+from apps.financeiro.constants.enums import StatusContaPagar, TipoFormaPagamento
 from apps.financeiro.models import (
     ContaPagar, ContaReceber, PagamentoContaPagar, PagamentoContaReceber,
     PlanoContas,
@@ -36,6 +36,7 @@ from apps.financeiro.models.caixa_historico import DiaCaixaHistorico
 from apps.financeiro.services.caixa_historico_service import consultar_historico
 from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaService
 from apps.financeiro.services.receber_service import ContaReceberService
+from apps.financeiro.services.taxas_transacao_service import sincronizar_taxa_transacao
 from apps.financeiro.views.contas_bancarias import ContaBancariaListView, _usuario_admin
 from apps.financeiro.views.pagar import _contexto_meta_despesa_pessoal
 from apps.moda.models import PedidoProducao
@@ -775,7 +776,7 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             item.save(update_fields=[*campos, "updated_at"])
         else:
             campos += [
-                "valor", "taxa_percentual_aplicada", "taxa_fixa_aplicada", "valor_taxa",
+                "valor", "troco", "taxa_percentual_aplicada", "taxa_fixa_aplicada", "valor_taxa",
                 "valor_liquido", "taxa_calculada_em", "data_liquidacao_prevista",
                 "bandeira", "numero_parcelas", "prazo_compensacao_aplicado",
             ]
@@ -783,7 +784,13 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             calculo = _calculo_taxa_edicao(dados)
             item.conta_bancaria = dados["conta_bancaria"]
             item.forma_pagamento = dados["forma_pagamento"]
-            item.valor = dados["valor"] + (item.troco or 0)
+            if item.forma_pagamento.tipo == TipoFormaPagamento.DINHEIRO:
+                item.valor = dados["valor"] + (item.troco or 0)
+            else:
+                # Troco só existe em dinheiro. Em cartão/PIX, reaproveitar um
+                # troco antigo somava esse valor novamente ao editar a taxa.
+                item.valor = dados["valor"]
+                item.troco = Decimal("0.00")
             item.bandeira = dados["forma_pagamento"].normalizar_bandeira(dados.get("bandeira", ""))
             item.numero_parcelas = dados.get("numero_parcelas") or 1
             item.taxa_percentual_aplicada = calculo["percentual"]
@@ -795,7 +802,13 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
             item.prazo_compensacao_aplicado = dados["forma_pagamento"].prazo_compensacao_dias_uteis or 0
             item.save(update_fields=campos)
             venda = item.venda_pdv
-            venda.valor_pago = sum((pagamento.valor_bruto_recebido for pagamento in venda.pagamentos.all()), 0)
+            venda.valor_pago = sum(
+                (
+                    pagamento.valor_bruto_recebido
+                    for pagamento in venda.pagamentos.exclude(status="excluido")
+                ),
+                0,
+            )
             venda.save(update_fields=["valor_pago", "updated_at"])
 
         nova_conta = item.conta_bancaria
@@ -846,6 +859,15 @@ class PosicaoDiariaCaixaView(PermissaoRequiredMixin, View):
         antes = snapshot_modelo(item, ["status"])
         item.status = "excluido"
         item.save(update_fields=["status"])
+        sincronizar_taxa_transacao(
+            origem="pdv",
+            origem_id=item.pk,
+            filial=item.venda_pdv.filial,
+            data=item.data_liquidacao_prevista,
+            valor=Decimal("0.00"),
+            forma_pagamento=item.forma_pagamento,
+            conta_bancaria=conta_anterior,
+        )
 
         venda = item.venda_pdv
         venda.valor_pago = sum(

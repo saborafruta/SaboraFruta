@@ -120,6 +120,8 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn('.payment-change { color:var(--pdv-warning);', template)
         self.assertIn(':aria-pressed="formaPgtoSelecionada?.id===forma.id"', template)
         self.assertIn('html.tema-claro .btn-fim:disabled { opacity:1 !important;', template)
+        self.assertIn("const permiteTroco = (this.formaPgtoSelecionada.tipo||'').toLowerCase()==='dinheiro';", template)
+        self.assertIn("Pagamento acima do restante só é permitido em dinheiro", template)
         claro = template.split('html.tema-claro body {', 1)[1].split('}', 1)[0]
         self.assertIn('--pdv-paid:#15803d;', claro)
         self.assertIn('--pdv-warning:#b45309;', claro)

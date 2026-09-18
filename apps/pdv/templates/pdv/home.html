@@ -5335,7 +5335,13 @@ function pdv() {
         if (!this.venda.cliente.id) { this.toast_('Selecione um cliente identificado para pagar com cashback.','erro'); return; }
         if (valor > parseFloat(this.cashbackDisponivel||0) + 0.001) { this.toast_('Valor maior que o saldo de cashback disponível.','erro'); return; }
       }
-      const troco = Math.max(0, valor-parseFloat(this.venda.restante));
+      const restante = parseFloat(this.venda.restante)||0;
+      const permiteTroco = (this.formaPgtoSelecionada.tipo||'').toLowerCase()==='dinheiro';
+      if (!permiteTroco && valor > restante + 0.001) {
+        this.toast_('Pagamento acima do restante só é permitido em dinheiro, para troco.','erro');
+        return;
+      }
+      const troco = permiteTroco ? Math.max(0, valor-restante) : 0;
       this.venda.pagamentos.push({ _id:Date.now()+Math.random(), forma_id:this.formaPgtoSelecionada.id,
         forma_descricao:this.formaPgtoSelecionada.descricao, forma_tipo:this.formaPgtoSelecionada.tipo, valor, troco,
         prazo_dias: aPrazo ? parseInt(this.prazoDiasPgto) : null,
