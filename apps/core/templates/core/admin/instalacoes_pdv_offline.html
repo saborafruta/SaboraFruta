@@ -23,6 +23,39 @@
   </section>
 
   <section class="card p-5">
+    <div>
+      <h2 class="font-bold">Vendas locais que exigem acompanhamento</h2>
+      <p class="text-sm text-slate-500 mt-1">A nova tentativa é entregue ao próprio caixa no próximo contato. Nenhum item, valor, cliente ou pagamento da venda fica neste painel.</p>
+    </div>
+    <div class="overflow-x-auto mt-4">
+      <table class="w-full text-sm">
+        <thead><tr class="text-left text-slate-500 border-b"><th class="py-2 pr-3">Venda/caixa</th><th class="py-2 pr-3">Estado</th><th class="py-2 pr-3">Erro</th><th class="py-2 pr-3">Responsável</th><th class="py-2">Tratamento</th></tr></thead>
+        <tbody>
+        {% for ocorrencia in ocorrencias_abertas %}
+          <tr class="border-b border-slate-200 align-top">
+            <td class="py-3 pr-3"><div class="font-mono text-xs">{{ ocorrencia.local_id }}</div><div class="text-slate-500 mt-1">{{ ocorrencia.instalacao.filial_nome }} · {{ ocorrencia.instalacao.caixa_descricao|default:ocorrencia.instalacao.nome_dispositivo }}<br>vista {{ ocorrencia.vista_por_ultimo_em|timesince }} atrás</div></td>
+            <td class="py-3 pr-3"><span class="soft-pill {% if ocorrencia.status_fila == 'erro' %}is-red{% else %}is-amber{% endif %}">{{ ocorrencia.status_fila }} · {{ ocorrencia.tentativas }} tentativa(s)</span><div class="mt-1">{{ ocorrencia.get_status_display }}</div>{% if ocorrencia.retry_solicitado_em and not ocorrencia.retry_processado_em %}<div class="text-amber-600 font-bold mt-1">Retry aguardando o caixa</div>{% endif %}</td>
+            <td class="py-3 pr-3 text-red-600 max-w-sm">{{ ocorrencia.ultimo_erro|default:"Sem erro informado" }}</td>
+            <td class="py-3 pr-3">{{ ocorrencia.responsavel_nome|default:"Não atribuído" }}{% if ocorrencia.observacao %}<div class="text-slate-500 mt-1">{{ ocorrencia.observacao }}</div>{% endif %}</td>
+            <td class="py-3">
+              <form method="post" action="{% url 'core:admin_ocorrencia_pdv_offline_acao' ocorrencia.pk %}" class="min-w-[250px] space-y-2">
+                {% csrf_token %}
+                <input class="form-input" name="observacao" maxlength="2000" placeholder="Observação / solução">
+                <div class="flex flex-wrap gap-1">
+                  <button class="btn-secondary" name="acao" value="assumir" type="submit">Assumir</button>
+                  <button class="btn-secondary" name="acao" value="retry" type="submit">Tentar novamente</button>
+                  <button class="btn-primary" name="acao" value="resolver" type="submit">Resolver</button>
+                </div>
+              </form>
+            </td>
+          </tr>
+        {% empty %}<tr><td colspan="5" class="py-5 text-slate-500 text-center">Nenhuma venda local presa.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card p-5">
     <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
       <div>
         <h2 class="font-bold">Homologação de contingência</h2>
@@ -86,6 +119,8 @@
                 {% if instalacao.fila_erro_quantidade %}<span class="soft-pill is-red">{{ instalacao.fila_erro_quantidade }} com erro</span>{% endif %}
                 {% if instalacao.catalogo_vencido %}<span class="soft-pill is-red">Catálogo vencido/sem informação</span>{% else %}<span class="soft-pill is-green">Catálogo {{ instalacao.catalogo_atualizado_em|timesince }}</span>{% endif %}
                 {% if instalacao.contato_atrasado %}<span class="soft-pill is-slate">Sem contato há {{ instalacao.visto_por_ultimo_em|timesince }}</span>{% endif %}
+                {% if instalacao.armazenamento_persistente is False %}<span class="soft-pill is-red">Armazenamento não persistente</span>{% endif %}
+                {% if not instalacao.pwa_instalado %}<span class="soft-pill is-amber">PWA não instalado/aberto como aba</span>{% endif %}
               </div>
               {% if instalacao.ultimo_erro_sincronizacao %}<p class="text-red-600"><strong>Erro:</strong> {{ instalacao.ultimo_erro_sincronizacao }}</p>{% endif %}
               <p>Última sincronização: {{ instalacao.ultima_sincronizacao_em|date:"d/m/Y H:i"|default:"não informada" }} · último backup: {{ instalacao.ultimo_backup_em|date:"d/m/Y H:i"|default:"não informado" }}</p>

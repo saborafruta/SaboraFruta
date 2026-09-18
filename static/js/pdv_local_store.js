@@ -217,11 +217,38 @@
       if (current?.scope === this.scope) await this._delete(QUEUE_STORE, localId, true);
     }
 
+    async retryQueuedSales(localIds) {
+      const applied = [];
+      for (const localId of Array.from(new Set(localIds || [])).slice(0, 100)) {
+        const current = await this._get(QUEUE_STORE, localId);
+        if (!current || current.scope !== this.scope) continue;
+        await this.enqueueSale({
+          ...current,
+          status: 'pendente',
+          attempts: 0,
+          last_error: '',
+          retry_requested_at: new Date().toISOString(),
+        });
+        applied.push(localId);
+      }
+      return applied;
+    }
+
     async operationalSummary() {
       const queue = await this.listQueuedSales();
       const snapshot = await this.loadSnapshot();
       const errors = queue.filter(item => item.status === 'erro');
       const latestError = queue.slice().reverse().find(item => item.last_error);
+      let persistent = null;
+      let estimate = {};
+      try {
+        if (global.navigator?.storage?.persisted) persistent = await global.navigator.storage.persisted();
+        if (global.navigator?.storage?.estimate) estimate = await global.navigator.storage.estimate() || {};
+      } catch (_) { /* navegador sem telemetria de armazenamento */ }
+      const standalone = !!(
+        global.matchMedia?.('(display-mode: standalone)')?.matches
+        || global.navigator?.standalone
+      );
       return {
         fila_pendente_quantidade: queue.length,
         fila_erro_quantidade: errors.length,
@@ -236,6 +263,10 @@
         ultimo_erro_sincronizacao: String(latestError?.last_error || '').slice(0, 1000),
         ultima_sincronizacao_em: await this._getMeta('ultima_sincronizacao_em'),
         ultimo_backup_em: await this._getMeta('ultimo_backup_em'),
+        armazenamento_persistente: persistent,
+        armazenamento_quota: Number(estimate.quota || 0) || null,
+        armazenamento_uso: Number(estimate.usage || 0) || null,
+        pwa_instalado: standalone,
       };
     }
 

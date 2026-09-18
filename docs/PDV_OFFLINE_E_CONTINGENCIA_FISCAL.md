@@ -273,6 +273,16 @@ O painel `Central Administrativa > PDVs offline` mostra os últimos eventos de c
 
 O mesmo painel permite registrar cada cenário obrigatório de homologação como `Aprovado`, `Falhou` ou `Bloqueado`, incluindo resultado esperado, resultado obtido, responsável e `local_id` quando aplicável. A cobertura é resumida por filial e pode ser exportada em CSV.
 
+Cada venda local ainda presente na fila também possui uma ocorrência operacional própria. O painel mostra estado, tentativas, último erro, caixa, responsável e observação. O suporte pode assumir a ocorrência, solicitar uma nova tentativa no próprio caixa ou encerrá-la com justificativa. O comando de retry não recria nem move a venda: no próximo heartbeat, o navegador original apenas devolve o registro já existente ao estado `pendente`, preservando o mesmo `local_id`, e confirma ao servidor que processou o comando.
+
+O watchdog roda a cada cinco minutos e mantém alertas condicionais para fila presa, PDV com fila sem contato há mais de dez minutos, catálogo vencido, armazenamento não persistente e NFC-e processando por mais de cinco minutos. A reconciliação automática de NFC-e roda a cada dois minutos. Nenhuma dessas rotinas autoriza contingência fiscal por conta própria.
+
+Para evitar crescimento indefinido, eventos e ocorrências resolvidas têm retenção padrão de 180 dias; evidências de homologação, 730 dias. Os prazos podem ser alterados pelas variáveis `PDV_OFFLINE_AUDIT_RETENTION_DAYS` e `PDV_OFFLINE_TEST_RETENTION_DAYS`. A limpeza ocorre diariamente às 03:30 e nunca apaga vendas, documentos fiscais ou dados financeiros.
+
+O endpoint de monitoramento aceita no máximo 768 KB e limita heartbeats excessivos por usuário e instalação. O navegador também informa se o armazenamento persistente foi concedido, estimativa de espaço e se a tela está sendo executada como PWA. Quando a persistência não foi concedida ou a aplicação está aberta como aba comum, o operador recebe orientação visível e o suporte enxerga o risco no painel.
+
+Há um E2E executado em Chrome real em `tests/browser/test_pdv_offline_browser.py`. Ele valida IndexedDB após uma nova instância do navegador, fila, carrinho, exportação/importação criptografada e pré-cache do casco pelo service worker. O teste usa o Chrome já instalado e aceita `CHROME_PATH` em ambientes onde o executável não esteja no caminho padrão.
+
 ### Fase 4 — operação e auditoria (implementada)
 
 - painel administrativo global de instalações/caixas (implementado);
@@ -283,8 +293,16 @@ O mesmo painel permite registrar cada cenário obrigatório de homologação com
 - notificações proativas para vendas presas ou catálogo vencido (implementado);
 - relatório de testes de contingência por filial (implementado);
 - trilha de auditoria de tentativas e reconciliações (implementado).
+- watchdog periódico de caixa sem contato, fila presa e proteção local frágil (implementado);
+- tratamento por ocorrência com responsável, nota, retry remoto seguro e confirmação do caixa (implementado);
+- alerta de NFC-e processando/contingenciada além de cinco minutos (implementado);
+- retenção automática da telemetria e evidências (implementado);
+- teste E2E em navegador real para energia/reabertura, fila, backup e service worker (implementado);
+- limite de corpo e frequência do heartbeat (implementado).
 
 ### Fase 5 — Comunicador Focus
+
+Esta fase foi deliberadamente excluída desta entrega. Nenhum binário, download, detecção ou integração com o Comunicador foi criado enquanto o arquivo oficial não é fornecido e homologado.
 
 - download versionado na configuração fiscal;
 - verificação automática de presença e versão;
@@ -343,4 +361,4 @@ O projeto será considerado maduro quando uma filial conseguir operar durante qu
 
 ### Estado atual
 
-O modo comercial local-first, a recuperação local, o backup criptografado, o monitoramento, os alertas, a auditoria e a homologação assistida estão implementados. A conclusão fiscal integral continua condicionada ao recebimento do Comunicador Offline da Focus, sua distribuição versionada na configuração fiscal e a validação do contador para as regras aplicáveis ao RN.
+O modo comercial local-first, a recuperação local, o backup criptografado, o monitoramento automático, os alertas comerciais e fiscais, o tratamento de ocorrências, a auditoria com retenção e a homologação assistida estão implementados. A conclusão fiscal integral continua condicionada ao recebimento do Comunicador Offline da Focus e à validação do contador para as regras aplicáveis ao RN; essa fase não faz parte desta entrega.

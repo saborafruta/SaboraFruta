@@ -196,6 +196,7 @@ TENANT_GLOBAL_MODELS = [
     'core.tenantpubliclink',
     'pdv.instalacaopdvoffline',
     'pdv.eventoinstalacaopdvoffline',
+    'pdv.ocorrenciapdvoffline',
     'pdv.testecontingenciapdv',
     'sessions.session',
 ]
@@ -341,6 +342,8 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+PDV_OFFLINE_AUDIT_RETENTION_DAYS = env.int('PDV_OFFLINE_AUDIT_RETENTION_DAYS', default=180)
+PDV_OFFLINE_TEST_RETENTION_DAYS = env.int('PDV_OFFLINE_TEST_RETENTION_DAYS', default=730)
 CELERY_TASK_PUBLISH_RETRY = False
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_REJECT_ON_WORKER_LOST = True

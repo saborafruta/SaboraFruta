@@ -6,7 +6,10 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.models import Empresa, Filial, Notificacao, PerfilAcesso, Usuario
-from apps.pdv.models import EventoInstalacaoPDVOffline, InstalacaoPDVOffline, TesteContingenciaPDV
+from apps.pdv.models import (
+    EventoInstalacaoPDVOffline, InstalacaoPDVOffline, OcorrenciaPDVOffline,
+    TesteContingenciaPDV,
+)
 
 
 class InstalacaoOfflineTests(TestCase):
@@ -142,6 +145,8 @@ class InstalacaoOfflineTests(TestCase):
         self.assertTrue(EventoInstalacaoPDVOffline.objects.filter(
             tipo="venda_enfileirada", metadados__local_id=local_id,
         ).exists())
+        ocorrencia = OcorrenciaPDVOffline.objects.get(local_id=local_id)
+        self.assertEqual(ocorrencia.status, OcorrenciaPDVOffline.Status.ABERTA)
 
         self.post_api(
             "heartbeat",
@@ -174,6 +179,96 @@ class InstalacaoOfflineTests(TestCase):
         self.assertTrue(EventoInstalacaoPDVOffline.objects.filter(
             tipo="venda_reconciliada", metadados__local_id=local_id,
         ).exists())
+        ocorrencia.refresh_from_db()
+        self.assertEqual(ocorrencia.status, OcorrenciaPDVOffline.Status.RESOLVIDA)
+
+    def test_suporte_solicita_retry_e_caixa_confirma_processamento(self):
+        catalogo_em = timezone.now().isoformat()
+        local_id = "pdv" + "d" * 32
+        self.post_api("activate", recuperacao_configurada=True, catalogo_atualizado_em=catalogo_em)
+        self.post_api(
+            "heartbeat",
+            recuperacao_configurada=True,
+            fila_pendente_quantidade=1,
+            fila_erro_quantidade=1,
+            fila_resumo=[{
+                "local_id": local_id,
+                "status": "erro",
+                "attempts": 3,
+                "created_at": timezone.now().isoformat(),
+                "last_error": "Falha transitória",
+            }],
+        )
+        ocorrencia = OcorrenciaPDVOffline.objects.get(local_id=local_id)
+
+        self.client.force_login(self.superuser)
+        response = self.client.post(
+            reverse("core:admin_ocorrencia_pdv_offline_acao", args=[ocorrencia.pk]),
+            {"acao": "retry", "observacao": "Conexão normalizada; repetir no mesmo caixa."},
+        )
+        self.assertRedirects(response, reverse("core:admin_instalacoes_pdv_offline"))
+        ocorrencia.refresh_from_db()
+        self.assertEqual(ocorrencia.status, OcorrenciaPDVOffline.Status.EM_TRATAMENTO)
+        self.assertIsNotNone(ocorrencia.retry_solicitado_em)
+
+        self.client.force_login(self.usuario)
+        comando = self.post_api(
+            "heartbeat",
+            fila_pendente_quantidade=1,
+            fila_erro_quantidade=1,
+            fila_resumo=[{
+                "local_id": local_id,
+                "status": "erro",
+                "attempts": 3,
+                "created_at": timezone.now().isoformat(),
+                "last_error": "Falha transitória",
+            }],
+        )
+        self.assertEqual(comando.json()["retry_local_ids"], [local_id])
+        confirmado = self.post_api(
+            "heartbeat",
+            retry_ack_ids=[local_id],
+            fila_pendente_quantidade=1,
+            fila_erro_quantidade=0,
+            fila_resumo=[{
+                "local_id": local_id,
+                "status": "pendente",
+                "attempts": 0,
+                "created_at": timezone.now().isoformat(),
+            }],
+        )
+        self.assertEqual(confirmado.json()["retry_local_ids"], [])
+        ocorrencia.refresh_from_db()
+        self.assertIsNotNone(ocorrencia.retry_processado_em)
+
+    def test_api_recusa_payload_maior_que_768_kb(self):
+        response = self.client.post(
+            reverse("pdv:api_instalacao_offline"),
+            data=json.dumps({"conteudo": "x" * 786500}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 413)
+
+    def test_watchdog_alerta_fila_sem_contato_e_armazenamento_fragil(self):
+        self.post_api(
+            "activate",
+            recuperacao_configurada=True,
+            fila_pendente_quantidade=1,
+            armazenamento_persistente=False,
+        )
+        instalacao = InstalacaoPDVOffline.objects.get()
+        InstalacaoPDVOffline.objects.filter(pk=instalacao.pk).update(
+            visto_por_ultimo_em=timezone.now() - timedelta(minutes=11),
+        )
+        from apps.pdv.tasks import _monitorar_instalacoes_banco_atual
+
+        self.assertEqual(_monitorar_instalacoes_banco_atual(), 1)
+        self.assertTrue(Notificacao.objects.get(
+            referencia_tipo="pdv_offline_sem_contato",
+        ).ativa)
+        self.assertTrue(Notificacao.objects.get(
+            referencia_tipo="pdv_offline_armazenamento",
+        ).ativa)
 
     def test_superusuario_registra_e_exporta_teste_de_contingencia(self):
         self.post_api("activate", recuperacao_configurada=True)

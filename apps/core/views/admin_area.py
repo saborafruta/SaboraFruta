@@ -53,7 +53,10 @@ from apps.core.tenant_context import get_current_database_alias
 from apps.core.views.audit import core_log_context
 from apps.core.views._admin import admin_area_required, superuser_required
 from apps.produtos.services.replicacao_service import ReplicacaoProdutoService
-from apps.pdv.models import EventoInstalacaoPDVOffline, InstalacaoPDVOffline, TesteContingenciaPDV
+from apps.pdv.models import (
+    EventoInstalacaoPDVOffline, InstalacaoPDVOffline, OcorrenciaPDVOffline,
+    TesteContingenciaPDV,
+)
 
 
 PER_PAGE = 10
@@ -489,7 +492,59 @@ def instalacoes_pdv_offline(request):
         'resumo_testes': resumo_testes,
         'cobertura_filiais': cobertura_filiais,
         'total_cenarios_obrigatorios': len(TesteContingenciaPDV.Cenario.choices),
+        'ocorrencias_abertas': OcorrenciaPDVOffline.objects.using('default').exclude(
+            status=OcorrenciaPDVOffline.Status.RESOLVIDA,
+        ).select_related('instalacao').order_by('-vista_por_ultimo_em')[:100],
     })
+
+
+@superuser_required
+@require_POST
+def ocorrencia_pdv_offline_acao(request, pk):
+    acao = request.POST.get('acao', '').strip()
+    if acao not in {'assumir', 'retry', 'resolver', 'reabrir'}:
+        messages.error(request, 'Ação operacional inválida.')
+        return redirect('core:admin_instalacoes_pdv_offline')
+    observacao = request.POST.get('observacao', '').strip()[:2000]
+    if acao == 'resolver' and not observacao:
+        messages.error(request, 'Informe como a ocorrência foi resolvida.')
+        return redirect('core:admin_instalacoes_pdv_offline')
+    ator_nome = getattr(request.user, 'nome', '') or request.user.email
+    agora = timezone.now()
+    with transaction.atomic(using='default'):
+        ocorrencia = get_object_or_404(
+            OcorrenciaPDVOffline.objects.using('default').select_for_update().select_related('instalacao'),
+            pk=pk,
+        )
+        if acao in {'assumir', 'retry'}:
+            ocorrencia.status = OcorrenciaPDVOffline.Status.EM_TRATAMENTO
+            ocorrencia.responsavel_id = request.user.pk
+            ocorrencia.responsavel_nome = ator_nome
+            ocorrencia.resolvida_em = None
+        elif acao == 'resolver':
+            ocorrencia.status = OcorrenciaPDVOffline.Status.RESOLVIDA
+            ocorrencia.resolvida_em = agora
+            ocorrencia.responsavel_id = request.user.pk
+            ocorrencia.responsavel_nome = ator_nome
+        else:
+            ocorrencia.status = OcorrenciaPDVOffline.Status.ABERTA
+            ocorrencia.resolvida_em = None
+        if acao == 'retry':
+            ocorrencia.retry_solicitado_em = agora
+            ocorrencia.retry_processado_em = None
+        if observacao:
+            ocorrencia.observacao = observacao
+        ocorrencia.save(using='default')
+        EventoInstalacaoPDVOffline.objects.using('default').create(
+            instalacao=ocorrencia.instalacao,
+            tipo=f'ocorrencia_{acao}',
+            ator_id=request.user.pk,
+            ator_nome=ator_nome,
+            detalhe=observacao or f'Ação operacional: {acao}.',
+            metadados={'ocorrencia_id': ocorrencia.pk, 'local_id': ocorrencia.local_id},
+        )
+    messages.success(request, 'Ocorrência atualizada e registrada na auditoria.')
+    return redirect('core:admin_instalacoes_pdv_offline')
 
 
 @superuser_required

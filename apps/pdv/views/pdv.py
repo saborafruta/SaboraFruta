@@ -6,6 +6,7 @@ from collections import defaultdict
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.contrib import messages
+from django.core.cache import cache
 from django.db import IntegrityError, connections
 from django.db.models import Max, Min, Q, Sum
 from django.db.models.functions import Coalesce
@@ -47,7 +48,7 @@ from apps.estoque.models import Estoque
 from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeNetworkError, FocusNFeServerError
 from apps.pdv.models import (
     Caixa, EventoInstalacaoPDVOffline, InstalacaoPDVOffline, ItemVendaPDV,
-    MovimentacaoCaixa, PagamentoVendaPDV, SessaoPDV, VendaPDV,
+    MovimentacaoCaixa, OcorrenciaPDVOffline, PagamentoVendaPDV, SessaoPDV, VendaPDV,
 )
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
 from apps.pdv.services.offline_monitoring import atualizar_alertas_pdv, registrar_auditoria_fila
@@ -185,6 +186,34 @@ def _resumo_fila_cliente_seguro(value, limite=1000):
             "last_error": str(item.get("last_error") or "")[:300],
         })
     return resultado
+
+
+def _comandos_offline(instalacao):
+    if not instalacao:
+        return []
+    return list(
+        OcorrenciaPDVOffline.objects.using("default").filter(
+            instalacao=instalacao,
+            retry_solicitado_em__isnull=False,
+            retry_processado_em__isnull=True,
+            status__in=[
+                OcorrenciaPDVOffline.Status.ABERTA,
+                OcorrenciaPDVOffline.Status.EM_TRATAMENTO,
+            ],
+        ).values_list("local_id", flat=True)[:100]
+    )
+
+
+def _confirmar_comandos_offline(instalacao, value):
+    if not instalacao or not isinstance(value, list):
+        return
+    ids = [str(item) for item in value[:100] if re.fullmatch(r"pdv[a-f0-9]{32}", str(item))]
+    if ids:
+        OcorrenciaPDVOffline.objects.using("default").filter(
+            instalacao=instalacao,
+            local_id__in=ids,
+            retry_solicitado_em__isnull=False,
+        ).update(retry_processado_em=timezone.now())
 
 
 def _processar_monitoramento_offline(*, filial, tenant_alias, instalacao, fila_anterior, backup_anterior):
@@ -1340,7 +1369,16 @@ def api_estado(request):
 def api_instalacao_offline(request):
     """Registra e consulta a autorização local sem receber PIN ou código."""
     try:
-        body = json.loads(request.body or b'{}')
+        content_length = int(request.META.get("CONTENT_LENGTH") or 0)
+    except (TypeError, ValueError):
+        content_length = 0
+    if content_length > 786432:
+        return JsonResponse({"erro": "Payload de monitoramento excede 768 KB."}, status=413)
+    raw_body = request.body or b'{}'
+    if len(raw_body) > 786432:
+        return JsonResponse({"erro": "Payload de monitoramento excede 768 KB."}, status=413)
+    try:
+        body = json.loads(raw_body)
     except (json.JSONDecodeError, TypeError):
         return JsonResponse({"erro": "JSON invalido."}, status=400)
 
@@ -1350,6 +1388,18 @@ def api_instalacao_offline(request):
     action = str(body.get("action") or "status").strip().lower()
     if action not in {"status", "heartbeat", "activate", "deactivate"}:
         return JsonResponse({"erro": "Acao invalida."}, status=400)
+    if action == "heartbeat":
+        janela = timezone.now().strftime("%Y%m%d%H%M")
+        chave = f"pdv-offline-heartbeat:{request.user.pk}:{installation_id}:{janela}"
+        try:
+            quantidade = cache.incr(chave)
+        except ValueError:
+            cache.set(chave, 1, timeout=70)
+            quantidade = 1
+        if quantidade > 30:
+            response = JsonResponse({"erro": "Muitos heartbeats. Tente novamente em instantes."}, status=429)
+            response["Retry-After"] = "10"
+            return response
 
     filial = request.filial_ativa
     tenant_alias = get_current_database_alias() or "default"
@@ -1360,6 +1410,7 @@ def api_instalacao_offline(request):
         "installation_id": installation_id,
     }
     instalacao = InstalacaoPDVOffline.objects.using("default").filter(**lookup).first()
+    _confirmar_comandos_offline(instalacao, body.get("retry_ack_ids"))
     fila_resumo_recebido = isinstance(body.get("fila_resumo"), list)
     fila_resumo = (
         _resumo_fila_cliente_seguro(body.get("fila_resumo"))
@@ -1403,12 +1454,17 @@ def api_instalacao_offline(request):
         instalacao.ultimo_backup_em = _data_cliente_segura(body.get("ultimo_backup_em"))
         instalacao.ultimo_erro_sincronizacao = str(body.get("ultimo_erro_sincronizacao") or "")[:1000]
         instalacao.fila_resumo = fila_resumo
+        instalacao.armazenamento_persistente = body.get("armazenamento_persistente") if isinstance(body.get("armazenamento_persistente"), bool) else None
+        instalacao.pwa_instalado = bool(body.get("pwa_instalado"))
+        instalacao.armazenamento_quota = _quantidade_cliente_segura(body.get("armazenamento_quota"), limite=10**15) or None
+        instalacao.armazenamento_uso = _quantidade_cliente_segura(body.get("armazenamento_uso"), limite=10**15) or None
         instalacao.save(using="default", update_fields=[
             "filial_nome", "usuario_nome", "usuario_login", "user_agent",
             "recuperacao_configurada", "fila_pendente_quantidade",
             "fila_erro_quantidade", "catalogo_atualizado_em",
             "ultima_sincronizacao_em", "ultimo_backup_em",
-            "ultimo_erro_sincronizacao", "fila_resumo", "visto_por_ultimo_em",
+            "ultimo_erro_sincronizacao", "fila_resumo", "armazenamento_persistente",
+            "pwa_instalado", "armazenamento_quota", "armazenamento_uso", "visto_por_ultimo_em",
         ])
         _processar_monitoramento_offline(
             filial=filial, tenant_alias=tenant_alias, instalacao=instalacao,
@@ -1418,6 +1474,7 @@ def api_instalacao_offline(request):
             "status": instalacao.status,
             "revisao": instalacao.revisao,
             "nome_dispositivo": instalacao.nome_dispositivo,
+            "retry_local_ids": _comandos_offline(instalacao),
         })
 
     if action == "heartbeat":
@@ -1445,6 +1502,10 @@ def api_instalacao_offline(request):
             "ultimo_backup_em": _data_cliente_segura(body.get("ultimo_backup_em")),
             "ultimo_erro_sincronizacao": str(body.get("ultimo_erro_sincronizacao") or "")[:1000],
             "fila_resumo": fila_resumo,
+            "armazenamento_persistente": body.get("armazenamento_persistente") if isinstance(body.get("armazenamento_persistente"), bool) else None,
+            "pwa_instalado": bool(body.get("pwa_instalado")),
+            "armazenamento_quota": _quantidade_cliente_segura(body.get("armazenamento_quota"), limite=10**15) or None,
+            "armazenamento_uso": _quantidade_cliente_segura(body.get("armazenamento_uso"), limite=10**15) or None,
         }
         fila_anterior = instalacao.fila_resumo if instalacao else []
         backup_anterior = instalacao.ultimo_backup_em if instalacao else None
@@ -1470,6 +1531,7 @@ def api_instalacao_offline(request):
             "status": instalacao.status,
             "revisao": instalacao.revisao,
             "nome_dispositivo": instalacao.nome_dispositivo,
+            "retry_local_ids": _comandos_offline(instalacao),
         })
 
     if instalacao and instalacao.status == InstalacaoPDVOffline.Status.REVOGADA:
@@ -1505,6 +1567,10 @@ def api_instalacao_offline(request):
         "ultimo_backup_em": _data_cliente_segura(body.get("ultimo_backup_em")),
         "ultimo_erro_sincronizacao": str(body.get("ultimo_erro_sincronizacao") or "")[:1000],
         "fila_resumo": fila_resumo,
+        "armazenamento_persistente": body.get("armazenamento_persistente") if isinstance(body.get("armazenamento_persistente"), bool) else None,
+        "pwa_instalado": bool(body.get("pwa_instalado")),
+        "armazenamento_quota": _quantidade_cliente_segura(body.get("armazenamento_quota"), limite=10**15) or None,
+        "armazenamento_uso": _quantidade_cliente_segura(body.get("armazenamento_uso"), limite=10**15) or None,
         "revogado_em": None,
         "revogado_por_id": None,
         "revogado_por_nome": "",
@@ -1536,6 +1602,7 @@ def api_instalacao_offline(request):
         "status": instalacao.status,
         "revisao": instalacao.revisao,
         "nome_dispositivo": instalacao.nome_dispositivo,
+        "retry_local_ids": _comandos_offline(instalacao),
     })
 
 

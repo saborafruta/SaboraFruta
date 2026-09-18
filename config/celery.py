@@ -23,6 +23,22 @@ app.conf.beat_schedule = {
         'task': 'apps.estoque.tasks.alertas.verificar_estoque_minimo',
         'schedule': crontab(hour=8, minute=0),
     },
+    'monitorar-pdv-offline': {
+        'task': 'apps.pdv.tasks.monitorar_pdv_offline',
+        'schedule': crontab(minute='*/5'),
+    },
+    'reconciliar-nfce-processando': {
+        'task': 'apps.fiscal.tasks.reconciliar_nfce_processando',
+        'schedule': crontab(minute='*/2'),
+    },
+    'monitorar-pendencias-fiscais': {
+        'task': 'apps.fiscal.tasks.monitorar_pendencias_fiscais',
+        'schedule': crontab(minute='*/5'),
+    },
+    'retencao-auditoria-pdv-offline': {
+        'task': 'apps.pdv.tasks.aplicar_retencao_auditoria_offline',
+        'schedule': crontab(hour=3, minute=30),
+    },
 }
 
 

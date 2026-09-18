@@ -3880,6 +3880,11 @@
         <template x-if="offlineProfileEnabled"><div><strong style="color:#4ade80;">Proteção ativa</strong><br><span x-text="'Autorizado até '+offlineProfileValidoAte"></span><br>O prazo é renovado sempre que este PDV abre conectado.<br><span x-show="!offlineRecoveryAvailable" style="color:#fbbf24;">Perfil antigo sem código emergencial: desative e ative novamente.</span></div></template>
         <template x-if="!offlineProfileEnabled"><div><strong style="color:#fbbf24;">Proteção ainda não ativada</strong><br>Crie um PIN local de 6 números. Ele não substitui a senha do sistema e deve ficar somente com operadores autorizados.</div></template>
       </div>
+      <div x-show="armazenamentoPersistente === false || !pwaInstalado" style="margin-top:10px;padding:11px;border:1px solid #a16207;border-radius:9px;background:rgba(161,98,7,.12);color:#fde68a;font-size:12px;line-height:1.5;">
+        <strong>Atenção à proteção contra energia/formatação</strong><br>
+        <span x-show="armazenamentoPersistente === false">O navegador não garantiu armazenamento persistente; evite limpeza automática dos dados do site e mantenha o backup emergencial em dia.<br></span>
+        <span x-show="!pwaInstalado">Este PDV está aberto como aba. Instalar o PWA reduz fechamentos acidentais e facilita a reabertura, embora os dados locais já continuem protegidos pelo IndexedDB.</span>
+      </div>
       <template x-if="!offlineProfileEnabled">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
           <input type="text" maxlength="120" autocomplete="off" x-model="offlineInstallationName" placeholder="Nome do caixa/computador" style="grid-column:1/-1;padding:11px;border:1px solid var(--pdv-bd2);border-radius:8px;background:var(--pdv-bg);color:var(--pdv-t1);">
@@ -3928,7 +3933,7 @@
 {{ favoritos_completos|json_script:"sidebar-favorites-records" }}
 <script src="{% static 'core/js/sidebar_favorites.js' %}?v=20260917-4"></script>
 <script src="{% static 'core/js/sidebar_search.js' %}?v=20260917-3"></script>
-<script src="{% static 'js/pdv_local_store.js' %}?v=20260918-4"></script>
+<script src="{% static 'js/pdv_local_store.js' %}?v=20260918-5"></script>
 <script>
 function pdv() {
   return {
@@ -3947,6 +3952,7 @@ function pdv() {
     snapshotLocal: null, snapshotCatalogoEm: null, vendasOfflinePendentes: 0, sincronizandoFilaOffline: false,
     _localStore: null, _localSaveChain: Promise.resolve(), _persistenciaSuspensa: false, _catalogoSyncEmAndamento: false,
     showModalProtecaoOffline: false, offlineProfileEnabled: false, offlineProfileValidoAte: '', offlineRecoveryAvailable: false,
+    armazenamentoPersistente: null, pwaInstalado: false, _retryAckIds: [],
     offlinePin: '', offlinePinConfirmacao: '', offlineProfileErro: '', offlineProfileSalvando: false,
     offlineInstallationName: '', offlineRecoveryCode: '',
     backupPassword: '', backupPasswordConfirmacao: '', backupFile: null, backupFileName: '', backupProcessando: false,
@@ -4302,6 +4308,8 @@ function pdv() {
     async sincronizarInstalacaoOffline(action, profile={}) {
       if (!profile?.scope) profile = await this._localStore?.getOfflineProfile() || profile;
       const operational = await this._localStore?.operationalSummary().catch(() => ({})) || {};
+      this.armazenamentoPersistente = operational.armazenamento_persistente ?? null;
+      this.pwaInstalado = !!operational.pwa_instalado;
       const response = await fetch('/pdv/api/offline/instalacao/', {
         method: 'POST',
         headers: {'Content-Type':'application/json', 'X-CSRFToken':csrf()},
@@ -4310,11 +4318,22 @@ function pdv() {
           installation_id: this._localStore?.installationId,
           nome_dispositivo: this.offlineInstallationName || profile.nome_dispositivo || `Caixa ${this.sessao?.caixa_id || 'PDV'}`,
           recuperacao_configurada: !!profile.recovery_proof,
+          retry_ack_ids: this._retryAckIds,
           ...operational,
         }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.erro || 'Falha ao atualizar a instalação offline.');
+      if (this._retryAckIds.length) this._retryAckIds = [];
+      if (Array.isArray(data.retry_local_ids) && data.retry_local_ids.length && this._localStore) {
+        const applied = await this._localStore.retryQueuedSales(data.retry_local_ids);
+        this._retryAckIds = Array.from(new Set([...this._retryAckIds, ...data.retry_local_ids]));
+        if (applied.length) {
+          await this.atualizarContagemFilaOffline();
+          this.toast_(`${applied.length} venda(s) liberada(s) pelo suporte para nova tentativa.`, 'info');
+          if (navigator.onLine) this.sincronizarFilaOffline();
+        }
+      }
       return data;
     },
 

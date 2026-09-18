@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><title>E2E PDV local-first</title></head>
+<body>
+  <main id="result" data-status="RUNNING">RUNNING</main>
+  <script src="/static/js/pdv_local_store.js"></script>
+  <script type="module">
+    try {
+      const assert = (condition, message) => { if (!condition) throw new Error(message); };
+      const store = await new PDVLocalStore({filialId: '99101', usuarioId: '99102'}).init();
+      for (const item of await store.listQueuedSales()) await store.deleteQueuedSale(item.local_id);
+      await store.deleteDraft();
+      const localId = store.newSaleId();
+      await store.saveDraft({status: 'rascunho', venda: {local_id: localId, itens: [{produto_id: 1}]}});
+      await store.enqueueSale({local_id: localId, venda: {itens: [{produto_id: 1}]}});
+
+      // Uma segunda instância representa fechar/reabrir o navegador após energia cair.
+      const reopened = await new PDVLocalStore({filialId: '99101', usuarioId: '99102'}).init();
+      assert((await reopened.loadDraft()).venda.local_id === localId, 'carrinho não foi restaurado');
+      assert((await reopened.listQueuedSales()).length === 1, 'fila não sobreviveu à reabertura');
+
+      const backup = await reopened.exportEmergencyBackup('senha-e2e-segura');
+      await reopened.deleteQueuedSale(localId);
+      await reopened.deleteDraft();
+      const imported = await reopened.importEmergencyBackup(backup, 'senha-e2e-segura');
+      assert(imported.queued === 1, 'backup não restaurou a fila');
+      assert((await reopened.loadDraft()).venda.local_id === localId, 'backup não restaurou o carrinho');
+
+      const registration = await navigator.serviceWorker.register('/sw.js', {scope: '/'});
+      await navigator.serviceWorker.ready;
+      await new Promise(resolve => setTimeout(resolve, 700));
+      const shell = await caches.match('/static/pdv-offline.html?v=20260918-5');
+      assert(registration.active || registration.waiting, 'service worker não ativou');
+      assert(shell, 'casco offline não foi pré-carregado');
+
+      document.querySelector('#result').dataset.status = 'PASS';
+      document.querySelector('#result').textContent = 'PASS';
+    } catch (error) {
+      document.querySelector('#result').dataset.status = 'FAIL';
+      document.querySelector('#result').textContent = `FAIL: ${error.message}`;
+    }
+  </script>
+</body>
+</html>

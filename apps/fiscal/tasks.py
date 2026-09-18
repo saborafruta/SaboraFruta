@@ -68,3 +68,62 @@ def reconciliar_nfce_processando():
     from apps.core.services.tenant_task_service import TenantTaskService
 
     return TenantTaskService.executar_em_todos(_reconciliar_nfce_banco_atual)
+
+
+def _monitorar_pendencias_fiscais_banco_atual():
+    from apps.core.models import Notificacao, NotificacaoLeitura
+    from apps.financeiro.constants.enums import StatusDocumentoFiscal
+    from apps.financeiro.models.fiscal import DocumentoFiscal
+    from django.urls import reverse
+
+    limite = timezone.now() - timedelta(minutes=5)
+    documentos = DocumentoFiscal.objects.filter(
+        tipo_documento="nfce",
+        updated_at__lte=limite,
+    ).filter(
+        status=StatusDocumentoFiscal.PROCESSANDO,
+    ).select_related("filial")[:500]
+    ativos = set()
+    for documento in documentos:
+        referencia_id = str(documento.pk)
+        ativos.add(referencia_id)
+        titulo = (
+            "NFC-e em contingência ainda pendente"
+            if documento.em_contingencia else "NFC-e processando há mais de 5 minutos"
+        )
+        existente = Notificacao.objects.filter(
+            filial=documento.filial,
+            tipo=Notificacao.Tipo.ALERTA_SISTEMA,
+            referencia_tipo="nfce_pendente",
+            referencia_id=referencia_id,
+        ).first()
+        estava_ativa = bool(existente and existente.ativa)
+        notificacao, _ = Notificacao.objects.update_or_create(
+            filial=documento.filial,
+            tipo=Notificacao.Tipo.ALERTA_SISTEMA,
+            referencia_tipo="nfce_pendente",
+            referencia_id=referencia_id,
+            defaults={
+                "titulo": titulo,
+                "mensagem": f"NFC-e {documento.numero}/{documento.serie}: consulte e reconcilie o retorno fiscal.",
+                "url": reverse("fiscal:documento-saida-detail", args=[documento.pk]),
+                "ativa": True,
+            },
+        )
+        if not estava_ativa:
+            NotificacaoLeitura.objects.filter(notificacao=notificacao).delete()
+    obsoletas = Notificacao.objects.filter(
+        tipo=Notificacao.Tipo.ALERTA_SISTEMA,
+        referencia_tipo="nfce_pendente",
+        ativa=True,
+    )
+    if ativos:
+        obsoletas = obsoletas.exclude(referencia_id__in=ativos)
+    return obsoletas.update(ativa=False) + len(ativos)
+
+
+@shared_task(name="apps.fiscal.tasks.monitorar_pendencias_fiscais")
+def monitorar_pendencias_fiscais():
+    from apps.core.services.tenant_task_service import TenantTaskService
+
+    return TenantTaskService.executar_em_todos(_monitorar_pendencias_fiscais_banco_atual)

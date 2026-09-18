@@ -270,7 +270,7 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn('async sincronizarFilaOffline()', template)
         self.assertIn("forma.requer_tef", template)
         self.assertIn("12 * 60 * 60 * 1000", template)
-        self.assertIn("pdv_local_store.js?v=20260918-4", service_worker)
+        self.assertIn("pdv_local_store.js?v=20260918-5", service_worker)
 
     def test_pdv_tem_abertura_fria_offline_com_pin_local(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
@@ -289,10 +289,10 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn('showModalProtecaoOffline', template)
         self.assertIn('ativarProtecaoOffline()', template)
         self.assertIn('renovarProtecaoOffline()', template)
-        self.assertIn("const PDV_OFFLINE_SHELL = '/static/pdv-offline.html?v=20260918-4'", service_worker)
+        self.assertIn("const PDV_OFFLINE_SHELL = '/static/pdv-offline.html?v=20260918-5'", service_worker)
         self.assertIn("url.pathname.startsWith('/pdv/')", service_worker)
         self.assertIn('Abrir PDV sem internet', offline_shell)
-        self.assertIn('/static/js/pdv_offline_app.js?v=20260918-4', offline_shell)
+        self.assertIn('/static/js/pdv_offline_app.js?v=20260918-5', offline_shell)
         self.assertIn("await state.store.enqueueSale", offline_app)
         self.assertIn('delete safe.custo_atual', offline_app)
         self.assertIn("window.addEventListener('online'", offline_app)

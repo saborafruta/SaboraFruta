@@ -32,6 +32,10 @@ class InstalacaoPDVOffline(models.Model):
     ultimo_backup_em = models.DateTimeField(null=True, blank=True)
     ultimo_erro_sincronizacao = models.TextField(blank=True)
     fila_resumo = models.JSONField(default=list, blank=True)
+    armazenamento_persistente = models.BooleanField(null=True, blank=True)
+    pwa_instalado = models.BooleanField(default=False)
+    armazenamento_quota = models.BigIntegerField(null=True, blank=True)
+    armazenamento_uso = models.BigIntegerField(null=True, blank=True)
     autorizado_em = models.DateTimeField(auto_now_add=True)
     visto_por_ultimo_em = models.DateTimeField(auto_now=True, db_index=True)
     revogado_em = models.DateTimeField(null=True, blank=True)
@@ -83,6 +87,51 @@ class EventoInstalacaoPDVOffline(models.Model):
     class Meta:
         db_table = "pdv_instalacoes_offline_eventos"
         ordering = ["-criado_em"]
+
+
+class OcorrenciaPDVOffline(models.Model):
+    """Estado operacional de uma venda local presa, sem seu conteúdo comercial."""
+
+    class Status(models.TextChoices):
+        ABERTA = "aberta", "Aberta"
+        EM_TRATAMENTO = "em_tratamento", "Em tratamento"
+        RESOLVIDA = "resolvida", "Resolvida"
+
+    instalacao = models.ForeignKey(
+        InstalacaoPDVOffline,
+        on_delete=models.CASCADE,
+        related_name="ocorrencias",
+    )
+    local_id = models.CharField(max_length=40)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ABERTA, db_index=True)
+    status_fila = models.CharField(max_length=20, default="pendente")
+    tentativas = models.PositiveIntegerField(default=0)
+    ultimo_erro = models.TextField(blank=True)
+    detectada_em = models.DateTimeField(default=timezone.now)
+    vista_por_ultimo_em = models.DateTimeField(default=timezone.now)
+    resolvida_em = models.DateTimeField(null=True, blank=True)
+    responsavel_id = models.BigIntegerField(null=True, blank=True)
+    responsavel_nome = models.CharField(max_length=160, blank=True)
+    observacao = models.TextField(blank=True)
+    retry_solicitado_em = models.DateTimeField(null=True, blank=True)
+    retry_processado_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "pdv_ocorrencias_offline"
+        ordering = ["status", "-vista_por_ultimo_em"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["instalacao", "local_id"],
+                name="uniq_pdv_ocorrencia_inst_local",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["status", "-vista_por_ultimo_em"], name="pdv_ocor_status_visto_idx"),
+            models.Index(fields=["retry_solicitado_em"], name="pdv_ocor_retry_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.local_id} - {self.get_status_display()}"
 
 
 class TesteContingenciaPDV(models.Model):

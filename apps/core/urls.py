@@ -44,6 +44,7 @@ urlpatterns = [
     path('gestao/central/pdv-offline/', admin_area.instalacoes_pdv_offline, name='admin_instalacoes_pdv_offline'),
     path('gestao/central/pdv-offline/<int:pk>/acao/', admin_area.instalacao_pdv_offline_acao, name='admin_instalacao_pdv_offline_acao'),
     path('gestao/central/pdv-offline/<int:pk>/teste/', admin_area.instalacao_pdv_offline_registrar_teste, name='admin_instalacao_pdv_offline_teste'),
+    path('gestao/central/pdv-offline/ocorrencias/<int:pk>/acao/', admin_area.ocorrencia_pdv_offline_acao, name='admin_ocorrencia_pdv_offline_acao'),
     path('gestao/central/pdv-offline/testes.csv', admin_area.testes_contingencia_pdv_csv, name='admin_testes_contingencia_pdv_csv'),
     path(
         'gestao/central/filiais/<int:filial_id>/etiqueta-venda/',

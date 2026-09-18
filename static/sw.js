@@ -21,17 +21,17 @@
 
 // Mude esta versao sempre que o casco visual global mudar. Isso impede que
 // um F5 reutilize CSS antigo e mostre por um instante a geometria anterior.
-const VERSAO = 'erp-v7-pdv-operational-audit';
+const VERSAO = 'erp-v8-pdv-watchdog';
 const CACHE_ESTATICO = `estatico-${VERSAO}`;
-const PDV_OFFLINE_SHELL = '/static/pdv-offline.html?v=20260918-4';
+const PDV_OFFLINE_SHELL = '/static/pdv-offline.html?v=20260918-5';
 
 // Só o casco: o que é igual para qualquer usuário.
 const PRE_CACHE = [
   '/static/css/tailwind-built.css?v=20260917-2',
   '/static/favicon.svg',
   '/static/pdv-manifest.json',
-  '/static/js/pdv_local_store.js?v=20260918-4',
-  '/static/js/pdv_offline_app.js?v=20260918-4',
+  '/static/js/pdv_local_store.js?v=20260918-5',
+  '/static/js/pdv_offline_app.js?v=20260918-5',
   PDV_OFFLINE_SHELL,
   '/static/pwa-icon-192.png',
   '/static/pwa-icon-512.png',

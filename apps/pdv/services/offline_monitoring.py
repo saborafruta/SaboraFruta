@@ -1,9 +1,12 @@
 """Alertas e auditoria do estado local do PDV, sem copiar conteúdo de vendas."""
+import datetime
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.models import Notificacao, NotificacaoLeitura
-from apps.pdv.models import EventoInstalacaoPDVOffline, InstalacaoPDVOffline
+from apps.pdv.models import (
+    EventoInstalacaoPDVOffline, InstalacaoPDVOffline, OcorrenciaPDVOffline,
+)
 
 
 def _atualizar_notificacao(*, alias, filial, referencia_tipo, referencia_id, ativa, titulo, mensagem):
@@ -72,14 +75,66 @@ def atualizar_alertas_pdv(*, alias, filial, instalacao):
         mensagem=f"{nome}: conecte o caixa para renovar produtos, preços e regras antes de operar offline.",
     )
 
+    sem_contato_com_fila = (
+        pendentes > 0
+        and instalacao.visto_por_ultimo_em < timezone.now() - timezone.timedelta(minutes=10)
+    )
+    _atualizar_notificacao(
+        alias=alias,
+        filial=filial,
+        referencia_tipo="pdv_offline_sem_contato",
+        referencia_id=instalacao.installation_id,
+        ativa=sem_contato_com_fila,
+        titulo="PDV com venda local e sem contato",
+        mensagem=f"{nome}: há {pendentes} venda(s) no caixa e nenhum heartbeat há mais de 10 minutos.",
+    )
+
+    protecao_fragil = (
+        instalacao.status == InstalacaoPDVOffline.Status.ATIVA
+        and instalacao.armazenamento_persistente is False
+    )
+    _atualizar_notificacao(
+        alias=alias,
+        filial=filial,
+        referencia_tipo="pdv_offline_armazenamento",
+        referencia_id=instalacao.installation_id,
+        ativa=protecao_fragil,
+        titulo="Armazenamento local do PDV não é persistente",
+        mensagem=f"{nome}: revise a política do navegador e mantenha o backup emergencial em dia.",
+    )
+
 
 def registrar_auditoria_fila(*, instalacao, fila_anterior, fila_atual, backup_anterior=None):
     """Registra transições por local_id; o payload comercial nunca é persistido."""
     anteriores = {item.get("local_id"): item for item in fila_anterior or [] if item.get("local_id")}
     atuais = {item.get("local_id"): item for item in fila_atual or [] if item.get("local_id")}
     eventos = []
+    agora = timezone.now()
 
     for local_id, item in atuais.items():
+        criado_em = item.get("created_at")
+        try:
+            detectada_em = timezone.datetime.fromisoformat(criado_em) if criado_em else agora
+            if timezone.is_naive(detectada_em):
+                detectada_em = timezone.make_aware(detectada_em, timezone=datetime.timezone.utc)
+        except (TypeError, ValueError):
+            detectada_em = agora
+        ocorrencia, _ = OcorrenciaPDVOffline.objects.using("default").get_or_create(
+            instalacao=instalacao,
+            local_id=local_id,
+            defaults={"detectada_em": detectada_em},
+        )
+        ocorrencia.status_fila = item.get("status", "pendente")
+        ocorrencia.tentativas = item.get("attempts", 0)
+        ocorrencia.ultimo_erro = item.get("last_error") or ""
+        ocorrencia.vista_por_ultimo_em = agora
+        if ocorrencia.status == OcorrenciaPDVOffline.Status.RESOLVIDA:
+            ocorrencia.status = OcorrenciaPDVOffline.Status.ABERTA
+            ocorrencia.resolvida_em = None
+        ocorrencia.save(using="default", update_fields=[
+            "status_fila", "tentativas", "ultimo_erro", "vista_por_ultimo_em",
+            "status", "resolvida_em",
+        ])
         anterior = anteriores.get(local_id)
         metadados = {
             "local_id": local_id,
@@ -114,6 +169,14 @@ def registrar_auditoria_fila(*, instalacao, fila_anterior, fila_atual, backup_an
 
     for local_id, item in anteriores.items():
         if local_id not in atuais:
+            OcorrenciaPDVOffline.objects.using("default").filter(
+                instalacao=instalacao,
+                local_id=local_id,
+            ).update(
+                status=OcorrenciaPDVOffline.Status.RESOLVIDA,
+                resolvida_em=agora,
+                vista_por_ultimo_em=agora,
+            )
             eventos.append(EventoInstalacaoPDVOffline(
                 instalacao=instalacao,
                 tipo="venda_reconciliada",
