@@ -277,6 +277,8 @@ Cada venda local ainda presente na fila também possui uma ocorrência operacion
 
 O watchdog roda a cada cinco minutos e mantém alertas condicionais para fila presa, PDV com fila sem contato há mais de dez minutos, catálogo vencido, armazenamento não persistente e NFC-e processando por mais de cinco minutos. A reconciliação automática de NFC-e roda a cada dois minutos. Nenhuma dessas rotinas autoriza contingência fiscal por conta própria.
 
+Em produção, o serviço worker inicia também o Celery Beat com `DatabaseScheduler`. Deve existir apenas uma réplica desse worker-agendador; aumentar sua quantidade exige separar o Beat em um serviço único para impedir disparos concorrentes.
+
 Para evitar crescimento indefinido, eventos e ocorrências resolvidas têm retenção padrão de 180 dias; evidências de homologação, 730 dias. Os prazos podem ser alterados pelas variáveis `PDV_OFFLINE_AUDIT_RETENTION_DAYS` e `PDV_OFFLINE_TEST_RETENTION_DAYS`. A limpeza ocorre diariamente às 03:30 e nunca apaga vendas, documentos fiscais ou dados financeiros.
 
 O endpoint de monitoramento aceita no máximo 768 KB e limita heartbeats excessivos por usuário e instalação. O navegador também informa se o armazenamento persistente foi concedido, estimativa de espaço e se a tela está sendo executada como PWA. Quando a persistência não foi concedida ou a aplicação está aberta como aba comum, o operador recebe orientação visível e o suporte enxerga o risco no painel.
