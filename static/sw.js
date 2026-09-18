@@ -9,8 +9,9 @@
  *   - estático versionado (CSS, ícones, libs de CDN): cache primeiro,
  *     porque é igual para todo mundo e é o que faz a tela abrir rápido
  *     e continuar abrindo com sinal ruim;
- *   - qualquer outra coisa (páginas, APIs, POST): rede, sempre. Sem
- *     fallback de conteúdo -- só um aviso de offline na navegação.
+ *   - qualquer outra coisa (páginas, APIs, POST): rede, sempre. O único
+ *     fallback funcional é o casco público e sem dados do PDV. Os dados do
+ *     operador continuam no IndexedDB e exigem PIN local para desbloqueio.
  *
  * O "offline-first" de verdade da tela do motorista não está aqui: as
  * posições captadas sem sinal ficam na fila em localStorage (ver
@@ -20,15 +21,18 @@
 
 // Mude esta versao sempre que o casco visual global mudar. Isso impede que
 // um F5 reutilize CSS antigo e mostre por um instante a geometria anterior.
-const VERSAO = 'erp-v3';
+const VERSAO = 'erp-v4-pdv-cold-start';
 const CACHE_ESTATICO = `estatico-${VERSAO}`;
+const PDV_OFFLINE_SHELL = '/static/pdv-offline.html?v=20260918-1';
 
 // Só o casco: o que é igual para qualquer usuário.
 const PRE_CACHE = [
   '/static/css/tailwind-built.css?v=20260917-2',
   '/static/favicon.svg',
   '/static/pdv-manifest.json',
-  '/static/js/pdv_local_store.js?v=20260917-2',
+  '/static/js/pdv_local_store.js?v=20260918-1',
+  '/static/js/pdv_offline_app.js?v=20260918-1',
+  PDV_OFFLINE_SHELL,
   '/static/pwa-icon-192.png',
   '/static/pwa-icon-512.png',
 ];
@@ -88,7 +92,12 @@ self.addEventListener('fetch', (evento) => {
   // Não servimos HTML do cache -- ver comentário do topo.
   if (req.mode === 'navigate') {
     evento.respondWith(
-      fetch(req).catch(() => new Response(
+      fetch(req).catch(async () => {
+        if (url.pathname === '/pdv' || url.pathname.startsWith('/pdv/')) {
+          const shell = await caches.match(PDV_OFFLINE_SHELL);
+          if (shell) return shell;
+        }
+        return new Response(
         `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
          <meta name="viewport" content="width=device-width,initial-scale=1">
          <title>Sem conexão</title><style>
@@ -106,8 +115,9 @@ self.addEventListener('fetch', (evento) => {
          aparelho e sobem sozinhas quando a conexão voltar.</p>
          <button onclick="location.reload()">Tentar de novo</button>
          </div></body></html>`,
-        { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 503 },
-      )),
+          { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 503 },
+        );
+      }),
     );
   }
 });

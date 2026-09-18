@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111318">
+  <title>PDV offline — iNoovaTed</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/static/pdv-manifest.json">
+  <style>
+    :root{color-scheme:dark;--bg:#111318;--panel:#191c23;--panel2:#20242d;--bd:#303642;--text:#f8fafc;--muted:#9ca3af;--blue:#2563eb;--green:#22c55e;--red:#ef4444;--yellow:#facc15}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px Inter,system-ui,sans-serif;min-height:100vh}button,input,select{font:inherit}button{cursor:pointer}.hidden{display:none!important}
+    .top{height:58px;padding:0 16px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--bd);background:#171a21;position:sticky;top:0;z-index:5}.brand{font-weight:850;font-size:18px}.brand b{color:#3b82f6}.state{display:flex;align-items:center;gap:7px;margin-left:auto;font-size:11px;font-weight:850;color:#f87171}.dot{width:9px;height:9px;border-radius:50%;background:var(--red);box-shadow:0 0 0 4px #ef444422;animation:pulse 1s infinite}.context{font-size:12px;color:var(--muted);max-width:42vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .layout{display:grid;grid-template-columns:minmax(250px,340px) minmax(320px,1fr) minmax(280px,360px);height:calc(100vh - 58px)}.pane{padding:14px;border-right:1px solid var(--bd);overflow:auto}.pane:last-child{border-right:0}.search{width:100%;padding:12px;border:1px solid var(--bd);border-radius:9px;background:#11141a;color:var(--text);outline:none}.search:focus{border-color:#3b82f6}.list{display:grid;gap:8px;margin-top:12px}.card{width:100%;text-align:left;padding:11px;border:1px solid var(--bd);border-radius:10px;background:var(--panel);color:var(--text)}.card:hover{border-color:#3b82f6}.desc{font-weight:750}.sub{font-size:11px;color:var(--muted);margin-top:4px}.price{color:#60a5fa;font-weight:850;margin-top:5px}
+    h2{font-size:14px;margin:0 0 12px}.empty{color:#71717a;text-align:center;padding:54px 16px}.line{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid var(--bd)}.qty{display:flex;align-items:center;gap:8px}.qty button,.remove{border:1px solid var(--bd);background:var(--panel2);color:var(--text);border-radius:7px;width:30px;height:30px}.remove{color:#f87171}.totals{margin-top:14px;padding-top:12px;border-top:1px solid var(--bd);display:grid;gap:7px}.total-row{display:flex;justify-content:space-between}.total-row.main{font-size:18px;font-weight:850}.payments{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.pay{padding:11px 8px;border:1px solid var(--bd);border-radius:9px;background:var(--panel);color:var(--text)}.pay:disabled{opacity:.35;cursor:not-allowed}.queue{font-size:12px;color:var(--yellow);margin:10px 0}.finish{width:100%;padding:14px;border:0;border-radius:10px;background:var(--blue);color:#fff;font-weight:850;margin-top:14px}.finish:disabled{opacity:.35;cursor:not-allowed}.secondary{padding:9px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--panel2);color:var(--text)}.notice{padding:10px 12px;border:1px solid #854d0e;border-radius:9px;background:#42200655;color:#fde68a;font-size:12px;line-height:1.45;margin-bottom:12px}
+    .lock{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(circle at top,#1e293b,#101116 55%)}.lock-card{width:min(430px,100%);padding:25px;border:1px solid var(--bd);border-radius:16px;background:#171a21;box-shadow:0 24px 70px #0008}.lock h1{font-size:22px;margin:0 0 8px}.lock p{color:var(--muted);line-height:1.5}.profiles{display:grid;gap:8px;margin:16px 0}.profile{width:100%;padding:12px;text-align:left;border:1px solid var(--bd);border-radius:9px;background:var(--panel2);color:var(--text)}.profile.selected{border-color:#3b82f6;background:#172554}.pin{width:100%;padding:13px;text-align:center;letter-spacing:.35em;border:1px solid var(--bd);border-radius:9px;background:#0f1116;color:#fff;font-size:20px}.unlock{width:100%;margin-top:10px;padding:12px;border:0;border-radius:9px;background:var(--blue);color:#fff;font-weight:800}.error{color:#f87171;font-size:12px;min-height:18px;margin-top:8px}.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);padding:11px 16px;border-radius:9px;background:#272b35;border:1px solid var(--bd);box-shadow:0 12px 35px #0008;z-index:20}.age{font-size:11px;color:var(--muted)}
+    @keyframes pulse{50%{opacity:.28;transform:scale(.75)}}@media(prefers-reduced-motion:reduce){.dot{animation:none}}@media(max-width:900px){.layout{grid-template-columns:1fr;height:auto}.pane{border-right:0;border-bottom:1px solid var(--bd);max-height:none}.context{display:none}}
+  </style>
+</head>
+<body>
+  <section id="lock" class="lock">
+    <div class="lock-card">
+      <div class="brand">iNoova<b>Ted</b></div>
+      <h1>Abrir PDV sem internet</h1>
+      <p>Escolha um perfil autorizado neste computador e informe o PIN local de 6 números.</p>
+      <div id="profiles" class="profiles"></div>
+      <input id="pin" class="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="••••••" aria-label="PIN local">
+      <button id="unlock" class="unlock" type="button">Desbloquear PDV</button>
+      <div id="lock-error" class="error" role="alert"></div>
+      <p class="age">O acesso expira em 12 horas e é renovado sempre que o PDV abre conectado.</p>
+    </div>
+  </section>
+
+  <main id="app" class="hidden">
+    <header class="top">
+      <div class="brand">iNoova<b>Ted</b></div>
+      <div id="context" class="context"></div>
+      <button id="go-online" class="secondary" type="button">Tentar conectar</button>
+      <div class="state"><span class="dot"></span>SEM INTERNET</div>
+    </header>
+    <div class="layout">
+      <section class="pane">
+        <h2>Produtos disponíveis localmente</h2>
+        <input id="search" class="search" type="search" autocomplete="off" placeholder="Buscar produto ou código de barras">
+        <div id="catalog-age" class="age" style="margin-top:8px"></div>
+        <div id="products" class="list"></div>
+      </section>
+      <section class="pane">
+        <h2>Carrinho protegido</h2>
+        <div id="cart"></div>
+      </section>
+      <aside class="pane">
+        <div class="notice">Venda local: somente Consumidor Final e formas que não exigem autorização externa. A baixa de estoque e o fiscal ocorrerão quando o ERP voltar.</div>
+        <div id="operation-warning" class="notice hidden"></div>
+        <h2>Forma de pagamento</h2>
+        <div id="payments" class="payments"></div>
+        <div id="selected-payments" class="list"></div>
+        <div class="totals">
+          <div class="total-row"><span>Pago</span><strong id="paid">R$ 0,00</strong></div>
+          <div class="total-row"><span>Restante</span><strong id="remaining">R$ 0,00</strong></div>
+          <div class="total-row main"><span>Total</span><span id="total">R$ 0,00</span></div>
+        </div>
+        <div id="queue" class="queue"></div>
+        <button id="finish" class="finish" type="button" disabled>Salvar venda na fila offline</button>
+        <button id="clear" class="secondary" type="button" style="width:100%;margin-top:8px">Limpar carrinho</button>
+      </aside>
+    </div>
+  </main>
+  <div id="toast" class="toast hidden" role="status"></div>
+  <script src="/static/js/pdv_local_store.js?v=20260918-1"></script>
+  <script src="/static/js/pdv_offline_app.js?v=20260918-1"></script>
+</body>
+</html>

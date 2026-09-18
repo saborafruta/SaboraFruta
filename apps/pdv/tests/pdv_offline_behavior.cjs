@@ -70,3 +70,10 @@ assert.match(app.motivoBloqueioFilaOffline({...payload, cliente_id: 99}), /Consu
 assert.match(app.motivoBloqueioFilaOffline({...payload, pagamentos: [{forma_id: 2}]}), /validação online/);
 app.snapshotLocal.catalogo_em = new Date(Date.now() - 13 * 60 * 60 * 1000).toISOString();
 assert.match(app.motivoBloqueioFilaOffline(payload), /mais de 12 horas/);
+
+const vendaSegura = app.vendaLocalSegura({
+  itens: [{produto_id: 1, custo_atual: 10, margem_percentual: 50, valor_unitario: 20}],
+});
+assert.equal(Object.hasOwn(vendaSegura.itens[0], 'custo_atual'), false);
+assert.equal(Object.hasOwn(vendaSegura.itens[0], 'margem_percentual'), false);
+assert.equal(vendaSegura.itens[0].valor_unitario, 20);

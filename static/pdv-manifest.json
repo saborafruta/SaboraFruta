@@ -2,6 +2,7 @@
   "name": "Sabor a Fruta — PDV",
   "short_name": "PDV Sabor a Fruta",
   "description": "Ponto de venda Sabor a Fruta",
+  "id": "/pdv/",
   "start_url": "/pdv/",
   "scope": "/",
   "display": "standalone",

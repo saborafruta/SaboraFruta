@@ -1332,8 +1332,8 @@
       </button>
     </div>
 
-    <div class="topbar-chip" style="gap:6px;" :style="vendasOfflinePendentes ? 'cursor:pointer;' : 'cursor:default;'"
-         :title="statusLocalDetalhe" @click="vendasOfflinePendentes && mostrarFilaOffline()">
+    <div class="topbar-chip" style="gap:6px;cursor:pointer;"
+         :title="statusLocalDetalhe" @click="abrirProtecaoOffline()">
       <span x-show="!sincronizandoConexao" class="pdv-connection-dot"
             :class="conectividadeOnline ? 'pdv-connection-dot--online' : 'pdv-connection-dot--offline'"
             aria-hidden="true"></span>
@@ -3896,6 +3896,34 @@
     </div>
   </div>
 
+  <!-- Autorizacao local para reabrir o PDV depois de queda de energia. -->
+  <div x-show="showModalProtecaoOffline" x-cloak
+       :style="showModalProtecaoOffline ? 'position:fixed;inset:0;z-index:9400;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.84);backdrop-filter:blur(4px);' : 'display:none;'"
+       @keydown.escape.window="showModalProtecaoOffline=false">
+    <div style="width:min(480px,100%);padding:22px;border:1px solid var(--pdv-bd3);border-radius:15px;background:var(--pdv-modal);box-shadow:0 24px 70px rgba(0,0,0,.55);">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;">
+        <div><h2 style="margin:0;color:var(--pdv-t1);font-size:18px;">Abertura offline neste computador</h2><p style="margin:7px 0 0;color:var(--pdv-t3);font-size:12px;line-height:1.5;">Permite reabrir o PDV após reiniciar sem internet. A autorização é exclusiva desta instalação.</p></div>
+        <button type="button" @click="showModalProtecaoOffline=false" class="cli-modal-close" aria-label="Fechar">✕</button>
+      </div>
+      <div style="margin-top:16px;padding:12px;border:1px solid var(--pdv-bd2);border-radius:10px;background:var(--pdv-bg);font-size:12px;line-height:1.55;color:var(--pdv-tmid);">
+        <template x-if="offlineProfileEnabled"><div><strong style="color:#4ade80;">Proteção ativa</strong><br><span x-text="'Autorizado até '+offlineProfileValidoAte"></span><br>O prazo é renovado sempre que este PDV abre conectado.</div></template>
+        <template x-if="!offlineProfileEnabled"><div><strong style="color:#fbbf24;">Proteção ainda não ativada</strong><br>Crie um PIN local de 6 números. Ele não substitui a senha do sistema e deve ficar somente com operadores autorizados.</div></template>
+      </div>
+      <template x-if="!offlineProfileEnabled">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
+          <input type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" x-model="offlinePin" placeholder="PIN de 6 números" style="padding:11px;border:1px solid var(--pdv-bd2);border-radius:8px;background:var(--pdv-bg);color:var(--pdv-t1);text-align:center;letter-spacing:.18em;">
+          <input type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" x-model="offlinePinConfirmacao" placeholder="Repita o PIN" style="padding:11px;border:1px solid var(--pdv-bd2);border-radius:8px;background:var(--pdv-bg);color:var(--pdv-t1);text-align:center;letter-spacing:.18em;">
+        </div>
+      </template>
+      <p x-show="offlineProfileErro" x-text="offlineProfileErro" style="margin:10px 0 0;color:#f87171;font-size:12px;"></p>
+      <div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:9px;margin-top:16px;">
+        <button type="button" x-show="vendasOfflinePendentes" @click="mostrarFilaOffline()" style="padding:9px 12px;border:1px solid #854d0e;border-radius:8px;background:#42200655;color:#fde68a;">Ver fila (<span x-text="vendasOfflinePendentes"></span>)</button>
+        <button type="button" x-show="offlineProfileEnabled" @click="desativarProtecaoOffline()" style="padding:9px 12px;border:1px solid rgba(248,113,113,.3);border-radius:8px;background:rgba(239,68,68,.08);color:#f87171;">Desativar</button>
+        <button type="button" x-show="!offlineProfileEnabled" @click="ativarProtecaoOffline()" :disabled="offlineProfileSalvando" style="padding:9px 14px;border:0;border-radius:8px;background:#2563eb;color:#fff;font-weight:750;">Ativar abertura offline</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 {% endblock %}
 
@@ -3905,7 +3933,7 @@
 {{ favoritos_completos|json_script:"sidebar-favorites-records" }}
 <script src="{% static 'core/js/sidebar_favorites.js' %}?v=20260917-4"></script>
 <script src="{% static 'core/js/sidebar_search.js' %}?v=20260917-3"></script>
-<script src="{% static 'js/pdv_local_store.js' %}?v=20260917-2"></script>
+<script src="{% static 'js/pdv_local_store.js' %}?v=20260918-1"></script>
 <script>
 function pdv() {
   return {
@@ -3923,6 +3951,8 @@ function pdv() {
     localStorePronto: false, localSaveState: 'inicializando', localDraftRestaurado: false,
     snapshotLocal: null, snapshotCatalogoEm: null, vendasOfflinePendentes: 0, sincronizandoFilaOffline: false,
     _localStore: null, _localSaveChain: Promise.resolve(), _persistenciaSuspensa: false, _catalogoSyncEmAndamento: false,
+    showModalProtecaoOffline: false, offlineProfileEnabled: false, offlineProfileValidoAte: '',
+    offlinePin: '', offlinePinConfirmacao: '', offlineProfileErro: '', offlineProfileSalvando: false,
     erroCaixa: '', caixaSelecionada: '', valorAberturaCaixa: '0', caixaAbrindo: false,
     criandoCaixa: false, novoCaixaDescricao: '', criandoCaixaLoading: false,
 
@@ -4184,6 +4214,7 @@ function pdv() {
       this.$nextTick(()=>this.focarBuscaProduto());
       await this.iniciarLocalFirst();
       await this.carregarEstado();
+      await this.renovarProtecaoOffline();
       const restaurado = await this.restaurarRascunhoLocal();
       await this.atualizarListasTopo();
       if (!restaurado) {
@@ -4209,6 +4240,7 @@ function pdv() {
         }).init();
         this.localStorePronto = true;
         this.localSaveState = 'salvo';
+        await this.carregarProtecaoOffline();
       } catch (error) {
         this.localSaveState = 'erro';
         this.toast_('O navegador não conseguiu ativar a proteção local do carrinho.', 'erro');
@@ -4218,6 +4250,81 @@ function pdv() {
         this.sincronizarFilaOffline();
       });
       window.addEventListener?.('offline', () => { this.conectividadeOnline = false; });
+    },
+
+    async carregarProtecaoOffline() {
+      const profile = await this._localStore?.getOfflineProfile();
+      this.offlineProfileEnabled = !!profile;
+      this.offlineProfileValidoAte = profile?.valid_until
+        ? new Date(profile.valid_until).toLocaleString('pt-BR')
+        : '';
+    },
+
+    async renovarProtecaoOffline() {
+      if (!this._localStore || !navigator.onLine || !this.conectividadeOnline || !this.sessao?.id) return;
+      const profile = await this._localStore.getOfflineProfile();
+      if (!profile) return;
+      const atualizado = await this._localStore.refreshOfflineAccess({
+        filial_nome: '{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social|escapejs }}',
+        usuario_nome: this.nomeUsuario,
+        usuario_login: this.loginUsuario,
+      });
+      this.offlineProfileEnabled = !!atualizado;
+      this.offlineProfileValidoAte = atualizado?.valid_until
+        ? new Date(atualizado.valid_until).toLocaleString('pt-BR')
+        : '';
+    },
+
+    abrirProtecaoOffline() {
+      this.offlinePin = '';
+      this.offlinePinConfirmacao = '';
+      this.offlineProfileErro = '';
+      this.carregarProtecaoOffline();
+      this.showModalProtecaoOffline = true;
+    },
+
+    async ativarProtecaoOffline() {
+      this.offlineProfileErro = '';
+      if (!navigator.onLine || !this.conectividadeOnline) {
+        this.offlineProfileErro = 'A ativação inicial precisa ser feita com o sistema conectado.';
+        return;
+      }
+      if (!this._localStore || !this.sessao?.id || !this.snapshotLocalValido()) {
+        this.offlineProfileErro = 'Abra o caixa e aguarde a atualização completa do catálogo antes de ativar.';
+        return;
+      }
+      if (!/^\d{6}$/.test(this.offlinePin)) {
+        this.offlineProfileErro = 'Crie um PIN com exatamente 6 números.';
+        return;
+      }
+      if (this.offlinePin !== this.offlinePinConfirmacao) {
+        this.offlineProfileErro = 'Os PINs informados não são iguais.';
+        return;
+      }
+      this.offlineProfileSalvando = true;
+      try {
+        const profile = await this._localStore.configureOfflineAccess(this.offlinePin, {
+          filial_nome: '{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social|escapejs }}',
+          usuario_nome: this.nomeUsuario,
+          usuario_login: this.loginUsuario,
+        });
+        this.offlineProfileEnabled = true;
+        this.offlineProfileValidoAte = new Date(profile.valid_until).toLocaleString('pt-BR');
+        this.offlinePin = this.offlinePinConfirmacao = '';
+        this.toast_('Abertura offline ativada neste computador.', 'ok');
+      } catch (error) {
+        this.offlineProfileErro = error.message || 'Não foi possível ativar a abertura offline.';
+      } finally {
+        this.offlineProfileSalvando = false;
+      }
+    },
+
+    async desativarProtecaoOffline() {
+      if (!confirm('Desativar a abertura offline para este operador e filial neste computador?')) return;
+      await this._localStore?.disableOfflineAccess();
+      this.offlineProfileEnabled = false;
+      this.offlineProfileValidoAte = '';
+      this.toast_('Abertura offline desativada neste computador.', 'info');
     },
 
     async restaurarRascunhoLocal() {
@@ -4272,7 +4379,7 @@ function pdv() {
           await this._localStore.saveDraft({
             version: 1,
             status,
-            venda: this.venda,
+            venda: this.vendaLocalSegura(this.venda),
             modo: this.modo,
             sessao_id: this.sessao?.id || null,
             caixa_id: this.sessao?.caixa_id || null,
@@ -4286,6 +4393,25 @@ function pdv() {
       } catch (_) {
         this.localSaveState = 'erro';
       }
+    },
+
+    vendaLocalSegura(venda) {
+      const copia = JSON.parse(JSON.stringify(venda || {}));
+      for (const item of copia.itens || []) {
+        delete item.custo_atual;
+        delete item.margem_percentual;
+      }
+      return copia;
+    },
+
+    payloadLocalSeguro(payload) {
+      const copia = JSON.parse(JSON.stringify(payload || {}));
+      copia.itens = (copia.itens || []).map(item => {
+        delete item.custo_atual;
+        delete item.margem_percentual;
+        return item;
+      });
+      return copia;
     },
 
     async concluirRascunhoLocal() {
@@ -5116,7 +5242,7 @@ function pdv() {
       await this._localStore.enqueueSale({
         local_id: payload.idempotency_key,
         endpoint,
-        payload,
+        payload: this.payloadLocalSeguro(payload),
         status: 'pendente',
         last_error: '',
       });
@@ -7031,7 +7157,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
         || this.showModalPendentes || this.showModalOrcamentos || this.showModalConfirmacao
         || this.showModalDescontoItem || this.showModalDesconto || this.showModalPrecoItem
         || this.showModalNovoCliente || this.showModalCaixaRel || this.showModalConfig
-        || this.showModalHistorico || this.showModalImpressao || this.modalPreco.show
+        || this.showModalHistorico || this.showModalImpressao || this.showModalProtecaoOffline || this.modalPreco.show
         || this.modalFoto.show || !!this.cancelamentoHistorico.venda;
     },
 

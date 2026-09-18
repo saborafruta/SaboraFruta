@@ -2,7 +2,7 @@
 
 Status do documento: plano vivo e registro de implementação
 
-Última atualização: 17/09/2026
+Última atualização: 18/09/2026
 
 Responsáveis funcionais: Operação, Fiscal e Tecnologia
 
@@ -151,7 +151,9 @@ Ainda assim, a proteção operacional recomendada é:
 - teste trimestral de autonomia das baterias;
 - procedimento de encerramento e conferência após retorno de energia.
 
-Estado atual importante: se o PDV já estiver carregado, ele consegue usar catálogo e fila local durante a queda de internet. Após reiniciar o computador sem internet, o casco autenticado completo ainda não é carregado. A fila e o carrinho permanecem no IndexedDB, mas a abertura fria totalmente offline pertence à próxima fase.
+Se o PDV já estiver carregado, ele usa catálogo e fila local durante a queda de internet. A abertura fria offline também está disponível para perfis previamente autorizados: após reiniciar o computador sem internet, o service worker entrega um casco público sem dados embutidos, e o operador desbloqueia os dados locais com seu PIN desta instalação.
+
+O casco offline não substitui a tela autenticada nem guarda seu HTML em cache. Ele permite apenas venda normal para Consumidor Final, usando o último caixa aberto, catálogo ainda válido e formas de pagamento que não dependam de autorização externa. Quando a internet retorna, ele redireciona para o PDV normal, que sincroniza a fila com a mesma chave de idempotência.
 
 ## 9. Contingência hospedada da NFC-e
 
@@ -207,14 +209,27 @@ PWA local-first -> fila comercial local -> Comunicador Focus -> NFC-e offline
 
 ## 11. Próximas fases
 
-### Fase 3 — abertura fria offline
+### Fase 3 — abertura fria offline (implementada)
 
-- criar um casco offline específico do PDV;
-- vincular o casco a uma instalação autorizada;
-- evitar cache compartilhado de HTML autenticado;
-- exigir autenticação local curta ou desbloqueio seguro;
-- permitir reabrir o PDV após falta de energia sem internet;
-- mostrar claramente a idade do catálogo e da sessão.
+- casco offline específico e sem HTML autenticado em cache;
+- perfil vinculado a filial, operador e `installation_id`;
+- ativação explícita no indicador de conexão do PDV;
+- PIN local de seis dígitos derivado com PBKDF2 e prova protegida por AES-GCM;
+- bloqueio temporário após cinco tentativas incorretas;
+- autorização por 12 horas, renovada ao abrir o PDV conectado com caixa aberto;
+- restauração de carrinho, catálogo, caixa, pagamentos permitidos e fila;
+- bloqueio de novas vendas com catálogo vencido ou caixa ausente;
+- retorno automático ao PDV online para sincronização quando a conexão volta.
+
+Procedimento por operador e filial:
+
+1. entrar no PDV com internet e abrir o caixa;
+2. aguardar a atualização do catálogo;
+3. clicar no indicador `ONLINE` e escolher `Ativar abertura offline`;
+4. criar e confirmar um PIN local de seis dígitos;
+5. testar uma abertura sem internet antes de colocar o caixa em produção.
+
+O PIN fica somente neste navegador e não é a senha do ERP. Limpar os dados do navegador ou formatar a máquina remove a autorização e exige nova ativação online.
 
 ### Fase 4 — operação e auditoria
 

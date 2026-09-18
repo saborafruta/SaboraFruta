@@ -1,4 +1,6 @@
 from pathlib import Path
+import shutil
+import subprocess
 from types import SimpleNamespace
 
 from django.template.loader import get_template
@@ -232,7 +234,7 @@ class PDVVisualBaseTests(SimpleTestCase):
         local_store = (Path(__file__).resolve().parents[3] / 'static/js/pdv_local_store.js').read_text(encoding='utf-8')
         service_worker = (Path(__file__).resolve().parents[3] / 'static/sw.js').read_text(encoding='utf-8')
 
-        self.assertIn("const DB_VERSION = 2", local_store)
+        self.assertIn("const DB_VERSION = 3", local_store)
         self.assertIn("const SNAPSHOTS_STORE = 'snapshots'", local_store)
         self.assertIn("const QUEUE_STORE = 'vendas_pendentes'", local_store)
         self.assertIn('async enqueueSale(data)', local_store)
@@ -242,7 +244,46 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn('async sincronizarFilaOffline()', template)
         self.assertIn("forma.requer_tef", template)
         self.assertIn("12 * 60 * 60 * 1000", template)
-        self.assertIn("pdv_local_store.js?v=20260917-2", service_worker)
+        self.assertIn("pdv_local_store.js?v=20260918-1", service_worker)
+
+    def test_pdv_tem_abertura_fria_offline_com_pin_local(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+        raiz = Path(__file__).resolve().parents[3]
+        local_store = (raiz / 'static/js/pdv_local_store.js').read_text(encoding='utf-8')
+        service_worker = (raiz / 'static/sw.js').read_text(encoding='utf-8')
+        offline_shell = (raiz / 'static/pdv-offline.html').read_text(encoding='utf-8')
+        offline_app = (raiz / 'static/js/pdv_offline_app.js').read_text(encoding='utf-8')
+
+        self.assertIn("const OFFLINE_PROFILES_STORE = 'perfis_offline'", local_store)
+        self.assertIn('async configureOfflineAccess(pin, profile)', local_store)
+        self.assertIn('static async unlockOfflineProfile(scope, pin)', local_store)
+        self.assertIn("iterations: 210000", local_store)
+        self.assertIn("name: 'AES-GCM'", local_store)
+        self.assertIn('failed_attempts >= 5', local_store)
+        self.assertIn('showModalProtecaoOffline', template)
+        self.assertIn('ativarProtecaoOffline()', template)
+        self.assertIn('renovarProtecaoOffline()', template)
+        self.assertIn("const PDV_OFFLINE_SHELL = '/static/pdv-offline.html?v=20260918-1'", service_worker)
+        self.assertIn("url.pathname.startsWith('/pdv/')", service_worker)
+        self.assertIn('Abrir PDV sem internet', offline_shell)
+        self.assertIn('/static/js/pdv_offline_app.js?v=20260918-1', offline_shell)
+        self.assertIn("await state.store.enqueueSale", offline_app)
+        self.assertIn('delete safe.custo_atual', offline_app)
+        self.assertIn("window.addEventListener('online'", offline_app)
+
+    def test_service_worker_entrega_casco_offline_somente_ao_pdv(self):
+        raiz = Path(__file__).resolve().parents[3]
+        resultado = subprocess.run(
+            [
+                shutil.which('node'),
+                str(Path(__file__).with_name('pdv_service_worker_behavior.cjs')),
+            ],
+            input=(raiz / 'static/sw.js').read_text(encoding='utf-8'),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(resultado.returncode, 0, resultado.stdout + resultado.stderr)
 
     def test_indicador_distingue_online_offline_e_sincronizacao(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
