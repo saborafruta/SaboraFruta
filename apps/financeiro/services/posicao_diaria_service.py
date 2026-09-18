@@ -571,7 +571,7 @@ class PosicaoDiariaCaixaService:
                 forma_pagamento__movimenta_caixa=True,
             ).exclude(
                 forma_pagamento__tipo__in=("boleto", "vale"),
-            ).exclude(venda_pdv__status="cancelada").select_related(
+            ).exclude(venda_pdv__status="cancelada").exclude(status="excluido").select_related(
                 "venda_pdv__cliente", "forma_pagamento", "forma_pagamento__conta_bancaria_padrao", "conta_bancaria",
             )
             for item in vendas:
@@ -663,7 +663,7 @@ class PosicaoDiariaCaixaService:
                 forma_pagamento__movimenta_caixa=True,
             ).exclude(
                 forma_pagamento__tipo__in=("boleto", "vale"),
-            ).exclude(venda_pdv__status="cancelada").select_related(
+            ).exclude(venda_pdv__status="cancelada").exclude(status="excluido").select_related(
                 "forma_pagamento__conta_bancaria_padrao", "conta_bancaria",
             )
             for item in vendas.iterator():
@@ -706,7 +706,7 @@ class PosicaoDiariaCaixaService:
                 forma_pagamento__conta_bancaria_padrao__isnull=True,
             ).exclude(
                 forma_pagamento__tipo__in=("boleto", "vale"),
-            ).exclude(venda_pdv__status="cancelada").select_related("venda_pdv", "forma_pagamento")
+            ).exclude(venda_pdv__status="cancelada").exclude(status="excluido").select_related("venda_pdv", "forma_pagamento")
             for item in vendas:
                 valor = item.valor_entrada_liquida
                 if valor:
@@ -734,7 +734,7 @@ class PosicaoDiariaCaixaService:
             forma_pagamento__movimenta_caixa=True,
         ).exclude(
             forma_pagamento__tipo__in=("boleto", "vale"),
-        ).exclude(venda_pdv__status="cancelada").select_related(
+        ).exclude(venda_pdv__status="cancelada").exclude(status="excluido").select_related(
             "venda_pdv__cliente", "forma_pagamento", "forma_pagamento__conta_bancaria_padrao", "conta_bancaria",
         ).order_by("data_liquidacao_prevista", "pk")
         itens = []
