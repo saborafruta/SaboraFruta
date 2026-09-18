@@ -20,6 +20,7 @@ class RailwayProvisioningError(Exception):
 
 class RailwayApiClient:
     API_URL = 'https://backboard.railway.com/graphql/v2'
+    POSTGRES_ICON_URL = 'https://devicons.railway.app/postgres'
 
     def __init__(self, project_id, environment_id, *, project_token='', api_token=''):
         self.project_id = project_id
@@ -77,6 +78,7 @@ class RailwayApiClient:
             'projectId': self.project_id,
             'environmentId': self.environment_id,
             'name': name,
+            'icon': self.POSTGRES_ICON_URL,
             'source': {'image': settings.RAILWAY_TENANT_DATABASE_IMAGE},
             'variables': {
                 'POSTGRES_DB': 'railway',

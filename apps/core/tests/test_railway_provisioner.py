@@ -3,10 +3,28 @@ from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase, override_settings
 
-from apps.core.services.railway_provisioner import RailwayProvisioner
+from apps.core.services.railway_provisioner import RailwayApiClient, RailwayProvisioner
 
 
 class RailwayProvisionerTests(SimpleTestCase):
+    @override_settings(
+        RAILWAY_TENANT_DATABASE_IMAGE='postgres:16-alpine',
+        RAILWAY_TENANT_DATABASE_VOLUME_PATH='/var/lib/postgresql/data',
+    )
+    def test_novo_banco_usa_icone_oficial_do_postgres(self):
+        client = RailwayApiClient('project-id', 'environment-id', project_token='token')
+        client.graphql = Mock(return_value={
+            'serviceCreate': {'id': 'database-id', 'name': 'banco-empresa'},
+        })
+
+        client.create_service('banco-empresa', 'senha-segura')
+
+        variables = client.graphql.call_args.args[1]
+        self.assertEqual(
+            variables['input']['icon'],
+            'https://devicons.railway.app/postgres',
+        )
+
     @override_settings(
         RAILWAY_PROJECT_TOKEN='token-central',
         RAILWAY_PROJECT_ID='project-central',
