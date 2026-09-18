@@ -935,13 +935,13 @@
     --pdv-scroll:#cbd5e1;
     --pdv-focus:#2563eb;
     --pdv-focus-ring:rgba(37,99,235,.20);
-    --pdv-header-bg:radial-gradient(circle at 44% -80%,rgba(59,130,246,.22),transparent 42%),linear-gradient(90deg,#0f172a 0%,#172554 42%,#1e3a8a 58%,#0f172a 100%);
-    --pdv-header-border:rgba(59,130,246,.20);
-    --pdv-header-control-bg:#242426;
-    --pdv-header-control-border:#34343a;
-    --pdv-header-control-hover:#2e2e30;
-    --pdv-header-text:#f8fafc;
-    --pdv-header-muted:#dbeafe;
+    --pdv-header-bg:radial-gradient(circle at 22% -60%,rgba(255,255,255,.22),transparent 42%),linear-gradient(90deg,#f15a24 0%,#e8824a 55%,#c2410c 100%);
+    --pdv-header-border:rgba(255,255,255,.16);
+    --pdv-header-control-bg:rgba(255,255,255,.16);
+    --pdv-header-control-border:rgba(255,255,255,.30);
+    --pdv-header-control-hover:rgba(255,255,255,.23);
+    --pdv-header-text:#ffffff;
+    --pdv-header-muted:rgba(255,255,255,.90);
     --pdv-accent:#2563eb;
     --pdv-accent-text:#1d4ed8;
     --pdv-accent-soft:rgba(37,99,235,.10);
@@ -1003,6 +1003,18 @@
   .pdv-topbar .mode-btn.act-venda,.pdv-topbar .mode-btn.act-delivery,.pdv-topbar .mode-btn.act-orcamento,.pdv-topbar .mode-btn.act-bonificacao,.pdv-topbar .mode-btn.act-venda-fora {
     background:#fff;color:#173b8f;box-shadow:none;
   }
+  html.tema-claro .pdv-topbar .mode-btn.act-venda,
+  html.tema-claro .pdv-topbar .mode-btn.act-delivery,
+  html.tema-claro .pdv-topbar .mode-btn.act-orcamento,
+  html.tema-claro .pdv-topbar .mode-btn.act-bonificacao,
+  html.tema-claro .pdv-topbar .mode-btn.act-venda-fora { background:#fff3e8;color:#c2410c; }
+  html.tema-claro #pdv-app > .pdv-topbar { position:relative;background:#c2410c !important;border-radius:0;box-shadow:0 12px 30px rgba(241,90,36,.16); }
+  html.tema-claro #pdv-app > .pdv-topbar::before { content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:var(--pdv-header-bg);border-radius:0 0 18px 0; }
+  html.tema-claro #pdv-app > .pdv-topbar > * { position:relative;z-index:1; }
+  html.tema-claro .pdv-topbar .mode-seg { background:rgba(194,65,12,.42);border-color:rgba(255,255,255,.34);box-shadow:none; }
+  html.tema-claro .pdv-topbar .mode-btn:not(.act-venda):not(.act-delivery):not(.act-orcamento):not(.act-bonificacao):not(.act-venda-fora),
+  html.tema-claro .pdv-topbar .topbar-btn { background:rgba(194,65,12,.36) !important;border-color:rgba(255,231,213,.36) !important;color:#fff !important; }
+  html.tema-claro .pdv-topbar .topbar-btn:hover { background:rgba(194,65,12,.50) !important; }
   .brand-switch {
     display:flex;align-items:center;gap:12px;min-width:0;padding:6px 10px 6px 9px;
     border:1px solid var(--pdv-header-control-border);border-radius:12px;
@@ -1094,9 +1106,16 @@
     .system-nav-drawer .sidebar-favoritable-link:hover > .sidebar-favorite-toggle:not(.is-favorite) { visibility:visible;opacity:1;pointer-events:auto; }
   }
   .sidebar-favorites-panel { margin:5px 0 8px;padding:7px;border:1px solid #34343a;border-radius:10px;background:#202024; }
-  .sidebar-favorites-heading { display:flex;gap:7px;padding:4px 5px 7px;color:#facc15;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em; }
-  .sidebar-favorite-row { position:relative;display:flex;align-items:center; }
-  .sidebar-favorite-link { flex:1;padding:7px 28px 7px 8px;border-radius:7px;color:#dbeafe;font-size:12px;font-weight:650;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .sidebar-favorites-heading { display:flex;align-items:center;justify-content:space-between;gap:7px;width:100%;padding:4px 5px 7px;border:0;background:transparent;color:#facc15;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;cursor:pointer; }
+  .sidebar-favorites-heading-label { display:flex;align-items:center;gap:7px; }
+  .sidebar-favorites-chevron { width:14px;height:14px;flex:0 0 14px;transition:transform .2s ease; }
+  .sidebar-favorites-panel.is-collapsed .sidebar-favorites-chevron { transform:rotate(-90deg); }
+  .sidebar-favorites-list { display:flex;flex-direction:column;gap:2px; }
+  .sidebar-favorites-list[hidden] { display:none; }
+  .sidebar-favorite-row { position:relative;display:flex;align-items:center;min-width:0; }
+  .sidebar-favorite-link { display:flex;align-items:center;gap:9px;min-width:0;flex:1 1 auto;padding:7px 28px 7px 8px;border-radius:7px;color:#dbeafe;font-size:12px;font-weight:650;text-decoration:none;white-space:nowrap;overflow:hidden; }
+  .sidebar-favorite-icon { width:16px;height:16px;flex:0 0 16px;stroke-width:1.7; }
+  .sidebar-favorite-label { min-width:0;overflow:hidden;text-overflow:ellipsis; }
   .sidebar-favorite-link:hover { background:#27272c; }
   .sidebar-favorite-row .sidebar-favorite-toggle { right:7px; }
   html.tema-claro .sidebar-favorites-panel { background:#eff6ff;border-color:#bfdbfe; }
@@ -1398,6 +1417,10 @@
     <button title="Tela cheia" @click="if(document.fullscreenElement){document.exitFullscreen()}else{document.documentElement.requestFullscreen()}" class="topbar-icon-btn">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
     </button>
+    <button type="button" id="pdv-theme-btn" class="topbar-icon-btn" onclick="pdvToggleTheme()" title="Alternar modo claro/escuro" aria-label="Alternar modo claro/escuro">
+      <svg id="pdv-icon-moon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+      <svg id="pdv-icon-sun" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:none;"><circle cx="12" cy="12" r="5" stroke-width="1.5"/><path stroke-linecap="round" stroke-width="1.5" d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
     <!-- Imprimir (dropdown) -->
     <div class="topbar-print" style="position:relative;flex-shrink:0;" @click.outside="showImprimirMenu=false">
       <button title="Imprimir" @click="showImprimirMenu=!showImprimirMenu"
@@ -1462,12 +1485,6 @@
         <a class="pdv-menu-item" href="{% url 'core:logout' %}" style="color:#f87171;">Sair</a>
       </div>
     </div>
-
-    <!-- Theme toggle -->
-    <button id="pdv-theme-btn" onclick="pdvToggleTheme()" title="Alternar modo claro/escuro" style="width:32px;height:32px;border-radius:8px;background:transparent;border:none;color:#555;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;" onmouseover="this.style.background='var(--pdv-hover2)'" onmouseout="this.style.background='transparent'">
-      <svg id="pdv-icon-moon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
-      <svg id="pdv-icon-sun" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:none;"><circle cx="12" cy="12" r="5" stroke-width="1.5"/><path stroke-linecap="round" stroke-width="1.5" d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-    </button>
   </header>
 
     <div id="sidebar-root" data-full-favorites="true" data-favorites-url="{% url 'core:menu-favoritos' %}" data-csrf-token="{{ csrf_token }}"
