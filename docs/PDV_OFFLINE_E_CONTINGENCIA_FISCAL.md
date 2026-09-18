@@ -231,10 +231,24 @@ Procedimento por operador e filial:
 
 O PIN fica somente neste navegador e não é a senha do ERP. Limpar os dados do navegador ou formatar a máquina remove a autorização e exige nova ativação online.
 
-### Fase 4 — operação e auditoria
+### Recuperação do PIN e revogação
 
-- painel administrativo de instalações/caixas;
-- revogação de instalação perdida ou formatada;
+Cada ativação cria também um código de emergência aleatório de 16 caracteres. Ele aparece uma única vez e pode ser baixado em `.txt` para guarda pelo responsável da loja. O servidor recebe apenas a informação de que a recuperação foi configurada; não recebe PIN, código ou material capaz de reconstruí-los.
+
+Se o PIN for esquecido sem internet, o operador pode usar o código de emergência no casco offline e é obrigado a criar outro PIN. O código usado é invalidado e um novo código aparece para guarda. Essa recuperação não renova a autorização nem o catálogo: o limite original de 12 horas continua valendo. Depois de cinco códigos incorretos, a recuperação fica bloqueada por 15 minutos.
+
+Se houver internet, um superusuário acessa `Central Administrativa > PDVs offline` e usa uma das ações:
+
+- `Liberar novo PIN`: invalida o PIN local no próximo contato e permite que o operador autenticado crie outro;
+- `Revogar`: invalida a instalação e bloqueia nova ativação nela até uma liberação explícita do superusuário.
+
+O painel registra dispositivo, filial, operador, caixa, último contato, revisão, responsável e motivo. Não existe senha mestra universal e o suporte nunca consegue visualizar o PIN antigo. Uma máquina formatada recebe outro `installation_id`; o registro antigo deve ser revogado no painel para manter o inventário limpo.
+
+### Fase 4 — operação e auditoria (parcialmente implementada)
+
+- painel administrativo global de instalações/caixas (implementado);
+- liberação online de novo PIN e revogação de instalação perdida ou formatada (implementado);
+- código emergencial local, de uso único, com rotação obrigatória (implementado);
 - exportação de emergência da fila local;
 - alerta central de vendas presas ou catálogo vencido;
 - relatório de testes de contingência por filial;

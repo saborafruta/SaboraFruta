@@ -51,6 +51,7 @@ from apps.core.tenant_context import get_current_database_alias
 from apps.core.views.audit import core_log_context
 from apps.core.views._admin import admin_area_required, superuser_required
 from apps.produtos.services.replicacao_service import ReplicacaoProdutoService
+from apps.pdv.models import EventoInstalacaoPDVOffline, InstalacaoPDVOffline
 
 
 PER_PAGE = 10
@@ -409,6 +410,76 @@ def central_administrativa(request):
             filial_selecionada.empresa if filial_selecionada else None
         ),
     })
+
+
+@superuser_required
+def instalacoes_pdv_offline(request):
+    """Painel global de revogação e liberação de novo PIN local."""
+    queryset = InstalacaoPDVOffline.objects.using('default').all()
+    busca = request.GET.get('q', '').strip()
+    status = request.GET.get('status', '').strip()
+    if busca:
+        queryset = queryset.filter(
+            Q(nome_dispositivo__icontains=busca)
+            | Q(filial_nome__icontains=busca)
+            | Q(usuario_nome__icontains=busca)
+            | Q(usuario_login__icontains=busca)
+            | Q(caixa_descricao__icontains=busca)
+            | Q(installation_id__icontains=busca)
+        )
+    if status in InstalacaoPDVOffline.Status.values:
+        queryset = queryset.filter(status=status)
+    return render(request, 'core/admin/instalacoes_pdv_offline.html', {
+        'instalacoes': _paginate(request, queryset),
+        'busca': busca,
+        'status_filtro': status,
+        'status_choices': InstalacaoPDVOffline.Status.choices,
+    })
+
+
+@superuser_required
+@require_POST
+def instalacao_pdv_offline_acao(request, pk):
+    acao = request.POST.get('acao', '').strip()
+    if acao not in {'redefinir', 'revogar'}:
+        messages.error(request, 'Ação inválida.')
+        return redirect('core:admin_instalacoes_pdv_offline')
+    motivo = request.POST.get('motivo', '').strip()[:1000]
+    if not motivo:
+        messages.error(request, 'Informe o motivo para manter a trilha de auditoria.')
+        return redirect('core:admin_instalacoes_pdv_offline')
+
+    with transaction.atomic(using='default'):
+        instalacao = get_object_or_404(
+            InstalacaoPDVOffline.objects.using('default').select_for_update(), pk=pk,
+        )
+        instalacao.status = (
+            InstalacaoPDVOffline.Status.REDEFINIR
+            if acao == 'redefinir' else InstalacaoPDVOffline.Status.REVOGADA
+        )
+        instalacao.revisao += 1
+        instalacao.revogado_em = timezone.now()
+        instalacao.revogado_por_id = request.user.pk
+        instalacao.revogado_por_nome = getattr(request.user, 'nome', '') or request.user.email
+        instalacao.motivo_revogacao = motivo
+        instalacao.save(using='default', update_fields=[
+            'status', 'revisao', 'revogado_em', 'revogado_por_id',
+            'revogado_por_nome', 'motivo_revogacao', 'visto_por_ultimo_em',
+        ])
+        EventoInstalacaoPDVOffline.objects.using('default').create(
+            instalacao=instalacao,
+            tipo='liberacao_novo_pin' if acao == 'redefinir' else 'revogada',
+            ator_id=request.user.pk,
+            ator_nome=instalacao.revogado_por_nome,
+            detalhe=motivo,
+        )
+    messages.success(
+        request,
+        'Novo PIN liberado. O PIN local antigo será apagado quando o PDV conectar.'
+        if acao == 'redefinir'
+        else 'Instalação revogada. Ela não poderá criar outro PIN sem nova liberação.',
+    )
+    return redirect('core:admin_instalacoes_pdv_offline')
 
 
 @superuser_required

@@ -98,6 +98,46 @@
     }
   }
 
+  function toggleRecovery() {
+    el('recovery').classList.toggle('hidden');
+    el('new-recovery').classList.add('hidden');
+    el('lock-error').textContent = '';
+    if (!el('recovery').classList.contains('hidden')) el('recovery-code').focus();
+  }
+
+  async function recoverPin() {
+    el('lock-error').textContent = '';
+    if (!state.selectedScope) return void (el('lock-error').textContent = 'Selecione um perfil autorizado.');
+    const newPin = el('new-pin').value;
+    if (!/^\d{6}$/.test(newPin)) return void (el('lock-error').textContent = 'Crie um novo PIN com 6 números.');
+    if (newPin !== el('new-pin-confirm').value) return void (el('lock-error').textContent = 'Os novos PINs não são iguais.');
+    try {
+      const profile = await window.PDVLocalStore.recoverOfflineProfile(
+        state.selectedScope, el('recovery-code').value, newPin,
+      );
+      el('new-recovery-code').textContent = profile.recovery_code;
+      el('new-recovery').classList.remove('hidden');
+      el('recovery').classList.add('hidden');
+      el('pin').value = '';
+      el('recovery-code').value = el('new-pin').value = el('new-pin-confirm').value = '';
+      el('lock-error').textContent = 'PIN alterado. Guarde o novo código e entre com o novo PIN.';
+    } catch (error) {
+      el('lock-error').textContent = error.message || 'Não foi possível recuperar o PIN.';
+    }
+  }
+
+  function downloadRecoveryCode() {
+    const code = el('new-recovery-code').textContent.trim();
+    if (!code) return;
+    const content = `Código de emergência do PDV: ${code}\n\nGuarde com o responsável. Uso único: ao utilizá-lo, outro código será criado.\n`;
+    const url = URL.createObjectURL(new Blob([content], {type: 'text/plain;charset=utf-8'}));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'codigo-emergencia-pdv.txt';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   function catalogValid() {
     const reference = state.snapshot?.catalogo_em || state.snapshot?.gerado_em;
     const age = reference ? Date.now() - new Date(reference).getTime() : Infinity;
@@ -272,6 +312,9 @@
   function tryOnline() { window.location.href = '/pdv/'; }
 
   el('unlock').addEventListener('click', unlock);
+  el('show-recovery').addEventListener('click', toggleRecovery);
+  el('recover').addEventListener('click', recoverPin);
+  el('download-recovery').addEventListener('click', downloadRecoveryCode);
   el('pin').addEventListener('keydown', event => { if (event.key === 'Enter') unlock(); });
   el('search').addEventListener('input', event => { state.query = event.target.value; renderProducts(); });
   el('search').addEventListener('keydown', event => {

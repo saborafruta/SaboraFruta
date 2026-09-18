@@ -1,5 +1,6 @@
 import datetime
 import json
+import re
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
@@ -31,6 +32,7 @@ from apps.core.services.checkout import (
 )
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
 from apps.core.tenant_context import tenant_atomic
+from apps.core.tenant_context import get_current_database_alias
 from apps.core.services.permissions import requer_permissao
 from apps.core.services.search import (
     filter_queryset_by_terms,
@@ -42,7 +44,8 @@ from apps.financeiro.constants.enums import TipoFormaPagamento
 from apps.estoque.models import Estoque
 from apps.fiscal.integrations.focusnfe.exceptions import FocusNFeNetworkError, FocusNFeServerError
 from apps.pdv.models import (
-    Caixa, ItemVendaPDV, MovimentacaoCaixa, PagamentoVendaPDV, SessaoPDV, VendaPDV,
+    Caixa, EventoInstalacaoPDVOffline, InstalacaoPDVOffline, ItemVendaPDV,
+    MovimentacaoCaixa, PagamentoVendaPDV, SessaoPDV, VendaPDV,
 )
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
 from apps.pdv.services.oferta_contexto_service import (
@@ -1268,6 +1271,118 @@ def api_estado(request):
         } if sessao else None,
         "formas_pagamento": formas,
         "top_produtos": top_produtos,
+    })
+
+
+@requer_permissao('pdv', 'ver')
+@require_POST
+def api_instalacao_offline(request):
+    """Registra e consulta a autorização local sem receber PIN ou código."""
+    try:
+        body = json.loads(request.body or b'{}')
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({"erro": "JSON invalido."}, status=400)
+
+    installation_id = str(body.get("installation_id") or "").strip()
+    if not re.fullmatch(r"inst[a-f0-9]{32}", installation_id):
+        return JsonResponse({"erro": "Identificador da instalacao invalido."}, status=400)
+    action = str(body.get("action") or "status").strip().lower()
+    if action not in {"status", "activate", "deactivate"}:
+        return JsonResponse({"erro": "Acao invalida."}, status=400)
+
+    filial = request.filial_ativa
+    tenant_alias = get_current_database_alias() or "default"
+    lookup = {
+        "tenant_alias": tenant_alias,
+        "filial_id_origem": filial.pk,
+        "usuario_id_origem": request.user.pk,
+        "installation_id": installation_id,
+    }
+    instalacao = InstalacaoPDVOffline.objects.using("default").filter(**lookup).first()
+
+    if action == "deactivate":
+        if instalacao:
+            instalacao.status = InstalacaoPDVOffline.Status.INATIVA
+            instalacao.revisao += 1
+            instalacao.save(using="default", update_fields=["status", "revisao", "visto_por_ultimo_em"])
+            EventoInstalacaoPDVOffline.objects.using("default").create(
+                instalacao=instalacao,
+                tipo="desativada_no_pdv",
+                ator_id=request.user.pk,
+                ator_nome=getattr(request.user, "nome", "") or request.user.email,
+                detalhe="Abertura offline desativada no proprio dispositivo.",
+            )
+        return JsonResponse({"status": "inativa", "revisao": getattr(instalacao, "revisao", 0)})
+
+    if action == "status":
+        if not instalacao:
+            return JsonResponse({"status": "nao_registrada", "revisao": 0})
+        instalacao.filial_nome = filial.nome_fantasia or filial.razao_social
+        instalacao.usuario_nome = getattr(request.user, "nome", "") or request.user.email
+        instalacao.usuario_login = request.user.email
+        instalacao.user_agent = request.META.get("HTTP_USER_AGENT", "")[:1000]
+        instalacao.recuperacao_configurada = bool(body.get("recuperacao_configurada"))
+        instalacao.save(using="default", update_fields=[
+            "filial_nome", "usuario_nome", "usuario_login", "user_agent",
+            "recuperacao_configurada", "visto_por_ultimo_em",
+        ])
+        return JsonResponse({
+            "status": instalacao.status,
+            "revisao": instalacao.revisao,
+            "nome_dispositivo": instalacao.nome_dispositivo,
+        })
+
+    if instalacao and instalacao.status == InstalacaoPDVOffline.Status.REVOGADA:
+        return JsonResponse({
+            "erro": "Esta instalacao foi revogada pelo suporte. Solicite a liberacao antes de criar outro PIN.",
+            "status": instalacao.status,
+            "revisao": instalacao.revisao,
+        }, status=403)
+
+    sessao = _sessao_aberta(request)
+    caixa = getattr(sessao, "caixa", None) if sessao else None
+    nome_dispositivo = str(body.get("nome_dispositivo") or "").strip()[:120]
+    if not nome_dispositivo:
+        nome_dispositivo = f"Caixa {getattr(caixa, 'numero', '') or 'PDV'}"
+    defaults = {
+        "empresa_id_origem": filial.empresa_id,
+        "filial_nome": filial.nome_fantasia or filial.razao_social,
+        "usuario_nome": getattr(request.user, "nome", "") or request.user.email,
+        "usuario_login": request.user.email,
+        "nome_dispositivo": nome_dispositivo,
+        "caixa_id_origem": getattr(caixa, "pk", None),
+        "caixa_descricao": (
+            f"Caixa {caixa.numero}" + (f" - {caixa.descricao}" if caixa.descricao else "")
+            if caixa else ""
+        ),
+        "user_agent": request.META.get("HTTP_USER_AGENT", "")[:1000],
+        "status": InstalacaoPDVOffline.Status.ATIVA,
+        "recuperacao_configurada": bool(body.get("recuperacao_configurada")),
+        "revogado_em": None,
+        "revogado_por_id": None,
+        "revogado_por_nome": "",
+        "motivo_revogacao": "",
+    }
+    if instalacao:
+        for field, value in defaults.items():
+            setattr(instalacao, field, value)
+        instalacao.revisao += 1
+        instalacao.save(using="default")
+        event_type = "pin_redefinido"
+    else:
+        instalacao = InstalacaoPDVOffline.objects.using("default").create(**lookup, **defaults)
+        event_type = "ativada"
+    EventoInstalacaoPDVOffline.objects.using("default").create(
+        instalacao=instalacao,
+        tipo=event_type,
+        ator_id=request.user.pk,
+        ator_nome=getattr(request.user, "nome", "") or request.user.email,
+        detalhe="Autorizacao offline configurada no proprio PDV.",
+    )
+    return JsonResponse({
+        "status": instalacao.status,
+        "revisao": instalacao.revisao,
+        "nome_dispositivo": instalacao.nome_dispositivo,
     })
 
 

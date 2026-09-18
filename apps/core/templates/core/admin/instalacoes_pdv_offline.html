@@ -1,0 +1,87 @@
+{% extends "_base.html" %}
+
+{% block title %}PDVs offline - ERP iNoovaTed{% endblock %}
+{% block page_title %}PDVs offline{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <section class="card p-6">
+    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+      <div>
+        <h2 class="text-xl font-bold">Instalações autorizadas para abertura offline</h2>
+        <p class="text-sm mt-2 text-slate-500">O suporte pode invalidar o PIN local ou liberar a criação de um novo. PIN e código de emergência nunca são enviados ao servidor.</p>
+      </div>
+      <a href="{% url 'core:admin_central' %}" class="btn-secondary">Voltar à Central</a>
+    </div>
+  </section>
+
+  <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-[1fr_220px_auto] gap-3 items-end">
+    <label class="block">
+      <span class="block text-xs font-bold mb-1">Buscar</span>
+      <input class="form-input" type="search" name="q" value="{{ busca }}" placeholder="Filial, operador, caixa ou instalação">
+    </label>
+    <label class="block">
+      <span class="block text-xs font-bold mb-1">Status</span>
+      <select class="form-input" name="status">
+        <option value="">Todos</option>
+        {% for valor, rotulo in status_choices %}<option value="{{ valor }}" {% if status_filtro == valor %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+      </select>
+    </label>
+    <button class="btn-primary" type="submit">Filtrar</button>
+  </form>
+
+  <section class="space-y-3">
+    {% for instalacao in instalacoes %}
+      <article class="card p-5" x-data="{acao:''}">
+        <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 class="font-bold text-lg">{{ instalacao.nome_dispositivo }}</h3>
+              {% if instalacao.status == 'ativa' %}
+                <span class="soft-pill is-green">Ativa</span>
+              {% elif instalacao.status == 'redefinir' %}
+                <span class="soft-pill is-amber">Aguardando novo PIN</span>
+              {% elif instalacao.status == 'inativa' %}
+                <span class="soft-pill is-slate">Desativada no PDV</span>
+              {% else %}
+                <span class="soft-pill is-red">Revogada</span>
+              {% endif %}
+            </div>
+            <div class="mt-2 text-sm text-slate-500 space-y-1">
+              <p><strong>{{ instalacao.filial_nome }}</strong> · {{ instalacao.usuario_nome }}{% if instalacao.usuario_login %} ({{ instalacao.usuario_login }}){% endif %}</p>
+              <p>{{ instalacao.caixa_descricao|default:"Caixa não informado" }} · último contato {{ instalacao.visto_por_ultimo_em|date:"d/m/Y H:i" }}</p>
+              <p>Código emergencial: {% if instalacao.recuperacao_configurada %}configurado{% else %}<strong class="text-amber-600">não configurado</strong>{% endif %}</p>
+              <p class="font-mono text-xs break-all">{{ instalacao.installation_id }} · revisão {{ instalacao.revisao }}</p>
+              {% if instalacao.motivo_revogacao %}<p class="text-amber-600">Última ação: {{ instalacao.motivo_revogacao }} — {{ instalacao.revogado_por_nome }}</p>{% endif %}
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2 shrink-0">
+            <button type="button" class="btn-secondary" @click="acao = acao === 'redefinir' ? '' : 'redefinir'">Liberar novo PIN</button>
+            <button type="button" class="px-4 py-2 rounded-lg border border-red-300 text-red-600 font-bold" @click="acao = acao === 'revogar' ? '' : 'revogar'">Revogar</button>
+          </div>
+        </div>
+        <form x-show="acao" x-cloak method="post" action="{% url 'core:admin_instalacao_pdv_offline_acao' instalacao.pk %}" class="mt-4 p-4 rounded-xl border border-slate-300">
+          {% csrf_token %}
+          <input type="hidden" name="acao" :value="acao">
+          <label class="block text-sm font-bold mb-2" x-text="acao === 'redefinir' ? 'Motivo da liberação' : 'Motivo da revogação'"></label>
+          <textarea class="form-input" name="motivo" rows="2" maxlength="1000" required placeholder="Ex.: operador esqueceu o PIN; computador perdido; máquina formatada"></textarea>
+          <div class="flex justify-end gap-2 mt-3">
+            <button type="button" class="btn-secondary" @click="acao=''">Cancelar</button>
+            <button type="submit" class="btn-primary" x-text="acao === 'redefinir' ? 'Confirmar novo PIN' : 'Confirmar revogação'"></button>
+          </div>
+        </form>
+      </article>
+    {% empty %}
+      <div class="card p-8 text-center text-slate-500">Nenhuma instalação encontrada.</div>
+    {% endfor %}
+  </section>
+
+  {% if instalacoes.paginator.num_pages > 1 %}
+    <nav class="flex justify-center gap-2">
+      {% if instalacoes.has_previous %}<a class="btn-secondary" href="?q={{ busca|urlencode }}&status={{ status_filtro|urlencode }}&page={{ instalacoes.previous_page_number }}">Anterior</a>{% endif %}
+      <span class="px-4 py-2">{{ instalacoes.number }} / {{ instalacoes.paginator.num_pages }}</span>
+      {% if instalacoes.has_next %}<a class="btn-secondary" href="?q={{ busca|urlencode }}&status={{ status_filtro|urlencode }}&page={{ instalacoes.next_page_number }}">Próxima</a>{% endif %}
+    </nav>
+  {% endif %}
+</div>
+{% endblock %}

@@ -3899,22 +3899,32 @@
   <!-- Autorizacao local para reabrir o PDV depois de queda de energia. -->
   <div x-show="showModalProtecaoOffline" x-cloak
        :style="showModalProtecaoOffline ? 'position:fixed;inset:0;z-index:9400;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.84);backdrop-filter:blur(4px);' : 'display:none;'"
-       @keydown.escape.window="showModalProtecaoOffline=false">
+       @keydown.escape.window="fecharProtecaoOffline()">
     <div style="width:min(480px,100%);padding:22px;border:1px solid var(--pdv-bd3);border-radius:15px;background:var(--pdv-modal);box-shadow:0 24px 70px rgba(0,0,0,.55);">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;">
         <div><h2 style="margin:0;color:var(--pdv-t1);font-size:18px;">Abertura offline neste computador</h2><p style="margin:7px 0 0;color:var(--pdv-t3);font-size:12px;line-height:1.5;">Permite reabrir o PDV após reiniciar sem internet. A autorização é exclusiva desta instalação.</p></div>
-        <button type="button" @click="showModalProtecaoOffline=false" class="cli-modal-close" aria-label="Fechar">✕</button>
+        <button type="button" @click="fecharProtecaoOffline()" class="cli-modal-close" aria-label="Fechar">✕</button>
       </div>
       <div style="margin-top:16px;padding:12px;border:1px solid var(--pdv-bd2);border-radius:10px;background:var(--pdv-bg);font-size:12px;line-height:1.55;color:var(--pdv-tmid);">
-        <template x-if="offlineProfileEnabled"><div><strong style="color:#4ade80;">Proteção ativa</strong><br><span x-text="'Autorizado até '+offlineProfileValidoAte"></span><br>O prazo é renovado sempre que este PDV abre conectado.</div></template>
+        <template x-if="offlineProfileEnabled"><div><strong style="color:#4ade80;">Proteção ativa</strong><br><span x-text="'Autorizado até '+offlineProfileValidoAte"></span><br>O prazo é renovado sempre que este PDV abre conectado.<br><span x-show="!offlineRecoveryAvailable" style="color:#fbbf24;">Perfil antigo sem código emergencial: desative e ative novamente.</span></div></template>
         <template x-if="!offlineProfileEnabled"><div><strong style="color:#fbbf24;">Proteção ainda não ativada</strong><br>Crie um PIN local de 6 números. Ele não substitui a senha do sistema e deve ficar somente com operadores autorizados.</div></template>
       </div>
       <template x-if="!offlineProfileEnabled">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
+          <input type="text" maxlength="120" autocomplete="off" x-model="offlineInstallationName" placeholder="Nome do caixa/computador" style="grid-column:1/-1;padding:11px;border:1px solid var(--pdv-bd2);border-radius:8px;background:var(--pdv-bg);color:var(--pdv-t1);">
           <input type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" x-model="offlinePin" placeholder="PIN de 6 números" style="padding:11px;border:1px solid var(--pdv-bd2);border-radius:8px;background:var(--pdv-bg);color:var(--pdv-t1);text-align:center;letter-spacing:.18em;">
           <input type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" x-model="offlinePinConfirmacao" placeholder="Repita o PIN" style="padding:11px;border:1px solid var(--pdv-bd2);border-radius:8px;background:var(--pdv-bg);color:var(--pdv-t1);text-align:center;letter-spacing:.18em;">
         </div>
       </template>
+      <div x-show="offlineRecoveryCode" style="margin-top:14px;padding:14px;border:1px solid #a16207;border-radius:10px;background:rgba(161,98,7,.12);">
+        <strong style="color:#fde047;">Código de emergência — salve agora</strong>
+        <p style="margin:6px 0 10px;color:var(--pdv-tmid);font-size:12px;line-height:1.5;">Ele aparece uma única vez. Entregue ao responsável da loja. Ao ser usado, será inutilizado e outro será criado.</p>
+        <div x-text="offlineRecoveryCode" style="padding:11px;border:1px dashed #eab308;border-radius:8px;color:#fde047;text-align:center;font:800 17px ui-monospace,monospace;letter-spacing:.08em;"></div>
+        <div style="display:flex;gap:8px;margin-top:9px;">
+          <button type="button" @click="copiarCodigoRecuperacao()" style="flex:1;padding:8px;border:1px solid var(--pdv-bd3);border-radius:8px;background:var(--pdv-card);color:var(--pdv-t1);">Copiar</button>
+          <button type="button" @click="baixarCodigoRecuperacao()" style="flex:1;padding:8px;border:1px solid var(--pdv-bd3);border-radius:8px;background:var(--pdv-card);color:var(--pdv-t1);">Baixar .txt</button>
+        </div>
+      </div>
       <p x-show="offlineProfileErro" x-text="offlineProfileErro" style="margin:10px 0 0;color:#f87171;font-size:12px;"></p>
       <div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:9px;margin-top:16px;">
         <button type="button" x-show="vendasOfflinePendentes" @click="mostrarFilaOffline()" style="padding:9px 12px;border:1px solid #854d0e;border-radius:8px;background:#42200655;color:#fde68a;">Ver fila (<span x-text="vendasOfflinePendentes"></span>)</button>
@@ -3933,7 +3943,7 @@
 {{ favoritos_completos|json_script:"sidebar-favorites-records" }}
 <script src="{% static 'core/js/sidebar_favorites.js' %}?v=20260917-4"></script>
 <script src="{% static 'core/js/sidebar_search.js' %}?v=20260917-3"></script>
-<script src="{% static 'js/pdv_local_store.js' %}?v=20260918-1"></script>
+<script src="{% static 'js/pdv_local_store.js' %}?v=20260918-2"></script>
 <script>
 function pdv() {
   return {
@@ -3951,8 +3961,9 @@ function pdv() {
     localStorePronto: false, localSaveState: 'inicializando', localDraftRestaurado: false,
     snapshotLocal: null, snapshotCatalogoEm: null, vendasOfflinePendentes: 0, sincronizandoFilaOffline: false,
     _localStore: null, _localSaveChain: Promise.resolve(), _persistenciaSuspensa: false, _catalogoSyncEmAndamento: false,
-    showModalProtecaoOffline: false, offlineProfileEnabled: false, offlineProfileValidoAte: '',
+    showModalProtecaoOffline: false, offlineProfileEnabled: false, offlineProfileValidoAte: '', offlineRecoveryAvailable: false,
     offlinePin: '', offlinePinConfirmacao: '', offlineProfileErro: '', offlineProfileSalvando: false,
+    offlineInstallationName: '', offlineRecoveryCode: '',
     erroCaixa: '', caixaSelecionada: '', valorAberturaCaixa: '0', caixaAbrindo: false,
     criandoCaixa: false, novoCaixaDescricao: '', criandoCaixaLoading: false,
 
@@ -4226,6 +4237,9 @@ function pdv() {
       setInterval(() => {
         if (navigator.onLine && this.vendasOfflinePendentes) this.sincronizarFilaOffline();
       }, 30000);
+      setInterval(() => {
+        if (navigator.onLine && this.conectividadeOnline && this.offlineProfileEnabled) this.renovarProtecaoOffline();
+      }, 60000);
     },
 
     async iniciarLocalFirst() {
@@ -4255,6 +4269,8 @@ function pdv() {
     async carregarProtecaoOffline() {
       const profile = await this._localStore?.getOfflineProfile();
       this.offlineProfileEnabled = !!profile;
+      this.offlineRecoveryAvailable = !!profile?.recovery_proof;
+      this.offlineInstallationName = profile?.nome_dispositivo || this.offlineInstallationName || `Caixa ${this.sessao?.caixa_id || 'PDV'}`;
       this.offlineProfileValidoAte = profile?.valid_until
         ? new Date(profile.valid_until).toLocaleString('pt-BR')
         : '';
@@ -4264,10 +4280,30 @@ function pdv() {
       if (!this._localStore || !navigator.onLine || !this.conectividadeOnline || !this.sessao?.id) return;
       const profile = await this._localStore.getOfflineProfile();
       if (!profile) return;
+      let registro;
+      try {
+        registro = await this.sincronizarInstalacaoOffline('status', profile);
+        if (registro.status === 'nao_registrada') registro = await this.sincronizarInstalacaoOffline('activate', profile);
+      } catch (error) {
+        this.toast_('Não foi possível renovar a autorização offline no servidor.', 'erro');
+        return;
+      }
+      if (['redefinir', 'revogada', 'inativa'].includes(registro.status)) {
+        await this._localStore.disableOfflineAccess();
+        this.offlineProfileEnabled = false;
+        this.offlineRecoveryAvailable = false;
+        this.offlineProfileValidoAte = '';
+        this.toast_(registro.status === 'redefinir'
+          ? 'O suporte liberou a criação de um novo PIN offline neste computador.'
+          : 'A autorização offline deste computador foi revogada.', 'info');
+        return;
+      }
       const atualizado = await this._localStore.refreshOfflineAccess({
         filial_nome: '{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social|escapejs }}',
         usuario_nome: this.nomeUsuario,
         usuario_login: this.loginUsuario,
+        server_revision: registro.revisao,
+        nome_dispositivo: registro.nome_dispositivo,
       });
       this.offlineProfileEnabled = !!atualizado;
       this.offlineProfileValidoAte = atualizado?.valid_until
@@ -4275,12 +4311,36 @@ function pdv() {
         : '';
     },
 
+    async sincronizarInstalacaoOffline(action, profile={}) {
+      const response = await fetch('/pdv/api/offline/instalacao/', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json', 'X-CSRFToken':csrf()},
+        body: JSON.stringify({
+          action,
+          installation_id: this._localStore?.installationId,
+          nome_dispositivo: this.offlineInstallationName || profile.nome_dispositivo || `Caixa ${this.sessao?.caixa_id || 'PDV'}`,
+          recuperacao_configurada: !!profile.recovery_proof,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.erro || 'Falha ao atualizar a instalação offline.');
+      return data;
+    },
+
     abrirProtecaoOffline() {
       this.offlinePin = '';
       this.offlinePinConfirmacao = '';
       this.offlineProfileErro = '';
+      this.offlineRecoveryCode = '';
+      this.offlineInstallationName ||= `Caixa ${this.sessao?.caixa_id || 'PDV'}`;
       this.carregarProtecaoOffline();
       this.showModalProtecaoOffline = true;
+    },
+
+    fecharProtecaoOffline() {
+      this.showModalProtecaoOffline = false;
+      this.offlineRecoveryCode = '';
+      this.offlinePin = this.offlinePinConfirmacao = '';
     },
 
     async ativarProtecaoOffline() {
@@ -4301,15 +4361,25 @@ function pdv() {
         this.offlineProfileErro = 'Os PINs informados não são iguais.';
         return;
       }
+      if (!this.offlineInstallationName.trim()) {
+        this.offlineProfileErro = 'Informe um nome para identificar este caixa ou computador.';
+        return;
+      }
       this.offlineProfileSalvando = true;
       try {
+        const registro = await this.sincronizarInstalacaoOffline('activate');
         const profile = await this._localStore.configureOfflineAccess(this.offlinePin, {
           filial_nome: '{{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social|escapejs }}',
           usuario_nome: this.nomeUsuario,
           usuario_login: this.loginUsuario,
+          server_revision: registro.revisao,
+          nome_dispositivo: registro.nome_dispositivo,
         });
         this.offlineProfileEnabled = true;
         this.offlineProfileValidoAte = new Date(profile.valid_until).toLocaleString('pt-BR');
+        this.offlineRecoveryAvailable = true;
+        this.offlineRecoveryCode = profile.recovery_code;
+        await this.sincronizarInstalacaoOffline('status', profile);
         this.offlinePin = this.offlinePinConfirmacao = '';
         this.toast_('Abertura offline ativada neste computador.', 'ok');
       } catch (error) {
@@ -4321,10 +4391,33 @@ function pdv() {
 
     async desativarProtecaoOffline() {
       if (!confirm('Desativar a abertura offline para este operador e filial neste computador?')) return;
+      try { await this.sincronizarInstalacaoOffline('deactivate'); } catch (_) { /* limpeza local continua */ }
       await this._localStore?.disableOfflineAccess();
       this.offlineProfileEnabled = false;
+      this.offlineRecoveryAvailable = false;
       this.offlineProfileValidoAte = '';
       this.toast_('Abertura offline desativada neste computador.', 'info');
+    },
+
+    async copiarCodigoRecuperacao() {
+      if (!this.offlineRecoveryCode) return;
+      try {
+        await navigator.clipboard.writeText(this.offlineRecoveryCode);
+        this.toast_('Código copiado.', 'ok');
+      } catch (_) {
+        this.offlineProfileErro = 'Não foi possível copiar. Use o botão para baixar o arquivo.';
+      }
+    },
+
+    baixarCodigoRecuperacao() {
+      if (!this.offlineRecoveryCode) return;
+      const content = `Código de emergência do PDV: ${this.offlineRecoveryCode}\nDispositivo: ${this.offlineInstallationName}\nFilial: {{ filial_ativa.nome_fantasia|default:filial_ativa.razao_social|escapejs }}\nOperador: ${this.nomeUsuario}\n\nGuarde com o responsável. Uso único: ao utilizá-lo, outro código será criado.\n`;
+      const url = URL.createObjectURL(new Blob([content], {type:'text/plain;charset=utf-8'}));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'codigo-emergencia-pdv.txt';
+      link.click();
+      URL.revokeObjectURL(url);
     },
 
     async restaurarRascunhoLocal() {

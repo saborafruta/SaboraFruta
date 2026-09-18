@@ -41,6 +41,8 @@ urlpatterns = [
     path('auth/preferencias-tabelas/', TabelaPreferenciasView.as_view(), name='preferencias-tabelas'),
 
     path('gestao/central/', admin_area.central_administrativa, name='admin_central'),
+    path('gestao/central/pdv-offline/', admin_area.instalacoes_pdv_offline, name='admin_instalacoes_pdv_offline'),
+    path('gestao/central/pdv-offline/<int:pk>/acao/', admin_area.instalacao_pdv_offline_acao, name='admin_instalacao_pdv_offline_acao'),
     path(
         'gestao/central/filiais/<int:filial_id>/etiqueta-venda/',
         admin_area.etiqueta_venda_config,

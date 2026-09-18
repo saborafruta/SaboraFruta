@@ -33,6 +33,18 @@
     return `${prefix || 'pdv'}${uuid}`;
   }
 
+  function generateRecoveryCode() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const values = new Uint8Array(16);
+    global.crypto.getRandomValues(values);
+    const raw = Array.from(values, value => alphabet[value % alphabet.length]).join('');
+    return raw.match(/.{1,4}/g).join('-');
+  }
+
+  function normalizeRecoveryCode(value) {
+    return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
   function bytesToBase64(bytes) {
     let binary = '';
     bytes.forEach(value => { binary += String.fromCharCode(value); });
@@ -200,6 +212,18 @@
         marker: generateId('unlock'),
       }));
       const encrypted = new Uint8Array(await global.crypto.subtle.encrypt({name: 'AES-GCM', iv}, key, proof));
+      const recoveryCode = generateRecoveryCode();
+      const recoverySalt = global.crypto.getRandomValues(new Uint8Array(16));
+      const recoveryIv = global.crypto.getRandomValues(new Uint8Array(12));
+      const recoveryKey = await derivePinKey(normalizeRecoveryCode(recoveryCode), recoverySalt);
+      const recoveryProof = new TextEncoder().encode(JSON.stringify({
+        scope: this.scope,
+        installation_id: this.installationId,
+        marker: generateId('recovery'),
+      }));
+      const recoveryEncrypted = new Uint8Array(await global.crypto.subtle.encrypt(
+        {name: 'AES-GCM', iv: recoveryIv}, recoveryKey, recoveryProof,
+      ));
       const now = new Date();
       const record = {
         scope: this.scope,
@@ -212,6 +236,14 @@
         salt: bytesToBase64(salt),
         iv: bytesToBase64(iv),
         proof: bytesToBase64(encrypted),
+        recovery_salt: bytesToBase64(recoverySalt),
+        recovery_iv: bytesToBase64(recoveryIv),
+        recovery_proof: bytesToBase64(recoveryEncrypted),
+        recovery_generation: Number(profile?.recovery_generation || 1),
+        recovery_failed_attempts: 0,
+        recovery_blocked_until: null,
+        server_revision: Number(profile?.server_revision || 0),
+        nome_dispositivo: String(profile?.nome_dispositivo || ''),
         enabled_at: now.toISOString(),
         last_online_at: now.toISOString(),
         valid_until: new Date(now.getTime() + OFFLINE_AUTH_HOURS * 60 * 60 * 1000).toISOString(),
@@ -219,7 +251,7 @@
         blocked_until: null,
       };
       await this._put(OFFLINE_PROFILES_STORE, record, true);
-      return clonePlain(record);
+      return {...clonePlain(record), recovery_code: recoveryCode};
     }
 
     async getOfflineProfile() {
@@ -236,6 +268,8 @@
         filial_nome: String(profile?.filial_nome || current.filial_nome || 'Filial'),
         usuario_nome: String(profile?.usuario_nome || current.usuario_nome || 'Operador'),
         usuario_login: String(profile?.usuario_login || current.usuario_login || ''),
+        server_revision: Number(profile?.server_revision || current.server_revision || 0),
+        nome_dispositivo: String(profile?.nome_dispositivo || current.nome_dispositivo || ''),
         last_online_at: now.toISOString(),
         valid_until: new Date(now.getTime() + OFFLINE_AUTH_HOURS * 60 * 60 * 1000).toISOString(),
         failed_attempts: 0,
@@ -311,6 +345,102 @@
         await write(profile);
         db.close();
         throw new Error('PIN local incorreto.');
+      }
+    }
+
+    static async recoverOfflineProfile(scope, recoveryCode, newPin) {
+      if (!/^\d{6}$/.test(String(newPin || ''))) {
+        throw new Error('Crie um novo PIN com exatamente 6 numeros.');
+      }
+      const normalizedCode = normalizeRecoveryCode(recoveryCode);
+      if (normalizedCode.length !== 16) throw new Error('Codigo de emergencia invalido.');
+      const db = await PDVLocalStore._openDatabase();
+      const read = key => new Promise((resolve, reject) => {
+        const request = db.transaction(OFFLINE_PROFILES_STORE, 'readonly')
+          .objectStore(OFFLINE_PROFILES_STORE).get(key);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error || new Error('Falha ao ler acesso offline.'));
+      });
+      const write = value => new Promise((resolve, reject) => {
+        let transaction;
+        try { transaction = db.transaction(OFFLINE_PROFILES_STORE, 'readwrite', {durability: 'strict'}); }
+        catch (_) { transaction = db.transaction(OFFLINE_PROFILES_STORE, 'readwrite'); }
+        transaction.objectStore(OFFLINE_PROFILES_STORE).put(value);
+        transaction.oncomplete = resolve;
+        transaction.onabort = transaction.onerror = () => reject(transaction.error || new Error('Falha ao atualizar acesso offline.'));
+      });
+      const profile = await read(scope);
+      if (!profile?.recovery_proof) { db.close(); throw new Error('Este perfil nao possui codigo de emergencia. Conecte o PDV para reconfigurar.'); }
+      const now = Date.now();
+      if (!profile.valid_until || new Date(profile.valid_until).getTime() < now) {
+        db.close();
+        throw new Error('Autorizacao offline vencida. O codigo nao renova o prazo; conecte o PDV.');
+      }
+      if (profile.recovery_blocked_until && new Date(profile.recovery_blocked_until).getTime() > now) {
+        db.close();
+        throw new Error('Recuperacao temporariamente bloqueada. Aguarde 15 minutos.');
+      }
+      let recoveryVerified = false;
+      try {
+        const recoveryKey = await derivePinKey(normalizedCode, base64ToBytes(profile.recovery_salt));
+        const clear = await global.crypto.subtle.decrypt(
+          {name: 'AES-GCM', iv: base64ToBytes(profile.recovery_iv)},
+          recoveryKey,
+          base64ToBytes(profile.recovery_proof),
+        );
+        const recoveryProof = JSON.parse(new TextDecoder().decode(clear));
+        if (recoveryProof.scope !== scope || recoveryProof.installation_id !== profile.installation_id) throw new Error('invalid proof');
+        recoveryVerified = true;
+
+        const pinSalt = global.crypto.getRandomValues(new Uint8Array(16));
+        const pinIv = global.crypto.getRandomValues(new Uint8Array(12));
+        const pinKey = await derivePinKey(newPin, pinSalt);
+        const pinProof = new TextEncoder().encode(JSON.stringify({
+          scope,
+          installation_id: profile.installation_id,
+          marker: generateId('unlock'),
+        }));
+        const pinEncrypted = new Uint8Array(await global.crypto.subtle.encrypt(
+          {name: 'AES-GCM', iv: pinIv}, pinKey, pinProof,
+        ));
+
+        const nextCode = generateRecoveryCode();
+        const nextSalt = global.crypto.getRandomValues(new Uint8Array(16));
+        const nextIv = global.crypto.getRandomValues(new Uint8Array(12));
+        const nextKey = await derivePinKey(normalizeRecoveryCode(nextCode), nextSalt);
+        const nextProof = new TextEncoder().encode(JSON.stringify({
+          scope,
+          installation_id: profile.installation_id,
+          marker: generateId('recovery'),
+        }));
+        const nextEncrypted = new Uint8Array(await global.crypto.subtle.encrypt(
+          {name: 'AES-GCM', iv: nextIv}, nextKey, nextProof,
+        ));
+
+        Object.assign(profile, {
+          salt: bytesToBase64(pinSalt), iv: bytesToBase64(pinIv), proof: bytesToBase64(pinEncrypted),
+          recovery_salt: bytesToBase64(nextSalt), recovery_iv: bytesToBase64(nextIv),
+          recovery_proof: bytesToBase64(nextEncrypted),
+          recovery_generation: Number(profile.recovery_generation || 1) + 1,
+          failed_attempts: 0, blocked_until: null,
+          recovery_failed_attempts: 0, recovery_blocked_until: null,
+        });
+        await write(profile);
+        db.close();
+        return {...clonePlain(profile), recovery_code: nextCode};
+      } catch (error) {
+        if (recoveryVerified) {
+          db.close();
+          throw error;
+        }
+        profile.recovery_failed_attempts = Number(profile.recovery_failed_attempts || 0) + 1;
+        if (profile.recovery_failed_attempts >= 5) {
+          profile.recovery_blocked_until = new Date(now + 15 * 60 * 1000).toISOString();
+          profile.recovery_failed_attempts = 0;
+        }
+        await write(profile);
+        db.close();
+        throw new Error('Codigo de emergencia incorreto.');
       }
     }
 

@@ -194,6 +194,8 @@ TENANT_GLOBAL_MODELS = [
     'core.filialfavorita',
     'core.separacaofilial',
     'core.tenantpubliclink',
+    'pdv.instalacaopdvoffline',
+    'pdv.eventoinstalacaopdvoffline',
     'sessions.session',
 ]
 DATABASE_ROUTERS = ['apps.core.db_router.TenantDatabaseRouter']
