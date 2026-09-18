@@ -259,8 +259,10 @@
         status.setAttribute('aria-live', 'polite');
         panel.appendChild(status);
 
-        // Favoritos ficam depois de todos os modulos e de seus itens.
-        nav.appendChild(panel);
+        // Mantem os atalhos favoritos logo abaixo da busca, antes do inicio e dos modulos.
+        var search = nav.querySelector('[data-sidebar-search]');
+        if (search) search.insertAdjacentElement('afterend', panel);
+        else nav.insertBefore(panel, nav.firstChild);
       });
     }
 

@@ -169,8 +169,9 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
         self.assertIn('letter-spacing: 0.1em;', home_label_rule)
         self.assertIn('text-transform: uppercase;', home_label_rule)
         self.assertIn('aria-current="page"', template)
-        self.assertIn('nav.appendChild(panel)', script)
-        self.assertNotIn("dashboard.insertAdjacentElement('afterend', panel)", script)
+        self.assertIn("nav.querySelector('[data-sidebar-search]')", script)
+        self.assertIn("search.insertAdjacentElement('afterend', panel)", script)
+        self.assertNotIn('nav.appendChild(panel)', script)
 
     def test_sanfonas_restauram_estado_expandido_e_visual_simples(self):
         raiz = Path(__file__).resolve().parents[1]
