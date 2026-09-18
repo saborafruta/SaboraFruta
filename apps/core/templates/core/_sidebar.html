@@ -418,6 +418,40 @@
   }
 </style>
 <script>
+  window.criarEstadoSidebar = function(opcoes) {
+    var configuracao = opcoes || {};
+    var secoes;
+    try {
+      var padrao = {cadastros:true, operacoes:true, financeiro:true, logistica:true, avancado:true, food_service:true, moda:true, polpa:true};
+      var salvo = localStorage.getItem('sidebar-secoes');
+      secoes = salvo ? Object.assign(padrao, JSON.parse(salvo)) : padrao;
+    } catch (e) {
+      secoes = {cadastros:true, operacoes:true, financeiro:true, logistica:true, avancado:true, food_service:true, moda:true, polpa:true};
+    }
+    return {
+      collapsed: Boolean(configuracao.collapsed),
+      mobileOpen: false,
+      secoes: secoes,
+      toggleSecao: function(nome) {
+        this.secoes[nome] = !this.secoes[nome];
+        localStorage.setItem('sidebar-secoes', JSON.stringify(this.secoes));
+      },
+      menuBloqueado: function() {
+        return Date.now() < (window.__erpMobileMenuBlockedUntil || 0);
+      },
+      toggleMobileMenu: function() {
+        if (this.menuBloqueado() || window.__erpThemeChanging) {
+          this.mobileOpen = false;
+          return;
+        }
+        this.mobileOpen = !this.mobileOpen;
+      },
+      closeMobileMenu: function() {
+        this.mobileOpen = false;
+      }
+    };
+  };
+
   function detectarConteudoLogoSidebar(img, proporcaoNatural) {
     try {
       var largura = Math.min(img.naturalWidth, 280);
@@ -560,39 +594,11 @@
 <link rel="stylesheet" href="{% static 'core/css/sidebar_search.css' %}?v=20260917-5">
 
 <!-- SIDEBAR DESKTOP + DRAWER MOBILE -->
+{% if not sidebar_assets_only %}
 <div id="sidebar-root"
      data-favorites-url="{% url 'core:menu-favoritos' %}"
      data-csrf-token="{{ csrf_token }}"
-     x-data="{
-  collapsed: Boolean(window.__erpSidebarCollapsedInitial),
-  mobileOpen: false,
-  secoes: (function(){
-    try {
-      var padrao = {cadastros:true, operacoes:true, financeiro:true, logistica:true, avancado:true, food_service:true, moda:true, polpa:true};
-      var salvo = localStorage.getItem('sidebar-secoes');
-      return salvo ? Object.assign(padrao, JSON.parse(salvo)) : padrao;
-    } catch(e) {
-      return {cadastros:true, operacoes:true, financeiro:true, logistica:true, avancado:true, food_service:true, moda:true, polpa:true};
-    }
-  })(),
-  toggleSecao: function(nome) {
-    this.secoes[nome] = !this.secoes[nome];
-    localStorage.setItem('sidebar-secoes', JSON.stringify(this.secoes));
-  },
-  menuBloqueado: function() {
-    return Date.now() < (window.__erpMobileMenuBlockedUntil || 0);
-  },
-  toggleMobileMenu: function() {
-    if (this.menuBloqueado() || window.__erpThemeChanging) {
-      this.mobileOpen = false;
-      return;
-    }
-    this.mobileOpen = !this.mobileOpen;
-  },
-  closeMobileMenu: function() {
-    this.mobileOpen = false;
-  }
-}" @keydown.escape.window="mobileOpen = false"
+     x-data="window.criarEstadoSidebar({collapsed:Boolean(window.__erpSidebarCollapsedInitial)})" @keydown.escape.window="mobileOpen = false"
    x-init="window.__erpSetSidebarCollapsed(collapsed, false); window.__erpCloseMobileSidebar = function() { mobileOpen = false }; $nextTick(function() { var secaoAtual = window.aplicarFocoTelaAtualSidebar($root); window.sincronizarSecoesSidebar(secoes, secaoAtual); })"
    @toggle-mobile-menu.window="toggleMobileMenu()"
    @close-mobile-menu.window="closeMobileMenu()">
@@ -615,47 +621,7 @@
     class="app-sidebar sidebar-desktop hidden lg:flex flex-col flex-shrink-0 fixed left-0 top-0 bottom-0 z-50"
     :style="temaClaro ? 'background:#ffffff; border-right:1px solid #cbd5e1; border-radius:0; box-shadow:3px 0 14px rgba(15,23,42,0.08); height:100dvh; max-height:100dvh;' : 'background:#161618; border-right:none; border-radius:0; box-shadow:4px 0 16px rgba(0,0,0,0.4); height:100dvh; max-height:100dvh;'"
   >
-    <!-- Logo / Toggle -->
-    <div class="flex items-center h-14 px-4 flex-shrink-0" :style="temaClaro ? 'border-bottom:1px solid #e5e5e5;' : 'border-bottom:1px solid #2a2a2e;'">
-      <a href="{{ pagina_inicial_url }}" class="flex items-center flex-1 min-w-0" x-show="!collapsed" x-cloak>
-        <span class="font-bold truncate" style="font-family:Space Grotesk, sans-serif; letter-spacing:-1px; font-size:20px;"><span :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">iNoova</span><span :style="temaClaro ? 'color:#e8824a;' : 'color:#3b82f6;'">Ted</span></span>
-      </a>
-      <a href="{{ pagina_inicial_url }}" x-show="collapsed" x-cloak class="flex items-center justify-center w-full">
-        <span class="font-bold" style="font-family:Space Grotesk, sans-serif; font-size:15px; letter-spacing:-0.5px;"><span :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">i</span><span :style="temaClaro ? 'color:#e8824a;' : 'color:#3b82f6;'">T</span></span>
-      </a>
-      <button @click="collapsed = !collapsed; window.__erpSetSidebarCollapsed(collapsed, true)"
-              class="p-1 rounded-lg flex-shrink-0 transition-colors"
-              :class="collapsed ? 'mx-auto' : 'ml-auto'"
-              :style="temaClaro ? 'color:#aaa;' : 'color:#f8fafc;'"
-              onmouseover="this.style.color=temaClaro?'#333':'#f0f0f0'; this.style.background=temaClaro?'#f0f0f0':'#2a2a2e';"
-              onmouseout="this.style.color=temaClaro?'#aaa':'#f8fafc'; this.style.background='transparent';"
-              :title="collapsed ? 'Expandir menu' : 'Recolher menu'">
-        <svg class="w-4 h-4 transition-transform" :class="collapsed ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
-        </svg>
-      </button>
-    </div>
-
-    <!-- Nav desktop -->
-    <nav class="sidebar-scroll sidebar-favorites-nav flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-0.5">
-      {% include "core/_sidebar_navigation.html" %}
-    </nav>
-
-    <!-- Footer sidebar desktop -->
-    <div class="p-2" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'">
-      <a href="{% url 'core:logout' %}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
-         :class="collapsed ? 'justify-center' : ''"
-         :style="temaClaro ? 'background:#fff0f0; color:#e24b4a; border:0.5px solid rgba(226,75,74,0.2);' : 'background:rgba(239,68,68,0.08); color:#f87171; border:0.5px solid rgba(239,68,68,0.15);'"
-         title="Sair"
-         onmouseover="this.style.background=temaClaro?'#ffe4e4':'rgba(239,68,68,0.18)'; this.style.borderColor=temaClaro?'rgba(226,75,74,0.4)':'rgba(239,68,68,0.35)';"
-         onmouseout="this.style.background=temaClaro?'#fff0f0':'rgba(239,68,68,0.08)'; this.style.borderColor=temaClaro?'rgba(226,75,74,0.2)':'rgba(239,68,68,0.15)';">
-        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-        </svg>
-        <span x-show="!collapsed" x-cloak>Sair</span>
-      </a>
-    </div>
+    {% include "core/_sidebar_panel.html" %}
   </aside>
 
   <!-- DRAWER MOBILE -->
@@ -1464,3 +1430,4 @@
 {{ request.user.menu_favoritos|default_if_none:''|json_script:"sidebar-favorites-data" }}
 <script src="{% static 'core/js/sidebar_favorites.js' %}?v=20260918-2" defer></script>
 <script src="{% static 'core/js/sidebar_search.js' %}?v=20260917-3" defer></script>
+{% endif %}

@@ -90,10 +90,12 @@ class ClienteEditorPDVTests(TestCase):
         response = self.client.get(reverse('pdv:home'))
         normal = render_to_string('core/_sidebar_navigation.html', request=response.wsgi_request)
         pdv_html = response.content.decode()
-        drawer = pdv_html.split('<nav class="system-nav-drawer', 1)[1].split('</nav>', 1)[0]
+        drawer = pdv_html.split('<aside class="pdv-system-sidebar', 1)[1].split('</aside>', 1)[0]
         parser_normal, parser_pdv = _MenuLinks(), _MenuLinks()
         parser_normal.feed(normal)
         parser_pdv.feed(drawer)
+        parser_normal.links.pop(reverse('core:dashboard'), None)
+        parser_pdv.links.pop(reverse('core:dashboard'), None)
         self.assertEqual(parser_pdv.links, parser_normal.links)
         self.assertIn(reverse('cadastros:funcionario-list'), parser_pdv.links)
         self.assertNotIn('>↵ OK</button>', pdv_html)

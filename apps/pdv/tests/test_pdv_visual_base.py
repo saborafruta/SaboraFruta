@@ -81,18 +81,17 @@ class PDVVisualBaseTests(SimpleTestCase):
         pdv_navigation = navigation.render(context)
         self.assertNotIn('/media/logo-empresa-teste.png', pdv_navigation)
         self.assertNotIn('sidebar-branch-logo-frame', pdv_navigation)
-        self.assertIn('Dashboard', pdv_navigation)
+        self.assertIn('href="/dashboard/"', pdv_navigation)
 
     def test_favoritos_aparecem_selecionados_hover_ou_foco(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
-        selector = '.system-nav-drawer .sidebar-favoritable-link'
-        self.assertIn(selector + ' > .sidebar-favorite-toggle:not(.is-favorite) { visibility:hidden;opacity:0;pointer-events:none; }', template)
-        self.assertIn(selector + ':focus-within > .sidebar-favorite-toggle:not(.is-favorite) { visibility:visible;opacity:1;pointer-events:auto; }', template)
-        self.assertIn('@media (hover:hover) and (pointer:fine)', template)
-        self.assertIn(selector + ':hover > .sidebar-favorite-toggle:not(.is-favorite) { visibility:visible;opacity:1;pointer-events:auto; }', template)
-        self.assertIn('.sidebar-favorite-toggle.is-favorite { color:#facc15; }', template)
-        self.assertIn('.sidebar-favorite-link { display:flex;align-items:center;gap:9px;min-width:0;', template)
-        self.assertIn('.sidebar-favorite-icon { width:16px;height:16px;flex:0 0 16px;', template)
+        sidebar = (Path(__file__).resolve().parents[2] / 'core/templates/core/_sidebar.html').read_text(encoding='utf-8')
+        self.assertIn('{% include "core/_sidebar.html" with sidebar_assets_only=True %}', template)
+        self.assertIn('@media (hover: hover) and (pointer: fine)', sidebar)
+        self.assertIn('.sidebar-favoritable-link:hover > .sidebar-favorite-toggle:not(.is-favorite)', sidebar)
+        self.assertIn('.sidebar-favorite-toggle.is-favorite', sidebar)
+        self.assertIn('.sidebar-favorite-link {', sidebar)
+        self.assertIn('.sidebar-favorite-icon {', sidebar)
         navigation = (Path(__file__).resolve().parents[2] / 'core/templates/core/_sidebar_navigation.html').read_text(encoding='utf-8')
         self.assertNotIn('onmouseover=', navigation)
         self.assertIn('@mouseenter="$el.style.background=temaClaro?', navigation)
@@ -111,7 +110,7 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn('aria-label="Menu do usuário"', header)
         self.assertNotIn('id="sidebar-root"', header)
         self.assertNotIn('@click.outside="showSystemMenu=false"', header)
-        self.assertIn('{% include "core/_sidebar_navigation.html" with hide_sidebar_logo=True %}', template)
+        self.assertIn('{% include "core/_sidebar_panel.html" with sidebar_drawer_mode=True', template)
 
     def test_pagamento_neutro_troco_e_contraste_claro(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
@@ -184,9 +183,24 @@ class PDVVisualBaseTests(SimpleTestCase):
         ).read_text(encoding='utf-8')
 
         self.assertIn('showSystemMenu', template)
-        self.assertIn('system-nav-drawer sidebar-favorites-nav', template)
-        self.assertIn('brand-wordmark-neutral', template)
-        self.assertIn("{% url 'core:dashboard' as dashboard_url %}", template)
+        self.assertIn('class="pdv-system-sidebar flex flex-col"', template)
+        self.assertIn('{% include "core/_sidebar_panel.html" with sidebar_drawer_mode=True', template)
+        sidebar = (
+            Path(__file__).resolve().parents[2] / 'core/templates/core/_sidebar.html'
+        ).read_text(encoding='utf-8')
+        self.assertIn('{% include "core/_sidebar_panel.html" %}', sidebar)
+        self.assertIn('window.criarEstadoSidebar', sidebar)
+        self.assertIn('Object.assign(window.criarEstadoSidebar({collapsed:false})', template)
+        self.assertIn('{% firstof pagina_inicial_url "/dashboard/" as dashboard_url %}', template)
+
+    def test_cabecalho_claro_mantem_acoes_visiveis_e_online_contrastante(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+
+        self.assertIn('class="topbar-chip pdv-status-chip" :class="{\'pdv-status-chip--online\':conectividadeOnline}"', template)
+        self.assertIn('html.tema-claro .pdv-topbar .pdv-status-chip--online {', template)
+        self.assertIn('background:#9a3412 !important;border-color:#fdba74 !important;color:#fff !important;', template)
+        self.assertIn('html.tema-claro .pdv-topbar .topbar-sales-actions > .topbar-btn {', template)
+        self.assertIn('display:inline-flex !important;visibility:visible !important;opacity:1 !important;', template)
 
     def test_pdv_integra_favoritos_filial_perfil_e_pagamentos(self):
         template = (

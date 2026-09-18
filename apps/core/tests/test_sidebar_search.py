@@ -58,9 +58,11 @@ class SidebarSearchTemplateTests(SimpleTestCase):
     def test_menu_especial_do_pdv_carrega_busca_completa(self):
         raiz_apps = Path(__file__).resolve().parents[2]
         template = (raiz_apps / "pdv" / "templates" / "pdv" / "home.html").read_text(encoding="utf-8")
+        sidebar = (raiz_apps / "core" / "templates" / "core" / "_sidebar.html").read_text(encoding="utf-8")
 
-        self.assertIn('core/css/sidebar_search.css', template)
-        self.assertIn('?v=20260917-5', template)
+        self.assertIn('{% include "core/_sidebar.html" with sidebar_assets_only=True %}', template)
+        self.assertIn('core/css/sidebar_search.css', sidebar)
+        self.assertIn('?v=20260917-5', sidebar)
         self.assertIn('core/js/sidebar_search.js', template)
         self.assertIn('sidebar_favorites.js', template)
         self.assertIn('v=20260917-3', template)

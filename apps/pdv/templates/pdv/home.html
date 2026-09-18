@@ -3,18 +3,13 @@
 {% block title %}PDV{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'core/css/sidebar_search.css' %}?v=20260917-5">
+{% include "core/_sidebar.html" with sidebar_assets_only=True %}
 <style>
   .payment-confirm { align-self:center;min-height:38px;padding:8px 15px;border:1px solid #15803d;border-radius:7px;background:#15803d;color:#fff;font-size:13px;font-weight:600;cursor:pointer;box-shadow:none; }
   .payment-confirm:hover { background:#166534;border-color:#166534; }
   .payment-confirm:focus-visible, .client-name-edit:focus-visible { outline:2px solid var(--pdv-t2);outline-offset:3px; }
   .client-name-edit { background:none;border:0;padding:0;text-align:left;color:var(--pdv-t1);font:inherit;font-size:14px;font-weight:600;cursor:pointer; }
   .client-name-edit:hover { text-decoration:underline;text-underline-offset:3px; }
-  .system-nav-drawer .sidebar-branch-logo-frame { height:95px;display:flex;justify-content:center; }
-  .system-nav-drawer .sidebar-branch-logo-img { max-width:100%;max-height:95px;object-fit:contain; }
-  .system-nav-drawer .sidebar-branch-name { text-align:center;font-size:12px;font-weight:600;margin:8px; }
-  html.tema-claro .system-nav-drawer .topbar-icon-btn { color:#475569 !important;background:#f1f5f9 !important; }
-  .system-nav-drawer .sidebar-section-label { color:#475569;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em; }
   .client-editor { margin:auto;width:min(640px,calc(100vw - 28px));max-height:88dvh;overflow:auto;padding:24px;background:var(--pdv-modal);color:var(--pdv-t1);border:1px solid var(--pdv-bd);border-radius:14px;box-shadow:0 20px 65px #0005; }
   .client-editor::backdrop { background:rgba(15,23,42,.55); }
   .client-editor h2 { font-size:18px;font-weight:700;margin:0; }
@@ -1015,6 +1010,15 @@
   html.tema-claro .pdv-topbar .mode-btn:not(.act-venda):not(.act-delivery):not(.act-orcamento):not(.act-bonificacao):not(.act-venda-fora),
   html.tema-claro .pdv-topbar .topbar-btn { background:rgba(194,65,12,.36) !important;border-color:rgba(255,231,213,.36) !important;color:#fff !important; }
   html.tema-claro .pdv-topbar .topbar-btn:hover { background:rgba(194,65,12,.50) !important; }
+  html.tema-claro .pdv-topbar .topbar-sales-actions > .topbar-btn {
+    display:inline-flex !important;visibility:visible !important;opacity:1 !important;
+    background:#9a3412 !important;border-color:#fdba74 !important;color:#fff !important;
+  }
+  html.tema-claro .pdv-topbar .pdv-status-chip--online {
+    background:#9a3412 !important;border-color:#fdba74 !important;color:#fff !important;
+    box-shadow:0 2px 8px rgba(124,45,18,.24);
+  }
+  html.tema-claro .pdv-topbar .pdv-status-chip--online > span { color:#fff !important; }
   .brand-switch {
     display:flex;align-items:center;gap:12px;min-width:0;padding:6px 10px 6px 9px;
     border:1px solid var(--pdv-header-control-border);border-radius:12px;
@@ -1027,19 +1031,8 @@
   html.tema-claro .brand-wordmark-neutral { color:#101010; }
   html.tema-claro .brand-wordmark-accent { color:#f15a24; }
   .system-overlay { position:fixed;inset:0;z-index:80;display:flex;align-items:stretch;background:rgba(15,23,42,.34);backdrop-filter:blur(2px); }
-  .system-nav-drawer { width:min(310px,calc(100vw - 26px));height:100dvh;background:#161618;border-right:1px solid #2a2a2e;box-shadow:18px 0 48px rgba(0,0,0,.42);padding:10px;overflow-y:auto; }
-  html.tema-claro .system-nav-drawer { background:#fff;border-right-color:#e5e7eb;box-shadow:14px 0 34px rgba(15,23,42,.18); }
-  .system-nav-head { display:flex;align-items:center;justify-content:space-between;height:48px;padding:0 8px 10px;border-bottom:1px solid #2a2a2e;margin-bottom:8px; }
-  html.tema-claro .system-nav-head { border-bottom-color:#e5e7eb; }
-  .system-nav-section { padding:14px 10px 5px;font-size:10px;font-weight:800;letter-spacing:.10em;text-transform:uppercase;color:#a1a1aa; }
-  .system-nav-link { display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:9px;color:#f8fafc;font-size:13px;font-weight:600;text-decoration:none;transition:.15s; }
-  .system-nav-link:hover { background:#242426;color:#dbeafe; }
-  .system-nav-link.is-current { background:#1e3a5f;color:#bfdbfe; }
-  .system-nav-link svg { width:18px;height:18px;flex-shrink:0; }
-  html.tema-claro .system-nav-section { color:#6b7280; }
-  html.tema-claro .system-nav-link { color:#4b5563; }
-  html.tema-claro .system-nav-link:hover { background:#eff6ff;color:#1d4ed8; }
-  html.tema-claro .system-nav-link.is-current { background:#dbeafe;color:#1d4ed8; }
+  .pdv-system-sidebar { width:min(310px,calc(100vw - 26px));height:100dvh;box-shadow:18px 0 48px rgba(0,0,0,.42); }
+  html.tema-claro .pdv-system-sidebar { box-shadow:14px 0 34px rgba(15,23,42,.18); }
   .prod-card,.item-card,.forma-btn { background:var(--pdv-card);border-color:var(--pdv-bd) !important; }
   .prod-card:hover,.prod-card.in-cart { border-color:var(--pdv-accent) !important;background:var(--pdv-accent-soft); }
   .prod-card-preco { color:var(--pdv-accent-text); }
@@ -1097,30 +1090,6 @@
   .pdv-menu-item:hover { background:var(--pdv-hover);color:var(--pdv-t1); }
   .header-avatar { width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;font-size:11px;font-weight:800;flex-shrink:0; }
   .header-avatar img { width:100%;height:100%;object-fit:cover; }
-  .sidebar-favorites-nav .sidebar-favoritable-link { position:relative;padding-right:34px; }
-  .sidebar-favorite-toggle { position:absolute;right:10px;color:#71717a;font-size:17px;line-height:1;cursor:pointer; }
-  .sidebar-favorite-toggle.is-favorite { color:#facc15; }
-  .system-nav-drawer .sidebar-favoritable-link > .sidebar-favorite-toggle:not(.is-favorite) { visibility:hidden;opacity:0;pointer-events:none; }
-  .system-nav-drawer .sidebar-favoritable-link:focus-within > .sidebar-favorite-toggle:not(.is-favorite) { visibility:visible;opacity:1;pointer-events:auto; }
-  @media (hover:hover) and (pointer:fine) {
-    .system-nav-drawer .sidebar-favoritable-link:hover > .sidebar-favorite-toggle:not(.is-favorite) { visibility:visible;opacity:1;pointer-events:auto; }
-  }
-  .sidebar-favorites-panel { margin:5px 0 8px;padding:7px;border:1px solid #34343a;border-radius:10px;background:#202024; }
-  .sidebar-favorites-heading { display:flex;align-items:center;justify-content:space-between;gap:7px;width:100%;padding:4px 5px 7px;border:0;background:transparent;color:#facc15;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;cursor:pointer; }
-  .sidebar-favorites-heading-label { display:flex;align-items:center;gap:7px; }
-  .sidebar-favorites-chevron { width:14px;height:14px;flex:0 0 14px;transition:transform .2s ease; }
-  .sidebar-favorites-panel.is-collapsed .sidebar-favorites-chevron { transform:rotate(-90deg); }
-  .sidebar-favorites-list { display:flex;flex-direction:column;gap:2px; }
-  .sidebar-favorites-list[hidden] { display:none; }
-  .sidebar-favorite-row { position:relative;display:flex;align-items:center;min-width:0; }
-  .sidebar-favorite-link { display:flex;align-items:center;gap:9px;min-width:0;flex:1 1 auto;padding:7px 28px 7px 8px;border-radius:7px;color:#dbeafe;font-size:12px;font-weight:650;text-decoration:none;white-space:nowrap;overflow:hidden; }
-  .sidebar-favorite-icon { width:16px;height:16px;flex:0 0 16px;stroke-width:1.7; }
-  .sidebar-favorite-label { min-width:0;overflow:hidden;text-overflow:ellipsis; }
-  .sidebar-favorite-link:hover { background:#27272c; }
-  .sidebar-favorite-row .sidebar-favorite-toggle { right:7px; }
-  html.tema-claro .sidebar-favorites-panel { background:#eff6ff;border-color:#bfdbfe; }
-  html.tema-claro .sidebar-favorite-link { color:#1e3a8a; }
-  html.tema-claro .sidebar-favorite-link:hover { background:#dbeafe; }
   .profile-photo-modal { width:min(420px,calc(100vw - 28px));padding:22px;background:var(--pdv-modal);border:1px solid var(--pdv-bd);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.48); }
   .cash-open-shell { width:min(390px,calc(100vw - 28px));background:var(--pdv-modal);border:1px solid var(--pdv-bd4);border-radius:16px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.5); }
   .cash-open-control { width:100%;padding:11px 12px;background:var(--pdv-bg);border:1px solid var(--pdv-bd4);border-radius:9px;color:var(--pdv-t1);font-size:13px;outline:none; }
@@ -1169,7 +1138,7 @@
       position:fixed;top:calc(60px + env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));left:auto;
       width:min(300px,calc(100vw - 16px));max-height:calc(100dvh - 76px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;z-index:120;
     }
-    .system-nav-drawer { padding-top:calc(10px + env(safe-area-inset-top));padding-bottom:calc(10px + env(safe-area-inset-bottom)); }
+    .pdv-system-sidebar { padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom); }
   }
   @media (min-width:1101px) and (max-width:1500px) {
     #pdv-app > .pdv-topbar { gap:6px !important;padding:0 8px !important; }
@@ -1339,7 +1308,7 @@
       </button>
     </div>
 
-    <div class="topbar-chip" style="gap:6px;cursor:pointer;"
+    <div class="topbar-chip pdv-status-chip" :class="{'pdv-status-chip--online':conectividadeOnline}" style="gap:6px;cursor:pointer;"
          :title="statusLocalDetalhe" @click="abrirProtecaoOffline()">
       <span x-show="!sincronizandoConexao" class="pdv-connection-dot"
             :class="conectividadeOnline ? 'pdv-connection-dot--online' : 'pdv-connection-dot--offline'"
@@ -1491,27 +1460,19 @@
     <div id="sidebar-root" data-full-favorites="true" data-favorites-url="{% url 'core:menu-favoritos' %}" data-csrf-token="{{ csrf_token }}"
          x-show="showSystemMenu" x-cloak x-transition.opacity.duration.140ms class="system-overlay"
          @click.self="showSystemMenu=false" @keydown.escape.window="showSystemMenu=false">
-      <nav class="system-nav-drawer sidebar-favorites-nav"
-           aria-label="Navegação do sistema"
-           x-data="{ collapsed:false, temaClaro:document.documentElement.classList.contains('tema-claro'),
-             secoes:{cadastros:true,operacoes:true,financeiro:true,logistica:true,avancado:true,food_service:true,moda:true,polpa:true},
-             toggleSecao(nome) { this.secoes[nome] = !this.secoes[nome]; } }"
-           x-init="$watch('showSystemMenu', () => temaClaro = document.documentElement.classList.contains('tema-claro'))"
+      <aside class="pdv-system-sidebar flex flex-col"
+             aria-label="Navegação do sistema"
+             x-data="Object.assign(window.criarEstadoSidebar({collapsed:false}), {temaClaro:document.documentElement.classList.contains('tema-claro')})"
+             x-init="$watch('showSystemMenu', function(aberto) { temaClaro=document.documentElement.classList.contains('tema-claro'); if (aberto) $nextTick(function(){ var secaoAtual=window.aplicarFocoTelaAtualSidebar($root); window.sincronizarSecoesSidebar(secoes,secaoAtual); }); })"
+             :style="temaClaro ? 'background:#ffffff; border-right:1px solid #cbd5e1; border-radius:0;' : 'background:#161618; border-right:none; border-radius:0;'"
              x-transition:enter="transition ease-out duration-160"
              x-transition:enter-start="-translate-x-full opacity-70"
              x-transition:enter-end="translate-x-0 opacity-100"
              x-transition:leave="transition ease-in duration-120"
              x-transition:leave-start="translate-x-0 opacity-100"
              x-transition:leave-end="-translate-x-full opacity-70">
-        <div class="system-nav-head sidebar-branch-logo-card">
-          <span class="brand-mark"><span class="brand-wordmark-neutral">iNoova</span><span class="brand-wordmark-accent">Ted</span></span>
-          <button type="button" class="topbar-icon-btn" @click="showSystemMenu=false" title="Recolher menu">
-            <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
-          </button>
-        </div>
-        {% include "core/_sidebar_navigation.html" with hide_sidebar_logo=True %}
-        <a href="{% url 'core:logout' %}" class="system-nav-link" style="margin-top:8px;color:#f87171;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>Sair</a>
-      </nav>
+        {% include "core/_sidebar_panel.html" with sidebar_drawer_mode=True pagina_inicial_url=dashboard_url %}
+      </aside>
     </div>
 
   <!-- ══════════════════ CORPO ══════════════════ -->

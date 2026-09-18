@@ -143,9 +143,11 @@ class MenuFavoritosTemplateTests(SimpleTestCase):
     def test_sidebar_carrega_favoritos_no_desktop_e_celular(self):
         raiz = Path(__file__).resolve().parents[1]
         template = (raiz / 'templates' / 'core' / '_sidebar.html').read_text(encoding='utf-8')
+        panel = (raiz / 'templates' / 'core' / '_sidebar_panel.html').read_text(encoding='utf-8')
         script = (raiz / 'static' / 'core' / 'js' / 'sidebar_favorites.js').read_text(encoding='utf-8')
 
-        self.assertEqual(template.count('sidebar-favorites-nav'), 2)
+        self.assertEqual(template.count('sidebar-favorites-nav') + panel.count('sidebar-favorites-nav'), 2)
+        self.assertIn('{% include "core/_sidebar_panel.html" %}', template)
         self.assertIn('core/js/sidebar_favorites.js', template)
         self.assertIn('request.user.menu_favoritos', template)
         self.assertIn('@media (hover: hover) and (pointer: fine)', template)
