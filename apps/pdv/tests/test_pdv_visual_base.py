@@ -308,10 +308,10 @@ class PDVVisualBaseTests(SimpleTestCase):
         )
 
         self.assertIn(
-            'linear-gradient(90deg, #f15a24 0%, #e8824a 55%, #c2410c 100%)',
+            'linear-gradient(90deg, #f54e12 0%, #f17733 55%, #e55d25 100%)',
             base,
         )
-        self.assertIn('background: #c2410c !important;', base)
+        self.assertIn('background: #e55d25 !important;', base)
         self.assertIn('border-radius: 0 0 18px 0;', base)
         self.assertIn('body.tema-claro .app-topbar > * { position: relative; z-index: 1; }', base)
         self.assertNotIn('#542412', base)
