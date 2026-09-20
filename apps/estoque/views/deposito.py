@@ -11,7 +11,9 @@ from django.views import View
 from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
-from apps.estoque.forms import DepositoForm, TransferenciaInternaForm
+from apps.core.services.request_scope import empresa_operacional
+from apps.core.tenant_context import tenant_atomic
+from apps.estoque.forms import AviamentoRapidoForm, DepositoForm, TransferenciaInternaForm
 from apps.estoque.models import Deposito, Estoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.estoque.views.permissoes import permissoes_estoque
@@ -28,6 +30,57 @@ def _auditar_deposito(request, acao, deposito, descricao='', antes=None, depois=
         antes=antes,
         depois=depois,
     )
+
+
+def _painel_aviamentos(request, deposito, form_rapido=None):
+    """
+    Dados do painel "Aviamentos" da tela do depósito: o catálogo da filial
+    com o saldo NESTE depósito e o total geral, mais o formulário de
+    cadastro rápido. Só existe com o vertical Moda ativo (é dele o catálogo).
+    """
+    from apps.moda.models import Aviamento
+    from apps.moda.permissoes import pode_na_area
+
+    filial = request.filial_ativa
+    catalogo = list(
+        Aviamento.objects.for_filial(filial)
+        .select_related('produto_estoque')
+        .order_by('tipo', 'nome')
+    )
+    produto_ids = [a.produto_estoque_id for a in catalogo if a.produto_estoque_id]
+    saldos = {}
+    if produto_ids:
+        for row in (
+            Estoque.objects.filter(filial=filial, produto_id__in=produto_ids)
+            .values('produto_id', 'deposito_id')
+            .annotate(total=Sum('quantidade_atual'))
+        ):
+            por_deposito = saldos.setdefault(row['produto_id'], {})
+            por_deposito[row['deposito_id']] = row['total'] or Decimal('0')
+
+    for aviamento in catalogo:
+        por_deposito = saldos.get(aviamento.produto_estoque_id, {})
+        aviamento.saldo_aqui = por_deposito.get(deposito.pk, Decimal('0'))
+        aviamento.saldo_total = sum(por_deposito.values(), Decimal('0'))
+
+    pode_cadastrar = (
+        request.user.tem_permissao('estoque', 'criar')
+        and pode_na_area(request.user, 'comercial', 'criar')
+    )
+    return {
+        'aviamentos': catalogo,
+        'deposito_tem_aviamento': bool(
+            {valor for valor, _ in Aviamento.Tipo.choices} & set(deposito.tipos_material or [])
+        ),
+        'pode_cadastrar_aviamento': pode_cadastrar,
+        'form_aviamento': form_rapido or AviamentoRapidoForm(
+            filial=filial, empresa=empresa_operacional(request),
+            initial={
+                'tipo': request.GET.get('tipo', ''),
+                'unidade_medida': request.GET.get('un', ''),
+            },
+        ),
+    }
 
 
 class DepositoListView(PermissaoRequiredMixin, View):
@@ -113,6 +166,7 @@ class DepositoUpdateView(PermissaoRequiredMixin, View):
             'form': DepositoForm(instance=deposito, filial=request.filial_ativa),
             'deposito': deposito,
             'title': f'Editar depósito — {deposito.nome}',
+            **_painel_aviamentos(request, deposito),
         })
 
     def post(self, request, pk):
@@ -131,7 +185,76 @@ class DepositoUpdateView(PermissaoRequiredMixin, View):
         return render(request, self.template_name, {
             'form': form, 'deposito': deposito,
             'title': f'Editar depósito — {deposito.nome}',
+            **_painel_aviamentos(request, deposito),
         })
+
+
+class DepositoAviamentoCreateView(PermissaoRequiredMixin, View):
+    """
+    Cadastro rápido de aviamento a partir da tela do depósito.
+
+    Cria o item do catálogo (`moda.Aviamento`), o produto de estoque enxuto
+    ligado a ele e, se informado, o saldo inicial NESTE depósito. Depois
+    volta para a mesma tela, com tipo e unidade preservados — a ideia é
+    cadastrar uma fileira de aviamentos sem sair daqui.
+    """
+
+    permissao_modulo = 'estoque'
+    permissao_acao = 'criar'
+    template_name = 'estoque/deposito/form.html'
+
+    def post(self, request, pk):
+        from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE
+        from apps.moda.models import Aviamento
+        from apps.moda.permissoes import pode_na_area
+        from apps.moda.views_apoio import criar_produto_materia_prima
+
+        filial = request.filial_ativa
+        deposito = get_object_or_404(Deposito.objects.filter(filial=filial), pk=pk)
+        if not pode_na_area(request.user, 'comercial', 'criar'):
+            messages.error(request, PERMISSION_DENIED_MESSAGE)
+            return redirect('estoque:deposito-update', pk=deposito.pk)
+
+        form = AviamentoRapidoForm(
+            request.POST, filial=filial, empresa=empresa_operacional(request),
+        )
+        if not form.is_valid():
+            return render(request, self.template_name, {
+                'form': DepositoForm(instance=deposito, filial=filial),
+                'deposito': deposito,
+                'title': f'Editar depósito — {deposito.nome}',
+                **_painel_aviamentos(request, deposito, form_rapido=form),
+            })
+
+        dados = form.cleaned_data
+        with tenant_atomic():
+            produto = criar_produto_materia_prima(filial, dados, 'Cadastro de Aviamentos')
+            aviamento = Aviamento.objects.create(
+                filial=filial, nome=dados['nome'], tipo=dados['tipo'],
+                codigo=dados.get('codigo') or '',
+                unidade=form.unidade_do_aviamento(),
+                produto_estoque=produto,
+            )
+            quantidade = dados.get('quantidade_inicial')
+            if quantidade:
+                MovimentacaoService.ajustar_manual(
+                    produto_id=produto.pk, filial_id=filial.pk,
+                    quantidade_nova=quantidade, usuario_id=request.user.pk,
+                    justificativa=(
+                        'Saldo inicial informado ao cadastrar o aviamento '
+                        f'no depósito {deposito.nome}.'
+                    ),
+                    deposito_id=deposito.pk,
+                )
+        registrar_auditoria(
+            request=request, modulo='estoque', acao='criar', objeto=aviamento,
+            descricao=f'Aviamento {aviamento.nome} cadastrado pelo depósito {deposito.nome}',
+        )
+        messages.success(request, f'Aviamento "{aviamento.nome}" cadastrado.')
+        destino = reverse('estoque:deposito-update', args=[deposito.pk])
+        return redirect(
+            f'{destino}?tipo={aviamento.tipo}&un={dados["unidade_medida"].pk}#aviamentos'
+        )
 
 
 class EstoquePorDepositoJsonView(PermissaoRequiredMixin, View):

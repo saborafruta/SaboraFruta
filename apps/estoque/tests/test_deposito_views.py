@@ -150,3 +150,84 @@ class EstoquePorDepositoJsonViewTests(DepositoViewsBase):
         self._set_filial_sessao()
         resp = self.client.get(reverse('estoque:estoque-por-deposito-json'))
         self.assertEqual(resp.status_code, 400)
+
+
+class DepositoAviamentoViewTests(DepositoViewsBase):
+    """Painel de aviamentos dentro da edição do depósito."""
+
+    def setUp(self):
+        super().setUp()
+        self._set_filial_sessao()
+        self.aviamentos = Deposito.objects.create(
+            filial=self.filial, nome='Aviamentos', tipo='producao',
+            tipos_material=['linha', 'ziper'],
+        )
+        self.url_novo = reverse('estoque:deposito-aviamento-create', args=[self.aviamentos.pk])
+
+    def _payload(self, **extra):
+        dados = {
+            'nome': 'Zíper nylon nº 5 preto', 'tipo': 'ziper',
+            'unidade_medida': self.unidade.pk, 'codigo': 'ZP5',
+            'quantidade_inicial': '25',
+        }
+        dados.update(extra)
+        return dados
+
+    def test_edicao_mostra_painel_e_formulario_rapido(self):
+        resp = self.client.get(reverse('estoque:deposito-update', args=[self.aviamentos.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="aviamentos"')
+        self.assertContains(resp, self.url_novo)
+
+    def test_criacao_de_deposito_nao_mostra_painel(self):
+        resp = self.client.get(reverse('estoque:deposito-create'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, 'id="aviamentos"')
+
+    def test_cadastra_aviamento_com_saldo_no_deposito(self):
+        from apps.moda.models import Aviamento
+
+        resp = self.client.post(self.url_novo, self._payload())
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('#aviamentos', resp['Location'])
+
+        avi = Aviamento.objects.get(filial=self.filial, nome='Zíper nylon nº 5 preto')
+        self.assertEqual(avi.tipo, 'ziper')
+        self.assertEqual(avi.codigo, 'ZP5')
+        self.assertEqual(avi.unidade, 'un')
+        self.assertIsNotNone(avi.produto_estoque_id)
+        saldo = Estoque.objects.get(
+            filial=self.filial, produto=avi.produto_estoque, deposito=self.aviamentos,
+        )
+        self.assertEqual(saldo.quantidade_atual, Decimal('25'))
+
+        resp = self.client.get(reverse('estoque:deposito-update', args=[self.aviamentos.pk]))
+        self.assertContains(resp, 'Zíper nylon nº 5 preto')
+
+    def test_cadastra_sem_saldo_inicial(self):
+        from apps.moda.models import Aviamento
+
+        resp = self.client.post(self.url_novo, self._payload(quantidade_inicial=''))
+        self.assertEqual(resp.status_code, 302)
+        avi = Aviamento.objects.get(filial=self.filial, nome='Zíper nylon nº 5 preto')
+        self.assertFalse(Estoque.objects.filter(produto=avi.produto_estoque).exists())
+
+    def test_nome_repetido_e_recusado(self):
+        from apps.moda.models import Aviamento
+
+        Aviamento.objects.create(filial=self.filial, nome='Botão 4 furos', tipo='botao')
+        resp = self.client.post(self.url_novo, self._payload(nome='botão 4 FUROS', tipo='botao'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Já existe')
+        self.assertEqual(Aviamento.objects.filter(filial=self.filial).count(), 1)
+
+    def test_deposito_de_outra_filial_da_404(self):
+        outra = Filial.objects.create(
+            empresa=self.empresa, razao_social='G', nome_fantasia='Filial 2',
+            cnpj='29345678000203', uf='RN',
+        )
+        alheio = Deposito.objects.create(filial=outra, nome='Alheio')
+        resp = self.client.post(
+            reverse('estoque:deposito-aviamento-create', args=[alheio.pk]), self._payload(),
+        )
+        self.assertEqual(resp.status_code, 404)

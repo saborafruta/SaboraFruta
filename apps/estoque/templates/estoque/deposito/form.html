@@ -2,17 +2,135 @@
 {% load widget_tweaks %}
 {% block title %}{{ title }} — ERP iNoovaTed{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
-{% block largura_conteudo %}max-w-2xl{% endblock %}
+{% block largura_conteudo %}{% if deposito %}max-w-7xl{% else %}max-w-2xl{% endif %}{% endblock %}
 
 {% block content %}
-<div class="w-full space-y-5">
+<style>
+  /* Tela de depósito. Cores seguem o restante do sistema (escuro por padrão,
+     `html.tema-claro` para o claro) e ficam em variáveis para não repetir. */
+  .dep-page {
+    --dep-text: #f1f5f9; --dep-muted: #94a3b8; --dep-line: #2a2a2e;
+    --dep-soft: rgba(255,255,255,.035); --dep-soft-hover: rgba(255,255,255,.07);
+    --dep-accent: #e8824a; --dep-accent-soft: rgba(232,130,74,.14);
+    --dep-ok: #34d399; --dep-warn: #fbbf24;
+  }
+  html.tema-claro .dep-page {
+    --dep-text: #111827; --dep-muted: #64748b; --dep-line: #e5e7eb;
+    --dep-soft: #f8fafc; --dep-soft-hover: #f1f5f9;
+    --dep-accent: #e8824a; --dep-accent-soft: rgba(232,130,74,.12);
+    --dep-ok: #059669; --dep-warn: #b45309;
+  }
+  .dep-page .dep-text { color: var(--dep-text); }
+  .dep-page .dep-muted { color: var(--dep-muted); }
 
-  <div>
-    <p class="text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      <a href="{% url 'estoque:deposito-list' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Depósitos</a>
-      <span class="mx-1">›</span> {{ title }}
-    </p>
-    <h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
+  .dep-grid { display: grid; gap: 20px; align-items: start; }
+  @media (min-width: 1280px) { .dep-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); } }
+  .dep-options { display: grid; gap: 12px; }
+  @media (min-width: 640px) { .dep-options { grid-template-columns: 1fr 1fr; } }
+  .dep-section { padding: 20px 24px; border-top: 1px solid var(--dep-line); }
+  .dep-section:first-of-type { border-top: 0; }
+  .dep-section-title { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--dep-muted); margin-bottom: 14px; }
+  .dep-label { display: block; font-size: 13px; font-weight: 500; color: var(--dep-text); margin-bottom: 6px; }
+  .dep-hint { font-size: 12px; color: var(--dep-muted); margin-top: 6px; line-height: 1.45; }
+  .dep-error { font-size: 12px; color: #f87171; margin-top: 4px; }
+
+  /* Tipo do depósito: três opções lado a lado em vez de um select. */
+  .dep-segment { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .dep-segment label { cursor: pointer; }
+  .dep-segment input { position: absolute; opacity: 0; pointer-events: none; }
+  .dep-segment span {
+    display: block; text-align: center; padding: 9px 8px; border-radius: 8px; font-size: 13px; font-weight: 500;
+    border: 1px solid var(--dep-line); background: var(--dep-soft); color: var(--dep-muted); transition: all .15s;
+  }
+  .dep-segment label:hover span { background: var(--dep-soft-hover); }
+  .dep-segment input:checked + span { border-color: var(--dep-accent); background: var(--dep-accent-soft); color: var(--dep-text); }
+  .dep-segment input:focus-visible + span { box-shadow: 0 0 0 3px var(--dep-accent-soft); }
+
+  /* Regras de uso: cada opção é um cartão inteiro clicável. */
+  .dep-option {
+    display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--dep-line); background: var(--dep-soft); transition: all .15s;
+  }
+  .dep-option:hover { background: var(--dep-soft-hover); }
+  .dep-option:has(input:checked) { border-color: var(--dep-accent); background: var(--dep-accent-soft); }
+  .dep-option input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--dep-accent); flex-shrink: 0; }
+  .dep-option strong { display: block; font-size: 13px; font-weight: 600; color: var(--dep-text); }
+  .dep-option small { display: block; font-size: 12px; color: var(--dep-muted); margin-top: 2px; line-height: 1.4; }
+  .dep-option:has(input:disabled) { opacity: .6; cursor: not-allowed; }
+
+  /* Tipos de material: pílulas que acendem quando marcadas. */
+  .dep-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .dep-chip { cursor: pointer; }
+  .dep-chip input { position: absolute; opacity: 0; pointer-events: none; }
+  .dep-chip span {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 13px;
+    border: 1px solid var(--dep-line); background: var(--dep-soft); color: var(--dep-muted); transition: all .15s;
+  }
+  .dep-chip:hover span { background: var(--dep-soft-hover); }
+  .dep-chip input:checked + span { border-color: var(--dep-accent); background: var(--dep-accent-soft); color: var(--dep-text); font-weight: 600; }
+  .dep-chip input:checked + span::before { content: "✓"; font-size: 11px; color: var(--dep-accent); }
+  .dep-chip input:focus-visible + span { box-shadow: 0 0 0 3px var(--dep-accent-soft); }
+  .dep-chip-group + .dep-chip-group { margin-top: 16px; }
+  .dep-chip-group-title { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--dep-muted); margin-bottom: 8px; }
+  .dep-link-btn { background: none; border: 0; padding: 0; cursor: pointer; font-size: 12px; color: var(--dep-accent); }
+  .dep-link-btn:hover { text-decoration: underline; }
+
+  .dep-footer {
+    display: flex; justify-content: flex-end; gap: 12px; padding: 16px 24px; border-top: 1px solid var(--dep-line);
+    border-radius: 0 0 12px 12px; position: sticky; bottom: 0; background: inherit;
+  }
+  .dep-footer-bg { background: #242426; }
+  html.tema-claro .dep-footer-bg { background: #ffffff; }
+
+  .dep-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 2px 10px; border-radius: 999px; background: var(--dep-soft-hover); color: var(--dep-muted); }
+  .dep-badge.is-accent { background: var(--dep-accent-soft); color: var(--dep-accent); }
+  .dep-badge.is-ok { background: rgba(52,211,153,.14); color: var(--dep-ok); }
+  .dep-badge.is-warn { background: rgba(251,191,36,.14); color: var(--dep-warn); }
+
+  /* Painel de aviamentos */
+  .dep-avi-add { display: grid; gap: 10px; grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: end; }
+  .dep-avi-add .col-nome { grid-column: span 6; }
+  .dep-avi-add .col-tipo, .dep-avi-add .col-un { grid-column: span 3; }
+  .dep-avi-add .col-cod, .dep-avi-add .col-qtd { grid-column: span 3; }
+  .dep-avi-add .col-btn { grid-column: span 6; }
+  @media (min-width: 640px) {
+    .dep-avi-add .col-nome { grid-column: span 6; }
+    .dep-avi-add .col-tipo { grid-column: span 3; }
+    .dep-avi-add .col-un { grid-column: span 3; }
+    .dep-avi-add .col-cod { grid-column: span 2; }
+    .dep-avi-add .col-qtd { grid-column: span 2; }
+    .dep-avi-add .col-btn { grid-column: span 2; }
+  }
+  .dep-avi-add label { display: block; font-size: 12px; color: var(--dep-muted); margin-bottom: 4px; }
+  .dep-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+  .dep-table thead th { text-transform: none; letter-spacing: normal; }
+  .dep-table th { text-align: left; font-weight: 500; font-size: 12px; color: var(--dep-muted); padding: 10px 14px; border-bottom: 1px solid var(--dep-line); position: sticky; top: 0; background: var(--dep-head-bg, #242426); }
+  html.tema-claro .dep-table th { --dep-head-bg: #ffffff; }
+  .dep-table td { padding: 10px 14px; border-bottom: 1px solid var(--dep-line); color: var(--dep-text); vertical-align: middle; }
+  .dep-table tr:last-child td { border-bottom: 0; }
+  .dep-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .dep-scroll { max-height: 460px; overflow: auto; }
+  .dep-empty { padding: 36px 20px; text-align: center; }
+</style>
+
+<div class="dep-page w-full space-y-5">
+
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0">
+      <p class="text-sm dep-muted">
+        <a href="{% url 'estoque:deposito-list' %}" style="color:var(--dep-accent);">Depósitos</a>
+        <span class="mx-1">›</span> {% if deposito %}{{ deposito.nome }}{% else %}Novo depósito{% endif %}
+      </p>
+      <h2 class="text-2xl font-semibold mt-1 dep-text">{{ title }}</h2>
+      {% if deposito %}
+        <div class="flex flex-wrap items-center gap-2 mt-2">
+          <span class="dep-badge is-accent">{{ deposito.get_tipo_display }}</span>
+          {% if deposito.is_padrao %}<span class="dep-badge">Padrão da filial</span>{% endif %}
+          {% if deposito.ativo %}<span class="dep-badge is-ok">Ativo</span>{% else %}<span class="dep-badge is-warn">Inativo</span>{% endif %}
+        </div>
+      {% endif %}
+    </div>
+    <a href="{% url 'estoque:deposito-list' %}" class="btn-secondary">← Voltar aos depósitos</a>
   </div>
 
   {% if form.non_field_errors %}
@@ -21,50 +139,249 @@
     </div>
   {% endif %}
 
-  <form method="post" class="card p-6 space-y-4">
-    {% csrf_token %}
+  <div class="{% if deposito %}dep-grid{% endif %}"
+       x-data="{ aviamentoMarcado: {{ deposito_tem_aviamento|yesno:'true,false' }} }">
 
-    <div>
-      <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Nome</label>
-      {{ form.nome|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
-      {% if form.nome.errors %}<p class="text-xs mt-1" style="color:#f87171;">{{ form.nome.errors.0 }}</p>{% endif %}
-    </div>
+    {# ───────────── Configuração do depósito ───────────── #}
+    <form method="post" class="card" style="overflow:visible;">
+      {% csrf_token %}
 
-    <div>
-      <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">Tipo</label>
-      {{ form.tipo|add_class:"w-full rounded-lg border px-3 py-2 text-sm" }}
-      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Só organiza; as regras de venda/produção são os campos abaixo.</p>
-    </div>
+      <div class="dep-section">
+        <p class="dep-section-title">Identificação</p>
 
-    <label class="flex items-center gap-2 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
-      {{ form.permite_venda }} Disponível para venda (aparece no PDV)
-    </label>
-    <label class="flex items-center gap-2 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
-      {{ form.permite_producao }} Usado pela produção (consumo e entrada)
-    </label>
+        <div>
+          <label class="dep-label" for="{{ form.nome.id_for_label }}">Nome</label>
+          {{ form.nome|add_class:"form-input" }}
+          {% if form.nome.errors %}<p class="dep-error">{{ form.nome.errors.0 }}</p>{% endif %}
+        </div>
 
-    <div>
-      <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">{{ form.tipos_material.label }}</label>
-      <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border p-3" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#334155;'">
-        {% for checkbox in form.tipos_material %}
-          <label class="flex items-center gap-2 text-xs" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
-            {{ checkbox.tag }} {{ checkbox.choice_label }}
-          </label>
-        {% endfor %}
+        <div style="margin-top:16px;">
+          <span class="dep-label">Tipo</span>
+          {% with atual=form.tipo.value|default:'geral' %}
+          <div class="dep-segment" role="radiogroup" aria-label="Tipo do depósito">
+            {% for valor, rotulo in form.tipo.field.choices %}
+              <label>
+                <input type="radio" name="{{ form.tipo.html_name }}" value="{{ valor }}" {% if atual == valor %}checked{% endif %}>
+                <span>{{ rotulo }}</span>
+              </label>
+            {% endfor %}
+          </div>
+          {% endwith %}
+          <p class="dep-hint">Só organiza a lista; as regras de venda e produção são as opções abaixo.</p>
+          {% if form.tipo.errors %}<p class="dep-error">{{ form.tipo.errors.0 }}</p>{% endif %}
+        </div>
       </div>
-      <p class="text-xs mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ form.tipos_material.help_text }}</p>
-    </div>
 
-    <label class="flex items-center gap-2 text-sm" :style="temaClaro ? 'color:#374151;' : 'color:#cbd5e1;'">
-      {{ form.ativo }} Ativo
-    </label>
-    {% if form.ativo.help_text %}<p class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ form.ativo.help_text }}</p>{% endif %}
+      <div class="dep-section">
+        <p class="dep-section-title">Como este depósito é usado</p>
+        <div class="dep-options">
+          <label class="dep-option">
+            {{ form.permite_venda }}
+            <span><strong>Disponível para venda</strong><small>O saldo aparece no PDV e nos pedidos.</small></span>
+          </label>
+          <label class="dep-option">
+            {{ form.permite_producao }}
+            <span><strong>Usado pela produção</strong><small>Recebe entradas e serve consumo das OPs.</small></span>
+          </label>
+        </div>
+      </div>
 
-    <div class="flex gap-3 justify-end pt-2">
-      <a href="{% url 'estoque:deposito-list' %}" class="btn-secondary">Cancelar</a>
-      <button type="submit" class="btn-primary">Salvar</button>
-    </div>
-  </form>
+      <div class="dep-section" @change="aviamentoMarcado = $el.querySelectorAll('[data-avi] input:checked').length > 0">
+        <p class="dep-section-title">Materiais que caem aqui automaticamente</p>
 
+        <div class="dep-chip-group">
+          <div class="dep-chip-group-title"><span>Tecidos e forros</span></div>
+          <div class="dep-chips">
+            {% for checkbox in form.tipos_material %}
+              {% if checkbox.data.value == 'tecido_principal' or checkbox.data.value == 'forro' %}
+                <label class="dep-chip">{{ checkbox.tag }}<span>{{ checkbox.choice_label }}</span></label>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="dep-chip-group">
+          <div class="dep-chip-group-title">
+            <span>Aviamentos</span>
+            <button type="button" class="dep-link-btn"
+                    @click="const c = $el.closest('.dep-chip-group').querySelectorAll('input'); const marcar = [...c].some(i => !i.checked); c.forEach(i => i.checked = marcar); aviamentoMarcado = marcar;">Marcar/desmarcar todos</button>
+          </div>
+          <div class="dep-chips">
+            {% for checkbox in form.tipos_material %}
+              {% if checkbox.data.value != 'tecido_principal' and checkbox.data.value != 'forro' %}
+                <label class="dep-chip" data-avi>{{ checkbox.tag }}<span>{{ checkbox.choice_label }}</span></label>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+
+        <p class="dep-hint">{{ form.tipos_material.help_text }}</p>
+      </div>
+
+      <div class="dep-section">
+        <label class="dep-option" style="align-items:center;">
+          {{ form.ativo }}
+          <span><strong>Depósito ativo</strong>
+            <small>{% if form.ativo.help_text %}{{ form.ativo.help_text }}{% else %}Desmarque para tirar de circulação sem apagar o histórico.{% endif %}</small>
+          </span>
+        </label>
+      </div>
+
+      <div class="dep-footer dep-footer-bg">
+        <a href="{% url 'estoque:deposito-list' %}" class="btn-secondary">Cancelar</a>
+        <button type="submit" class="btn-primary">Salvar depósito</button>
+      </div>
+    </form>
+
+    {# ───────────── Aviamentos (só na edição) ───────────── #}
+    {% if deposito %}
+    <section id="aviamentos" class="card" style="overflow:visible;"
+             x-data="{ busca: '', tipo: '' }">
+
+      <div class="dep-section" style="border-top:0;">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 class="text-lg font-semibold dep-text">Aviamentos</h3>
+            <p class="text-sm dep-muted mt-0.5">
+              Linhas, zíperes, botões, etiquetas… Cadastre aqui e o item já nasce ligado ao estoque
+              {% if pode_cadastrar_aviamento %}— com saldo inicial neste depósito{% endif %}.
+            </p>
+          </div>
+          <span class="dep-badge">{{ aviamentos|length }} cadastrado{{ aviamentos|length|pluralize }}</span>
+        </div>
+
+        <p x-show="!aviamentoMarcado" x-cloak class="dep-hint" style="color:var(--dep-warn);">
+          Nenhum tipo de aviamento está marcado neste depósito — a produção não vai buscar aviamentos aqui automaticamente.
+        </p>
+      </div>
+
+      {% if pode_cadastrar_aviamento %}
+      <div class="dep-section">
+        <p class="dep-section-title">Novo aviamento</p>
+
+        <form method="post" action="{% url 'estoque:deposito-aviamento-create' deposito.pk %}"
+              x-data="{
+                tipo: '{{ form_aviamento.tipo.value|default:'' }}',
+                padrao: { linha: 'cone', elastico: 'm', ziper: 'un', botao: 'un', etiqueta: 'un', tag: 'un', embalagem: 'un', aviamento: 'un' },
+                sugerir() {
+                  const alvo = this.padrao[this.tipo];
+                  const un = this.$refs.unidade;
+                  if (!alvo || !un || un.value) return;
+                  const op = [...un.options].find(o => o.dataset.sigla === alvo);
+                  if (op) un.value = op.value;
+                }
+              }"
+              @submit="$refs.enviar.disabled = true">
+          {% csrf_token %}
+          <div class="dep-avi-add">
+            <div class="col-nome">
+              <label for="avi-nome">Nome</label>
+              <input id="avi-nome" type="text" name="nome" maxlength="80" required class="form-input"
+                     value="{{ form_aviamento.nome.value|default:'' }}" placeholder="Ex.: Zíper nylon nº 5 preto"
+                     {% if form_aviamento.errors %}autofocus{% endif %}>
+              {% if form_aviamento.nome.errors %}<p class="dep-error">{{ form_aviamento.nome.errors.0 }}</p>{% endif %}
+            </div>
+            <div class="col-tipo">
+              <label for="avi-tipo">Tipo</label>
+              <select id="avi-tipo" name="tipo" required class="form-input" x-model="tipo" @change="sugerir()">
+                <option value="">Selecione…</option>
+                {% for valor, rotulo in form_aviamento.fields.tipo.choices %}{% if valor %}
+                  <option value="{{ valor }}" {% if form_aviamento.tipo.value == valor %}selected{% endif %}>{{ rotulo }}</option>
+                {% endif %}{% endfor %}
+              </select>
+              {% if form_aviamento.tipo.errors %}<p class="dep-error">{{ form_aviamento.tipo.errors.0 }}</p>{% endif %}
+            </div>
+            <div class="col-un">
+              <label for="avi-un">Unidade</label>
+              <select id="avi-un" name="unidade_medida" required class="form-input" x-ref="unidade">
+                <option value="">Selecione…</option>
+                {% for u in form_aviamento.fields.unidade_medida.queryset %}
+                  <option value="{{ u.pk }}" data-sigla="{{ u.sigla|lower }}"
+                          {% if form_aviamento.unidade_medida.value|stringformat:'s' == u.pk|stringformat:'s' %}selected{% endif %}>{{ u.sigla }} — {{ u.descricao }}</option>
+                {% endfor %}
+              </select>
+              {% if form_aviamento.unidade_medida.errors %}<p class="dep-error">{{ form_aviamento.unidade_medida.errors.0 }}</p>{% endif %}
+            </div>
+            <div class="col-cod">
+              <label for="avi-cod">Código</label>
+              <input id="avi-cod" type="text" name="codigo" maxlength="30" class="form-input"
+                     value="{{ form_aviamento.codigo.value|default:'' }}" placeholder="Opcional">
+            </div>
+            <div class="col-qtd">
+              <label for="avi-qtd">Saldo inicial</label>
+              <input id="avi-qtd" type="text" inputmode="decimal" name="quantidade_inicial" class="form-input"
+                     value="{{ form_aviamento.quantidade_inicial.value|default:'' }}" placeholder="0">
+              {% if form_aviamento.quantidade_inicial.errors %}<p class="dep-error">{{ form_aviamento.quantidade_inicial.errors.0 }}</p>{% endif %}
+            </div>
+            <div class="col-btn">
+              <button type="submit" x-ref="enviar" class="btn-primary" style="width:100%;">Cadastrar</button>
+            </div>
+          </div>
+          <p class="dep-hint">Depois de cadastrar, a tela volta aqui com o tipo e a unidade mantidos — é só digitar o próximo.</p>
+        </form>
+      </div>
+      {% endif %}
+
+      <div class="dep-section" style="padding:0;">
+        <div class="flex flex-wrap gap-2" style="padding:14px 24px;">
+          <input type="search" class="form-input" style="flex:1; min-width:180px;" placeholder="Buscar aviamento ou código…"
+                 x-model="busca" aria-label="Buscar aviamento">
+          <select class="form-input" style="width:auto; min-width:150px;" x-model="tipo" aria-label="Filtrar por tipo">
+            <option value="">Todos os tipos</option>
+            {% for valor, rotulo in form_aviamento.fields.tipo.choices %}{% if valor %}
+              <option value="{{ valor }}">{{ rotulo }}</option>
+            {% endif %}{% endfor %}
+          </select>
+        </div>
+
+        {% if aviamentos %}
+        <div class="dep-scroll">
+          <table class="dep-table" data-columns="off">
+            <thead>
+              <tr>
+                <th>Aviamento</th>
+                <th>Tipo</th>
+                <th class="num">Neste depósito</th>
+                <th class="num">Total</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for a in aviamentos %}
+              <tr data-tipo="{{ a.tipo }}" data-busca="{{ a.nome|lower }} {{ a.codigo|lower }}"
+                  x-show="(!tipo || tipo === $el.dataset.tipo) && (!busca || $el.dataset.busca.includes(busca.toLowerCase()))">
+                <td>
+                  <span class="font-medium">{{ a.nome }}</span>
+                  {% if a.codigo %}<span class="dep-muted" style="font-size:12px; margin-left:6px; font-family:ui-monospace,monospace;">{{ a.codigo }}</span>{% endif %}
+                  {% if not a.ativo %}<span class="dep-badge is-warn" style="margin-left:6px;">inativo</span>{% endif %}
+                </td>
+                <td><span class="dep-badge">{{ a.get_tipo_display }}</span></td>
+                {% if a.produto_estoque_id %}
+                  <td class="num">{{ a.saldo_aqui|floatformat:"-3" }} <span class="dep-muted">{{ a.get_unidade_display }}</span></td>
+                  <td class="num dep-muted">{{ a.saldo_total|floatformat:"-3" }}</td>
+                {% else %}
+                  <td class="num" colspan="2"><span class="dep-badge is-warn">sem vínculo com estoque</span></td>
+                {% endif %}
+                <td class="num">
+                  <a href="{% url 'moda:apoio-update' 'engenharia' 'cadastro-aviamentos' a.pk %}" style="color:var(--dep-accent); font-size:13px;">Editar</a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="dep-empty">
+          <p class="text-sm font-medium dep-text">Nenhum aviamento cadastrado ainda.</p>
+          <p class="text-sm dep-muted" style="margin-top:4px;">
+            {% if pode_cadastrar_aviamento %}Use o formulário acima para cadastrar o primeiro.{% else %}Peça a quem tem acesso ao cadastro para incluí-los.{% endif %}
+          </p>
+        </div>
+        {% endif %}
+      </div>
+    </section>
+    {% endif %}
+
+  </div>
 </div>
 {% endblock %}

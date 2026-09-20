@@ -12,7 +12,7 @@ from .inventario import (
 )
 from .lote import LoteBaixaValidadeView, LoteListView, LoteCreateView, LoteUpdateView
 from .deposito import (
-    DepositoListView, DepositoCreateView, DepositoUpdateView,
+    DepositoAviamentoCreateView, DepositoListView, DepositoCreateView, DepositoUpdateView,
     EstoquePorDepositoJsonView, TransferenciaInternaView,
 )
 from .alerta import AlertaListView
@@ -42,7 +42,7 @@ __all__ = [
     'InventarioDivergenciasView',
     'InventarioListView',
     'LoteBaixaValidadeView', 'LoteListView', 'LoteCreateView', 'LoteUpdateView',
-    'DepositoListView', 'DepositoCreateView', 'DepositoUpdateView',
+    'DepositoAviamentoCreateView', 'DepositoListView', 'DepositoCreateView', 'DepositoUpdateView',
     'EstoquePorDepositoJsonView', 'TransferenciaInternaView',
     'AlertaListView',
     'DesperdicioDashboardView',

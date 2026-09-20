@@ -58,6 +58,68 @@ class DepositoForm(forms.ModelForm):
         return nome
 
 
+class AviamentoRapidoForm(forms.Form):
+    """
+    Cadastro rápido de aviamento dentro da tela do depósito.
+
+    Grava o catálogo (`moda.Aviamento`) já ligado a um produto de estoque
+    enxuto e, se vier quantidade, lança o saldo inicial NESTE depósito —
+    o mesmo que "Cadastro de Aviamentos › Novo produto de estoque" faria
+    em três telas. A unidade sai das unidades da empresa (é o que o
+    produto exige); o `Aviamento.unidade` é derivado dela.
+    """
+
+    nome = forms.CharField(max_length=80, label='Nome')
+    tipo = forms.ChoiceField(label='Tipo')
+    unidade_medida = forms.ModelChoiceField(queryset=None, label='Unidade')
+    codigo = forms.CharField(max_length=30, required=False, label='Código')
+    quantidade_inicial = forms.DecimalField(
+        max_digits=12, decimal_places=3, required=False, min_value=0,
+        label='Saldo inicial',
+    )
+
+    def __init__(self, *args, filial=None, empresa=None, **kwargs):
+        from apps.moda.models import Aviamento
+        from apps.produtos.models import UnidadeMedida
+
+        self.filial = filial
+        super().__init__(*args, **kwargs)
+        self.fields['tipo'].choices = [('', 'Tipo'), *Aviamento.Tipo.choices]
+        self.fields['unidade_medida'].queryset = (
+            UnidadeMedida.objects.filter(empresa=empresa).order_by('sigla')
+            if empresa else UnidadeMedida.objects.none()
+        )
+        self.fields['unidade_medida'].empty_label = 'Unidade'
+        self.fields['nome'].widget.attrs['placeholder'] = 'Ex.: Zíper nylon nº 5 preto'
+        self.fields['codigo'].widget.attrs['placeholder'] = 'Opcional'
+        self.fields['quantidade_inicial'].widget = forms.TextInput(
+            attrs={'inputmode': 'decimal', 'placeholder': '0'},
+        )
+        for campo in self.fields.values():
+            css = campo.widget.attrs.get('class', '')
+            if 'form-input' not in css:
+                campo.widget.attrs['class'] = (css + ' form-input').strip()
+
+    def clean_nome(self):
+        from apps.moda.models import Aviamento
+
+        nome = (self.cleaned_data['nome'] or '').strip()
+        if not nome:
+            raise forms.ValidationError('Informe o nome.')
+        if Aviamento.all_objects.filter(filial=self.filial, nome__iexact=nome).exists():
+            raise forms.ValidationError(f'Já existe "{nome}" cadastrado nesta filial.')
+        return nome
+
+    def unidade_do_aviamento(self):
+        """Sigla da unidade de estoque traduzida para as do catálogo."""
+        from apps.moda.models import Aviamento
+
+        sigla = self.cleaned_data['unidade_medida'].sigla.strip().lower()
+        sigla = {'pç': 'pc', 'peça': 'pc', 'mt': 'm'}.get(sigla, sigla)
+        validas = {valor for valor, _ in Aviamento.Unidade.choices}
+        return sigla if sigla in validas else Aviamento.Unidade.UNIDADE
+
+
 class TransferenciaInternaForm(forms.Form):
     """Move saldo de um depósito para outro na mesma filial (sem NF-e)."""
 

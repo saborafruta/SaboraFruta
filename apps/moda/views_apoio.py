@@ -274,6 +274,48 @@ class CadastroApoioDeleteView(ModaBaseView):
         return _redirecionar(request, cadastro)
 
 
+def criar_produto_materia_prima(filial, dados, origem_plural):
+    """
+    Produto de estoque enxuto para matéria-prima (tecido, aviamento).
+
+    `dados` é o `cleaned_data` de `NovoProdutoEstoqueForm` (ou um dict com
+    as mesmas chaves). Fica no módulo, e não na view, para o atalho de
+    cadastro dentro de Depósitos criar exatamente o mesmo produto.
+    """
+    from apps.produtos.models import Produto
+    from apps.produtos.views.produto import _definir_status_produto_filial
+
+    produto = Produto(
+        filial=filial,
+        unidade_medida=dados['unidade_medida'],
+        codigo=dados.get('codigo') or '',
+        descricao=dados['nome'][:150],
+        # NCM/CFOP de verdade só importam pra quem sai numa nota --
+        # matéria-prima não sai. O placeholder + rascunho_comercial é
+        # o mesmo par usado quando o produto nasce de uma entrada de
+        # NF-e sem revisão comercial ainda (apps/compras).
+        ncm='00000000',
+        permite_venda_sem_estoque=False,
+        rascunho_comercial=True,
+        observacao=(
+            f'Matéria-prima do cadastro de {origem_plural}. '
+            'Sem dados fiscais/comerciais -- não deve ser vendida.'
+        ),
+        estoque_minimo=dados.get('estoque_minimo') or 0,
+        estoque_maximo=dados.get('estoque_maximo') or 0,
+        ponto_reposicao=dados.get('ponto_reposicao') or 0,
+        estoque_seguranca=dados.get('estoque_seguranca') or 0,
+        lead_time_reposicao_dias=dados.get('lead_time_reposicao_dias') or 0,
+        localizacao_estoque=dados.get('localizacao_estoque') or '',
+        metodo_saida=dados.get('metodo_saida') or Produto.MetodoSaida.FEFO,
+        ativo=True,
+    )
+    produto.calcular_margem()
+    produto.save()
+    _definir_status_produto_filial(produto, filial, True)
+    return produto
+
+
 class NovoProdutoEstoqueView(ModaBaseView):
     """
     Cadastro enxuto de produto de estoque pra matéria-prima (tecido,
@@ -325,39 +367,9 @@ class NovoProdutoEstoqueView(ModaBaseView):
         return redirect(reverse('moda:apoio-update', args=[cadastro.grupo, cadastro.slug, obj.pk]))
 
     def _criar_produto(self, request, form, cadastro):
-        from apps.produtos.models import Produto
-        from apps.produtos.views.produto import _definir_status_produto_filial
-
-        dados = form.cleaned_data
-        produto = Produto(
-            filial=request.filial_ativa,
-            unidade_medida=dados['unidade_medida'],
-            codigo=dados.get('codigo') or '',
-            descricao=dados['nome'][:150],
-            # NCM/CFOP de verdade só importam pra quem sai numa nota --
-            # matéria-prima não sai. O placeholder + rascunho_comercial é
-            # o mesmo par usado quando o produto nasce de uma entrada de
-            # NF-e sem revisão comercial ainda (apps/compras).
-            ncm='00000000',
-            permite_venda_sem_estoque=False,
-            rascunho_comercial=True,
-            observacao=(
-                f'Matéria-prima do cadastro de {cadastro.plural}. '
-                'Sem dados fiscais/comerciais -- não deve ser vendida.'
-            ),
-            estoque_minimo=dados.get('estoque_minimo') or 0,
-            estoque_maximo=dados.get('estoque_maximo') or 0,
-            ponto_reposicao=dados.get('ponto_reposicao') or 0,
-            estoque_seguranca=dados.get('estoque_seguranca') or 0,
-            lead_time_reposicao_dias=dados.get('lead_time_reposicao_dias') or 0,
-            localizacao_estoque=dados.get('localizacao_estoque') or '',
-            metodo_saida=dados.get('metodo_saida') or Produto.MetodoSaida.FEFO,
-            ativo=True,
+        return criar_produto_materia_prima(
+            request.filial_ativa, form.cleaned_data, cadastro.plural,
         )
-        produto.calcular_margem()
-        produto.save()
-        _definir_status_produto_filial(produto, request.filial_ativa, True)
-        return produto
 
     @staticmethod
     def _lancar_quantidade_inicial(request, produto, quantidade, cadastro=None):
