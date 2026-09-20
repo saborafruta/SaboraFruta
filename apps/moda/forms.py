@@ -631,7 +631,8 @@ class AviamentoForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
         model = Aviamento
         fields = [
             'nome', 'tipo', 'tipo_personalizado', 'codigo', 'unidade',
-            'fornecedor', 'produto_estoque', 'observacao', 'ativo',
+            'fornecedor', 'valor_unidade', 'quantidade_embalagem', 'valor_embalagem',
+            'produto_estoque', 'observacao', 'ativo',
         ]
         labels = {
             'codigo': 'Código',
@@ -641,6 +642,9 @@ class AviamentoForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
         widgets = {
             'nome': forms.TextInput(attrs={'placeholder': 'Ex.: Zíper nylon nº 5 preto'}),
             'tipo_personalizado': forms.TextInput(attrs={'placeholder': 'Ex.: Patch (só com "Outro aviamento")'}),
+            'valor_unidade': forms.NumberInput(attrs={'step': '0.0001', 'min': '0', 'placeholder': '0,00'}),
+            'quantidade_embalagem': forms.NumberInput(attrs={'step': '0.001', 'min': '0', 'placeholder': 'Ex.: 100'}),
+            'valor_embalagem': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'placeholder': '0,00'}),
             'codigo': forms.TextInput(attrs={'placeholder': 'Código no estoque ou no fornecedor'}),
             'observacao': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Detalhes que não cabem nos campos acima (opcional).'}),
         }
@@ -671,6 +675,23 @@ class AviamentoForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
         self.fields['produto_estoque'].queryset = Produto.objects.filter(
             ativo=True,
         ).order_by('descricao')
+
+    def clean(self):
+        dados = super().clean()
+        valor_caixa = dados.get('valor_embalagem')
+        quantidade = dados.get('quantidade_embalagem')
+        if quantidade is not None and quantidade <= 0:
+            self.add_error('quantidade_embalagem', 'Informe uma quantidade maior que zero.')
+        elif valor_caixa is not None and not quantidade:
+            self.add_error(
+                'quantidade_embalagem',
+                'Informe quantas unidades vêm na caixa/rolo para calcular o valor da unidade.',
+            )
+        elif dados.get('valor_unidade') is None and valor_caixa is not None and quantidade:
+            # Só compra por caixa/rolo: o valor da unidade sai da conta.
+            from decimal import Decimal
+            dados['valor_unidade'] = (valor_caixa / quantidade).quantize(Decimal('0.0001'))
+        return dados
 
 
 class CategoriaForm(_FilialFormMixin, forms.ModelForm):

@@ -526,6 +526,7 @@
     const campoCodigo = document.getElementById('id_codigo');
     const campoUnidade = document.getElementById('id_unidade');
     const campoProdutoEstoque = document.getElementById('id_produto_estoque');
+    const campoCusto = document.getElementById('id_custo_unitario');
     if (!id) {
       if (campoProdutoEstoque) campoProdutoEstoque.value = '';
       return;
@@ -540,6 +541,8 @@
     if (campoCodigo) campoCodigo.value = aviamento.codigo || '';
     if (campoUnidade) campoUnidade.value = aviamento.unidade;
     if (campoProdutoEstoque) campoProdutoEstoque.value = aviamento.produto_estoque_id || '';
+    // O valor da unidade do cadastro vira o custo do material, se estiver cadastrado.
+    if (campoCusto && aviamento.valor_unidade) campoCusto.value = aviamento.valor_unidade;
   }
 </script>
 {% endblock %}

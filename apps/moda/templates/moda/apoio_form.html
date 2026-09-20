@@ -81,5 +81,31 @@
     </div>
   </form>
 
+  {% if cadastro.slug == 'cadastro-aviamentos' %}
+  <script>
+    // Valor da unidade = valor da caixa/rolo ÷ unidades por caixa/rolo.
+    // Só preenche enquanto a pessoa não digitou o valor da unidade à mão.
+    (function () {
+      const caixa = document.getElementById('id_valor_embalagem');
+      const qtd = document.getElementById('id_quantidade_embalagem');
+      const unidade = document.getElementById('id_valor_unidade');
+      if (!caixa || !qtd || !unidade) return;
+      let manual = unidade.value !== '';
+      unidade.addEventListener('input', () => { manual = unidade.value !== ''; });
+      function calcular() {
+        const v = parseFloat(caixa.value), q = parseFloat(qtd.value);
+        if (manual && unidade.dataset.auto !== '1') return;
+        if (v >= 0 && q > 0) {
+          unidade.value = (v / q).toFixed(4);
+          unidade.dataset.auto = '1';
+        }
+      }
+      unidade.addEventListener('input', () => { unidade.dataset.auto = ''; });
+      caixa.addEventListener('input', calcular);
+      qtd.addEventListener('input', calcular);
+    })();
+  </script>
+  {% endif %}
+
 </div>
 {% endblock %}

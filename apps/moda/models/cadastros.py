@@ -5,6 +5,9 @@ Todos seguem o mesmo desenho: escopo por filial, `nome` único dentro da
 filial e `ativo` para desativar sem apagar (apagar quebraria produtos que
 já apontam para o registro).
 """
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
 from django.db import models
 
 from apps.core.models.base import ActiveModel, FilialManager, FilialScopedModel
@@ -260,6 +263,28 @@ class Aviamento(CadastroApoio):
         help_text='Código no estoque ou no fornecedor.',
     )
     unidade = models.CharField(max_length=6, choices=Unidade.choices, default=Unidade.UNIDADE)
+
+    # Quanto custa. O valor da unidade é o que a ficha técnica usa; a caixa
+    # (ou rolo, pacote...) é como se compra, e só serve para chegar nele:
+    # valor da caixa ÷ unidades por caixa. Os três são opcionais.
+    valor_unidade = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0'))],
+        verbose_name='Valor da unidade (R$)',
+        help_text='Preço de UMA unidade (um metro, um botão...). Vai para o custo da ficha técnica.',
+    )
+    quantidade_embalagem = models.DecimalField(
+        max_digits=12, decimal_places=3, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0'))],
+        verbose_name='Unidades por caixa/rolo',
+        help_text='Quantas unidades vêm na caixa ou no rolo. Ex.: 100 botões, 50 metros.',
+    )
+    valor_embalagem = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0'))],
+        verbose_name='Valor da caixa/rolo (R$)',
+        help_text='Quanto custa a caixa ou o rolo inteiro.',
+    )
     fornecedor = models.ForeignKey(
         'cadastros.Fornecedor', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='aviamentos_moda',

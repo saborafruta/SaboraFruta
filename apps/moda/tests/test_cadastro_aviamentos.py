@@ -220,3 +220,75 @@ class BotaoNaTelaDeUsoTests(AviamentoBase):
         self.assertIn(
             reverse('moda:apoio-create', args=['engenharia', 'cadastro-aviamentos']), html,
         )
+
+
+class ValoresDoAviamentoTests(AviamentoBase):
+    """Valor da unidade e valor da caixa/rolo."""
+
+    def _post(self, **extra):
+        dados = {
+            'nome': 'Botão pérola 12mm', 'tipo': Aviamento.Tipo.BOTAO,
+            'unidade': Aviamento.Unidade.UNIDADE, 'ativo': 'on',
+        }
+        dados.update(extra)
+        return self.client.post(
+            reverse('moda:apoio-create', args=['engenharia', 'cadastro-aviamentos']), dados,
+        )
+
+    def test_valor_da_unidade_direto(self):
+        self._post(valor_unidade='0,35'.replace(',', '.'))
+        avi = Aviamento.objects.get(nome='Botão pérola 12mm')
+        self.assertEqual(str(avi.valor_unidade), '0.3500')
+
+    def test_valor_da_unidade_sai_da_caixa_quando_nao_informado(self):
+        self._post(valor_embalagem='45.00', quantidade_embalagem='150')
+        avi = Aviamento.objects.get(nome='Botão pérola 12mm')
+        self.assertEqual(str(avi.valor_unidade), '0.3000')
+        self.assertEqual(str(avi.valor_embalagem), '45.00')
+        self.assertEqual(str(avi.quantidade_embalagem), '150.000')
+
+    def test_valor_da_unidade_digitado_vence_o_calculo(self):
+        self._post(valor_unidade='0.5', valor_embalagem='45.00', quantidade_embalagem='150')
+        avi = Aviamento.objects.get(nome='Botão pérola 12mm')
+        self.assertEqual(str(avi.valor_unidade), '0.5000')
+
+    def test_caixa_sem_quantidade_e_recusada(self):
+        resposta = self._post(valor_embalagem='45.00')
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'quantas unidades vêm')
+        self.assertFalse(Aviamento.objects.filter(nome='Botão pérola 12mm').exists())
+
+    def test_quantidade_zero_e_recusada(self):
+        resposta = self._post(valor_embalagem='45.00', quantidade_embalagem='0')
+        self.assertEqual(resposta.status_code, 200)
+        self.assertFalse(Aviamento.objects.filter(nome='Botão pérola 12mm').exists())
+
+    def test_valores_sao_opcionais(self):
+        self._post()
+        avi = Aviamento.objects.get(nome='Botão pérola 12mm')
+        self.assertIsNone(avi.valor_unidade)
+        self.assertIsNone(avi.valor_embalagem)
+
+    def test_tela_de_edicao_mostra_os_campos_e_o_calculo(self):
+        avi = Aviamento.objects.create(
+            filial=self.filial, nome='Fita', tipo=Aviamento.Tipo.AVIAMENTO,
+        )
+        resposta = self.client.get(
+            reverse('moda:apoio-update', args=['engenharia', 'cadastro-aviamentos', avi.pk]),
+        )
+        self.assertContains(resposta, 'Valor da unidade (R$)')
+        self.assertContains(resposta, 'Unidades por caixa/rolo')
+        self.assertContains(resposta, 'Valor da caixa/rolo (R$)')
+        self.assertContains(resposta, "getElementById('id_valor_embalagem')")
+
+    def test_ficha_recebe_o_valor_da_unidade_no_atalho(self):
+        from apps.moda.views_ficha import _aviamentos_do_cadastro
+
+        Aviamento.objects.create(
+            filial=self.filial, nome='Zíper 5', tipo=Aviamento.Tipo.ZIPER,
+            valor_unidade='1.2500',
+        )
+        Aviamento.objects.create(filial=self.filial, nome='Linha', tipo=Aviamento.Tipo.LINHA)
+        por_nome = {a['nome']: a for a in _aviamentos_do_cadastro(self.filial)}
+        self.assertEqual(por_nome['Zíper 5']['valor_unidade'], '1.2500')
+        self.assertEqual(por_nome['Linha']['valor_unidade'], '')

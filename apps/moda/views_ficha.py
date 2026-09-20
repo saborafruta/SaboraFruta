@@ -42,6 +42,7 @@ def _aviamentos_do_cadastro(filial) -> list[dict]:
             'codigo': a.codigo,
             'unidade': a.unidade,
             'produto_estoque_id': a.produto_estoque_id,
+            'valor_unidade': str(a.valor_unidade) if a.valor_unidade is not None else '',
         }
         for a in (
             Aviamento.objects.for_filial(filial)
