@@ -101,6 +101,10 @@
     .dep-avi-add .col-qtd { grid-column: span 2; }
     .dep-avi-add .col-btn { grid-column: span 2; }
   }
+  .dep-avi-add .col-nova { grid-column: span 6; }
+  .dep-nova-unidade { padding: 12px 14px; border-radius: 10px; border: 1px dashed var(--dep-accent); background: var(--dep-accent-soft); }
+  .dep-nova-grid { display: grid; gap: 10px; grid-template-columns: 1fr; }
+  @media (min-width: 640px) { .dep-nova-grid { grid-template-columns: 1fr 2fr 2fr; } }
   .dep-avi-add label { display: block; font-size: 12px; color: var(--dep-muted); margin-bottom: 4px; }
   .dep-table { width: 100%; font-size: 13px; border-collapse: collapse; }
   .dep-table thead th { text-transform: none; letter-spacing: normal; }
@@ -262,13 +266,14 @@
         <form method="post" action="{% url 'estoque:deposito-aviamento-create' deposito.pk %}"
               x-data="{
                 tipo: '{{ form_aviamento.tipo.value|default:'' }}',
+                unidade: '{% if form_aviamento.criando_unidade %}{{ form_aviamento.unidade_escolhida }}{% else %}{{ form_aviamento.unidade_medida.value|default:'' }}{% endif %}',
                 padrao: { linha: 'cone', elastico: 'm', ziper: 'un', botao: 'un', etiqueta: 'un', tag: 'un', embalagem: 'un', aviamento: 'un' },
                 sugerir() {
                   const alvo = this.padrao[this.tipo];
                   const un = this.$refs.unidade;
-                  if (!alvo || !un || un.value) return;
+                  if (!alvo || !un || this.unidade) return;
                   const op = [...un.options].find(o => o.dataset.sigla === alvo);
-                  if (op) un.value = op.value;
+                  if (op) this.unidade = op.value;
                 }
               }"
               @submit="$refs.enviar.disabled = true">
@@ -292,15 +297,46 @@
               {% if form_aviamento.tipo.errors %}<p class="dep-error">{{ form_aviamento.tipo.errors.0 }}</p>{% endif %}
             </div>
             <div class="col-un">
-              <label for="avi-un">Unidade</label>
-              <select id="avi-un" name="unidade_medida" required class="form-input" x-ref="unidade">
+              <label for="avi-un">Tipo de unidade</label>
+              <select id="avi-un" name="unidade_medida" required class="form-input" x-ref="unidade" x-model="unidade">
                 <option value="">Selecione…</option>
                 {% for u in form_aviamento.fields.unidade_medida.queryset %}
                   <option value="{{ u.pk }}" data-sigla="{{ u.sigla|lower }}"
                           {% if form_aviamento.unidade_medida.value|stringformat:'s' == u.pk|stringformat:'s' %}selected{% endif %}>{{ u.sigla }} — {{ u.descricao }}</option>
                 {% endfor %}
+                {% for valor, sigla, descricao in form_aviamento.unidades_padrao_faltando %}
+                  <option value="{{ valor }}" data-sigla="{{ sigla|lower }}" {% if form_aviamento.unidade_escolhida == valor %}selected{% endif %}>{{ sigla }} — {{ descricao }}</option>
+                {% endfor %}
+                <option value="__nova__" {% if form_aviamento.unidade_escolhida == '__nova__' %}selected{% endif %}>+ Criar outra unidade…</option>
               </select>
               {% if form_aviamento.unidade_medida.errors %}<p class="dep-error">{{ form_aviamento.unidade_medida.errors.0 }}</p>{% endif %}
+            </div>
+            <div class="col-nova" x-show="unidade === '__nova__'" x-cloak>
+              <div class="dep-nova-unidade">
+                <p class="dep-hint" style="margin:0 0 10px;">Outra unidade de medida — fica disponível para os próximos aviamentos e produtos.</p>
+                <div class="dep-nova-grid">
+                  <div>
+                    <label for="avi-un-sigla">Sigla</label>
+                    <input id="avi-un-sigla" type="text" name="nova_unidade_sigla" maxlength="6" class="form-input"
+                           :required="unidade === '__nova__'" value="{{ form_aviamento.nova_unidade_sigla.value|default:'' }}" placeholder="Ex.: M">
+                    {% if form_aviamento.nova_unidade_sigla.errors %}<p class="dep-error">{{ form_aviamento.nova_unidade_sigla.errors.0 }}</p>{% endif %}
+                  </div>
+                  <div>
+                    <label for="avi-un-desc">Nome da unidade</label>
+                    <input id="avi-un-desc" type="text" name="nova_unidade_descricao" maxlength="40" class="form-input"
+                           :required="unidade === '__nova__'" value="{{ form_aviamento.nova_unidade_descricao.value|default:'' }}" placeholder="Ex.: Metro">
+                    {% if form_aviamento.nova_unidade_descricao.errors %}<p class="dep-error">{{ form_aviamento.nova_unidade_descricao.errors.0 }}</p>{% endif %}
+                  </div>
+                  <div>
+                    <label for="avi-un-tipo">Tipo de medida</label>
+                    <select id="avi-un-tipo" name="nova_unidade_tipo" class="form-input">
+                      {% for valor, rotulo in form_aviamento.fields.nova_unidade_tipo.choices %}
+                        <option value="{{ valor }}" {% if form_aviamento.nova_unidade_tipo.value == valor %}selected{% endif %}>{{ rotulo }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="col-cod">
               <label for="avi-cod">Código</label>
@@ -357,7 +393,7 @@
                 </td>
                 <td><span class="dep-badge">{{ a.get_tipo_display }}</span></td>
                 {% if a.produto_estoque_id %}
-                  <td class="num">{{ a.saldo_aqui|floatformat:"-3" }} <span class="dep-muted">{{ a.get_unidade_display }}</span></td>
+                  <td class="num">{{ a.saldo_aqui|floatformat:"-3" }} <span class="dep-muted">{{ a.produto_estoque.unidade_medida.sigla|lower }}</span></td>
                   <td class="num dep-muted">{{ a.saldo_total|floatformat:"-3" }}</td>
                 {% else %}
                   <td class="num" colspan="2"><span class="dep-badge is-warn">sem vínculo com estoque</span></td>

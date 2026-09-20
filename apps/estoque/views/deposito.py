@@ -44,7 +44,7 @@ def _painel_aviamentos(request, deposito, form_rapido=None):
     filial = request.filial_ativa
     catalogo = list(
         Aviamento.objects.for_filial(filial)
-        .select_related('produto_estoque')
+        .select_related('produto_estoque__unidade_medida')
         .order_by('tipo', 'nome')
     )
     produto_ids = [a.produto_estoque_id for a in catalogo if a.produto_estoque_id]
@@ -228,11 +228,13 @@ class DepositoAviamentoCreateView(PermissaoRequiredMixin, View):
 
         dados = form.cleaned_data
         with tenant_atomic():
+            unidade = form.obter_unidade()
+            dados['unidade_medida'] = unidade
             produto = criar_produto_materia_prima(filial, dados, 'Cadastro de Aviamentos')
             aviamento = Aviamento.objects.create(
                 filial=filial, nome=dados['nome'], tipo=dados['tipo'],
                 codigo=dados.get('codigo') or '',
-                unidade=form.unidade_do_aviamento(),
+                unidade=form.sigla_do_aviamento(unidade),
                 produto_estoque=produto,
             )
             quantidade = dados.get('quantidade_inicial')
@@ -253,7 +255,7 @@ class DepositoAviamentoCreateView(PermissaoRequiredMixin, View):
         messages.success(request, f'Aviamento "{aviamento.nome}" cadastrado.')
         destino = reverse('estoque:deposito-update', args=[deposito.pk])
         return redirect(
-            f'{destino}?tipo={aviamento.tipo}&un={dados["unidade_medida"].pk}#aviamentos'
+            f'{destino}?tipo={aviamento.tipo}&un={unidade.pk}#aviamentos'
         )
 
 

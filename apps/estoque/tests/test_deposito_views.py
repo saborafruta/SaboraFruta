@@ -231,3 +231,75 @@ class DepositoAviamentoViewTests(DepositoViewsBase):
             reverse('estoque:deposito-aviamento-create', args=[alheio.pk]), self._payload(),
         )
         self.assertEqual(resp.status_code, 404)
+
+    def test_cria_unidade_nova_junto_com_o_aviamento(self):
+        from apps.moda.models import Aviamento
+        from apps.produtos.models import UnidadeMedida, UnidadeMedidaFilial
+
+        resp = self.client.post(self.url_novo, self._payload(
+            nome='Elástico chato 25mm', tipo='elastico',
+            unidade_medida='__nova__', nova_unidade_sigla='m',
+            nova_unidade_descricao='Metro', nova_unidade_tipo='comprimento',
+            quantidade_inicial='50',
+        ))
+        self.assertEqual(resp.status_code, 302)
+        metro = UnidadeMedida.objects.get(empresa=self.empresa, sigla='M')
+        self.assertEqual(metro.descricao, 'Metro')
+        self.assertEqual(metro.tipo, 'comprimento')
+        self.assertTrue(UnidadeMedidaFilial.objects.filter(unidade=metro, filial=self.filial).exists())
+        avi = Aviamento.objects.get(filial=self.filial, nome='Elástico chato 25mm')
+        self.assertEqual(avi.unidade, 'm')
+        self.assertEqual(avi.produto_estoque.unidade_medida, metro)
+        self.assertIn(f'un={metro.pk}', resp['Location'])
+
+    def test_unidade_nova_com_sigla_repetida_e_recusada(self):
+        from apps.produtos.models import UnidadeMedida
+
+        resp = self.client.post(self.url_novo, self._payload(
+            unidade_medida='__nova__', nova_unidade_sigla='un',
+            nova_unidade_descricao='Outra unidade',
+        ))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Já existe a unidade')
+        self.assertEqual(UnidadeMedida.objects.filter(empresa=self.empresa).count(), 1)
+
+    def test_unidade_nova_sem_nome_nao_cria_nada(self):
+        from apps.moda.models import Aviamento
+        from apps.produtos.models import UnidadeMedida
+
+        resp = self.client.post(self.url_novo, self._payload(
+            unidade_medida='__nova__', nova_unidade_sigla='m', nova_unidade_descricao='',
+        ))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Informe o nome.')
+        self.assertFalse(UnidadeMedida.objects.filter(empresa=self.empresa, sigla='M').exists())
+        self.assertFalse(Aviamento.objects.filter(filial=self.filial).exists())
+
+    def test_sem_unidade_nenhuma_e_recusado(self):
+        resp = self.client.post(self.url_novo, self._payload(unidade_medida=''))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'obrigat')
+
+
+    def test_lista_oferece_metro_pronto_e_nao_repete_unidade_existente(self):
+        resp = self.client.get(reverse('estoque:deposito-update', args=[self.aviamentos.pk]))
+        self.assertContains(resp, 'value="padrao:M"')
+        self.assertNotContains(resp, 'value="padrao:UN"')  # a empresa já tem UN
+        self.assertContains(resp, 'Tipo de unidade')
+
+    def test_escolhe_metro_pronto_e_a_unidade_e_criada(self):
+        from apps.moda.models import Aviamento
+        from apps.produtos.models import UnidadeMedida
+
+        resp = self.client.post(self.url_novo, self._payload(
+            nome='Elástico 30mm', tipo='elastico', unidade_medida='padrao:M',
+        ))
+        self.assertEqual(resp.status_code, 302)
+        metro = UnidadeMedida.objects.get(empresa=self.empresa, sigla='M')
+        self.assertEqual((metro.descricao, metro.tipo), ('Metro', 'comprimento'))
+        avi = Aviamento.objects.get(filial=self.filial, nome='Elástico 30mm')
+        self.assertEqual(avi.unidade, 'm')
+
+        # Depois de criada, deixa de ser oferecida como "pronta".
+        resp = self.client.get(reverse('estoque:deposito-update', args=[self.aviamentos.pk]))
+        self.assertNotContains(resp, 'value="padrao:M"')
