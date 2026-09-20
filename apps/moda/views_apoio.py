@@ -111,7 +111,7 @@ CADASTROS: dict[str, Cadastro] = {
         slug='cadastro-aviamentos', model=m.Aviamento, form=f.AviamentoForm,
         singular='Aviamento', plural='Cadastro de Aviamentos', grupo='engenharia',
         colunas=(
-            ('Nome', 'nome'), ('Tipo', 'get_tipo_display'),
+            ('Nome', 'nome'), ('Tipo', 'tipo_rotulo'),
             ('Código', 'codigo'), ('Fornecedor', 'fornecedor'),
         ),
         busca_em=('nome', 'codigo'),

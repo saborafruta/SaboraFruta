@@ -102,6 +102,7 @@
     .dep-avi-add .col-btn { grid-column: span 2; }
   }
   .dep-avi-add .col-nova { grid-column: span 6; }
+  .dep-nova-unidade label { display: block; font-size: 12px; color: var(--dep-muted); margin-bottom: 4px; }
   .dep-nova-unidade { padding: 12px 14px; border-radius: 10px; border: 1px dashed var(--dep-accent); background: var(--dep-accent-soft); }
   .dep-nova-grid { display: grid; gap: 10px; grid-template-columns: 1fr; }
   @media (min-width: 640px) { .dep-nova-grid { grid-template-columns: 1fr 2fr 2fr; } }
@@ -265,11 +266,12 @@
 
         <form method="post" action="{% url 'estoque:deposito-aviamento-create' deposito.pk %}"
               x-data="{
-                tipo: '{{ form_aviamento.tipo.value|default:'' }}',
+                tipo: '{{ form_aviamento.tipo_escolhido|default:form_aviamento.tipo.value|default:'' }}',
                 unidade: '{% if form_aviamento.criando_unidade %}{{ form_aviamento.unidade_escolhida }}{% else %}{{ form_aviamento.unidade_medida.value|default:'' }}{% endif %}',
                 padrao: { linha: 'cone', elastico: 'm', ziper: 'un', botao: 'un', etiqueta: 'un', tag: 'un', embalagem: 'un', aviamento: 'un' },
                 sugerir() {
-                  const alvo = this.padrao[this.tipo];
+                  const base = (this.tipo === '__novo__' || this.tipo.startsWith('custom:')) ? 'aviamento' : this.tipo;
+                  const alvo = this.padrao[base];
                   const un = this.$refs.unidade;
                   if (!alvo || !un || this.unidade) return;
                   const op = [...un.options].find(o => o.dataset.sigla === alvo);
@@ -291,8 +293,12 @@
               <select id="avi-tipo" name="tipo" required class="form-input" x-model="tipo" @change="sugerir()">
                 <option value="">Selecione…</option>
                 {% for valor, rotulo in form_aviamento.fields.tipo.choices %}{% if valor %}
-                  <option value="{{ valor }}" {% if form_aviamento.tipo.value == valor %}selected{% endif %}>{{ rotulo }}</option>
+                  <option value="{{ valor }}">{{ rotulo }}</option>
                 {% endif %}{% endfor %}
+                {% for nome in form_aviamento.tipos_personalizados %}
+                  <option value="custom:{{ nome }}">{{ nome }}</option>
+                {% endfor %}
+                <option value="__novo__">+ Criar outro tipo…</option>
               </select>
               {% if form_aviamento.tipo.errors %}<p class="dep-error">{{ form_aviamento.tipo.errors.0 }}</p>{% endif %}
             </div>
@@ -310,6 +316,15 @@
                 <option value="__nova__" {% if form_aviamento.unidade_escolhida == '__nova__' %}selected{% endif %}>+ Criar outra unidade…</option>
               </select>
               {% if form_aviamento.unidade_medida.errors %}<p class="dep-error">{{ form_aviamento.unidade_medida.errors.0 }}</p>{% endif %}
+            </div>
+            <div class="col-nova" x-show="tipo === '__novo__'" x-cloak>
+              <div class="dep-nova-unidade">
+                <label for="avi-novo-tipo">Nome do novo tipo</label>
+                <input id="avi-novo-tipo" type="text" name="novo_tipo_nome" maxlength="40" class="form-input"
+                       :required="tipo === '__novo__'" value="{% if form_aviamento.tipo_escolhido == '__novo__' %}{{ form_aviamento.novo_tipo_nome.value|default:'' }}{% endif %}" placeholder="Ex.: Patch, Cordão, Fita">
+                <p class="dep-hint" style="margin-bottom:0;">Fica na lista de tipos para os próximos aviamentos. Para a produção conta como "Outro aviamento".</p>
+                {% if form_aviamento.novo_tipo_nome.errors %}<p class="dep-error">{{ form_aviamento.novo_tipo_nome.errors.0 }}</p>{% endif %}
+              </div>
             </div>
             <div class="col-nova" x-show="unidade === '__nova__'" x-cloak>
               <div class="dep-nova-unidade">
@@ -367,6 +382,9 @@
             {% for valor, rotulo in form_aviamento.fields.tipo.choices %}{% if valor %}
               <option value="{{ valor }}">{{ rotulo }}</option>
             {% endif %}{% endfor %}
+            {% for nome in form_aviamento.tipos_personalizados %}
+              <option value="custom:{{ nome }}">{{ nome }}</option>
+            {% endfor %}
           </select>
         </div>
 
@@ -384,14 +402,14 @@
             </thead>
             <tbody>
               {% for a in aviamentos %}
-              <tr data-tipo="{{ a.tipo }}" data-busca="{{ a.nome|lower }} {{ a.codigo|lower }}"
+              <tr data-tipo="{% if a.tipo_personalizado %}custom:{{ a.tipo_personalizado }}{% else %}{{ a.tipo }}{% endif %}" data-busca="{{ a.nome|lower }} {{ a.codigo|lower }}"
                   x-show="(!tipo || tipo === $el.dataset.tipo) && (!busca || $el.dataset.busca.includes(busca.toLowerCase()))">
                 <td>
                   <span class="font-medium">{{ a.nome }}</span>
                   {% if a.codigo %}<span class="dep-muted" style="font-size:12px; margin-left:6px; font-family:ui-monospace,monospace;">{{ a.codigo }}</span>{% endif %}
                   {% if not a.ativo %}<span class="dep-badge is-warn" style="margin-left:6px;">inativo</span>{% endif %}
                 </td>
-                <td><span class="dep-badge">{{ a.get_tipo_display }}</span></td>
+                <td><span class="dep-badge">{{ a.tipo_rotulo }}</span></td>
                 {% if a.produto_estoque_id %}
                   <td class="num">{{ a.saldo_aqui|floatformat:"-3" }} <span class="dep-muted">{{ a.produto_estoque.unidade_medida.sigla|lower }}</span></td>
                   <td class="num dep-muted">{{ a.saldo_total|floatformat:"-3" }}</td>

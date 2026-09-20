@@ -630,7 +630,7 @@ class AviamentoForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
         from .models import Aviamento
         model = Aviamento
         fields = [
-            'nome', 'tipo', 'codigo', 'unidade',
+            'nome', 'tipo', 'tipo_personalizado', 'codigo', 'unidade',
             'fornecedor', 'produto_estoque', 'observacao', 'ativo',
         ]
         labels = {
@@ -640,6 +640,7 @@ class AviamentoForm(_NomeUnicoMixin, _FilialFormMixin, forms.ModelForm):
         }
         widgets = {
             'nome': forms.TextInput(attrs={'placeholder': 'Ex.: Zíper nylon nº 5 preto'}),
+            'tipo_personalizado': forms.TextInput(attrs={'placeholder': 'Ex.: Patch (só com "Outro aviamento")'}),
             'codigo': forms.TextInput(attrs={'placeholder': 'Código no estoque ou no fornecedor'}),
             'observacao': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Detalhes que não cabem nos campos acima (opcional).'}),
         }

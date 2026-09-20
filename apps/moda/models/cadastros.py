@@ -247,6 +247,14 @@ class Aviamento(CadastroApoio):
         CONE = 'cone', 'cone'
 
     tipo = models.CharField(max_length=20, choices=Tipo.choices)
+    # Tipo criado pelo usuário (ex.: "Patch", "Cordão"). O `tipo` acima
+    # continua "Outro aviamento" para tudo que depende dele -- ficha
+    # técnica, roteamento de depósito, telas de estoque --; este campo só
+    # muda o nome que aparece.
+    tipo_personalizado = models.CharField(
+        max_length=40, blank=True, verbose_name='Tipo personalizado',
+        help_text='Nome do tipo quando nenhum da lista serve (ex.: Patch). Vale só para "Outro aviamento".',
+    )
     codigo = models.CharField(
         max_length=40, blank=True,
         help_text='Código no estoque ou no fornecedor.',
@@ -277,8 +285,13 @@ class Aviamento(CadastroApoio):
         verbose_name = 'Aviamento'
         verbose_name_plural = 'Aviamentos'
 
+    @property
+    def tipo_rotulo(self):
+        """Nome do tipo como aparece na tela: o personalizado, se houver."""
+        return self.tipo_personalizado or self.get_tipo_display()
+
     def __str__(self):
-        return f'{self.nome} ({self.get_tipo_display()})'
+        return f'{self.nome} ({self.tipo_rotulo})'
 
 
 class Modelo(CadastroApoio):

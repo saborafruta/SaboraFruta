@@ -74,6 +74,8 @@ class AviamentoRapidoForm(forms.Form):
     `obter_unidade()`, sem sair da tela.
     """
 
+    NOVO_TIPO = '__novo__'
+    PREFIXO_TIPO_PERSONALIZADO = 'custom:'
     NOVA_UNIDADE = '__nova__'
     # Unidades que a lista oferece prontas quando a empresa ainda não as tem:
     # o valor do select é `padrao:<SIGLA>` e a unidade nasce junto com o
@@ -87,6 +89,7 @@ class AviamentoRapidoForm(forms.Form):
     nome = forms.CharField(max_length=80, label='Nome')
     tipo = forms.ChoiceField(label='Tipo')
     unidade_medida = forms.ModelChoiceField(queryset=None, label='Unidade')
+    novo_tipo_nome = forms.CharField(max_length=40, required=False, label='Nome do novo tipo')
     nova_unidade_sigla = forms.CharField(max_length=6, required=False, label='Sigla')
     nova_unidade_descricao = forms.CharField(max_length=40, required=False, label='Nome da unidade')
     nova_unidade_tipo = forms.ChoiceField(required=False, label='Tipo de medida')
@@ -106,6 +109,29 @@ class AviamentoRapidoForm(forms.Form):
         # "Nova unidade" não é um pk: tira o marcador dos dados antes de o
         # ModelChoiceField validar e lembra a escolha (para reabrir os
         # campos da unidade nova se o formulário voltar com erro).
+        # Tipo: "+ Criar outro tipo…" e os tipos já criados (`custom:Nome`)
+        # não são valores do ChoiceField. Ambos viram "Outro aviamento" com
+        # o nome guardado à parte.
+        tipo_escolhido = self.data.get('tipo') or ''
+        self.tipo_escolhido = tipo_escolhido
+        self.criando_tipo = (
+            tipo_escolhido == self.NOVO_TIPO
+            or tipo_escolhido.startswith(self.PREFIXO_TIPO_PERSONALIZADO)
+        )
+        if self.criando_tipo:
+            self.data = self.data.copy()
+            if tipo_escolhido.startswith(self.PREFIXO_TIPO_PERSONALIZADO):
+                self.data['novo_tipo_nome'] = tipo_escolhido.removeprefix(self.PREFIXO_TIPO_PERSONALIZADO)
+            self.data['tipo'] = Aviamento.Tipo.AVIAMENTO
+        self.tipos_personalizados = sorted(
+            set(
+                Aviamento.all_objects.filter(filial=filial)
+                .exclude(tipo_personalizado='')
+                .values_list('tipo_personalizado', flat=True)
+            ),
+            key=str.lower,
+        ) if filial else []
+
         escolha = self.data.get('unidade_medida') or ''
         padrao = self.UNIDADES_PADRAO.get(escolha.removeprefix(self.PREFIXO_PADRAO).upper())             if escolha.startswith(self.PREFIXO_PADRAO) else None
         self.criando_unidade = escolha == self.NOVA_UNIDADE or padrao is not None
@@ -160,9 +186,27 @@ class AviamentoRapidoForm(forms.Form):
         return nome
 
     def clean(self):
+        from apps.moda.models import Aviamento
         from apps.produtos.models import UnidadeMedida
 
         dados = super().clean()
+        if self.criando_tipo:
+            nome_tipo = ' '.join((dados.get('novo_tipo_nome') or '').split())
+            if not nome_tipo:
+                self.add_error('novo_tipo_nome', 'Informe o nome do tipo.')
+            else:
+                # Digitou um tipo que já existe na lista? Usa o da lista, em
+                # vez de criar "zíper" ao lado de "Zíper".
+                padrao = {rotulo.lower(): valor for valor, rotulo in Aviamento.Tipo.choices}
+                existente = {t.lower(): t for t in self.tipos_personalizados}
+                if nome_tipo.lower() in padrao and padrao[nome_tipo.lower()] != Aviamento.Tipo.AVIAMENTO:
+                    dados['tipo'] = padrao[nome_tipo.lower()]
+                    dados['tipo_personalizado'] = ''
+                else:
+                    dados['tipo'] = Aviamento.Tipo.AVIAMENTO
+                    dados['tipo_personalizado'] = existente.get(nome_tipo.lower(), nome_tipo)
+        else:
+            dados['tipo_personalizado'] = ''
         if self.criando_unidade:
             sigla = (dados.get('nova_unidade_sigla') or '').strip().upper()
             descricao = (dados.get('nova_unidade_descricao') or '').strip()

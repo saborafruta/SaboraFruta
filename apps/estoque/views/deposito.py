@@ -6,6 +6,7 @@ from django.db.models import Count, Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import urlencode
 from django.views import View
 
 from apps.core.services.auditoria import registrar_auditoria, snapshot_modelo
@@ -233,6 +234,7 @@ class DepositoAviamentoCreateView(PermissaoRequiredMixin, View):
             produto = criar_produto_materia_prima(filial, dados, 'Cadastro de Aviamentos')
             aviamento = Aviamento.objects.create(
                 filial=filial, nome=dados['nome'], tipo=dados['tipo'],
+                tipo_personalizado=dados.get('tipo_personalizado') or '',
                 codigo=dados.get('codigo') or '',
                 unidade=form.sigla_do_aviamento(unidade),
                 produto_estoque=produto,
@@ -253,9 +255,13 @@ class DepositoAviamentoCreateView(PermissaoRequiredMixin, View):
             descricao=f'Aviamento {aviamento.nome} cadastrado pelo depósito {deposito.nome}',
         )
         messages.success(request, f'Aviamento "{aviamento.nome}" cadastrado.')
+        tipo_volta = (
+            f'{form.PREFIXO_TIPO_PERSONALIZADO}{aviamento.tipo_personalizado}'
+            if aviamento.tipo_personalizado else aviamento.tipo
+        )
         destino = reverse('estoque:deposito-update', args=[deposito.pk])
         return redirect(
-            f'{destino}?tipo={aviamento.tipo}&un={unidade.pk}#aviamentos'
+            f'{destino}?{urlencode({"tipo": tipo_volta, "un": unidade.pk})}#aviamentos'
         )
 
 

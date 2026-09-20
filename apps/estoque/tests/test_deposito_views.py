@@ -303,3 +303,43 @@ class DepositoAviamentoViewTests(DepositoViewsBase):
         # Depois de criada, deixa de ser oferecida como "pronta".
         resp = self.client.get(reverse('estoque:deposito-update', args=[self.aviamentos.pk]))
         self.assertNotContains(resp, 'value="padrao:M"')
+
+    def test_cria_tipo_novo_de_aviamento(self):
+        from apps.moda.models import Aviamento
+
+        resp = self.client.post(self.url_novo, self._payload(
+            nome='Patch bandeirinha RN', tipo='__novo__', novo_tipo_nome='  Patch ',
+        ))
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('custom%3APatch', resp['Location'])
+        avi = Aviamento.objects.get(filial=self.filial, nome='Patch bandeirinha RN')
+        self.assertEqual(avi.tipo, 'aviamento')  # a produção o trata como "Outro aviamento"
+        self.assertEqual(avi.tipo_personalizado, 'Patch')
+        self.assertEqual(avi.tipo_rotulo, 'Patch')
+
+        # O tipo criado passa a ser oferecido na lista, e reaproveitá-lo não duplica.
+        resp = self.client.get(reverse('estoque:deposito-update', args=[self.aviamentos.pk]))
+        self.assertContains(resp, 'value="custom:Patch"')
+        self.client.post(self.url_novo, self._payload(
+            nome='Patch bandeira BRA', tipo='custom:Patch',
+        ))
+        self.assertEqual(
+            Aviamento.objects.filter(filial=self.filial, tipo_personalizado='Patch').count(), 2,
+        )
+
+    def test_tipo_novo_com_nome_de_tipo_existente_usa_o_da_lista(self):
+        from apps.moda.models import Aviamento
+
+        self.client.post(self.url_novo, self._payload(
+            nome='Botão pérola', tipo='__novo__', novo_tipo_nome='botão',
+        ))
+        avi = Aviamento.objects.get(filial=self.filial, nome='Botão pérola')
+        self.assertEqual((avi.tipo, avi.tipo_personalizado), ('botao', ''))
+
+    def test_tipo_novo_sem_nome_e_recusado(self):
+        from apps.moda.models import Aviamento
+
+        resp = self.client.post(self.url_novo, self._payload(tipo='__novo__', novo_tipo_nome=''))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Informe o nome do tipo.')
+        self.assertFalse(Aviamento.objects.filter(filial=self.filial).exists())
