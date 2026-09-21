@@ -25,6 +25,7 @@ class FilialMiddleware:
         '/comprovante/',
         '/auth/login/',
         '/auth/logout/',
+        '/auth/menu-favoritos/',
         '/auth/minha-foto/',
         '/auth/trocar-filial/',
         '/api/v1/',

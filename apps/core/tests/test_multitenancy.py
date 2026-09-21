@@ -670,6 +670,25 @@ class MultitenancyFoundationTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertNotIn('filial_ativa_id', request.session)
 
+    def test_menu_favoritos_nao_remove_contexto_operacional(self):
+        request = RequestFactory().get('/auth/menu-favoritos/')
+        request.session = {
+            'tenant_db_alias': self.banco.db_alias,
+            'filial_ativa_id': 1,
+        }
+        request.user = Mock(
+            is_authenticated=True,
+            filial_id=self.filial.pk,
+        )
+        request.tenant_db_alias = self.banco.db_alias
+        request.selected_tenant_db_alias = self.banco.db_alias
+
+        response = FilialMiddleware(lambda _request: 'ok')(request)
+
+        self.assertEqual(response, 'ok')
+        self.assertEqual(request.session['filial_ativa_id'], 1)
+        request.user.pode_acessar_filial.assert_not_called()
+
     @override_settings(TENANT_DATABASE_ROUTING_ENABLED=True)
     def test_login_autentica_e_registra_no_diretorio_central(self):
         request = RequestFactory().post('/auth/login/')
