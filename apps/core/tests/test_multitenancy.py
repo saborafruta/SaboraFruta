@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
+from django.contrib.sessions.backends.signed_cookies import SessionStore
 from django.contrib.sessions.models import Session
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils.functional import SimpleLazyObject
@@ -275,6 +276,38 @@ class MultitenancyFoundationTests(TestCase):
             usuario_central=self.usuario,
             filial_id=None,
         )
+
+    @override_settings(
+        TENANT_DATABASE_ROUTING_ENABLED=True,
+        TENANT_PUBLIC_LINK_ROUTING_READY=True,
+        TENANT_BACKGROUND_TASKS_READY=True,
+    )
+    def test_middleware_nao_regrava_sessao_operacional_inalterada(self):
+        request = RequestFactory().get('/dashboard/')
+        request.session = SessionStore()
+        request.session.update({
+            'tenant_db_alias': self.banco.db_alias,
+            'filial_ativa_id': self.filial.pk,
+            'auth_database_alias': 'default',
+        })
+        request.session.modified = False
+        request.user = self.usuario
+        tenant_user = Mock(email=self.usuario.email, is_authenticated=True)
+
+        with (
+            patch(
+                'apps.core.middleware.tenant.register_tenant_database',
+                return_value=True,
+            ),
+            patch(
+                'apps.core.middleware.tenant.TenantUserService.resolver_usuario',
+                return_value=tenant_user,
+            ),
+        ):
+            response = TenantContextMiddleware(lambda req: req.user)(request)
+
+        self.assertIs(response, tenant_user)
+        self.assertFalse(request.session.modified)
 
     @override_settings(
         TENANT_DATABASE_ROUTING_ENABLED=True,

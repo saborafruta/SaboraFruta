@@ -89,10 +89,22 @@ def logout_view(request):
 @login_required
 @require_POST
 def atualizar_minha_foto(request):
-    user = request.user
+    usuario_contextual = request.user
+    user = _usuario_central(request) or usuario_contextual
     foto = request.FILES.get('foto')
     remover = request.POST.get('remover_foto') == '1'
     voltar_para = request.META.get('HTTP_REFERER') or reverse_lazy('core:dashboard')
+
+    def sincronizar_usuario_contextual():
+        banco_contextual = usuario_contextual._state.db or 'default'
+        banco_central = user._state.db or 'default'
+        if banco_contextual == banco_central:
+            return
+        usuario_contextual.foto = user.foto.name if user.foto else None
+        usuario_contextual.save(
+            using=banco_contextual,
+            update_fields=['foto', 'updated_at'],
+        )
 
     if remover:
         if user.foto:
@@ -102,6 +114,7 @@ def atualizar_minha_foto(request):
                 using=user._state.db or 'default',
                 update_fields=['foto', 'updated_at'],
             )
+            sincronizar_usuario_contextual()
             messages.success(request, 'Foto removida.')
         return redirect(voltar_para)
 
@@ -123,6 +136,7 @@ def atualizar_minha_foto(request):
         using=user._state.db or 'default',
         update_fields=['foto', 'updated_at'],
     )
+    sincronizar_usuario_contextual()
 
     if foto_antiga and foto_antiga != user.foto.name:
         user.foto.storage.delete(foto_antiga)

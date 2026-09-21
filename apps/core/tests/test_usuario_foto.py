@@ -1,11 +1,12 @@
 from io import BytesIO
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase
 from PIL import Image
 
 from apps.core.models import Usuario
+from apps.core.views.auth import atualizar_minha_foto
 
 
 class UsuarioFotoTests(SimpleTestCase):
@@ -41,4 +42,45 @@ class UsuarioFotoTests(SimpleTestCase):
             usuario.save(update_fields=['last_login'])
 
         otimizar.assert_not_called()
+
+    @patch('apps.core.views.auth.messages.success')
+    @patch('apps.core.views.auth._usuario_central')
+    def test_foto_de_sessao_legada_atualiza_usuario_central_e_local(
+        self,
+        usuario_central,
+        _mensagem,
+    ):
+        central = Usuario(email='foto-global@teste.local', nome='Foto Global')
+        central._state.db = 'default'
+        central.save = Mock()
+        usuario_central.return_value = central
+
+        local = Usuario(email=central.email, nome=central.nome)
+        local._state.db = 'empresa_teste'
+        local.save = Mock()
+
+        imagem = SimpleUploadedFile(
+            'perfil.png',
+            b'conteudo-da-imagem',
+            content_type='image/png',
+        )
+        request = RequestFactory().post(
+            '/auth/minha-foto/',
+            {'foto': imagem},
+        )
+        request.user = local
+        request.session = {}
+
+        response = atualizar_minha_foto(request)
+
+        self.assertEqual(response.status_code, 302)
+        central.save.assert_called_once_with(
+            using='default',
+            update_fields=['foto', 'updated_at'],
+        )
+        local.save.assert_called_once_with(
+            using='empresa_teste',
+            update_fields=['foto', 'updated_at'],
+        )
+        self.assertEqual(local.foto.name, central.foto.name)
 

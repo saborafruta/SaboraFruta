@@ -86,7 +86,11 @@ class TenantContextMiddleware:
             # LazyUser foi resolvido acima enquanto o router apontava para o
             # gerencial, podemos reconhecê-las com segurança e atualizar a
             # sessão sem obrigar o usuário a sair e entrar novamente.
-            if request.user.is_authenticated and request.user._state.db == 'default':
+            if (
+                request.user.is_authenticated
+                and request.user._state.db == 'default'
+                and request.session.get(AUTH_DATABASE_SESSION_KEY) != 'default'
+            ):
                 request.session[AUTH_DATABASE_SESSION_KEY] = 'default'
 
         # A credencial do superusuário continua autenticada pelo Banco
