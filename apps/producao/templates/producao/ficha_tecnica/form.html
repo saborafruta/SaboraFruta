@@ -40,9 +40,19 @@
 
     {# Formset de itens (BOM) #}
     <div class="card">
-      <div class="px-6 py-4 border-b border-transparent flex items-center justify-between">
-        <h3 class="font-semibold">Matérias-primas (BOM)</h3>
-        <button type="button" onclick="adicionarItem()" class="btn-secondary">+ Adicionar item</button>
+      <div class="px-6 py-4 border-b border-transparent flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 class="font-semibold">Matérias-primas (BOM)</h3>
+          {% if pode_cadastrar_produto %}
+          <p class="text-xs mt-1" style="color:#94a3b8;">Não achou o insumo na lista? <a href="{% url 'produtos:produto-create' %}" target="_blank" rel="noopener" style="color:#60a5fa;">Cadastre em uma aba nova</a> e recarregue esta página.</p>
+          {% endif %}
+        </div>
+        <div class="flex gap-2">
+          {% if pode_cadastrar_produto %}
+          <a href="{% url 'produtos:produto-create' %}" target="_blank" rel="noopener" class="btn-secondary">+ Novo produto</a>
+          {% endif %}
+          <button type="button" onclick="adicionarItem()" class="btn-secondary">+ Adicionar item</button>
+        </div>
       </div>
 
       {{ formset.management_form }}

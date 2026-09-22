@@ -75,6 +75,7 @@ class FichaTecnicaCreateView(PermissaoRequiredMixin, View):
             'formset': ItemFichaTecnicaFormSet(),
             'title': 'Nova Ficha Técnica',
             'cancel_url': reverse_lazy('producao:ficha-list'),
+            'pode_cadastrar_produto': request.user.tem_permissao('produtos', 'criar'),
         })
 
     @tenant_atomic
@@ -95,6 +96,7 @@ class FichaTecnicaCreateView(PermissaoRequiredMixin, View):
             'formset': formset,
             'title': 'Nova Ficha Técnica',
             'cancel_url': reverse_lazy('producao:ficha-list'),
+            'pode_cadastrar_produto': request.user.tem_permissao('produtos', 'criar'),
         })
 
 
@@ -111,6 +113,7 @@ class FichaTecnicaUpdateView(PermissaoRequiredMixin, View):
             'ficha': ficha,
             'title': f'Editar — {ficha}',
             'cancel_url': reverse_lazy('producao:ficha-list'),
+            'pode_cadastrar_produto': request.user.tem_permissao('produtos', 'criar'),
         })
 
     @tenant_atomic
@@ -130,4 +133,5 @@ class FichaTecnicaUpdateView(PermissaoRequiredMixin, View):
             'ficha': ficha,
             'title': f'Editar — {ficha}',
             'cancel_url': reverse_lazy('producao:ficha-list'),
+            'pode_cadastrar_produto': request.user.tem_permissao('produtos', 'criar'),
         })
