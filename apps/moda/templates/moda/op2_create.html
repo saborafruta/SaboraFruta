@@ -6,7 +6,7 @@
 {% block extra_head %}<script>localStorage.setItem('sidebar-collapsed','true');</script>{% endblock %}
 {% block content %}
 {{ estrutura_opcoes|json_script:"op2-estrutura-opcoes" }}
-<script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260918-1"></script>
+<script src="{% static 'js/op2_modelo_validacao.js' %}?v=20260922-1"></script>
 <script src="{% static 'js/op2_clientes.js' %}"></script>
 {{ modelos_grade|json_script:"op2-modelos-grade" }}
 {{ grades_json|json_script:"op2-grades" }}
@@ -582,6 +582,8 @@ function op2NovaMelhorada(){
       alert('Confira a quantidade e o valor de cada item avulso.');return
     }
     if(this.draft.estrutura_tipo==='conjunto'){
+      const erroValorConjunto=validarValorUnitarioOp2(this.draft.valor_unitario,'Valor por conjunto');
+      if(erroValorConjunto){alert(erroValorConjunto);return}
       const erroConjunto=validarConjuntoOp2(this.draft.configuracao_conjunto,this.estruturaOpcoes);
       if(erroConjunto){alert(erroConjunto);return}
       if(this.draft.configuracao_conjunto.camisa.grades?.length)this.draft.quantidade=this.totalComponenteConjunto('camisa');

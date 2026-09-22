@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  validarModeloOp2, op2AlternarMultisselecao, op2ResumoMultisselecao,
+  validarValorUnitarioOp2, validarModeloOp2, op2AlternarMultisselecao, op2ResumoMultisselecao,
   op2EstruturaPadraoNaoMultipla, op2NormalizarUidsItens,
   op2NovaConfiguracaoConjunto, op2CopiarCamisaParaCalcao,
   op2EspelharGradeCamisaNoCalcao,
@@ -169,6 +169,15 @@ test('conjunto exige duas fichas completas com totais iguais', () => {
   assert.equal(validarConjuntoOp2(configuracao, opcoes), '');
   configuracao.calcao.gradePorGrade[1][9] = 1;
   assert.match(validarConjuntoOp2(configuracao, opcoes), /mesmo total/);
+});
+
+test('valor por conjunto vazio é recusado do mesmo jeito que o valor unitário', () => {
+  for (const valor of ['', null, undefined, '-1', 'NaN', 'abc']) {
+    assert.match(validarValorUnitarioOp2(valor, 'Valor por conjunto'), /Valor por conjunto/);
+  }
+  for (const valor of [0, '0', '85.00', 20.9]) {
+    assert.equal(validarValorUnitarioOp2(valor, 'Valor por conjunto'), '');
+  }
 });
 
 test('conjunto pode ser incluído antes de definir a grade', () => {

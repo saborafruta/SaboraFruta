@@ -1,9 +1,15 @@
 // Regra compartilhada pelos editores de criação e edição da OP/orçamento.
-function validarModeloOp2(draft, grupos) {
-  const valor = String(draft.valor_unitario ?? '').trim();
+function validarValorUnitarioOp2(valorUnitario, rotulo) {
+  const valor = String(valorUnitario ?? '').trim();
   if (!/^(?:\d+|\d*\.\d{1,2})$/.test(valor) || Number(valor) < 0 || Number(valor) > 9999999999.99) {
-    return 'Valor unitário: informe zero ou um valor positivo, com até duas casas decimais.';
+    return `${rotulo || 'Valor unitário'}: informe zero ou um valor positivo, com até duas casas decimais.`;
   }
+  return '';
+}
+
+function validarModeloOp2(draft, grupos) {
+  const erroValor = validarValorUnitarioOp2(draft.valor_unitario);
+  if (erroValor) return erroValor;
   const grupo = grupos[draft.estrutura_tipo];
   if (!grupo) return 'Selecione um tipo de peça válido.';
   for (const [campo, opcoes] of Object.entries(grupo.campos)) {
@@ -270,7 +276,7 @@ function validarConjuntoOp2(configuracao, grupos) {
 }
 
 if (typeof module !== 'undefined') module.exports = {
-  validarModeloOp2, op2AlternarMultisselecao, op2ListaMultisselecao,
+  validarValorUnitarioOp2, validarModeloOp2, op2AlternarMultisselecao, op2ListaMultisselecao,
   op2MultisselecaoContem, op2ResumoMultisselecao,
   op2CampoMultisselecao, op2NormalizarUidsItens,
   op2EstruturaPadraoNaoMultipla,
