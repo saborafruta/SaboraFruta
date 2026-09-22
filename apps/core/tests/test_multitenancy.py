@@ -341,6 +341,58 @@ class MultitenancyFoundationTests(TestCase):
         self.assertNotIn('filial_ativa_id', request.session)
         self.assertEqual(request.session['auth_database_alias'], 'default')
 
+    def test_filial_middleware_sincroniza_segmento_do_diretorio_central_pro_tenant(self):
+        self.empresa.segmento = 'padarias'
+        self.empresa.modulos_extras = ['moda']
+        self.empresa.save(update_fields=['segmento', 'modulos_extras'])
+        empresa_tenant = SimpleNamespace(pk=self.empresa.pk, segmento='', modulos_extras=[])
+        request = RequestFactory().get('/dashboard/')
+        request.tenant_db_alias = self.banco.db_alias
+        request.selected_tenant_db_alias = self.banco.db_alias
+
+        using_real = Empresa.objects.using
+        tenant_queryset = MagicMock()
+        with patch(
+            'apps.core.middleware.filial.Empresa.objects.using',
+            side_effect=lambda alias: using_real('default') if alias == 'default' else tenant_queryset,
+        ):
+            FilialMiddleware._sincronizar_vertical_empresa(request, empresa_tenant)
+
+        tenant_queryset.filter.assert_called_once_with(pk=self.empresa.pk)
+        tenant_queryset.filter.return_value.update.assert_called_once_with(
+            segmento='padarias', modulos_extras=['moda'],
+        )
+        self.assertEqual(empresa_tenant.segmento, 'padarias')
+        self.assertEqual(empresa_tenant.modulos_extras, ['moda'])
+
+    def test_filial_middleware_nao_regrava_quando_ja_sincronizado(self):
+        self.empresa.segmento = 'padarias'
+        self.empresa.save(update_fields=['segmento'])
+        empresa_tenant = SimpleNamespace(pk=self.empresa.pk, segmento='padarias', modulos_extras=[])
+        request = RequestFactory().get('/dashboard/')
+        request.tenant_db_alias = self.banco.db_alias
+        request.selected_tenant_db_alias = self.banco.db_alias
+
+        using_real = Empresa.objects.using
+        tenant_queryset = MagicMock()
+        with patch(
+            'apps.core.middleware.filial.Empresa.objects.using',
+            side_effect=lambda alias: using_real('default') if alias == 'default' else tenant_queryset,
+        ):
+            FilialMiddleware._sincronizar_vertical_empresa(request, empresa_tenant)
+
+        tenant_queryset.filter.assert_not_called()
+
+    def test_filial_middleware_ignora_sincronizacao_fora_de_contexto_de_tenant(self):
+        empresa_local = SimpleNamespace(pk=self.empresa.pk, segmento='', modulos_extras=[])
+        request = RequestFactory().get('/dashboard/')
+        request.tenant_db_alias = None
+
+        with patch('apps.core.middleware.filial.EmpresaBanco.objects') as banco_objects:
+            FilialMiddleware._sincronizar_vertical_empresa(request, empresa_local)
+
+        banco_objects.using.assert_not_called()
+
     @override_settings(
         TENANT_DATABASE_ROUTING_ENABLED=True,
         TENANT_PUBLIC_LINK_ROUTING_READY=True,

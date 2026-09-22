@@ -11,7 +11,7 @@ from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse
 
-from apps.core.models import EmpresaBanco, Filial
+from apps.core.models import Empresa, EmpresaBanco, Filial
 from apps.core.services.modulos import modulo_da_url, modulos_ativos
 from apps.core.services.home import nome_rota_inicial
 from apps.core.tenant_registry import register_tenant_database
@@ -74,6 +74,42 @@ class FilialMiddleware:
         except (EmpresaBanco.DoesNotExist, Filial.DoesNotExist):
             return None, True
 
+    @staticmethod
+    def _sincronizar_vertical_empresa(request, empresa):
+        """
+        Segmento e modulos_extras sao definidos pela Central Administrativa
+        no diretorio central, mas uma empresa com banco proprio guarda sua
+        propria copia da linha Empresa -- o bootstrap so' copiou uma vez, na
+        criacao do tenant. Sem isso, mudar o vertical pela Central nunca
+        chega pro usuario logado no tenant: o menu fica preso no segmento de
+        quando o banco foi provisionado.
+
+        O pk da Empresa no tenant nao identifica a mesma empresa no diretorio
+        central -- bancos independentes reaproveitam a faixa de PKs (ver
+        `_filial_central_do_tenant` acima). A ligacao correta e' o
+        EmpresaBanco do alias ativo, que guarda o empresa_id central.
+        """
+        alias = getattr(request, 'tenant_db_alias', None)
+        if not alias or empresa is None:
+            return
+        tenant_registro_alias = getattr(request, 'selected_tenant_db_alias', None) or alias
+        try:
+            banco = EmpresaBanco.objects.using('default').get(
+                db_alias=tenant_registro_alias, ativo=True, status=EmpresaBanco.Status.ATIVO,
+            )
+            central = Empresa.objects.using('default').only(
+                'segmento', 'modulos_extras',
+            ).get(pk=banco.empresa_id)
+        except (EmpresaBanco.DoesNotExist, Empresa.DoesNotExist):
+            return
+        if empresa.segmento == central.segmento and empresa.modulos_extras == central.modulos_extras:
+            return
+        Empresa.objects.using(alias).filter(pk=empresa.pk).update(
+            segmento=central.segmento, modulos_extras=central.modulos_extras,
+        )
+        empresa.segmento = central.segmento
+        empresa.modulos_extras = central.modulos_extras
+
     def __call__(self, request):
         request.filial_ativa = None
 
@@ -115,6 +151,7 @@ class FilialMiddleware:
             request.session.pop('filial_ativa_id', None)
             return redirect('core:selecionar-filial')
 
+        self._sincronizar_vertical_empresa(request, filial.empresa)
         request.filial_ativa = filial
         request.user._perfil_ativo = request.user.perfil_para_filial(filial)
 
