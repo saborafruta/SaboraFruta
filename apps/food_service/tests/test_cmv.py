@@ -4,7 +4,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.core.models import Empresa, Filial, Permissao, PerfilAcesso, Usuario
 
 
 class CmvViewTests(TestCase):
@@ -37,6 +37,37 @@ class CmvViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Controle de CMV')
         self.assertContains(response, 'Nenhuma venda no período.')
+
+    def test_admin_ve_atalhos_para_cadastrar_prato_e_ficha_tecnica(self):
+        response = self.client.get(reverse('food_service:cmv'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse('produtos:produto-create'))
+        self.assertContains(response, reverse('producao:ficha-create'))
+        self.assertContains(response, 'Novo prato (produto)')
+        self.assertContains(response, 'Nova ficha técnica (custo)')
+
+    def test_usuario_sem_permissao_nao_ve_atalhos_de_cadastro(self):
+        perfil_sem_permissao = PerfilAcesso.objects.create(
+            empresa=self.empresa, nome='Garçom', is_admin=False,
+        )
+        Permissao.objects.create(
+            perfil=perfil_sem_permissao, modulo=Permissao.Modulo.FOOD_SERVICE, pode_ver=True,
+        )
+        operador = Usuario.objects.create_user(
+            email='garcom@inoovated.com', nome='Garçom Teste', password='teste1234',
+            empresa=self.empresa, filial=self.filial, perfil=perfil_sem_permissao,
+        )
+        self.client.force_login(operador)
+        session = self.client.session
+        session['filial_ativa_id'] = self.filial.pk
+        session.save()
+
+        response = self.client.get(reverse('food_service:cmv'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Novo prato (produto)')
+        self.assertNotContains(response, 'Nova ficha técnica (custo)')
 
     def test_pagina_sem_vendas_com_meta_informada_nao_quebra(self):
         response = self.client.get(reverse('food_service:cmv'), {'meta_cmv': '30'})

@@ -34,4 +34,11 @@ class CmvView(PermissaoRequiredMixin, View):
             'data_inicio': data_inicio,
             'data_fim': data_fim,
             'meta_cmv_percentual': meta_cmv_percentual,
+            # O CMV depende do prato existir como Produto e ter uma Ficha
+            # Técnica ativa (apps.producao) com o custo dos ingredientes --
+            # sem isso o relatorio fica sempre zerado, mesmo com vendas.
+            # Atalhos aqui evitam o usuario ter que procurar essas telas em
+            # outro modulo pra' entender por que a pagina esta' vazia.
+            'pode_cadastrar_produto': request.user.tem_permissao('produtos', 'criar'),
+            'pode_criar_ficha_tecnica': request.user.tem_permissao('producao', 'criar'),
         })

@@ -5,13 +5,31 @@
 {% block content %}
 <div class="max-w-7xl mx-auto space-y-5">
 
-  <div>
-    <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      <a href="{% url 'food_service:painel' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Painel de Mesas</a>
-      <span class="mx-1">›</span> Controle de CMV
-    </p>
-    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Controle de CMV</h2>
-    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Custo da mercadoria vendida, margem e lucro do período — por prato e por categoria.</p>
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        <a href="{% url 'food_service:painel' %}" :style="temaClaro ? 'color:#3b82f6;' : 'color:#60a5fa;'">Painel de Mesas</a>
+        <span class="mx-1">›</span> Controle de CMV
+      </p>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Controle de CMV</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Custo da mercadoria vendida, margem e lucro do período — por prato e por categoria.</p>
+    </div>
+    {% if pode_cadastrar_produto or pode_criar_ficha_tecnica %}
+    <div class="flex flex-wrap gap-2">
+      {% if pode_cadastrar_produto %}
+      <a href="{% url 'produtos:produto-create' %}" class="btn-secondary">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Novo prato (produto)
+      </a>
+      {% endif %}
+      {% if pode_criar_ficha_tecnica %}
+      <a href="{% url 'producao:ficha-create' %}" class="btn-secondary">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Nova ficha técnica (custo)
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
   </div>
 
   <form method="get" class="card flex flex-wrap gap-4 items-end">
@@ -164,6 +182,23 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
             </svg>
             <p :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">Nenhuma venda no período.</p>
+            {% if pode_cadastrar_produto or pode_criar_ficha_tecnica %}
+            <p class="text-xs mt-2 max-w-sm mx-auto" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">O CMV so' aparece depois que o prato e' vendido. Se ainda nao tem os pratos cadastrados com o custo (ficha tecnica), comece por aqui:</p>
+            <div class="flex flex-wrap justify-center gap-2 mt-3">
+              {% if pode_cadastrar_produto %}
+              <a href="{% url 'produtos:produto-create' %}" class="btn-secondary">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                Novo prato (produto)
+              </a>
+              {% endif %}
+              {% if pode_criar_ficha_tecnica %}
+              <a href="{% url 'producao:ficha-create' %}" class="btn-secondary">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Nova ficha técnica (custo)
+              </a>
+              {% endif %}
+            </div>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}
