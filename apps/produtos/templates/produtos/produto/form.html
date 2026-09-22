@@ -1195,7 +1195,7 @@
     {% endfor %}
   {% endif %}
 
-  <div class="produto-tour-backdrop" x-show="tourActive" x-cloak @keydown.escape.window="stopTour()"></div>
+  <div class="produto-tour-backdrop" x-show="tourActive" x-cloak @keydown.escape.window="stopTour()" @click="stopTour()"></div>
   <div
     class="produto-tour-highlight" x-show="tourActive" x-cloak
     :style="`top:${tourRect.top}px; left:${tourRect.left}px; width:${tourRect.width}px; height:${tourRect.height}px;`"
@@ -1410,7 +1410,14 @@
         const entry = this.tourSteps[this.tourIndex];
         if (!entry) return;
         const el = document.querySelector(entry.target);
-        if (!el) { this.tourRect = { top: 0, left: 0, width: 0, height: 0 }; return; }
+        if (!el) {
+          // Alvo do passo nao existe no DOM (secao ainda nao renderizada,
+          // layout diferente etc.) -- sem isso o backdrop cheio de tela
+          // (que bloqueia clique fora do tour) ficava travado sem o cartao
+          // do tour nunca aparecer pra' explicar ou deixar sair.
+          this.stopTour();
+          return;
+        }
         el.scrollIntoView({ block: 'center', behavior: 'auto' });
         window.requestAnimationFrame(() => {
           const rect = el.getBoundingClientRect();
