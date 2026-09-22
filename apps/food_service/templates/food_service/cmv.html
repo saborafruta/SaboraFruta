@@ -3,7 +3,7 @@
 {% block page_title %}{{ title }}{% endblock %}
 
 {% block content %}
-<div class="max-w-5xl mx-auto space-y-5">
+<div class="max-w-7xl mx-auto space-y-5">
 
   <div>
     <p class="text-sm mb-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
@@ -62,7 +62,7 @@
   </div>
   {% endif %}
 
-  <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
     <div class="card">
       <div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide" :style="temaClaro ? 'color:#94a3b8;' : 'color:#64748b;'">
         <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V6m0 10v2m9-8a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -125,6 +125,7 @@
     Lucro líquido subtrai as despesas operacionais pagas no financeiro (contas a pagar categorizadas como despesa) — a precisão depende do plano de contas estar bem categorizado.</span>
   </p>
 
+  <div class="grid lg:grid-cols-2 gap-5 items-start">
   <div class="card overflow-hidden">
     <div class="flex items-center gap-2 px-4 pt-4">
       <svg class="w-4 h-4 flex-shrink-0" :style="temaClaro ? 'color:#6b7280;' : 'color:#9ca3af;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -210,6 +211,7 @@
         {% endfor %}
       </tbody>
     </table>
+  </div>
   </div>
 </div>
 {% endblock %}
