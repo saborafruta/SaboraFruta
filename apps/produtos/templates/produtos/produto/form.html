@@ -386,11 +386,12 @@
     .produto-specs-head { display: none; }
     .produto-spec-row { grid-template-columns: 1fr; }
     .produto-spec-row .produto-icon-btn { width: 100%; }
-    .produto-footer { width: max-content; max-width: 100%; margin-left: auto; flex-direction: row; align-items: center; padding: .28rem; gap: .32rem; }
-    .produto-footer > .flex { gap: .25rem; }
+    .produto-footer { width: 100%; max-width: 100%; margin-left: 0; flex-direction: column; align-items: stretch; padding: .5rem; gap: .45rem; }
+    .produto-footer > .flex { width: 100%; gap: .25rem; }
     .produto-footer-stage { min-height: 27px; font-size: .74rem; padding: 0 .34rem; }
-    .produto-footer .actions { display: flex; flex-wrap: nowrap; gap: .28rem; }
-    .produto-btn { min-height: 27px; padding: .28rem .48rem; font-size: .78rem; }
+    .produto-footer .actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; }
+    .produto-footer .actions .produto-btn { width: 100%; min-width: 0; }
+    .produto-btn { min-height: 36px; padding: .38rem .5rem; font-size: .78rem; }
     .produto-progress span { width: 5px; height: 3px; }
     .produto-log-overlay { align-items: stretch; place-items: stretch; padding: 0; }
     .produto-log-modal { width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; }
@@ -577,7 +578,7 @@
     </div>
   {% endif %}
 
-  <form method="post" enctype="multipart/form-data" novalidate x-data="{ loading: false }" @submit="loading = true">
+  <form id="produto-form-principal" method="post" enctype="multipart/form-data" novalidate @submit="loading = true">
     {% csrf_token %}
 
     <nav class="produto-stepper mb-4" aria-label="Etapas do produto">
@@ -1005,6 +1006,7 @@
         </div>
       </div>
     </section>
+  </form>
 
     <section x-show="step === 8" class="produto-grid" x-cloak>
       {% if not produto %}
@@ -1142,17 +1144,6 @@
           </div>
         </div>
 
-        <div class="produto-footer" style="margin-top:.75rem;">
-          <div class="produto-footer-stage">
-            <strong>Concluir cadastro do produto</strong>
-          </div>
-          <div class="actions flex flex-wrap justify-end gap-3">
-            <button type="submit" class="produto-btn primary" :disabled="loading">
-              <span x-show="!loading">Salvar produto</span>
-              <span x-show="loading" x-cloak>Salvando...</span>
-            </button>
-          </div>
-        </div>
       {% endif %}
     </section>
 
@@ -1169,18 +1160,13 @@
         <button type="button" class="produto-btn secondary" x-show="step > 1" @click="previous()">Etapa anterior</button>
         <a href="{{ cancel_url }}" class="produto-btn secondary" x-show="step === 1">Sair</a>
         <button type="button" class="produto-btn primary" x-show="step < 7" @click="next()">Proximo</button>
-        <button type="submit" class="produto-btn primary" x-show="step < 7" :disabled="loading">
-          <span x-show="!loading">{{ submit_text|default:"Salvar produto" }}</span>
-          <span x-show="loading" x-cloak>Salvando...</span>
-        </button>
-        <button type="submit" class="produto-btn primary" x-show="step === 7" :disabled="loading">
+        <button type="submit" form="produto-form-principal" class="produto-btn primary" :disabled="loading">
           <span x-show="!loading">{{ submit_text|default:"Salvar produto" }}</span>
           <span x-show="loading" x-cloak>Salvando...</span>
         </button>
         <button type="button" class="produto-btn secondary" x-show="step === 8" @click="step = 7">Ver dados do produto</button>
       </div>
     </div>
-  </form>
   {% if produto and vinculos_fornecedor %}
     {% for vinculo in vinculos_fornecedor %}
       <form id="produto-vinculo-delete-{{ vinculo.pk }}" method="post" action="{% url 'produtos:produto-fornecedor-vinculo-delete' produto.pk vinculo.pk %}">
@@ -1339,6 +1325,7 @@
     const subcategoriasPorCategoria = {{ subcategorias_form_json|default:"{}"|safe }};
     return {
       step: 1,
+      loading: false,
       steps: [
         { id: 1, label: 'Identificacao', hasError: errorSteps.includes(1) },
         { id: 2, label: 'Industrial', hasError: errorSteps.includes(2) },

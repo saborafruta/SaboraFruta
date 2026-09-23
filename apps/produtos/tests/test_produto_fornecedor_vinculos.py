@@ -274,6 +274,20 @@ class ProdutoFornecedorVinculoTests(TestCase):
         self.assertContains(response, '7891234567890')
         self.assertIn(f'produto-vinculo-delete-{vinculo.pk}', html)
 
+    def test_edicao_exibe_botao_salvar_vinculado_ao_form_principal(self):
+        produto = self.criar_produto()
+
+        response = ProdutoUpdateView.as_view()(self.request(), pk=produto.pk)
+
+        html = response.content.decode()
+        inicio_formulario = html.index('<form id="produto-form-principal"')
+        fim_formulario = html.index('</form>', inicio_formulario)
+        inicio_apresentacoes = html.index('<section x-show="step === 8"')
+        self.assertLess(fim_formulario, inicio_apresentacoes)
+        self.assertIn('type="submit" form="produto-form-principal"', html)
+        self.assertContains(response, 'Salvar produto')
+        self.assertIn('grid-template-columns: repeat(2, minmax(0, 1fr))', html)
+
     def test_cadastro_do_produto_abre_mesmo_se_vinculos_falharem(self):
         produto = self.criar_produto()
 
