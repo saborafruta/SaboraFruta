@@ -5157,6 +5157,12 @@ function pdv() {
     },
 
     adicionarItem(produto) {
+      const quantidadeBalanca = Number(produto?.quantidade_balanca || produto?.leitura_balanca?.quantidade || 0);
+      if (Number.isFinite(quantidadeBalanca) && quantidadeBalanca > 0) {
+        const oferta = { ...this.ofertaCatalogo(produto), quantidade: quantidadeBalanca };
+        this._pushItem(produto, oferta);
+        return;
+      }
       const precos = produto.ofertas || produto.todos_precos || [];
       const promocoes = precos.filter(p => this.temPromocao(p));
       // Preço normal/tabela não conta como promoção. Condições de quantidade exigem escolha.

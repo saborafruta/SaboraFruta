@@ -27,6 +27,7 @@ from apps.produtos.models import (
     UnidadeMedida,
     UnidadeMedidaFilial,
 )
+from apps.produtos.services.codigo_barras_service import calcular_digito_verificador_ean13
 
 
 class CheckoutVendaTests(TestCase):
@@ -335,6 +336,15 @@ assert.equal(checkout.podeFinalizar, true);
 checkout.valorPagamentoEntrada = '40,00';
 assert.equal(checkout.faltaPagamento, 10);
 assert.equal(checkout.podeFinalizar, false);
+checkout.quantidadeEntrada = '9';
+checkout.adicionarProduto({
+  id: 8, descricao: 'Produto pesado', preco: 18.9, pode_vender: true,
+  quantidade_step: 0.001, quantidade_decimais: 3,
+  quantidade_balanca: 0.65,
+  leitura_balanca: {quantidade: 0.65, valor_total: 12.29}
+});
+assert.equal(checkout.itens[1].quantidade, 0.65);
+assert.equal(checkout.quantidadeEntrada, '1');
 '''
 
         resultado = subprocess.run(
@@ -451,6 +461,47 @@ assert.deepEqual(acoes, [
         self.assertEqual(self.buscar('Café Especial').json()['produtos'], [])
         self.assertEqual(self.buscar('CAF').json()['produtos'], [])
         self.assertEqual(self.buscar('SOMENTE-OUTRA-FILIAL').json()['produtos'], [])
+
+    def test_etiqueta_da_balanca_encontra_plu_e_informa_quantidade_no_checkout_e_pdv(self):
+        self.habilitar_checkout()
+        self.produto.codigo_balanca = '1'
+        self.produto.gera_etiqueta_balanca = True
+        self.produto.vendido_por_peso_granel = True
+        self.produto.save(update_fields=[
+            'codigo_balanca', 'gera_etiqueta_balanca', 'vendido_por_peso_granel',
+        ])
+        base = '20' + '00001' + '01229'  # PLU 1, total R$ 12,29; a R$ 18,90/kg = 0,650 kg.
+        codigo = base + calcular_digito_verificador_ean13(base)
+
+        checkout = self.buscar(codigo)
+        pdv = self.client.get(reverse('pdv:api_produtos'), {'q': codigo})
+
+        self.assertEqual(checkout.status_code, 200, checkout.content)
+        self.assertEqual(pdv.status_code, 200, pdv.content)
+        for resposta in (checkout, pdv):
+            produto = resposta.json()['produtos'][0]
+            self.assertEqual(produto['id'], self.produto.pk)
+            self.assertEqual(produto['quantidade_balanca'], 0.65)
+            self.assertEqual(produto['leitura_balanca']['plu'], '1')
+            self.assertEqual(produto['leitura_balanca']['valor_total'], 12.29)
+
+    def test_etiqueta_da_balanca_respeita_configuracao_de_peso(self):
+        self.habilitar_checkout()
+        self.parametros.balanca_ean_conteudo = 'peso'
+        self.parametros.save(update_fields=['balanca_ean_conteudo'])
+        self.produto.codigo_balanca = '1'
+        self.produto.gera_etiqueta_balanca = True
+        self.produto.vendido_por_peso_granel = True
+        self.produto.save(update_fields=[
+            'codigo_balanca', 'gera_etiqueta_balanca', 'vendido_por_peso_granel',
+        ])
+        base = '20' + '00001' + '00650'
+        codigo = base + calcular_digito_verificador_ean13(base)
+
+        produto = self.buscar(codigo).json()['produtos'][0]
+
+        self.assertEqual(produto['quantidade_balanca'], 0.65)
+        self.assertEqual(produto['leitura_balanca']['conteudo'], 'peso')
 
     def test_busca_por_nome_aparece_para_operador_sem_aprovacao_mas_exige_autorizacao(self):
         self.habilitar_checkout()

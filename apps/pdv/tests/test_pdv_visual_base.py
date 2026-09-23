@@ -35,6 +35,12 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn('Math.max(zoomMinimo, 1.6)', template)
         self.assertIn('fps: 12', template)
 
+    def test_pdv_aplica_quantidade_decodificada_da_etiqueta_da_balanca(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+
+        self.assertIn('produto?.quantidade_balanca', template)
+        self.assertIn('quantidade: quantidadeBalanca', template)
+
     def test_modal_pos_venda_permanece_aberto_ate_pular_com_f10(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
 

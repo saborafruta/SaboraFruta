@@ -48,7 +48,10 @@ def _parametros_checkout(request):
         return (
             ParametrosSistema.objects.using(DEFAULT_DB_ALIAS)
             .filter(filial_id=filial_central_id)
-            .only('checkout_venda_ativo')
+            .only(
+                'checkout_venda_ativo', 'balanca_ean_prefixo',
+                'balanca_ean_plu_digitos', 'balanca_ean_conteudo',
+            )
             .first()
         )
 
@@ -56,7 +59,10 @@ def _parametros_checkout(request):
     return (
         ParametrosSistema.objects.using(database_alias)
         .filter(filial_id=filial.pk)
-        .only('checkout_venda_ativo')
+        .only(
+            'checkout_venda_ativo', 'balanca_ean_prefixo',
+            'balanca_ean_plu_digitos', 'balanca_ean_conteudo',
+        )
         .first()
     )
 
@@ -65,6 +71,16 @@ def checkout_venda_ativo(request) -> bool:
     """Retorna a flag salva pela Central para a filial ativa."""
     parametros = _parametros_checkout(request)
     return bool(parametros and parametros.checkout_venda_ativo)
+
+
+def configuracao_ean_balanca(request) -> dict:
+    """Retorna a composição da etiqueta Prix/MGV7 configurada para a filial."""
+    parametros = _parametros_checkout(request)
+    return {
+        'prefixo': getattr(parametros, 'balanca_ean_prefixo', None) or '20',
+        'plu_digitos': getattr(parametros, 'balanca_ean_plu_digitos', None) or 5,
+        'conteudo': getattr(parametros, 'balanca_ean_conteudo', None) or 'preco_total',
+    }
 
 
 def _escopo_busca_nome(request) -> str:

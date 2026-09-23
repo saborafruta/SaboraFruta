@@ -32,6 +32,7 @@ from apps.core.services.checkout import (
     encerrar_checkout_busca_nome,
     usuarios_autorizadores_checkout,
     validar_autorizador_checkout_busca_nome,
+    configuracao_ean_balanca,
 )
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
 from apps.core.tenant_context import tenant_atomic
@@ -78,6 +79,11 @@ from apps.produtos.models import (
     PromocaoQuantidade,
 )
 from apps.produtos.services.preco_service import PrecoService
+from apps.produtos.services.codigo_balanca_service import (
+    CodigoBalancaInvalido,
+    calcular_leitura_etiqueta,
+    decodificar_ean_balanca,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -107,6 +113,49 @@ def _cliente_precificacao(request, cliente_id=None):
         .filter(pk=cliente_id, ativo=True)
         .first()
     )
+
+
+def _resolver_etiqueta_balanca(request, produtos_base, codigo):
+    """Resolve uma etiqueta de peso pelo PLU sem confundi-la com EAN comum."""
+    configuracao = configuracao_ean_balanca(request)
+    try:
+        dados = decodificar_ean_balanca(
+            codigo,
+            prefixo=configuracao['prefixo'],
+            plu_digitos=configuracao['plu_digitos'],
+        )
+    except CodigoBalancaInvalido:
+        return None
+
+    plu_preenchido = dados.plu.zfill(int(configuracao['plu_digitos']))
+    candidatos = list(
+        produtos_base.filter(
+            gera_etiqueta_balanca=True,
+            codigo_balanca__in={dados.plu, plu_preenchido, dados.plu.zfill(6)},
+        ).select_related('linha_producao')[:3]
+    )
+    candidatos = [
+        produto for produto in candidatos
+        if str(int(produto.codigo_balanca or '0')) == dados.plu
+    ]
+    if len(candidatos) != 1:
+        return None
+    produto = candidatos[0]
+    try:
+        leitura = calcular_leitura_etiqueta(
+            produto,
+            dados,
+            conteudo=configuracao['conteudo'],
+        )
+    except CodigoBalancaInvalido:
+        return None
+    return produto, {
+        'codigo': dados.codigo,
+        'plu': dados.plu,
+        'conteudo': leitura.conteudo,
+        'quantidade': float(leitura.quantidade),
+        'valor_total': float(leitura.valor_total),
+    }
 
 
 def _cliente_endereco_preferencial(cliente):
@@ -463,6 +512,7 @@ def checkout_buscar_produto(request):
         return JsonResponse({'produtos': []})
 
     produtos_base = Produto.objects.for_filial(request.filial_ativa).filter(ativo=True)
+    leitura_balanca = None
     if por_nome:
         produtos = list(
             filter_queryset_by_terms(
@@ -511,19 +561,28 @@ def checkout_buscar_produto(request):
                 .select_related('linha_producao')
                 [:20 - len(produtos)]
             )
+        if not produtos:
+            resolvida = _resolver_etiqueta_balanca(request, produtos_base, termo)
+            if resolvida:
+                produto, leitura_balanca = resolvida
+                produtos = [produto]
 
     cliente = _cliente_precificacao(request)
     contexto = _preparar_contexto_ofertas(produtos, request.filial_ativa)
+    produtos_serializados = []
+    for produto in produtos:
+        payload = _serializa_produto(
+            produto,
+            request.filial_ativa,
+            cliente=cliente,
+            contexto_ofertas=contexto,
+        )
+        if leitura_balanca and produto.pk == produtos[0].pk:
+            payload['leitura_balanca'] = leitura_balanca
+            payload['quantidade_balanca'] = leitura_balanca['quantidade']
+        produtos_serializados.append(payload)
     return JsonResponse({
-        'produtos': [
-            _serializa_produto(
-                produto,
-                request.filial_ativa,
-                cliente=cliente,
-                contexto_ofertas=contexto,
-            )
-            for produto in produtos
-        ],
+        'produtos': produtos_serializados,
         'busca_por_nome': por_nome,
     })
 
@@ -627,6 +686,7 @@ def buscar_produto(request):
     if linha_id:
         qs = qs.filter(linha_producao_id=linha_id)
 
+    leitura_balanca = None
     if q:
         base_qs = qs
         qs = filter_queryset_by_terms(
@@ -661,6 +721,12 @@ def buscar_produto(request):
             for produto in qs.filter(pk__in=ranked_ids).select_related('linha_producao')
         }
         produtos = [products_by_id[pk] for pk in ranked_ids if pk in products_by_id]
+        if not produtos and pagina == 1:
+            resolvida = _resolver_etiqueta_balanca(request, base_qs, q)
+            if resolvida:
+                produto, leitura_balanca = resolvida
+                produtos = [produto]
+                tem_mais = False
     else:
         ids_paginados = list(qs.order_by('descricao').values_list('pk', flat=True)[inicio:fim + 1])
         tem_mais = len(ids_paginados) > tamanho_pagina
@@ -688,7 +754,7 @@ def buscar_produto(request):
             contexto=contexto_ofertas,
         )
 
-        data.append({
+        payload = {
             "id": p.id, "descricao": p.descricao_pdv or p.descricao,
             "codigo_barras": p.codigo_barras,
             "tipo_produto": p.tipo_produto,
@@ -722,7 +788,11 @@ def buscar_produto(request):
             "ofertas": ofertas,
             # Compatibilidade com clientes ainda esperando o nome antigo.
             "todos_precos": ofertas,
-        })
+        }
+        if leitura_balanca and p.pk == produtos[0].pk:
+            payload['leitura_balanca'] = leitura_balanca
+            payload['quantidade_balanca'] = leitura_balanca['quantidade']
+        data.append(payload)
     return JsonResponse({
         "produtos": data,
         "pagina": pagina,
