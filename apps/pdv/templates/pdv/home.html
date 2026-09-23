@@ -727,8 +727,18 @@
   .scanner-head { display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px; }
   .scanner-head strong { color:var(--pdv-t1);font-size:15px; }
   .scanner-close { width:36px;height:36px;border:1px solid var(--pdv-bd);border-radius:8px;background:transparent;color:var(--pdv-t2);font-size:22px;cursor:pointer; }
-  #pdv-camera-reader { width:100%;min-height:260px;overflow:hidden;border-radius:8px;background:#050508; }
-  #pdv-camera-reader video { width:100% !important;border-radius:8px; }
+  .scanner-reader-wrap { position:relative;overflow:hidden;border-radius:10px;background:#050508; }
+  #pdv-camera-reader { width:100%;min-height:260px;overflow:hidden;border-radius:10px;background:#050508; }
+  #pdv-camera-reader video { width:100% !important;min-height:260px;object-fit:cover;border-radius:10px; }
+  .scanner-guide { position:absolute;z-index:5;left:9%;right:9%;top:50%;height:2px;border-radius:999px;background:#ef4444;box-shadow:0 0 5px #ef4444,0 0 13px rgba(239,68,68,.85);pointer-events:none;animation:scanner-guide-move 1.8s ease-in-out infinite alternate; }
+  .scanner-guide::before,.scanner-guide::after { content:"";position:absolute;top:-7px;width:18px;height:14px;border-top:2px solid #ef4444; }
+  .scanner-guide::before { left:0;border-left:2px solid #ef4444; }
+  .scanner-guide::after { right:0;border-right:2px solid #ef4444; }
+  @keyframes scanner-guide-move { from { transform:translateY(-24px); } to { transform:translateY(24px); } }
+  .scanner-actions { display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px; }
+  .scanner-status { margin:0;color:var(--pdv-t3);font-size:12px;line-height:1.4; }
+  .scanner-torch { display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:8px 12px;border:1px solid rgba(250,204,21,.45);border-radius:9px;background:rgba(250,204,21,.10);color:#fde047;font:800 12px/1 inherit;cursor:pointer;white-space:nowrap; }
+  .scanner-torch.is-on { background:#facc15;color:#422006;border-color:#fde047; }
   .scanner-help { margin:10px 0 0;color:var(--pdv-t3);font-size:12px;line-height:1.45; }
   .scanner-error { margin-top:10px;color:#f87171;font-size:12px; }
 
@@ -2356,8 +2366,20 @@
         <strong>Aponte para o codigo de barras</strong>
         <button type="button" class="scanner-close" @click="fecharScanner()" aria-label="Fechar">&times;</button>
       </div>
-      <div id="pdv-camera-reader"></div>
-      <p class="scanner-help">Mantenha o codigo centralizado e com boa iluminacao.</p>
+      <div class="scanner-reader-wrap">
+        <div id="pdv-camera-reader"></div>
+        <div class="scanner-guide" x-show="scannerAtivo" aria-hidden="true"></div>
+      </div>
+      <div class="scanner-actions">
+        <p class="scanner-status" x-text="scannerStatus"></p>
+        <button type="button" class="scanner-torch" :class="{'is-on':scannerTorchLigada}"
+                x-show="scannerTorchDisponivel" @click="alternarScannerTorch()"
+                :aria-pressed="scannerTorchLigada.toString()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 2h6l1 5-2 3v11h-4V10L8 7l1-5Zm1 8h4"/></svg>
+          <span x-text="scannerTorchLigada ? 'Desligar luz' : 'Ligar luz'"></span>
+        </button>
+      </div>
+      <p class="scanner-help">Alinhe as listras do EAN com a linha vermelha. Para QR Code, centralize o quadrado e aproxime devagar.</p>
       <p class="scanner-error" x-show="scannerErro" x-text="scannerErro"></p>
     </section>
   </div>
@@ -3977,9 +3999,13 @@ function pdv() {
     mobilePane: 'catalogo',
     showScanner: false,
     scannerErro: '',
+    scannerStatus: 'Preparando a camera...',
     scannerAtivo: false,
+    scannerTorchDisponivel: false,
+    scannerTorchLigada: false,
     _scanner: null,
     _scannerScript: null,
+    _scannerTrack: null,
     _ultimoCodigoCamera: '',
     tabAtiva: 'todos', linhaAtiva: null,
 
@@ -4896,34 +4922,102 @@ function pdv() {
       if (window.Html5Qrcode) return Promise.resolve();
       if (this._scannerScript) return this._scannerScript;
       this._scannerScript = new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
-        script.onload = resolve;
-        script.onerror = () => reject(new Error('Falha ao carregar leitor de camera'));
-        document.head.appendChild(script);
+        const urls = [
+          'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
+          'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js',
+        ];
+        const tentar = (indice) => {
+          if (indice >= urls.length) { reject(new Error('Falha ao carregar leitor de camera')); return; }
+          const script = document.createElement('script');
+          script.src = urls[indice];
+          script.async = true;
+          script.onload = resolve;
+          script.onerror = () => { script.remove(); tentar(indice + 1); };
+          document.head.appendChild(script);
+        };
+        tentar(0);
       });
+      this._scannerScript.catch(() => { this._scannerScript = null; });
       return this._scannerScript;
+    },
+
+    _formatosScanner() {
+      const formatos = window.Html5QrcodeSupportedFormats || {};
+      return [
+        formatos.EAN_13, formatos.EAN_8, formatos.UPC_A, formatos.UPC_E,
+        formatos.CODE_128, formatos.CODE_39, formatos.CODE_93,
+        formatos.ITF, formatos.CODABAR, formatos.QR_CODE,
+      ].filter(formato => formato !== undefined);
+    },
+
+    _configurarTorchScanner() {
+      const video = document.querySelector('#pdv-camera-reader video');
+      this._scannerTrack = video?.srcObject?.getVideoTracks?.()[0] || null;
+      const capacidades = this._scannerTrack?.getCapabilities?.() || {};
+      this.scannerTorchDisponivel = capacidades.torch === true;
+      this.scannerTorchLigada = false;
+    },
+
+    async alternarScannerTorch() {
+      if (!this._scannerTrack || !this.scannerTorchDisponivel) return;
+      const ligar = !this.scannerTorchLigada;
+      try {
+        await this._scannerTrack.applyConstraints({ advanced: [{ torch: ligar }] });
+        this.scannerTorchLigada = ligar;
+      } catch (_) {
+        this.scannerTorchDisponivel = false;
+        this.scannerErro = 'A luz desta camera nao pode ser controlada pelo navegador.';
+      }
     },
 
     async abrirScanner() {
       this.scannerErro = '';
+      this.scannerStatus = 'Preparando a camera...';
+      this.scannerTorchDisponivel = false;
+      this.scannerTorchLigada = false;
       this.showScanner = true;
       this.mobilePane = 'catalogo';
       try {
         await this._carregarScannerLib();
         await this.$nextTick();
-        this._scanner = new window.Html5Qrcode('pdv-camera-reader');
+        const formatos = this._formatosScanner();
+        this._scanner = new window.Html5Qrcode('pdv-camera-reader', { formatsToSupport: formatos, verbose: false });
+        const cameras = await window.Html5Qrcode.getCameras();
+        if (!cameras.length) throw new Error('NotFoundError');
+        const cameraTraseira = cameras.find(camera => /back|rear|environment|traseira/i.test(camera.label || ''));
+        const camera = cameraTraseira?.id || cameras[cameras.length - 1].id;
         await this._scanner.start(
-          { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 280, height: 130 }, aspectRatio: 1.7778 },
+          camera,
+          {
+            fps: 20,
+            aspectRatio: 1.7778,
+            disableFlip: true,
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+            qrbox: (largura, altura) => ({
+              width: Math.max(220, Math.floor(Math.min(largura * .88, 430))),
+              height: Math.max(100, Math.floor(Math.min(altura * .38, 180))),
+            }),
+          },
           decodedText => this.processarCodigoCamera(decodedText),
           () => {}
         );
         this.scannerAtivo = true;
+        this.scannerStatus = 'Leitor pronto';
+        this.$nextTick(() => this._configurarTorchScanner());
       } catch (error) {
-        this.scannerErro = location.protocol !== 'https:'
-          ? 'A camera exige acesso por HTTPS.'
-          : 'Nao foi possivel abrir a camera. Autorize o acesso e tente novamente.';
+        const erro = String(error?.name || error?.message || error || '');
+        if (location.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(location.hostname)) {
+          this.scannerErro = 'A camera exige acesso por HTTPS.';
+        } else if (/NotAllowed|Permission|permiss/i.test(erro)) {
+          this.scannerErro = 'Permita o acesso a camera nas configuracoes do navegador e tente novamente.';
+        } else if (/NotFound|DevicesNotFound/i.test(erro)) {
+          this.scannerErro = 'Nenhuma camera compativel foi encontrada neste aparelho.';
+        } else if (/NotReadable|TrackStart|in use|ocupad/i.test(erro)) {
+          this.scannerErro = 'A camera esta em uso por outro aplicativo. Feche-o e tente novamente.';
+        } else {
+          this.scannerErro = 'Nao foi possivel iniciar o leitor. Verifique a conexao e tente novamente.';
+        }
+        this.scannerStatus = 'Leitor indisponivel';
         this.scannerAtivo = false;
       }
     },
@@ -4932,6 +5026,12 @@ function pdv() {
       const scanner = this._scanner;
       this._scanner = null;
       this.scannerAtivo = false;
+      if (this.scannerTorchLigada && this._scannerTrack) {
+        try { await this._scannerTrack.applyConstraints({ advanced: [{ torch: false }] }); } catch (_) {}
+      }
+      this._scannerTrack = null;
+      this.scannerTorchDisponivel = false;
+      this.scannerTorchLigada = false;
       if (scanner) {
         try { if (scanner.isScanning) await scanner.stop(); } catch (_) {}
         try { await scanner.clear(); } catch (_) {}

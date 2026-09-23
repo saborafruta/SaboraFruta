@@ -1,0 +1,93 @@
+{% extends "_base.html" %}
+
+{% block title %}Carga para balança — ERP iNoovaTed{% endblock %}
+{% block page_title %}Carga para balança{% endblock %}
+
+{% block content %}
+<style>
+  .balanca-page { width:min(1180px,100%); margin:0 auto; display:grid; gap:1rem; }
+  .balanca-head,.balanca-card { border:1px solid rgba(148,163,184,.2); border-radius:16px; background:#242426; }
+  body.tema-claro .balanca-head,body.tema-claro .balanca-card { background:#fff; border-color:#e2e8f0; }
+  .balanca-head { display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.1rem 1.2rem; }
+  .balanca-head h1 { margin:0;color:#f8fafc;font-size:1.15rem;font-weight:950; }
+  body.tema-claro .balanca-head h1 { color:#0f172a; }
+  .balanca-head p { margin:.25rem 0 0;color:#94a3b8;font-size:.84rem;line-height:1.45; }
+  .balanca-actions { display:flex;flex-wrap:wrap;gap:.55rem; }
+  .balanca-button { display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:.55rem .9rem;border-radius:10px;border:1px solid #3b82f6;background:#2563eb;color:#fff;text-decoration:none;font-size:.83rem;font-weight:900; }
+  .balanca-button.secondary { background:transparent;border-color:rgba(148,163,184,.35);color:#cbd5e1; }
+  body.tema-claro .balanca-button.secondary { color:#334155;border-color:#cbd5e1; }
+  .balanca-button.disabled { opacity:.45;pointer-events:none; }
+  .balanca-summary { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem;padding:1rem; }
+  .balanca-metric { padding:.8rem;border-radius:12px;background:rgba(15,23,42,.3); }
+  body.tema-claro .balanca-metric { background:#f8fafc; }
+  .balanca-metric span { display:block;color:#94a3b8;font-size:.68rem;font-weight:900;text-transform:uppercase;letter-spacing:.07em; }
+  .balanca-metric strong { display:block;margin-top:.2rem;color:#f8fafc;font-size:1.25rem; }
+  body.tema-claro .balanca-metric strong { color:#0f172a; }
+  .balanca-table-wrap { overflow:auto; }
+  .balanca-table { width:100%;min-width:700px;border-collapse:collapse; }
+  .balanca-table th,.balanca-table td { padding:.75rem .9rem;border-top:1px solid rgba(148,163,184,.15);text-align:left;font-size:.8rem; }
+  .balanca-table th { color:#94a3b8;font-size:.68rem;text-transform:uppercase;letter-spacing:.06em; }
+  .balanca-table td { color:#e5e7eb; }
+  body.tema-claro .balanca-table td { color:#1e293b; }
+  .balanca-table a { color:#60a5fa;font-weight:850;text-decoration:none; }
+  .balanca-ok,.balanca-error { display:inline-flex;border-radius:999px;padding:.2rem .5rem;font-size:.7rem;font-weight:900; }
+  .balanca-ok { background:rgba(34,197,94,.14);color:#86efac; }
+  .balanca-error { background:rgba(239,68,68,.14);color:#fca5a5; }
+  body.tema-claro .balanca-ok { background:#dcfce7;color:#15803d; }
+  body.tema-claro .balanca-error { background:#fee2e2;color:#b91c1c; }
+  .balanca-note { margin:0;padding:1rem 1.2rem;color:#94a3b8;font-size:.8rem;line-height:1.5; }
+  .balanca-empty { padding:2rem;text-align:center;color:#94a3b8; }
+  @media(max-width:700px){ .balanca-head{align-items:stretch;flex-direction:column}.balanca-actions>*{flex:1}.balanca-summary{grid-template-columns:1fr} }
+</style>
+
+<div class="balanca-page">
+  <header class="balanca-head">
+    <div>
+      <h1>Produtos para balança Prix / MGV7</h1>
+      <p>Confira os produtos marcados e baixe o arquivo de carga <strong>Itensmgv.txt</strong>.</p>
+    </div>
+    <div class="balanca-actions">
+      <a class="balanca-button secondary" href="{% url 'produtos:produto-list' %}">Voltar aos produtos</a>
+      <a class="balanca-button{% if not itens or total_pendencias or not pode_exportar %} disabled{% endif %}"
+         href="{% url 'produtos:balanca-download' %}"
+         {% if not itens or total_pendencias or not pode_exportar %}aria-disabled="true"{% endif %}>Baixar Itensmgv.txt</a>
+    </div>
+  </header>
+
+  <section class="balanca-card">
+    <div class="balanca-summary">
+      <div class="balanca-metric"><span>Produtos marcados</span><strong>{{ total_produtos }}</strong></div>
+      <div class="balanca-metric"><span>Pendências</span><strong>{{ total_pendencias }}</strong></div>
+      <div class="balanca-metric"><span>Formato</span><strong>MGV7</strong></div>
+    </div>
+    {% if itens %}
+      <div class="balanca-table-wrap">
+        <table class="balanca-table">
+          <thead><tr><th>PLU</th><th>Produto</th><th>Tipo</th><th>Preço</th><th>Situação</th></tr></thead>
+          <tbody>
+          {% for item in itens %}
+            <tr>
+              <td>{{ item.produto.codigo_balanca|default:"—" }}</td>
+              <td><a href="{% url 'produtos:produto-update' item.produto.pk %}?step=6">{{ item.produto.descricao }}</a></td>
+              <td>{{ item.tipo_balanca }}</td>
+              <td>R$ {{ item.produto.preco_venda|floatformat:2 }}</td>
+              <td>
+                {% if item.pendencias %}
+                  <span class="balanca-error">{{ item.pendencias|join:" • " }}</span>
+                {% else %}
+                  <span class="balanca-ok">Pronto para exportar</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="balanca-empty">Nenhum produto foi marcado como “Produto de balança”.</div>
+    {% endif %}
+    <p class="balanca-note">O arquivo usa o departamento padrão 01 e o layout básico de itens aceito pelo MGV7. Importe-o no MGV7 e, em seguida, envie a carga às balanças da loja.</p>
+    {% if not pode_exportar %}<p class="balanca-note">Seu perfil pode consultar esta tela, mas precisa da permissão de exportação de produtos para baixar o arquivo.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

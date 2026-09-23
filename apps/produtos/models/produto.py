@@ -202,7 +202,8 @@ class Produto(FilialScopedModel):
         max_length=20, choices=TipoProduto.choices, default=TipoProduto.UNITARIO,
     )
     codigo_balanca = models.CharField(
-        max_length=5, blank=True, help_text='Codigo para balanca (4-5 digitos)',
+        max_length=6, blank=True,
+        help_text='PLU numerico usado na balanca (de 1 a 6 digitos)',
     )
     tara_padrao = models.DecimalField(
         max_digits=10, decimal_places=3, default=0,
@@ -218,7 +219,11 @@ class Produto(FilialScopedModel):
     unidade_pesagem = models.CharField(
         max_length=10, choices=UnidadePeso.choices, default=UnidadePeso.KG,
     )
-    gera_etiqueta_balanca = models.BooleanField(default=False)
+    gera_etiqueta_balanca = models.BooleanField(
+        default=False,
+        verbose_name='Produto de balanca',
+        help_text='Inclui o produto no arquivo de carga para balancas Prix/MGV7.',
+    )
 
     # Precos
     preco_custo = models.DecimalField(max_digits=14, decimal_places=4, default=0)
