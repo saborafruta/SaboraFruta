@@ -667,9 +667,11 @@
       {% url 'estoque:ajuste-rapido' as ajuste_estoque_url %}
 
       {% url 'compras:entrada-list' as compras_url %}
+      {% url 'compras:cotacao-list' as cotacoes_compras_url %}
       {% url 'estoque:sugestao-compras' as sugestao_compras_url %}
       {% url 'estoque:equilibrio-estoque' as equilibrio_estoque_url %}
       {% url 'estoque:outras-mov-hub' as outras_mov_url %}
+      {% url 'estoque:deposito-list' as depositos_url %}
       {% url 'lotes:dashboard' as lotes_url %}
 
       {% if filial_ativa and filial_ativa.imagem %}
@@ -844,6 +846,16 @@
         Compras
       </a>
 
+      <a href="{{ cotacoes_compras_url }}" @click="mobileOpen = false"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :style="{% if cotacoes_compras_url in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
+         title="Cotações de Compra">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5h6M9 9h6m-8 4h10m-8 4h6M5 3h14v18H5V3z"/>
+        </svg>
+        Cotações de Compra
+      </a>
+
       <a href="{{ sugestao_compras_url }}" @click="mobileOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :style="{% if '/estoque/sugestao-compras' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
@@ -872,6 +884,16 @@
         Outras Mov.
       </a>
 
+      <a href="{{ depositos_url }}" @click="mobileOpen = false"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :style="{% if '/estoque/depositos' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
+         title="Depósitos">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5m14 0h2m-2 0V11a2 2 0 00-2-2H9a2 2 0 00-2 2v10"/>
+        </svg>
+        Depósitos
+      </a>
+
 
       <a href="{{ lotes_url }}" @click="mobileOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
@@ -881,6 +903,16 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
         </svg>
         Lotes
+      </a>
+
+      <a href="{% url 'lotes:alertas' %}" @click="mobileOpen = false"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :style="{% if '/lotes/alertas' in request.path %}temaClaro ? 'background:#fee2e2; color:#dc2626; font-weight:600;' : 'background:#3a1a1a; color:#fca5a5;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
+         title="Alertas de Vencimento">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 00-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1"/>
+        </svg>
+        Alertas de Validade
       </a>
 
       {% url 'mapas:mapa' as mapas_url %}
@@ -960,6 +992,7 @@
       {% url 'pdv:home' as pdv_url %}
       {% url 'pdv:checkout' as checkout_url %}
       {% url 'pdv:delivery' as delivery_url %}
+      {% url 'pdv:pre_venda_nova' as pre_venda_url %}
       {% url 'fiscal:consultas-cnpj' as fiscal_consultas_url %}
       {% url 'qualidade:analise_list' as qualidade_url %}
       {% url 'analytics:operacional' as analytics_url %}
@@ -1246,6 +1279,16 @@
         Delivery
       </a>
 
+      <a href="{{ pre_venda_url }}" @click="mobileOpen = false"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :style="{% if '/pdv/pre-venda/' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
+         title="Pré-venda — vendedor externo">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a4 4 0 10-4-4"/>
+        </svg>
+        Pré-venda
+      </a>
+
       <a href="{{ qualidade_url }}" @click="mobileOpen = false"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :style="{% if '/qualidade/' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
@@ -1275,6 +1318,21 @@
         </svg>
         Histórico de Vendas
       </a>
+
+      {% if user.is_superuser or user.perfil.is_admin %}
+      <div class="pt-4 pb-1 px-3">
+        <span :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">Sistema</span>
+      </div>
+      <a href="{% url 'core:admin_parametros' %}" @click="mobileOpen = false"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :style="{% if '/gestao/parametros/' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
+         title="Parâmetros">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6V4m0 16v-2m8-6h-2M6 12H4m12.95 4.95l-1.414-1.414M8.464 8.464L7.05 7.05m9.9 0l-1.414 1.414M8.464 15.536L7.05 16.95M12 15a3 3 0 100-6 3 3 0 000 6z"/>
+        </svg>
+        Parâmetros
+      </a>
+      {% endif %}
       </div><!-- /avancado -->
       {% endif %}
 
