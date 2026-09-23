@@ -1,4 +1,5 @@
 import json
+import re
 from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
@@ -140,6 +141,19 @@ class MenuFavoritosViewTests(SimpleTestCase):
 
 
 class MenuFavoritosTemplateTests(SimpleTestCase):
+    def test_menu_mobile_possui_as_mesmas_rotas_nomeadas_do_desktop(self):
+        raiz = Path(__file__).resolve().parents[1]
+        sidebar = (raiz / 'templates' / 'core' / '_sidebar.html').read_text(
+            encoding='utf-8',
+        )
+        desktop = (
+            raiz / 'templates' / 'core' / '_sidebar_navigation.html'
+        ).read_text(encoding='utf-8')
+        mobile = sidebar.split('<!-- Nav mobile -->', 1)[1].split('</nav>', 1)[0]
+        pattern = re.compile(r"{%\s*url\s+['\"]([^'\"]+)")
+
+        self.assertSetEqual(set(pattern.findall(mobile)), set(pattern.findall(desktop)))
+
     def test_sidebar_carrega_favoritos_no_desktop_e_celular(self):
         raiz = Path(__file__).resolve().parents[1]
         template = (raiz / 'templates' / 'core' / '_sidebar.html').read_text(encoding='utf-8')
