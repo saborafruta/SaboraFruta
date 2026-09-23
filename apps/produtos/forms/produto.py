@@ -202,12 +202,12 @@ class ProdutoForm(forms.ModelForm):
             'lead_time_reposicao_dias': 'Lead time de reposicao (dias)',
             'metodo_saida': 'Metodo de saida',
             'dias_aviso_vencimento': 'Dias para alerta de vencimento',
-            'codigo_balanca': 'Codigo da balanca',
+            'codigo_balanca': 'PLU / Codigo da balanca',
             'tara_padrao': 'Tara padrao (kg)',
             'peso_minimo_venda': 'Peso minimo de venda (kg)',
             'fracionavel': 'Produto fracionado',
             'vendido_por_peso_granel': 'Produto vendido por peso / granel',
-            'gera_etiqueta_balanca': 'Gera etiqueta de balanca',
+            'gera_etiqueta_balanca': 'Produto de balanca',
             'profundidade': 'Comprimento',
             'tipo_embalagem': 'Tipo de embalagem',
             'quantidade_por_embalagem': 'Quantidade por embalagem',
@@ -221,6 +221,12 @@ class ProdutoForm(forms.ModelForm):
             'descricao': forms.TextInput(attrs={'placeholder': 'Digite o nome do produto'}),
             'codigo': forms.TextInput(attrs={'placeholder': 'Ex.: REF-00123'}),
             'codigo_barras': forms.TextInput(attrs={'placeholder': 'EAN-13', 'maxlength': '14'}),
+            'codigo_balanca': forms.TextInput(attrs={
+                'placeholder': 'Ex.: 1234',
+                'maxlength': '6',
+                'inputmode': 'numeric',
+                'pattern': '[0-9]*',
+            }),
             'descricao_curta': forms.TextInput(attrs={'placeholder': 'Resumo do produto para identificacao rapida', 'maxlength': '120'}),
             'descricao_completa': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Descricao completa do produto'}),
             'observacao': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Informacoes internas sobre o produto'}),
@@ -257,6 +263,7 @@ class ProdutoForm(forms.ModelForm):
     def __init__(self, *args, empresa=None, filial=None, estoque_atual=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.empresa = empresa
+        self.filial = filial
         if estoque_atual is not None:
             self.fields['estoque_quantidade'].initial = estoque_atual
         self.fields['estoque_quantidade'].widget.attrs.update({
@@ -606,6 +613,22 @@ class ProdutoForm(forms.ModelForm):
                 raise forms.ValidationError(
                     'Produto granel requer codigo de balanca.'
                 )
+
+        codigo_balanca = str(cleaned.get('codigo_balanca') or '').strip()
+        produto_balanca = bool(cleaned.get('gera_etiqueta_balanca'))
+        cleaned['codigo_balanca'] = codigo_balanca
+        if produto_balanca:
+            if not codigo_balanca:
+                self.add_error('codigo_balanca', 'Informe o PLU para enviar o produto a balanca.')
+            elif not codigo_balanca.isdigit() or int(codigo_balanca) <= 0:
+                self.add_error('codigo_balanca', 'O PLU deve conter apenas numeros e ser maior que zero.')
+            elif self.filial and Produto.objects.for_filial(self.filial).filter(
+                gera_etiqueta_balanca=True,
+                codigo_balanca=codigo_balanca,
+            ).exclude(pk=getattr(self.instance, 'pk', None)).exists():
+                self.add_error('codigo_balanca', 'Este PLU ja esta sendo usado por outro produto de balanca nesta filial.')
+            if (cleaned.get('preco_venda') or Decimal('0')) <= 0:
+                self.add_error('preco_venda', 'Produto de balanca precisa ter preco de venda maior que zero.')
 
         for field_name, value in list(cleaned.items()):
             if value is not None:

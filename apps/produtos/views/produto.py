@@ -44,6 +44,12 @@ from apps.produtos.models import (
     ProdutoFornecedorEquivalencia, UnidadeMedida,
 )
 from apps.produtos.services.codigo_barras_service import gerar_codigo_barras_unico
+from apps.produtos.services.mgv7_export import (
+    ErroExportacaoMGV7,
+    gerar_itensmgv,
+    produto_vendido_por_peso_mgv7,
+    validar_produto_mgv7,
+)
 from apps.produtos.services.replicacao_service import ReplicacaoProdutoService
 
 
@@ -2538,6 +2544,72 @@ class ProdutoExportPdfView(PermissaoRequiredMixin, View):
             _produto_queryset_filtrado(request, usar_flag_mostrar_inativos=True),
             empresa_operacional(request),
         )
+
+
+class ProdutoBalancaExportView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'produtos'
+    permissao_acao = 'ver'
+    template_name = 'produtos/produto/balanca_export.html'
+
+    def _produtos(self, request):
+        return list(
+            _produtos_filial_qs(request)
+            .filter(gera_etiqueta_balanca=True)
+            .order_by('codigo_balanca', 'descricao')
+        )
+
+    def get(self, request):
+        produtos = self._produtos(request)
+        plus = {}
+        itens = []
+        total_pendencias = 0
+        for produto in produtos:
+            pendencias = validar_produto_mgv7(produto)
+            if produto.codigo_balanca and produto.codigo_balanca.isdigit():
+                plu = str(int(produto.codigo_balanca))
+                if plu in plus:
+                    pendencias.append(f'PLU repetido com {plus[plu]}.')
+                else:
+                    plus[plu] = produto.descricao
+            total_pendencias += len(pendencias)
+            itens.append({
+                'produto': produto,
+                'pendencias': pendencias,
+                'tipo_balanca': 'Peso' if produto_vendido_por_peso_mgv7(produto) else 'Unidade',
+            })
+        return render(request, self.template_name, {
+            'itens': itens,
+            'total_produtos': len(produtos),
+            'total_pendencias': total_pendencias,
+            'pode_exportar': _usuario_pode_exportar(request),
+        })
+
+
+class ProdutoBalancaDownloadView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'produtos'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        if not _usuario_pode_exportar(request):
+            messages.error(request, 'Seu perfil nao tem permissao para exportar produtos.')
+            return redirect('produtos:balanca-export')
+        produtos = list(
+            _produtos_filial_qs(request)
+            .filter(gera_etiqueta_balanca=True)
+            .order_by('codigo_balanca', 'descricao')
+        )
+        if not produtos:
+            messages.warning(request, 'Marque pelo menos um produto como Produto de balanca.')
+            return redirect('produtos:balanca-export')
+        try:
+            conteudo = gerar_itensmgv(produtos)
+        except ErroExportacaoMGV7 as exc:
+            messages.error(request, f'Corrija as pendencias antes de exportar: {exc}')
+            return redirect('produtos:balanca-export')
+        response = HttpResponse(conteudo, content_type='text/plain; charset=us-ascii')
+        response['Content-Disposition'] = 'attachment; filename="Itensmgv.txt"'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
 
 
 # Entradas em que o vínculo do item ainda pode ser desfeito. É O MESMO

@@ -21,7 +21,7 @@
 
 // Mude esta versao sempre que o casco visual global mudar. Isso impede que
 // um F5 reutilize CSS antigo e mostre por um instante a geometria anterior.
-const VERSAO = 'erp-v8-pdv-watchdog';
+const VERSAO = 'erp-v9-pdv-scanner';
 const CACHE_ESTATICO = `estatico-${VERSAO}`;
 const PDV_OFFLINE_SHELL = '/static/pdv-offline.html?v=20260918-5';
 
@@ -59,6 +59,7 @@ self.addEventListener('activate', (evento) => {
 function ehEstatico(url) {
   return url.pathname.startsWith('/static/')
     || url.hostname === 'unpkg.com'
+    || url.hostname === 'cdn.jsdelivr.net'
     || url.hostname === 'fonts.googleapis.com'
     || url.hostname === 'fonts.gstatic.com';
 }

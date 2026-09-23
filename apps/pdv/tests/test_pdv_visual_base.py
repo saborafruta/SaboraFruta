@@ -8,6 +8,20 @@ from django.test import SimpleTestCase
 
 
 class PDVVisualBaseTests(SimpleTestCase):
+    def test_scanner_mobile_prioriza_ean_e_oferece_lanterna_compativel(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+
+        for formato in ['EAN_13', 'EAN_8', 'UPC_A', 'CODE_128', 'ITF', 'QR_CODE']:
+            self.assertIn(f'formatos.{formato}', template)
+        self.assertIn('Html5Qrcode.getCameras()', template)
+        self.assertIn('useBarCodeDetectorIfSupported: true', template)
+        self.assertIn('scanner-guide', template)
+        self.assertIn('scannerTorchDisponivel', template)
+        self.assertIn("applyConstraints({ advanced: [{ torch: ligar }] })", template)
+        self.assertIn('cdn.jsdelivr.net/npm/html5-qrcode@2.3.8', template)
+        service_worker = (Path(__file__).resolve().parents[3] / 'static/sw.js').read_text(encoding='utf-8')
+        self.assertIn("url.hostname === 'cdn.jsdelivr.net'", service_worker)
+
     def test_modal_pos_venda_permanece_aberto_ate_pular_com_f10(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
 
