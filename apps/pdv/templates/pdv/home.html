@@ -4006,6 +4006,8 @@ function pdv() {
     _scanner: null,
     _scannerScript: null,
     _scannerTrack: null,
+    _scannerZoom: null,
+    _scannerVideoConstraints: null,
     _ultimoCodigoCamera: '',
     tabAtiva: 'todos', linhaAtiva: null,
 
@@ -4945,24 +4947,106 @@ function pdv() {
       const formatos = window.Html5QrcodeSupportedFormats || {};
       return [
         formatos.EAN_13, formatos.EAN_8, formatos.UPC_A, formatos.UPC_E,
-        formatos.CODE_128, formatos.CODE_39, formatos.CODE_93,
-        formatos.ITF, formatos.CODABAR, formatos.QR_CODE,
+        formatos.CODE_128, formatos.ITF, formatos.QR_CODE,
       ].filter(formato => formato !== undefined);
     },
 
-    _configurarTorchScanner() {
+    _selecionarCameraScanner(cameras) {
+      const dispositivos = Array.isArray(cameras) ? cameras : [];
+      const traseiras = dispositivos.filter(camera => (
+        /back|rear|environment|traseira|posterior/i.test(camera.label || '')
+      ));
+      const lentePrincipal = traseiras.find(camera => (
+        !/ultra[ -]?wide|ultrawide|0[,.]5|telephoto|telefoto|macro/i.test(camera.label || '')
+      ));
+      if (lentePrincipal?.id) return lentePrincipal.id;
+      if (traseiras[0]?.id) return traseiras[0].id;
+      // No Safari/iOS os nomes podem vir vazios. Nesse caso, deixar o proprio
+      // navegador escolher a lente traseira e mais seguro do que usar a ultima
+      // camera da lista (que frequentemente e a frontal ou a ultrawide).
+      return { facingMode: { ideal: 'environment' } };
+    },
+
+    async _aplicarRestricaoScanner(restricoes) {
+      try {
+        if (this._scanner?.applyVideoConstraints) {
+          await this._scanner.applyVideoConstraints(restricoes);
+        } else if (this._scannerTrack?.applyConstraints) {
+          await this._scannerTrack.applyConstraints(restricoes);
+        } else {
+          return false;
+        }
+        return true;
+      } catch (_) {
+        return false;
+      }
+    },
+
+    async _otimizarCameraScanner() {
       const video = document.querySelector('#pdv-camera-reader video');
       this._scannerTrack = video?.srcObject?.getVideoTracks?.()[0] || null;
       const capacidades = this._scannerTrack?.getCapabilities?.() || {};
       this.scannerTorchDisponivel = capacidades.torch === true;
       this.scannerTorchLigada = false;
+
+      let restricoesAtuais = {};
+      const larguraMaxima = Number(capacidades.width?.max || 0);
+      const alturaMaxima = Number(capacidades.height?.max || 0);
+      if (larguraMaxima || alturaMaxima) {
+        const restricoesResolucao = {
+          width: { ideal: larguraMaxima ? Math.min(larguraMaxima, 1920) : 1920 },
+          height: { ideal: alturaMaxima ? Math.min(alturaMaxima, 1080) : 1080 },
+        };
+        if (await this._aplicarRestricaoScanner(restricoesResolucao)) {
+          restricoesAtuais = restricoesResolucao;
+        }
+      }
+
+      const modosFoco = Array.isArray(capacidades.focusMode) ? capacidades.focusMode : [];
+      if (modosFoco.includes('continuous')) {
+        const restricoesFoco = {
+          ...restricoesAtuais,
+          advanced: [{ focusMode: 'continuous' }],
+        };
+        if (await this._aplicarRestricaoScanner(restricoesFoco)) {
+          restricoesAtuais = restricoesFoco;
+        }
+      }
+
+      const zoomMinimo = Number(capacidades.zoom?.min);
+      const zoomMaximo = Number(capacidades.zoom?.max);
+      if (Number.isFinite(zoomMinimo) && Number.isFinite(zoomMaximo) && zoomMaximo > zoomMinimo) {
+        const zoomDesejado = Math.min(zoomMaximo, Math.max(zoomMinimo, 1.6));
+        if (zoomDesejado > zoomMinimo) {
+          const avancadaAtual = restricoesAtuais.advanced?.[0] || {};
+          const restricoesZoom = {
+            ...restricoesAtuais,
+            advanced: [{ ...avancadaAtual, zoom: zoomDesejado }],
+          };
+          if (await this._aplicarRestricaoScanner(restricoesZoom)) {
+            restricoesAtuais = restricoesZoom;
+            this._scannerZoom = Number(this._scannerTrack?.getSettings?.().zoom || zoomDesejado);
+          }
+        }
+      }
+      this._scannerVideoConstraints = restricoesAtuais;
+      this.scannerStatus = this._scannerZoom
+        ? `Leitor pronto • aproximação ${this._scannerZoom.toLocaleString('pt-BR', {maximumFractionDigits:1})}x`
+        : 'Leitor pronto';
     },
 
     async alternarScannerTorch() {
       if (!this._scannerTrack || !this.scannerTorchDisponivel) return;
       const ligar = !this.scannerTorchLigada;
       try {
-        await this._scannerTrack.applyConstraints({ advanced: [{ torch: ligar }] });
+        const configuracaoAtual = this._scannerVideoConstraints || {};
+        const avancadaAtual = configuracaoAtual.advanced?.[0] || {};
+        const configuracao = {
+          ...configuracaoAtual,
+          advanced: [{ ...avancadaAtual, torch: ligar }],
+        };
+        await this._scannerTrack.applyConstraints(configuracao);
+        this._scannerVideoConstraints = configuracao;
         this.scannerTorchLigada = ligar;
       } catch (_) {
         this.scannerTorchDisponivel = false;
@@ -4975,6 +5059,8 @@ function pdv() {
       this.scannerStatus = 'Preparando a camera...';
       this.scannerTorchDisponivel = false;
       this.scannerTorchLigada = false;
+      this._scannerZoom = null;
+      this._scannerVideoConstraints = null;
       this.showScanner = true;
       this.mobilePane = 'catalogo';
       try {
@@ -4984,26 +5070,25 @@ function pdv() {
         this._scanner = new window.Html5Qrcode('pdv-camera-reader', { formatsToSupport: formatos, verbose: false });
         const cameras = await window.Html5Qrcode.getCameras();
         if (!cameras.length) throw new Error('NotFoundError');
-        const cameraTraseira = cameras.find(camera => /back|rear|environment|traseira/i.test(camera.label || ''));
-        const camera = cameraTraseira?.id || cameras[cameras.length - 1].id;
+        const camera = this._selecionarCameraScanner(cameras);
         await this._scanner.start(
           camera,
           {
-            fps: 20,
+            fps: 12,
             aspectRatio: 1.7778,
             disableFlip: true,
             experimentalFeatures: { useBarCodeDetectorIfSupported: true },
             qrbox: (largura, altura) => ({
-              width: Math.max(220, Math.floor(Math.min(largura * .88, 430))),
-              height: Math.max(100, Math.floor(Math.min(altura * .38, 180))),
+              width: Math.max(220, Math.floor(Math.min(largura * .94, 520))),
+              height: Math.max(96, Math.floor(Math.min(altura * .32, 150))),
             }),
           },
           decodedText => this.processarCodigoCamera(decodedText),
           () => {}
         );
         this.scannerAtivo = true;
-        this.scannerStatus = 'Leitor pronto';
-        this.$nextTick(() => this._configurarTorchScanner());
+        await this.$nextTick();
+        await this._otimizarCameraScanner();
       } catch (error) {
         const erro = String(error?.name || error?.message || error || '');
         if (location.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(location.hostname)) {
@@ -5030,6 +5115,8 @@ function pdv() {
         try { await this._scannerTrack.applyConstraints({ advanced: [{ torch: false }] }); } catch (_) {}
       }
       this._scannerTrack = null;
+      this._scannerZoom = null;
+      this._scannerVideoConstraints = null;
       this.scannerTorchDisponivel = false;
       this.scannerTorchLigada = false;
       if (scanner) {

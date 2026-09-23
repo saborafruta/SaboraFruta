@@ -17,10 +17,23 @@ class PDVVisualBaseTests(SimpleTestCase):
         self.assertIn('useBarCodeDetectorIfSupported: true', template)
         self.assertIn('scanner-guide', template)
         self.assertIn('scannerTorchDisponivel', template)
-        self.assertIn("applyConstraints({ advanced: [{ torch: ligar }] })", template)
+        self.assertIn('torch: ligar', template)
+        self.assertIn('applyConstraints(configuracao)', template)
         self.assertIn('cdn.jsdelivr.net/npm/html5-qrcode@2.3.8', template)
         service_worker = (Path(__file__).resolve().parents[3] / 'static/sw.js').read_text(encoding='utf-8')
         self.assertIn("url.hostname === 'cdn.jsdelivr.net'", service_worker)
+
+    def test_scanner_otimiza_distancia_foco_resolucao_e_lente_principal(self):
+        template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
+
+        self.assertIn("return { facingMode: { ideal: 'environment' } };", template)
+        self.assertIn('ultra[ -]?wide|ultrawide', template)
+        self.assertNotIn('cameras[cameras.length - 1].id', template)
+        self.assertIn("focusMode: 'continuous'", template)
+        self.assertIn('Math.min(larguraMaxima, 1920)', template)
+        self.assertIn('Math.min(alturaMaxima, 1080)', template)
+        self.assertIn('Math.max(zoomMinimo, 1.6)', template)
+        self.assertIn('fps: 12', template)
 
     def test_modal_pos_venda_permanece_aberto_ate_pular_com_f10(self):
         template = (Path(__file__).resolve().parents[1] / 'templates/pdv/home.html').read_text(encoding='utf-8')
