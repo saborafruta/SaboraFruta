@@ -513,6 +513,10 @@ function checkoutVenda() {
     quantidadeParaProduto(produto){
       const casas=Math.max(0,Number(produto.quantidade_decimais||0));
       const minimo=Number(produto.quantidade_step||1);
+      const quantidadeBalanca=Number(produto.quantidade_balanca||produto.leitura_balanca?.quantidade||0);
+      if(Number.isFinite(quantidadeBalanca)&&quantidadeBalanca>0){
+        return casas?Number(quantidadeBalanca.toFixed(casas)):Math.max(1,Math.round(quantidadeBalanca));
+      }
       const informada=Math.max(minimo,this.numero(this.quantidadeEntrada)||minimo);
       return casas ? Number(informada.toFixed(casas)) : Math.max(1,Math.trunc(informada));
     },

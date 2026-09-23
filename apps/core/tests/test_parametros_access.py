@@ -71,6 +71,14 @@ class ParametrosSistemaAccessTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(render_mock.called)
 
+    def test_formulario_expoe_composicao_do_ean_da_balanca(self):
+        form = ParametrosSistemaForm(instance=ParametrosSistema(filial=self.filial))
+
+        self.assertIn('balanca_ean_prefixo', form.fields)
+        self.assertIn('balanca_ean_plu_digitos', form.fields)
+        self.assertIn('balanca_ean_conteudo', form.fields)
+        self.assertEqual(form.fields['balanca_ean_prefixo'].initial, '20')
+
     def test_operador_nao_acessa_parametros(self):
         request = RequestFactory().get('/gestao/parametros/')
         request.user = self.operador

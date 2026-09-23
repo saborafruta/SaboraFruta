@@ -62,6 +62,10 @@ def normalizar_layout_etiqueta_venda(valor):
 class ParametrosSistema(TimestampedModel):
     """Parâmetros gerais de uma filial (um registro por filial)."""
 
+    class ConteudoEANBalanca(models.TextChoices):
+        PRECO_TOTAL = 'preco_total', 'Preço total'
+        PESO = 'peso', 'Peso líquido'
+
     filial = models.OneToOneField(
         'core.Filial',
         on_delete=models.CASCADE,
@@ -88,6 +92,25 @@ class ParametrosSistema(TimestampedModel):
         default=False,
         verbose_name='Utilizar checkout de venda',
         help_text='Exibe o Checkout no menu desta filial. Quando desativado, a tela fica indisponível.',
+    )
+    balanca_ean_prefixo = models.CharField(
+        max_length=2,
+        default='20',
+        verbose_name='Prefixo do EAN da balança',
+        help_text='Um ou dois dígitos configurados no MGV7 para as etiquetas de peso.',
+    )
+    balanca_ean_plu_digitos = models.PositiveSmallIntegerField(
+        default=5,
+        choices=((3, '3 dígitos'), (4, '4 dígitos'), (5, '5 dígitos'), (6, '6 dígitos')),
+        verbose_name='Quantidade de dígitos do PLU',
+        help_text='Use a mesma quantidade definida em Configuração do EAN-13 no MGV7.',
+    )
+    balanca_ean_conteudo = models.CharField(
+        max_length=20,
+        choices=ConteudoEANBalanca.choices,
+        default=ConteudoEANBalanca.PRECO_TOTAL,
+        verbose_name='Conteúdo variável do EAN',
+        help_text='Informe se a etiqueta codifica o preço total ou o peso líquido.',
     )
     checkout_busca_nome_senha_hash = models.CharField(
         max_length=128,

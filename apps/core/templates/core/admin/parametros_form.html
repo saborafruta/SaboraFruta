@@ -362,6 +362,34 @@
     </div>
 
     <div class="param-card">
+      <div class="param-card-title">Código de barras da balança Prix</div>
+      <p class="param-card-sub">Use a mesma composição configurada no MGV7. Ela permite que o PDV e o Checkout encontrem o produto pelo PLU e recuperem a quantidade da etiqueta.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+        <div>
+          <label class="param-label">{{ form_params.balanca_ean_prefixo.label }}</label>
+          {{ form_params.balanca_ean_prefixo }}
+          <p class="param-card-sub mt-1">{{ form_params.balanca_ean_prefixo.help_text }}</p>
+          {% for e in form_params.balanca_ean_prefixo.errors %}<p class="param-erro">{{ e }}</p>{% endfor %}
+        </div>
+        <div>
+          <label class="param-label">{{ form_params.balanca_ean_plu_digitos.label }}</label>
+          {{ form_params.balanca_ean_plu_digitos }}
+          <p class="param-card-sub mt-1">{{ form_params.balanca_ean_plu_digitos.help_text }}</p>
+          {% for e in form_params.balanca_ean_plu_digitos.errors %}<p class="param-erro">{{ e }}</p>{% endfor %}
+        </div>
+        <div>
+          <label class="param-label">{{ form_params.balanca_ean_conteudo.label }}</label>
+          {{ form_params.balanca_ean_conteudo }}
+          <p class="param-card-sub mt-1">{{ form_params.balanca_ean_conteudo.help_text }}</p>
+          {% for e in form_params.balanca_ean_conteudo.errors %}<p class="param-erro">{{ e }}</p>{% endfor %}
+        </div>
+      </div>
+      <div class="param-help mt-4">
+        Padrão inicial recomendado: prefixo <strong>20</strong>, PLU com <strong>5 dígitos</strong> e <strong>Preço total</strong>. Se o MGV7 estiver configurado para gravar peso, altere o último campo para Peso líquido.
+      </div>
+    </div>
+
+    <div class="param-card">
       <div class="param-card-title">Endereco</div>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
         <div>

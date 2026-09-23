@@ -91,6 +91,7 @@ class ParametrosSistemaForm(forms.ModelForm):
             'email_secundario',
             'controlar_entrega_contas_receber',
             'checkout_venda_ativo',
+            'balanca_ean_prefixo', 'balanca_ean_plu_digitos', 'balanca_ean_conteudo',
             'logo_url',
             'certificado_digital', 'senha_certificado',
             'focusnfe_token_principal',
@@ -101,6 +102,9 @@ class ParametrosSistemaForm(forms.ModelForm):
         ]
         widgets = {
             'email_secundario': forms.EmailInput(attrs={'placeholder': 'contato@empresa.com.br'}),
+            'balanca_ean_prefixo': forms.TextInput(attrs={
+                'inputmode': 'numeric', 'maxlength': '2', 'placeholder': '20',
+            }),
             'logo_url': forms.URLInput(attrs={'placeholder': 'https://... (URL pública da logo)'}),
             'senha_certificado': forms.PasswordInput(
                 render_value=False,
@@ -156,6 +160,12 @@ class ParametrosSistemaForm(forms.ModelForm):
 
     def clean_nfce_csc_token(self):
         return self._segredo_ou_atual('nfce_csc_token')
+
+    def clean_balanca_ean_prefixo(self):
+        prefixo = (self.cleaned_data.get('balanca_ean_prefixo') or '').strip()
+        if len(prefixo) not in {1, 2} or not prefixo.isdigit():
+            raise forms.ValidationError('Informe um prefixo com um ou dois dígitos numéricos.')
+        return prefixo
 
     def clean_comunicador_offline_instalador(self):
         arquivo = self.cleaned_data.get('comunicador_offline_instalador')
