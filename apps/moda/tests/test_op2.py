@@ -2228,6 +2228,8 @@ class Op2Tests(TestCase):
 
     def test_imagem_do_rascunho_reabre_e_migra_para_o_produto_salvo(self):
         self._login_op2()
+        self.produto.nome = 'A' * 154
+        self.produto.save(update_fields=['nome'])
         chave = str(uuid4())
         uid_item = 'item-persistente-1'
         url_rascunho = reverse('moda:op2-rascunho')
@@ -2272,7 +2274,14 @@ class Op2Tests(TestCase):
         criado = PedidoProducao.objects.exclude(pk=self.pedido.pk).get()
         self.assertRedirects(resposta, reverse('moda:op2-detail', args=[criado.pk]))
         visual = VisualItemPedido.objects.get(item__pedido=criado)
+        anexo = ArquivoPedido.objects.get(pedido=criado)
         self.assertEqual(visual.observacoes, 'Imagem recuperada do rascunho')
+        self.assertEqual(anexo.descricao, f'Imagem · {self.produto.nome}')
+        self.assertEqual(len(anexo.descricao), 163)
+        self.assertEqual(
+            ArquivoPedido._meta.get_field('descricao').max_length,
+            500,
+        )
         self.assertTrue(visual.imagem)
         self.assertFalse(ImagemRascunhoOP.objects.exists())
         self.assertFalse(RascunhoOP.objects.filter(chave=chave).exists())
