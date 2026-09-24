@@ -332,25 +332,8 @@
       <div class="rounded-md border p-3"><span class="block text-[11px] font-semibold uppercase opacity-55">Média por lançamento</span><strong class="mt-1 block text-lg">R$ {{ despesas_pessoais_media|floatformat:2 }}</strong></div>
       <div class="rounded-md border p-3"><span class="block text-[11px] font-semibold uppercase opacity-55">Participação nas despesas</span><strong class="mt-1 block text-lg">{{ despesas_pessoais_percentual_total|floatformat:1 }}%</strong></div>
     </div>
-    <div class="mt-4 grid gap-4 xl:grid-cols-2">
-      {% include "financeiro/pagar/_grafico_pizza_despesas.html" with titulo="Despesas pessoais por subgrupo" descricao="Segundo nível das categorias pessoais" grafico=grafico_despesas_pessoais_subgrupos vazio="Nenhum subgrupo de despesa pessoal no período." %}
-      {% include "financeiro/pagar/_grafico_pizza_despesas.html" with titulo="Despesas pessoais por categoria final" descricao="Último nível informado nos lançamentos pessoais" grafico=grafico_despesas_pessoais_categorias_finais vazio="Nenhuma categoria final de despesa pessoal no período." %}
+    <div class="mt-4">
       {% include "financeiro/pagar/_grafico_pizza_despesas.html" with titulo="Despesas pessoais por beneficiário" descricao="Quem recebeu os pagamentos classificados como pessoais" grafico=grafico_despesas_pessoais_beneficiarios vazio="Nenhum beneficiário de despesa pessoal no período." %}
-    </div>
-    <div class="mt-4 rounded-lg border">
-      <div class="border-b px-4 py-3"><h4 class="text-sm font-semibold">Últimos lançamentos pessoais</h4><p class="mt-1 text-xs opacity-60">Até 10 lançamentos mais recentes dos filtros atuais.</p></div>
-      <div class="divide-y">
-        {% for conta_pessoal in despesas_pessoais_contas %}
-          <button type="button" class="grid w-full gap-2 px-4 py-3 text-left text-sm hover:bg-orange-500/5 sm:grid-cols-[100px_minmax(0,1fr)_180px_auto] sm:items-center" @click="abrirDetalhe('{% url 'financeiro:pagar_detail' conta_pessoal.pk %}')">
-            <span class="text-xs opacity-60">{{ conta_pessoal.data_pagamento|date:'d/m/Y' }}</span>
-            <span class="min-w-0"><strong class="block">{{ conta_pessoal.descricao_exibicao }}</strong><small class="opacity-55">{{ conta_pessoal.beneficiario_nome }}</small></span>
-            <span class="text-xs opacity-65">{{ conta_pessoal.plano_contas.caminho_descricao }}</span>
-            <strong class="whitespace-nowrap">R$ {{ conta_pessoal.valor_pago|floatformat:2 }}</strong>
-          </button>
-        {% empty %}
-          <p class="px-4 py-6 text-sm opacity-60">Nenhuma despesa pessoal encontrada nos filtros atuais.</p>
-        {% endfor %}
-      </div>
     </div>
   </section>
 

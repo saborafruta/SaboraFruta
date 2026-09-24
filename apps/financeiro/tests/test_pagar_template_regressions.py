@@ -75,10 +75,10 @@ class ContaPagarTemplateRegressionTests(SimpleTestCase):
         self.assertIn("grafico_subgrupos", template)
         self.assertIn("grafico_categorias_finais", template)
         self.assertIn("grafico_fornecedores", template)
-        self.assertIn("grafico_despesas_pessoais_subgrupos", template)
-        self.assertIn("grafico_despesas_pessoais_categorias_finais", template)
         self.assertIn("grafico_despesas_pessoais_beneficiarios", template)
-        self.assertIn("Últimos lançamentos pessoais", template)
+        self.assertNotIn("grafico_despesas_pessoais_subgrupos", template)
+        self.assertNotIn("grafico_despesas_pessoais_categorias_finais", template)
+        self.assertNotIn("Últimos lançamentos pessoais", template)
         self.assertIn("clique para ver o último nível", template)
 
         grafico = Path(
@@ -86,6 +86,8 @@ class ContaPagarTemplateRegressionTests(SimpleTestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("paid-donut-slice", grafico)
         self.assertIn("<title>{{ fatia.nome }}", grafico)
+        self.assertIn("grafico.total|moeda", grafico)
+        self.assertIn("fatia.valor|moeda", grafico)
         self.assertNotIn("truncate", grafico)
 
     def test_resumo_categorias_monta_os_tres_niveis_e_graficos(self):
@@ -119,7 +121,7 @@ class ContaPagarTemplateRegressionTests(SimpleTestCase):
         self.assertEqual(_limite_ranking(factory.get("/?limite=20"), "limite"), 20)
         self.assertIsNone(_limite_ranking(factory.get("/?limite=todos"), "limite"))
 
-    def test_contexto_despesas_pessoais_separa_detalhes_e_beneficiarios(self):
+    def test_contexto_despesas_pessoais_resume_por_beneficiario(self):
         grupo = SimpleNamespace(pk=1, descricao="Pessoais", conta_pai=None, conta_pai_id=None)
         subgrupo = SimpleNamespace(pk=2, descricao="Sócios", conta_pai=grupo, conta_pai_id=1)
         categoria = SimpleNamespace(
@@ -131,16 +133,10 @@ class ContaPagarTemplateRegressionTests(SimpleTestCase):
             beneficiario_nome="Sócio A", data_pagamento=None,
         )
 
-        contexto = _contexto_despesas_pessoais(
-            [conta], Decimal("1000.00"), Decimal("2000.00"),
-        )
+        contexto = _contexto_despesas_pessoais([conta], Decimal("1000.00"))
 
         self.assertEqual(contexto["despesas_pessoais_total"], Decimal("250.00"))
         self.assertEqual(contexto["despesas_pessoais_percentual_total"], Decimal("25.00"))
-        self.assertEqual(
-            contexto["grafico_despesas_pessoais_categorias_finais"]["fatias"][0]["nome"],
-            "Sócios / Retiradas",
-        )
         self.assertEqual(
             contexto["grafico_despesas_pessoais_beneficiarios"]["fatias"][0]["nome"],
             "Sócio A",

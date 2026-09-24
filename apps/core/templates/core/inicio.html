@@ -7,7 +7,7 @@
 
 {% block extra_head %}
 {{ block.super }}
-<link rel="stylesheet" href="{% static 'core/css/inicio.css' %}?v=20260924-1">
+<link rel="stylesheet" href="{% static 'core/css/inicio.css' %}?v=20260924-2">
 {% endblock %}
 
 {% block content %}
@@ -99,7 +99,7 @@
     </div>
     <div id="home-notifications" class="home-notifications">
       {% for notificacao in notificacoes_pendentes %}
-        <article class="notification-row" data-notification-id="{{ notificacao.pk }}">
+        <article class="notification-row{% if notificacao.tipo == 'moda_cliente_ajuste' %} is-critical{% endif %}" data-notification-id="{{ notificacao.pk }}">
           <span class="notification-indicator" aria-hidden="true"></span>
           <a href="{% url 'core:notificacao-abrir' notificacao.pk %}" class="notification-copy">
             <strong>{{ notificacao.titulo }}</strong>

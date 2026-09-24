@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -7,6 +8,15 @@ from apps.core.views.notificacoes import NotificacaoAbrirView, NotificacaoMarcar
 
 
 class NotificacaoAbrirViewTests(SimpleTestCase):
+    def test_alerta_de_ajuste_pulsa_vermelho_ate_confirmar_ciencia(self):
+        template = Path('apps/core/templates/core/inicio.html').read_text(encoding='utf-8')
+        estilos = Path('apps/core/static/core/css/inicio.css').read_text(encoding='utf-8')
+
+        self.assertIn("notificacao.tipo == 'moda_cliente_ajuste'", template)
+        self.assertIn('is-critical', template)
+        self.assertIn('notification-critical-pulse 1.5s ease-in-out infinite', estilos)
+        self.assertIn('.notification-row.is-critical .notification-indicator', estilos)
+
     @patch('apps.core.views.notificacoes.NotificacaoLeitura.objects.get_or_create')
     @patch('apps.core.views.notificacoes.get_object_or_404')
     def test_abrir_notificacao_nao_marca_como_lida_sem_confirmacao(

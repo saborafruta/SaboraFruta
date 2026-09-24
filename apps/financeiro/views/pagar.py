@@ -756,13 +756,12 @@ def _query_ranking(request, parametro, valor):
     return query.urlencode()
 
 
-def _contexto_despesas_pessoais(contas, total_geral, faturamento):
+def _contexto_despesas_pessoais(contas, total_geral):
     contas_pessoais = [
         conta for conta in contas
         if conta.plano_contas and conta.plano_contas.despesa_pessoal
     ]
     total = sum((conta.valor_pago or Decimal('0') for conta in contas_pessoais), Decimal('0'))
-    categorias = _resumo_categorias_pagas(contas_pessoais, faturamento)
     beneficiarios, _ = _resumo_fornecedores(contas_pessoais)
     return {
         'despesas_pessoais_total': total,
@@ -773,16 +772,6 @@ def _contexto_despesas_pessoais(contas, total_geral, faturamento):
         'despesas_pessoais_percentual_total': (
             total / total_geral * Decimal('100') if total_geral else Decimal('0')
         ),
-        'despesas_pessoais_categorias': categorias['categorias_resumo'][:10],
-        'despesas_pessoais_beneficiarios': beneficiarios[:10],
-        'despesas_pessoais_contas': sorted(
-            contas_pessoais,
-            key=lambda conta: (conta.data_pagamento or timezone.localdate(), conta.pk),
-            reverse=True,
-        )[:10],
-        'grafico_despesas_pessoais_categorias': categorias['grafico_categorias'],
-        'grafico_despesas_pessoais_subgrupos': categorias['grafico_subgrupos'],
-        'grafico_despesas_pessoais_categorias_finais': categorias['grafico_categorias_finais'],
         'grafico_despesas_pessoais_beneficiarios': _dados_grafico_pizza(beneficiarios),
     }
 
@@ -883,7 +872,7 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
         faturamento = _somar_faturamento(filial, inicio_analise, fim_analise)
         categorias_contexto = _resumo_categorias_pagas(contas_filtradas, faturamento)
         despesas_pessoais_contexto = _contexto_despesas_pessoais(
-            contas_filtradas, categorias_contexto['categorias_total'], faturamento,
+            contas_filtradas, categorias_contexto['categorias_total'],
         )
 
         fornecedor_periodo, fornecedor_inicio, fornecedor_fim = _periodo_fornecedores(request)
