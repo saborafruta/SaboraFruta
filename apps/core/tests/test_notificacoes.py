@@ -3,13 +3,13 @@ from unittest.mock import Mock, patch
 
 from django.test import RequestFactory, SimpleTestCase
 
-from apps.core.views.notificacoes import NotificacaoAbrirView
+from apps.core.views.notificacoes import NotificacaoAbrirView, NotificacaoMarcarLidaView
 
 
 class NotificacaoAbrirViewTests(SimpleTestCase):
     @patch('apps.core.views.notificacoes.NotificacaoLeitura.objects.get_or_create')
     @patch('apps.core.views.notificacoes.get_object_or_404')
-    def test_marca_leitura_por_ids_para_aceitar_usuario_de_outro_banco(
+    def test_abrir_notificacao_nao_marca_como_lida_sem_confirmacao(
         self,
         get_object_or_404,
         get_or_create,
@@ -24,6 +24,24 @@ class NotificacaoAbrirViewTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, '/estoque/')
+        get_or_create.assert_not_called()
+
+    @patch('apps.core.views.notificacoes.NotificacaoLeitura.objects.get_or_create')
+    @patch('apps.core.views.notificacoes.get_object_or_404')
+    def test_estou_ciente_marca_leitura_por_ids_para_usuario_do_tenant(
+        self,
+        get_object_or_404,
+        get_or_create,
+    ):
+        notificacao = SimpleNamespace(pk=31)
+        get_object_or_404.return_value = notificacao
+        request = RequestFactory().post('/notificacoes/31/marcar-lida/')
+        request.user = SimpleNamespace(is_authenticated=True, pk=17)
+        request.filial_ativa = SimpleNamespace(pk=9)
+
+        response = NotificacaoMarcarLidaView.as_view()(request, pk=31)
+
+        self.assertEqual(response.status_code, 200)
         get_or_create.assert_called_once_with(
             notificacao_id=31,
             usuario_id=17,

@@ -22,10 +22,19 @@
   .paid-analysis { border-left:4px solid #10b981; background:rgba(16,185,129,.10); }
   .paid-suppliers { border-left:4px solid #3b82f6; background:rgba(59,130,246,.10); }
   .paid-goal { border-left:4px solid #f59e0b; background:rgba(245,158,11,.10); }
+  .paid-personal { border-left:4px solid #f97316; background:rgba(249,115,22,.09); }
   .paid-supplier-row { border-color:#1e3a8a; background:rgba(30,58,138,.18); }
   .paid-summary-card { border:1px solid #303038; background:#242426; color:#e2e8f0; border-radius:8px; }
   .paid-pagination { border:1px solid #303038; background:#242426; color:#e2e8f0; border-radius:8px; }
-  .paid-pie { width:148px; height:148px; border-radius:9999px; box-shadow:inset 0 0 0 1px rgba(148,163,184,.25); }
+  .paid-chart-card { border-color:rgba(148,163,184,.28); background:rgba(15,23,42,.18); }
+  .paid-donut { width:180px; height:180px; overflow:visible; }
+  .paid-donut-track { stroke:rgba(148,163,184,.16); }
+  .paid-donut-slice { cursor:help; transition:opacity .15s,stroke-width .15s; }
+  .paid-donut:hover .paid-donut-slice:not(:hover) { opacity:.32; }
+  .paid-donut-slice:hover,.paid-donut-slice:focus { stroke-width:9.5; opacity:1; outline:none; }
+  .paid-donut-label { fill:#94a3b8; font-size:2.25px; font-weight:700; letter-spacing:.16em; }
+  .paid-donut-total { fill:#f8fafc; font-size:3.1px; font-weight:800; }
+  .paid-chart-legend { background:rgba(148,163,184,.07); }
   .paid-drill-row { border-color:rgba(148,163,184,.24); }
 
   body.tema-claro .paid-filter { border-color:#dbe3ee; }
@@ -34,7 +43,10 @@
   body.tema-claro .paid-analysis { background:rgba(16,185,129,.045); }
   body.tema-claro .paid-suppliers { background:rgba(59,130,246,.045); }
   body.tema-claro .paid-goal { background:rgba(245,158,11,.055); }
+  body.tema-claro .paid-personal { background:rgba(249,115,22,.045); }
   body.tema-claro .paid-supplier-row { border-color:#bfdbfe; background:rgba(239,246,255,.55); }
+  body.tema-claro .paid-chart-card { background:rgba(255,255,255,.72); }
+  body.tema-claro .paid-donut-total { fill:#0f172a; }
   body.tema-claro .paid-summary-card,
   body.tema-claro .paid-pagination { border-color:#e2e8f0; background:#fff; color:#334155; }
 </style>
@@ -222,12 +234,6 @@
       <div class="rounded-md border p-3"><span class="block text-[11px] font-semibold uppercase opacity-55">Sem classificação</span><strong class="mt-1 block text-lg">R$ {{ categorias_sem_classificacao|floatformat:2 }}</strong></div>
     </div>
 
-    <div class="mt-4 grid gap-3 lg:grid-cols-3">
-      {% include "financeiro/pagar/_grafico_pizza_despesas.html" with titulo="Categorias" grafico=grafico_categorias vazio="Nenhuma categoria encontrada." %}
-      {% include "financeiro/pagar/_grafico_pizza_despesas.html" with titulo="Subgrupos" grafico=grafico_subgrupos vazio="Nenhum subgrupo encontrado." %}
-      {% include "financeiro/pagar/_grafico_pizza_despesas.html" with titulo="Último nível" grafico=grafico_categorias_finais vazio="Nenhuma categoria final encontrada." %}
-    </div>
-
     <div class="mt-4 space-y-3">
       {% for categoria in categorias_resumo %}
         <div x-data="{aberto:false}" class="rounded-md border">
@@ -273,6 +279,14 @@
         <div class="flex gap-2"><a class="btn-secondary" href="?{{ categorias_ranking_query_mais }}">Ver mais 10</a><a class="btn-secondary" href="?{{ categorias_ranking_query_todos }}">Ver tudo</a></div>
       </div>
     {% endif %}
+    <div class="mt-5 border-t pt-4">
+      <div class="mb-3"><h4 class="font-semibold">Relatórios visuais das despesas</h4><p class="mt-1 text-xs opacity-60">Passe o mouse sobre uma fatia para ver o nome, o valor e o percentual completos.</p></div>
+      <div class="grid gap-4 xl:grid-cols-2">
+        {% include "financeiro/pagar/_grafico_pizza_despesas.html" with titulo="Categorias" descricao="Distribuição pelos grupos principais" grafico=grafico_categorias vazio="Nenhuma categoria encontrada." %}
+        {% include "financeiro/pagar/_grafico_pizza_despesas.html" with titulo="Subgrupos" descricao="Segundo nível do plano financeiro" grafico=grafico_subgrupos vazio="Nenhum subgrupo encontrado." %}
+        {% include "financeiro/pagar/_grafico_pizza_despesas.html" with titulo="Último nível" descricao="Categorias finais usadas nos lançamentos" grafico=grafico_categorias_finais vazio="Nenhuma categoria final encontrada." %}
+      </div>
+    </div>
   </section>
 
   <section class="card paid-suppliers p-3">
@@ -302,6 +316,42 @@
         <div class="flex gap-2"><a class="btn-secondary" href="?{{ fornecedores_ranking_query_mais }}">Ver mais 10</a><a class="btn-secondary" href="?{{ fornecedores_ranking_query_todos }}">Ver tudo</a></div>
       </div>
     {% endif %}
+    <div class="mt-5 border-t pt-4">
+      {% include "financeiro/pagar/_grafico_pizza_despesas.html" with titulo="Despesas por fornecedor" descricao="Participação dos dez principais fornecedores; os demais ficam agrupados em Outros" grafico=grafico_fornecedores vazio="Nenhum fornecedor encontrado no período." %}
+    </div>
+  </section>
+
+  <section class="card paid-personal p-4">
+    <div>
+      <h3 class="text-base font-semibold">Detalhamento de despesas pessoais</h3>
+      <p class="mt-1 text-xs opacity-65">Valores dos lançamentos classificados como despesa pessoal dentro dos filtros da tela.</p>
+    </div>
+    <div class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="rounded-md border p-3"><span class="block text-[11px] font-semibold uppercase opacity-55">Total pessoal</span><strong class="mt-1 block text-lg">R$ {{ despesas_pessoais_total|floatformat:2 }}</strong></div>
+      <div class="rounded-md border p-3"><span class="block text-[11px] font-semibold uppercase opacity-55">Lançamentos</span><strong class="mt-1 block text-lg">{{ despesas_pessoais_quantidade }}</strong></div>
+      <div class="rounded-md border p-3"><span class="block text-[11px] font-semibold uppercase opacity-55">Média por lançamento</span><strong class="mt-1 block text-lg">R$ {{ despesas_pessoais_media|floatformat:2 }}</strong></div>
+      <div class="rounded-md border p-3"><span class="block text-[11px] font-semibold uppercase opacity-55">Participação nas despesas</span><strong class="mt-1 block text-lg">{{ despesas_pessoais_percentual_total|floatformat:1 }}%</strong></div>
+    </div>
+    <div class="mt-4 grid gap-4 xl:grid-cols-2">
+      {% include "financeiro/pagar/_grafico_pizza_despesas.html" with titulo="Despesas pessoais por subgrupo" descricao="Segundo nível das categorias pessoais" grafico=grafico_despesas_pessoais_subgrupos vazio="Nenhum subgrupo de despesa pessoal no período." %}
+      {% include "financeiro/pagar/_grafico_pizza_despesas.html" with titulo="Despesas pessoais por categoria final" descricao="Último nível informado nos lançamentos pessoais" grafico=grafico_despesas_pessoais_categorias_finais vazio="Nenhuma categoria final de despesa pessoal no período." %}
+      {% include "financeiro/pagar/_grafico_pizza_despesas.html" with titulo="Despesas pessoais por beneficiário" descricao="Quem recebeu os pagamentos classificados como pessoais" grafico=grafico_despesas_pessoais_beneficiarios vazio="Nenhum beneficiário de despesa pessoal no período." %}
+    </div>
+    <div class="mt-4 rounded-lg border">
+      <div class="border-b px-4 py-3"><h4 class="text-sm font-semibold">Últimos lançamentos pessoais</h4><p class="mt-1 text-xs opacity-60">Até 10 lançamentos mais recentes dos filtros atuais.</p></div>
+      <div class="divide-y">
+        {% for conta_pessoal in despesas_pessoais_contas %}
+          <button type="button" class="grid w-full gap-2 px-4 py-3 text-left text-sm hover:bg-orange-500/5 sm:grid-cols-[100px_minmax(0,1fr)_180px_auto] sm:items-center" @click="abrirDetalhe('{% url 'financeiro:pagar_detail' conta_pessoal.pk %}')">
+            <span class="text-xs opacity-60">{{ conta_pessoal.data_pagamento|date:'d/m/Y' }}</span>
+            <span class="min-w-0"><strong class="block">{{ conta_pessoal.descricao_exibicao }}</strong><small class="opacity-55">{{ conta_pessoal.beneficiario_nome }}</small></span>
+            <span class="text-xs opacity-65">{{ conta_pessoal.plano_contas.caminho_descricao }}</span>
+            <strong class="whitespace-nowrap">R$ {{ conta_pessoal.valor_pago|floatformat:2 }}</strong>
+          </button>
+        {% empty %}
+          <p class="px-4 py-6 text-sm opacity-60">Nenhuma despesa pessoal encontrada nos filtros atuais.</p>
+        {% endfor %}
+      </div>
+    </div>
   </section>
 
   <section class="card paid-goal p-3">

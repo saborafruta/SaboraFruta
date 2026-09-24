@@ -609,7 +609,7 @@ CORES_GRAFICO_DESPESAS = (
 
 
 def _dados_grafico_pizza(itens):
-    """Prepara no maximo dez fatias e consolida o restante como Outros."""
+    """Prepara um grafico legivel, com no maximo dez fatias e tooltip por arco."""
     itens = sorted(itens, key=lambda item: item['valor'], reverse=True)
     total = sum((item['valor'] for item in itens), Decimal('0'))
     fatias = [dict(item) for item in itens[:10]]
@@ -623,7 +623,13 @@ def _dados_grafico_pizza(itens):
         percentual = (fatia['valor'] / total * Decimal('100')) if total else Decimal('0')
         fim = cursor + percentual
         cor = CORES_GRAFICO_DESPESAS[indice % len(CORES_GRAFICO_DESPESAS)]
-        fatia.update({'percentual': percentual, 'cor': cor})
+        fatia.update({
+            'percentual': percentual,
+            'percentual_svg': f'{float(percentual):.4f}',
+            'restante_svg': f'{float(Decimal("100") - percentual):.4f}',
+            'offset_svg': f'{-float(cursor):.4f}',
+            'cor': cor,
+        })
         gradiente.append(f'{cor} {float(cursor):.2f}% {float(fim):.2f}%')
         cursor = fim
     return {
@@ -750,6 +756,37 @@ def _query_ranking(request, parametro, valor):
     return query.urlencode()
 
 
+def _contexto_despesas_pessoais(contas, total_geral, faturamento):
+    contas_pessoais = [
+        conta for conta in contas
+        if conta.plano_contas and conta.plano_contas.despesa_pessoal
+    ]
+    total = sum((conta.valor_pago or Decimal('0') for conta in contas_pessoais), Decimal('0'))
+    categorias = _resumo_categorias_pagas(contas_pessoais, faturamento)
+    beneficiarios, _ = _resumo_fornecedores(contas_pessoais)
+    return {
+        'despesas_pessoais_total': total,
+        'despesas_pessoais_quantidade': len(contas_pessoais),
+        'despesas_pessoais_media': (
+            total / Decimal(len(contas_pessoais)) if contas_pessoais else Decimal('0')
+        ),
+        'despesas_pessoais_percentual_total': (
+            total / total_geral * Decimal('100') if total_geral else Decimal('0')
+        ),
+        'despesas_pessoais_categorias': categorias['categorias_resumo'][:10],
+        'despesas_pessoais_beneficiarios': beneficiarios[:10],
+        'despesas_pessoais_contas': sorted(
+            contas_pessoais,
+            key=lambda conta: (conta.data_pagamento or timezone.localdate(), conta.pk),
+            reverse=True,
+        )[:10],
+        'grafico_despesas_pessoais_categorias': categorias['grafico_categorias'],
+        'grafico_despesas_pessoais_subgrupos': categorias['grafico_subgrupos'],
+        'grafico_despesas_pessoais_categorias_finais': categorias['grafico_categorias_finais'],
+        'grafico_despesas_pessoais_beneficiarios': _dados_grafico_pizza(beneficiarios),
+    }
+
+
 def _periodo_fornecedores(request):
     hoje = timezone.localdate()
     periodo = request.GET.get('fornecedor_periodo', 'mes')
@@ -845,6 +882,9 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
         fim_analise = parse_date(filtros.get('data_fim') or '') or (max(datas) if datas else timezone.localdate())
         faturamento = _somar_faturamento(filial, inicio_analise, fim_analise)
         categorias_contexto = _resumo_categorias_pagas(contas_filtradas, faturamento)
+        despesas_pessoais_contexto = _contexto_despesas_pessoais(
+            contas_filtradas, categorias_contexto['categorias_total'], faturamento,
+        )
 
         fornecedor_periodo, fornecedor_inicio, fornecedor_fim = _periodo_fornecedores(request)
         fornecedor_qs = ContaPagar.objects.for_filial(filial).filter(status=StatusContaPagar.PAGO)
@@ -868,6 +908,7 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
             'fornecedor', 'funcionario', 'plano_contas',
         ).order_by('-data_pagamento', '-id'))
         fornecedores_resumo, total_fornecedores = _resumo_fornecedores(contas_fornecedores)
+        grafico_fornecedores = _dados_grafico_pizza(fornecedores_resumo)
         limite_categorias = _limite_ranking(request, 'categorias_limite')
         limite_fornecedores = _limite_ranking(request, 'fornecedores_limite')
         total_categorias_ranking = len(categorias_contexto['categorias_resumo'])
@@ -898,6 +939,7 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
             'user_is_admin': _usuario_admin(request),
             'fornecedores_resumo': fornecedores_resumo,
             'total_fornecedores': total_fornecedores,
+            'grafico_fornecedores': grafico_fornecedores,
             'fornecedor_periodo': fornecedor_periodo,
             'fornecedor_inicio': fornecedor_inicio,
             'fornecedor_fim': fornecedor_fim,
@@ -920,6 +962,7 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
             'analise_inicio': inicio_analise,
             'analise_fim': fim_analise,
             **categorias_contexto,
+            **despesas_pessoais_contexto,
             **meta_contexto,
             **filtros,
         })

@@ -7,7 +7,7 @@
 
 {% block extra_head %}
 {{ block.super }}
-<link rel="stylesheet" href="{% static 'core/css/inicio.css' %}?v=20260918-8">
+<link rel="stylesheet" href="{% static 'core/css/inicio.css' %}?v=20260924-1">
 {% endblock %}
 
 {% block content %}
@@ -108,10 +108,11 @@
           </a>
           <button type="button" class="notification-check"
                   data-url="{% url 'core:notificacao-marcar-lida' notificacao.pk %}"
-                  title="Marcar como lida" aria-label="Marcar {{ notificacao.titulo }} como lida">
+                  title="Confirmar ciência" aria-label="Estou ciente de {{ notificacao.titulo }}">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
             </svg>
+            <span>Estou ciente</span>
           </button>
         </article>
       {% empty %}
@@ -154,5 +155,5 @@
 
 {% block extra_js %}
 {{ block.super }}
-<script src="{% static 'core/js/inicio.js' %}?v=20260917-1" defer></script>
+<script src="{% static 'core/js/inicio.js' %}?v=20260924-1" defer></script>
 {% endblock %}

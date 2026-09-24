@@ -16,10 +16,6 @@ class NotificacaoAbrirView(LoginRequiredMixin, View):
             filial=getattr(request, 'filial_ativa', None),
             ativa=True,
         )
-        NotificacaoLeitura.objects.get_or_create(
-            notificacao_id=notificacao.pk,
-            usuario_id=request.user.pk,
-        )
         destino = notificacao.url or reverse('core:dashboard')
         if not url_has_allowed_host_and_scheme(
             destino,

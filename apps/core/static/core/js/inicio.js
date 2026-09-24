@@ -61,11 +61,18 @@
 
   root.querySelectorAll('.notification-check').forEach(function (button) {
     button.addEventListener('click', function () {
+      var row = button.closest('.notification-row');
       button.disabled = true;
+      row.classList.add('is-acknowledging');
       post(button.dataset.url).then(function () {
-        button.closest('.notification-row').remove();
-        emptyNotificationsIfNeeded();
-      }).catch(function () { button.disabled = false; });
+        window.setTimeout(function () {
+          row.remove();
+          emptyNotificationsIfNeeded();
+        }, 650);
+      }).catch(function () {
+        row.classList.remove('is-acknowledging');
+        button.disabled = false;
+      });
     });
   });
   var markAll = root.querySelector('.mark-all');
