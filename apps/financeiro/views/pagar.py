@@ -602,9 +602,53 @@ def _resumo_fornecedores(contas):
     return sorted(resumo, key=lambda item: item['valor'], reverse=True), total
 
 
+CORES_GRAFICO_DESPESAS = (
+    '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
+    '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1', '#64748b',
+)
+
+
+def _dados_grafico_pizza(itens):
+    """Prepara no maximo dez fatias e consolida o restante como Outros."""
+    itens = sorted(itens, key=lambda item: item['valor'], reverse=True)
+    total = sum((item['valor'] for item in itens), Decimal('0'))
+    fatias = [dict(item) for item in itens[:10]]
+    valor_outros = sum((item['valor'] for item in itens[10:]), Decimal('0'))
+    if valor_outros:
+        fatias.append({'nome': 'Outros', 'valor': valor_outros})
+
+    cursor = Decimal('0')
+    gradiente = []
+    for indice, fatia in enumerate(fatias):
+        percentual = (fatia['valor'] / total * Decimal('100')) if total else Decimal('0')
+        fim = cursor + percentual
+        cor = CORES_GRAFICO_DESPESAS[indice % len(CORES_GRAFICO_DESPESAS)]
+        fatia.update({'percentual': percentual, 'cor': cor})
+        gradiente.append(f'{cor} {float(cursor):.2f}% {float(fim):.2f}%')
+        cursor = fim
+    return {
+        'fatias': fatias,
+        'gradiente': f"conic-gradient({', '.join(gradiente)})" if gradiente else '',
+        'total': total,
+    }
+
+
+def _caminho_categoria(categoria):
+    caminho = []
+    atual = categoria
+    ids_vistos = set()
+    while atual and atual.pk not in ids_vistos and len(caminho) < 3:
+        ids_vistos.add(atual.pk)
+        caminho.append(atual)
+        atual = atual.conta_pai
+    return list(reversed(caminho))
+
+
 def _resumo_categorias_pagas(contas, faturamento=Decimal('0')):
     total = sum((conta.valor_pago or Decimal('0') for conta in contas), Decimal('0'))
     grupos = {}
+    subgrupos_grafico = {}
+    categorias_finais_grafico = {}
     sem_classificacao = Decimal('0')
     for conta in contas:
         valor = conta.valor_pago or Decimal('0')
@@ -612,19 +656,65 @@ def _resumo_categorias_pagas(contas, faturamento=Decimal('0')):
         if not categoria:
             sem_classificacao += valor
             continue
-        grupo = categoria
-        while grupo.conta_pai_id and grupo.conta_pai:
-            grupo = grupo.conta_pai
+        caminho = _caminho_categoria(categoria)
+        grupo = caminho[0]
         item = grupos.setdefault(grupo.pk, {
-            'nome': grupo.descricao, 'valor': Decimal('0'), 'quantidade': 0,
+            'id': grupo.pk, 'nome': grupo.descricao, 'valor': Decimal('0'),
+            'quantidade': 0, 'subgrupos_map': {},
         })
         item['valor'] += valor
         item['quantidade'] += 1
+
+        if len(caminho) >= 2:
+            subgrupo = caminho[1]
+            subitem = item['subgrupos_map'].setdefault(subgrupo.pk, {
+                'id': subgrupo.pk, 'nome': subgrupo.descricao, 'valor': Decimal('0'),
+                'quantidade': 0, 'categorias_map': {},
+            })
+            subitem['valor'] += valor
+            subitem['quantidade'] += 1
+            chave_subgrupo = (grupo.pk, subgrupo.pk)
+            subgrafico = subgrupos_grafico.setdefault(chave_subgrupo, {
+                'nome': f'{grupo.descricao} / {subgrupo.descricao}',
+                'valor': Decimal('0'),
+            })
+            subgrafico['valor'] += valor
+
+            if len(caminho) >= 3:
+                categoria_final = caminho[2]
+                finalitem = subitem['categorias_map'].setdefault(categoria_final.pk, {
+                    'id': categoria_final.pk, 'nome': categoria_final.descricao,
+                    'valor': Decimal('0'), 'quantidade': 0,
+                })
+                finalitem['valor'] += valor
+                finalitem['quantidade'] += 1
+                chave_final = (grupo.pk, subgrupo.pk, categoria_final.pk)
+                finalgrafico = categorias_finais_grafico.setdefault(chave_final, {
+                    'nome': f'{subgrupo.descricao} / {categoria_final.descricao}',
+                    'valor': Decimal('0'),
+                })
+                finalgrafico['valor'] += valor
     resumo = []
     for item in grupos.values():
+        subgrupos = []
+        for subitem in item.pop('subgrupos_map').values():
+            categorias = sorted(
+                subitem.pop('categorias_map').values(),
+                key=lambda categoria_item: categoria_item['valor'],
+                reverse=True,
+            )
+            subitem['categorias'] = categorias
+            subitem['percentual_grupo'] = (
+                subitem['valor'] / item['valor'] * Decimal('100') if item['valor'] else Decimal('0')
+            )
+            subgrupos.append(subitem)
+        item['subgrupos'] = sorted(
+            subgrupos, key=lambda subgrupo_item: subgrupo_item['valor'], reverse=True,
+        )
         percentual = (item['valor'] / total * Decimal('100')) if total else Decimal('0')
         impacto = (item['valor'] / faturamento * Decimal('100')) if faturamento else Decimal('0')
-        resumo.append({**item, 'percentual': percentual, 'impacto_faturamento': impacto})
+        item.update({'percentual': percentual, 'impacto_faturamento': impacto})
+        resumo.append(item)
     resumo.sort(key=lambda item: item['valor'], reverse=True)
     maior = resumo[0] if resumo else None
     return {
@@ -637,7 +727,27 @@ def _resumo_categorias_pagas(contas, faturamento=Decimal('0')):
             sem_classificacao / total * Decimal('100') if total else Decimal('0')
         ),
         'categorias_faturamento': faturamento,
+        'grafico_categorias': _dados_grafico_pizza(resumo),
+        'grafico_subgrupos': _dados_grafico_pizza(list(subgrupos_grafico.values())),
+        'grafico_categorias_finais': _dados_grafico_pizza(list(categorias_finais_grafico.values())),
     }
+
+
+def _limite_ranking(request, parametro):
+    valor = request.GET.get(parametro, '10').strip().lower()
+    if valor == 'todos':
+        return None
+    try:
+        return max(10, min(int(valor), 500))
+    except (TypeError, ValueError):
+        return 10
+
+
+def _query_ranking(request, parametro, valor):
+    query = request.GET.copy()
+    query[parametro] = str(valor)
+    query.pop('page', None)
+    return query.urlencode()
 
 
 def _periodo_fornecedores(request):
@@ -758,6 +868,18 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
             'fornecedor', 'funcionario', 'plano_contas',
         ).order_by('-data_pagamento', '-id'))
         fornecedores_resumo, total_fornecedores = _resumo_fornecedores(contas_fornecedores)
+        limite_categorias = _limite_ranking(request, 'categorias_limite')
+        limite_fornecedores = _limite_ranking(request, 'fornecedores_limite')
+        total_categorias_ranking = len(categorias_contexto['categorias_resumo'])
+        total_fornecedores_ranking = len(fornecedores_resumo)
+        categorias_contexto['categorias_resumo'] = (
+            categorias_contexto['categorias_resumo'][:limite_categorias]
+            if limite_categorias is not None else categorias_contexto['categorias_resumo']
+        )
+        fornecedores_resumo = (
+            fornecedores_resumo[:limite_fornecedores]
+            if limite_fornecedores is not None else fornecedores_resumo
+        )
         paginator = Paginator(contas_filtradas, 10)
         page_obj = paginator.get_page(request.GET.get('page', 1))
         query = request.GET.copy()
@@ -779,6 +901,22 @@ class ContaPagaListView(PermissaoRequiredMixin, View):
             'fornecedor_periodo': fornecedor_periodo,
             'fornecedor_inicio': fornecedor_inicio,
             'fornecedor_fim': fornecedor_fim,
+            'categorias_ranking_total': total_categorias_ranking,
+            'categorias_ranking_exibidas': len(categorias_contexto['categorias_resumo']),
+            'categorias_ranking_tem_mais': len(categorias_contexto['categorias_resumo']) < total_categorias_ranking,
+            'categorias_ranking_query_mais': _query_ranking(
+                request, 'categorias_limite',
+                min((limite_categorias or total_categorias_ranking) + 10, total_categorias_ranking),
+            ),
+            'categorias_ranking_query_todos': _query_ranking(request, 'categorias_limite', 'todos'),
+            'fornecedores_ranking_total': total_fornecedores_ranking,
+            'fornecedores_ranking_exibidos': len(fornecedores_resumo),
+            'fornecedores_ranking_tem_mais': len(fornecedores_resumo) < total_fornecedores_ranking,
+            'fornecedores_ranking_query_mais': _query_ranking(
+                request, 'fornecedores_limite',
+                min((limite_fornecedores or total_fornecedores_ranking) + 10, total_fornecedores_ranking),
+            ),
+            'fornecedores_ranking_query_todos': _query_ranking(request, 'fornecedores_limite', 'todos'),
             'analise_inicio': inicio_analise,
             'analise_fim': fim_analise,
             **categorias_contexto,
