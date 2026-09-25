@@ -54,36 +54,6 @@ def _endereco_pedido(pedido):
     ])) or _coordenada(cliente)
 
 
-def _urls_google_maps(filial, pedidos):
-    """Divide em até três entregas por link, limite seguro no Maps móvel."""
-    roteaveis = [
-        pedido for pedido in pedidos
-        if pedido.cliente and pedido.cliente.latitude is not None
-        and pedido.cliente.longitude is not None
-    ]
-    if not roteaveis or filial.latitude is None or filial.longitude is None:
-        return []
-
-    origem_filial = _endereco_filial(filial)
-    grupos = [roteaveis[i:i + 3] for i in range(0, len(roteaveis), 3)]
-    urls = []
-    for indice, grupo in enumerate(grupos):
-        origem = origem_filial if indice == 0 else _endereco_pedido(grupos[indice - 1][-1])
-        ultima_etapa = indice == len(grupos) - 1
-        destino = origem_filial if ultima_etapa else _endereco_pedido(grupo[-1])
-        intermediarios = grupo if ultima_etapa else grupo[:-1]
-        parametros = {
-            'api': '1',
-            'origin': origem,
-            'destination': destino,
-            'travelmode': 'driving',
-        }
-        if intermediarios:
-            parametros['waypoints'] = '|'.join(_endereco_pedido(p) for p in intermediarios)
-        urls.append('https://www.google.com/maps/dir/?' + urlencode(parametros))
-    return urls
-
-
 def _url_google_maps_completa(filial, pedidos):
     """URL oficial única para comparar o comportamento do Maps no aparelho."""
     roteaveis = [
@@ -219,7 +189,6 @@ def painel(request, token):
         'pedidos': dados,
         'total': len(dados),
         'concluidos': sum(1 for pedido in dados if pedido['concluido']),
-        'etapas_maps': _urls_google_maps(rota.filial, pedidos),
         'google_maps_completa': _url_google_maps_completa(rota.filial, pedidos),
         'osmand_url': _url_osmand(rota.filial, pedidos),
     })

@@ -30,24 +30,14 @@
 
   {% if osmand_url or google_maps_completa %}
   <section class="maps">
-    <h2>Rota completa — testes</h2>
-    <p>As duas opções abaixo levam todos os pedidos em uma única rota, na ordem publicada.</p>
+    <h2>Navegação da rota</h2>
+    <p>Abra todos os pedidos em uma única rota, na ordem publicada.</p>
     <div class="map-grid">
       {% if osmand_url %}<a class="btn green" href="{{ osmand_url }}" target="_blank" rel="noopener">OsmAnd — rota completa</a>{% endif %}
       <a class="btn outline" href="{% url 'delivery_publico:gpx' rota.token %}">Baixar GPX para OsmAnd</a>
-      {% if google_maps_completa %}<a class="btn" href="{{ google_maps_completa }}" target="_blank" rel="noopener">Google Maps completo (teste)</a>{% endif %}
+      {% if google_maps_completa %}<a class="btn" href="{{ google_maps_completa }}" target="_blank" rel="noopener">Google Maps</a>{% endif %}
     </div>
     <p class="test-note">No Google completo, confirme se aparecem todas as {{ total }} entregas antes de iniciar. Alguns celulares podem ignorar paradas.</p>
-  </section>
-  {% endif %}
-
-  {% if etapas_maps %}
-  <section class="maps">
-    <h2>Google Maps em etapas — opção segura</h2>
-    <p>Opção gratuita atual, separada em até três entregas para nenhuma parada desaparecer no celular.</p>
-    <div class="map-grid">
-      {% for url in etapas_maps %}<a class="btn" href="{{ url }}" target="_blank" rel="noopener">Abrir etapa {{ forloop.counter }} de {{ etapas_maps|length }}</a>{% endfor %}
-    </div>
   </section>
   {% endif %}
 

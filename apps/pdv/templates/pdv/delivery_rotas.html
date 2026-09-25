@@ -99,8 +99,7 @@
       <button class="dr-button" id="routeDriverLink">Copiar link do motoboy</button>
       <button class="dr-button green" id="routeShare">Compartilhar no WhatsApp</button>
       <button class="dr-button green" id="routeOsmAnd">OsmAnd completo</button>
-      <button class="dr-button" id="routeMapsFull">Google Maps completo (teste)</button>
-      <button class="dr-button" id="routeMaps">Google Maps em etapas</button>
+      <button class="dr-button" id="routeMaps">Google Maps</button>
     </div>
   </div>
 
@@ -255,23 +254,6 @@
     const full=[branch.endereco,branch.bairro,[branch.cidade,branch.uf].filter(Boolean).join('/')].filter(Boolean).join(', ');
     return full||`${branch.lat},${branch.lng}`;
   }
-  function googleUrls(){
-    if(!state.result)return[];
-    const stops=state.result.paradas, chunks=[];
-    // Maps URLs aceitam menos pontos no celular que no desktop. Três entregas
-    // por etapa é o limite seguro quando o link abre pelo WhatsApp/app móvel.
-    for(let i=0;i<stops.length;i+=3)chunks.push(stops.slice(i,i+3));
-    return chunks.map((chunk,index)=>{
-      const previous=index===0?branchMapsLocation():mapsLocation(chunks[index-1][chunks[index-1].length-1]);
-      const isLast=index===chunks.length-1;
-      const destination=isLast?branchMapsLocation():mapsLocation(chunk[chunk.length-1]);
-      const waypoints=isLast?chunk:chunk.slice(0,-1);
-      const url=new URL('https://www.google.com/maps/dir/');
-      url.searchParams.set('api','1');url.searchParams.set('origin',previous);url.searchParams.set('destination',destination);url.searchParams.set('travelmode','driving');
-      if(waypoints.length)url.searchParams.set('waypoints',waypoints.map(mapsLocation).join('|'));
-      return url.toString();
-    });
-  }
   function googleFullUrl(){
     if(!state.result)return'';
     const url=new URL('https://www.google.com/maps/dir/');
@@ -289,8 +271,7 @@
     url.searchParams.set('type','osmand');url.searchParams.set('profile','car');
     return url.toString();
   }
-  function openMaps(){const urls=googleUrls();if(!urls.length)return toast('Gere a rota antes de abrir o GPS.',true);window.open(urls[0],'_blank','noopener');if(urls.length>1)toast(`Rota dividida em ${urls.length} etapas. Todas ficam disponíveis no painel do motoboy.`);}
-  function openMapsFull(){const url=googleFullUrl();if(!url)return toast('Gere a rota antes de testar.',true);window.open(url,'_blank','noopener');toast(`Confira se o Google carregou todas as ${state.result.paradas.length} entregas.`);}
+  function openMaps(){const url=googleFullUrl();if(!url)return toast('Gere a rota antes de abrir o GPS.',true);window.open(url,'_blank','noopener');toast(`Confira se o Google carregou todas as ${state.result.paradas.length} entregas.`);}
   function openOsmAnd(){const url=osmandUrl();if(!url)return toast('Gere a rota antes de testar.',true);window.open(url,'_blank','noopener');}
   function saveDraft(){const payload={selected:state.selected,locked:[...state.locked],driver:document.getElementById('routeDriver').value,minutes:document.getElementById('stopMinutes').value};localStorage.setItem('delivery-route-draft',JSON.stringify(payload));toast('Rascunho salvo neste navegador.');}
   function loadDraft(){try{const d=JSON.parse(localStorage.getItem('delivery-route-draft')||'null');if(!d)return;state.selected=(d.selected||[]).map(Number).filter(id=>byId[String(id)]?.tem_coordenada);state.locked=new Set((d.locked||[]).map(Number));document.getElementById('routeDriver').value=d.driver||'';document.getElementById('stopMinutes').value=d.minutes||5;}catch(e){}}
@@ -309,7 +290,6 @@
   document.getElementById('routeDriverLink').addEventListener('click',copyDriverLink);
   document.getElementById('routeShare').addEventListener('click',share);
   document.getElementById('routeOsmAnd').addEventListener('click',openOsmAnd);
-  document.getElementById('routeMapsFull').addEventListener('click',openMapsFull);
   document.getElementById('routeMaps').addEventListener('click',openMaps);
   document.getElementById('stopMinutes').addEventListener('change',()=>scheduleAutomaticCalculation(false,100));
   loadDraft();renderAvailable();renderRoute();initMap();
