@@ -147,6 +147,8 @@
   const calculateUrl = '{% url "pdv:delivery_rota_calcular" %}';
   const pageUrl = '{% url "pdv:delivery_rotas" %}';
   let map, routeLine, markers = [];
+  let automaticCalculationTimer = null;
+  let calculationSequence = 0;
 
   function esc(value) { const d=document.createElement('div'); d.textContent=value ?? ''; return d.innerHTML; }
   function money(value) { return Number(value || 0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
@@ -203,21 +205,30 @@
       el.addEventListener('drop',e=>{e.preventDefault();moveOrder(state.dragging,Number(el.dataset.routeId));});
     });
   }
-  function toggleOrder(id,checked) { if(checked&&!state.selected.includes(id))state.selected.push(id); if(!checked){state.selected=state.selected.filter(x=>x!==id);state.locked.delete(id);} state.result=null; renderAvailable();renderRoute();resetSummary(); }
-  function moveOrder(from,to) { if(!from||from===to)return; const old=state.selected.indexOf(from), target=state.selected.indexOf(to); if(old<0||target<0)return; state.selected.splice(old,1);state.selected.splice(target,0,from);state.locked.add(from);state.result=null;renderRoute();resetSummary(); }
+  function scheduleAutomaticCalculation(optimize=false, delay=450) {
+    clearTimeout(automaticCalculationTimer);
+    calculationSequence += 1;
+    if(!state.selected.length||!branch.tem_coordenada)return;
+    automaticCalculationTimer=setTimeout(()=>calculate(optimize),delay);
+  }
+  function toggleOrder(id,checked) { if(checked&&!state.selected.includes(id))state.selected.push(id); if(!checked){state.selected=state.selected.filter(x=>x!==id);state.locked.delete(id);} state.result=null; renderAvailable();renderRoute();resetSummary();scheduleAutomaticCalculation(false); }
+  function moveOrder(from,to) { if(!from||from===to)return; const old=state.selected.indexOf(from), target=state.selected.indexOf(to); if(old<0||target<0)return; state.selected.splice(old,1);state.selected.splice(target,0,from);state.locked.add(from);state.result=null;renderRoute();resetSummary();scheduleAutomaticCalculation(false,150); }
   function resetSummary(){document.getElementById('routeDeparture').textContent='—';document.getElementById('routeReturn').textContent='—';document.getElementById('routeDistance').textContent='—';document.getElementById('routeTimeline').innerHTML='<div class="dr-empty" style="width:100%;padding:6px;">Recalcule a rota para atualizar os horários.</div>';}
 
   async function calculate(optimize=false) {
+    clearTimeout(automaticCalculationTimer);
     if(!state.selected.length){toast('Selecione ao menos um pedido.',true);return;}
+    const sequence=++calculationSequence;
     const buttons=[document.getElementById('routeGenerate'),document.getElementById('routeOptimize')]; buttons.forEach(b=>b.disabled=true);
     document.getElementById('mapNote').textContent=optimize?'Reotimizando pedidos livres…':'Calculando trajeto por ruas…';
     try{
       const resp=await fetch(calculateUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({pedidos:state.selected,travados:[...state.locked],otimizar:optimize,minutos_parada:Number(document.getElementById('stopMinutes').value||5)})});
       const data=await resp.json(); if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
+      if(sequence!==calculationSequence)return;
       state.selected=data.ordem; state.result=data; renderAvailable();renderRoute();drawRoute(data);renderSummary(data);
       document.getElementById('mapNote').textContent=data.uso_comercial_liberado?'Rota calculada por ruas. Arraste uma parada para ajustar.':`Provider público ${data.provider}: configure um provider comercial antes do uso em produção.`;
       toast(optimize?'Pedidos livres reotimizados.':'Rota calculada com sucesso.');
-    }catch(error){document.getElementById('mapNote').textContent=error.message;toast(error.message,true);}finally{buttons.forEach(b=>b.disabled=false);}
+    }catch(error){if(sequence===calculationSequence){document.getElementById('mapNote').textContent=error.message;toast(error.message,true);}}finally{if(sequence===calculationSequence)buttons.forEach(b=>b.disabled=false);}
   }
   function renderSummary(data){
     document.getElementById('routeDeparture').textContent=data.saida;document.getElementById('routeReturn').textContent=data.retorno;document.getElementById('routeDistance').textContent=`${data.distancia_km} km · ${duration(data.tempo_total_s)}`;document.getElementById('routeProvider').textContent=data.provider;
@@ -228,10 +239,10 @@
   function googleUrls(){
     if(!state.result)return[];
     const stops=state.result.paradas, chunks=[];
-    // Três pontos por etapa é o limite conservador para links abertos em
-    // navegador móvel; no desktop o Google aceita mais, mas o link precisa
-    // funcionar justamente no celular do entregador.
-    for(let i=0;i<stops.length;i+=3)chunks.push(stops.slice(i,i+3));
+    // O Google Maps aceita uma rota multiponto com origem, destino e pontos
+    // intermediários. Oito entregas por etapa preservam a rota completa mais
+    // comum do delivery; apenas roteiros maiores são divididos.
+    for(let i=0;i<stops.length;i+=8)chunks.push(stops.slice(i,i+8));
     return chunks.map((chunk,index)=>{
       const previous=index===0?`${branch.lat},${branch.lng}`:coords(chunks[index-1][chunks[index-1].length-1]);
       const isLast=index===chunks.length-1;
@@ -250,15 +261,16 @@
   function share(){if(!state.result)return toast('Gere a rota antes de compartilhar.',true);const driver=document.getElementById('routeDriver').value.trim();const urls=googleUrls();const gps=urls.length===1?[`Google Maps: ${urls[0]}`]:urls.flatMap((url,i)=>[`Etapa ${i+1} de ${urls.length}: ${url}`]);const lines=[`🛵 Rota do Delivery${driver?' — '+driver:''}`,`${state.result.paradas.length} entregas · ${state.result.distancia_km} km`,`Saída ${state.result.saida} · retorno previsto ${state.result.retorno}`,'',...state.result.paradas.map(p=>`${p.ordem}. ${p.cliente} — ETA ${p.eta}`),'',...gps];window.open(`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`,'_blank','noopener');}
 
   document.getElementById('orderSearch').addEventListener('input',renderAvailable);
-  document.getElementById('routeGenerate').addEventListener('click',()=>calculate(false));
+  document.getElementById('routeGenerate').addEventListener('click',()=>calculate(true));
   document.getElementById('routeOptimize').addEventListener('click',()=>calculate(true));
   document.getElementById('routeSave').addEventListener('click',saveDraft);
   document.getElementById('routeShare').addEventListener('click',share);
   document.getElementById('routeMaps').addEventListener('click',openMaps);
   document.getElementById('routeWaze').addEventListener('click',openWaze);
-  document.getElementById('stopMinutes').addEventListener('change',()=>state.result&&calculate(false));
+  document.getElementById('stopMinutes').addEventListener('change',()=>scheduleAutomaticCalculation(false,100));
   loadDraft();renderAvailable();renderRoute();initMap();
   if(!branch.tem_coordenada)document.getElementById('mapNote').textContent='A filial precisa de coordenadas para calcular saída e retorno.';
+  else if(state.selected.length)scheduleAutomaticCalculation(true,150);
 })();
 </script>
 {% endblock %}

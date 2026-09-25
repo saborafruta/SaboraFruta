@@ -177,6 +177,44 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         pontos = mock_rota.call_args.args[0]
         self.assertEqual(pontos[0], pontos[-1])
 
+    @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.rota')
+    def test_gerar_rota_otimiza_proximidade_e_retorno(self, mock_rota):
+        proximo = self._venda(numero=211)
+        cliente_distante = Cliente.objects.create(
+            filial=self.filial, razao_social='Cliente Distante', cpf_cnpj='98765432101',
+            latitude=-5.9000, longitude=-35.3100,
+        )
+        distante = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=212, cliente=cliente_distante,
+            usuario=self.usuario, status='finalizada', delivery=True,
+            status_delivery='novo', data_venda=timezone.now(),
+        )
+        cliente_intermediario = Cliente.objects.create(
+            filial=self.filial, razao_social='Cliente Intermediario', cpf_cnpj='98765432102',
+            latitude=-5.8100, longitude=-35.2300,
+        )
+        intermediario = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=213, cliente=cliente_intermediario,
+            usuario=self.usuario, status='finalizada', delivery=True,
+            status_delivery='novo', data_venda=timezone.now(),
+        )
+        mock_rota.return_value = Rota(
+            distancia_m=30000, duracao_s=3600,
+            geometria=[[-5.79, -35.21], [-5.90, -35.31], [-5.79, -35.21]],
+        )
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_calcular'),
+            data=json.dumps({
+                'pedidos': [proximo.pk, distante.pk, intermediario.pk],
+                'otimizar': True,
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['ordem'], [proximo.pk, intermediario.pk, distante.pk])
+
     def test_pedido_sem_coordenada_e_rejeitado(self):
         self.cliente.latitude = None
         self.cliente.longitude = None

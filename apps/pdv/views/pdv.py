@@ -3340,8 +3340,53 @@ def delivery_rotas(request):
 
 
 def _delivery_otimizar_livres(pedidos, travados, origem):
-    """Otimiza blocos livres sem mudar a posição dos pedidos travados."""
-    from apps.mapas.services.otimizacao import otimizar_local
+    """Otimiza blocos livres sem mudar a posição dos pedidos travados.
+
+    Cada bloco considera o ponto anterior e o próximo ponto fixo; no último
+    bloco, o destino é a filial. A sugestão minimiza o circuito completo, em
+    vez de produzir uma cadeia que pode terminar longe do ponto de retorno.
+    """
+    from apps.mapas.services.otimizacao import distancia_haversine_m
+
+    def coordenada(pedido):
+        return (float(pedido.cliente.latitude), float(pedido.cliente.longitude))
+
+    def custo(bloco, ponto_inicial, ponto_final):
+        pontos = [ponto_inicial] + [coordenada(p) for p in bloco] + [ponto_final]
+        return sum(
+            distancia_haversine_m(pontos[i], pontos[i + 1])
+            for i in range(len(pontos) - 1)
+        )
+
+    def otimizar_bloco(bloco, ponto_inicial, ponto_final):
+        if len(bloco) < 2:
+            return list(bloco)
+
+        restantes = list(bloco)
+        ordem = []
+        atual = ponto_inicial
+        while restantes:
+            proximo = min(
+                restantes,
+                key=lambda pedido: distancia_haversine_m(atual, coordenada(pedido)),
+            )
+            ordem.append(proximo)
+            restantes.remove(proximo)
+            atual = coordenada(proximo)
+
+        melhorou = True
+        while melhorou:
+            melhorou = False
+            custo_atual = custo(ordem, ponto_inicial, ponto_final)
+            for i in range(len(ordem) - 1):
+                for j in range(i + 1, len(ordem)):
+                    candidata = ordem[:i] + ordem[i:j + 1][::-1] + ordem[j + 1:]
+                    custo_candidata = custo(candidata, ponto_inicial, ponto_final)
+                    if custo_candidata < custo_atual - 0.5:
+                        ordem = candidata
+                        melhorou = True
+                        custo_atual = custo_candidata
+        return ordem
 
     resultado = list(pedidos)
     posicoes_travadas = [i for i, p in enumerate(resultado) if p.pk in travados]
@@ -3350,15 +3395,14 @@ def _delivery_otimizar_livres(pedidos, travados, origem):
     ponto_anterior = origem
     for limite in limites:
         bloco = resultado[inicio:limite]
+        ponto_seguinte = coordenada(resultado[limite]) if limite < len(resultado) else origem
         if bloco:
-            pontos = [ponto_anterior] + [
-                (float(p.cliente.latitude), float(p.cliente.longitude)) for p in bloco
-            ]
-            ordem = otimizar_local(pontos, fixar_primeiro=True)[1:]
-            resultado[inicio:limite] = [bloco[i - 1] for i in ordem]
+            resultado[inicio:limite] = otimizar_bloco(
+                bloco, ponto_anterior, ponto_seguinte,
+            )
         if limite < len(resultado):
             fixo = resultado[limite]
-            ponto_anterior = (float(fixo.cliente.latitude), float(fixo.cliente.longitude))
+            ponto_anterior = coordenada(fixo)
             inicio = limite + 1
         else:
             inicio = limite
