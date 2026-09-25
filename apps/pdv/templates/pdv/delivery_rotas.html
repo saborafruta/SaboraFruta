@@ -96,6 +96,7 @@
       <button class="dr-button primary" id="routeGenerate" title="Remove as travas e busca a menor rota para todos os pedidos">Melhor rota</button>
       <button class="dr-button" id="routeOptimize" title="Mantém posições travadas e reorganiza somente as demais">Reotimizar livres</button>
       <button class="dr-button" id="routeSave">Salvar rascunho</button>
+      <button class="dr-button" id="routeDriverLink">Copiar link do motoboy</button>
       <button class="dr-button green" id="routeShare">Compartilhar no WhatsApp</button>
       <button class="dr-button" id="routeMaps">Google Maps</button>
     </div>
@@ -144,6 +145,7 @@
   const byId = Object.fromEntries(orders.map(o => [String(o.id), o]));
   const csrf = '{{ csrf_token }}';
   const calculateUrl = '{% url "pdv:delivery_rota_calcular" %}';
+  const publishUrl = '{% url "pdv:delivery_rota_publicar" %}';
   const pageUrl = '{% url "pdv:delivery_rotas" %}';
   let map, routeLine, markers = [];
   let automaticCalculationTimer = null;
@@ -246,30 +248,36 @@
   function googleUrls(){
     if(!state.result)return[];
     const stops=state.result.paradas, chunks=[];
-    // O Google Maps aceita uma rota multiponto com origem, destino e pontos
-    // intermediários. Oito entregas por etapa preservam a rota completa mais
-    // comum do delivery; apenas roteiros maiores são divididos.
-    for(let i=0;i<stops.length;i+=8)chunks.push(stops.slice(i,i+8));
+    // Maps URLs aceitam menos pontos no celular que no desktop. Três entregas
+    // por etapa é o limite seguro quando o link abre pelo WhatsApp/app móvel.
+    for(let i=0;i<stops.length;i+=3)chunks.push(stops.slice(i,i+3));
     return chunks.map((chunk,index)=>{
       const previous=index===0?`${branch.lat},${branch.lng}`:coords(chunks[index-1][chunks[index-1].length-1]);
       const isLast=index===chunks.length-1;
       const destination=isLast?`${branch.lat},${branch.lng}`:coords(chunk[chunk.length-1]);
       const waypoints=isLast?chunk:chunk.slice(0,-1);
       const url=new URL('https://www.google.com/maps/dir/');
-      url.searchParams.set('api','1');url.searchParams.set('origin',previous);url.searchParams.set('destination',destination);url.searchParams.set('travelmode','driving');
+      url.searchParams.set('api','1');url.searchParams.set('origin',previous);url.searchParams.set('destination',destination);url.searchParams.set('travelmode','driving');url.searchParams.set('dir_action','navigate');
       if(waypoints.length)url.searchParams.set('waypoints',waypoints.map(coords).join('|'));
       return url.toString();
     });
   }
-  function openMaps(){const urls=googleUrls();if(!urls.length)return toast('Gere a rota antes de abrir o GPS.',true);window.open(urls[0],'_blank','noopener');if(urls.length>1)toast(`Rota dividida em ${urls.length} etapas. Os links de todas as etapas vão no WhatsApp.`);}
+  function openMaps(){const urls=googleUrls();if(!urls.length)return toast('Gere a rota antes de abrir o GPS.',true);window.open(urls[0],'_blank','noopener');if(urls.length>1)toast(`Rota dividida em ${urls.length} etapas. Todas ficam disponíveis no painel do motoboy.`);}
   function saveDraft(){const payload={selected:state.selected,locked:[...state.locked],driver:document.getElementById('routeDriver').value,minutes:document.getElementById('stopMinutes').value};localStorage.setItem('delivery-route-draft',JSON.stringify(payload));toast('Rascunho salvo neste navegador.');}
   function loadDraft(){try{const d=JSON.parse(localStorage.getItem('delivery-route-draft')||'null');if(!d)return;state.selected=(d.selected||[]).map(Number).filter(id=>byId[String(id)]?.tem_coordenada);state.locked=new Set((d.locked||[]).map(Number));document.getElementById('routeDriver').value=d.driver||'';document.getElementById('stopMinutes').value=d.minutes||5;}catch(e){}}
-  function share(){if(!state.result)return toast('Gere a rota antes de compartilhar.',true);const driver=document.getElementById('routeDriver').value.trim();const urls=googleUrls();const gps=urls.length===1?[`Google Maps: ${urls[0]}`]:urls.flatMap((url,i)=>[`Etapa ${i+1} de ${urls.length}: ${url}`]);const lines=[`🛵 Rota do Delivery${driver?' — '+driver:''}`,`${state.result.paradas.length} entregas · ${state.result.distancia_km} km`,`Saída ${state.result.saida} · retorno previsto ${state.result.retorno}`,'',...state.result.paradas.map(p=>`${p.ordem}. ${p.cliente} — ETA ${p.eta}`),'',...gps];window.open(`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`,'_blank','noopener');}
+  async function publishRoute(){
+    if(!state.result)throw new Error('Gere a rota antes de publicá-la.');
+    const resp=await fetch(publishUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({pedidos:state.result.ordem,entregador:document.getElementById('routeDriver').value.trim()})});
+    const data=await resp.json();if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);return data;
+  }
+  async function copyDriverLink(){try{const data=await publishRoute();if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(data.url);toast('Link fixo do motoboy copiado.');}else{window.prompt('Copie o link fixo do motoboy:',data.url);}}catch(error){toast(error.message,true);}}
+  async function share(){const popup=window.open('about:blank','_blank');try{const data=await publishRoute();const driver=document.getElementById('routeDriver').value.trim();const lines=[`🛵 Rota do Delivery${driver?' — '+driver:''}`,`${state.result.paradas.length} entregas · ${state.result.distancia_km} km`,`Saída ${state.result.saida} · retorno previsto ${state.result.retorno}`,'',`Painel do motoboy: ${data.url}`,'Abra o painel para ver pedidos, pagamentos, clientes e as etapas do Google Maps.'];const target=`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`;if(popup){popup.opener=null;popup.location.href=target;}else{window.location.href=target;}}catch(error){if(popup)popup.close();toast(error.message,true);}}
 
   document.getElementById('orderSearch').addEventListener('input',renderAvailable);
   document.getElementById('routeGenerate').addEventListener('click',generateBestRoute);
   document.getElementById('routeOptimize').addEventListener('click',()=>calculate(true));
   document.getElementById('routeSave').addEventListener('click',saveDraft);
+  document.getElementById('routeDriverLink').addEventListener('click',copyDriverLink);
   document.getElementById('routeShare').addEventListener('click',share);
   document.getElementById('routeMaps').addEventListener('click',openMaps);
   document.getElementById('stopMinutes').addEventListener('change',()=>scheduleAutomaticCalculation(false,100));

@@ -81,6 +81,7 @@ urlpatterns = [
     path("delivery/", pdv.delivery_kanban, name="delivery"),
     path("delivery/rotas/", pdv.delivery_rotas, name="delivery_rotas"),
     path("delivery/rotas/calcular/", pdv.delivery_rota_calcular, name="delivery_rota_calcular"),
+    path("delivery/rotas/publicar/", pdv.delivery_rota_publicar, name="delivery_rota_publicar"),
     path("delivery/relatorio/", pdv.delivery_relatorio, name="delivery_relatorio"),
     path("delivery/relatorio/imprimir/", pdv.delivery_relatorio_pagina, name="delivery_relatorio_pagina"),
     path("delivery/<int:pk>/mover/", pdv.delivery_mover, name="delivery_mover"),

@@ -3539,6 +3539,59 @@ def delivery_rota_calcular(request):
 
 
 @require_POST
+@requer_permissao('pdv', 'ver')
+def delivery_rota_publicar(request):
+    """Atualiza o conteúdo do link fixo usado pelo motoboy."""
+    from apps.pdv.models import RotaDeliveryPublica
+
+    try:
+        corpo = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+
+    ids = []
+    for bruto in corpo.get('pedidos') or []:
+        try:
+            pk = int(bruto)
+        except (TypeError, ValueError):
+            continue
+        if pk not in ids:
+            ids.append(pk)
+    if not ids:
+        return JsonResponse({'erro': 'Gere uma rota antes de publicá-la.'}, status=400)
+
+    encontrados = set(
+        VendaPDV.objects.for_filial(request.filial_ativa)
+        .filter(pk__in=ids, delivery=True)
+        .exclude(status='cancelada')
+        .values_list('pk', flat=True)
+    )
+    if any(pk not in encontrados for pk in ids):
+        return JsonResponse({'erro': 'A rota contém pedidos inválidos.'}, status=400)
+
+    entregador = str(corpo.get('entregador') or '').strip()[:100]
+    with tenant_atomic():
+        rota, _criada = RotaDeliveryPublica.objects.get_or_create(
+            filial=request.filial_ativa,
+        )
+        rota.pedido_ids = ids
+        rota.entregador = entregador
+        rota.ativa = True
+        rota.save()
+        if entregador:
+            VendaPDV.objects.for_filial(request.filial_ativa).filter(pk__in=ids).update(
+                entregador=entregador,
+            )
+
+    url = request.build_absolute_uri(
+        reverse('delivery_publico:painel', args=[rota.token]),
+    )
+    response = JsonResponse({'ok': True, 'url': url, 'fixo': not _criada})
+    response['Cache-Control'] = 'private, no-store'
+    return response
+
+
+@require_POST
 @requer_permissao('pdv', 'editar')
 def delivery_mover(request, pk):
     try:

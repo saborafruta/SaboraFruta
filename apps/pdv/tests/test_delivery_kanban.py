@@ -14,7 +14,7 @@ from django.utils import timezone
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.mapas.services.roteirizacao import Rota
-from apps.pdv.models import VendaPDV
+from apps.pdv.models import RotaDeliveryPublica, VendaPDV
 
 
 class DeliveryKanbanBase(TestCase):
@@ -241,3 +241,88 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
 
         self.assertEqual(resp.status_code, 400)
         self.assertIn('sem coordenada', resp.json()['erro'].lower())
+
+
+class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
+
+    def setUp(self):
+        super().setUp()
+        self.filial.latitude = -5.7900
+        self.filial.longitude = -35.2100
+        self.filial.save(update_fields=['latitude', 'longitude'])
+        self.cliente.latitude = -5.8000
+        self.cliente.longitude = -35.2200
+        self.cliente.celular = '(84) 99999-1234'
+        self.cliente.save(update_fields=['latitude', 'longitude', 'celular'])
+
+    def _publicar(self, pedidos, entregador='João'):
+        return self.client.post(
+            reverse('pdv:delivery_rota_publicar'),
+            data=json.dumps({'pedidos': [p.pk for p in pedidos], 'entregador': entregador}),
+            content_type='application/json',
+        )
+
+    def test_link_e_curto_fixo_e_atualiza_o_conteudo(self):
+        primeiro = self._venda(numero=401)
+        segundo = self._venda(numero=402)
+
+        primeira_publicacao = self._publicar([primeiro]).json()
+        segunda_publicacao = self._publicar([segundo]).json()
+
+        self.assertEqual(primeira_publicacao['url'], segunda_publicacao['url'])
+        rota = RotaDeliveryPublica.objects.get(filial=self.filial)
+        self.assertEqual(len(rota.token), 22)
+        self.assertEqual(rota.pedido_ids, [segundo.pk])
+        self.assertEqual(rota.entregador, 'João')
+
+    def test_painel_publico_exibe_contato_observacao_pagamento_e_pedido(self):
+        venda = self._venda(numero=410)
+        venda.observacao_delivery = 'Entregar na recepção lateral.'
+        venda.valor_total = 89.90
+        venda.save(update_fields=['observacao_delivery', 'valor_total'])
+        url = self._publicar([venda]).json()['url']
+        self.client.logout()
+
+        resp = self.client.get(url)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, '#410')
+        self.assertContains(resp, 'Entregar na recepção lateral.')
+        self.assertContains(resp, '(84) 99999-1234')
+        self.assertContains(resp, 'WhatsApp do cliente')
+        self.assertContains(resp, 'PAGO')
+        self.assertContains(resp, 'Marcar entrega como concluída')
+        self.assertEqual(resp.headers['Cache-Control'], 'private, no-store')
+
+    def test_motoboy_conclui_somente_pedido_da_rota(self):
+        permitido = self._venda(numero=420)
+        fora_da_rota = self._venda(numero=421)
+        self._publicar([permitido])
+        rota = RotaDeliveryPublica.objects.get(filial=self.filial)
+        self.client.logout()
+
+        concluido = self.client.post(
+            reverse('delivery_publico:concluir', args=[rota.token, permitido.pk]),
+        )
+        negado = self.client.post(
+            reverse('delivery_publico:concluir', args=[rota.token, fora_da_rota.pk]),
+        )
+
+        permitido.refresh_from_db()
+        fora_da_rota.refresh_from_db()
+        self.assertEqual(concluido.status_code, 302)
+        self.assertEqual(permitido.status_delivery, VendaPDV.StatusDelivery.ENTREGUE)
+        self.assertEqual(negado.status_code, 404)
+        self.assertEqual(fora_da_rota.status_delivery, VendaPDV.StatusDelivery.NOVO)
+
+    def test_sete_entregas_viram_tres_etapas_no_maps_movel(self):
+        pedidos = [self._venda(numero=430 + indice) for indice in range(7)]
+        url = self._publicar(pedidos).json()['url']
+        self.client.logout()
+
+        resp = self.client.get(url)
+
+        self.assertContains(resp, 'Abrir etapa 1 de 3')
+        self.assertContains(resp, 'Abrir etapa 2 de 3')
+        self.assertContains(resp, 'Abrir etapa 3 de 3')
+        self.assertContains(resp, 'dir_action=navigate', html=False)

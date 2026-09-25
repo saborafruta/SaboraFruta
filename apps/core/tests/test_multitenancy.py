@@ -197,6 +197,7 @@ class MultitenancyFoundationTests(TestCase):
         casos = {
             '/comprovante/abc/pdf/': ('pdv', 'abc'),
             '/cardapio/mesa-123/pedido/': ('cardapio', 'mesa-123'),
+            '/entregas/rota-secreta/pedido/1/concluir/': ('rota_delivery', 'rota-secreta'),
             '/pedido/token-456/responder/': ('pedido', 'token-456'),
             '/pedido/entrega/EXP-789/': ('entrega', 'EXP-789'),
         }

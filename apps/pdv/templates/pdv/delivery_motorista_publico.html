@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Rota do Delivery</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b111b;--card:#151e2b;--line:#273448;--text:#f3f6fb;--muted:#9aa9bd;--blue:#2f72f4;--green:#16a36a;--amber:#e9a423;--red:#ef5350}
+    *{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#101b2d 0,#0b111b 260px);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+    main{width:min(720px,100%);margin:auto;padding:18px 14px 40px}.top{padding:8px 2px 18px}.eyebrow{color:#79a8ff;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}.top h1{font-size:28px;line-height:1.1;margin:6px 0}.sub{color:var(--muted);margin:0}.summary{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:16px}.stat{background:rgba(21,30,43,.9);border:1px solid var(--line);border-radius:14px;padding:12px}.stat small{display:block;color:var(--muted);text-transform:uppercase;font-size:10px;font-weight:800}.stat strong{display:block;margin-top:3px;font-size:18px}
+    .maps{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:14px}.maps h2{font-size:15px;margin:0 0 5px}.maps p{color:var(--muted);font-size:12px;margin:0 0 12px}.map-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+    .btn{display:flex;align-items:center;justify-content:center;gap:7px;min-height:48px;padding:11px 14px;border:0;border-radius:11px;color:#fff;background:var(--blue);font:inherit;font-weight:800;text-decoration:none;cursor:pointer}.btn.green{background:var(--green)}.btn.outline{background:#202c3d;border:1px solid #3a4b63}.btn:disabled{opacity:.55;cursor:default}
+    .order{background:var(--card);border:1px solid var(--line);border-radius:17px;margin:12px 0;overflow:hidden}.order.done{border-color:rgba(22,163,106,.6)}.order-head{display:flex;gap:12px;align-items:flex-start;padding:15px}.number{width:34px;height:34px;flex:0 0 34px;border-radius:50%;background:var(--blue);display:grid;place-items:center;font-weight:900}.done .number{background:var(--green)}.order-title{min-width:0;flex:1}.order-title h2{font-size:16px;margin:0;overflow-wrap:anywhere}.order-title p{margin:3px 0 0;color:var(--muted);font-size:13px}.tag{display:inline-flex;margin-top:8px;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:900}.paid{background:rgba(22,163,106,.16);color:#54dda7}.collect{background:rgba(233,164,35,.16);color:#ffc85c}
+    .section{border-top:1px solid var(--line);padding:13px 15px}.section-title{color:var(--muted);font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px}.info{margin:3px 0}.note{padding:10px;border-radius:10px;background:rgba(233,164,35,.1);color:#ffd889;margin-top:7px}.items{margin:0;padding:0;list-style:none}.items li{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px dashed #2d3b4e}.items li:first-child{border-top:0}.items span:last-child{white-space:nowrap;color:#c7d3e3}.item-note{display:block;color:#ffd889;font-size:12px;margin-top:2px}.actions{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:14px 15px;border-top:1px solid var(--line)}.actions form{grid-column:1/-1}.done-label{display:flex;align-items:center;justify-content:center;min-height:48px;border-radius:11px;background:rgba(22,163,106,.14);color:#60e3ad;font-weight:900}.empty{text-align:center;padding:40px 18px;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:16px}.foot{text-align:center;color:#718197;font-size:11px;margin-top:18px}
+    @media(max-width:420px){.actions{grid-template-columns:1fr}.actions form{grid-column:auto}.top h1{font-size:25px}}
+  </style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div class="eyebrow">{{ rota.filial.nome_fantasia|default:rota.filial.razao_social }}</div>
+    <h1>Rota do Delivery</h1>
+    <p class="sub">{% if rota.entregador %}Motoboy: {{ rota.entregador }} · {% endif %}atualizada em {{ rota.updated_at|date:"d/m/Y H:i" }}</p>
+    <div class="summary">
+      <div class="stat"><small>Entregas</small><strong>{{ total }}</strong></div>
+      <div class="stat"><small>Concluídas</small><strong>{{ concluidos }}/{{ total }}</strong></div>
+    </div>
+  </header>
+
+  {% if etapas_maps %}
+  <section class="maps">
+    <h2>Navegação no Google Maps</h2>
+    <p>A rota foi separada em etapas de até três entregas para funcionar corretamente no celular.</p>
+    <div class="map-grid">
+      {% for url in etapas_maps %}<a class="btn" href="{{ url }}" target="_blank" rel="noopener">Abrir etapa {{ forloop.counter }} de {{ etapas_maps|length }}</a>{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% for pedido in pedidos %}
+  <article class="order{% if pedido.concluido %} done{% endif %}" id="pedido-{{ pedido.venda.pk }}">
+    <div class="order-head">
+      <div class="number">{% if pedido.concluido %}✓{% else %}{{ pedido.ordem }}{% endif %}</div>
+      <div class="order-title">
+        <h2>#{{ pedido.venda.numero_venda }} · {{ pedido.cliente }}</h2>
+        <p>{{ pedido.endereco|default:"Endereço não informado" }}{% if pedido.complemento %} · {{ pedido.complemento }}{% endif %}</p>
+        {% if pedido.pago %}<span class="tag paid">PAGO</span>{% else %}<span class="tag collect">COBRAR R$ {{ pedido.venda.valor_total|floatformat:2 }}</span>{% endif %}
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Pagamento</div>
+      <p class="info"><strong>{{ pedido.formas_pagamento }}</strong> · total R$ {{ pedido.venda.valor_total|floatformat:2 }}</p>
+    </div>
+
+    {% if pedido.telefone or pedido.observacoes %}
+    <div class="section">
+      {% if pedido.telefone %}<div class="section-title">Contato</div><p class="info">{{ pedido.telefone }}</p>{% endif %}
+      {% if pedido.observacoes %}<div class="section-title" style="margin-top:9px">Observações</div>{% for observacao in pedido.observacoes %}<div class="note">{{ observacao }}</div>{% endfor %}{% endif %}
+    </div>
+    {% endif %}
+
+    <div class="section">
+      <div class="section-title">Itens do pedido</div>
+      <ul class="items">
+        {% for item in pedido.venda.itens.all %}
+        <li><span>{{ item.produto.descricao|default:"Produto" }}{% if item.observacao %}<small class="item-note">{{ item.observacao }}</small>{% endif %}</span><span>{{ item.quantidade|floatformat:"-3" }} {{ item.unidade_medida }}</span></li>
+        {% empty %}<li><span>Itens não disponíveis</span></li>{% endfor %}
+      </ul>
+    </div>
+
+    <div class="actions">
+      {% if pedido.navegar_url %}<a class="btn outline" href="{{ pedido.navegar_url }}" target="_blank" rel="noopener">Navegar</a>{% endif %}
+      {% if pedido.whatsapp %}<a class="btn green" href="https://wa.me/{{ pedido.whatsapp }}" target="_blank" rel="noopener">WhatsApp do cliente</a>{% elif pedido.telefone %}<a class="btn green" href="tel:{{ pedido.telefone }}">Ligar para o cliente</a>{% endif %}
+      {% if pedido.concluido %}<div class="done-label">Entrega concluída</div>{% else %}
+      <form method="post" action="{% url 'delivery_publico:concluir' rota.token pedido.venda.pk %}" onsubmit="return confirm('Confirmar a entrega do pedido #{{ pedido.venda.numero_venda }}?')">
+        {% csrf_token %}<button class="btn green" type="submit" style="width:100%">Marcar entrega como concluída</button>
+      </form>{% endif %}
+    </div>
+  </article>
+  {% empty %}<div class="empty">Nenhum pedido publicado nesta rota.</div>{% endfor %}
+
+  <p class="foot">Link privado da rota. Não encaminhe para pessoas que não participam da entrega.</p>
+</main>
+</body>
+</html>
