@@ -85,6 +85,10 @@ class RoteirizadorBase:
     def rota(self, pontos) -> Rota:  # pragma: no cover
         raise NotImplementedError
 
+    def matriz_distancias(self, pontos) -> list[list[float]]:  # pragma: no cover
+        """Distância rodoviária, em metros, entre todos os pares de pontos."""
+        raise NotImplementedError
+
 
 class OSRMRoteirizador(RoteirizadorBase):
     """
@@ -121,6 +125,20 @@ class OSRMRoteirizador(RoteirizadorBase):
             geometria=geometria,
             paradas=[],  # preenchido por RoteirizacaoService, que tem os nomes
         )
+
+    def matriz_distancias(self, pontos) -> list[list[float]]:
+        url = f'{self.base_url}/table/v1/driving/{_para_lonlat(pontos)}'
+        resp = requests.get(
+            url,
+            params={'annotations': 'distance'},
+            timeout=TIMEOUT_S,
+        )
+        resp.raise_for_status()
+        dados = resp.json()
+        distancias = dados.get('distances')
+        if dados.get('code') != 'Ok' or not distancias:
+            raise ValueError(dados.get('message') or 'matriz de distâncias não encontrada')
+        return distancias
 
 
 class ORSRoteirizador(RoteirizadorBase):
@@ -163,6 +181,23 @@ class ORSRoteirizador(RoteirizadorBase):
             geometria=[[lat, lng] for lng, lat in coords],
             paradas=[],
         )
+
+    def matriz_distancias(self, pontos) -> list[list[float]]:
+        resp = requests.post(
+            'https://api.openrouteservice.org/v2/matrix/driving-car',
+            headers={'Authorization': self.api_key, 'Content-Type': 'application/json'},
+            json={
+                'locations': [[float(lng), float(lat)] for lat, lng in pontos],
+                'metrics': ['distance'],
+            },
+            timeout=TIMEOUT_S,
+        )
+        resp.raise_for_status()
+        dados = resp.json()
+        distancias = dados.get('distances')
+        if not distancias:
+            raise ValueError('matriz de distâncias não encontrada')
+        return distancias
 
 
 def construir_roteirizador() -> RoteirizadorBase:

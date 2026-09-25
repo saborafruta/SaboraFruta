@@ -141,6 +141,8 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'Rota do Delivery')
         self.assertContains(tela, 'Melhor rota')
         self.assertContains(tela, 'Reotimizar livres')
+        self.assertContains(tela, 'Google Maps')
+        self.assertNotContains(tela, 'Waze')
         pedidos = json.loads(tela.context['pedidos_json'])
         self.assertIn(ativo.pk, [p['id'] for p in pedidos])
         self.assertNotIn(102, [p['numero'] for p in pedidos])
@@ -179,8 +181,9 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         pontos = mock_rota.call_args.args[0]
         self.assertEqual(pontos[0], pontos[-1])
 
+    @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.matriz_distancias')
     @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.rota')
-    def test_gerar_rota_otimiza_proximidade_e_retorno(self, mock_rota):
+    def test_gerar_rota_otimiza_distancia_pelas_ruas(self, mock_rota, mock_matriz):
         proximo = self._venda(numero=211)
         cliente_distante = Cliente.objects.create(
             filial=self.filial, razao_social='Cliente Distante', cpf_cnpj='98765432101',
@@ -204,6 +207,14 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
             distancia_m=30000, duracao_s=3600,
             geometria=[[-5.79, -35.21], [-5.90, -35.31], [-5.79, -35.21]],
         )
+        # Índices: 0 filial, 1 próximo, 2 distante, 3 intermediário.
+        # A sequência 1 -> 3 -> 2 -> 0 é menor pela malha viária.
+        mock_matriz.return_value = [
+            [0, 1, 9, 2],
+            [1, 0, 10, 1],
+            [9, 10, 0, 1],
+            [2, 1, 1, 0],
+        ]
 
         resp = self.client.post(
             reverse('pdv:delivery_rota_calcular'),

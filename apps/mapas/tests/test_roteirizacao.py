@@ -81,6 +81,21 @@ class OSRMTests(TestCase):
         url = mock.call_args[0][0]
         self.assertIn('-35.21,-5.79', url)
 
+    def test_matriz_usa_distancias_pelas_ruas(self):
+        mock = self._mock({
+            'code': 'Ok',
+            'distances': [[0, 1200.0], [1350.0, 0]],
+        })
+
+        matriz = OSRMRoteirizador().matriz_distancias([
+            (-5.79, -35.21), (-5.80, -35.25),
+        ])
+
+        self.assertEqual(matriz, [[0, 1200.0], [1350.0, 0]])
+        url = mock.call_args[0][0]
+        self.assertIn('/table/v1/driving/', url)
+        self.assertEqual(mock.call_args.kwargs['params'], {'annotations': 'distance'})
+
     def test_code_diferente_de_ok_vira_erro(self):
         self._mock({'code': 'NoRoute', 'message': 'sem rota'})
         rota = OSRMRoteirizador().rota([(-5.79, -35.21), (-5.80, -35.25)])

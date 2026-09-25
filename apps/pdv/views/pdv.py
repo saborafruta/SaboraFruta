@@ -3339,70 +3339,82 @@ def delivery_rotas(request):
     })
 
 
-def _delivery_otimizar_livres(pedidos, travados, origem):
+def _delivery_otimizar_livres(pedidos, travados, matriz_distancias):
     """Otimiza blocos livres sem mudar a posição dos pedidos travados.
 
     Cada bloco considera o ponto anterior e o próximo ponto fixo; no último
-    bloco, o destino é a filial. A sugestão minimiza o circuito completo, em
-    vez de produzir uma cadeia que pode terminar longe do ponto de retorno.
+    bloco, o destino é a filial. O custo vem da matriz rodoviária do provider,
+    incluindo sentidos de rua, pontes e retornos; o índice zero é a filial.
     """
-    from apps.mapas.services.otimizacao import distancia_haversine_m
 
-    def coordenada(pedido):
-        return (float(pedido.cliente.latitude), float(pedido.cliente.longitude))
+    indice_por_pedido = {pedido.pk: i + 1 for i, pedido in enumerate(pedidos)}
 
-    def custo(bloco, ponto_inicial, ponto_final):
-        pontos = [ponto_inicial] + [coordenada(p) for p in bloco] + [ponto_final]
-        return sum(
-            distancia_haversine_m(pontos[i], pontos[i + 1])
-            for i in range(len(pontos) - 1)
-        )
+    def distancia_entre(indice_inicial, indice_final):
+        distancia = matriz_distancias[indice_inicial][indice_final]
+        return float(distancia) if distancia is not None else float('inf')
 
-    def otimizar_bloco(bloco, ponto_inicial, ponto_final):
+    def custo(bloco, indice_inicial, indice_final):
+        indices = [indice_inicial] + [indice_por_pedido[p.pk] for p in bloco] + [indice_final]
+        return sum(distancia_entre(indices[i], indices[i + 1]) for i in range(len(indices) - 1))
+
+    def otimizar_bloco(bloco, indice_inicial, indice_final):
         if len(bloco) < 2:
             return list(bloco)
 
-        restantes = list(bloco)
-        ordem = []
-        atual = ponto_inicial
-        while restantes:
-            proximo = min(
-                restantes,
-                key=lambda pedido: distancia_haversine_m(atual, coordenada(pedido)),
-            )
-            ordem.append(proximo)
-            restantes.remove(proximo)
-            atual = coordenada(proximo)
+        def completar_por_vizinho(primeiro):
+            restantes = [pedido for pedido in bloco if pedido.pk != primeiro.pk]
+            ordem = [primeiro]
+            atual = indice_por_pedido[primeiro.pk]
+            while restantes:
+                proximo = min(
+                    restantes,
+                    key=lambda pedido: (
+                        matriz_distancias[atual][indice_por_pedido[pedido.pk]] is None,
+                        distancia_entre(atual, indice_por_pedido[pedido.pk]),
+                    ),
+                )
+                ordem.append(proximo)
+                restantes.remove(proximo)
+                atual = indice_por_pedido[proximo.pk]
+            return ordem
 
-        melhorou = True
-        while melhorou:
-            melhorou = False
-            custo_atual = custo(ordem, ponto_inicial, ponto_final)
-            for i in range(len(ordem) - 1):
-                for j in range(i + 1, len(ordem)):
-                    candidata = ordem[:i] + ordem[i:j + 1][::-1] + ordem[j + 1:]
-                    custo_candidata = custo(candidata, ponto_inicial, ponto_final)
-                    if custo_candidata < custo_atual - 0.5:
-                        ordem = candidata
-                        melhorou = True
-                        custo_atual = custo_candidata
-        return ordem
+        def melhorar_2opt(ordem):
+            melhorou = True
+            while melhorou:
+                melhorou = False
+                custo_atual = custo(ordem, indice_inicial, indice_final)
+                for i in range(len(ordem) - 1):
+                    for j in range(i + 1, len(ordem)):
+                        candidata = ordem[:i] + ordem[i:j + 1][::-1] + ordem[j + 1:]
+                        custo_candidata = custo(candidata, indice_inicial, indice_final)
+                        if custo_candidata < custo_atual - 0.5:
+                            ordem = candidata
+                            melhorou = True
+                            custo_atual = custo_candidata
+            return ordem
+
+        # Testar cada pedido como primeira parada evita depender de uma única
+        # escolha gulosa. Em seguida o 2-opt elimina cruzamentos e retornos ruins.
+        candidatas = [melhorar_2opt(completar_por_vizinho(pedido)) for pedido in bloco]
+        return min(candidatas, key=lambda ordem: custo(ordem, indice_inicial, indice_final))
 
     resultado = list(pedidos)
     posicoes_travadas = [i for i, p in enumerate(resultado) if p.pk in travados]
     limites = posicoes_travadas + [len(resultado)]
     inicio = 0
-    ponto_anterior = origem
+    indice_anterior = 0
     for limite in limites:
         bloco = resultado[inicio:limite]
-        ponto_seguinte = coordenada(resultado[limite]) if limite < len(resultado) else origem
+        indice_seguinte = (
+            indice_por_pedido[resultado[limite].pk] if limite < len(resultado) else 0
+        )
         if bloco:
             resultado[inicio:limite] = otimizar_bloco(
-                bloco, ponto_anterior, ponto_seguinte,
+                bloco, indice_anterior, indice_seguinte,
             )
         if limite < len(resultado):
             fixo = resultado[limite]
-            ponto_anterior = coordenada(fixo)
+            indice_anterior = indice_por_pedido[fixo.pk]
             inicio = limite + 1
         else:
             inicio = limite
@@ -3459,14 +3471,27 @@ def delivery_rota_calcular(request):
             travados.add(int(bruto))
         except (TypeError, ValueError):
             pass
+    pontos_entrega_originais = [
+        (float(v.cliente.latitude), float(v.cliente.longitude)) for v in pedidos
+    ]
+    roteirizador = construir_roteirizador()
     if corpo.get('otimizar'):
-        pedidos = _delivery_otimizar_livres(pedidos, travados, origem)
+        try:
+            matriz = roteirizador.matriz_distancias([origem] + pontos_entrega_originais)
+            tamanho = len(pedidos) + 1
+            if len(matriz) != tamanho or any(len(linha) != tamanho for linha in matriz):
+                raise ValueError('matriz de distâncias incompleta')
+            pedidos = _delivery_otimizar_livres(pedidos, travados, matriz)
+        except Exception as exc:
+            logger.warning('falha ao otimizar rota de delivery pelas ruas: %s', exc)
+            return JsonResponse({
+                'erro': 'Não foi possível comparar as distâncias pelas ruas. Tente novamente.'
+            }, status=503)
 
     pontos_entrega = [
         (float(v.cliente.latitude), float(v.cliente.longitude)) for v in pedidos
     ]
     pontos = [origem] + pontos_entrega + [origem]
-    roteirizador = construir_roteirizador()
     try:
         rota = roteirizador.rota(pontos)
     except Exception as exc:

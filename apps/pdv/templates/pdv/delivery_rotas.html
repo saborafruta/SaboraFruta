@@ -98,7 +98,6 @@
       <button class="dr-button" id="routeSave">Salvar rascunho</button>
       <button class="dr-button green" id="routeShare">Compartilhar no WhatsApp</button>
       <button class="dr-button" id="routeMaps">Google Maps</button>
-      <button class="dr-button" id="routeWaze">Waze</button>
     </div>
   </div>
 
@@ -263,7 +262,6 @@
     });
   }
   function openMaps(){const urls=googleUrls();if(!urls.length)return toast('Gere a rota antes de abrir o GPS.',true);window.open(urls[0],'_blank','noopener');if(urls.length>1)toast(`Rota dividida em ${urls.length} etapas. Os links de todas as etapas vão no WhatsApp.`);}
-  function openWaze(){const first=state.result?.paradas?.[0];if(!first)return toast('Gere a rota antes de abrir o GPS.',true);window.open(`https://www.waze.com/ul?ll=${first.lat}%2C${first.lng}&navigate=yes`,'_blank','noopener');}
   function saveDraft(){const payload={selected:state.selected,locked:[...state.locked],driver:document.getElementById('routeDriver').value,minutes:document.getElementById('stopMinutes').value};localStorage.setItem('delivery-route-draft',JSON.stringify(payload));toast('Rascunho salvo neste navegador.');}
   function loadDraft(){try{const d=JSON.parse(localStorage.getItem('delivery-route-draft')||'null');if(!d)return;state.selected=(d.selected||[]).map(Number).filter(id=>byId[String(id)]?.tem_coordenada);state.locked=new Set((d.locked||[]).map(Number));document.getElementById('routeDriver').value=d.driver||'';document.getElementById('stopMinutes').value=d.minutes||5;}catch(e){}}
   function share(){if(!state.result)return toast('Gere a rota antes de compartilhar.',true);const driver=document.getElementById('routeDriver').value.trim();const urls=googleUrls();const gps=urls.length===1?[`Google Maps: ${urls[0]}`]:urls.flatMap((url,i)=>[`Etapa ${i+1} de ${urls.length}: ${url}`]);const lines=[`🛵 Rota do Delivery${driver?' — '+driver:''}`,`${state.result.paradas.length} entregas · ${state.result.distancia_km} km`,`Saída ${state.result.saida} · retorno previsto ${state.result.retorno}`,'',...state.result.paradas.map(p=>`${p.ordem}. ${p.cliente} — ETA ${p.eta}`),'',...gps];window.open(`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`,'_blank','noopener');}
@@ -274,7 +272,6 @@
   document.getElementById('routeSave').addEventListener('click',saveDraft);
   document.getElementById('routeShare').addEventListener('click',share);
   document.getElementById('routeMaps').addEventListener('click',openMaps);
-  document.getElementById('routeWaze').addEventListener('click',openWaze);
   document.getElementById('stopMinutes').addEventListener('change',()=>scheduleAutomaticCalculation(false,100));
   loadDraft();renderAvailable();renderRoute();initMap();
   if(!branch.tem_coordenada)document.getElementById('mapNote').textContent='A filial precisa de coordenadas para calcular saída e retorno.';
