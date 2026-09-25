@@ -93,8 +93,8 @@
       <div class="dr-subtitle">Selecione pedidos, organize a sequência e gere a melhor rota respeitando suas prioridades.</div>
     </div>
     <div class="dr-actions">
-      <button class="dr-button primary" id="routeGenerate">Gerar rota</button>
-      <button class="dr-button" id="routeOptimize">Reotimizar livres</button>
+      <button class="dr-button primary" id="routeGenerate" title="Remove as travas e busca a menor rota para todos os pedidos">Melhor rota</button>
+      <button class="dr-button" id="routeOptimize" title="Mantém posições travadas e reorganiza somente as demais">Reotimizar livres</button>
       <button class="dr-button" id="routeSave">Salvar rascunho</button>
       <button class="dr-button green" id="routeShare">Compartilhar no WhatsApp</button>
       <button class="dr-button" id="routeMaps">Google Maps</button>
@@ -122,7 +122,7 @@
     </section>
     <section class="dr-panel map-panel">
       <div class="dr-panel-head"><span class="dr-panel-title">Mapa da rota</span><span class="dr-count" id="routeProvider">Aguardando rota</span></div>
-      <div class="dr-map"><div id="deliveryRouteMap"></div><div class="dr-map-note" id="mapNote">Selecione os pedidos e clique em “Gerar rota”.</div></div>
+      <div class="dr-map"><div id="deliveryRouteMap"></div><div class="dr-map-note" id="mapNote">Selecione os pedidos e clique em “Melhor rota”.</div></div>
     </section>
   </div>
 
@@ -215,6 +215,14 @@
   function moveOrder(from,to) { if(!from||from===to)return; const old=state.selected.indexOf(from), target=state.selected.indexOf(to); if(old<0||target<0)return; state.selected.splice(old,1);state.selected.splice(target,0,from);state.locked.add(from);state.result=null;renderRoute();resetSummary();scheduleAutomaticCalculation(false,150); }
   function resetSummary(){document.getElementById('routeDeparture').textContent='—';document.getElementById('routeReturn').textContent='—';document.getElementById('routeDistance').textContent='—';document.getElementById('routeTimeline').innerHTML='<div class="dr-empty" style="width:100%;padding:6px;">Recalcule a rota para atualizar os horários.</div>';}
 
+  function generateBestRoute() {
+    const hadLocks=state.locked.size>0;
+    state.locked.clear();
+    renderRoute();
+    if(hadLocks)toast('Posições destravadas. Buscando a melhor rota completa…');
+    calculate(true);
+  }
+
   async function calculate(optimize=false) {
     clearTimeout(automaticCalculationTimer);
     if(!state.selected.length){toast('Selecione ao menos um pedido.',true);return;}
@@ -261,7 +269,7 @@
   function share(){if(!state.result)return toast('Gere a rota antes de compartilhar.',true);const driver=document.getElementById('routeDriver').value.trim();const urls=googleUrls();const gps=urls.length===1?[`Google Maps: ${urls[0]}`]:urls.flatMap((url,i)=>[`Etapa ${i+1} de ${urls.length}: ${url}`]);const lines=[`🛵 Rota do Delivery${driver?' — '+driver:''}`,`${state.result.paradas.length} entregas · ${state.result.distancia_km} km`,`Saída ${state.result.saida} · retorno previsto ${state.result.retorno}`,'',...state.result.paradas.map(p=>`${p.ordem}. ${p.cliente} — ETA ${p.eta}`),'',...gps];window.open(`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`,'_blank','noopener');}
 
   document.getElementById('orderSearch').addEventListener('input',renderAvailable);
-  document.getElementById('routeGenerate').addEventListener('click',()=>calculate(true));
+  document.getElementById('routeGenerate').addEventListener('click',generateBestRoute);
   document.getElementById('routeOptimize').addEventListener('click',()=>calculate(true));
   document.getElementById('routeSave').addEventListener('click',saveDraft);
   document.getElementById('routeShare').addEventListener('click',share);

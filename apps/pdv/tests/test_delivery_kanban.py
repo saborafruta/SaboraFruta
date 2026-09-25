@@ -139,6 +139,8 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertEqual(tela.status_code, 200)
         self.assertEqual(tela.headers['X-Frame-Options'], 'SAMEORIGIN')
         self.assertContains(tela, 'Rota do Delivery')
+        self.assertContains(tela, 'Melhor rota')
+        self.assertContains(tela, 'Reotimizar livres')
         pedidos = json.loads(tela.context['pedidos_json'])
         self.assertIn(ativo.pk, [p['id'] for p in pedidos])
         self.assertNotIn(102, [p['numero'] for p in pedidos])
