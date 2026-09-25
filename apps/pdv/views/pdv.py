@@ -18,6 +18,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.debug import sensitive_variables
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 from apps.cadastros.models import Cliente
 from apps.core.services.checkout import (
@@ -3324,6 +3325,7 @@ def _delivery_rota_filial(filial):
     }
 
 
+@xframe_options_sameorigin
 @requer_permissao('pdv', 'ver')
 def delivery_rotas(request):
     pedidos = [
