@@ -326,3 +326,32 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         self.assertContains(resp, 'Abrir etapa 2 de 3')
         self.assertContains(resp, 'Abrir etapa 3 de 3')
         self.assertContains(resp, 'dir_action=navigate', html=False)
+
+    def test_painel_oferece_osmand_google_completo_e_maps_em_etapas(self):
+        pedidos = [self._venda(numero=440 + indice) for indice in range(7)]
+        url = self._publicar(pedidos).json()['url']
+        self.client.logout()
+
+        resp = self.client.get(url)
+
+        self.assertContains(resp, 'OsmAnd — rota completa')
+        self.assertContains(resp, 'Baixar GPX para OsmAnd')
+        self.assertContains(resp, 'Google Maps completo (teste)')
+        self.assertContains(resp, 'Google Maps em etapas — opção segura')
+        self.assertContains(resp, 'https://osmand.net/map/?', html=False)
+        self.assertContains(resp, 'waypoints=', html=False)
+
+    def test_gpx_contem_todos_os_pedidos_em_uma_unica_rota(self):
+        pedidos = [self._venda(numero=450 + indice) for indice in range(3)]
+        self._publicar(pedidos)
+        rota = RotaDeliveryPublica.objects.get(filial=self.filial)
+        self.client.logout()
+
+        resp = self.client.get(reverse('delivery_publico:gpx', args=[rota.token]))
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'application/gpx+xml')
+        self.assertIn('attachment; filename="rota-delivery.gpx"', resp['Content-Disposition'])
+        self.assertEqual(resp.content.count(b'<rtept '), 5)
+        for numero in range(450, 453):
+            self.assertIn(f'#{numero}'.encode(), resp.content)

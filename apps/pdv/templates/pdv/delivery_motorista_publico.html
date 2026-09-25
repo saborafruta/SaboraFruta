@@ -9,7 +9,7 @@
     :root{color-scheme:dark;--bg:#0b111b;--card:#151e2b;--line:#273448;--text:#f3f6fb;--muted:#9aa9bd;--blue:#2f72f4;--green:#16a36a;--amber:#e9a423;--red:#ef5350}
     *{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#101b2d 0,#0b111b 260px);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
     main{width:min(720px,100%);margin:auto;padding:18px 14px 40px}.top{padding:8px 2px 18px}.eyebrow{color:#79a8ff;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}.top h1{font-size:28px;line-height:1.1;margin:6px 0}.sub{color:var(--muted);margin:0}.summary{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:16px}.stat{background:rgba(21,30,43,.9);border:1px solid var(--line);border-radius:14px;padding:12px}.stat small{display:block;color:var(--muted);text-transform:uppercase;font-size:10px;font-weight:800}.stat strong{display:block;margin-top:3px;font-size:18px}
-    .maps{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:14px}.maps h2{font-size:15px;margin:0 0 5px}.maps p{color:var(--muted);font-size:12px;margin:0 0 12px}.map-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+    .maps{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:14px}.maps h2{font-size:15px;margin:0 0 5px}.maps p{color:var(--muted);font-size:12px;margin:0 0 12px}.map-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}.maps+.maps{margin-top:12px}.test-note{margin-top:10px!important;color:#ffc85c!important}
     .btn{display:flex;align-items:center;justify-content:center;gap:7px;min-height:48px;padding:11px 14px;border:0;border-radius:11px;color:#fff;background:var(--blue);font:inherit;font-weight:800;text-decoration:none;cursor:pointer}.btn.green{background:var(--green)}.btn.outline{background:#202c3d;border:1px solid #3a4b63}.btn:disabled{opacity:.55;cursor:default}
     .order{background:var(--card);border:1px solid var(--line);border-radius:17px;margin:12px 0;overflow:hidden}.order.done{border-color:rgba(22,163,106,.6)}.order-head{display:flex;gap:12px;align-items:flex-start;padding:15px}.number{width:34px;height:34px;flex:0 0 34px;border-radius:50%;background:var(--blue);display:grid;place-items:center;font-weight:900}.done .number{background:var(--green)}.order-title{min-width:0;flex:1}.order-title h2{font-size:16px;margin:0;overflow-wrap:anywhere}.order-title p{margin:3px 0 0;color:var(--muted);font-size:13px}.tag{display:inline-flex;margin-top:8px;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:900}.paid{background:rgba(22,163,106,.16);color:#54dda7}.collect{background:rgba(233,164,35,.16);color:#ffc85c}
     .section{border-top:1px solid var(--line);padding:13px 15px}.section-title{color:var(--muted);font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px}.info{margin:3px 0}.note{padding:10px;border-radius:10px;background:rgba(233,164,35,.1);color:#ffd889;margin-top:7px}.items{margin:0;padding:0;list-style:none}.items li{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px dashed #2d3b4e}.items li:first-child{border-top:0}.items span:last-child{white-space:nowrap;color:#c7d3e3}.item-note{display:block;color:#ffd889;font-size:12px;margin-top:2px}.actions{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:14px 15px;border-top:1px solid var(--line)}.actions form{grid-column:1/-1}.done-label{display:flex;align-items:center;justify-content:center;min-height:48px;border-radius:11px;background:rgba(22,163,106,.14);color:#60e3ad;font-weight:900}.empty{text-align:center;padding:40px 18px;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:16px}.foot{text-align:center;color:#718197;font-size:11px;margin-top:18px}
@@ -28,10 +28,23 @@
     </div>
   </header>
 
+  {% if osmand_url or google_maps_completa %}
+  <section class="maps">
+    <h2>Rota completa — testes</h2>
+    <p>As duas opções abaixo levam todos os pedidos em uma única rota, na ordem publicada.</p>
+    <div class="map-grid">
+      {% if osmand_url %}<a class="btn green" href="{{ osmand_url }}" target="_blank" rel="noopener">OsmAnd — rota completa</a>{% endif %}
+      <a class="btn outline" href="{% url 'delivery_publico:gpx' rota.token %}">Baixar GPX para OsmAnd</a>
+      {% if google_maps_completa %}<a class="btn" href="{{ google_maps_completa }}" target="_blank" rel="noopener">Google Maps completo (teste)</a>{% endif %}
+    </div>
+    <p class="test-note">No Google completo, confirme se aparecem todas as {{ total }} entregas antes de iniciar. Alguns celulares podem ignorar paradas.</p>
+  </section>
+  {% endif %}
+
   {% if etapas_maps %}
   <section class="maps">
-    <h2>Navegação no Google Maps</h2>
-    <p>A rota foi separada em etapas de até três entregas para funcionar corretamente no celular.</p>
+    <h2>Google Maps em etapas — opção segura</h2>
+    <p>Opção gratuita atual, separada em até três entregas para nenhuma parada desaparecer no celular.</p>
     <div class="map-grid">
       {% for url in etapas_maps %}<a class="btn" href="{{ url }}" target="_blank" rel="noopener">Abrir etapa {{ forloop.counter }} de {{ etapas_maps|length }}</a>{% endfor %}
     </div>

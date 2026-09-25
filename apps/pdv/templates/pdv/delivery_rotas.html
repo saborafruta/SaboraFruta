@@ -98,7 +98,9 @@
       <button class="dr-button" id="routeSave">Salvar rascunho</button>
       <button class="dr-button" id="routeDriverLink">Copiar link do motoboy</button>
       <button class="dr-button green" id="routeShare">Compartilhar no WhatsApp</button>
-      <button class="dr-button" id="routeMaps">Google Maps</button>
+      <button class="dr-button green" id="routeOsmAnd">OsmAnd completo</button>
+      <button class="dr-button" id="routeMapsFull">Google Maps completo (teste)</button>
+      <button class="dr-button" id="routeMaps">Google Maps em etapas</button>
     </div>
   </div>
 
@@ -262,7 +264,26 @@
       return url.toString();
     });
   }
+  function googleFullUrl(){
+    if(!state.result)return'';
+    const url=new URL('https://www.google.com/maps/dir/');
+    const base=`${branch.lat},${branch.lng}`;
+    url.searchParams.set('api','1');url.searchParams.set('origin',base);url.searchParams.set('destination',base);url.searchParams.set('travelmode','driving');url.searchParams.set('dir_action','navigate');
+    if(state.result.paradas.length)url.searchParams.set('waypoints',state.result.paradas.map(coords).join('|'));
+    return url.toString();
+  }
+  function osmandUrl(){
+    if(!state.result)return'';
+    const url=new URL('https://osmand.net/map/');
+    const base=`${branch.lat},${branch.lng}`;
+    url.searchParams.set('start',base);url.searchParams.set('finish',base);
+    state.result.paradas.forEach(stop=>url.searchParams.append('via',coords(stop)));
+    url.searchParams.set('type','osmand');url.searchParams.set('profile','car');
+    return url.toString();
+  }
   function openMaps(){const urls=googleUrls();if(!urls.length)return toast('Gere a rota antes de abrir o GPS.',true);window.open(urls[0],'_blank','noopener');if(urls.length>1)toast(`Rota dividida em ${urls.length} etapas. Todas ficam disponíveis no painel do motoboy.`);}
+  function openMapsFull(){const url=googleFullUrl();if(!url)return toast('Gere a rota antes de testar.',true);window.open(url,'_blank','noopener');toast(`Confira se o Google carregou todas as ${state.result.paradas.length} entregas.`);}
+  function openOsmAnd(){const url=osmandUrl();if(!url)return toast('Gere a rota antes de testar.',true);window.open(url,'_blank','noopener');}
   function saveDraft(){const payload={selected:state.selected,locked:[...state.locked],driver:document.getElementById('routeDriver').value,minutes:document.getElementById('stopMinutes').value};localStorage.setItem('delivery-route-draft',JSON.stringify(payload));toast('Rascunho salvo neste navegador.');}
   function loadDraft(){try{const d=JSON.parse(localStorage.getItem('delivery-route-draft')||'null');if(!d)return;state.selected=(d.selected||[]).map(Number).filter(id=>byId[String(id)]?.tem_coordenada);state.locked=new Set((d.locked||[]).map(Number));document.getElementById('routeDriver').value=d.driver||'';document.getElementById('stopMinutes').value=d.minutes||5;}catch(e){}}
   async function publishRoute(){
@@ -271,7 +292,7 @@
     const data=await resp.json();if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);return data;
   }
   async function copyDriverLink(){try{const data=await publishRoute();if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(data.url);toast('Link fixo do motoboy copiado.');}else{window.prompt('Copie o link fixo do motoboy:',data.url);}}catch(error){toast(error.message,true);}}
-  async function share(){const popup=window.open('about:blank','_blank');try{const data=await publishRoute();const driver=document.getElementById('routeDriver').value.trim();const lines=[`🛵 Rota do Delivery${driver?' — '+driver:''}`,`${state.result.paradas.length} entregas · ${state.result.distancia_km} km`,`Saída ${state.result.saida} · retorno previsto ${state.result.retorno}`,'',`Painel do motoboy: ${data.url}`,'Abra o painel para ver pedidos, pagamentos, clientes e as etapas do Google Maps.'];const target=`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`;if(popup){popup.opener=null;popup.location.href=target;}else{window.location.href=target;}}catch(error){if(popup)popup.close();toast(error.message,true);}}
+  async function share(){const popup=window.open('about:blank','_blank');try{const data=await publishRoute();const driver=document.getElementById('routeDriver').value.trim();const lines=[`🛵 Rota do Delivery${driver?' — '+driver:''}`,`${state.result.paradas.length} entregas · ${state.result.distancia_km} km`,`Saída ${state.result.saida} · retorno previsto ${state.result.retorno}`,'',`Painel do motoboy: ${data.url}`,'Abra o painel para ver pedidos, pagamentos, clientes e as opções de navegação.'];const target=`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`;if(popup){popup.opener=null;popup.location.href=target;}else{window.location.href=target;}}catch(error){if(popup)popup.close();toast(error.message,true);}}
 
   document.getElementById('orderSearch').addEventListener('input',renderAvailable);
   document.getElementById('routeGenerate').addEventListener('click',generateBestRoute);
@@ -279,6 +300,8 @@
   document.getElementById('routeSave').addEventListener('click',saveDraft);
   document.getElementById('routeDriverLink').addEventListener('click',copyDriverLink);
   document.getElementById('routeShare').addEventListener('click',share);
+  document.getElementById('routeOsmAnd').addEventListener('click',openOsmAnd);
+  document.getElementById('routeMapsFull').addEventListener('click',openMapsFull);
   document.getElementById('routeMaps').addEventListener('click',openMaps);
   document.getElementById('stopMinutes').addEventListener('change',()=>scheduleAutomaticCalculation(false,100));
   loadDraft();renderAvailable();renderRoute();initMap();

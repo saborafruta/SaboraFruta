@@ -1,9 +1,10 @@
 """Painel público e móvel da rota atual do motoboy."""
 import re
+import xml.etree.ElementTree as ET
 from urllib.parse import urlencode
 
 from django.db import transaction
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
@@ -60,6 +61,46 @@ def _urls_google_maps(filial, pedidos):
             parametros['waypoints'] = '|'.join(_coordenada(p.cliente) for p in intermediarios)
         urls.append('https://www.google.com/maps/dir/?' + urlencode(parametros))
     return urls
+
+
+def _url_google_maps_completa(filial, pedidos):
+    """URL oficial única para comparar o comportamento do Maps no aparelho."""
+    roteaveis = [
+        pedido for pedido in pedidos
+        if pedido.cliente and pedido.cliente.latitude is not None
+        and pedido.cliente.longitude is not None
+    ]
+    if not roteaveis or filial.latitude is None or filial.longitude is None:
+        return ''
+    base = _coordenada(filial)
+    return 'https://www.google.com/maps/dir/?' + urlencode({
+        'api': '1',
+        'origin': base,
+        'destination': base,
+        'travelmode': 'driving',
+        'dir_action': 'navigate',
+        'waypoints': '|'.join(_coordenada(pedido.cliente) for pedido in roteaveis),
+    })
+
+
+def _url_osmand(filial, pedidos):
+    """Rota completa no planejador oficial do OsmAnd, sem dividir paradas."""
+    roteaveis = [
+        pedido for pedido in pedidos
+        if pedido.cliente and pedido.cliente.latitude is not None
+        and pedido.cliente.longitude is not None
+    ]
+    if not roteaveis or filial.latitude is None or filial.longitude is None:
+        return ''
+    base = _coordenada(filial)
+    parametros = [
+        ('start', base),
+        ('finish', base),
+        *[('via', _coordenada(pedido.cliente)) for pedido in roteaveis],
+        ('type', 'osmand'),
+        ('profile', 'car'),
+    ]
+    return 'https://osmand.net/map/?' + urlencode(parametros)
 
 
 def _telefone_whatsapp(cliente):
@@ -159,7 +200,52 @@ def painel(request, token):
         'total': len(dados),
         'concluidos': sum(1 for pedido in dados if pedido['concluido']),
         'etapas_maps': _urls_google_maps(rota.filial, pedidos),
+        'google_maps_completa': _url_google_maps_completa(rota.filial, pedidos),
+        'osmand_url': _url_osmand(rota.filial, pedidos),
     })
+    return _privado(response)
+
+
+@require_GET
+def gpx(request, token):
+    """Entrega a rota publicada como GPX para importação no OsmAnd."""
+    rota = _buscar_rota(token)
+    pedidos = _pedidos_da_rota(rota)
+    filial = rota.filial
+    if filial.latitude is None or filial.longitude is None:
+        raise Http404
+
+    namespace = 'http://www.topografix.com/GPX/1/1'
+    ET.register_namespace('', namespace)
+    raiz = ET.Element(f'{{{namespace}}}gpx', {
+        'version': '1.1',
+        'creator': 'Saborafruta',
+    })
+    metadata = ET.SubElement(raiz, f'{{{namespace}}}metadata')
+    ET.SubElement(metadata, f'{{{namespace}}}name').text = 'Rota do Delivery'
+    caminho = ET.SubElement(raiz, f'{{{namespace}}}rte')
+    ET.SubElement(caminho, f'{{{namespace}}}name').text = 'Rota do Delivery'
+
+    pontos = [(filial, f'Saída — {filial.nome_fantasia or filial.razao_social}')]
+    for ordem, pedido in enumerate(pedidos, start=1):
+        cliente = pedido.cliente
+        if cliente and cliente.latitude is not None and cliente.longitude is not None:
+            nome = cliente.nome_fantasia or cliente.razao_social or f'Pedido {pedido.numero_venda}'
+            pontos.append((cliente, f'{ordem}. #{pedido.numero_venda} — {nome}'))
+    pontos.append((filial, f'Retorno — {filial.nome_fantasia or filial.razao_social}'))
+
+    for ponto, nome in pontos:
+        elemento = ET.SubElement(caminho, f'{{{namespace}}}rtept', {
+            'lat': str(ponto.latitude),
+            'lon': str(ponto.longitude),
+        })
+        ET.SubElement(elemento, f'{{{namespace}}}name').text = nome
+
+    response = HttpResponse(
+        ET.tostring(raiz, encoding='utf-8', xml_declaration=True),
+        content_type='application/gpx+xml',
+    )
+    response['Content-Disposition'] = 'attachment; filename="rota-delivery.gpx"'
     return _privado(response)
 
 
