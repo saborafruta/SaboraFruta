@@ -3267,7 +3267,7 @@ def delivery_kanban(request):
     })
 
 
-DELIVERY_ROTA_STATUS = {'novo', 'preparando', 'em_entrega'}
+DELIVERY_ROTA_STATUS = {'novo', 'preparando'}
 
 
 def _delivery_rota_pedidos(filial):
@@ -3319,6 +3319,10 @@ def _delivery_rota_serializar_pedido(venda):
 def _delivery_rota_filial(filial):
     return {
         'nome': filial.nome_fantasia or filial.razao_social,
+        'endereco': ', '.join(filter(None, [filial.endereco, filial.numero])),
+        'bairro': filial.bairro or '',
+        'cidade': filial.cidade or '',
+        'uf': filial.uf or '',
         'lat': float(filial.latitude) if filial.latitude is not None else None,
         'lng': float(filial.longitude) if filial.longitude is not None else None,
         'tem_coordenada': bool(filial.latitude is not None and filial.longitude is not None),

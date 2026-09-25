@@ -6,6 +6,7 @@ mudar_status_delivery`), pra "o motorista marcou entregue no celular" e
 """
 import json
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 
 from django.test import TestCase
 from django.urls import reverse
@@ -131,6 +132,7 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
 
     def test_tela_exibe_pedidos_ativos_e_botao_existe_no_kanban(self):
         ativo = self._venda(numero=101, status_delivery='preparando')
+        em_entrega = self._venda(numero=103, status_delivery='em_entrega')
         self._venda(numero=102, status_delivery='entregue')
 
         tela = self.client.get(reverse('pdv:delivery_rotas'))
@@ -145,6 +147,7 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertNotContains(tela, 'Waze')
         pedidos = json.loads(tela.context['pedidos_json'])
         self.assertIn(ativo.pk, [p['id'] for p in pedidos])
+        self.assertNotIn(em_entrega.pk, [p['id'] for p in pedidos])
         self.assertNotIn(102, [p['numero'] for p in pedidos])
         self.assertContains(kanban, 'Rota do Delivery')
         self.assertContains(kanban, '?embed=1')
@@ -249,11 +252,27 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         super().setUp()
         self.filial.latitude = -5.7900
         self.filial.longitude = -35.2100
-        self.filial.save(update_fields=['latitude', 'longitude'])
+        self.filial.endereco = 'Rua da Matriz'
+        self.filial.numero = '100'
+        self.filial.bairro = 'Centro'
+        self.filial.cidade = 'Natal'
+        self.filial.geo_fixado = True
+        self.filial.save(update_fields=[
+            'latitude', 'longitude', 'endereco', 'numero', 'bairro', 'cidade', 'geo_fixado',
+        ])
         self.cliente.latitude = -5.8000
         self.cliente.longitude = -35.2200
         self.cliente.celular = '(84) 99999-1234'
-        self.cliente.save(update_fields=['latitude', 'longitude', 'celular'])
+        self.cliente.endereco = 'Rua do Cliente'
+        self.cliente.numero = '200'
+        self.cliente.bairro = 'Ponta Negra'
+        self.cliente.cidade = 'Natal'
+        self.cliente.uf = 'RN'
+        self.cliente.geo_fixado = True
+        self.cliente.save(update_fields=[
+            'latitude', 'longitude', 'celular', 'endereco', 'numero', 'bairro', 'cidade', 'uf',
+            'geo_fixado',
+        ])
 
     def _publicar(self, pedidos, entregador='João'):
         return self.client.post(
@@ -325,7 +344,8 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         self.assertContains(resp, 'Abrir etapa 1 de 3')
         self.assertContains(resp, 'Abrir etapa 2 de 3')
         self.assertContains(resp, 'Abrir etapa 3 de 3')
-        self.assertContains(resp, 'dir_action=navigate', html=False)
+        for url_etapa in resp.context['etapas_maps']:
+            self.assertNotIn('dir_action=navigate', url_etapa)
 
     def test_painel_oferece_osmand_google_completo_e_maps_em_etapas(self):
         pedidos = [self._venda(numero=440 + indice) for indice in range(7)]
@@ -340,6 +360,9 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         self.assertContains(resp, 'Google Maps em etapas — opção segura')
         self.assertContains(resp, 'https://osmand.net/map/?', html=False)
         self.assertContains(resp, 'waypoints=', html=False)
+        parametros = parse_qs(urlparse(resp.context['google_maps_completa']).query)
+        self.assertNotIn('dir_action', parametros)
+        self.assertIn('Rua do Cliente', parametros['waypoints'][0])
 
     def test_gpx_contem_todos_os_pedidos_em_uma_unica_rota(self):
         pedidos = [self._venda(numero=450 + indice) for indice in range(3)]

@@ -32,6 +32,28 @@ def _coordenada(objeto):
     return f'{float(objeto.latitude)},{float(objeto.longitude)}'
 
 
+def _endereco_filial(filial):
+    return ', '.join(filter(None, [
+        filial.endereco,
+        filial.numero,
+        filial.bairro,
+        filial.cidade,
+        filial.uf,
+    ])) or _coordenada(filial)
+
+
+def _endereco_pedido(pedido):
+    cliente = pedido.cliente
+    endereco = pedido.endereco_entrega or {}
+    return ', '.join(filter(None, [
+        endereco.get('rua') or endereco.get('logradouro') or cliente.endereco,
+        str(endereco.get('numero') or cliente.numero or ''),
+        endereco.get('bairro') or cliente.bairro,
+        endereco.get('cidade') or cliente.cidade,
+        endereco.get('uf') or cliente.uf,
+    ])) or _coordenada(cliente)
+
+
 def _urls_google_maps(filial, pedidos):
     """Divide em até três entregas por link, limite seguro no Maps móvel."""
     roteaveis = [
@@ -42,23 +64,22 @@ def _urls_google_maps(filial, pedidos):
     if not roteaveis or filial.latitude is None or filial.longitude is None:
         return []
 
-    origem_filial = _coordenada(filial)
+    origem_filial = _endereco_filial(filial)
     grupos = [roteaveis[i:i + 3] for i in range(0, len(roteaveis), 3)]
     urls = []
     for indice, grupo in enumerate(grupos):
-        origem = origem_filial if indice == 0 else _coordenada(grupos[indice - 1][-1].cliente)
+        origem = origem_filial if indice == 0 else _endereco_pedido(grupos[indice - 1][-1])
         ultima_etapa = indice == len(grupos) - 1
-        destino = origem_filial if ultima_etapa else _coordenada(grupo[-1].cliente)
+        destino = origem_filial if ultima_etapa else _endereco_pedido(grupo[-1])
         intermediarios = grupo if ultima_etapa else grupo[:-1]
         parametros = {
             'api': '1',
             'origin': origem,
             'destination': destino,
             'travelmode': 'driving',
-            'dir_action': 'navigate',
         }
         if intermediarios:
-            parametros['waypoints'] = '|'.join(_coordenada(p.cliente) for p in intermediarios)
+            parametros['waypoints'] = '|'.join(_endereco_pedido(p) for p in intermediarios)
         urls.append('https://www.google.com/maps/dir/?' + urlencode(parametros))
     return urls
 
@@ -72,14 +93,13 @@ def _url_google_maps_completa(filial, pedidos):
     ]
     if not roteaveis or filial.latitude is None or filial.longitude is None:
         return ''
-    base = _coordenada(filial)
+    base = _endereco_filial(filial)
     return 'https://www.google.com/maps/dir/?' + urlencode({
         'api': '1',
         'origin': base,
         'destination': base,
         'travelmode': 'driving',
-        'dir_action': 'navigate',
-        'waypoints': '|'.join(_coordenada(pedido.cliente) for pedido in roteaveis),
+        'waypoints': '|'.join(_endereco_pedido(pedido) for pedido in roteaveis),
     })
 
 

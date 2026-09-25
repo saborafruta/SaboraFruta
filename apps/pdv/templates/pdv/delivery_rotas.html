@@ -247,6 +247,14 @@
     document.getElementById('routeTimeline').innerHTML=points.map(p=>`<div class="dr-timepoint"><span class="dr-dot">${esc(p.ordem)}</span><strong style="display:block;color:#e0e8f4;">${esc(p.eta)}</strong><span>${esc(p.cliente)}</span></div>`).join('');
   }
   function coords(o){return `${o.lat},${o.lng}`;}
+  function mapsLocation(o){
+    const full=[o.endereco,o.bairro,[o.cidade,o.uf].filter(Boolean).join('/')].filter(Boolean).join(', ');
+    return full||coords(o);
+  }
+  function branchMapsLocation(){
+    const full=[branch.endereco,branch.bairro,[branch.cidade,branch.uf].filter(Boolean).join('/')].filter(Boolean).join(', ');
+    return full||`${branch.lat},${branch.lng}`;
+  }
   function googleUrls(){
     if(!state.result)return[];
     const stops=state.result.paradas, chunks=[];
@@ -254,22 +262,22 @@
     // por etapa é o limite seguro quando o link abre pelo WhatsApp/app móvel.
     for(let i=0;i<stops.length;i+=3)chunks.push(stops.slice(i,i+3));
     return chunks.map((chunk,index)=>{
-      const previous=index===0?`${branch.lat},${branch.lng}`:coords(chunks[index-1][chunks[index-1].length-1]);
+      const previous=index===0?branchMapsLocation():mapsLocation(chunks[index-1][chunks[index-1].length-1]);
       const isLast=index===chunks.length-1;
-      const destination=isLast?`${branch.lat},${branch.lng}`:coords(chunk[chunk.length-1]);
+      const destination=isLast?branchMapsLocation():mapsLocation(chunk[chunk.length-1]);
       const waypoints=isLast?chunk:chunk.slice(0,-1);
       const url=new URL('https://www.google.com/maps/dir/');
-      url.searchParams.set('api','1');url.searchParams.set('origin',previous);url.searchParams.set('destination',destination);url.searchParams.set('travelmode','driving');url.searchParams.set('dir_action','navigate');
-      if(waypoints.length)url.searchParams.set('waypoints',waypoints.map(coords).join('|'));
+      url.searchParams.set('api','1');url.searchParams.set('origin',previous);url.searchParams.set('destination',destination);url.searchParams.set('travelmode','driving');
+      if(waypoints.length)url.searchParams.set('waypoints',waypoints.map(mapsLocation).join('|'));
       return url.toString();
     });
   }
   function googleFullUrl(){
     if(!state.result)return'';
     const url=new URL('https://www.google.com/maps/dir/');
-    const base=`${branch.lat},${branch.lng}`;
-    url.searchParams.set('api','1');url.searchParams.set('origin',base);url.searchParams.set('destination',base);url.searchParams.set('travelmode','driving');url.searchParams.set('dir_action','navigate');
-    if(state.result.paradas.length)url.searchParams.set('waypoints',state.result.paradas.map(coords).join('|'));
+    const base=branchMapsLocation();
+    url.searchParams.set('api','1');url.searchParams.set('origin',base);url.searchParams.set('destination',base);url.searchParams.set('travelmode','driving');
+    if(state.result.paradas.length)url.searchParams.set('waypoints',state.result.paradas.map(mapsLocation).join('|'));
     return url.toString();
   }
   function osmandUrl(){
