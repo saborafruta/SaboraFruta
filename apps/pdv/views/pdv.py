@@ -3266,6 +3266,207 @@ def delivery_kanban(request):
     })
 
 
+DELIVERY_ROTA_STATUS = {'novo', 'preparando', 'em_entrega'}
+
+
+def _delivery_rota_pedidos(filial):
+    """Pedidos que ainda podem ser planejados, sempre limitados à filial ativa."""
+    return (
+        VendaPDV.objects.for_filial(filial)
+        .filter(delivery=True, status_delivery__in=DELIVERY_ROTA_STATUS)
+        .exclude(status='cancelada')
+        .select_related('cliente')
+        .prefetch_related('pagamentos__forma_pagamento')
+        .order_by('data_venda', 'pk')
+    )
+
+
+def _delivery_rota_serializar_pedido(venda):
+    cliente = venda.cliente
+    endereco = venda.endereco_entrega or {}
+    nome = 'Consumidor Final'
+    if cliente:
+        nome = cliente.nome_fantasia or cliente.razao_social or nome
+    forma = ', '.join(
+        pg.forma_pagamento.descricao if pg.forma_pagamento else 'Pagamento'
+        for pg in venda.pagamentos.all()
+    )
+    return {
+        'id': venda.pk,
+        'numero': venda.numero_venda,
+        'cliente': nome,
+        'cliente_id': cliente.pk if cliente else None,
+        'bairro': endereco.get('bairro') or (cliente.bairro if cliente else '') or '',
+        'endereco': ', '.join(filter(None, [
+            endereco.get('rua') or endereco.get('logradouro') or (cliente.endereco if cliente else ''),
+            str(endereco.get('numero') or (cliente.numero if cliente else '') or ''),
+        ])),
+        'complemento': endereco.get('complemento') or '',
+        'cidade': endereco.get('cidade') or (cliente.cidade if cliente else '') or '',
+        'uf': endereco.get('uf') or (cliente.uf if cliente else '') or '',
+        'valor': float(venda.valor_total),
+        'pagamento': forma or 'Não informado',
+        'status': venda.status_delivery,
+        'status_label': venda.get_status_delivery_display(),
+        'entregador': venda.entregador or '',
+        'lat': float(cliente.latitude) if cliente and cliente.latitude is not None else None,
+        'lng': float(cliente.longitude) if cliente and cliente.longitude is not None else None,
+        'tem_coordenada': bool(cliente and cliente.latitude is not None and cliente.longitude is not None),
+    }
+
+
+def _delivery_rota_filial(filial):
+    return {
+        'nome': filial.nome_fantasia or filial.razao_social,
+        'lat': float(filial.latitude) if filial.latitude is not None else None,
+        'lng': float(filial.longitude) if filial.longitude is not None else None,
+        'tem_coordenada': bool(filial.latitude is not None and filial.longitude is not None),
+    }
+
+
+@requer_permissao('pdv', 'ver')
+def delivery_rotas(request):
+    pedidos = [
+        _delivery_rota_serializar_pedido(v)
+        for v in _delivery_rota_pedidos(request.filial_ativa)
+    ]
+    return render(request, 'pdv/delivery_rotas.html', {
+        'pedidos_json': json.dumps(pedidos, ensure_ascii=False),
+        'filial_rota_json': json.dumps(_delivery_rota_filial(request.filial_ativa), ensure_ascii=False),
+        'embedded': request.GET.get('embed') == '1',
+    })
+
+
+def _delivery_otimizar_livres(pedidos, travados, origem):
+    """Otimiza blocos livres sem mudar a posição dos pedidos travados."""
+    from apps.mapas.services.otimizacao import otimizar_local
+
+    resultado = list(pedidos)
+    posicoes_travadas = [i for i, p in enumerate(resultado) if p.pk in travados]
+    limites = posicoes_travadas + [len(resultado)]
+    inicio = 0
+    ponto_anterior = origem
+    for limite in limites:
+        bloco = resultado[inicio:limite]
+        if bloco:
+            pontos = [ponto_anterior] + [
+                (float(p.cliente.latitude), float(p.cliente.longitude)) for p in bloco
+            ]
+            ordem = otimizar_local(pontos, fixar_primeiro=True)[1:]
+            resultado[inicio:limite] = [bloco[i - 1] for i in ordem]
+        if limite < len(resultado):
+            fixo = resultado[limite]
+            ponto_anterior = (float(fixo.cliente.latitude), float(fixo.cliente.longitude))
+            inicio = limite + 1
+        else:
+            inicio = limite
+    return resultado
+
+
+@require_POST
+@requer_permissao('pdv', 'ver')
+def delivery_rota_calcular(request):
+    """Calcula o traçado da rota na ordem escolhida e, opcionalmente, reordena livres."""
+    from apps.mapas.services.roteirizacao import MAX_PARADAS, construir_roteirizador
+
+    try:
+        corpo = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+    if not isinstance(corpo, dict):
+        return JsonResponse({'erro': 'Envie um objeto JSON.'}, status=400)
+
+    ids = []
+    for bruto in corpo.get('pedidos') or []:
+        try:
+            pk = int(bruto)
+        except (TypeError, ValueError):
+            continue
+        if pk not in ids:
+            ids.append(pk)
+    if not ids:
+        return JsonResponse({'erro': 'Selecione ao menos um pedido.'}, status=400)
+    if len(ids) > MAX_PARADAS:
+        return JsonResponse({'erro': f'Selecione no máximo {MAX_PARADAS} pedidos.'}, status=400)
+
+    encontrados = {
+        v.pk: v for v in _delivery_rota_pedidos(request.filial_ativa).filter(pk__in=ids)
+    }
+    if len(encontrados) != len(ids):
+        return JsonResponse({'erro': 'Há pedidos inválidos ou que já saíram da lista de planejamento.'}, status=400)
+    pedidos = [encontrados[pk] for pk in ids]
+    sem_coordenada = [v.numero_venda for v in pedidos if not (
+        v.cliente and v.cliente.latitude is not None and v.cliente.longitude is not None
+    )]
+    if sem_coordenada:
+        numeros = ', '.join(f'#{n}' for n in sem_coordenada)
+        return JsonResponse({'erro': f'Pedidos sem coordenada confirmada: {numeros}.'}, status=400)
+
+    filial = request.filial_ativa
+    if filial.latitude is None or filial.longitude is None:
+        return JsonResponse({'erro': 'Cadastre as coordenadas da filial para calcular saída e retorno.'}, status=400)
+    origem = (float(filial.latitude), float(filial.longitude))
+
+    travados = set()
+    for bruto in corpo.get('travados') or []:
+        try:
+            travados.add(int(bruto))
+        except (TypeError, ValueError):
+            pass
+    if corpo.get('otimizar'):
+        pedidos = _delivery_otimizar_livres(pedidos, travados, origem)
+
+    pontos_entrega = [
+        (float(v.cliente.latitude), float(v.cliente.longitude)) for v in pedidos
+    ]
+    pontos = [origem] + pontos_entrega + [origem]
+    roteirizador = construir_roteirizador()
+    try:
+        rota = roteirizador.rota(pontos)
+    except Exception as exc:
+        logger.warning('falha ao calcular rota de delivery: %s', exc)
+        return JsonResponse({'erro': 'O serviço de rotas não respondeu. Tente novamente.'}, status=503)
+    if not rota.ok:
+        return JsonResponse({'erro': rota.erro or 'Não foi possível calcular a rota.'}, status=400)
+
+    # O provider atual devolve o tempo total. Distribuímos esse tempo entre os
+    # trechos pela distância em linha reta para produzir ETAs úteis sem fazer
+    # uma chamada externa adicional para cada parada.
+    from apps.mapas.services.otimizacao import distancia_haversine_m
+    pesos = [distancia_haversine_m(pontos[i], pontos[i + 1]) for i in range(len(pontos) - 1)]
+    peso_total = sum(pesos) or 1
+    agora = timezone.localtime()
+    try:
+        minutos_parada = int(corpo.get('minutos_parada') or 5)
+    except (TypeError, ValueError):
+        minutos_parada = 5
+    servico_s = max(0, min(minutos_parada, 60)) * 60
+    acumulado_s = 0.0
+    paradas = []
+    for i, venda in enumerate(pedidos):
+        acumulado_s += rota.duracao_s * (pesos[i] / peso_total)
+        chegada = agora + datetime.timedelta(seconds=acumulado_s + servico_s * i)
+        dado = _delivery_rota_serializar_pedido(venda)
+        dado.update({'ordem': i + 1, 'eta': chegada.strftime('%H:%M')})
+        paradas.append(dado)
+    tempo_total_s = rota.duracao_s + servico_s * len(pedidos)
+    retorno = agora + datetime.timedelta(seconds=tempo_total_s)
+
+    return JsonResponse({
+        'ordem': [v.pk for v in pedidos],
+        'paradas': paradas,
+        'geometria': rota.geometria,
+        'distancia_km': round(rota.distancia_m / 1000, 1),
+        'tempo_deslocamento_s': round(rota.duracao_s),
+        'tempo_total_s': round(tempo_total_s),
+        'saida': agora.strftime('%H:%M'),
+        'retorno': retorno.strftime('%H:%M'),
+        'provider': roteirizador.nome,
+        'uso_comercial_liberado': roteirizador.permite_uso_comercial,
+        'filial': _delivery_rota_filial(filial),
+    })
+
+
 @require_POST
 @requer_permissao('pdv', 'editar')
 def delivery_mover(request, pk):

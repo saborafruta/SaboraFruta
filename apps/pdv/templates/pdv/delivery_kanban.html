@@ -132,6 +132,19 @@
   /* ── Sugestão de clientes próximos à entrega (§8) ── */
   .delivery-modal.largo { max-width: 900px; max-height: 88vh; display: flex;
                           flex-direction: column; }
+  .delivery-route-modal-bg { position:fixed; inset:0; z-index:300; display:none; align-items:center;
+    justify-content:center; padding:2.5vh 2vw; background:rgba(3,7,18,.78); backdrop-filter:blur(5px); }
+  .delivery-route-modal-bg.open { display:flex; }
+  .delivery-route-modal { display:flex; width:96vw; height:94vh; overflow:hidden; flex-direction:column;
+    border:1px solid #303744; border-radius:16px; background:#171a1f; box-shadow:0 30px 90px #000a; }
+  .delivery-route-modal:fullscreen { width:100vw; height:100vh; border:0; border-radius:0; }
+  .delivery-route-modal-head { display:flex; align-items:center; justify-content:space-between; gap:12px;
+    min-height:48px; padding:8px 12px 8px 16px; border-bottom:1px solid #2d3440; }
+  .delivery-route-modal-title { color:#f4f7fb; font-size:13px; font-weight:800; }
+  .delivery-route-modal-actions { display:flex; gap:7px; }
+  .delivery-route-modal iframe { flex:1; width:100%; border:0; background:#1c1c1e; }
+  body.tema-claro .delivery-route-modal { border-color:#d9e0ea; background:#fff; }
+  body.tema-claro .delivery-route-modal-title { color:#142033; }
   .sug-raios { display: flex; gap: 6px; }
   .sug-raios button { font-size: 12px; font-weight: 700; padding: 5px 12px;
                       border-radius: 7px; border: 1px solid rgba(127,127,127,.32);
@@ -175,6 +188,10 @@
       </p>
     </div>
     <div class="flex gap-2">
+      <button onclick="abrirRotaDelivery()" class="btn-primary text-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.4-2.7A1 1 0 013 16.4V5.6a1 1 0 011.4-.9L9 7m0 13l6-3m-6 3V7m6 10l4.6 2.3A1 1 0 0021 18.4V7.6a1 1 0 00-.6-.9L15 4m0 13V4m0 0L9 7"/></svg>
+        Rota do Delivery
+      </button>
       <button onclick="abrirRelatorioModal()" class="btn-secondary text-sm">
         <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a2 2 0 012-2h2a2 2 0 012 2v2m-9 4h14a2 2 0 002-2V7a2 2 0 00-2-2h-3l-2-2H9L7 5H4a2 2 0 00-2 2v12a2 2 0 002 2z"/>
@@ -311,6 +328,21 @@
 
 </div>
 
+<!-- A mesma tela de rotas em modo embutido; a URL própria evita manter duas implementações. -->
+<div class="delivery-route-modal-bg" id="routeDeliveryModal" onclick="if(event.target===this) fecharRotaDelivery()">
+  <div class="delivery-route-modal" id="routeDeliveryPanel">
+    <div class="delivery-route-modal-head">
+      <span class="delivery-route-modal-title">Rota do Delivery</span>
+      <div class="delivery-route-modal-actions">
+        <a href="{% url 'pdv:delivery_rotas' %}" target="_blank" rel="noopener" class="btn-secondary text-xs">Abrir em nova aba</a>
+        <button type="button" class="btn-secondary text-xs" onclick="alternarTelaCheiaRota()">Tela cheia</button>
+        <button type="button" class="btn-secondary text-xs" onclick="fecharRotaDelivery()">Fechar</button>
+      </div>
+    </div>
+    <iframe id="routeDeliveryFrame" title="Rota do Delivery" data-src="{% url 'pdv:delivery_rotas' %}?embed=1"></iframe>
+  </div>
+</div>
+
 <!-- Modal de edição do card -->
 <div class="delivery-modal-bg" id="deliveryModal" onclick="if(event.target===this) fecharModal()">
   <div class="delivery-modal">
@@ -436,6 +468,23 @@
 <script>
   const CSRF = '{{ csrf_token }}';
   let draggingCard = null;
+
+  function abrirRotaDelivery() {
+    const frame = document.getElementById('routeDeliveryFrame');
+    if (!frame.src) frame.src = frame.dataset.src;
+    document.getElementById('routeDeliveryModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function fecharRotaDelivery() {
+    document.getElementById('routeDeliveryModal').classList.remove('open');
+    document.body.style.overflow = '';
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
+  function alternarTelaCheiaRota() {
+    const panel = document.getElementById('routeDeliveryPanel');
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (panel.requestFullscreen) panel.requestFullscreen();
+  }
 
   // ── Drag & Drop ──────────────────────────────────────────────────────────
 

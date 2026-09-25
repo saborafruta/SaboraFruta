@@ -1,0 +1,264 @@
+{% extends "_base.html" %}
+{% block title %}Rota do Delivery{% endblock %}
+{% block page_title %}Rota do Delivery{% endblock %}
+{% block largura_conteudo %}max-w-none{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+{% if embedded %}
+<script>document.documentElement.classList.add('delivery-route-embedded');</script>
+{% endif %}
+<style>
+  {% if embedded %}
+  html.delivery-route-embedded body aside, html.delivery-route-embedded .app-topbar { display:none !important; }
+  html.delivery-route-embedded .app-shell-content { margin-left:0 !important; }
+  html.delivery-route-embedded .app-content-frame { max-width:none !important; padding:12px !important; }
+  html.delivery-route-embedded main { min-height:100vh; }
+  {% endif %}
+  .dr-shell { display:flex; flex-direction:column; gap:12px; min-height:calc(100vh - 130px); }
+  .dr-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+  .dr-title { font-size:22px; line-height:1.2; font-weight:800; color:#f8fafc; }
+  .dr-subtitle { margin-top:5px; font-size:12px; color:#94a3b8; }
+  .dr-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:7px; }
+  .dr-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:34px;
+    padding:7px 11px; border-radius:8px; border:1px solid #323947; background:#24282f;
+    color:#dbe4f0; font-size:11px; font-weight:750; cursor:pointer; white-space:nowrap; }
+  .dr-button:hover { background:#2d3440; border-color:#465164; }
+  .dr-button.primary { color:#fff; border-color:#2563eb; background:#2563eb; }
+  .dr-button.green { color:#fff; border-color:#12845b; background:#12845b; }
+  .dr-button:disabled { opacity:.45; cursor:not-allowed; }
+  .dr-summary { display:grid; grid-template-columns:1.25fr repeat(4,minmax(105px,.7fr)); gap:9px; }
+  .dr-stat { min-height:66px; border:1px solid #2d3440; border-radius:10px; background:#20242a; padding:10px 12px; }
+  .dr-stat-label { color:#7f8b9d; font-size:9px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; }
+  .dr-stat-value { margin-top:5px; color:#f8fafc; font-size:16px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .dr-stat select, .dr-stat input { width:100%; margin-top:4px; border:0; outline:0; background:transparent; color:#f8fafc; font-size:13px; font-weight:700; }
+  .dr-grid { display:grid; grid-template-columns:minmax(245px,.82fr) minmax(300px,1fr) minmax(390px,1.45fr); gap:10px; min-height:560px; flex:1; }
+  .dr-panel { display:flex; min-width:0; flex-direction:column; overflow:hidden; border:1px solid #2d3440; border-radius:11px; background:#1f2329; }
+  .dr-panel-head { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:42px; padding:9px 11px; border-bottom:1px solid #2d3440; }
+  .dr-panel-title { color:#f3f6fb; font-size:12px; font-weight:800; }
+  .dr-count { border-radius:999px; padding:2px 7px; background:#303744; color:#9eabc0; font-size:9px; font-weight:800; }
+  .dr-search { margin:9px 9px 3px; padding:8px 10px; border:1px solid #313846; border-radius:8px; background:#171a1f; color:#e6edf7; font-size:11px; outline:none; }
+  .dr-list { overflow:auto; padding:7px; scrollbar-width:thin; }
+  .dr-card { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:8px; align-items:flex-start; margin-bottom:6px; padding:9px; border:1px solid #303744; border-radius:9px; background:#252a31; }
+  .dr-card:hover { border-color:#3d4a5f; }
+  .dr-card.unavailable { opacity:.55; }
+  .dr-card.dragging { opacity:.35; }
+  .dr-check { margin-top:3px; accent-color:#2563eb; }
+  .dr-order { display:flex; align-items:center; justify-content:center; width:23px; height:23px; border-radius:50%; background:#2563eb; color:#fff; font-size:10px; font-weight:850; }
+  .dr-client { overflow:hidden; color:#eef3fb; font-size:10.5px; font-weight:750; text-overflow:ellipsis; white-space:nowrap; }
+  .dr-meta { margin-top:3px; color:#8491a4; font-size:9px; line-height:1.4; }
+  .dr-badges { display:flex; flex-wrap:wrap; gap:3px; margin-top:5px; }
+  .dr-badge { padding:2px 5px; border-radius:5px; background:#173e32; color:#5ee2ab; font-size:8px; font-weight:800; }
+  .dr-badge.blue { background:#172f55; color:#73a9ff; }
+  .dr-badge.warn { background:#4a3215; color:#f9bd5b; }
+  .dr-price { color:#dce5f1; font-size:9px; font-weight:800; white-space:nowrap; }
+  .dr-lock { display:flex; align-items:center; justify-content:center; width:25px; height:25px; border:0; border-radius:6px; background:#303744; color:#8e9aad; cursor:pointer; }
+  .dr-lock.locked { background:#14543f; color:#67e3b0; }
+  .dr-empty { padding:35px 14px; color:#69768a; font-size:11px; line-height:1.5; text-align:center; }
+  .dr-map { position:relative; flex:1; min-height:390px; }
+  #deliveryRouteMap { position:absolute; inset:0; background:#111820; }
+  .dr-map-note { position:absolute; z-index:500; right:9px; bottom:9px; max-width:270px; border:1px solid #344154; border-radius:8px; background:rgba(21,25,31,.92); padding:7px 9px; color:#aeb9c9; font-size:9px; }
+  .dr-marker { display:flex; align-items:center; justify-content:center; width:25px; height:25px; border:2px solid #fff; border-radius:50%; background:#16a36e; color:#fff; box-shadow:0 2px 8px #0008; font-size:10px; font-weight:900; }
+  .dr-marker.base { background:#2563eb; }
+  .dr-footer { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; border:1px solid #2d3440; border-radius:10px; background:#20242a; padding:9px 11px; }
+  .dr-timeline { display:flex; align-items:flex-start; overflow-x:auto; padding:2px 0; }
+  .dr-timepoint { position:relative; flex:1 0 90px; color:#92a0b3; font-size:8px; text-align:center; }
+  .dr-timepoint::before { content:""; position:absolute; top:9px; left:0; right:0; height:2px; background:#2563eb; }
+  .dr-timepoint:first-child::before { left:50%; }
+  .dr-timepoint:last-child::before { right:50%; }
+  .dr-dot { position:relative; z-index:1; display:flex; align-items:center; justify-content:center; width:19px; height:19px; margin:0 auto 4px; border:2px solid #4b88f7; border-radius:50%; background:#20242a; color:#dce9ff; font-size:7px; font-weight:900; }
+  .dr-toast { position:fixed; z-index:5000; right:22px; bottom:22px; max-width:360px; transform:translateY(12px); border-radius:9px; background:#12845b; padding:10px 14px; color:#fff; font-size:11px; font-weight:700; opacity:0; pointer-events:none; transition:.2s; }
+  .dr-toast.show { transform:none; opacity:1; }
+  .dr-toast.error { background:#b42332; }
+  body.tema-claro .dr-title, body.tema-claro .dr-stat-value, body.tema-claro .dr-panel-title, body.tema-claro .dr-client { color:#142033; }
+  body.tema-claro .dr-subtitle, body.tema-claro .dr-meta { color:#65748a; }
+  body.tema-claro .dr-stat, body.tema-claro .dr-panel, body.tema-claro .dr-footer { background:#fff; border-color:#dfe5ee; }
+  body.tema-claro .dr-card { background:#f7f9fc; border-color:#e1e6ee; }
+  body.tema-claro .dr-search { background:#fff; color:#142033; border-color:#d9e0ea; }
+  body.tema-claro .dr-button { background:#fff; color:#334155; border-color:#d9e0ea; }
+  @media (max-width:1200px) { .dr-grid { grid-template-columns:minmax(230px,.8fr) minmax(280px,1fr); } .dr-panel.map-panel { grid-column:1/-1; min-height:430px; } }
+  @media (max-width:760px) { .dr-head { flex-direction:column; } .dr-actions { justify-content:flex-start; } .dr-summary { grid-template-columns:repeat(2,1fr); } .dr-summary .dr-stat:first-child { grid-column:1/-1; } .dr-grid { grid-template-columns:1fr; } .dr-panel.map-panel { grid-column:auto; } .dr-footer { grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+{{ pedidos_json|json_script:"delivery-route-orders-raw" }}
+{{ filial_rota_json|json_script:"delivery-route-branch-raw" }}
+<div class="dr-shell" id="deliveryRouteApp">
+  <div class="dr-head">
+    <div>
+      {% if not embedded %}<a href="{% url 'pdv:delivery' %}" class="text-xs" style="color:#60a5fa;">&lsaquo; Voltar ao Delivery</a>{% endif %}
+      <div class="dr-title">Rota do Delivery</div>
+      <div class="dr-subtitle">Selecione pedidos, organize a sequência e gere a melhor rota respeitando suas prioridades.</div>
+    </div>
+    <div class="dr-actions">
+      <button class="dr-button primary" id="routeGenerate">Gerar rota</button>
+      <button class="dr-button" id="routeOptimize">Reotimizar livres</button>
+      <button class="dr-button" id="routeSave">Salvar rascunho</button>
+      <button class="dr-button green" id="routeShare">Compartilhar no WhatsApp</button>
+      <button class="dr-button" id="routeMaps">Google Maps</button>
+      <button class="dr-button" id="routeWaze">Waze</button>
+    </div>
+  </div>
+
+  <div class="dr-summary">
+    <div class="dr-stat"><div class="dr-stat-label">Motoboy</div><input id="routeDriver" placeholder="Nome do entregador"></div>
+    <div class="dr-stat"><div class="dr-stat-label">Entregas</div><div class="dr-stat-value" id="routeDeliveries">0</div></div>
+    <div class="dr-stat"><div class="dr-stat-label">Saída prevista</div><div class="dr-stat-value" id="routeDeparture">—</div></div>
+    <div class="dr-stat"><div class="dr-stat-label">Retorno previsto</div><div class="dr-stat-value" id="routeReturn">—</div></div>
+    <div class="dr-stat"><div class="dr-stat-label">Distância / tempo</div><div class="dr-stat-value" id="routeDistance">—</div></div>
+  </div>
+
+  <div class="dr-grid">
+    <section class="dr-panel">
+      <div class="dr-panel-head"><span class="dr-panel-title">Pedidos disponíveis</span><span class="dr-count" id="availableCount">0</span></div>
+      <input class="dr-search" id="orderSearch" placeholder="Buscar cliente, pedido ou bairro">
+      <div class="dr-list" id="availableList"></div>
+    </section>
+    <section class="dr-panel">
+      <div class="dr-panel-head"><span class="dr-panel-title">Sequência da rota</span><span class="dr-count" id="selectedCount">0 paradas</span></div>
+      <div class="dr-list" id="routeList"></div>
+    </section>
+    <section class="dr-panel map-panel">
+      <div class="dr-panel-head"><span class="dr-panel-title">Mapa da rota</span><span class="dr-count" id="routeProvider">Aguardando rota</span></div>
+      <div class="dr-map"><div id="deliveryRouteMap"></div><div class="dr-map-note" id="mapNote">Selecione os pedidos e clique em “Gerar rota”.</div></div>
+    </section>
+  </div>
+
+  <div class="dr-footer">
+    <div class="dr-timeline" id="routeTimeline"><div class="dr-empty" style="width:100%;padding:6px;">A linha do tempo aparece depois do cálculo.</div></div>
+    <label style="display:flex;align-items:center;gap:7px;color:#91a0b4;font-size:10px;white-space:nowrap;">Tempo por entrega <input id="stopMinutes" type="number" min="0" max="60" value="5" style="width:48px;border:1px solid #374151;border-radius:6px;background:#171a1f;color:#fff;padding:5px;"> min</label>
+  </div>
+</div>
+<div class="dr-toast" id="routeToast"></div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function () {
+  const orders = JSON.parse(JSON.parse(document.getElementById('delivery-route-orders-raw').textContent));
+  const branch = JSON.parse(JSON.parse(document.getElementById('delivery-route-branch-raw').textContent));
+  const state = { selected: orders.filter(o => o.tem_coordenada).map(o => o.id), locked: new Set(), result: null, dragging: null };
+  const byId = Object.fromEntries(orders.map(o => [String(o.id), o]));
+  const csrf = '{{ csrf_token }}';
+  const calculateUrl = '{% url "pdv:delivery_rota_calcular" %}';
+  const pageUrl = '{% url "pdv:delivery_rotas" %}';
+  let map, routeLine, markers = [];
+
+  function esc(value) { const d=document.createElement('div'); d.textContent=value ?? ''; return d.innerHTML; }
+  function money(value) { return Number(value || 0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+  function duration(seconds) { const m=Math.round(Number(seconds||0)/60); return m<60 ? `${m} min` : `${Math.floor(m/60)}h ${String(m%60).padStart(2,'0')}min`; }
+  function toast(message, error=false) { const el=document.getElementById('routeToast'); el.textContent=message; el.className='dr-toast show'+(error?' error':''); clearTimeout(toast.t); toast.t=setTimeout(()=>el.className='dr-toast',3200); }
+  function address(o) { return [o.endereco,o.bairro,[o.cidade,o.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ') || 'Endereço não informado'; }
+  function currentOrders() { return state.selected.map(id => byId[String(id)]).filter(Boolean); }
+
+  function initMap() {
+    const center = branch.tem_coordenada ? [branch.lat, branch.lng] : [-14.235,-51.925];
+    map=L.map('deliveryRouteMap',{zoomControl:true,preferCanvas:true}).setView(center,branch.tem_coordenada?13:4);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles &copy; Esri'}).addTo(map);
+    if(branch.tem_coordenada) addMarker(branch.lat,branch.lng,'⌂','base',branch.nome);
+  }
+  function addMarker(lat,lng,label,kind,title) {
+    const icon=L.divIcon({className:'',iconSize:[25,25],iconAnchor:[12,12],html:`<div class="dr-marker ${kind||''}">${esc(label)}</div>`});
+    const marker=L.marker([lat,lng],{icon,title}).addTo(map).bindPopup(esc(title)); markers.push(marker); return marker;
+  }
+  function clearRoute() { if(routeLine){map.removeLayer(routeLine);routeLine=null;} markers.forEach(m=>map.removeLayer(m)); markers=[]; if(branch.tem_coordenada)addMarker(branch.lat,branch.lng,'⌂','base',branch.nome); }
+  function drawRoute(result) {
+    clearRoute();
+    routeLine=L.polyline(result.geometria,{color:'#2f7df4',weight:5,opacity:.9}).addTo(map);
+    result.paradas.forEach(p=>addMarker(p.lat,p.lng,p.ordem,'',`#${p.numero} · ${p.cliente}`));
+    map.fitBounds(routeLine.getBounds(),{padding:[35,35]});
+  }
+
+  function renderAvailable() {
+    const q=document.getElementById('orderSearch').value.toLowerCase().trim();
+    const shown=orders.filter(o=>!q||`${o.numero} ${o.cliente} ${o.bairro}`.toLowerCase().includes(q));
+    document.getElementById('availableCount').textContent=orders.length;
+    document.getElementById('availableList').innerHTML=shown.length?shown.map(o=>`
+      <label class="dr-card ${o.tem_coordenada?'':'unavailable'}" title="${o.tem_coordenada?'':'Cliente sem coordenada confirmada'}">
+        <input class="dr-check" type="checkbox" data-select="${o.id}" ${state.selected.includes(o.id)?'checked':''} ${o.tem_coordenada?'':'disabled'}>
+        <div><div class="dr-client">#${esc(o.numero)} · ${esc(o.cliente)}</div><div class="dr-meta">${esc(address(o))}</div><div class="dr-badges"><span class="dr-badge">${esc(o.status_label)}</span><span class="dr-badge blue">${esc(o.pagamento)}</span>${o.tem_coordenada?'':'<span class="dr-badge warn">Sem coordenada</span>'}</div></div>
+        <div class="dr-price">${money(o.valor)}</div>
+      </label>`).join(''):'<div class="dr-empty">Nenhum pedido encontrado.</div>';
+    document.querySelectorAll('[data-select]').forEach(el=>el.addEventListener('change',()=>toggleOrder(Number(el.dataset.select),el.checked)));
+  }
+  function renderRoute() {
+    const list=currentOrders();
+    document.getElementById('selectedCount').textContent=`${list.length} parada${list.length===1?'':'s'}`;
+    document.getElementById('routeDeliveries').textContent=list.length;
+    document.getElementById('routeList').innerHTML=list.length?list.map((o,i)=>`
+      <div class="dr-card" draggable="true" data-route-id="${o.id}">
+        <span class="dr-order">${i+1}</span>
+        <div><div class="dr-client">☰ &nbsp;#${esc(o.numero)} · ${esc(o.cliente)}</div><div class="dr-meta">${esc(address(o))}${state.result?.paradas?.[i]?.eta?` · ETA <strong>${esc(state.result.paradas[i].eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge blue">${esc(o.status_label)}</span>${state.locked.has(o.id)?'<span class="dr-badge">Posição travada</span>':''}</div></div>
+        <button class="dr-lock ${state.locked.has(o.id)?'locked':''}" data-lock="${o.id}" title="${state.locked.has(o.id)?'Destravar posição':'Travar posição'}">${state.locked.has(o.id)?'🔒':'🔓'}</button>
+      </div>`).join(''):'<div class="dr-empty">Marque pedidos à esquerda para montar a sequência.</div>';
+    document.querySelectorAll('[data-lock]').forEach(b=>b.addEventListener('click',()=>{const id=Number(b.dataset.lock);state.locked.has(id)?state.locked.delete(id):state.locked.add(id);renderRoute();}));
+    document.querySelectorAll('[data-route-id]').forEach(el=>{
+      el.addEventListener('dragstart',()=>{state.dragging=Number(el.dataset.routeId);el.classList.add('dragging');});
+      el.addEventListener('dragend',()=>{state.dragging=null;el.classList.remove('dragging');});
+      el.addEventListener('dragover',e=>e.preventDefault());
+      el.addEventListener('drop',e=>{e.preventDefault();moveOrder(state.dragging,Number(el.dataset.routeId));});
+    });
+  }
+  function toggleOrder(id,checked) { if(checked&&!state.selected.includes(id))state.selected.push(id); if(!checked){state.selected=state.selected.filter(x=>x!==id);state.locked.delete(id);} state.result=null; renderAvailable();renderRoute();resetSummary(); }
+  function moveOrder(from,to) { if(!from||from===to)return; const old=state.selected.indexOf(from), target=state.selected.indexOf(to); if(old<0||target<0)return; state.selected.splice(old,1);state.selected.splice(target,0,from);state.locked.add(from);state.result=null;renderRoute();resetSummary(); }
+  function resetSummary(){document.getElementById('routeDeparture').textContent='—';document.getElementById('routeReturn').textContent='—';document.getElementById('routeDistance').textContent='—';document.getElementById('routeTimeline').innerHTML='<div class="dr-empty" style="width:100%;padding:6px;">Recalcule a rota para atualizar os horários.</div>';}
+
+  async function calculate(optimize=false) {
+    if(!state.selected.length){toast('Selecione ao menos um pedido.',true);return;}
+    const buttons=[document.getElementById('routeGenerate'),document.getElementById('routeOptimize')]; buttons.forEach(b=>b.disabled=true);
+    document.getElementById('mapNote').textContent=optimize?'Reotimizando pedidos livres…':'Calculando trajeto por ruas…';
+    try{
+      const resp=await fetch(calculateUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({pedidos:state.selected,travados:[...state.locked],otimizar:optimize,minutos_parada:Number(document.getElementById('stopMinutes').value||5)})});
+      const data=await resp.json(); if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
+      state.selected=data.ordem; state.result=data; renderAvailable();renderRoute();drawRoute(data);renderSummary(data);
+      document.getElementById('mapNote').textContent=data.uso_comercial_liberado?'Rota calculada por ruas. Arraste uma parada para ajustar.':`Provider público ${data.provider}: configure um provider comercial antes do uso em produção.`;
+      toast(optimize?'Pedidos livres reotimizados.':'Rota calculada com sucesso.');
+    }catch(error){document.getElementById('mapNote').textContent=error.message;toast(error.message,true);}finally{buttons.forEach(b=>b.disabled=false);}
+  }
+  function renderSummary(data){
+    document.getElementById('routeDeparture').textContent=data.saida;document.getElementById('routeReturn').textContent=data.retorno;document.getElementById('routeDistance').textContent=`${data.distancia_km} km · ${duration(data.tempo_total_s)}`;document.getElementById('routeProvider').textContent=data.provider;
+    const points=[{ordem:'⌂',eta:data.saida,cliente:'Saída'},...data.paradas,{ordem:'⌂',eta:data.retorno,cliente:'Retorno'}];
+    document.getElementById('routeTimeline').innerHTML=points.map(p=>`<div class="dr-timepoint"><span class="dr-dot">${esc(p.ordem)}</span><strong style="display:block;color:#e0e8f4;">${esc(p.eta)}</strong><span>${esc(p.cliente)}</span></div>`).join('');
+  }
+  function coords(o){return `${o.lat},${o.lng}`;}
+  function googleUrls(){
+    if(!state.result)return[];
+    const stops=state.result.paradas, chunks=[];
+    // Três pontos por etapa é o limite conservador para links abertos em
+    // navegador móvel; no desktop o Google aceita mais, mas o link precisa
+    // funcionar justamente no celular do entregador.
+    for(let i=0;i<stops.length;i+=3)chunks.push(stops.slice(i,i+3));
+    return chunks.map((chunk,index)=>{
+      const previous=index===0?`${branch.lat},${branch.lng}`:coords(chunks[index-1][chunks[index-1].length-1]);
+      const isLast=index===chunks.length-1;
+      const destination=isLast?`${branch.lat},${branch.lng}`:coords(chunk[chunk.length-1]);
+      const waypoints=isLast?chunk:chunk.slice(0,-1);
+      const url=new URL('https://www.google.com/maps/dir/');
+      url.searchParams.set('api','1');url.searchParams.set('origin',previous);url.searchParams.set('destination',destination);url.searchParams.set('travelmode','driving');
+      if(waypoints.length)url.searchParams.set('waypoints',waypoints.map(coords).join('|'));
+      return url.toString();
+    });
+  }
+  function openMaps(){const urls=googleUrls();if(!urls.length)return toast('Gere a rota antes de abrir o GPS.',true);window.open(urls[0],'_blank','noopener');if(urls.length>1)toast(`Rota dividida em ${urls.length} etapas. Os links de todas as etapas vão no WhatsApp.`);}
+  function openWaze(){const first=state.result?.paradas?.[0];if(!first)return toast('Gere a rota antes de abrir o GPS.',true);window.open(`https://www.waze.com/ul?ll=${first.lat}%2C${first.lng}&navigate=yes`,'_blank','noopener');}
+  function saveDraft(){const payload={selected:state.selected,locked:[...state.locked],driver:document.getElementById('routeDriver').value,minutes:document.getElementById('stopMinutes').value};localStorage.setItem('delivery-route-draft',JSON.stringify(payload));toast('Rascunho salvo neste navegador.');}
+  function loadDraft(){try{const d=JSON.parse(localStorage.getItem('delivery-route-draft')||'null');if(!d)return;state.selected=(d.selected||[]).map(Number).filter(id=>byId[String(id)]?.tem_coordenada);state.locked=new Set((d.locked||[]).map(Number));document.getElementById('routeDriver').value=d.driver||'';document.getElementById('stopMinutes').value=d.minutes||5;}catch(e){}}
+  function share(){if(!state.result)return toast('Gere a rota antes de compartilhar.',true);const driver=document.getElementById('routeDriver').value.trim();const urls=googleUrls();const gps=urls.length===1?[`Google Maps: ${urls[0]}`]:urls.flatMap((url,i)=>[`Etapa ${i+1} de ${urls.length}: ${url}`]);const lines=[`🛵 Rota do Delivery${driver?' — '+driver:''}`,`${state.result.paradas.length} entregas · ${state.result.distancia_km} km`,`Saída ${state.result.saida} · retorno previsto ${state.result.retorno}`,'',...state.result.paradas.map(p=>`${p.ordem}. ${p.cliente} — ETA ${p.eta}`),'',...gps];window.open(`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`,'_blank','noopener');}
+
+  document.getElementById('orderSearch').addEventListener('input',renderAvailable);
+  document.getElementById('routeGenerate').addEventListener('click',()=>calculate(false));
+  document.getElementById('routeOptimize').addEventListener('click',()=>calculate(true));
+  document.getElementById('routeSave').addEventListener('click',saveDraft);
+  document.getElementById('routeShare').addEventListener('click',share);
+  document.getElementById('routeMaps').addEventListener('click',openMaps);
+  document.getElementById('routeWaze').addEventListener('click',openWaze);
+  document.getElementById('stopMinutes').addEventListener('change',()=>state.result&&calculate(false));
+  loadDraft();renderAvailable();renderRoute();initMap();
+  if(!branch.tem_coordenada)document.getElementById('mapNote').textContent='A filial precisa de coordenadas para calcular saída e retorno.';
+})();
+</script>
+{% endblock %}

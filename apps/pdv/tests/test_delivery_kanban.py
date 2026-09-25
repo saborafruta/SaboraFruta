@@ -4,12 +4,16 @@ rastreio (`apps.mapas`) compartilham a mesma conta (`VendaPDV.
 mudar_status_delivery`), pra "o motorista marcou entregue no celular" e
 "alguém arrastou o card" nunca divergirem em como o campo é atualizado.
 """
+import json
+from unittest.mock import patch
+
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.mapas.services.roteirizacao import Rota
 from apps.pdv.models import VendaPDV
 
 
@@ -112,3 +116,76 @@ class DeliveryMoverViewTests(DeliveryKanbanBase):
             data='{"status": "em_entrega"}', content_type='application/json',
         )
         self.assertEqual(resp.status_code, 404)
+
+
+class DeliveryRotasViewTests(DeliveryKanbanBase):
+
+    def setUp(self):
+        super().setUp()
+        self.filial.latitude = -5.7900
+        self.filial.longitude = -35.2100
+        self.filial.save(update_fields=['latitude', 'longitude'])
+        self.cliente.latitude = -5.8000
+        self.cliente.longitude = -35.2200
+        self.cliente.save(update_fields=['latitude', 'longitude'])
+
+    def test_tela_exibe_pedidos_ativos_e_botao_existe_no_kanban(self):
+        ativo = self._venda(numero=101, status_delivery='preparando')
+        self._venda(numero=102, status_delivery='entregue')
+
+        tela = self.client.get(reverse('pdv:delivery_rotas'))
+        kanban = self.client.get(reverse('pdv:delivery'))
+
+        self.assertEqual(tela.status_code, 200)
+        self.assertContains(tela, 'Rota do Delivery')
+        pedidos = json.loads(tela.context['pedidos_json'])
+        self.assertIn(ativo.pk, [p['id'] for p in pedidos])
+        self.assertNotIn(102, [p['numero'] for p in pedidos])
+        self.assertContains(kanban, 'Rota do Delivery')
+        self.assertContains(kanban, '?embed=1')
+
+    @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.rota')
+    def test_calculo_preserva_ordem_e_inclui_retorno(self, mock_rota):
+        primeiro = self._venda(numero=201)
+        segundo_cliente = Cliente.objects.create(
+            filial=self.filial, razao_social='Segundo Cliente', cpf_cnpj='98765432100',
+            latitude=-5.8100, longitude=-35.2300,
+        )
+        segundo = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=202, cliente=segundo_cliente,
+            usuario=self.usuario, status='finalizada', delivery=True,
+            status_delivery='novo', data_venda=timezone.now(),
+        )
+        mock_rota.return_value = Rota(
+            distancia_m=12000, duracao_s=1800,
+            geometria=[[-5.79, -35.21], [-5.81, -35.23], [-5.8, -35.22], [-5.79, -35.21]],
+        )
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_calcular'),
+            data=json.dumps({'pedidos': [segundo.pk, primeiro.pk], 'minutos_parada': 5}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        dados = resp.json()
+        self.assertEqual(dados['ordem'], [segundo.pk, primeiro.pk])
+        self.assertEqual(dados['distancia_km'], 12.0)
+        self.assertEqual(dados['tempo_total_s'], 2400)
+        self.assertEqual(len(dados['paradas']), 2)
+        pontos = mock_rota.call_args.args[0]
+        self.assertEqual(pontos[0], pontos[-1])
+
+    def test_pedido_sem_coordenada_e_rejeitado(self):
+        self.cliente.latitude = None
+        self.cliente.longitude = None
+        self.cliente.save(update_fields=['latitude', 'longitude'])
+        venda = self._venda(numero=301)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_calcular'),
+            data=json.dumps({'pedidos': [venda.pk]}), content_type='application/json',
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('sem coordenada', resp.json()['erro'].lower())
