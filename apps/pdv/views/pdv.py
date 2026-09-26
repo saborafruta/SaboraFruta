@@ -1,4 +1,5 @@
 import datetime
+import hashlib
 import json
 import logging
 import re
@@ -3447,6 +3448,70 @@ def delivery_rota_atualizar_endereco(request, pk):
     })
 
 
+def _delivery_normalizar_endereco_manual(corpo):
+    limites = {
+        'cep': 8, 'rua': 255, 'numero': 20, 'complemento': 80,
+        'bairro': 80, 'cidade': 80, 'uf': 2,
+    }
+    endereco = {
+        campo: str(corpo.get(campo) or '').strip()[:limite]
+        for campo, limite in limites.items()
+    }
+    endereco['cep'] = re.sub(r'\D', '', endereco['cep'])[:8]
+    endereco['uf'] = endereco['uf'].upper()
+    ausentes = [
+        rotulo for campo, rotulo in (
+            ('rua', 'rua'), ('bairro', 'bairro'), ('cidade', 'cidade'), ('uf', 'UF'),
+        ) if not endereco[campo]
+    ]
+    if ausentes:
+        raise ValueError(f'Preencha {", ".join(ausentes)} para localizar a parada.')
+    return endereco
+
+
+def _delivery_endereco_manual_texto(endereco):
+    return ', '.join(filter(None, [
+        endereco.get('rua'), endereco.get('numero'), endereco.get('complemento'),
+        endereco.get('bairro'), endereco.get('cidade'), endereco.get('uf'),
+        endereco.get('cep'),
+    ]))
+
+
+@require_POST
+@requer_permissao('pdv', 'ver')
+def delivery_rota_localizar_parada_manual(request):
+    """Valida e geocodifica uma parada avulsa sem alterar cadastro de cliente."""
+    from apps.mapas.services.geocoder import GeocodificacaoService
+
+    try:
+        corpo = json.loads(request.body or b'{}')
+        if not isinstance(corpo, dict):
+            raise ValueError('Envie um objeto JSON.')
+        endereco = _delivery_normalizar_endereco_manual(corpo)
+    except (ValueError, TypeError) as exc:
+        return JsonResponse({'erro': str(exc)}, status=400)
+
+    observacao = str(corpo.get('observacao') or '').strip()[:240]
+    if not observacao:
+        return JsonResponse({'erro': 'Informe o que será feito nesta parada.'}, status=400)
+    texto = _delivery_endereco_manual_texto(endereco)
+    endereco_hash = hashlib.sha256(texto.lower().encode('utf-8')).hexdigest()
+    resultado = GeocodificacaoService().resolver(texto, endereco_hash)
+    if not resultado.ok:
+        return JsonResponse({
+            'erro': 'Não foi possível localizar esse endereço. Confira os dados e tente novamente.'
+        }, status=400)
+    return JsonResponse({
+        'ok': True,
+        'endereco': endereco,
+        'endereco_texto': texto,
+        'observacao': observacao,
+        'lat': float(resultado.latitude),
+        'lng': float(resultado.longitude),
+        'precisao': resultado.precisao,
+    })
+
+
 def _delivery_otimizar_livres(pedidos, travados, matriz_distancias):
     """Otimiza blocos livres sem mudar a posição dos pedidos travados.
 
@@ -3529,10 +3594,76 @@ def _delivery_otimizar_livres(pedidos, travados, matriz_distancias):
     return resultado
 
 
+def _delivery_otimizar_paradas(paradas, travadas, matriz_distancias):
+    """Versão genérica do otimizador para entregas e paradas avulsas misturadas."""
+    indice_por_chave = {parada['chave']: i + 1 for i, parada in enumerate(paradas)}
+
+    def distancia(indice_inicial, indice_final):
+        valor = matriz_distancias[indice_inicial][indice_final]
+        return float(valor) if valor is not None else float('inf')
+
+    def custo(bloco, indice_inicial, indice_final):
+        indices = [indice_inicial] + [indice_por_chave[p['chave']] for p in bloco] + [indice_final]
+        return sum(distancia(indices[i], indices[i + 1]) for i in range(len(indices) - 1))
+
+    def otimizar_bloco(bloco, indice_inicial, indice_final):
+        if len(bloco) < 2:
+            return list(bloco)
+
+        def completar(primeira):
+            restantes = [p for p in bloco if p['chave'] != primeira['chave']]
+            ordem = [primeira]
+            atual = indice_por_chave[primeira['chave']]
+            while restantes:
+                proxima = min(
+                    restantes,
+                    key=lambda p: (
+                        matriz_distancias[atual][indice_por_chave[p['chave']]] is None,
+                        distancia(atual, indice_por_chave[p['chave']]),
+                    ),
+                )
+                ordem.append(proxima)
+                restantes.remove(proxima)
+                atual = indice_por_chave[proxima['chave']]
+            return ordem
+
+        def dois_opt(ordem):
+            melhorou = True
+            while melhorou:
+                melhorou = False
+                custo_atual = custo(ordem, indice_inicial, indice_final)
+                for i in range(len(ordem) - 1):
+                    for j in range(i + 1, len(ordem)):
+                        candidata = ordem[:i] + ordem[i:j + 1][::-1] + ordem[j + 1:]
+                        custo_candidata = custo(candidata, indice_inicial, indice_final)
+                        if custo_candidata < custo_atual - .5:
+                            ordem, custo_atual, melhorou = candidata, custo_candidata, True
+            return ordem
+
+        candidatas = [dois_opt(completar(parada)) for parada in bloco]
+        return min(candidatas, key=lambda ordem: custo(ordem, indice_inicial, indice_final))
+
+    resultado = list(paradas)
+    posicoes_travadas = [i for i, parada in enumerate(resultado) if parada['chave'] in travadas]
+    inicio = 0
+    indice_anterior = 0
+    for limite in posicoes_travadas + [len(resultado)]:
+        bloco = resultado[inicio:limite]
+        indice_seguinte = (
+            indice_por_chave[resultado[limite]['chave']] if limite < len(resultado) else 0
+        )
+        if bloco:
+            resultado[inicio:limite] = otimizar_bloco(bloco, indice_anterior, indice_seguinte)
+        if limite < len(resultado):
+            indice_anterior = indice_por_chave[resultado[limite]['chave']]
+            inicio = limite + 1
+    return resultado
+
+
 @require_POST
 @requer_permissao('pdv', 'ver')
 def delivery_rota_calcular(request):
-    """Calcula o traçado da rota na ordem escolhida e, opcionalmente, reordena livres."""
+    """Calcula uma rota com entregas e paradas manuais na mesma sequência."""
     from apps.mapas.services.roteirizacao import MAX_PARADAS, construir_roteirizador
 
     try:
@@ -3542,18 +3673,24 @@ def delivery_rota_calcular(request):
     if not isinstance(corpo, dict):
         return JsonResponse({'erro': 'Envie um objeto JSON.'}, status=400)
 
+    entradas = corpo.get('paradas')
+    if not isinstance(entradas, list):
+        entradas = [{'tipo': 'pedido', 'id': bruto} for bruto in (corpo.get('pedidos') or [])]
+
     ids = []
-    for bruto in corpo.get('pedidos') or []:
+    for item in entradas:
+        if not isinstance(item, dict) or item.get('tipo') != 'pedido':
+            continue
         try:
-            pk = int(bruto)
+            pk = int(item.get('id'))
         except (TypeError, ValueError):
             continue
         if pk not in ids:
             ids.append(pk)
-    if not ids:
-        return JsonResponse({'erro': 'Selecione ao menos um pedido.'}, status=400)
-    if len(ids) > MAX_PARADAS:
-        return JsonResponse({'erro': f'Selecione no máximo {MAX_PARADAS} pedidos.'}, status=400)
+    if not entradas:
+        return JsonResponse({'erro': 'Adicione ao menos uma parada.'}, status=400)
+    if len(entradas) > MAX_PARADAS:
+        return JsonResponse({'erro': f'Adicione no máximo {MAX_PARADAS} paradas.'}, status=400)
 
     encontrados = {
         v.pk: v for v in _delivery_rota_pedidos(request.filial_ativa).filter(pk__in=ids)
@@ -3573,32 +3710,69 @@ def delivery_rota_calcular(request):
         return JsonResponse({'erro': 'Cadastre as coordenadas da filial para calcular saída e retorno.'}, status=400)
     origem = (float(filial.latitude), float(filial.longitude))
 
-    travados = set()
-    for bruto in corpo.get('travados') or []:
-        try:
-            travados.add(int(bruto))
-        except (TypeError, ValueError):
-            pass
-    pontos_entrega_originais = [
-        (float(v.cliente.latitude), float(v.cliente.longitude)) for v in pedidos
-    ]
+    paradas = []
+    chaves_vistas = set()
+    for item in entradas:
+        if not isinstance(item, dict):
+            continue
+        tipo = str(item.get('tipo') or '')
+        if tipo == 'pedido':
+            try:
+                venda = encontrados[int(item.get('id'))]
+            except (KeyError, TypeError, ValueError):
+                return JsonResponse({'erro': 'A rota contém um pedido inválido.'}, status=400)
+            chave = f'pedido:{venda.pk}'
+            parada = {
+                'tipo': 'pedido', 'chave': chave, 'venda': venda,
+                'ponto': (float(venda.cliente.latitude), float(venda.cliente.longitude)),
+            }
+        elif tipo == 'manual':
+            identificador = re.sub(r'[^a-zA-Z0-9_-]', '', str(item.get('id') or ''))[:64]
+            observacao = str(item.get('observacao') or '').strip()[:240]
+            endereco = item.get('endereco') if isinstance(item.get('endereco'), dict) else {}
+            try:
+                latitude, longitude = float(item.get('lat')), float(item.get('lng'))
+            except (TypeError, ValueError):
+                return JsonResponse({'erro': 'Localize o endereço da parada manual novamente.'}, status=400)
+            if not identificador or not observacao or not (-34 <= latitude <= 6 and -74 <= longitude <= -32):
+                return JsonResponse({'erro': 'A parada manual está incompleta ou fora do Brasil.'}, status=400)
+            chave = f'manual:{identificador}'
+            parada = {
+                'tipo': 'manual', 'chave': chave, 'ponto': (latitude, longitude),
+                'manual': {
+                    'id': identificador, 'tipo': 'manual', 'observacao': observacao,
+                    'endereco': {k: str(v or '')[:255] for k, v in endereco.items() if k in {
+                        'cep', 'rua', 'numero', 'complemento', 'bairro', 'cidade', 'uf',
+                    }},
+                    'endereco_texto': str(item.get('endereco_texto') or '')[:500],
+                    'lat': latitude, 'lng': longitude,
+                },
+            }
+        else:
+            return JsonResponse({'erro': 'A rota contém um tipo de parada inválido.'}, status=400)
+        if chave not in chaves_vistas:
+            paradas.append(parada)
+            chaves_vistas.add(chave)
+    if not paradas:
+        return JsonResponse({'erro': 'Adicione ao menos uma parada.'}, status=400)
+
+    travados = {str(chave) for chave in (corpo.get('travados') or []) if str(chave) in chaves_vistas}
+    pontos_entrega_originais = [parada['ponto'] for parada in paradas]
     roteirizador = construir_roteirizador()
     if corpo.get('otimizar'):
         try:
             matriz = roteirizador.matriz_distancias([origem] + pontos_entrega_originais)
-            tamanho = len(pedidos) + 1
+            tamanho = len(paradas) + 1
             if len(matriz) != tamanho or any(len(linha) != tamanho for linha in matriz):
                 raise ValueError('matriz de distâncias incompleta')
-            pedidos = _delivery_otimizar_livres(pedidos, travados, matriz)
+            paradas = _delivery_otimizar_paradas(paradas, travados, matriz)
         except Exception as exc:
             logger.warning('falha ao otimizar rota de delivery pelas ruas: %s', exc)
             return JsonResponse({
                 'erro': 'Não foi possível comparar as distâncias pelas ruas. Tente novamente.'
             }, status=503)
 
-    pontos_entrega = [
-        (float(v.cliente.latitude), float(v.cliente.longitude)) for v in pedidos
-    ]
+    pontos_entrega = [parada['ponto'] for parada in paradas]
     pontos = [origem] + pontos_entrega + [origem]
     try:
         rota = roteirizador.rota(pontos)
@@ -3629,19 +3803,34 @@ def delivery_rota_calcular(request):
         minutos_parada = 5
     servico_s = max(0, min(minutos_parada, 60)) * 60
     acumulado_s = 0.0
-    paradas = []
-    for i, venda in enumerate(pedidos):
+    paradas_resposta = []
+    for i, parada in enumerate(paradas):
         acumulado_s += rota.duracao_s * (pesos[i] / peso_total)
         chegada = agora + datetime.timedelta(seconds=acumulado_s + servico_s * i)
-        dado = _delivery_rota_serializar_pedido(venda)
+        if parada['tipo'] == 'pedido':
+            dado = _delivery_rota_serializar_pedido(parada['venda'])
+            dado.update({'tipo': 'pedido', 'chave': parada['chave']})
+        else:
+            manual = parada['manual']
+            endereco = manual['endereco']
+            dado = {
+                'id': manual['id'], 'tipo': 'manual', 'chave': parada['chave'],
+                'cliente': manual['observacao'], 'observacao': manual['observacao'],
+                'endereco': ', '.join(filter(None, [endereco.get('rua'), endereco.get('numero')])),
+                'complemento': endereco.get('complemento', ''),
+                'bairro': endereco.get('bairro', ''), 'cidade': endereco.get('cidade', ''),
+                'uf': endereco.get('uf', ''), 'lat': manual['lat'], 'lng': manual['lng'],
+                'endereco_texto': manual['endereco_texto'],
+            }
         dado.update({'ordem': i + 1, 'eta': chegada.strftime('%H:%M')})
-        paradas.append(dado)
-    tempo_total_s = rota.duracao_s + servico_s * len(pedidos)
+        paradas_resposta.append(dado)
+    tempo_total_s = rota.duracao_s + servico_s * len(paradas)
     retorno = agora + datetime.timedelta(seconds=tempo_total_s)
 
     return JsonResponse({
-        'ordem': [v.pk for v in pedidos],
-        'paradas': paradas,
+        'ordem': [p['venda'].pk for p in paradas if p['tipo'] == 'pedido'],
+        'ordem_paradas': [p['chave'] for p in paradas],
+        'paradas': paradas_resposta,
         'geometria': rota.geometria,
         'distancia_km': round(rota.distancia_m / 1000, 1),
         'tempo_deslocamento_s': round(rota.duracao_s),
@@ -3673,7 +3862,31 @@ def delivery_rota_publicar(request):
             continue
         if pk not in ids:
             ids.append(pk)
-    if not ids:
+    extras_recebidas = corpo.get('paradas_extras') if isinstance(corpo.get('paradas_extras'), list) else []
+    extras = []
+    extras_ids = set()
+    for item in extras_recebidas:
+        if not isinstance(item, dict) or item.get('tipo') != 'manual':
+            continue
+        identificador = re.sub(r'[^a-zA-Z0-9_-]', '', str(item.get('id') or ''))[:64]
+        observacao = str(item.get('observacao') or '').strip()[:240]
+        try:
+            lat, lng = float(item.get('lat')), float(item.get('lng'))
+        except (TypeError, ValueError):
+            continue
+        if not identificador or identificador in extras_ids or not observacao:
+            continue
+        endereco = item.get('endereco') if isinstance(item.get('endereco'), dict) else {}
+        extras.append({
+            'id': identificador, 'tipo': 'manual', 'observacao': observacao,
+            'endereco': {k: str(v or '')[:255] for k, v in endereco.items() if k in {
+                'cep', 'rua', 'numero', 'complemento', 'bairro', 'cidade', 'uf',
+            }},
+            'endereco_texto': str(item.get('endereco_texto') or '')[:500],
+            'lat': lat, 'lng': lng,
+        })
+        extras_ids.add(identificador)
+    if not ids and not extras:
         return JsonResponse({'erro': 'Gere uma rota antes de publicá-la.'}, status=400)
 
     encontrados = set(
@@ -3692,6 +3905,19 @@ def delivery_rota_publicar(request):
         eta = str(etas_recebidas.get(str(pk)) or '').strip()
         if re.fullmatch(r'\d{2}:\d{2}', eta):
             etas[str(pk)] = eta
+    ordem_recebida = corpo.get('ordem_paradas') if isinstance(corpo.get('ordem_paradas'), list) else []
+    chaves_padrao = [f'pedido:{pk}' for pk in ids] + [f"manual:{item['id']}" for item in extras]
+    chaves_validas = set(chaves_padrao)
+    ordem_paradas = []
+    for chave in ordem_recebida:
+        chave = str(chave)
+        if chave in chaves_validas and chave not in ordem_paradas:
+            ordem_paradas.append(chave)
+    ordem_paradas.extend(chave for chave in chaves_padrao if chave not in ordem_paradas)
+    for item in extras:
+        eta = str(etas_recebidas.get(f"manual:{item['id']}") or '').strip()
+        if re.fullmatch(r'\d{2}:\d{2}', eta):
+            item['eta'] = eta
     with tenant_atomic():
         rota, _criada = RotaDeliveryPublica.objects.get_or_create(
             filial=request.filial_ativa,
@@ -3699,6 +3925,9 @@ def delivery_rota_publicar(request):
         rota.pedido_ids = ids
         rota.pedido_etas = etas
         rota.pedido_status_anteriores = {}
+        rota.paradas_extras = extras
+        rota.ordem_paradas = ordem_paradas
+        rota.paradas_extras_concluidas = []
         rota.entregador = entregador
         rota.ativa = True
         rota.save()

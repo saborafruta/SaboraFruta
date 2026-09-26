@@ -54,13 +54,9 @@ def _endereco_pedido(pedido):
     ])) or _coordenada(cliente)
 
 
-def _url_google_maps_completa(filial, pedidos):
+def _url_google_maps_completa(filial, paradas):
     """URL oficial única para comparar o comportamento do Maps no aparelho."""
-    roteaveis = [
-        pedido for pedido in pedidos
-        if pedido.cliente and pedido.cliente.latitude is not None
-        and pedido.cliente.longitude is not None
-    ]
+    roteaveis = [parada for parada in paradas if parada.get('maps_location')]
     if not roteaveis or filial.latitude is None or filial.longitude is None:
         return ''
     base = _endereco_filial(filial)
@@ -69,7 +65,7 @@ def _url_google_maps_completa(filial, pedidos):
         'origin': base,
         'destination': base,
         'travelmode': 'driving',
-        'waypoints': '|'.join(_endereco_pedido(pedido) for pedido in roteaveis),
+        'waypoints': '|'.join(parada['maps_location'] for parada in roteaveis),
     })
 
 
@@ -125,6 +121,8 @@ def _dados_pedidos(pedidos, etas=None):
             if texto and texto.strip()
         ))
         dados.append({
+            'tipo': 'pedido',
+            'chave': f'pedido:{pedido.pk}',
             'ordem': ordem,
             'venda': pedido,
             'cliente': (
@@ -165,22 +163,64 @@ def _dados_pedidos(pedidos, etas=None):
                 if cliente and cliente.latitude is not None and cliente.longitude is not None
                 else ''
             ),
+            'maps_location': _endereco_pedido(pedido),
         })
     # Mantém o número original da parada, mas leva as concluídas para o fim.
     return sorted(dados, key=lambda item: (item['concluido'], item['ordem']))
+
+
+def _dados_paradas_rota(rota, pedidos):
+    entregas = _dados_pedidos(pedidos, rota.pedido_etas)
+    por_chave = {item['chave']: item for item in entregas}
+    concluidas = {str(item) for item in (rota.paradas_extras_concluidas or [])}
+    for extra in rota.paradas_extras or []:
+        if not isinstance(extra, dict) or not extra.get('id'):
+            continue
+        identificador = str(extra['id'])
+        chave = f'manual:{identificador}'
+        endereco = extra.get('endereco') if isinstance(extra.get('endereco'), dict) else {}
+        endereco_texto = str(extra.get('endereco_texto') or '').strip() or ', '.join(filter(None, [
+            endereco.get('rua'), endereco.get('numero'), endereco.get('bairro'),
+            endereco.get('cidade'), endereco.get('uf'),
+        ]))
+        try:
+            maps_location = f"{float(extra['lat'])},{float(extra['lng'])}"
+        except (KeyError, TypeError, ValueError):
+            maps_location = endereco_texto
+        por_chave[chave] = {
+            'tipo': 'manual', 'chave': chave, 'manual_id': identificador,
+            'cliente': str(extra.get('observacao') or 'Parada manual'),
+            'endereco': endereco_texto, 'complemento': '', 'telefone': '', 'whatsapp': '',
+            'observacoes': [], 'eta': str(extra.get('eta') or ''), 'pago': False,
+            'pagamento_pendente': False, 'formas_pagamento': '',
+            'concluido': identificador in concluidas, 'pode_alterar': True,
+            'navegar_url': 'https://www.google.com/maps/dir/?' + urlencode({
+                'api': '1', 'destination': maps_location, 'travelmode': 'driving',
+                'dir_action': 'navigate',
+            }),
+            'maps_location': maps_location,
+        }
+    ordem = [str(chave) for chave in (rota.ordem_paradas or []) if str(chave) in por_chave]
+    ordem.extend(chave for chave in por_chave if chave not in ordem)
+    paradas = []
+    for numero, chave in enumerate(ordem, start=1):
+        item = por_chave[chave]
+        item['ordem'] = numero
+        paradas.append(item)
+    return sorted(paradas, key=lambda item: (item['concluido'], item['ordem']))
 
 
 @require_GET
 def painel(request, token):
     rota = _buscar_rota(token)
     pedidos = _pedidos_da_rota(rota)
-    dados = _dados_pedidos(pedidos, rota.pedido_etas)
+    dados = _dados_paradas_rota(rota, pedidos)
     response = render(request, 'pdv/delivery_motorista_publico.html', {
         'rota': rota,
         'pedidos': dados,
         'total': len(dados),
         'concluidos': sum(1 for pedido in dados if pedido['concluido']),
-        'google_maps_completa': _url_google_maps_completa(rota.filial, pedidos),
+        'google_maps_completa': _url_google_maps_completa(rota.filial, dados),
     })
     return _privado(response)
 
@@ -244,3 +284,35 @@ def concluir(request, token, pk):
             'concluido': entregue,
         }))
     return redirect(reverse('delivery_publico:painel', args=[token]) + f'#pedido-{pk}')
+
+
+@require_POST
+def concluir_parada_extra(request, token, parada_id):
+    rota = _buscar_rota(token)
+    extras = {
+        str(item.get('id')) for item in (rota.paradas_extras or [])
+        if isinstance(item, dict) and item.get('id')
+    }
+    if parada_id not in extras:
+        raise Http404
+    concluida = True
+    if request.content_type == 'application/json':
+        try:
+            corpo = json.loads(request.body or b'{}')
+        except ValueError:
+            return _privado(JsonResponse({'erro': 'JSON inválido.'}, status=400))
+        concluida = corpo.get('entregue', True) is not False
+    with transaction.atomic():
+        rota = get_object_or_404(
+            RotaDeliveryPublica._base_manager.select_for_update(), pk=rota.pk, ativa=True,
+        )
+        concluidas = {str(item) for item in (rota.paradas_extras_concluidas or [])}
+        if concluida:
+            concluidas.add(parada_id)
+        else:
+            concluidas.discard(parada_id)
+        rota.paradas_extras_concluidas = sorted(concluidas)
+        rota.save(update_fields=['paradas_extras_concluidas', 'updated_at'])
+    if 'application/json' in request.headers.get('Accept', ''):
+        return _privado(JsonResponse({'ok': True, 'concluido': concluida}))
+    return redirect(reverse('delivery_publico:painel', args=[token]) + f'#parada-{parada_id}')

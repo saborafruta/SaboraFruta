@@ -15,6 +15,7 @@ from django.utils import timezone
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.mapas.services.roteirizacao import Rota
+from apps.mapas.services.geocoder import Resultado
 from apps.pdv.models import RotaDeliveryPublica, VendaPDV
 
 
@@ -354,6 +355,51 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn('cidade', resp.json()['erro'])
 
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_parada_manual_exige_observacao_e_geocodifica_sem_criar_cliente(self, resolver):
+        resolver.return_value = Resultado(-5.82, -35.24, 'exata')
+        quantidade_clientes = Cliente.objects.count()
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_localizar_parada_manual'),
+            data=json.dumps({
+                'observacao': 'Buscar caixas térmicas', 'rua': 'Rua Manual',
+                'numero': '50', 'bairro': 'Centro', 'cidade': 'Natal', 'uf': 'rn',
+            }), content_type='application/json',
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['observacao'], 'Buscar caixas térmicas')
+        self.assertEqual(resp.json()['endereco']['uf'], 'RN')
+        self.assertEqual(Cliente.objects.count(), quantidade_clientes)
+
+    @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.rota')
+    def test_calculo_aceita_parada_manual_misturada_com_pedido(self, mock_rota):
+        venda = self._venda(numero=304)
+        mock_rota.return_value = Rota(
+            distancia_m=15000, duracao_s=2400,
+            geometria=[[-5.79, -35.21], [-5.80, -35.22], [-5.81, -35.23], [-5.79, -35.21]],
+        )
+        manual = {
+            'tipo': 'manual', 'id': 'buscar-caixas',
+            'observacao': 'Buscar caixas térmicas',
+            'endereco': {'rua': 'Rua das Caixas', 'numero': '10', 'bairro': 'Centro', 'cidade': 'Natal', 'uf': 'RN'},
+            'endereco_texto': 'Rua das Caixas, 10, Centro, Natal, RN',
+            'lat': -5.81, 'lng': -35.23,
+        }
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_calcular'),
+            data=json.dumps({'paradas': [
+                {'tipo': 'pedido', 'id': venda.pk}, manual,
+            ]}), content_type='application/json',
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['ordem_paradas'], [f'pedido:{venda.pk}', 'manual:buscar-caixas'])
+        self.assertEqual(resp.json()['paradas'][1]['observacao'], 'Buscar caixas térmicas')
+        self.assertEqual(resp.json()['tempo_total_s'], 3000)
+
 
 class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
 
@@ -552,3 +598,37 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         parametros = parse_qs(urlparse(resp.context['google_maps_completa']).query)
         self.assertNotIn('dir_action', parametros)
         self.assertIn('Rua do Cliente', parametros['waypoints'][0])
+
+    def test_painel_publico_exibe_e_conclui_parada_manual(self):
+        venda = self._venda(numero=460)
+        publicacao = self.client.post(
+            reverse('pdv:delivery_rota_publicar'),
+            data=json.dumps({
+                'pedidos': [venda.pk],
+                'paradas_extras': [{
+                    'tipo': 'manual', 'id': 'buscar-documentos',
+                    'observacao': 'Buscar documentos assinados',
+                    'endereco': {'rua': 'Rua Manual', 'numero': '50', 'bairro': 'Centro', 'cidade': 'Natal', 'uf': 'RN'},
+                    'endereco_texto': 'Rua Manual, 50, Centro, Natal, RN',
+                    'lat': -5.82, 'lng': -35.24,
+                }],
+                'ordem_paradas': ['manual:buscar-documentos', f'pedido:{venda.pk}'],
+                'etas': {'manual:buscar-documentos': '14:10', str(venda.pk): '14:30'},
+            }), content_type='application/json',
+        )
+        rota = RotaDeliveryPublica.objects.get(filial=self.filial)
+        self.client.logout()
+
+        tela = self.client.get(publicacao.json()['url'])
+        concluida = self.client.post(
+            reverse('delivery_publico:concluir_parada_extra', args=[rota.token, 'buscar-documentos']),
+            data=json.dumps({'entregue': True}), content_type='application/json',
+            HTTP_ACCEPT='application/json',
+        )
+
+        self.assertContains(tela, 'Buscar documentos assinados')
+        self.assertContains(tela, 'PARADA MANUAL')
+        self.assertContains(tela, 'Chegada 14:10')
+        self.assertEqual(concluida.status_code, 200)
+        rota.refresh_from_db()
+        self.assertEqual(rota.paradas_extras_concluidas, ['buscar-documentos'])

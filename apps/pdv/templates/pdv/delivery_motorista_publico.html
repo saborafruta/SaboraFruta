@@ -22,7 +22,7 @@
     <h1>Rota do Delivery</h1>
     <p class="sub">{% if rota.entregador %}Motoboy: {{ rota.entregador }} · {% endif %}atualizada em {{ rota.updated_at|date:"d/m/Y H:i" }}</p>
     <div class="summary">
-      <div class="stat"><small>Entregas</small><strong>{{ total }}</strong></div>
+      <div class="stat"><small>Paradas</small><strong>{{ total }}</strong></div>
       <div class="stat"><small>Concluídas</small><strong><span id="completedCount">{{ concluidos }}</span>/{{ total }}</strong></div>
     </div>
   </header>
@@ -36,9 +36,9 @@
 
   <section id="orderList">
   {% for pedido in pedidos %}
-  <article class="order{% if pedido.concluido %} done{% endif %}" id="pedido-{{ pedido.venda.pk }}" data-order-card data-route-order="{{ pedido.ordem }}">
+  <article class="order{% if pedido.concluido %} done{% endif %}" id="{% if pedido.tipo == 'manual' %}parada-{{ pedido.manual_id }}{% else %}pedido-{{ pedido.venda.pk }}{% endif %}" data-order-card data-route-order="{{ pedido.ordem }}">
     <div class="order-main">
-      <form class="route-check" method="post" action="{% url 'delivery_publico:concluir' rota.token pedido.venda.pk %}">
+      <form class="route-check" method="post" action="{% if pedido.tipo == 'manual' %}{% url 'delivery_publico:concluir_parada_extra' rota.token pedido.manual_id %}{% else %}{% url 'delivery_publico:concluir' rota.token pedido.venda.pk %}{% endif %}">
         {% csrf_token %}
         <span class="number">{{ pedido.ordem }}</span>
         <input type="checkbox" aria-label="Marcar parada {{ pedido.ordem }} como entregue" data-delivery-check {% if pedido.concluido %}checked{% endif %} {% if not pedido.pode_alterar %}disabled{% endif %}>
@@ -47,25 +47,25 @@
         <p class="client-name">{{ pedido.cliente }}</p>
         <p class="address">{{ pedido.endereco|default:"Endereço não informado" }}{% if pedido.complemento %} · {{ pedido.complemento }}{% endif %}</p>
         <div class="quick-meta">
-          {% if pedido.telefone %}<a class="phone" href="tel:{{ pedido.telefone }}">☎ {{ pedido.telefone }}</a>{% else %}<span class="phone">Telefone não informado</span>{% endif %}
+          {% if pedido.tipo != 'manual' %}{% if pedido.telefone %}<a class="phone" href="tel:{{ pedido.telefone }}">☎ {{ pedido.telefone }}</a>{% else %}<span class="phone">Telefone não informado</span>{% endif %}{% endif %}
           {% if pedido.eta %}<span class="eta">◷ Chegada {{ pedido.eta }}</span>{% endif %}
-          {% if pedido.pago %}<span class="tag paid">PAGO</span>{% else %}<span class="tag collect">RECEBER NA ENTREGA · R$ {{ pedido.venda.valor_total|floatformat:2 }}</span>{% endif %}
+          {% if pedido.tipo == 'manual' %}<span class="tag collect">PARADA MANUAL</span>{% elif pedido.pago %}<span class="tag paid">PAGO</span>{% else %}<span class="tag collect">RECEBER NA ENTREGA · R$ {{ pedido.venda.valor_total|floatformat:2 }}</span>{% endif %}
         </div>
         {% for observacao in pedido.observacoes %}<div class="card-note">⚠ {{ observacao }}</div>{% endfor %}
       </div>
       {% if pedido.whatsapp %}<a class="btn whatsapp" href="https://wa.me/{{ pedido.whatsapp }}" target="_blank" rel="noopener" aria-label="Falar com o cliente pelo WhatsApp" title="WhatsApp do cliente"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5A11.8 11.8 0 0 0 12.1 0C5.6 0 .3 5.3.3 11.8c0 2.1.6 4.1 1.6 5.9L.2 24l6.5-1.7c1.7.9 3.6 1.4 5.5 1.4 6.5 0 11.8-5.3 11.8-11.8 0-3.2-1.2-6.2-3.5-8.4Zm-8.4 18.2c-1.7 0-3.5-.5-5-1.4l-.4-.2-3.8 1 1-3.7-.2-.4a9.8 9.8 0 1 1 8.4 4.7Zm5.4-7.3c-.3-.1-1.7-.8-2-.9-.3-.1-.5-.1-.7.2-.2.3-.8.9-1 1.1-.2.2-.4.2-.7.1-1.8-.9-3-1.6-4.2-3.7-.3-.6.3-.5.9-1.7.1-.2 0-.4 0-.6l-.9-2.1c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.3-1.2 1.2-1.2 2.9 0 1.7 1.2 3.3 1.4 3.6.2.2 2.4 3.7 5.9 5.2.8.4 1.5.6 2 .7.8.3 1.6.2 2.2.1.7-.1 1.7-.7 1.9-1.4.2-.7.2-1.3.2-1.4-.2-.1-.4-.2-.7-.3Z"/></svg></a>{% endif %}
     </div>
 
-    <button class="details-toggle" type="button" aria-expanded="false" aria-controls="details-{{ pedido.venda.pk }}" data-details-toggle>Ver mais</button>
-    <div class="details" id="details-{{ pedido.venda.pk }}" hidden>
+    <button class="details-toggle" type="button" aria-expanded="false" aria-controls="details-{{ pedido.ordem }}" data-details-toggle>Ver mais</button>
+    <div class="details" id="details-{{ pedido.ordem }}" hidden>
       <div class="section">
-        <div class="section-title">Pedido</div>
-        <p class="info"><strong>#{{ pedido.venda.numero_venda }} · {{ pedido.cliente }}</strong></p>
-        <p class="info">{{ pedido.formas_pagamento }} · total R$ {{ pedido.venda.valor_total|floatformat:2 }}</p>
+        <div class="section-title">{% if pedido.tipo == 'manual' %}Atividade{% else %}Pedido{% endif %}</div>
+        <p class="info"><strong>{% if pedido.tipo != 'manual' %}#{{ pedido.venda.numero_venda }} · {% endif %}{{ pedido.cliente }}</strong></p>
+        {% if pedido.tipo != 'manual' %}<p class="info">{{ pedido.formas_pagamento }} · total R$ {{ pedido.venda.valor_total|floatformat:2 }}</p>{% endif %}
         {% if pedido.pagamento_pendente %}<p class="info" style="color:#ffc85c">Venda com pagamento pendente.</p>{% endif %}
         {% for observacao in pedido.observacoes %}<div class="note">{{ observacao }}</div>{% endfor %}
       </div>
-      <div class="section">
+      {% if pedido.tipo != 'manual' %}<div class="section">
         <div class="section-title">Itens da venda</div>
         <ul class="items">
           {% for item in pedido.venda.itens.all %}
@@ -77,7 +77,7 @@
           {% if pedido.telefone %}<a class="btn outline" href="tel:{{ pedido.telefone }}">Ligar</a>{% endif %}
           {% if pedido.concluido %}<span class="done-state" data-done-state>✓ Entrega concluída</span>{% else %}<span class="done-state" data-done-state hidden>✓ Entrega concluída</span>{% endif %}
         </div>
-      </div>
+      </div>{% else %}<div class="section"><div class="details-actions">{% if pedido.navegar_url %}<a class="btn outline" href="{{ pedido.navegar_url }}" target="_blank" rel="noopener">Navegar até esta parada</a>{% endif %}{% if pedido.concluido %}<span class="done-state" data-done-state>✓ Parada concluída</span>{% else %}<span class="done-state" data-done-state hidden>✓ Parada concluída</span>{% endif %}</div></div>{% endif %}
     </div>
   </article>
   {% empty %}<div class="empty">Nenhum pedido publicado nesta rota.</div>{% endfor %}
