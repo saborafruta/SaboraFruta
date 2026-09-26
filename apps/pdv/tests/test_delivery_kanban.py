@@ -210,6 +210,11 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'Finalizar rota')
         self.assertContains(tela, '📊 Relatório')
         self.assertContains(tela, 'Consumo das rotas')
+        self.assertContains(tela, '☷ Colunas')
+        self.assertContains(tela, "loadReport('diario')")
+        self.assertContains(tela, 'Cliente Delivery')
+        self.assertContains(tela, 'Compra Delivery')
+        self.assertContains(tela, 'dr-conference-progress')
         self.assertNotContains(tela, 'Waze')
         pedidos = json.loads(tela.context['pedidos_json'])
         self.assertIn(ativo.pk, [p['id'] for p in pedidos])
@@ -249,6 +254,7 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
             venda_pdv=venda, produto=produto, numero_item=1, quantidade=Decimal('3'),
             unidade_medida='UN', valor_unitario=Decimal('12'), valor_total=Decimal('36'),
         )
+        self._venda(numero=110)
 
         resp = self.client.get(reverse('pdv:api_historico_cliente', args=[self.cliente.pk]))
 
@@ -260,6 +266,9 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertEqual(ranking['qtd_media'], 3.0)
         self.assertEqual(ranking['valor_total'], 36.0)
         self.assertTrue(ranking['ultima_compra'])
+        self.assertTrue(resp.json()['cliente_delivery'])
+        self.assertEqual(resp.json()['compras_delivery'], 2)
+        self.assertTrue(resp.json()['compras'][0]['delivery'])
 
     @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.rota')
     def test_calculo_preserva_ordem_e_inclui_retorno(self, mock_rota):
@@ -658,6 +667,12 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         candidato.recompra = recompra
         candidato.distancia_m = 400
         proximos.return_value = [candidato]
+        for numero in (801, 802):
+            VendaPDV.objects.create(
+                filial=self.filial, numero_venda=numero, cliente=candidato,
+                usuario=self.usuario, status='finalizada', delivery=True,
+                status_delivery='entregue', data_venda=timezone.now(),
+            )
 
         resp = self.client.post(
             reverse('pdv:delivery_rota_oportunidades'),
@@ -677,6 +692,8 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertEqual(oportunidade['desvio_km_estimado'], 0.8)
         self.assertEqual(oportunidade['momento_recompra'], 100)
         self.assertIn('atrasada há 5', oportunidade['motivo_momento'])
+        self.assertTrue(oportunidade['cliente_delivery'])
+        self.assertEqual(oportunidade['compras_delivery'], 2)
 
         prioridade_atrasada = oportunidade['prioridade']
         recompra.dias_restantes = 20

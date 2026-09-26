@@ -9,7 +9,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from django.contrib import messages
 from django.core.cache import cache
 from django.db import IntegrityError, connections
-from django.db.models import Avg, Max, Min, Q, Sum
+from django.db.models import Avg, Count, Max, Min, Q, Sum
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -2474,11 +2474,26 @@ def api_historico_cliente(request, cliente_id):
     total = VendaPDV.objects.for_filial(request.filial_ativa).filter(
         cliente_id=cliente_id, status="finalizada"
     ).count()
+    inicio_delivery = timezone.localdate() - datetime.timedelta(days=365)
+    perfil_delivery = VendaPDV.objects.for_filial(request.filial_ativa).filter(
+        cliente_id=cliente_id, status="finalizada",
+        data_venda__date__gte=inicio_delivery,
+    ).aggregate(
+        total=Count("id"),
+        delivery=Count("id", filter=Q(delivery=True)),
+    )
+    total_periodo = perfil_delivery["total"] or 0
+    compras_delivery = perfil_delivery["delivery"] or 0
 
     return JsonResponse({
         "compras": compras,
         "produtos_frequentes": produtos_frequentes,
         "total_compras": total,
+        "compras_delivery": compras_delivery,
+        "cliente_delivery": (
+            compras_delivery >= 2
+            and compras_delivery / max(total_periodo, 1) >= .5
+        ),
     })
 
 
@@ -3768,12 +3783,26 @@ def delivery_rota_oportunidades(request):
     candidatos = [item[0] for item in encontrados.values()]
     frequencias = [getattr(getattr(c, 'recompra', None), 'qtd_compras', 0) for c in candidatos]
     monetarios = [float(getattr(getattr(c, 'recompra', None), 'valor_total_periodo', 0) or 0) for c in candidatos]
+    inicio_delivery = timezone.localdate() - datetime.timedelta(days=365)
+    perfil_delivery = {
+        row['cliente_id']: row
+        for row in VendaPDV.objects.for_filial(request.filial_ativa).filter(
+            cliente_id__in=[cliente.pk for cliente in candidatos],
+            status='finalizada', data_venda__date__gte=inicio_delivery,
+        ).values('cliente_id').annotate(
+            total_compras=Count('id'),
+            compras_delivery=Count('id', filter=Q(delivery=True)),
+        )
+    }
     from apps.pdv.models import RotaDeliveryPublica
     configuracao = RotaDeliveryPublica.objects.filter(filial=request.filial_ativa).first()
     limites_rfm = _delivery_configuracao_rfm(configuracao)
     oportunidades = []
     for cliente in candidatos:
         recompra = getattr(cliente, 'recompra', None)
+        delivery = perfil_delivery.get(cliente.pk, {})
+        compras_delivery = delivery.get('compras_delivery', 0)
+        total_delivery_periodo = delivery.get('total_compras', 0)
         distancia = encontrados[cliente.pk][1]
         dias = recompra.dias_desde_ultima_compra if recompra else None
         if dias is None:
@@ -3877,6 +3906,11 @@ def delivery_rota_oportunidades(request):
             'motivo_momento': motivo_momento,
             'valor_medio': float(recompra.valor_medio or 0) if recompra else 0,
             'qtd_compras': qtd,
+            'compras_delivery': compras_delivery,
+            'cliente_delivery': (
+                compras_delivery >= 2
+                and compras_delivery / max(total_delivery_periodo, 1) >= .5
+            ),
         })
     oportunidades.sort(key=lambda item: (-item['prioridade'], item['distancia_m'], item['nome']))
     return JsonResponse({
