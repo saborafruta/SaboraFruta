@@ -204,6 +204,11 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'Buscando a melhor posição na rota')
         self.assertContains(tela, 'routeTabs')
         self.assertContains(tela, '＋ Nova rota')
+        self.assertContains(tela, 'Copiar link desta rota')
+        self.assertContains(tela, 'data-route-link')
+        self.assertContains(tela, 'Link individual de')
+        self.assertContains(tela, 'Marcar concluída')
+        self.assertContains(tela, 'data-complete-order')
         self.assertContains(tela, 'conferenceModal')
         self.assertContains(tela, 'Marcar todos')
         self.assertContains(tela, 'Conferência pendente')
@@ -431,6 +436,39 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertEqual(rota_2.combustivel_litros, Decimal('2.000'))
         self.assertEqual(rota_2.custo_combustivel, Decimal('14.00'))
         self.assertNotEqual(rota_1.token, rota_2.token)
+        link_1 = json.loads(primeira.context['rotas_json'])[0]['link_motoboy']
+        link_2 = criada.json()['rota']['link_motoboy']
+        self.assertNotEqual(link_1, link_2)
+
+    def test_cada_rota_publicada_retorna_link_individual(self):
+        self.client.get(reverse('pdv:delivery_rotas'))
+        rota_1 = RotaDelivery.objects.get(filial=self.filial)
+        rota_2 = RotaDelivery.objects.create(filial=self.filial, nome='Rota Zona Norte')
+        venda_1 = self._venda(numero=392)
+        venda_2 = self._venda(numero=393)
+
+        def publicar(rota, venda):
+            return self.client.post(
+                reverse('pdv:delivery_rota_publicar'),
+                data=json.dumps({
+                    'rota_id': rota.pk,
+                    'pedidos': [venda.pk],
+                    'ordem_paradas': [f'pedido:{venda.pk}'],
+                    'entregador': rota.nome,
+                }),
+                content_type='application/json',
+            )
+
+        publicada_1 = publicar(rota_1, venda_1)
+        publicada_2 = publicar(rota_2, venda_2)
+
+        self.assertEqual(publicada_1.status_code, 200)
+        self.assertEqual(publicada_2.status_code, 200)
+        self.assertEqual(publicada_1.json()['rota_id'], rota_1.pk)
+        self.assertEqual(publicada_2.json()['rota_id'], rota_2.pk)
+        self.assertNotEqual(publicada_1.json()['url'], publicada_2.json()['url'])
+        self.assertContains(self.client.get(publicada_1.json()['url']), '#392')
+        self.assertContains(self.client.get(publicada_2.json()['url']), '#393')
 
     def test_finaliza_somente_depois_de_todas_as_entregas_concluidas(self):
         venda = self._venda(numero=391)
@@ -448,6 +486,56 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         rota.refresh_from_db()
         self.assertEqual(rota.status, RotaDelivery.Status.FINALIZADA)
         self.assertIsNotNone(rota.finalizada_em)
+
+    def test_usuario_conclui_e_reabre_entrega_diretamente_na_rota(self):
+        venda = self._venda(
+            numero=394,
+            status_delivery=VendaPDV.StatusDelivery.PREPARANDO,
+        )
+        rota = RotaDelivery.objects.create(
+            filial=self.filial, nome='Rota Centro', pedido_ids=[venda.pk],
+        )
+        url = reverse(
+            'pdv:delivery_rota_concluir_pedido', args=[rota.pk, venda.pk],
+        )
+
+        concluida = self.client.post(
+            url, data=json.dumps({'concluido': True}), content_type='application/json',
+        )
+        venda.refresh_from_db()
+        rota.refresh_from_db()
+
+        self.assertEqual(concluida.status_code, 200)
+        self.assertEqual(venda.status_delivery, VendaPDV.StatusDelivery.ENTREGUE)
+        self.assertEqual(
+            rota.pedido_status_anteriores[str(venda.pk)],
+            VendaPDV.StatusDelivery.PREPARANDO,
+        )
+
+        reaberta = self.client.post(
+            url, data=json.dumps({'concluido': False}), content_type='application/json',
+        )
+        venda.refresh_from_db()
+
+        self.assertEqual(reaberta.status_code, 200)
+        self.assertEqual(venda.status_delivery, VendaPDV.StatusDelivery.PREPARANDO)
+        self.assertEqual(reaberta.json()['status_label'], 'Em Preparo')
+
+    def test_nao_conclui_pedido_que_nao_pertence_a_rota(self):
+        permitido = self._venda(numero=395)
+        outro = self._venda(numero=396)
+        rota = RotaDelivery.objects.create(
+            filial=self.filial, nome='Rota Centro', pedido_ids=[permitido.pk],
+        )
+
+        resposta = self.client.post(
+            reverse('pdv:delivery_rota_concluir_pedido', args=[rota.pk, outro.pk]),
+            data=json.dumps({'concluido': True}), content_type='application/json',
+        )
+
+        self.assertEqual(resposta.status_code, 404)
+        outro.refresh_from_db()
+        self.assertEqual(outro.status_delivery, VendaPDV.StatusDelivery.NOVO)
 
     def test_nao_finaliza_rota_sem_paradas(self):
         rota = RotaDelivery.objects.create(filial=self.filial, nome='Rota vazia')

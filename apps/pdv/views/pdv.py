@@ -3462,6 +3462,7 @@ def _delivery_rota_serializar(rota):
         'combustivel_litros': float(rota.combustivel_litros or 0),
         'custo_combustivel': float(rota.custo_combustivel or 0),
         'publicada': bool(rota.publicada_em),
+        'link_motoboy': reverse('delivery_publico:painel', args=[rota.token]),
     }
 
 
@@ -3567,6 +3568,10 @@ def delivery_rota_situacao(request, pk):
         .filter(pk__in=rota.pedido_ids)
         .values_list('pk', 'status_delivery')
     )
+    status_labels = {
+        str(pedido_pk): VendaPDV.StatusDelivery(status).label
+        for pedido_pk, status in status_pedidos.items()
+    }
     pendentes = [
         pk for pk in rota.pedido_ids
         if status_pedidos.get(int(pk)) not in (
@@ -3581,7 +3586,70 @@ def delivery_rota_situacao(request, pk):
     return JsonResponse({
         'ok': True, 'concluida': bool(rota.pedido_ids or extras) and not pendentes and extras <= extras_concluidas,
         'pedidos_pendentes': pendentes, 'status_pedidos': status_pedidos,
+        'status_labels': status_labels,
         'paradas_extras_concluidas': sorted(extras_concluidas),
+    })
+
+
+@require_POST
+@requer_permissao('pdv', 'editar')
+def delivery_rota_concluir_pedido(request, pk, pedido_pk):
+    """Permite que a equipe conclua uma entrega diretamente na rota."""
+    from apps.pdv.models import RotaDelivery
+
+    try:
+        corpo = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+    concluido = corpo.get('concluido', True) is not False
+
+    with tenant_atomic():
+        rota = get_object_or_404(
+            RotaDelivery.objects.filter(filial=request.filial_ativa).select_for_update(),
+            pk=pk,
+        )
+        if rota.status == RotaDelivery.Status.FINALIZADA:
+            return JsonResponse({'erro': 'Esta rota já foi finalizada.'}, status=400)
+        if pedido_pk not in {int(item) for item in rota.pedido_ids if str(item).isdigit()}:
+            return JsonResponse({'erro': 'Pedido não pertence a esta rota.'}, status=404)
+        venda = get_object_or_404(
+            VendaPDV.objects.for_filial(request.filial_ativa).select_for_update(),
+            pk=pedido_pk,
+            delivery=True,
+        )
+        if venda.status_delivery in (
+            VendaPDV.StatusDelivery.FINALIZADO,
+            VendaPDV.StatusDelivery.CANCELADO,
+        ):
+            return JsonResponse({
+                'erro': 'Esta entrega já foi encerrada e não pode ser alterada.',
+            }, status=400)
+
+        anteriores = dict(rota.pedido_status_anteriores or {})
+        chave = str(pedido_pk)
+        if concluido:
+            if venda.status_delivery != VendaPDV.StatusDelivery.ENTREGUE:
+                anteriores[chave] = venda.status_delivery
+            novo_status = VendaPDV.StatusDelivery.ENTREGUE
+        else:
+            novo_status = anteriores.pop(chave, VendaPDV.StatusDelivery.EM_ENTREGA)
+            if novo_status not in (
+                VendaPDV.StatusDelivery.NOVO,
+                VendaPDV.StatusDelivery.PREPARANDO,
+                VendaPDV.StatusDelivery.EM_ENTREGA,
+            ):
+                novo_status = VendaPDV.StatusDelivery.EM_ENTREGA
+        if venda.status_delivery != novo_status:
+            venda.mudar_status_delivery(novo_status)
+        rota.pedido_status_anteriores = anteriores
+        rota.save(update_fields=['pedido_status_anteriores', 'updated_at'])
+
+    return JsonResponse({
+        'ok': True,
+        'pedido_id': pedido_pk,
+        'status': novo_status,
+        'status_label': venda.get_status_delivery_display(),
+        'concluido': concluido,
     })
 
 
@@ -4577,7 +4645,10 @@ def delivery_rota_publicar(request):
     url = request.build_absolute_uri(
         reverse('delivery_publico:painel', args=[rota.token]),
     )
-    response = JsonResponse({'ok': True, 'url': url, 'fixo': True})
+    response = JsonResponse({
+        'ok': True, 'url': url, 'fixo': True,
+        'rota_id': rota.pk, 'rota_nome': rota.nome,
+    })
     response['Cache-Control'] = 'private, no-store'
     return response
 

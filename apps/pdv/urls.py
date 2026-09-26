@@ -85,6 +85,11 @@ urlpatterns = [
     path("delivery/rotas/<int:pk>/salvar/", pdv.delivery_rota_salvar, name="delivery_rota_salvar"),
     path("delivery/rotas/<int:pk>/finalizar/", pdv.delivery_rota_finalizar, name="delivery_rota_finalizar"),
     path("delivery/rotas/<int:pk>/situacao/", pdv.delivery_rota_situacao, name="delivery_rota_situacao"),
+    path(
+        "delivery/rotas/<int:pk>/pedidos/<int:pedido_pk>/concluir/",
+        pdv.delivery_rota_concluir_pedido,
+        name="delivery_rota_concluir_pedido",
+    ),
     path("delivery/rotas/calcular/", pdv.delivery_rota_calcular, name="delivery_rota_calcular"),
     path("delivery/rotas/publicar/", pdv.delivery_rota_publicar, name="delivery_rota_publicar"),
     path("delivery/rotas/configuracao/", pdv.delivery_rota_salvar_configuracao, name="delivery_rota_salvar_configuracao"),
