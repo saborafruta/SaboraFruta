@@ -53,6 +53,10 @@
   .dr-badge.blue { background:#172f55; color:#73a9ff; }
   .dr-badge.warn { background:#4a3215; color:#f9bd5b; }
   .dr-price { color:#dce5f1; font-size:9px; font-weight:800; white-space:nowrap; }
+  .dr-card-actions { display:flex; align-items:flex-end; flex-direction:column; gap:7px; }
+  .dr-edit-address { border:1px solid #465164; border-radius:6px; background:#303744; padding:4px 6px;
+    color:#b8c7dc; font-size:8px; font-weight:800; cursor:pointer; white-space:nowrap; }
+  .dr-edit-address:hover { border-color:#6392df; color:#dce9ff; }
   .dr-lock { display:flex; align-items:center; justify-content:center; width:25px; height:25px; border:0; border-radius:6px; background:#303744; color:#8e9aad; cursor:pointer; }
   .dr-lock.locked { background:#14543f; color:#67e3b0; }
   .dr-empty { padding:35px 14px; color:#69768a; font-size:11px; line-height:1.5; text-align:center; }
@@ -71,6 +75,19 @@
   .dr-toast { position:fixed; z-index:5000; right:22px; bottom:22px; max-width:360px; transform:translateY(12px); border-radius:9px; background:#12845b; padding:10px 14px; color:#fff; font-size:11px; font-weight:700; opacity:0; pointer-events:none; transition:.2s; }
   .dr-toast.show { transform:none; opacity:1; }
   .dr-toast.error { background:#b42332; }
+  .dr-address-modal-bg { position:fixed; inset:0; z-index:6000; display:none; align-items:center;
+    justify-content:center; background:rgba(3,7,18,.78); padding:18px; }
+  .dr-address-modal-bg.open { display:flex; }
+  .dr-address-modal { width:min(560px,100%); border:1px solid #3a4557; border-radius:13px;
+    background:#1f2329; box-shadow:0 24px 80px #000a; padding:16px; }
+  .dr-address-modal h2 { margin:0; color:#f3f6fb; font-size:17px; }
+  .dr-address-modal p { margin:4px 0 14px; color:#94a3b8; font-size:11px; }
+  .dr-address-grid { display:grid; grid-template-columns:1fr 110px; gap:9px; }
+  .dr-address-grid label { color:#aab6c7; font-size:9px; font-weight:800; text-transform:uppercase; }
+  .dr-address-grid input { width:100%; margin-top:4px; border:1px solid #3a4557; border-radius:8px;
+    background:#171a1f; padding:9px 10px; color:#f3f6fb; font:inherit; font-size:12px; outline:none; }
+  .dr-address-wide { grid-column:1/-1; }
+  .dr-address-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
   body.tema-claro .dr-title, body.tema-claro .dr-stat-value, body.tema-claro .dr-panel-title, body.tema-claro .dr-client { color:#142033; }
   body.tema-claro .dr-subtitle, body.tema-claro .dr-meta { color:#65748a; }
   body.tema-claro .dr-stat, body.tema-claro .dr-panel, body.tema-claro .dr-footer { background:#fff; border-color:#dfe5ee; }
@@ -79,6 +96,7 @@
   body.tema-claro .dr-button { background:#fff; color:#334155; border-color:#d9e0ea; }
   @media (max-width:1200px) { .dr-grid { grid-template-columns:minmax(230px,.8fr) minmax(280px,1fr); } .dr-panel.map-panel { grid-column:1/-1; min-height:430px; } }
   @media (max-width:760px) { .dr-head { flex-direction:column; } .dr-actions { justify-content:flex-start; } .dr-summary { grid-template-columns:repeat(2,1fr); } .dr-summary .dr-stat:first-child { grid-column:1/-1; } .dr-grid { grid-template-columns:1fr; } .dr-panel.map-panel { grid-column:auto; } .dr-footer { grid-template-columns:1fr; } }
+  @media (max-width:480px) { .dr-address-grid { grid-template-columns:1fr; } .dr-address-wide { grid-column:auto; } }
 </style>
 {% endblock %}
 
@@ -132,6 +150,26 @@
   </div>
 </div>
 <div class="dr-toast" id="routeToast"></div>
+<div class="dr-address-modal-bg" id="addressModal" onclick="if(event.target===this)closeAddressModal()">
+  <form class="dr-address-modal" id="addressForm">
+    <h2>Editar endereço da entrega</h2>
+    <p id="addressOrderLabel"></p>
+    <input type="hidden" id="addressOrderId">
+    <div class="dr-address-grid">
+      <label>CEP<input id="addressCep" inputmode="numeric" maxlength="9"></label>
+      <label>Número<input id="addressNumber" maxlength="10"></label>
+      <label class="dr-address-wide">Rua / Avenida<input id="addressStreet" maxlength="255" required></label>
+      <label>Complemento<input id="addressComplement" maxlength="60"></label>
+      <label>Bairro<input id="addressDistrict" maxlength="80" required></label>
+      <label>Cidade<input id="addressCity" maxlength="80" required></label>
+      <label>UF<input id="addressState" maxlength="2" required></label>
+    </div>
+    <div class="dr-address-modal-actions">
+      <button class="dr-button" type="button" onclick="closeAddressModal()">Cancelar</button>
+      <button class="dr-button primary" type="submit" id="addressSave">Salvar e localizar</button>
+    </div>
+  </form>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -146,6 +184,7 @@
   const csrf = '{{ csrf_token }}';
   const calculateUrl = '{% url "pdv:delivery_rota_calcular" %}';
   const publishUrl = '{% url "pdv:delivery_rota_publicar" %}';
+  const addressUrlTemplate = '{% url "pdv:delivery_rota_atualizar_endereco" 0 %}';
   const pageUrl = '{% url "pdv:delivery_rotas" %}';
   let map, routeLine, markers = [];
   let automaticCalculationTimer = null;
@@ -181,12 +220,13 @@
     const shown=orders.filter(o=>!q||`${o.numero} ${o.cliente} ${o.bairro}`.toLowerCase().includes(q));
     document.getElementById('availableCount').textContent=orders.length;
     document.getElementById('availableList').innerHTML=shown.length?shown.map(o=>`
-      <label class="dr-card ${o.tem_coordenada?'':'unavailable'}" title="${o.tem_coordenada?'':'Confira o endereço do cliente para gerar a coordenada'}">
+      <div class="dr-card ${o.tem_coordenada?'':'unavailable'}" title="${o.tem_coordenada?'':'Confira o endereço do cliente para gerar a coordenada'}">
         <input class="dr-check" type="checkbox" data-select="${o.id}" ${state.selected.includes(o.id)?'checked':''} ${o.tem_coordenada?'':'disabled'}>
         <div><div class="dr-client">#${esc(o.numero)} · ${esc(o.cliente)}</div><div class="dr-meta">${esc(address(o))}</div><div class="dr-badges"><span class="dr-badge">${esc(o.status_label)}</span><span class="dr-badge blue">${esc(o.pagamento)}</span>${o.tem_coordenada?'':'<span class="dr-badge warn">Sem coordenada — confira o endereço</span>'}</div></div>
-        <div class="dr-price">${money(o.valor)}</div>
-      </label>`).join(''):'<div class="dr-empty">Nenhum pedido encontrado.</div>';
+        <div class="dr-card-actions"><div class="dr-price">${money(o.valor)}</div><button class="dr-edit-address" type="button" data-edit-address="${o.id}" title="Editar ou confirmar endereço">✎ Endereço</button></div>
+      </div>`).join(''):'<div class="dr-empty">Nenhum pedido encontrado.</div>';
     document.querySelectorAll('[data-select]').forEach(el=>el.addEventListener('change',()=>toggleOrder(Number(el.dataset.select),el.checked)));
+    document.querySelectorAll('[data-edit-address]').forEach(el=>el.addEventListener('click',()=>openAddressModal(Number(el.dataset.editAddress))));
   }
   function renderRoute() {
     const list=currentOrders();
@@ -215,6 +255,55 @@
   function toggleOrder(id,checked) { if(checked&&!state.selected.includes(id))state.selected.push(id); if(!checked){state.selected=state.selected.filter(x=>x!==id);state.locked.delete(id);} state.result=null; renderAvailable();renderRoute();resetSummary();scheduleAutomaticCalculation(false); }
   function moveOrder(from,to) { if(!from||from===to)return; const old=state.selected.indexOf(from), target=state.selected.indexOf(to); if(old<0||target<0)return; state.selected.splice(old,1);state.selected.splice(target,0,from);state.locked.add(from);state.result=null;renderRoute();resetSummary();scheduleAutomaticCalculation(false,150); }
   function resetSummary(){document.getElementById('routeDeparture').textContent='—';document.getElementById('routeReturn').textContent='—';document.getElementById('routeDistance').textContent='—';document.getElementById('routeTimeline').innerHTML='<div class="dr-empty" style="width:100%;padding:6px;">Recalcule a rota para atualizar os horários.</div>';}
+
+  function openAddressModal(id) {
+    const order=byId[String(id)]; if(!order)return;
+    const fields=order.endereco_campos||{};
+    document.getElementById('addressOrderId').value=id;
+    document.getElementById('addressOrderLabel').textContent=`#${order.numero} · ${order.cliente}`;
+    document.getElementById('addressCep').value=fields.cep||'';
+    document.getElementById('addressStreet').value=fields.rua||'';
+    document.getElementById('addressNumber').value=fields.numero||'';
+    document.getElementById('addressComplement').value=fields.complemento||'';
+    document.getElementById('addressDistrict').value=fields.bairro||'';
+    document.getElementById('addressCity').value=fields.cidade||'';
+    document.getElementById('addressState').value=fields.uf||'';
+    document.getElementById('addressModal').classList.add('open');
+    document.getElementById('addressStreet').focus();
+  }
+  window.closeAddressModal=function(){document.getElementById('addressModal').classList.remove('open');};
+  async function saveAddress(event) {
+    event.preventDefault();
+    const id=Number(document.getElementById('addressOrderId').value);
+    const order=byId[String(id)]; if(!order)return;
+    const button=document.getElementById('addressSave'); button.disabled=true;
+    const payload={
+      cep:document.getElementById('addressCep').value,
+      rua:document.getElementById('addressStreet').value,
+      numero:document.getElementById('addressNumber').value,
+      complemento:document.getElementById('addressComplement').value,
+      bairro:document.getElementById('addressDistrict').value,
+      cidade:document.getElementById('addressCity').value,
+      uf:document.getElementById('addressState').value,
+    };
+    try{
+      const url=addressUrlTemplate.replace('/0/','/'+id+'/');
+      const resp=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify(payload)});
+      const data=await resp.json(); if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
+      order.endereco_campos=data.endereco;
+      order.endereco=[data.endereco.rua,data.endereco.numero].filter(Boolean).join(', ');
+      order.complemento=data.endereco.complemento||'';
+      order.bairro=data.endereco.bairro||'';
+      order.cidade=data.endereco.cidade||'';
+      order.uf=data.endereco.uf||'';
+      order.lat=data.lat;order.lng=data.lng;order.tem_coordenada=data.tem_coordenada;
+      if(data.tem_coordenada&&!state.selected.includes(id))state.selected.push(id);
+      if(!data.tem_coordenada){state.selected=state.selected.filter(item=>item!==id);state.locked.delete(id);}
+      state.result=null;renderAvailable();renderRoute();resetSummary();closeAddressModal();
+      if(data.tem_coordenada){toast('Endereço salvo e localizado.');scheduleAutomaticCalculation(false,150);}
+      else toast(data.aviso||'Endereço salvo sem coordenada.',true);
+    }catch(error){toast(error.message,true);}finally{button.disabled=false;}
+  }
 
   function generateBestRoute() {
     const hadLocks=state.locked.size>0;
@@ -279,6 +368,7 @@
   document.getElementById('routeDriverLink').addEventListener('click',copyDriverLink);
   document.getElementById('routeShare').addEventListener('click',share);
   document.getElementById('routeMaps').addEventListener('click',openMaps);
+  document.getElementById('addressForm').addEventListener('submit',saveAddress);
   document.getElementById('stopMinutes').addEventListener('change',()=>scheduleAutomaticCalculation(false,100));
   loadDraft();renderAvailable();renderRoute();initMap();
   if(!branch.tem_coordenada)document.getElementById('mapNote').textContent='A filial precisa de coordenadas para calcular saída e retorno.';

@@ -10,7 +10,7 @@
     *{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#101b2d 0,#0b111b 260px);color:var(--text);font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
     main{width:min(680px,100%);margin:auto;padding:14px 12px 36px}.top{padding:6px 2px 14px}.eyebrow{color:#79a8ff;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}.top h1{font-size:25px;line-height:1.1;margin:5px 0}.sub{color:var(--muted);font-size:12px;margin:0}.summary{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}.stat{background:rgba(21,30,43,.9);border:1px solid var(--line);border-radius:12px;padding:9px 11px}.stat small{display:block;color:var(--muted);text-transform:uppercase;font-size:9px;font-weight:800}.stat strong{display:block;margin-top:1px;font-size:16px}
     .maps{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:13px;padding:10px;margin-bottom:10px}.maps-text{min-width:0;flex:1}.maps h2{font-size:14px;margin:0}.maps p{color:var(--muted);font-size:11px;margin:2px 0 0}.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:9px 12px;border:0;border-radius:10px;color:#fff;background:var(--blue);font:inherit;font-weight:800;text-decoration:none;cursor:pointer}.btn.green{background:var(--green)}.btn.outline{background:#202c3d;border:1px solid #3a4b63}
-    .order{background:var(--card);border:1px solid var(--line);border-radius:14px;margin:9px 0;overflow:hidden}.order.done{border-color:rgba(22,163,106,.65);opacity:.78}.order-main{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:11px}.route-check{display:grid;gap:6px;justify-items:center;cursor:pointer}.route-check input{width:22px;height:22px;margin:0;accent-color:var(--green)}.number{width:27px;height:27px;border-radius:50%;background:var(--blue);display:grid;place-items:center;font-size:12px;font-weight:900}.done .number{background:var(--green)}.summary-info{min-width:0}.address{font-size:13px;font-weight:750;margin:0;overflow-wrap:anywhere}.quick-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:7px}.phone{color:#c8d6e9;text-decoration:none;font-weight:700}.tag{display:inline-flex;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:900}.paid{background:rgba(22,163,106,.16);color:#54dda7}.collect{background:rgba(233,164,35,.16);color:#ffc85c}.whatsapp{width:36px;height:36px;padding:0;border-radius:50%;background:var(--green)}.whatsapp svg{width:19px;height:19px;fill:currentColor}
+    .order{background:var(--card);border:1px solid var(--line);border-radius:14px;margin:9px 0;overflow:hidden;transition:.2s}.order.done{border-color:#19865f;background:#12372e}.order.done .client-name,.order.done .address{text-decoration:line-through;color:#83b9a6}.order-main{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:11px}.route-check{display:grid;gap:6px;justify-items:center;cursor:pointer}.route-check input{width:22px;height:22px;margin:0;accent-color:var(--green)}.number{width:27px;height:27px;border-radius:50%;background:var(--blue);display:grid;place-items:center;font-size:12px;font-weight:900}.done .number{background:var(--green)}.summary-info{min-width:0}.client-name{margin:0 0 2px;color:#f2f6fc;font-size:13px;font-weight:900;overflow-wrap:anywhere}.address{font-size:12px;font-weight:650;margin:0;color:#c1cddd;overflow-wrap:anywhere}.quick-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:7px}.phone{color:#c8d6e9;text-decoration:none;font-weight:700}.tag{display:inline-flex;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:900}.paid{background:rgba(22,163,106,.16);color:#54dda7}.collect{background:rgba(233,164,35,.16);color:#ffc85c}.whatsapp{width:36px;height:36px;padding:0;border-radius:50%;background:var(--green)}.whatsapp svg{width:19px;height:19px;fill:currentColor}
     .details-toggle{width:100%;border:0;border-top:1px solid var(--line);background:#111925;color:#91b7ff;padding:8px 12px;text-align:left;font:inherit;font-size:11px;font-weight:800;cursor:pointer}.details{border-top:1px solid var(--line)}.section{padding:10px 12px}.section+.section{border-top:1px solid var(--line)}.section-title{color:var(--muted);font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px}.info{margin:3px 0}.note{padding:8px;border-radius:9px;background:rgba(233,164,35,.1);color:#ffd889;margin-top:6px}.items{margin:0;padding:0;list-style:none}.items li{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px dashed #2d3b4e}.items li:first-child{border-top:0}.items span:last-child{white-space:nowrap;color:#c7d3e3}.item-note{display:block;color:#ffd889;font-size:11px;margin-top:2px}.details-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}.done-state{color:#60e3ad;font-weight:900}.empty{text-align:center;padding:35px 16px;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:14px}.foot{text-align:center;color:#718197;font-size:10px;margin-top:16px}
     @media(max-width:430px){.maps{align-items:stretch;flex-direction:column}.maps .btn{width:100%}.address{font-size:12px}.quick-meta{font-size:12px}}
   </style>
@@ -34,15 +34,17 @@
   </section>
   {% endif %}
 
+  <section id="orderList">
   {% for pedido in pedidos %}
-  <article class="order{% if pedido.concluido %} done{% endif %}" id="pedido-{{ pedido.venda.pk }}" data-order-card>
+  <article class="order{% if pedido.concluido %} done{% endif %}" id="pedido-{{ pedido.venda.pk }}" data-order-card data-route-order="{{ pedido.ordem }}">
     <div class="order-main">
       <form class="route-check" method="post" action="{% url 'delivery_publico:concluir' rota.token pedido.venda.pk %}">
         {% csrf_token %}
         <span class="number">{{ pedido.ordem }}</span>
-        <input type="checkbox" aria-label="Marcar parada {{ pedido.ordem }} como entregue" data-delivery-check {% if pedido.concluido %}checked disabled{% endif %}>
+        <input type="checkbox" aria-label="Marcar parada {{ pedido.ordem }} como entregue" data-delivery-check {% if pedido.concluido %}checked{% endif %} {% if not pedido.pode_alterar %}disabled{% endif %}>
       </form>
       <div class="summary-info">
+        <p class="client-name">{{ pedido.cliente }}</p>
         <p class="address">{{ pedido.endereco|default:"Endereço não informado" }}{% if pedido.complemento %} · {{ pedido.complemento }}{% endif %}</p>
         <div class="quick-meta">
           {% if pedido.telefone %}<a class="phone" href="tel:{{ pedido.telefone }}">☎ {{ pedido.telefone }}</a>{% else %}<span class="phone">Telefone não informado</span>{% endif %}
@@ -77,6 +79,7 @@
     </div>
   </article>
   {% empty %}<div class="empty">Nenhum pedido publicado nesta rota.</div>{% endfor %}
+  </section>
 
   <p class="foot">Link privado da rota. Não encaminhe para pessoas que não participam da entrega.</p>
 </main>
@@ -91,12 +94,25 @@
     });
   });
 
+  function reorderCards() {
+    const list = document.getElementById('orderList');
+    [...list.querySelectorAll('[data-order-card]')]
+      .sort((a, b) => (
+        Number(a.classList.contains('done')) - Number(b.classList.contains('done'))
+        || Number(a.dataset.routeOrder) - Number(b.dataset.routeOrder)
+      ))
+      .forEach(card => list.appendChild(card));
+  }
+
   document.querySelectorAll('[data-delivery-check]:not(:disabled)').forEach(check => {
     check.addEventListener('change', async () => {
-      if (!check.checked) return;
+      const concluindo = check.checked;
       const form = check.form;
-      if (!confirm('Confirmar esta entrega como concluída?')) {
-        check.checked = false;
+      const pergunta = concluindo
+        ? 'Confirmar esta entrega como concluída?'
+        : 'Desmarcar esta entrega e devolver para Saiu para entrega?';
+      if (!confirm(pergunta)) {
+        check.checked = !concluindo;
         return;
       }
       check.disabled = true;
@@ -105,19 +121,23 @@
           method: 'POST',
           headers: {
             'Accept': 'application/json',
+            'Content-Type': 'application/json',
             'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value,
           },
+          body: JSON.stringify({entregue: concluindo}),
           credentials: 'same-origin',
         });
         if (!response.ok) throw new Error('Não foi possível atualizar a entrega.');
         const card = form.closest('[data-order-card]');
-        card.classList.add('done');
+        card.classList.toggle('done', concluindo);
         const doneState = card.querySelector('[data-done-state]');
-        if (doneState) doneState.hidden = false;
+        if (doneState) doneState.hidden = !concluindo;
         const count = document.getElementById('completedCount');
-        count.textContent = String(Number(count.textContent) + 1);
+        count.textContent = String(Number(count.textContent) + (concluindo ? 1 : -1));
+        reorderCards();
+        check.disabled = false;
       } catch (error) {
-        check.checked = false;
+        check.checked = !concluindo;
         check.disabled = false;
         alert(error.message);
       }

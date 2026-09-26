@@ -1,4 +1,5 @@
 """Painel público e móvel da rota atual do motoboy."""
+import json
 import re
 from urllib.parse import urlencode
 
@@ -148,6 +149,10 @@ def _dados_pedidos(pedidos):
                 VendaPDV.StatusDelivery.ENTREGUE,
                 VendaPDV.StatusDelivery.FINALIZADO,
             ),
+            'pode_alterar': pedido.status_delivery not in (
+                VendaPDV.StatusDelivery.FINALIZADO,
+                VendaPDV.StatusDelivery.CANCELADO,
+            ),
             'navegar_url': (
                 'https://www.google.com/maps/dir/?' + urlencode({
                     'api': '1',
@@ -159,7 +164,8 @@ def _dados_pedidos(pedidos):
                 else ''
             ),
         })
-    return dados
+    # Mantém o número original da parada, mas leva as concluídas para o fim.
+    return sorted(dados, key=lambda item: (item['concluido'], item['ordem']))
 
 
 @require_GET
@@ -183,21 +189,37 @@ def concluir(request, token, pk):
     ids = {int(item) for item in rota.pedido_ids if str(item).isdigit()}
     if pk not in ids:
         raise Http404
+    entregue = True
+    if request.content_type == 'application/json':
+        try:
+            corpo = json.loads(request.body or b'{}')
+        except ValueError:
+            return _privado(JsonResponse({'erro': 'JSON inválido.'}, status=400))
+        entregue = corpo.get('entregue', True) is not False
+
     with transaction.atomic():
         venda = get_object_or_404(
             VendaPDV._base_manager.select_for_update(),
             pk=pk, filial=rota.filial, delivery=True,
         )
-        if venda.status_delivery not in (
-            VendaPDV.StatusDelivery.ENTREGUE,
+        if venda.status_delivery in (
             VendaPDV.StatusDelivery.FINALIZADO,
             VendaPDV.StatusDelivery.CANCELADO,
         ):
-            venda.mudar_status_delivery(VendaPDV.StatusDelivery.ENTREGUE)
+            return _privado(JsonResponse({
+                'erro': 'Esta entrega já foi encerrada e não pode ser alterada.'
+            }, status=400))
+        novo_status = (
+            VendaPDV.StatusDelivery.ENTREGUE
+            if entregue else VendaPDV.StatusDelivery.EM_ENTREGA
+        )
+        if venda.status_delivery != novo_status:
+            venda.mudar_status_delivery(novo_status)
     if 'application/json' in request.headers.get('Accept', ''):
         return _privado(JsonResponse({
             'ok': True,
             'pedido_id': pk,
-            'status': VendaPDV.StatusDelivery.ENTREGUE,
+            'status': novo_status,
+            'concluido': entregue,
         }))
     return redirect(reverse('delivery_publico:painel', args=[token]) + f'#pedido-{pk}')

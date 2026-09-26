@@ -3315,6 +3315,21 @@ def _delivery_rota_serializar_pedido(venda):
         'lat': float(cliente.latitude) if cliente and cliente.latitude is not None else None,
         'lng': float(cliente.longitude) if cliente and cliente.longitude is not None else None,
         'tem_coordenada': bool(cliente and cliente.latitude is not None and cliente.longitude is not None),
+        'endereco_campos': {
+            'cep': endereco.get('cep') or (cliente.cep if cliente else '') or '',
+            'rua': (
+                endereco.get('rua') or endereco.get('logradouro')
+                or (cliente.endereco if cliente else '') or ''
+            ),
+            'numero': endereco.get('numero') or (cliente.numero if cliente else '') or '',
+            'complemento': (
+                endereco.get('complemento')
+                or (cliente.complemento if cliente else '') or ''
+            ),
+            'bairro': endereco.get('bairro') or (cliente.bairro if cliente else '') or '',
+            'cidade': endereco.get('cidade') or (cliente.cidade if cliente else '') or '',
+            'uf': endereco.get('uf') or (cliente.uf if cliente else '') or '',
+        },
     }
 
 
@@ -3342,6 +3357,89 @@ def delivery_rotas(request):
         'pedidos_json': json.dumps(pedidos, ensure_ascii=False),
         'filial_rota_json': json.dumps(_delivery_rota_filial(request.filial_ativa), ensure_ascii=False),
         'embedded': request.GET.get('embed') == '1',
+    })
+
+
+@require_POST
+@requer_permissao('pdv', 'ver')
+def delivery_rota_atualizar_endereco(request, pk):
+    """Edita o endereço do pedido e atualiza a geocodificação do cliente."""
+    try:
+        corpo = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+    if not isinstance(corpo, dict):
+        return JsonResponse({'erro': 'Envie um objeto JSON.'}, status=400)
+
+    venda = get_object_or_404(
+        _delivery_rota_pedidos(request.filial_ativa),
+        pk=pk,
+    )
+    if venda.cliente is None:
+        return JsonResponse({'erro': 'Este pedido não possui cliente cadastrado.'}, status=400)
+
+    limites = {
+        'cep': 8,
+        'rua': 255,
+        'numero': 10,
+        'complemento': 60,
+        'bairro': 80,
+        'cidade': 80,
+        'uf': 2,
+    }
+    endereco = {
+        campo: str(corpo.get(campo) or '').strip()[:limite]
+        for campo, limite in limites.items()
+    }
+    endereco['cep'] = re.sub(r'\D', '', endereco['cep'])[:8]
+    endereco['uf'] = endereco['uf'].upper()
+    ausentes = [
+        rotulo for campo, rotulo in (
+            ('rua', 'rua'), ('bairro', 'bairro'), ('cidade', 'cidade'), ('uf', 'UF'),
+        )
+        if not endereco[campo]
+    ]
+    if ausentes:
+        return JsonResponse({
+            'erro': f'Preencha {", ".join(ausentes)} para localizar o endereço.'
+        }, status=400)
+
+    with tenant_atomic():
+        cliente = Cliente.objects.select_for_update().get(pk=venda.cliente_id)
+        cliente.endereco = endereco['rua']
+        cliente.numero = endereco['numero']
+        cliente.complemento = endereco['complemento']
+        cliente.bairro = endereco['bairro']
+        cliente.cidade = endereco['cidade']
+        cliente.uf = endereco['uf']
+        cliente.cep = endereco['cep']
+        # Se havia um pino manual, a edição textual passa a ser novamente a
+        # fonte da verdade e permite ao signal recalcular a coordenada.
+        cliente.geo_fixado = False
+        cliente.save(update_fields=[
+            'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'uf',
+            'cep', 'geo_fixado', 'latitude', 'longitude', 'geo_precisao',
+            'geo_endereco_hash', 'geo_erro', 'updated_at',
+        ])
+
+        snapshot = dict(venda.endereco_entrega or {})
+        snapshot.update(endereco)
+        venda.endereco_entrega = snapshot
+        venda.save(update_fields=['endereco_entrega', 'updated_at'])
+
+    cliente.refresh_from_db()
+    tem_coordenada = cliente.latitude is not None and cliente.longitude is not None
+    return JsonResponse({
+        'ok': True,
+        'pedido_id': venda.pk,
+        'endereco': endereco,
+        'lat': float(cliente.latitude) if cliente.latitude is not None else None,
+        'lng': float(cliente.longitude) if cliente.longitude is not None else None,
+        'tem_coordenada': tem_coordenada,
+        'aviso': (
+            '' if tem_coordenada
+            else 'Endereço salvo, mas ainda não foi possível gerar a coordenada.'
+        ),
     })
 
 

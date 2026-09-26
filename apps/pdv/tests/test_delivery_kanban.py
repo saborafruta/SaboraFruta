@@ -263,6 +263,53 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn('sem coordenada', resp.json()['erro'].lower())
 
+    def test_endereco_pode_ser_confirmado_mesmo_com_coordenada(self):
+        self.cliente.endereco = 'Rua Confirmada'
+        self.cliente.numero = '25'
+        self.cliente.bairro = 'Centro'
+        self.cliente.cidade = 'Natal'
+        self.cliente.uf = 'RN'
+        self.cliente.save(update_fields=[
+            'endereco', 'numero', 'bairro', 'cidade', 'uf',
+        ])
+        venda = self._venda(numero=302)
+
+        tela = self.client.get(reverse('pdv:delivery_rotas'))
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
+            data=json.dumps({
+                'cep': '59000-000',
+                'rua': 'Rua Confirmada',
+                'numero': '25',
+                'complemento': 'Sala 2',
+                'bairro': 'Centro',
+                'cidade': 'Natal',
+                'uf': 'rn',
+            }),
+            content_type='application/json',
+        )
+
+        self.cliente.refresh_from_db()
+        venda.refresh_from_db()
+        self.assertContains(tela, 'Editar ou confirmar endereço')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['tem_coordenada'])
+        self.assertEqual(self.cliente.endereco, 'Rua Confirmada')
+        self.assertEqual(self.cliente.uf, 'RN')
+        self.assertEqual(venda.endereco_entrega['complemento'], 'Sala 2')
+
+    def test_endereco_da_rota_exige_dados_para_localizacao(self):
+        venda = self._venda(numero=303)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
+            data=json.dumps({'rua': 'Rua sem cidade'}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('cidade', resp.json()['erro'])
+
 
 class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
 
@@ -324,6 +371,7 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
 
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, '#410')
+        self.assertContains(resp, 'Cliente Delivery')
         self.assertContains(resp, 'Entregar na recepção lateral.')
         self.assertContains(resp, '(84) 99999-1234')
         self.assertContains(resp, 'WhatsApp do cliente')
@@ -381,6 +429,45 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()['status'], VendaPDV.StatusDelivery.ENTREGUE)
         self.assertEqual(venda.status_delivery, VendaPDV.StatusDelivery.ENTREGUE)
+
+    def test_motoboy_pode_desmarcar_e_pedido_volta_para_em_entrega(self):
+        venda = self._venda(numero=423)
+        self._publicar([venda])
+        rota = RotaDeliveryPublica.objects.get(filial=self.filial)
+        self.client.logout()
+        url = reverse('delivery_publico:concluir', args=[rota.token, venda.pk])
+
+        self.client.post(
+            url, data=json.dumps({'entregue': True}),
+            content_type='application/json', HTTP_ACCEPT='application/json',
+        )
+        resp = self.client.post(
+            url, data=json.dumps({'entregue': False}),
+            content_type='application/json', HTTP_ACCEPT='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json()['concluido'])
+        self.assertEqual(venda.status_delivery, VendaPDV.StatusDelivery.EM_ENTREGA)
+
+    def test_painel_joga_concluidos_para_o_final_sem_trocar_numero_da_rota(self):
+        concluida = self._venda(numero=424)
+        pendente = self._venda(numero=425)
+        concluida.mudar_status_delivery(VendaPDV.StatusDelivery.ENTREGUE)
+        url = self._publicar([concluida, pendente]).json()['url']
+        self.client.logout()
+
+        resp = self.client.get(url)
+
+        self.assertEqual(
+            [item['venda'].pk for item in resp.context['pedidos']],
+            [pendente.pk, concluida.pk],
+        )
+        self.assertEqual(
+            [item['ordem'] for item in resp.context['pedidos']],
+            [2, 1],
+        )
 
     def test_painel_oferece_somente_google_em_rota_unica(self):
         pedidos = [self._venda(numero=440 + indice) for indice in range(7)]
