@@ -9,7 +9,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from django.contrib import messages
 from django.core.cache import cache
 from django.db import IntegrityError, connections
-from django.db.models import Max, Min, Q, Sum
+from django.db.models import Avg, Max, Min, Q, Sum
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -2443,16 +2443,29 @@ def api_historico_cliente(request, cliente_id):
             venda_pdv__cliente_id=cliente_id,
             venda_pdv__status="finalizada",
         )
-        .values("produto__descricao", "produto__descricao_pdv")
-        .annotate(qtd_total=Sum("quantidade"), qtd_pedidos=DCount("venda_pdv", distinct=True))
+        .values("produto_id", "produto__descricao", "produto__descricao_pdv")
+        .annotate(
+            qtd_total=Sum("quantidade"),
+            qtd_media=Avg("quantidade"),
+            valor_total=Sum("valor_total"),
+            qtd_pedidos=DCount("venda_pdv", distinct=True),
+            ultima_compra=Max("venda_pdv__data_venda"),
+        )
         .order_by("-qtd_pedidos", "-qtd_total")[:8]
     )
 
     produtos_frequentes = [
         {
+            "produto_id": r["produto_id"],
             "descricao": r["produto__descricao_pdv"] or r["produto__descricao"],
             "qtd_total": float(r["qtd_total"]),
+            "qtd_media": float(r["qtd_media"] or 0),
+            "valor_total": float(r["valor_total"] or 0),
             "qtd_pedidos": r["qtd_pedidos"],
+            "ultima_compra": (
+                timezone.localtime(r["ultima_compra"]).strftime("%d/%m/%Y")
+                if r["ultima_compra"] else ""
+            ),
         }
         for r in top
     ]
@@ -3519,7 +3532,8 @@ def delivery_rota_oportunidades(request):
             'endereco': endereco, 'endereco_texto': _delivery_endereco_manual_texto(endereco),
             'distancia_m': round(distancia), 'desvio_km_estimado': desvio_km,
             'desvio_min_estimado': round(desvio_km / 25 * 60),
-            'rfm': f'R{r} F{f} M{m}', 'rfm_total': total_rfm, 'segmento_rfm': segmento,
+            'rfm': f'R{r} F{f} M{m}', 'rfm_r': r, 'rfm_f': f, 'rfm_m': m,
+            'rfm_total': total_rfm, 'segmento_rfm': segmento,
             'score_crm': score_crm, 'prioridade': prioridade,
             'status_recompra': recompra.get_status_display() if recompra else 'Sem histórico suficiente',
             'dias_sem_comprar': dias,

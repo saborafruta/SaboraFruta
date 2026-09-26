@@ -6,6 +6,7 @@ mudar_status_delivery`), pra "o motorista marcou entregue no celular" e
 """
 import datetime
 import json
+from decimal import Decimal
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
@@ -18,7 +19,8 @@ from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.crm.models import RecompraCliente
 from apps.mapas.services.roteirizacao import Rota
 from apps.mapas.services.geocoder import Resultado
-from apps.pdv.models import RotaDeliveryPublica, VendaPDV
+from apps.pdv.models import ItemVendaPDV, RotaDeliveryPublica, VendaPDV
+from apps.produtos.models import Produto, UnidadeMedida
 
 
 class DeliveryKanbanBase(TestCase):
@@ -171,6 +173,9 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'Combustível necessário')
         self.assertContains(tela, 'Custo estimado da rota')
         self.assertContains(tela, 'fuelAutonomy')
+        self.assertContains(tela, 'opportunitySegment')
+        self.assertContains(tela, 'opportunityDetailModal')
+        self.assertContains(tela, 'Sugestão pelo histórico de compra')
         self.assertNotContains(tela, 'Waze')
         pedidos = json.loads(tela.context['pedidos_json'])
         self.assertIn(ativo.pk, [p['id'] for p in pedidos])
@@ -194,6 +199,33 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         dados_kanban = json.loads(kanban.context['pedidos_json'])
         self.assertEqual(dados_kanban[str(ativo.pk)]['status_delivery'], 'preparando')
         self.assertEqual(dados_kanban[str(ativo.pk)]['status_label'], 'Em Preparo')
+
+    def test_historico_cliente_traz_ranking_com_frequencia_valor_e_ultima_compra(self):
+        unidade = UnidadeMedida.objects.create(
+            empresa=self.empresa, sigla='UN', descricao='Unidade',
+        )
+        produto = Produto.objects.create(
+            filial=self.filial, unidade_medida=unidade, descricao='Polpa de acerola',
+            descricao_pdv='Acerola 1 kg', codigo='ACE-1', ncm='08119000',
+        )
+        venda = self._venda(numero=109)
+        venda.valor_total = Decimal('36.00')
+        venda.save(update_fields=['valor_total'])
+        ItemVendaPDV.objects.create(
+            venda_pdv=venda, produto=produto, numero_item=1, quantidade=Decimal('3'),
+            unidade_medida='UN', valor_unitario=Decimal('12'), valor_total=Decimal('36'),
+        )
+
+        resp = self.client.get(reverse('pdv:api_historico_cliente', args=[self.cliente.pk]))
+
+        self.assertEqual(resp.status_code, 200)
+        ranking = resp.json()['produtos_frequentes'][0]
+        self.assertEqual(ranking['descricao'], 'Acerola 1 kg')
+        self.assertEqual(ranking['qtd_pedidos'], 1)
+        self.assertEqual(ranking['qtd_total'], 3.0)
+        self.assertEqual(ranking['qtd_media'], 3.0)
+        self.assertEqual(ranking['valor_total'], 36.0)
+        self.assertTrue(ranking['ultima_compra'])
 
     @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.rota')
     def test_calculo_preserva_ordem_e_inclui_retorno(self, mock_rota):
@@ -422,6 +454,9 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         oportunidade = resp.json()['oportunidades'][0]
         self.assertEqual(oportunidade['nome'], 'Cliente Campeão')
         self.assertEqual(oportunidade['rfm'], 'R5 F5 M5')
+        self.assertEqual(oportunidade['rfm_r'], 5)
+        self.assertEqual(oportunidade['rfm_f'], 5)
+        self.assertEqual(oportunidade['rfm_m'], 5)
         self.assertEqual(oportunidade['segmento_rfm'], 'Campeão')
         self.assertGreaterEqual(oportunidade['prioridade'], 90)
         self.assertEqual(oportunidade['desvio_km_estimado'], 0.8)
