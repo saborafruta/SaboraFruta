@@ -988,6 +988,7 @@
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
                       <span style="font-size:11px;color:#a5b4fc;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.24);border-radius:999px;padding:3px 8px;">R{{ cliente.R }} F{{ cliente.F }} M{{ cliente.M }}</span>
+                      {% if cliente.delivery_frequente %}<span title="{{ cliente.delivery_compras }} compras por delivery nos últimos 12 meses" style="font-size:11px;color:#93c5fd;background:#0c1a2d;border:1px solid #1d4ed8;border-radius:999px;padding:3px 8px;">🛵 Cliente Delivery</span>{% endif %}
                       <span style="font-size:11px;color:#cbd5e1;background:#20202a;border-radius:999px;padding:3px 8px;">{{ cliente.frequencia }} compra{{ cliente.frequencia|pluralize }}</span>
                       <span style="font-size:11px;color:#fbbf24;background:rgba(251,191,36,.1);border-radius:999px;padding:3px 8px;">{{ cliente.recencia_dias }} dia{{ cliente.recencia_dias|pluralize }}</span>
                       <span style="font-size:11px;color:#86efac;background:rgba(34,197,94,.1);border-radius:999px;padding:3px 8px;">R$ {{ cliente.monetario|floatformat:2 }}</span>

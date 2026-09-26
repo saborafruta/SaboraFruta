@@ -12,7 +12,7 @@ class TenantPublicLinkService:
     ROUTES = (
         (re.compile(r'^/comprovante/([^/]+)(?:/pdf/)?$'), 'pdv', 'pdv.VendaPDV', 'comprovante_token'),
         (re.compile(r'^/cardapio/([^/]+)(?:/.*)?$'), 'cardapio', 'food_service.Mesa', 'qr_token'),
-        (re.compile(r'^/entregas/([^/]+)(?:/.*)?$'), 'rota_delivery', 'pdv.RotaDeliveryPublica', 'token'),
+        (re.compile(r'^/entregas/([^/]+)(?:/.*)?$'), 'rota_delivery', 'pdv.RotaDelivery', 'token'),
         (re.compile(r'^/pedido/entrega/([^/]+)/?$'), 'entrega', 'moda.Expedicao', 'codigo'),
         (re.compile(r'^/pedido/([^/]+)(?:/.*)?$'), 'pedido', 'moda.PedidoProducao', 'token_publico'),
     )

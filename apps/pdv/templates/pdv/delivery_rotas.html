@@ -21,6 +21,12 @@
   .dr-title { font-size:22px; line-height:1.2; font-weight:800; color:#f8fafc; }
   .dr-subtitle { margin-top:5px; font-size:12px; color:#94a3b8; }
   .dr-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:7px; }
+  .dr-tabs { display:flex; align-items:center; gap:7px; overflow-x:auto; padding:2px 0 3px; }
+  .dr-tab { display:flex; align-items:center; gap:7px; border:1px solid #323947; border-radius:9px; background:#20242a; padding:7px 11px; color:#9eabc0; font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap; }
+  .dr-tab.active { border-color:#397be5; background:#172f55; color:#dbeafe; }
+  .dr-tab-status { width:7px; height:7px; border-radius:50%; background:#f59e0b; }
+  .dr-tab-status.em_rota { background:#22c55e; }
+  .dr-autosave { color:#7f8b9d; font-size:10px; white-space:nowrap; }
   .dr-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:34px;
     padding:7px 11px; border-radius:8px; border:1px solid #323947; background:#24282f;
     color:#dbe4f0; font-size:11px; font-weight:750; cursor:pointer; white-space:nowrap; }
@@ -160,6 +166,12 @@
   .dr-contact a { border-radius:6px; background:#172f55; padding:4px 7px; color:#9fc4ff; font-size:9px; font-weight:800; text-decoration:none; }
   .dr-contact a.whatsapp-link { background:#173e32; color:#70e6b5; }
   .dr-detail-modal { width:min(900px,100%); max-height:90vh; display:flex; flex-direction:column; }
+  .dr-conference-list { overflow:auto; max-height:55vh; margin-top:10px; }
+  .dr-conference-item { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; border-top:1px solid #303744; padding:10px 2px; color:#e8eef7; font-size:11px; }
+  .dr-report-modal { width:min(1050px,100%); max-height:92vh; overflow:auto; }
+  .dr-report-kpis { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin:12px 0; }
+  .dr-report-table { width:100%; border-collapse:collapse; font-size:10px; }
+  .dr-report-table th,.dr-report-table td { border-bottom:1px solid #303744; padding:8px; text-align:left; color:#cbd5e1; }
   .dr-detail-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
   .dr-detail-columns { display:grid; grid-template-columns:1fr 1.15fr; gap:12px; min-height:0; overflow:hidden; }
   .dr-detail-section { min-width:0; overflow:auto; border:1px solid #303744; border-radius:10px; background:#171a1f; padding:10px; }
@@ -181,7 +193,7 @@
   body.tema-claro .dr-search { background:#fff; color:#142033; border-color:#d9e0ea; }
   body.tema-claro .dr-button { background:#fff; color:#334155; border-color:#d9e0ea; }
   @media (max-width:1200px) { .dr-grid { grid-template-columns:minmax(230px,.8fr) minmax(280px,1fr); } .dr-panel.map-panel { grid-column:1/-1; min-height:430px; } }
-  @media (max-width:760px) { .dr-head { flex-direction:column; } .dr-actions { justify-content:flex-start; } .dr-summary,.dr-cost-summary { grid-template-columns:repeat(2,1fr); } .dr-summary .dr-stat:first-child { grid-column:1/-1; } .dr-grid { grid-template-columns:1fr; } .dr-panel.map-panel { grid-column:auto; } .dr-footer { grid-template-columns:1fr; } }
+  @media (max-width:760px) { .dr-head { flex-direction:column; } .dr-actions { justify-content:flex-start; } .dr-summary,.dr-cost-summary,.dr-report-kpis { grid-template-columns:repeat(2,1fr); } .dr-summary .dr-stat:first-child { grid-column:1/-1; } .dr-grid { grid-template-columns:1fr; } .dr-panel.map-panel { grid-column:auto; } .dr-footer { grid-template-columns:1fr; } }
   @media (max-width:480px) { .dr-address-grid { grid-template-columns:1fr; } .dr-address-wide { grid-column:auto; } }
 </style>
 {% endblock %}
@@ -190,6 +202,7 @@
 {{ pedidos_json|json_script:"delivery-route-orders-raw" }}
 {{ filial_rota_json|json_script:"delivery-route-branch-raw" }}
 {{ configuracao_rota_json|json_script:"delivery-route-config-raw" }}
+{{ rotas_json|json_script:"delivery-routes-raw" }}
 <div class="dr-shell" id="deliveryRouteApp">
   <div class="dr-head">
     <div>
@@ -206,7 +219,15 @@
       <button class="dr-button" id="routeDriverLink">Copiar link do motoboy</button>
       <button class="dr-button green" id="routeShare">Compartilhar no WhatsApp</button>
       <button class="dr-button" id="routeMaps">Google Maps</button>
+      <button class="dr-button green" id="routeFinalize" disabled>Finalizar rota</button>
     </div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+    <div class="dr-tabs" id="routeTabs" style="flex:1"></div>
+    <span class="dr-autosave" id="routeAutosave">Salvo</span>
+    <button class="dr-tab" id="routeReport" type="button">📊 Relatório</button>
+    <button class="dr-button" id="routeNew" type="button">＋ Nova rota</button>
   </div>
 
   <div class="dr-summary">
@@ -246,6 +267,21 @@
   </div>
 </div>
 <div class="dr-toast" id="routeToast"></div>
+<div class="dr-address-modal-bg" id="conferenceModal" style="z-index:6400" onclick="if(event.target===this)closeConferenceModal()">
+  <section class="dr-address-modal">
+    <div class="dr-detail-head"><div><h2 id="conferenceTitle">Conferir pedido</h2><p>Marque os itens separados antes da saída.</p></div><button class="dr-button" type="button" onclick="closeConferenceModal()">Fechar</button></div>
+    <label style="display:flex;gap:8px;align-items:center;color:#dbe4f0;font-size:11px;font-weight:800;"><input type="checkbox" id="conferenceAll"> Marcar todos</label>
+    <div class="dr-conference-list" id="conferenceList"></div>
+  </section>
+</div>
+<div class="dr-address-modal-bg" id="routeReportModal" style="z-index:6400" onclick="if(event.target===this)closeRouteReport()">
+  <section class="dr-address-modal dr-report-modal">
+    <div class="dr-detail-head"><div><h2>Consumo das rotas</h2><p>Distância, combustível e custo das rotas finalizadas.</p></div><button class="dr-button" type="button" onclick="closeRouteReport()">Fechar</button></div>
+    <div class="dr-actions" style="justify-content:flex-start;margin-top:10px"><button class="dr-button" data-report-period="diario">Hoje</button><button class="dr-button" data-report-period="semanal">Semana</button><button class="dr-button primary" data-report-period="mensal">Mês</button><input id="reportStart" type="date" class="dr-button"><input id="reportEnd" type="date" class="dr-button"><button class="dr-button" id="reportCustom">Aplicar período</button></div>
+    <div class="dr-report-kpis" id="reportKpis"></div>
+    <table class="dr-report-table"><thead><tr><th>Rota</th><th>Finalizada</th><th>Entregador</th><th>Paradas</th><th>Distância</th><th>Litros</th><th>Custo</th></tr></thead><tbody id="reportRows"></tbody></table>
+  </section>
+</div>
 <div class="dr-address-modal-bg" id="opportunityModal" onclick="if(event.target===this)closeOpportunityModal()">
   <section class="dr-address-modal dr-opportunity-modal">
     <h2>Oportunidades de Venda</h2>
@@ -405,7 +441,10 @@
   const orders = JSON.parse(JSON.parse(document.getElementById('delivery-route-orders-raw').textContent));
   const branch = JSON.parse(JSON.parse(document.getElementById('delivery-route-branch-raw').textContent));
   const savedConfig = JSON.parse(JSON.parse(document.getElementById('delivery-route-config-raw').textContent));
-  const state = { selected: orders.filter(o => o.tem_coordenada).map(o => `pedido:${o.id}`), manualStops: {}, locked: new Set(), result: null, dragging: null };
+  let routes = JSON.parse(JSON.parse(document.getElementById('delivery-routes-raw').textContent));
+  let currentRoute = routes[0];
+  let conference = {};
+  const state = { selected: [], manualStops: {}, locked: new Set(), result: null, dragging: null };
   const byId = Object.fromEntries(orders.map(o => [String(o.id), o]));
   const csrf = '{{ csrf_token }}';
   const calculateUrl = '{% url "pdv:delivery_rota_calcular" %}';
@@ -419,6 +458,11 @@
   const customerHistoryUrlTemplate = '{% url "pdv:api_historico_cliente" 0 %}';
   const pdvUrl = '{% url "pdv:home" %}';
   const pageUrl = '{% url "pdv:delivery_rotas" %}';
+  const createRouteUrl = '{% url "pdv:delivery_rota_criar" %}';
+  const saveRouteUrlTemplate = '{% url "pdv:delivery_rota_salvar" 0 %}';
+  const finalizeRouteUrlTemplate = '{% url "pdv:delivery_rota_finalizar" 0 %}';
+  const routeStatusUrlTemplate = '{% url "pdv:delivery_rota_situacao" 0 %}';
+  const reportUrl = '{% url "pdv:delivery_rotas_relatorio_consumo" %}';
   let map, routeLine, markers = [];
   let automaticCalculationTimer = null;
   let calculationSequence = 0;
@@ -436,6 +480,14 @@
     if(!type.includes('application/json'))throw new Error(resp.ok?'O servidor devolveu uma resposta inválida.':`Não foi possível concluir a operação (HTTP ${resp.status}).`);
     return resp.json();
   }
+  function routeSnapshot(){return {selected:[...state.selected],manualStops:state.manualStops,locked:[...state.locked],driver:document.getElementById('routeDriver').value,minutes:document.getElementById('stopMinutes').value,departure:document.getElementById('routeDeparture').value,fuelPrice:document.getElementById('fuelPrice').value,fuelAutonomy:document.getElementById('fuelAutonomy').value,result:state.result};}
+  function renderTabs(){document.getElementById('routeTabs').innerHTML=routes.map(route=>`<button class="dr-tab ${route.id===currentRoute?.id?'active':''}" data-route-tab="${route.id}" title="Duplo clique para renomear"><span class="dr-tab-status ${esc(route.status)}"></span>${esc(route.nome)}</button>`).join('');document.querySelectorAll('[data-route-tab]').forEach(tab=>{tab.addEventListener('click',()=>switchRoute(Number(tab.dataset.routeTab)));tab.addEventListener('dblclick',()=>renameRoute(Number(tab.dataset.routeTab)));});}
+  async function persistRoute(showToast=false){if(!currentRoute)return;const indicator=document.getElementById('routeAutosave');indicator.textContent='Salvando…';const payload={nome:currentRoute.nome,estado:routeSnapshot(),conferencia_itens:conference};try{const resp=await fetch(saveRouteUrlTemplate.replace('/0/','/'+currentRoute.id+'/'),{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify(payload)});const data=await responseJson(resp);if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);Object.assign(currentRoute,data.rota);lastSavedSignature=JSON.stringify({estado:routeSnapshot(),conferencia_itens:conference,nome:currentRoute.nome});indicator.textContent='Salvo agora';if(showToast)toast('Rota salva.');renderTabs();}catch(error){indicator.textContent='Erro ao salvar';toast(error.message,true);}}
+  let lastSavedSignature='';
+  function loadRoute(route){currentRoute=route;const saved=route.estado||{};state.manualStops=saved.manualStops||Object.fromEntries((route.paradas_extras||[]).map(item=>[String(item.id),item]));state.selected=(saved.selected||route.ordem_paradas||[]).map(String).filter(key=>stopByKey(key));state.locked=new Set((saved.locked||[]).filter(key=>state.selected.includes(key)));state.result=saved.result||null;conference=route.conferencia_itens||{};document.getElementById('routeDriver').value=saved.driver||route.entregador||'';document.getElementById('stopMinutes').value=saved.minutes??savedConfig.minutos_por_parada??5;document.getElementById('routeDeparture').value=saved.departure||'';document.getElementById('fuelPrice').value=saved.fuelPrice||savedConfig.combustivel_preco||'';document.getElementById('fuelAutonomy').value=saved.fuelAutonomy||savedConfig.autonomia_km_l||'';renderTabs();renderAvailable();renderRoute();if(state.result){drawRoute(state.result);renderSummary(state.result);}else resetSummary();updateFinalizeButton();lastSavedSignature=JSON.stringify({estado:routeSnapshot(),conferencia_itens:conference,nome:currentRoute.nome});}
+  async function switchRoute(id){const route=routes.find(item=>item.id===id);if(!route||route===currentRoute)return;await persistRoute();loadRoute(route);if(!document.getElementById('routeDeparture').value){const now=new Date();document.getElementById('routeDeparture').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;}if(state.selected.length&&!state.result)scheduleAutomaticCalculation(true,120);}
+  async function renameRoute(id){const route=routes.find(item=>item.id===id);if(!route)return;const nome=window.prompt('Nome da rota:',route.nome);if(!nome?.trim())return;route.nome=nome.trim().slice(0,100);if(route===currentRoute)await persistRoute(true);renderTabs();}
+  async function createRoute(){const nome=window.prompt('Nome da nova rota:',`Rota ${routes.length+1}`);if(!nome?.trim())return;await persistRoute();const resp=await fetch(createRouteUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({nome:nome.trim()})});const data=await responseJson(resp);if(!resp.ok)return toast(data.erro||`HTTP ${resp.status}`,true);routes.push(data.rota);loadRoute(data.rota);toast('Nova rota criada.');}
   function address(o) { return [o.endereco,o.bairro,[o.cidade,o.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ') || 'Endereço não informado'; }
   function orderKey(id) { return `pedido:${id}`; }
   function stopByKey(key) {
@@ -444,6 +496,8 @@
     return null;
   }
   function currentStops() { return state.selected.map(stopByKey).filter(Boolean); }
+  function checkedItems(order){return new Set((conference[String(order.id)]||[]).map(String));}
+  function conferenceComplete(order){const items=order?.itens||[];const checked=checkedItems(order);return items.length>0&&items.every(item=>checked.has(String(item.id)));}
   function stopPayload(key) {
     const stop=stopByKey(key);
     return String(key).startsWith('pedido:') ? {tipo:'pedido',id:stop.id} : {...stop,tipo:'manual'};
@@ -494,7 +548,7 @@
     document.getElementById('routeList').innerHTML=list.length?list.map((o,i)=>{const key=state.selected[i], manual=String(key).startsWith('manual:'), opportunity=manual&&o.origem==='oportunidade';return `
       <div class="dr-card ${manual?'dr-manual-card':''}" draggable="true" data-route-id="${esc(key)}">
         <span class="dr-order">${i+1}</span>
-        <div><div class="dr-client">☰ &nbsp;${manual?(opportunity?'Oportunidade · ':'Parada manual · ')+esc(o.observacao):'#'+esc(o.numero)+' · '+esc(o.cliente)}</div><div class="dr-meta">${esc(manual?o.endereco_texto:address(o))}${state.result?.paradas?.[i]?.eta?` · ETA <strong>${esc(state.result.paradas[i].eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge ${manual?'warn':'blue'}">${opportunity?'Oportunidade de Venda':manual?'Parada avulsa':esc(o.status_label)}</span>${opportunity&&o.rfm?`<span class="dr-badge">${esc(o.rfm)}</span>`:''}${state.locked.has(key)?'<span class="dr-badge">Posição travada</span>':''}</div></div>
+        <div ${manual?'':`data-conference="${o.id}" style="cursor:pointer" title="Abrir conferência dos itens"`}><div class="dr-client">☰ &nbsp;${manual?(opportunity?'Oportunidade · ':'Parada manual · ')+esc(o.observacao):'#'+esc(o.numero)+' · '+esc(o.cliente)}</div><div class="dr-meta">${esc(manual?o.endereco_texto:address(o))}${state.result?.paradas?.[i]?.eta?` · ETA <strong>${esc(state.result.paradas[i].eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge ${manual?'warn':'blue'}">${opportunity?'Oportunidade de Venda':manual?'Parada avulsa':esc(o.status_label)}</span>${!manual?`<span class="dr-badge ${conferenceComplete(o)?'':'warn'}">${conferenceComplete(o)?'✓ Conferido':'⚠ Conferência pendente'}</span>`:''}${opportunity&&o.rfm?`<span class="dr-badge">${esc(o.rfm)}</span>`:''}${state.locked.has(key)?'<span class="dr-badge">Posição travada</span>':''}</div></div>
         <div class="dr-card-actions">${manual?`<button class="dr-edit-address" type="button" data-edit-manual="${esc(key)}">✎ Endereço</button><button class="dr-edit-address" type="button" data-edit-stop="${esc(key)}">✎ Observação</button><button class="dr-edit-address" type="button" data-sale-stop="${esc(key)}">＋ Venda</button><button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:''}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição':'Travar posição'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
       </div>`}).join(''):'<div class="dr-empty">Marque pedidos ou adicione uma parada manual.</div>';
     document.querySelectorAll('[data-lock]').forEach(b=>b.addEventListener('click',()=>{const key=b.dataset.lock;state.locked.has(key)?state.locked.delete(key):state.locked.add(key);renderRoute();}));
@@ -502,13 +556,22 @@
     document.querySelectorAll('[data-edit-manual]').forEach(b=>b.addEventListener('click',()=>openManualStopModal(b.dataset.editManual)));
     document.querySelectorAll('[data-edit-stop]').forEach(b=>b.addEventListener('click',()=>openStopObservationForEdit(b.dataset.editStop)));
     document.querySelectorAll('[data-sale-stop]').forEach(b=>b.addEventListener('click',()=>openPdvForStop(b.dataset.saleStop)));
+    document.querySelectorAll('[data-conference]').forEach(el=>el.addEventListener('click',()=>openConference(Number(el.dataset.conference))));
     document.querySelectorAll('[data-route-id]').forEach(el=>{
       el.addEventListener('dragstart',()=>{state.dragging=el.dataset.routeId;el.classList.add('dragging');});
       el.addEventListener('dragend',()=>{state.dragging=null;el.classList.remove('dragging');});
       el.addEventListener('dragover',e=>e.preventDefault());
       el.addEventListener('drop',e=>{e.preventDefault();moveOrder(state.dragging,el.dataset.routeId);});
     });
+    updateFinalizeButton();
   }
+  let conferenceOrder=null;
+  function openConference(id){conferenceOrder=byId[String(id)];if(!conferenceOrder)return;document.getElementById('conferenceTitle').textContent=`Conferir pedido #${conferenceOrder.numero} · ${conferenceOrder.cliente}`;renderConference();document.getElementById('conferenceModal').classList.add('open');}
+  function renderConference(){if(!conferenceOrder)return;const checked=checkedItems(conferenceOrder),items=conferenceOrder.itens||[];document.getElementById('conferenceAll').checked=items.length>0&&items.every(item=>checked.has(String(item.id)));document.getElementById('conferenceList').innerHTML=items.length?items.map(item=>`<label class="dr-conference-item"><input type="checkbox" data-conference-item="${item.id}" ${checked.has(String(item.id))?'checked':''}><span>${esc(item.descricao)}</span><strong>${esc(item.quantidade)} ${esc(item.unidade_medida)}</strong></label>`).join(''):'<div class="dr-empty">Este pedido não possui itens detalhados.</div>';document.querySelectorAll('[data-conference-item]').forEach(input=>input.addEventListener('change',()=>toggleConferenceItem(String(input.dataset.conferenceItem),input.checked)));}
+  function toggleConferenceItem(itemId,checked){const key=String(conferenceOrder.id),values=new Set((conference[key]||[]).map(String));checked?values.add(itemId):values.delete(itemId);conference[key]=[...values];renderConference();renderRoute();}
+  window.closeConferenceModal=function(){conferenceOrder=null;document.getElementById('conferenceModal').classList.remove('open');};
+  function updateFinalizeButton(){const selectedOrders=state.selected.filter(key=>key.startsWith('pedido:')).map(stopByKey).filter(Boolean);const deliveriesDone=selectedOrders.length>0&&selectedOrders.every(order=>['entregue','finalizado'].includes(order.status));const extras=(currentRoute?.paradas_extras||[]).map(item=>String(item.id));const extrasDone=extras.every(id=>(currentRoute?.paradas_extras_concluidas||[]).map(String).includes(id));const button=document.getElementById('routeFinalize');button.disabled=!(deliveriesDone&&extrasDone);button.title=button.disabled?'Marque todas as entregas como concluídas no painel do motoboy.':'Todas as paradas foram concluídas.';}
+  async function refreshRouteCompletion(){if(!currentRoute)return;try{const resp=await fetch(routeStatusUrlTemplate.replace('/0/','/'+currentRoute.id+'/'),{headers:{Accept:'application/json'}});const data=await responseJson(resp);if(!resp.ok)return;Object.entries(data.status_pedidos||{}).forEach(([id,status])=>{if(byId[id])byId[id].status=status;});currentRoute.paradas_extras_concluidas=data.paradas_extras_concluidas||[];const button=document.getElementById('routeFinalize');button.disabled=!data.concluida;button.title=data.concluida?'Todas as paradas foram concluídas.':'Marque todas as entregas como concluídas no painel do motoboy.';}catch(_){}}
   function scheduleAutomaticCalculation(optimize=false, delay=450) {
     clearTimeout(automaticCalculationTimer);
     calculationSequence += 1;
@@ -821,8 +884,7 @@
     return url.toString();
   }
   function openMaps(){const url=googleFullUrl();if(!url)return toast('Gere a rota antes de abrir o GPS.',true);window.open(url,'_blank','noopener');toast(`Confira se o Google carregou todas as ${state.result.paradas.length} paradas.`);}
-  function saveDraft(silent=false){const payload={selected:state.selected,manualStops:state.manualStops,locked:[...state.locked],driver:document.getElementById('routeDriver').value,minutes:document.getElementById('stopMinutes').value,departure:document.getElementById('routeDeparture').value,fuelPrice:document.getElementById('fuelPrice').value,fuelAutonomy:document.getElementById('fuelAutonomy').value};localStorage.setItem('delivery-route-draft',JSON.stringify(payload));if(!silent)toast('Rascunho salvo neste navegador.');}
-  function loadDraft(){try{const d=JSON.parse(localStorage.getItem('delivery-route-draft')||'null');if(!d)return;state.manualStops=d.manualStops||{};state.selected=(d.selected||[]).map(item=>String(item).includes(':')?String(item):orderKey(item)).filter(key=>stopByKey(key)&&(key.startsWith('manual:')||stopByKey(key).tem_coordenada));state.locked=new Set((d.locked||[]).map(String).map(item=>item.includes(':')?item:orderKey(item)).filter(key=>state.selected.includes(key)));document.getElementById('routeDriver').value=d.driver||'';document.getElementById('stopMinutes').value=d.minutes||5;document.getElementById('routeDeparture').value=d.departure||'';document.getElementById('fuelPrice').value=d.fuelPrice||'';document.getElementById('fuelAutonomy').value=d.fuelAutonomy||'';}catch(e){}}
+  function saveDraft(silent=false){return persistRoute(!silent);}
   function applyPendingPdvSale(){
     const id=sessionStorage.getItem('delivery-route-new-order');if(!id)return;
     const key=orderKey(id), order=stopByKey(key);sessionStorage.removeItem('delivery-route-new-order');
@@ -832,11 +894,16 @@
     if(!state.result)throw new Error('Gere a rota antes de publicá-la.');
     const etas=Object.fromEntries(state.result.paradas.map(parada=>[parada.chave||String(parada.id),parada.eta]));
     state.result.paradas.filter(p=>p.tipo==='pedido').forEach(p=>etas[String(p.id)]=p.eta);
-    const resp=await fetch(publishUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({pedidos:state.result.ordem,paradas_extras:Object.values(state.manualStops),ordem_paradas:state.result.ordem_paradas,entregador:document.getElementById('routeDriver').value.trim(),etas})});
-    const data=await resp.json();if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);return data;
+    await persistRoute();
+    const resp=await fetch(publishUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({rota_id:currentRoute.id,pedidos:state.result.ordem,paradas_extras:Object.values(state.manualStops),ordem_paradas:state.result.ordem_paradas,entregador:document.getElementById('routeDriver').value.trim(),etas})});
+    const data=await resp.json();if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);currentRoute.status='em_rota';currentRoute.status_label='Em rota';currentRoute.publicada=true;renderTabs();return data;
   }
   async function copyDriverLink(){try{const data=await publishRoute();if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(data.url);toast('Link fixo do motoboy copiado.');}else{window.prompt('Copie o link fixo do motoboy:',data.url);}}catch(error){toast(error.message,true);}}
   async function share(){const popup=window.open('about:blank','_blank');try{const data=await publishRoute();const driver=document.getElementById('routeDriver').value.trim();const lines=[`🛵 Rota do Delivery${driver?' — '+driver:''}`,`${state.result.paradas.length} paradas · ${state.result.distancia_km} km`,`Saída ${state.result.saida} · retorno previsto ${state.result.retorno}`,'',`Painel do motoboy: ${data.url}`,'Abra o painel para ver entregas, paradas, pagamentos e as opções de navegação.'];const target=`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`;if(popup){popup.opener=null;popup.location.href=target;}else{window.location.href=target;}}catch(error){if(popup)popup.close();toast(error.message,true);}}
+  async function finalizeRoute(){if(!currentRoute||document.getElementById('routeFinalize').disabled)return;if(!confirm(`Finalizar a rota “${currentRoute.nome}”?`))return;await persistRoute();const resp=await fetch(finalizeRouteUrlTemplate.replace('/0/','/'+currentRoute.id+'/'),{method:'POST',headers:{'X-CSRFToken':csrf,'Accept':'application/json'}});const data=await responseJson(resp);if(!resp.ok)return toast(data.erro||`HTTP ${resp.status}`,true);routes=routes.filter(route=>route.id!==currentRoute.id);if(!routes.length){const create=await fetch(createRouteUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({nome:'Nova rota'})});routes=[(await responseJson(create)).rota];}loadRoute(routes[0]);toast('Rota finalizada e incluída no relatório.');}
+  window.closeRouteReport=function(){document.getElementById('routeReportModal').classList.remove('open');};
+  async function loadReport(period='mensal'){const params=new URLSearchParams({periodo:period});if(period==='personalizado'){params.set('inicio',document.getElementById('reportStart').value);params.set('fim',document.getElementById('reportEnd').value);}const resp=await fetch(`${reportUrl}?${params}`,{headers:{Accept:'application/json'}});const data=await responseJson(resp);if(!resp.ok)return toast(data.erro||`HTTP ${resp.status}`,true);const r=data.resumo;document.getElementById('reportKpis').innerHTML=[['Rotas',r.rotas],['Paradas',r.paradas],['Distância',`${r.distancia_km.toLocaleString('pt-BR')} km`],['Combustível',`${r.combustivel_litros.toLocaleString('pt-BR',{maximumFractionDigits:2})} L`],['Custo',money(r.custo)]].map(([label,value])=>`<div class="dr-stat"><div class="dr-stat-label">${label}</div><div class="dr-stat-value">${value}</div></div>`).join('');document.getElementById('reportRows').innerHTML=data.rotas.length?data.rotas.map(route=>`<tr><td>${esc(route.nome)}</td><td>${esc(route.finalizada_em)}</td><td>${esc(route.entregador||'—')}</td><td>${route.paradas}</td><td>${route.distancia_km.toLocaleString('pt-BR')} km</td><td>${route.combustivel_litros.toLocaleString('pt-BR',{maximumFractionDigits:2})} L</td><td>${money(route.custo)}</td></tr>`).join(''):'<tr><td colspan="7" style="text-align:center">Nenhuma rota finalizada no período.</td></tr>';document.getElementById('reportStart').value=data.inicio;document.getElementById('reportEnd').value=data.fim;}
+  function openRouteReport(){document.getElementById('routeReportModal').classList.add('open');loadReport('mensal');}
 
   document.getElementById('orderSearch').addEventListener('input',renderAvailable);
   document.getElementById('routeOpportunities').addEventListener('click',openOpportunityModal);
@@ -858,6 +925,12 @@
   document.getElementById('routeDriverLink').addEventListener('click',copyDriverLink);
   document.getElementById('routeShare').addEventListener('click',share);
   document.getElementById('routeMaps').addEventListener('click',openMaps);
+  document.getElementById('routeNew').addEventListener('click',createRoute);
+  document.getElementById('routeFinalize').addEventListener('click',finalizeRoute);
+  document.getElementById('routeReport').addEventListener('click',openRouteReport);
+  document.querySelectorAll('[data-report-period]').forEach(button=>button.addEventListener('click',()=>loadReport(button.dataset.reportPeriod)));
+  document.getElementById('reportCustom').addEventListener('click',()=>loadReport('personalizado'));
+  document.getElementById('conferenceAll').addEventListener('change',event=>{if(!conferenceOrder)return;conference[String(conferenceOrder.id)]=event.target.checked?(conferenceOrder.itens||[]).map(item=>String(item.id)):[];renderConference();renderRoute();});
   document.getElementById('mapExpand').addEventListener('click',toggleMapFullscreen);
   document.addEventListener('fullscreenchange',()=>{
     document.getElementById('mapExpand').textContent=document.fullscreenElement?'✕ Fechar mapa':'⛶ Expandir mapa';
@@ -874,13 +947,16 @@
     sessionStorage.setItem('delivery-route-new-order',String(event.data.venda_id));
     saveDraft(true);closeRoutePdv();window.location.reload();
   });
-  loadDraft();
-  applyPendingPdvSale();
+  initMap();
   applySavedConfig();
+  loadRoute(currentRoute);
+  applyPendingPdvSale();
   if(!document.getElementById('routeDeparture').value){const now=new Date();document.getElementById('routeDeparture').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;}
-  renderAvailable();renderRoute();initMap();renderFuelCost();
+  renderFuelCost();
   if(!branch.tem_coordenada)document.getElementById('mapNote').textContent='A filial precisa de coordenadas para calcular saída e retorno.';
   else if(state.selected.length)scheduleAutomaticCalculation(true,150);
+  setInterval(()=>{if(!currentRoute)return;const signature=JSON.stringify({estado:routeSnapshot(),conferencia_itens:conference,nome:currentRoute.nome});if(signature!==lastSavedSignature)persistRoute();},1500);
+  refreshRouteCompletion();setInterval(refreshRouteCompletion,5000);
 })();
 </script>
 {% endblock %}

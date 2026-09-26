@@ -8,7 +8,7 @@ from .venda import (
     VendaPDV, ItemVendaPDV, PagamentoVendaPDV, PesagemPDV,
     DevolucaoPDV, ItemDevolucaoPDV, PDVCache,
 )
-from .rota_delivery import RotaDeliveryPublica
+from .rota_delivery import RotaDelivery, RotaDeliveryPublica
 
 __all__ = [
     "Caixa","DispositivoPDV","ImpressoraConfig","ImpressaoLog",
@@ -16,5 +16,5 @@ __all__ = [
     "SessaoPDV","MovimentacaoCaixa",
     "VendaPDV","ItemVendaPDV","PagamentoVendaPDV","PesagemPDV",
     "DevolucaoPDV","ItemDevolucaoPDV","PDVCache",
-    "RotaDeliveryPublica",
+    "RotaDelivery", "RotaDeliveryPublica",
 ]

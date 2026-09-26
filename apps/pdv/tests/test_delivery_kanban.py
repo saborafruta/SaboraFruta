@@ -19,7 +19,7 @@ from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.crm.models import RecompraCliente
 from apps.mapas.services.roteirizacao import Rota
 from apps.mapas.services.geocoder import Resultado
-from apps.pdv.models import ItemVendaPDV, RotaDeliveryPublica, VendaPDV
+from apps.pdv.models import ItemVendaPDV, RotaDelivery, RotaDeliveryPublica, VendaPDV
 from apps.produtos.models import Produto, UnidadeMedida
 
 
@@ -202,6 +202,14 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'Localizar e atualizar')
         self.assertContains(tela, 'delivery-route-sale-completed')
         self.assertContains(tela, 'Buscando a melhor posição na rota')
+        self.assertContains(tela, 'routeTabs')
+        self.assertContains(tela, '＋ Nova rota')
+        self.assertContains(tela, 'conferenceModal')
+        self.assertContains(tela, 'Marcar todos')
+        self.assertContains(tela, 'Conferência pendente')
+        self.assertContains(tela, 'Finalizar rota')
+        self.assertContains(tela, '📊 Relatório')
+        self.assertContains(tela, 'Consumo das rotas')
         self.assertNotContains(tela, 'Waze')
         pedidos = json.loads(tela.context['pedidos_json'])
         self.assertIn(ativo.pk, [p['id'] for p in pedidos])
@@ -367,6 +375,99 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
 
         self.assertEqual(resp.status_code, 400)
         self.assertIn('sem coordenada', resp.json()['erro'].lower())
+
+
+class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
+
+    def setUp(self):
+        super().setUp()
+        self.filial.latitude = -5.7900
+        self.filial.longitude = -35.2100
+        self.filial.save(update_fields=['latitude', 'longitude'])
+        self.cliente.latitude = -5.8000
+        self.cliente.longitude = -35.2200
+        self.cliente.save(update_fields=['latitude', 'longitude'])
+
+    def test_cria_duas_rotas_nomeadas_e_salva_conferencia_no_servidor(self):
+        primeira = self.client.get(reverse('pdv:delivery_rotas'))
+        rota_1 = RotaDelivery.objects.get(filial=self.filial)
+        criada = self.client.post(
+            reverse('pdv:delivery_rota_criar'),
+            data=json.dumps({'nome': 'Rota Zona Sul'}), content_type='application/json',
+        )
+        rota_2 = RotaDelivery.objects.get(pk=criada.json()['rota']['id'])
+        venda = self._venda(numero=390)
+
+        salva = self.client.post(
+            reverse('pdv:delivery_rota_salvar', args=[rota_2.pk]),
+            data=json.dumps({
+                'nome': 'Rota Zona Sul',
+                'estado': {
+                    'selected': [f'pedido:{venda.pk}'], 'manualStops': {},
+                    'locked': [], 'driver': 'João', 'fuelPrice': '7',
+                    'fuelAutonomy': '14',
+                    'result': {'distancia_km': 28, 'tempo_total_s': 3600},
+                },
+                'conferencia_itens': {str(venda.pk): ['10', '11']},
+            }), content_type='application/json',
+        )
+
+        self.assertEqual(primeira.status_code, 200)
+        self.assertEqual(criada.status_code, 200)
+        self.assertEqual(salva.status_code, 200)
+        self.assertEqual(RotaDelivery.objects.filter(filial=self.filial).count(), 2)
+        rota_2.refresh_from_db()
+        self.assertEqual(rota_2.pedido_ids, [venda.pk])
+        self.assertEqual(rota_2.conferencia_itens[str(venda.pk)], ['10', '11'])
+        self.assertEqual(rota_2.combustivel_litros, Decimal('2.000'))
+        self.assertEqual(rota_2.custo_combustivel, Decimal('14.00'))
+        self.assertNotEqual(rota_1.token, rota_2.token)
+
+    def test_finaliza_somente_depois_de_todas_as_entregas_concluidas(self):
+        venda = self._venda(numero=391)
+        rota = RotaDelivery.objects.create(
+            filial=self.filial, nome='Rota Centro', pedido_ids=[venda.pk],
+        )
+
+        bloqueada = self.client.post(reverse('pdv:delivery_rota_finalizar', args=[rota.pk]))
+        venda.status_delivery = VendaPDV.StatusDelivery.ENTREGUE
+        venda.save(update_fields=['status_delivery'])
+        finalizada = self.client.post(reverse('pdv:delivery_rota_finalizar', args=[rota.pk]))
+
+        self.assertEqual(bloqueada.status_code, 400)
+        self.assertEqual(finalizada.status_code, 200)
+        rota.refresh_from_db()
+        self.assertEqual(rota.status, RotaDelivery.Status.FINALIZADA)
+        self.assertIsNotNone(rota.finalizada_em)
+
+    def test_nao_finaliza_rota_sem_paradas(self):
+        rota = RotaDelivery.objects.create(filial=self.filial, nome='Rota vazia')
+
+        resposta = self.client.post(reverse('pdv:delivery_rota_finalizar', args=[rota.pk]))
+
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn('ao menos uma parada', resposta.json()['erro'])
+
+    def test_relatorio_soma_consumo_das_rotas_finalizadas(self):
+        agora = timezone.now()
+        RotaDelivery.objects.create(
+            filial=self.filial, nome='Rota Norte', status='finalizada', ativa=False,
+            finalizada_em=agora, pedido_ids=[1, 2], distancia_km=Decimal('30'),
+            combustivel_litros=Decimal('3'), custo_combustivel=Decimal('21'),
+        )
+        RotaDelivery.objects.create(
+            filial=self.filial, nome='Rota Sul', status='finalizada', ativa=False,
+            finalizada_em=agora, pedido_ids=[3], distancia_km=Decimal('10'),
+            combustivel_litros=Decimal('1'), custo_combustivel=Decimal('7'),
+        )
+
+        resp = self.client.get(reverse('pdv:delivery_rotas_relatorio_consumo'), {'periodo': 'mensal'})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['resumo']['rotas'], 2)
+        self.assertEqual(resp.json()['resumo']['paradas'], 3)
+        self.assertEqual(resp.json()['resumo']['distancia_km'], 40.0)
+        self.assertEqual(resp.json()['resumo']['custo'], 28.0)
 
     def test_endereco_pode_ser_confirmado_mesmo_com_coordenada(self):
         self.cliente.endereco = 'Rua Confirmada'

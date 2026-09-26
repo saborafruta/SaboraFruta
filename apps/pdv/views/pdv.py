@@ -3293,12 +3293,20 @@ DELIVERY_ROTA_STATUS = {'novo', 'preparando'}
 
 def _delivery_rota_pedidos(filial):
     """Pedidos que ainda podem ser planejados, sempre limitados à filial ativa."""
+    from apps.pdv.models import RotaDelivery
+
+    ids_em_rotas = set()
+    for ids in RotaDelivery.objects.filter(
+        filial=filial, status__in=[RotaDelivery.Status.RASCUNHO, RotaDelivery.Status.EM_ROTA],
+    ).values_list('pedido_ids', flat=True):
+        ids_em_rotas.update(int(pk) for pk in (ids or []) if str(pk).isdigit())
     return (
         VendaPDV.objects.for_filial(filial)
-        .filter(delivery=True, status_delivery__in=DELIVERY_ROTA_STATUS)
+        .filter(delivery=True)
+        .filter(Q(status_delivery__in=DELIVERY_ROTA_STATUS) | Q(pk__in=ids_em_rotas))
         .exclude(status='cancelada')
         .select_related('cliente')
-        .prefetch_related('pagamentos__forma_pagamento')
+        .prefetch_related('pagamentos__forma_pagamento', 'itens__produto')
         .order_by('data_venda', 'pk')
     )
 
@@ -3349,6 +3357,15 @@ def _delivery_rota_serializar_pedido(venda):
             'cidade': endereco.get('cidade') or (cliente.cidade if cliente else '') or '',
             'uf': endereco.get('uf') or (cliente.uf if cliente else '') or '',
         },
+        'itens': [
+            {
+                'id': item.pk,
+                'descricao': item.produto.descricao if item.produto else 'Item',
+                'quantidade': float(item.quantidade),
+                'unidade_medida': item.unidade_medida or 'UN',
+            }
+            for item in venda.itens.all()
+        ],
     }
 
 
@@ -3384,7 +3401,14 @@ def _delivery_configuracao_rfm(configuracao=None):
 @xframe_options_sameorigin
 @requer_permissao('pdv', 'ver')
 def delivery_rotas(request):
-    from apps.pdv.models import RotaDeliveryPublica
+    from apps.pdv.models import RotaDelivery, RotaDeliveryPublica
+
+    rotas = list(RotaDelivery.objects.filter(
+        filial=request.filial_ativa,
+        status__in=[RotaDelivery.Status.RASCUNHO, RotaDelivery.Status.EM_ROTA],
+    ).order_by('created_at'))
+    if not rotas:
+        rotas = [RotaDelivery.objects.create(filial=request.filial_ativa, nome='Rota 1')]
 
     pedidos = [
         _delivery_rota_serializar_pedido(v)
@@ -3400,8 +3424,193 @@ def delivery_rotas(request):
             'minutos_por_parada': configuracao.minutos_por_parada if configuracao else 5,
             'rfm': _delivery_configuracao_rfm(configuracao),
         }),
+        'rotas_json': json.dumps([_delivery_rota_serializar(rota) for rota in rotas], ensure_ascii=False),
         'embedded': request.GET.get('embed') == '1',
     })
+
+
+def _delivery_rota_serializar(rota):
+    return {
+        'id': rota.pk,
+        'nome': rota.nome,
+        'status': rota.status,
+        'status_label': rota.get_status_display(),
+        'estado': rota.estado or {},
+        'pedido_ids': rota.pedido_ids or [],
+        'paradas_extras': rota.paradas_extras or [],
+        'paradas_extras_concluidas': rota.paradas_extras_concluidas or [],
+        'ordem_paradas': rota.ordem_paradas or [],
+        'conferencia_itens': rota.conferencia_itens or {},
+        'entregador': rota.entregador or '',
+        'distancia_km': float(rota.distancia_km or 0),
+        'tempo_total_s': rota.tempo_total_s or 0,
+        'combustivel_litros': float(rota.combustivel_litros or 0),
+        'custo_combustivel': float(rota.custo_combustivel or 0),
+        'publicada': bool(rota.publicada_em),
+    }
+
+
+@require_POST
+@requer_permissao('pdv', 'editar')
+def delivery_rota_criar(request):
+    from apps.pdv.models import RotaDelivery
+    try:
+        corpo = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+    nome = str(corpo.get('nome') or '').strip()[:100]
+    if not nome:
+        return JsonResponse({'erro': 'Informe um nome para a rota.'}, status=400)
+    rota = RotaDelivery.objects.create(filial=request.filial_ativa, nome=nome)
+    return JsonResponse({'ok': True, 'rota': _delivery_rota_serializar(rota)})
+
+
+def _decimal_rota(valor, casas='0.00'):
+    try:
+        return Decimal(str(valor or 0)).quantize(Decimal(casas))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal(casas)
+
+
+@require_POST
+@requer_permissao('pdv', 'editar')
+def delivery_rota_salvar(request, pk):
+    from apps.pdv.models import RotaDelivery
+    rota = get_object_or_404(RotaDelivery.objects.filter(filial=request.filial_ativa), pk=pk)
+    if rota.status == RotaDelivery.Status.FINALIZADA:
+        return JsonResponse({'erro': 'Uma rota finalizada não pode ser alterada.'}, status=400)
+    try:
+        corpo = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+    nome = str(corpo.get('nome') or rota.nome).strip()[:100]
+    estado = corpo.get('estado') if isinstance(corpo.get('estado'), dict) else {}
+    conferencia = corpo.get('conferencia_itens')
+    if not nome:
+        return JsonResponse({'erro': 'Informe um nome para a rota.'}, status=400)
+    rota.nome = nome
+    rota.estado = estado
+    rota.entregador = str(estado.get('driver') or '').strip()[:100]
+    rota.pedido_ids = [
+        int(chave.split(':', 1)[1]) for chave in estado.get('selected', [])
+        if isinstance(chave, str) and chave.startswith('pedido:') and chave.split(':', 1)[1].isdigit()
+    ]
+    rota.paradas_extras = list((estado.get('manualStops') or {}).values())
+    rota.ordem_paradas = list(estado.get('selected') or [])
+    if isinstance(conferencia, dict):
+        rota.conferencia_itens = conferencia
+    resultado = estado.get('result') if isinstance(estado.get('result'), dict) else {}
+    rota.distancia_km = _decimal_rota(resultado.get('distancia_km'))
+    rota.tempo_total_s = max(0, int(resultado.get('tempo_total_s') or 0))
+    autonomia = _decimal_rota(estado.get('fuelAutonomy'))
+    preco = _decimal_rota(estado.get('fuelPrice'))
+    litros = rota.distancia_km / autonomia if autonomia > 0 else Decimal('0')
+    rota.combustivel_litros = litros.quantize(Decimal('0.001'))
+    rota.custo_combustivel = (litros * preco).quantize(Decimal('0.01'))
+    rota.save()
+    return JsonResponse({'ok': True, 'rota': _delivery_rota_serializar(rota)})
+
+
+@require_POST
+@requer_permissao('pdv', 'editar')
+def delivery_rota_finalizar(request, pk):
+    from apps.pdv.models import RotaDelivery
+    with tenant_atomic():
+        rota = get_object_or_404(
+            RotaDelivery.objects.filter(filial=request.filial_ativa).select_for_update(), pk=pk,
+        )
+        pendentes = list(
+            VendaPDV.objects.for_filial(request.filial_ativa)
+            .filter(pk__in=rota.pedido_ids)
+            .exclude(status_delivery__in=[VendaPDV.StatusDelivery.ENTREGUE, VendaPDV.StatusDelivery.FINALIZADO])
+            .values_list('numero_venda', flat=True)
+        )
+        extras = {
+            str(item.get('id')) for item in rota.paradas_extras
+            if isinstance(item, dict) and item.get('id')
+        }
+        extras_pendentes = extras - set(rota.paradas_extras_concluidas or [])
+        if not rota.pedido_ids and not extras:
+            return JsonResponse({'erro': 'Adicione ao menos uma parada antes de finalizar a rota.'}, status=400)
+        if pendentes or extras_pendentes:
+            return JsonResponse({
+                'erro': 'Conclua todas as entregas e paradas antes de finalizar a rota.',
+                'pedidos_pendentes': pendentes,
+            }, status=400)
+        rota.finalizar()
+        rota.save(update_fields=['status', 'finalizada_em', 'ativa', 'updated_at'])
+    return JsonResponse({'ok': True})
+
+
+@require_GET
+@requer_permissao('pdv', 'ver')
+def delivery_rota_situacao(request, pk):
+    from apps.pdv.models import RotaDelivery
+    rota = get_object_or_404(RotaDelivery.objects.filter(filial=request.filial_ativa), pk=pk)
+    status_pedidos = dict(
+        VendaPDV.objects.for_filial(request.filial_ativa)
+        .filter(pk__in=rota.pedido_ids)
+        .values_list('pk', 'status_delivery')
+    )
+    pendentes = [
+        pk for pk in rota.pedido_ids
+        if status_pedidos.get(int(pk)) not in (
+            VendaPDV.StatusDelivery.ENTREGUE, VendaPDV.StatusDelivery.FINALIZADO,
+        )
+    ]
+    extras = {
+        str(item.get('id')) for item in rota.paradas_extras
+        if isinstance(item, dict) and item.get('id')
+    }
+    extras_concluidas = {str(item) for item in rota.paradas_extras_concluidas or []}
+    return JsonResponse({
+        'ok': True, 'concluida': bool(rota.pedido_ids or extras) and not pendentes and extras <= extras_concluidas,
+        'pedidos_pendentes': pendentes, 'status_pedidos': status_pedidos,
+        'paradas_extras_concluidas': sorted(extras_concluidas),
+    })
+
+
+@require_GET
+@requer_permissao('pdv', 'ver')
+def delivery_rotas_relatorio_consumo(request):
+    from apps.pdv.models import RotaDelivery
+    hoje = timezone.localdate()
+    periodo = request.GET.get('periodo', 'mensal')
+    try:
+        if periodo == 'diario':
+            inicio = fim = hoje
+        elif periodo == 'semanal':
+            inicio, fim = hoje - datetime.timedelta(days=hoje.weekday()), hoje
+        elif periodo == 'personalizado':
+            inicio = datetime.date.fromisoformat(request.GET.get('inicio', ''))
+            fim = datetime.date.fromisoformat(request.GET.get('fim', ''))
+        else:
+            inicio, fim = hoje.replace(day=1), hoje
+    except ValueError:
+        return JsonResponse({'erro': 'Período inválido.'}, status=400)
+    if inicio > fim:
+        inicio, fim = fim, inicio
+    qs = RotaDelivery.objects.filter(filial=request.filial_ativa).filter(
+        status=RotaDelivery.Status.FINALIZADA,
+        finalizada_em__date__range=(inicio, fim),
+    ).order_by('-finalizada_em')
+    rotas = list(qs)
+    total_paradas = sum(len(rota.pedido_ids or []) + len(rota.paradas_extras or []) for rota in rotas)
+    distancia = sum((rota.distancia_km for rota in rotas), Decimal('0'))
+    litros = sum((rota.combustivel_litros for rota in rotas), Decimal('0'))
+    custo = sum((rota.custo_combustivel for rota in rotas), Decimal('0'))
+    return JsonResponse({'ok': True, 'inicio': inicio.isoformat(), 'fim': fim.isoformat(), 'resumo': {
+        'rotas': len(rotas), 'paradas': total_paradas, 'distancia_km': float(distancia),
+        'combustivel_litros': float(litros), 'custo': float(custo),
+        'custo_por_entrega': float(custo / total_paradas) if total_paradas else 0,
+        'km_por_rota': float(distancia / len(rotas)) if rotas else 0,
+    }, 'rotas': [{
+        'id': rota.pk, 'nome': rota.nome,
+        'finalizada_em': timezone.localtime(rota.finalizada_em).strftime('%d/%m/%Y %H:%M'),
+        'entregador': rota.entregador, 'paradas': len(rota.pedido_ids or []) + len(rota.paradas_extras or []),
+        'distancia_km': float(rota.distancia_km), 'combustivel_litros': float(rota.combustivel_litros),
+        'custo': float(rota.custo_combustivel),
+    } for rota in rotas]})
 
 
 @require_POST
@@ -4208,13 +4417,29 @@ def delivery_rota_calcular(request):
 @require_POST
 @requer_permissao('pdv', 'ver')
 def delivery_rota_publicar(request):
-    """Atualiza o conteúdo do link fixo usado pelo motoboy."""
-    from apps.pdv.models import RotaDeliveryPublica
+    """Publica uma rota operacional no link exclusivo do motoboy."""
+    from apps.pdv.models import RotaDelivery, RotaDeliveryPublica
 
     try:
         corpo = json.loads(request.body or b'{}')
     except ValueError:
         return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+
+    rota_id = corpo.get('rota_id')
+    rota_legada = None
+    if rota_id:
+        rota = get_object_or_404(
+            RotaDelivery.objects.filter(filial=request.filial_ativa), pk=rota_id,
+        )
+    else:
+        # Compatibilidade com integrações e links criados antes das rotas em abas.
+        rota_legada, _ = RotaDeliveryPublica.objects.get_or_create(filial=request.filial_ativa)
+        rota, _ = RotaDelivery.objects.get_or_create(
+            filial=request.filial_ativa, token=rota_legada.token,
+            defaults={'nome': 'Rota principal'},
+        )
+    if rota.status == RotaDelivery.Status.FINALIZADA:
+        return JsonResponse({'erro': 'Esta rota já foi finalizada.'}, status=400)
 
     ids = []
     for bruto in corpo.get('pedidos') or []:
@@ -4292,9 +4517,6 @@ def delivery_rota_publicar(request):
         if re.fullmatch(r'\d{2}:\d{2}', eta):
             item['eta'] = eta
     with tenant_atomic():
-        rota, _criada = RotaDeliveryPublica.objects.get_or_create(
-            filial=request.filial_ativa,
-        )
         rota.pedido_ids = ids
         rota.pedido_etas = etas
         rota.pedido_status_anteriores = {}
@@ -4302,8 +4524,17 @@ def delivery_rota_publicar(request):
         rota.ordem_paradas = ordem_paradas
         rota.paradas_extras_concluidas = []
         rota.entregador = entregador
+        rota.status = RotaDelivery.Status.EM_ROTA
+        rota.publicada_em = timezone.now()
         rota.ativa = True
         rota.save()
+        if rota_legada is not None:
+            for campo in (
+                'pedido_ids', 'pedido_etas', 'pedido_status_anteriores', 'paradas_extras',
+                'ordem_paradas', 'paradas_extras_concluidas', 'entregador', 'ativa',
+            ):
+                setattr(rota_legada, campo, getattr(rota, campo))
+            rota_legada.save()
         if entregador:
             VendaPDV.objects.for_filial(request.filial_ativa).filter(pk__in=ids).update(
                 entregador=entregador,
@@ -4312,7 +4543,7 @@ def delivery_rota_publicar(request):
     url = request.build_absolute_uri(
         reverse('delivery_publico:painel', args=[rota.token]),
     )
-    response = JsonResponse({'ok': True, 'url': url, 'fixo': not _criada})
+    response = JsonResponse({'ok': True, 'url': url, 'fixo': True})
     response['Cache-Control'] = 'private, no-store'
     return response
 

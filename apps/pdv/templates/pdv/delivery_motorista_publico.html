@@ -19,7 +19,7 @@
 <main>
   <header class="top">
     <div class="eyebrow">{{ rota.filial.nome_fantasia|default:rota.filial.razao_social }}</div>
-    <h1>Rota do Delivery</h1>
+    <h1>{{ rota.nome|default:"Rota do Delivery" }}</h1>
     <p class="sub">{% if rota.entregador %}Motoboy: {{ rota.entregador }} · {% endif %}atualizada em {{ rota.updated_at|date:"d/m/Y H:i" }}</p>
     <div class="summary">
       <div class="stat"><small>Paradas</small><strong>{{ total }}</strong></div>

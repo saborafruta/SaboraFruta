@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 
-from apps.pdv.models import RotaDeliveryPublica, VendaPDV
+from apps.pdv.models import RotaDelivery, VendaPDV
 
 
 def _privado(response):
@@ -23,9 +23,24 @@ def _buscar_rota(token):
     if len(token) != 22:
         raise Http404
     return get_object_or_404(
-        RotaDeliveryPublica._base_manager.select_related('filial'),
+        RotaDelivery._base_manager.select_related('filial'),
         token=token, ativa=True,
     )
+
+
+def _sincronizar_rota_legada(rota):
+    """Mantém links antigos coerentes durante a transição para múltiplas rotas."""
+    from apps.pdv.models import RotaDeliveryPublica
+    legada = RotaDeliveryPublica._base_manager.filter(
+        filial=rota.filial, token=rota.token,
+    ).first()
+    if not legada:
+        return
+    legada.pedido_status_anteriores = rota.pedido_status_anteriores
+    legada.paradas_extras_concluidas = rota.paradas_extras_concluidas
+    legada.save(update_fields=[
+        'pedido_status_anteriores', 'paradas_extras_concluidas', 'updated_at',
+    ])
 
 
 def _coordenada(objeto):
@@ -246,7 +261,7 @@ def concluir(request, token, pk):
 
     with transaction.atomic():
         rota = get_object_or_404(
-            RotaDeliveryPublica._base_manager.select_for_update(),
+            RotaDelivery._base_manager.select_for_update(),
             pk=rota.pk, ativa=True,
         )
         venda = get_object_or_404(
@@ -280,6 +295,7 @@ def concluir(request, token, pk):
             venda.mudar_status_delivery(novo_status)
         rota.pedido_status_anteriores = anteriores
         rota.save(update_fields=['pedido_status_anteriores', 'updated_at'])
+        _sincronizar_rota_legada(rota)
     if 'application/json' in request.headers.get('Accept', ''):
         return _privado(JsonResponse({
             'ok': True,
@@ -309,7 +325,7 @@ def concluir_parada_extra(request, token, parada_id):
         concluida = corpo.get('entregue', True) is not False
     with transaction.atomic():
         rota = get_object_or_404(
-            RotaDeliveryPublica._base_manager.select_for_update(), pk=rota.pk, ativa=True,
+            RotaDelivery._base_manager.select_for_update(), pk=rota.pk, ativa=True,
         )
         concluidas = {str(item) for item in (rota.paradas_extras_concluidas or [])}
         if concluida:
@@ -318,6 +334,7 @@ def concluir_parada_extra(request, token, parada_id):
             concluidas.discard(parada_id)
         rota.paradas_extras_concluidas = sorted(concluidas)
         rota.save(update_fields=['paradas_extras_concluidas', 'updated_at'])
+        _sincronizar_rota_legada(rota)
     if 'application/json' in request.headers.get('Accept', ''):
         return _privado(JsonResponse({'ok': True, 'concluido': concluida}))
     return redirect(reverse('delivery_publico:painel', args=[token]) + f'#parada-{parada_id}')

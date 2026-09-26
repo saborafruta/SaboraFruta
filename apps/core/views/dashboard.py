@@ -284,6 +284,11 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                         monetario=Sum('valor_total'),
                     )
                 )
+                delivery_por_cliente = {
+                    row['cliente_id']: row['quantidade']
+                    for row in pdv_rfm_base.filter(delivery=True)
+                    .values('cliente_id').annotate(quantidade=Count('id'))
+                }
                 # O "M" do RFM e valor gasto pelo cliente: Doacao/Permuta nao
                 # entram, senao o cliente sobe de segmento sem ter pago nada.
                 ajustes_rfm = ajuste_por_cliente(pdv_rfm_base)
@@ -357,6 +362,11 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                             'frequencia': c['frequencia'],
                             'monetario': float(c['monetario'] or 0),
                             'R': c['R'], 'F': c['F'], 'M': c['M'],
+                            'delivery_compras': delivery_por_cliente.get(c['cliente_id'], 0),
+                            'delivery_frequente': (
+                                delivery_por_cliente.get(c['cliente_id'], 0) >= 3
+                                and delivery_por_cliente.get(c['cliente_id'], 0) / max(c['frequencia'], 1) >= .5
+                            ),
                         })
 
                     for lista in clientes_segmento.values():
