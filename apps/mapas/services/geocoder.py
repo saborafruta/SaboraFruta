@@ -16,6 +16,7 @@ cadastro de um cliente.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -105,7 +106,7 @@ class NominatimGeocoder(GeocoderBase):
             f'{self.base_url}/search',
             params={
                 'q': endereco, 'format': 'jsonv2', 'limit': 1,
-                'countrycodes': 'br', 'addressdetails': 0,
+                'countrycodes': 'br', 'addressdetails': 1,
             },
             headers={'User-Agent': self.user_agent, 'Accept-Language': 'pt-BR'},
             timeout=c.GEOCODER_TIMEOUT_S,
@@ -116,11 +117,63 @@ class NominatimGeocoder(GeocoderBase):
             return Resultado(erro='endereco nao encontrado')
 
         item = dados[0]
+        cep_solicitado = _cep_no_texto(endereco)
+        cep_encontrado = re.sub(r'\D', '', str((item.get('address') or {}).get('postcode') or ''))
+        if cep_solicitado and cep_encontrado != cep_solicitado:
+            return Resultado(erro='resultado incompatível com o CEP informado')
         return Resultado(
             latitude=float(item['lat']),
             longitude=float(item['lon']),
             precisao=_precisao_nominatim(item),
         )
+
+
+class ArcGISGeocoder(GeocoderBase):
+    """Geocodificador pontual do ArcGIS, usado como alternativa de precisão.
+
+    A resposta só é aceita quando tem boa pontuação e, havendo CEP na busca,
+    o CEP retornado é exatamente o solicitado. Isso evita o falso positivo em
+    que uma busca por CEP encontra um estabelecimento chamado "Brasil" em
+    outro bairro.
+    """
+
+    nome = 'arcgis'
+    permite_uso_comercial = False
+
+    def geocodificar(self, endereco: str) -> Resultado:
+        resp = requests.get(
+            'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates',
+            params={
+                'SingleLine': endereco, 'f': 'json', 'countryCode': 'BRA',
+                'maxLocations': 1, 'outFields': 'Match_addr,Addr_type,Postal',
+            },
+            headers={'User-Agent': 'ERP-iNoovaTed/1.0'},
+            timeout=c.GEOCODER_TIMEOUT_S,
+        )
+        resp.raise_for_status()
+        candidatos = resp.json().get('candidates') or []
+        if not candidatos:
+            return Resultado(erro='endereco nao encontrado')
+        candidato = candidatos[0]
+        if float(candidato.get('score') or 0) < 80:
+            return Resultado(erro='resultado com baixa confiança')
+        cep_solicitado = _cep_no_texto(endereco)
+        cep_encontrado = re.sub(r'\D', '', str((candidato.get('attributes') or {}).get('Postal') or ''))
+        if cep_solicitado and cep_encontrado != cep_solicitado:
+            return Resultado(erro='resultado incompatível com o CEP informado')
+        local = candidato.get('location') or {}
+        if local.get('y') is None or local.get('x') is None:
+            return Resultado(erro='coordenada ausente')
+        tipo = str((candidato.get('attributes') or {}).get('Addr_type') or '').lower()
+        return Resultado(
+            latitude=float(local['y']), longitude=float(local['x']),
+            precisao='exata' if tipo in ('pointaddress', 'subaddress') else 'aproximada',
+        )
+
+
+def _cep_no_texto(texto: str) -> str:
+    encontrado = re.search(r'(?<!\d)(\d{5})-?(\d{3})(?!\d)', texto or '')
+    return ''.join(encontrado.groups()) if encontrado else ''
 
 
 class LocationIQGeocoder(GeocoderBase):

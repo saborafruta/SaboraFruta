@@ -356,7 +356,7 @@
 </div>
 <div class="dr-address-modal-bg" id="manualStopModal" onclick="if(event.target===this)closeManualStopModal()">
   <form class="dr-address-modal" id="manualStopForm">
-    <h2>Adicionar parada manual</h2>
+    <h2 id="manualStopTitle">Adicionar parada manual</h2>
     <p>Ela entra na otimização, no mapa e no painel do motoboy como qualquer outra parada.</p>
     <div class="dr-address-grid">
       <label class="dr-address-wide">O que será feito nesta parada?<textarea id="manualObservation" maxlength="240" required placeholder="Ex.: buscar embalagem, deixar documento, visitar cliente potencial"></textarea></label>
@@ -425,6 +425,7 @@
   let opportunitiesCache = [];
   let pendingObservation = null;
   let pdvSourceKey = null;
+  let editingManualKey = null;
 
   function esc(value) { const d=document.createElement('div'); d.textContent=value ?? ''; return d.innerHTML; }
   function money(value) { return Number(value || 0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
@@ -494,10 +495,11 @@
       <div class="dr-card ${manual?'dr-manual-card':''}" draggable="true" data-route-id="${esc(key)}">
         <span class="dr-order">${i+1}</span>
         <div><div class="dr-client">☰ &nbsp;${manual?(opportunity?'Oportunidade · ':'Parada manual · ')+esc(o.observacao):'#'+esc(o.numero)+' · '+esc(o.cliente)}</div><div class="dr-meta">${esc(manual?o.endereco_texto:address(o))}${state.result?.paradas?.[i]?.eta?` · ETA <strong>${esc(state.result.paradas[i].eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge ${manual?'warn':'blue'}">${opportunity?'Oportunidade de Venda':manual?'Parada avulsa':esc(o.status_label)}</span>${opportunity&&o.rfm?`<span class="dr-badge">${esc(o.rfm)}</span>`:''}${state.locked.has(key)?'<span class="dr-badge">Posição travada</span>':''}</div></div>
-        <div class="dr-card-actions">${manual?`<button class="dr-edit-address" type="button" data-edit-stop="${esc(key)}">✎ Observação</button><button class="dr-edit-address" type="button" data-sale-stop="${esc(key)}">＋ Venda</button><button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:''}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição':'Travar posição'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
+        <div class="dr-card-actions">${manual?`<button class="dr-edit-address" type="button" data-edit-manual="${esc(key)}">✎ Endereço</button><button class="dr-edit-address" type="button" data-edit-stop="${esc(key)}">✎ Observação</button><button class="dr-edit-address" type="button" data-sale-stop="${esc(key)}">＋ Venda</button><button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:''}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição':'Travar posição'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
       </div>`}).join(''):'<div class="dr-empty">Marque pedidos ou adicione uma parada manual.</div>';
     document.querySelectorAll('[data-lock]').forEach(b=>b.addEventListener('click',()=>{const key=b.dataset.lock;state.locked.has(key)?state.locked.delete(key):state.locked.add(key);renderRoute();}));
     document.querySelectorAll('[data-remove-stop]').forEach(b=>b.addEventListener('click',()=>removeManualStop(b.dataset.removeStop)));
+    document.querySelectorAll('[data-edit-manual]').forEach(b=>b.addEventListener('click',()=>openManualStopModal(b.dataset.editManual)));
     document.querySelectorAll('[data-edit-stop]').forEach(b=>b.addEventListener('click',()=>openStopObservationForEdit(b.dataset.editStop)));
     document.querySelectorAll('[data-sale-stop]').forEach(b=>b.addEventListener('click',()=>openPdvForStop(b.dataset.saleStop)));
     document.querySelectorAll('[data-route-id]').forEach(el=>{
@@ -567,8 +569,19 @@
     }catch(error){toast(error.message,true);}finally{button.disabled=false;}
   }
 
-  function openManualStopModal(){document.getElementById('manualStopModal').classList.add('open');document.getElementById('manualCepStatus').textContent='Digite o CEP para preencher o endereço automaticamente.';document.getElementById('manualObservation').focus();}
-  window.closeManualStopModal=function(){document.getElementById('manualStopModal').classList.remove('open');};
+  function openManualStopModal(key=null){
+    editingManualKey=key;const stop=key?stopByKey(key):null, endereco=stop?.endereco||{};
+    if(!stop)document.getElementById('manualStopForm').reset();
+    document.getElementById('manualStopTitle').textContent=stop?'Editar parada manual':'Adicionar parada manual';
+    document.getElementById('manualStopSave').textContent=stop?'Localizar e atualizar':'Localizar e adicionar';
+    document.getElementById('manualObservation').value=stop?.observacao||'';
+    document.getElementById('manualCep').value=formatCep(endereco.cep||'');
+    document.getElementById('manualStreet').value=endereco.rua||'';document.getElementById('manualNumber').value=endereco.numero||'';
+    document.getElementById('manualComplement').value=endereco.complemento||'';document.getElementById('manualDistrict').value=endereco.bairro||'';
+    document.getElementById('manualCity').value=endereco.cidade||'';document.getElementById('manualState').value=endereco.uf||'';
+    document.getElementById('manualStopModal').classList.add('open');document.getElementById('manualCepStatus').textContent=stop?'Confira o endereço e localize novamente.':'Digite o CEP para preencher o endereço automaticamente.';document.getElementById('manualObservation').focus();
+  }
+  window.closeManualStopModal=function(){editingManualKey=null;document.getElementById('manualStopModal').classList.remove('open');};
   let manualCepTimer=null;
   function formatCep(value){const digits=String(value||'').replace(/\D/g,'').slice(0,8);return digits.length>5?`${digits.slice(0,5)}-${digits.slice(5)}`:digits;}
   async function lookupManualCep(){
@@ -601,11 +614,12 @@
     try{
       const resp=await fetch(manualStopUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify(payload)});
       const data=await responseJson(resp);if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
-      const id=(crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random().toString(16).slice(2)}`).replace(/[^a-zA-Z0-9_-]/g,'');
-      state.manualStops[id]={id,tipo:'manual',observacao:data.observacao,endereco:data.endereco,endereco_texto:data.endereco_texto,lat:data.lat,lng:data.lng};
-      state.selected.push(`manual:${id}`);state.result=null;
+      const existing=editingManualKey?stopByKey(editingManualKey):null;
+      const id=existing?existing.id:(crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random().toString(16).slice(2)}`).replace(/[^a-zA-Z0-9_-]/g,'');
+      state.manualStops[id]={...(existing||{}),id,tipo:'manual',observacao:data.observacao,endereco:data.endereco,endereco_texto:data.endereco_texto,lat:data.lat,lng:data.lng};
+      if(!editingManualKey)state.selected.push(`manual:${id}`);state.result=null;
       document.getElementById('manualStopForm').reset();closeManualStopModal();renderRoute();resetSummary();
-      toast('Parada manual localizada e adicionada.');scheduleAutomaticCalculation(false,150);
+      toast(existing?'Parada atualizada e localizada novamente.':'Parada manual localizada e adicionada.');scheduleAutomaticCalculation(true,150);
     }catch(error){toast(error.message,true);}finally{button.disabled=false;}
   }
   function removeManualStop(key){
@@ -833,7 +847,7 @@
   ['rfmFAutomatic','rfmMAutomatic'].forEach(id=>document.getElementById(id).addEventListener('change',toggleRfmModes));
   document.getElementById('opportunitySearch').addEventListener('input',filterOpportunities);
   ['opportunitySegment','opportunityR','opportunityF','opportunityM'].forEach(id=>document.getElementById(id).addEventListener('change',filterOpportunities));
-  document.getElementById('routeAddManual').addEventListener('click',openManualStopModal);
+  document.getElementById('routeAddManual').addEventListener('click',()=>openManualStopModal());
   document.getElementById('manualStopForm').addEventListener('submit',saveManualStop);
   document.getElementById('stopObservationForm').addEventListener('submit',saveStopObservation);
   document.getElementById('manualCepLookup').addEventListener('click',lookupManualCep);

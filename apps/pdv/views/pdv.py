@@ -3782,10 +3782,13 @@ def _delivery_normalizar_endereco_manual(corpo):
 
 
 def _delivery_endereco_manual_texto(endereco):
+    cep = re.sub(r'\D', '', str(endereco.get('cep') or ''))
+    if len(cep) == 8:
+        cep = f'{cep[:5]}-{cep[5:]}'
     return ', '.join(filter(None, [
         endereco.get('rua'), endereco.get('numero'), endereco.get('complemento'),
         endereco.get('bairro'), endereco.get('cidade'), endereco.get('uf'),
-        endereco.get('cep'),
+        cep,
     ]))
 
 
@@ -3819,7 +3822,7 @@ def _delivery_consultas_geocodificacao_manual(endereco):
 @requer_permissao('pdv', 'ver')
 def delivery_rota_localizar_parada_manual(request):
     """Valida e geocodifica uma parada avulsa sem alterar cadastro de cliente."""
-    from apps.mapas.services.geocoder import GeocodificacaoService
+    from apps.mapas.services.geocoder import ArcGISGeocoder, GeocodificacaoService
 
     try:
         corpo = json.loads(request.body or b'{}')
@@ -3834,13 +3837,20 @@ def delivery_rota_localizar_parada_manual(request):
         return JsonResponse({'erro': 'Informe o que será feito nesta parada.'}, status=400)
     texto = _delivery_endereco_manual_texto(endereco)
     try:
-        servico = GeocodificacaoService()
+        consultas = _delivery_consultas_geocodificacao_manual(endereco)
         resultado = None
-        for consulta in _delivery_consultas_geocodificacao_manual(endereco):
+        # A busca estruturada do ArcGIS costuma localizar número e CEP com
+        # mais precisão. O provider configurado continua como fallback.
+        if consultas:
+            consulta = consultas[0]
+            chave = hashlib.md5(f'manual-arcgis-v1:{consulta.lower()}'.encode('utf-8')).hexdigest()
+            resultado = GeocodificacaoService(geocoder=ArcGISGeocoder()).resolver(consulta, chave)
+        servico = GeocodificacaoService()
+        for consulta in (consultas if not resultado or not resultado.ok else []):
             # CacheGeocodificacao usa a mesma chave MD5 de 32 caracteres do
             # CoordenadaMixin. SHA-256 gera 64 caracteres e estoura a PK
             # varchar(32) no PostgreSQL ao gravar um endereço ainda não visto.
-            endereco_hash = hashlib.md5(consulta.lower().encode('utf-8')).hexdigest()
+            endereco_hash = hashlib.md5(f'manual-v3:{consulta.lower()}'.encode('utf-8')).hexdigest()
             resultado = servico.resolver(consulta, endereco_hash)
             if resultado.ok:
                 break

@@ -4,7 +4,7 @@ Testes do módulo de Mapas.
 Os testes de proximidade exigem Postgres com `cube`/`earthdistance` (as
 funções são do banco, não do Python) e são pulados em outro backend.
 """
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.test import TestCase
 from django.db import connection
@@ -12,7 +12,7 @@ from django.db import connection
 from apps.mapas import constants as c
 from apps.mapas.serializers import formatar_distancia
 from apps.mapas.services.geocoder import (
-    GeocodificacaoService, NominatimGeocoder, Resultado, _Throttle,
+    ArcGISGeocoder, GeocodificacaoService, NominatimGeocoder, Resultado, _Throttle,
 )
 
 
@@ -152,6 +152,46 @@ class GeocoderTests(TestCase):
         self.assertTrue(
             NominatimGeocoder(base_url='https://geo.minhaempresa.com').permite_uso_comercial
         )
+
+    def test_arcgis_aceita_endereco_com_cep_compativel(self):
+        resposta = Mock()
+        resposta.raise_for_status.return_value = None
+        resposta.json.return_value = {'candidates': [{
+            'score': 98.82, 'location': {'x': -35.211635, 'y': -5.859397},
+            'attributes': {'Addr_type': 'PointAddress', 'Postal': '59080-460'},
+        }]}
+        with patch('apps.mapas.services.geocoder.requests.get', return_value=resposta):
+            resultado = ArcGISGeocoder().geocodificar(
+                'Rua Arnaldo Neves da Silva, 15, Natal, RN, 59080-460, Brasil'
+            )
+        self.assertTrue(resultado.ok)
+        self.assertEqual(resultado.precisao, 'exata')
+        self.assertAlmostEqual(resultado.latitude, -5.859397)
+
+    def test_arcgis_rejeita_cep_diferente(self):
+        resposta = Mock()
+        resposta.raise_for_status.return_value = None
+        resposta.json.return_value = {'candidates': [{
+            'score': 99, 'location': {'x': -35.21, 'y': -5.81},
+            'attributes': {'Addr_type': 'PointAddress', 'Postal': '59056-100'},
+        }]}
+        with patch('apps.mapas.services.geocoder.requests.get', return_value=resposta):
+            resultado = ArcGISGeocoder().geocodificar('59080-460, Natal, RN, Brasil')
+        self.assertFalse(resultado.ok)
+        self.assertIn('CEP', resultado.erro)
+
+    def test_nominatim_rejeita_falso_positivo_de_outro_cep(self):
+        resposta = Mock()
+        resposta.raise_for_status.return_value = None
+        resposta.json.return_value = [{
+            'lat': '-5.8193078', 'lon': '-35.2126281',
+            'type': 'bank', 'class': 'amenity',
+            'address': {'postcode': '59056-100'},
+        }]
+        with patch('apps.mapas.services.geocoder.requests.get', return_value=resposta):
+            resultado = NominatimGeocoder().geocodificar('59080-460, Natal, RN, Brasil')
+        self.assertFalse(resultado.ok)
+        self.assertIn('CEP', resultado.erro)
 
 
 class ProximidadeTests(TestCase):

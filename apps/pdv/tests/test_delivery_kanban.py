@@ -198,6 +198,8 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'Fazer venda')
         self.assertContains(tela, 'stopObservationModal')
         self.assertContains(tela, 'routePdvModal')
+        self.assertContains(tela, 'data-edit-manual')
+        self.assertContains(tela, 'Localizar e atualizar')
         self.assertContains(tela, 'delivery-route-sale-completed')
         self.assertContains(tela, 'Buscando a melhor posição na rota')
         self.assertNotContains(tela, 'Waze')
@@ -435,6 +437,7 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
     def test_parada_manual_tenta_endereco_sem_complemento_e_faz_fallback(self, resolver):
         resolver.side_effect = [
             Resultado(erro='endereco nao encontrado'),
+            Resultado(erro='endereco nao encontrado'),
             Resultado(-5.87, -35.20, 'aproximada'),
         ]
 
@@ -449,15 +452,16 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         )
 
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resolver.call_count, 2)
-        primeira_consulta = resolver.call_args_list[0].args[0]
-        primeira_chave = resolver.call_args_list[0].args[1]
-        segunda_consulta = resolver.call_args_list[1].args[0]
+        self.assertEqual(resolver.call_count, 3)
+        primeira_consulta = resolver.call_args_list[1].args[0]
+        primeira_chave = resolver.call_args_list[1].args[1]
+        segunda_consulta = resolver.call_args_list[2].args[0]
         self.assertNotIn('Bloco teste', primeira_consulta)
         self.assertIn('Rua Arnaldo Neves da Silva, 15', primeira_consulta)
         self.assertEqual(len(primeira_chave), 32)
         self.assertNotIn(', 15,', segunda_consulta)
         self.assertEqual(resp.json()['endereco']['complemento'], 'Bloco teste')
+        self.assertIn('59080-460', resp.json()['endereco_texto'])
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_parada_manual_retorna_json_quando_geocodificador_falha(self, resolver):
