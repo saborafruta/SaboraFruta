@@ -3354,14 +3354,182 @@ def _delivery_rota_filial(filial):
 @xframe_options_sameorigin
 @requer_permissao('pdv', 'ver')
 def delivery_rotas(request):
+    from apps.pdv.models import RotaDeliveryPublica
+
     pedidos = [
         _delivery_rota_serializar_pedido(v)
         for v in _delivery_rota_pedidos(request.filial_ativa)
     ]
+    configuracao = RotaDeliveryPublica.objects.filter(filial=request.filial_ativa).first()
     return render(request, 'pdv/delivery_rotas.html', {
         'pedidos_json': json.dumps(pedidos, ensure_ascii=False),
         'filial_rota_json': json.dumps(_delivery_rota_filial(request.filial_ativa), ensure_ascii=False),
+        'configuracao_rota_json': json.dumps({
+            'combustivel_preco': float(configuracao.combustivel_preco) if configuracao else 0,
+            'autonomia_km_l': float(configuracao.autonomia_km_l) if configuracao else 0,
+            'minutos_por_parada': configuracao.minutos_por_parada if configuracao else 5,
+        }),
         'embedded': request.GET.get('embed') == '1',
+    })
+
+
+@require_POST
+@requer_permissao('pdv', 'ver')
+def delivery_rota_salvar_configuracao(request):
+    """Mantém os parâmetros operacionais da rota compartilhados pela filial."""
+    from apps.pdv.models import RotaDeliveryPublica
+
+    try:
+        corpo = json.loads(request.body or b'{}')
+        preco = Decimal(str(corpo.get('combustivel_preco') or 0).replace(',', '.'))
+        autonomia = Decimal(str(corpo.get('autonomia_km_l') or 0).replace(',', '.'))
+        minutos = int(corpo.get('minutos_por_parada') or 0)
+    except (ValueError, TypeError, InvalidOperation):
+        return JsonResponse({'erro': 'Informe valores válidos para a configuração.'}, status=400)
+    if preco < 0 or preco > Decimal('999999.99'):
+        return JsonResponse({'erro': 'O preço do combustível é inválido.'}, status=400)
+    if autonomia < 0 or autonomia > Decimal('999999.99'):
+        return JsonResponse({'erro': 'A autonomia é inválida.'}, status=400)
+    if minutos < 0 or minutos > 60:
+        return JsonResponse({'erro': 'O tempo por parada deve ficar entre 0 e 60 minutos.'}, status=400)
+    rota, _ = RotaDeliveryPublica.objects.get_or_create(filial=request.filial_ativa)
+    rota.combustivel_preco = preco
+    rota.autonomia_km_l = autonomia
+    rota.minutos_por_parada = minutos
+    rota.save(update_fields=[
+        'combustivel_preco', 'autonomia_km_l', 'minutos_por_parada', 'updated_at',
+    ])
+    return JsonResponse({'ok': True})
+
+
+def _delivery_pontos_oportunidades(corpo):
+    pontos = []
+    for item in corpo.get('paradas') or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            lat, lng = float(item.get('lat')), float(item.get('lng'))
+        except (TypeError, ValueError):
+            continue
+        if -34 <= lat <= 6 and -74 <= lng <= -32:
+            ponto = (lat, lng)
+            if ponto not in pontos:
+                pontos.append(ponto)
+    return pontos[:25]
+
+
+def _delivery_faixa_quintil(valor, valores):
+    if not valores or valor is None:
+        return 1
+    ordenados = sorted(valores)
+    menores_ou_iguais = sum(1 for atual in ordenados if atual <= valor)
+    return max(1, min(5, (menores_ou_iguais * 5 + len(ordenados) - 1) // len(ordenados)))
+
+
+@require_POST
+@requer_permissao('pdv', 'ver')
+def delivery_rota_oportunidades(request):
+    """Sugere clientes de alto potencial próximos das paradas já planejadas."""
+    from apps.mapas.services.proximidade import ProximidadeService
+
+    try:
+        corpo = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'erro': 'JSON inválido.'}, status=400)
+    if not isinstance(corpo, dict):
+        return JsonResponse({'erro': 'Envie um objeto JSON.'}, status=400)
+    pontos = _delivery_pontos_oportunidades(corpo)
+    if not pontos:
+        return JsonResponse({'erro': 'Gere uma rota para buscar oportunidades no caminho.'}, status=400)
+    try:
+        raio_m = int(corpo.get('raio_m') or 3000)
+    except (TypeError, ValueError):
+        raio_m = 3000
+    raio_m = max(500, min(raio_m, 10000))
+    excluir = {
+        int(item.get('cliente_id')) for item in (corpo.get('paradas') or [])
+        if isinstance(item, dict) and str(item.get('cliente_id') or '').isdigit()
+    }
+    encontrados = {}
+    for lat, lng in pontos:
+        for cliente in ProximidadeService.clientes_proximos(
+            filial=request.filial_ativa, latitude=lat, longitude=lng,
+            raio_m=raio_m, limite=30,
+        ):
+            if cliente.pk in excluir:
+                continue
+            distancia = float(getattr(cliente, 'distancia_m', 0) or 0)
+            anterior = encontrados.get(cliente.pk)
+            if anterior is None or distancia < anterior[1]:
+                encontrados[cliente.pk] = (cliente, distancia)
+
+    candidatos = [item[0] for item in encontrados.values()]
+    frequencias = [getattr(getattr(c, 'recompra', None), 'qtd_compras', 0) for c in candidatos]
+    monetarios = [float(getattr(getattr(c, 'recompra', None), 'valor_total_periodo', 0) or 0) for c in candidatos]
+    oportunidades = []
+    for cliente in candidatos:
+        recompra = getattr(cliente, 'recompra', None)
+        distancia = encontrados[cliente.pk][1]
+        dias = recompra.dias_desde_ultima_compra if recompra else None
+        if dias is None:
+            r = 1
+        elif dias <= 30:
+            r = 5
+        elif dias <= 60:
+            r = 4
+        elif dias <= 90:
+            r = 3
+        elif dias <= 180:
+            r = 2
+        else:
+            r = 1
+        qtd = recompra.qtd_compras if recompra else 0
+        total = float(recompra.valor_total_periodo or 0) if recompra else 0
+        f = _delivery_faixa_quintil(qtd, frequencias)
+        m = _delivery_faixa_quintil(total, monetarios)
+        total_rfm = r + f + m
+        if total_rfm >= 13:
+            segmento = 'Campeão'
+        elif total_rfm >= 10:
+            segmento = 'Cliente forte'
+        elif total_rfm >= 7:
+            segmento = 'Potencial'
+        elif r <= 2:
+            segmento = 'Reativação'
+        else:
+            segmento = 'Em desenvolvimento'
+        score_crm = recompra.score if recompra else 0
+        proximidade = max(0, 100 - (distancia / raio_m * 100))
+        prioridade = round(score_crm * .65 + proximidade * .25 + (total_rfm / 15 * 10))
+        desvio_km = round(distancia * 2 / 1000, 1)
+        telefone = (cliente.celular or cliente.telefone or '').strip()
+        whatsapp = re.sub(r'\D', '', telefone)
+        if len(whatsapp) in (10, 11):
+            whatsapp = '55' + whatsapp
+        endereco = {
+            'cep': cliente.cep or '', 'rua': cliente.endereco or '',
+            'numero': cliente.numero or '', 'complemento': cliente.complemento or '',
+            'bairro': cliente.bairro or '', 'cidade': cliente.cidade or '', 'uf': cliente.uf or '',
+        }
+        oportunidades.append({
+            'id': cliente.pk,
+            'nome': cliente.nome_fantasia or cliente.razao_social or f'Cliente {cliente.pk}',
+            'telefone': telefone, 'whatsapp': whatsapp,
+            'lat': float(cliente.latitude), 'lng': float(cliente.longitude),
+            'endereco': endereco, 'endereco_texto': _delivery_endereco_manual_texto(endereco),
+            'distancia_m': round(distancia), 'desvio_km_estimado': desvio_km,
+            'desvio_min_estimado': round(desvio_km / 25 * 60),
+            'rfm': f'R{r} F{f} M{m}', 'rfm_total': total_rfm, 'segmento_rfm': segmento,
+            'score_crm': score_crm, 'prioridade': prioridade,
+            'status_recompra': recompra.get_status_display() if recompra else 'Sem histórico suficiente',
+            'dias_sem_comprar': dias,
+            'valor_medio': float(recompra.valor_medio or 0) if recompra else 0,
+            'qtd_compras': qtd,
+        })
+    oportunidades.sort(key=lambda item: (-item['prioridade'], item['distancia_m'], item['nome']))
+    return JsonResponse({
+        'oportunidades': oportunidades[:20], 'total': len(oportunidades), 'raio_m': raio_m,
+        'criterio': 'momento de recompra + RFM + proximidade da rota',
     })
 
 
@@ -3877,8 +4045,19 @@ def delivery_rota_publicar(request):
         if not identificador or identificador in extras_ids or not observacao:
             continue
         endereco = item.get('endereco') if isinstance(item.get('endereco'), dict) else {}
+        try:
+            score_crm = max(0, min(100, int(item.get('score_crm') or 0)))
+        except (TypeError, ValueError):
+            score_crm = 0
         extras.append({
             'id': identificador, 'tipo': 'manual', 'observacao': observacao,
+            'origem': 'oportunidade' if item.get('origem') == 'oportunidade' else 'manual',
+            'cliente_id': int(item['cliente_id']) if str(item.get('cliente_id') or '').isdigit() else None,
+            'telefone': str(item.get('telefone') or '')[:40],
+            'whatsapp': re.sub(r'\D', '', str(item.get('whatsapp') or ''))[:15],
+            'rfm': str(item.get('rfm') or '')[:30],
+            'segmento_rfm': str(item.get('segmento_rfm') or '')[:60],
+            'score_crm': score_crm,
             'endereco': {k: str(v or '')[:255] for k, v in endereco.items() if k in {
                 'cep', 'rua', 'numero', 'complemento', 'bairro', 'cidade', 'uf',
             }},

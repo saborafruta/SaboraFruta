@@ -103,6 +103,16 @@
   .dr-address-grid textarea { width:100%; min-height:72px; resize:vertical; margin-top:4px; border:1px solid #3a4557; border-radius:8px; background:#171a1f; padding:9px 10px; color:#f3f6fb; font:inherit; font-size:12px; outline:none; }
   .dr-address-wide { grid-column:1/-1; }
   .dr-address-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
+  .dr-opportunity-modal { width:min(920px,100%); max-height:88vh; display:flex; flex-direction:column; }
+  .dr-opportunity-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:8px 0 10px; }
+  .dr-opportunity-toolbar select { border:1px solid #3a4557; border-radius:8px; background:#171a1f; padding:8px 10px; color:#f3f6fb; }
+  .dr-opportunity-list { overflow:auto; display:grid; gap:7px; padding-right:3px; }
+  .dr-opportunity { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; border:1px solid #303744; border-radius:10px; background:#252a31; padding:10px 12px; }
+  .dr-opportunity-title { color:#f3f6fb; font-size:12px; font-weight:850; }
+  .dr-opportunity-meta { margin-top:4px; color:#91a0b4; font-size:10px; line-height:1.5; }
+  .dr-opportunity-reason { margin-top:6px; color:#f7c66d; font-size:10px; font-weight:700; }
+  .dr-rfm { display:inline-flex; margin-right:5px; border-radius:999px; background:#3a2d13; padding:3px 7px; color:#ffd36d; font-size:9px; font-weight:900; }
+  .dr-priority { color:#67e3b0; font-weight:900; }
   body.tema-claro .dr-title, body.tema-claro .dr-stat-value, body.tema-claro .dr-panel-title, body.tema-claro .dr-client { color:#142033; }
   body.tema-claro .dr-subtitle, body.tema-claro .dr-meta { color:#65748a; }
   body.tema-claro .dr-stat, body.tema-claro .dr-panel, body.tema-claro .dr-footer { background:#fff; border-color:#dfe5ee; }
@@ -118,6 +128,7 @@
 {% block content %}
 {{ pedidos_json|json_script:"delivery-route-orders-raw" }}
 {{ filial_rota_json|json_script:"delivery-route-branch-raw" }}
+{{ configuracao_rota_json|json_script:"delivery-route-config-raw" }}
 <div class="dr-shell" id="deliveryRouteApp">
   <div class="dr-head">
     <div>
@@ -126,6 +137,7 @@
       <div class="dr-subtitle">Selecione pedidos, organize a sequência e gere a melhor rota respeitando suas prioridades.</div>
     </div>
     <div class="dr-actions">
+      <button class="dr-button green" id="routeOpportunities" type="button">✦ Oportunidades de Venda</button>
       <button class="dr-button" id="routeAddManual" type="button">＋ Parada manual</button>
       <button class="dr-button primary" id="routeGenerate" title="Remove as travas e busca a menor rota para todos os pedidos">Melhor rota</button>
       <button class="dr-button" id="routeOptimize" title="Mantém posições travadas e reorganiza somente as demais">Reotimizar livres</button>
@@ -173,6 +185,20 @@
   </div>
 </div>
 <div class="dr-toast" id="routeToast"></div>
+<div class="dr-address-modal-bg" id="opportunityModal" onclick="if(event.target===this)closeOpportunityModal()">
+  <section class="dr-address-modal dr-opportunity-modal">
+    <h2>Oportunidades de Venda</h2>
+    <p>Clientes classificados por momento de recompra, RFM e proximidade das paradas atuais.</p>
+    <div class="dr-opportunity-toolbar">
+      <label style="color:#aab6c7;font-size:10px;font-weight:800;">Buscar em até
+        <select id="opportunityRadius"><option value="1500">1,5 km</option><option value="3000" selected>3 km</option><option value="5000">5 km</option><option value="10000">10 km</option></select>
+      </label>
+      <button class="dr-button" type="button" id="opportunityReload">Atualizar sugestões</button>
+    </div>
+    <div class="dr-opportunity-list" id="opportunityList"><div class="dr-empty">Gerando sugestões…</div></div>
+    <div class="dr-address-modal-actions"><button class="dr-button" type="button" onclick="closeOpportunityModal()">Fechar</button></div>
+  </section>
+</div>
 <div class="dr-address-modal-bg" id="manualStopModal" onclick="if(event.target===this)closeManualStopModal()">
   <form class="dr-address-modal" id="manualStopForm">
     <h2>Adicionar parada manual</h2>
@@ -222,6 +248,7 @@
 (function () {
   const orders = JSON.parse(JSON.parse(document.getElementById('delivery-route-orders-raw').textContent));
   const branch = JSON.parse(JSON.parse(document.getElementById('delivery-route-branch-raw').textContent));
+  const savedConfig = JSON.parse(JSON.parse(document.getElementById('delivery-route-config-raw').textContent));
   const state = { selected: orders.filter(o => o.tem_coordenada).map(o => `pedido:${o.id}`), manualStops: {}, locked: new Set(), result: null, dragging: null };
   const byId = Object.fromEntries(orders.map(o => [String(o.id), o]));
   const csrf = '{{ csrf_token }}';
@@ -229,6 +256,8 @@
   const publishUrl = '{% url "pdv:delivery_rota_publicar" %}';
   const addressUrlTemplate = '{% url "pdv:delivery_rota_atualizar_endereco" 0 %}';
   const manualStopUrl = '{% url "pdv:delivery_rota_localizar_parada_manual" %}';
+  const configUrl = '{% url "pdv:delivery_rota_salvar_configuracao" %}';
+  const opportunitiesUrl = '{% url "pdv:delivery_rota_oportunidades" %}';
   const pageUrl = '{% url "pdv:delivery_rotas" %}';
   let map, routeLine, markers = [];
   let automaticCalculationTimer = null;
@@ -291,10 +320,10 @@
     const list=currentStops();
     document.getElementById('selectedCount').textContent=`${list.length} parada${list.length===1?'':'s'}`;
     document.getElementById('routeDeliveries').textContent=list.length;
-    document.getElementById('routeList').innerHTML=list.length?list.map((o,i)=>{const key=state.selected[i], manual=String(key).startsWith('manual:');return `
+    document.getElementById('routeList').innerHTML=list.length?list.map((o,i)=>{const key=state.selected[i], manual=String(key).startsWith('manual:'), opportunity=manual&&o.origem==='oportunidade';return `
       <div class="dr-card ${manual?'dr-manual-card':''}" draggable="true" data-route-id="${esc(key)}">
         <span class="dr-order">${i+1}</span>
-        <div><div class="dr-client">☰ &nbsp;${manual?'Parada manual · '+esc(o.observacao):'#'+esc(o.numero)+' · '+esc(o.cliente)}</div><div class="dr-meta">${esc(manual?o.endereco_texto:address(o))}${state.result?.paradas?.[i]?.eta?` · ETA <strong>${esc(state.result.paradas[i].eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge ${manual?'warn':'blue'}">${manual?'Parada avulsa':esc(o.status_label)}</span>${state.locked.has(key)?'<span class="dr-badge">Posição travada</span>':''}</div></div>
+        <div><div class="dr-client">☰ &nbsp;${manual?(opportunity?'Oportunidade · ':'Parada manual · ')+esc(o.observacao):'#'+esc(o.numero)+' · '+esc(o.cliente)}</div><div class="dr-meta">${esc(manual?o.endereco_texto:address(o))}${state.result?.paradas?.[i]?.eta?` · ETA <strong>${esc(state.result.paradas[i].eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge ${manual?'warn':'blue'}">${opportunity?'Oportunidade de Venda':manual?'Parada avulsa':esc(o.status_label)}</span>${opportunity&&o.rfm?`<span class="dr-badge">${esc(o.rfm)}</span>`:''}${state.locked.has(key)?'<span class="dr-badge">Posição travada</span>':''}</div></div>
         <div class="dr-card-actions">${manual?`<button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:''}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição':'Travar posição'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
       </div>`}).join(''):'<div class="dr-empty">Marque pedidos ou adicione uma parada manual.</div>';
     document.querySelectorAll('[data-lock]').forEach(b=>b.addEventListener('click',()=>{const key=b.dataset.lock;state.locked.has(key)?state.locked.delete(key):state.locked.add(key);renderRoute();}));
@@ -392,6 +421,48 @@
     const id=String(key).slice(7);delete state.manualStops[id];state.selected=state.selected.filter(item=>item!==key);state.locked.delete(key);state.result=null;renderRoute();resetSummary();scheduleAutomaticCalculation(false,150);toast('Parada manual removida.');
   }
 
+  function openOpportunityModal(){document.getElementById('opportunityModal').classList.add('open');loadOpportunities();}
+  window.closeOpportunityModal=function(){document.getElementById('opportunityModal').classList.remove('open');};
+  function opportunityAdded(id){return Boolean(state.manualStops[`oportunidade-${id}`]);}
+  function renderOpportunities(items){
+    const list=document.getElementById('opportunityList');
+    if(!items.length){list.innerHTML='<div class="dr-empty">Nenhuma oportunidade encontrada perto das paradas atuais.</div>';return;}
+    list.innerHTML=items.map(item=>{const added=opportunityAdded(item.id);return `<article class="dr-opportunity">
+      <div><div class="dr-opportunity-title">${esc(item.nome)}</div>
+      <div class="dr-opportunity-meta"><span class="dr-rfm">${esc(item.rfm)} · ${esc(item.segmento_rfm)}</span><span class="dr-priority">Prioridade ${esc(item.prioridade)}/100</span><br>${esc(item.endereco_texto)}<br>${esc(item.status_recompra)} · ${item.dias_sem_comprar==null?'sem data de última compra':esc(item.dias_sem_comprar)+' dias sem comprar'} · ticket médio ${money(item.valor_medio)}</div>
+      <div class="dr-opportunity-reason">Desvio estimado: +${esc(item.desvio_km_estimado)} km / +${esc(item.desvio_min_estimado)} min · ${esc(item.qtd_compras)} compras no histórico</div></div>
+      <button class="dr-button ${added?'':'green'}" type="button" data-add-opportunity="${item.id}" ${added?'disabled':''}>${added?'Na rota':'Adicionar à rota'}</button>
+    </article>`}).join('');
+    list.querySelectorAll('[data-add-opportunity]').forEach(button=>button.addEventListener('click',()=>addOpportunity(items.find(item=>String(item.id)===button.dataset.addOpportunity),items)));
+  }
+  async function loadOpportunities(){
+    const list=document.getElementById('opportunityList');list.innerHTML='<div class="dr-empty">Analisando clientes próximos da rota…</div>';
+    const paradas=currentStops().map(stop=>({lat:stop.lat,lng:stop.lng,cliente_id:stop.cliente_id||null}));
+    if(!paradas.length){list.innerHTML='<div class="dr-empty">Adicione ao menos uma entrega ou parada antes de buscar oportunidades.</div>';return;}
+    try{
+      const resp=await fetch(opportunitiesUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({paradas,raio_m:Number(document.getElementById('opportunityRadius').value)})});
+      const data=await resp.json();if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);renderOpportunities(data.oportunidades||[]);
+    }catch(error){list.innerHTML=`<div class="dr-empty">${esc(error.message)}</div>`;}
+  }
+  function addOpportunity(item,items){
+    if(!item)return;const id=`oportunidade-${item.id}`;if(state.manualStops[id])return;
+    state.manualStops[id]={id,tipo:'manual',origem:'oportunidade',cliente_id:item.id,observacao:item.nome,endereco:item.endereco,endereco_texto:item.endereco_texto,lat:item.lat,lng:item.lng,telefone:item.telefone,whatsapp:item.whatsapp,rfm:item.rfm,segmento_rfm:item.segmento_rfm,score_crm:item.score_crm};
+    state.selected.push(`manual:${id}`);state.result=null;renderRoute();resetSummary();renderOpportunities(items);scheduleAutomaticCalculation(false,150);toast(`${item.nome} adicionado como oportunidade de venda.`);
+  }
+
+  let configSaveTimer=null;
+  function applySavedConfig(){
+    document.getElementById('fuelPrice').value=Number(savedConfig.combustivel_preco)>0?savedConfig.combustivel_preco:'';
+    document.getElementById('fuelAutonomy').value=Number(savedConfig.autonomia_km_l)>0?savedConfig.autonomia_km_l:'';
+    document.getElementById('stopMinutes').value=savedConfig.minutos_por_parada??5;
+  }
+  function saveRouteConfig(){
+    clearTimeout(configSaveTimer);configSaveTimer=setTimeout(async()=>{
+      const payload={combustivel_preco:document.getElementById('fuelPrice').value||0,autonomia_km_l:document.getElementById('fuelAutonomy').value||0,minutos_por_parada:document.getElementById('stopMinutes').value||0};
+      try{const resp=await fetch(configUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify(payload)});const data=await resp.json();if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);}catch(error){toast(`Não foi possível guardar a configuração: ${error.message}`,true);}
+    },350);
+  }
+
   function generateBestRoute() {
     const hadLocks=state.locked.size>0;
     state.locked.clear();
@@ -465,6 +536,8 @@
   async function share(){const popup=window.open('about:blank','_blank');try{const data=await publishRoute();const driver=document.getElementById('routeDriver').value.trim();const lines=[`🛵 Rota do Delivery${driver?' — '+driver:''}`,`${state.result.paradas.length} paradas · ${state.result.distancia_km} km`,`Saída ${state.result.saida} · retorno previsto ${state.result.retorno}`,'',`Painel do motoboy: ${data.url}`,'Abra o painel para ver entregas, paradas, pagamentos e as opções de navegação.'];const target=`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`;if(popup){popup.opener=null;popup.location.href=target;}else{window.location.href=target;}}catch(error){if(popup)popup.close();toast(error.message,true);}}
 
   document.getElementById('orderSearch').addEventListener('input',renderAvailable);
+  document.getElementById('routeOpportunities').addEventListener('click',openOpportunityModal);
+  document.getElementById('opportunityReload').addEventListener('click',loadOpportunities);
   document.getElementById('routeAddManual').addEventListener('click',openManualStopModal);
   document.getElementById('manualStopForm').addEventListener('submit',saveManualStop);
   document.getElementById('routeGenerate').addEventListener('click',generateBestRoute);
@@ -479,11 +552,12 @@
     setTimeout(()=>map?.invalidateSize(),120);
   });
   document.getElementById('addressForm').addEventListener('submit',saveAddress);
-  document.getElementById('stopMinutes').addEventListener('change',()=>scheduleAutomaticCalculation(false,100));
+  document.getElementById('stopMinutes').addEventListener('change',()=>{saveRouteConfig();scheduleAutomaticCalculation(false,100);});
   document.getElementById('routeDeparture').addEventListener('change',()=>scheduleAutomaticCalculation(false,100));
-  document.getElementById('fuelPrice').addEventListener('input',renderFuelCost);
-  document.getElementById('fuelAutonomy').addEventListener('input',renderFuelCost);
+  document.getElementById('fuelPrice').addEventListener('input',()=>{renderFuelCost();saveRouteConfig();});
+  document.getElementById('fuelAutonomy').addEventListener('input',()=>{renderFuelCost();saveRouteConfig();});
   loadDraft();
+  applySavedConfig();
   if(!document.getElementById('routeDeparture').value){const now=new Date();document.getElementById('routeDeparture').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;}
   renderAvailable();renderRoute();initMap();renderFuelCost();
   if(!branch.tem_coordenada)document.getElementById('mapNote').textContent='A filial precisa de coordenadas para calcular saída e retorno.';

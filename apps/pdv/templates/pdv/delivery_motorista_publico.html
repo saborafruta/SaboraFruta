@@ -47,9 +47,9 @@
         <p class="client-name">{{ pedido.cliente }}</p>
         <p class="address">{{ pedido.endereco|default:"Endereço não informado" }}{% if pedido.complemento %} · {{ pedido.complemento }}{% endif %}</p>
         <div class="quick-meta">
-          {% if pedido.tipo != 'manual' %}{% if pedido.telefone %}<a class="phone" href="tel:{{ pedido.telefone }}">☎ {{ pedido.telefone }}</a>{% else %}<span class="phone">Telefone não informado</span>{% endif %}{% endif %}
+          {% if pedido.tipo != 'manual' or pedido.origem == 'oportunidade' %}{% if pedido.telefone %}<a class="phone" href="tel:{{ pedido.telefone }}">☎ {{ pedido.telefone }}</a>{% else %}<span class="phone">Telefone não informado</span>{% endif %}{% endif %}
           {% if pedido.eta %}<span class="eta">◷ Chegada {{ pedido.eta }}</span>{% endif %}
-          {% if pedido.tipo == 'manual' %}<span class="tag collect">PARADA MANUAL</span>{% elif pedido.pago %}<span class="tag paid">PAGO</span>{% else %}<span class="tag collect">RECEBER NA ENTREGA · R$ {{ pedido.venda.valor_total|floatformat:2 }}</span>{% endif %}
+          {% if pedido.tipo == 'manual' %}<span class="tag collect">{% if pedido.origem == 'oportunidade' %}OPORTUNIDADE DE VENDA{% else %}PARADA MANUAL{% endif %}</span>{% if pedido.rfm %}<span class="tag paid">{{ pedido.rfm }} · {{ pedido.segmento_rfm }}</span>{% endif %}{% elif pedido.pago %}<span class="tag paid">PAGO</span>{% else %}<span class="tag collect">RECEBER NA ENTREGA · R$ {{ pedido.venda.valor_total|floatformat:2 }}</span>{% endif %}
         </div>
         {% for observacao in pedido.observacoes %}<div class="card-note">⚠ {{ observacao }}</div>{% endfor %}
       </div>

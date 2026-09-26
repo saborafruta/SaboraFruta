@@ -4,6 +4,7 @@ rastreio (`apps.mapas`) compartilham a mesma conta (`VendaPDV.
 mudar_status_delivery`), pra "o motorista marcou entregue no celular" e
 "alguém arrastou o card" nunca divergirem em como o campo é atualizado.
 """
+import datetime
 import json
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
@@ -14,6 +15,7 @@ from django.utils import timezone
 
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.crm.models import RecompraCliente
 from apps.mapas.services.roteirizacao import Rota
 from apps.mapas.services.geocoder import Resultado
 from apps.pdv.models import RotaDeliveryPublica, VendaPDV
@@ -372,6 +374,57 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertEqual(resp.json()['observacao'], 'Buscar caixas térmicas')
         self.assertEqual(resp.json()['endereco']['uf'], 'RN')
         self.assertEqual(Cliente.objects.count(), quantidade_clientes)
+
+    def test_configuracao_de_custo_fica_guardada_na_filial(self):
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_salvar_configuracao'),
+            data=json.dumps({
+                'combustivel_preco': '6.29', 'autonomia_km_l': '32.5',
+                'minutos_por_parada': 8,
+            }), content_type='application/json',
+        )
+        tela = self.client.get(reverse('pdv:delivery_rotas'))
+        rota = RotaDeliveryPublica.objects.get(filial=self.filial)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(float(rota.combustivel_preco), 6.29)
+        self.assertEqual(float(rota.autonomia_km_l), 32.5)
+        self.assertEqual(rota.minutos_por_parada, 8)
+        configuracao = json.loads(tela.context['configuracao_rota_json'])
+        self.assertEqual(configuracao['minutos_por_parada'], 8)
+        self.assertContains(tela, 'Oportunidades de Venda')
+
+    @patch('apps.mapas.services.proximidade.ProximidadeService.clientes_proximos')
+    def test_oportunidades_combina_rfm_recompra_e_proximidade(self, proximos):
+        candidato = Cliente.objects.create(
+            filial=self.filial, razao_social='Cliente Campeão', cpf_cnpj='44555666000177',
+            endereco='Rua Comercial', numero='90', bairro='Centro', cidade='Natal', uf='RN',
+            celular='84999998888', latitude=-5.81, longitude=-35.23,
+        )
+        recompra = RecompraCliente.objects.create(
+            filial=self.filial, cliente=candidato, qtd_compras=18,
+            ultima_compra=timezone.localdate() - datetime.timedelta(days=20),
+            valor_medio='850.00', valor_total_periodo='15300.00', score=92,
+            status=RecompraCliente.Status.VERMELHO,
+            frequencia=RecompraCliente.Frequencia.SEMANAL,
+        )
+        candidato.recompra = recompra
+        candidato.distancia_m = 400
+        proximos.return_value = [candidato]
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_oportunidades'),
+            data=json.dumps({'paradas': [{'lat': -5.80, 'lng': -35.22}], 'raio_m': 3000}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        oportunidade = resp.json()['oportunidades'][0]
+        self.assertEqual(oportunidade['nome'], 'Cliente Campeão')
+        self.assertEqual(oportunidade['rfm'], 'R5 F5 M5')
+        self.assertEqual(oportunidade['segmento_rfm'], 'Campeão')
+        self.assertGreaterEqual(oportunidade['prioridade'], 90)
+        self.assertEqual(oportunidade['desvio_km_estimado'], 0.8)
 
     @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.rota')
     def test_calculo_aceita_parada_manual_misturada_com_pedido(self, mock_rota):

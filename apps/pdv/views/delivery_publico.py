@@ -189,8 +189,13 @@ def _dados_paradas_rota(rota, pedidos):
             maps_location = endereco_texto
         por_chave[chave] = {
             'tipo': 'manual', 'chave': chave, 'manual_id': identificador,
+            'origem': str(extra.get('origem') or 'manual'),
             'cliente': str(extra.get('observacao') or 'Parada manual'),
-            'endereco': endereco_texto, 'complemento': '', 'telefone': '', 'whatsapp': '',
+            'endereco': endereco_texto, 'complemento': '',
+            'telefone': str(extra.get('telefone') or ''),
+            'whatsapp': str(extra.get('whatsapp') or ''),
+            'rfm': str(extra.get('rfm') or ''),
+            'segmento_rfm': str(extra.get('segmento_rfm') or ''),
             'observacoes': [], 'eta': str(extra.get('eta') or ''), 'pago': False,
             'pagamento_pendente': False, 'formas_pagamento': '',
             'concluido': identificador in concluidas, 'pode_alterar': True,

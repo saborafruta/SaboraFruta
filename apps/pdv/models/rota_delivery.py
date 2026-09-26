@@ -1,5 +1,6 @@
 """Rota publicada para o celular do motoboy, protegida por URL-capacidade."""
 import secrets
+from decimal import Decimal
 
 from django.db import models
 
@@ -27,6 +28,13 @@ class RotaDeliveryPublica(TimestampedModel):
     paradas_extras = models.JSONField(default=list, blank=True)
     ordem_paradas = models.JSONField(default=list, blank=True)
     paradas_extras_concluidas = models.JSONField(default=list, blank=True)
+    combustivel_preco = models.DecimalField(
+        max_digits=8, decimal_places=2, default=Decimal('0.00'),
+    )
+    autonomia_km_l = models.DecimalField(
+        max_digits=8, decimal_places=2, default=Decimal('0.00'),
+    )
+    minutos_por_parada = models.PositiveSmallIntegerField(default=5)
     entregador = models.CharField(max_length=100, blank=True)
     ativa = models.BooleanField(default=True)
 
