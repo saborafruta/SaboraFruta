@@ -179,12 +179,18 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'rfmConfigModal')
         self.assertContains(tela, 'rfmFAutomatic')
         self.assertContains(tela, 'rfmMAutomatic')
+        self.assertContains(tela, 'Ajuda para configurar RFM')
+        self.assertContains(tela, 'Como preencher estas faixas?')
+        self.assertContains(tela, 'Automático:')
+        self.assertContains(tela, 'Manual:')
         self.assertContains(tela, 'manualCepLookup')
         self.assertContains(tela, reverse('cadastros:consultar-cep'))
         self.assertContains(tela, 'dr-opportunity-toolbar-row')
         self.assertContains(tela, 'R5 F5 M5:')
         self.assertContains(tela, 'Para recuperar clientes:')
         self.assertContains(tela, 'Por que foi sugerido?')
+        self.assertContains(tela, 'Combustível adicional estimado')
+        self.assertContains(tela, 'ponto mais próximo da rota')
         self.assertContains(tela, 'Combina potencial de recompra, RFM e proximidade da rota')
         self.assertContains(tela, 'opportunityDetailModal')
         self.assertContains(tela, 'Sugestão pelo histórico de compra')
@@ -418,6 +424,32 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertEqual(resp.json()['observacao'], 'Buscar caixas térmicas')
         self.assertEqual(resp.json()['endereco']['uf'], 'RN')
         self.assertEqual(Cliente.objects.count(), quantidade_clientes)
+
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_parada_manual_tenta_endereco_sem_complemento_e_faz_fallback(self, resolver):
+        resolver.side_effect = [
+            Resultado(erro='endereco nao encontrado'),
+            Resultado(-5.87, -35.20, 'aproximada'),
+        ]
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_localizar_parada_manual'),
+            data=json.dumps({
+                'observacao': 'Buscar material', 'cep': '59080460',
+                'rua': 'Rua Arnaldo Neves da Silva', 'numero': '15',
+                'complemento': 'Bloco teste', 'bairro': 'Neópolis',
+                'cidade': 'Natal', 'uf': 'RN',
+            }), content_type='application/json',
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resolver.call_count, 2)
+        primeira_consulta = resolver.call_args_list[0].args[0]
+        segunda_consulta = resolver.call_args_list[1].args[0]
+        self.assertNotIn('Bloco teste', primeira_consulta)
+        self.assertIn('Rua Arnaldo Neves da Silva, 15', primeira_consulta)
+        self.assertNotIn(', 15,', segunda_consulta)
+        self.assertEqual(resp.json()['endereco']['complemento'], 'Bloco teste')
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_parada_manual_retorna_json_quando_geocodificador_falha(self, resolver):

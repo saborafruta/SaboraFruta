@@ -3788,6 +3788,32 @@ def _delivery_endereco_manual_texto(endereco):
     ]))
 
 
+def _delivery_consultas_geocodificacao_manual(endereco):
+    """Consultas do endereço mais específica para a mais tolerante.
+
+    Complemento é informação para o entregador, não para o geocoder. Textos
+    livres nesse campo ("fundos", "bloco A", "teste") frequentemente fazem
+    o provider rejeitar um endereço que existe.
+    """
+    partes = [
+        [
+            endereco.get('rua'), endereco.get('numero'), endereco.get('bairro'),
+            endereco.get('cidade'), endereco.get('uf'), endereco.get('cep'), 'Brasil',
+        ],
+        [
+            endereco.get('rua'), endereco.get('bairro'), endereco.get('cidade'),
+            endereco.get('uf'), endereco.get('cep'), 'Brasil',
+        ],
+        [endereco.get('cep'), endereco.get('cidade'), endereco.get('uf'), 'Brasil'],
+    ]
+    consultas = []
+    for itens in partes:
+        consulta = ', '.join(filter(None, itens))
+        if consulta and consulta not in consultas:
+            consultas.append(consulta)
+    return consultas
+
+
 @require_POST
 @requer_permissao('pdv', 'ver')
 def delivery_rota_localizar_parada_manual(request):
@@ -3806,15 +3832,20 @@ def delivery_rota_localizar_parada_manual(request):
     if not observacao:
         return JsonResponse({'erro': 'Informe o que será feito nesta parada.'}, status=400)
     texto = _delivery_endereco_manual_texto(endereco)
-    endereco_hash = hashlib.sha256(texto.lower().encode('utf-8')).hexdigest()
     try:
-        resultado = GeocodificacaoService().resolver(texto, endereco_hash)
+        servico = GeocodificacaoService()
+        resultado = None
+        for consulta in _delivery_consultas_geocodificacao_manual(endereco):
+            endereco_hash = hashlib.sha256(consulta.lower().encode('utf-8')).hexdigest()
+            resultado = servico.resolver(consulta, endereco_hash)
+            if resultado.ok:
+                break
     except Exception:
         logger.exception('falha ao geocodificar parada manual para a filial %s', request.filial_ativa.pk)
         return JsonResponse({
             'erro': 'O serviço de localização não respondeu. Tente novamente em instantes.'
         }, status=503)
-    if not resultado.ok:
+    if resultado is None or not resultado.ok:
         return JsonResponse({
             'erro': 'Não foi possível localizar esse endereço. Confira os dados e tente novamente.'
         }, status=400)

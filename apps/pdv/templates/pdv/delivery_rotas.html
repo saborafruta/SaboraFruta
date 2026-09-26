@@ -126,6 +126,9 @@
   .dr-rfm-config-item input { width:100%; margin-top:6px; border:1px solid #46546a; border-radius:7px; background:#20242a; padding:8px; color:#fff; font-size:12px; }
   .dr-rfm-config-item small { display:block; margin-top:5px; color:#8997aa; font-size:9px; line-height:1.4; }
   .dr-rfm-settings-modal { width:min(820px,100%); max-height:92vh; overflow:auto; }
+  .dr-rfm-config-title { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .dr-rfm-config-title .dr-rfm-help { flex:0 0 auto; }
+  .dr-rfm-config-help .dr-rfm-tooltip { width:min(520px,calc(100vw - 54px)); }
   .dr-rfm-section { margin-top:12px; border:1px solid #354154; border-radius:10px; background:#191d23; padding:11px; }
   .dr-rfm-section-head { display:flex; justify-content:space-between; align-items:center; gap:12px; }
   .dr-rfm-section-head h3 { margin:0; color:#f3f6fb; font-size:12px; }
@@ -277,7 +280,21 @@
 </div>
 <div class="dr-address-modal-bg" id="rfmConfigModal" style="z-index:6150" onclick="if(event.target===this)closeRfmConfigModal()">
   <form class="dr-address-modal dr-rfm-settings-modal" id="rfmConfigForm">
-    <h2>Configurar RFM</h2>
+    <div class="dr-rfm-config-title">
+      <h2>Configurar RFM</h2>
+      <details class="dr-rfm-help dr-rfm-config-help">
+        <summary aria-label="Ajuda para configurar RFM" title="Ajuda para configurar RFM">?</summary>
+        <div class="dr-rfm-tooltip">
+          <strong>Como preencher estas faixas?</strong>
+          <div class="dr-rfm-tooltip-grid">
+            <div class="dr-rfm-tooltip-item"><strong>R — Recência:</strong> informe até quantos dias cada nota vale. Ex.: R5 = 30 significa que quem comprou há até 30 dias recebe R5; de 31 a 60 dias recebe R4.</div>
+            <div class="dr-rfm-tooltip-item"><strong>F — Frequência:</strong> quantidade de compras. Ex.: F5 = 10 significa que clientes com 10 compras ou mais recebem F5; F4 = 7 atende quem tem de 7 a 9.</div>
+            <div class="dr-rfm-tooltip-item"><strong>M — Valor:</strong> total comprado no período. Ex.: M5 = R$ 10.000 significa que quem acumulou R$ 10 mil ou mais recebe M5.</div>
+          </div>
+          <div class="dr-rfm-examples"><strong>Automático:</strong> divide sua própria carteira em cinco grupos. É útil quando você ainda não sabe quais limites usar, mas as notas mudam conforme a carteira muda.<br><br><strong>Manual:</strong> usa valores fixos definidos aqui. É melhor quando a empresa já sabe que “cliente frequente” significa, por exemplo, pelo menos 7 compras.<br><br><strong>Atenção:</strong> R5 indica relacionamento recente, não necessariamente hora de comprar novamente. A lista também considera a previsão de recompra para definir a prioridade.</div>
+        </div>
+      </details>
+    </div>
     <p>Defina as faixas de recência, frequência e valor. A configuração fica guardada para a filial atual.</p>
     <section class="dr-rfm-section">
       <div class="dr-rfm-section-head"><div><h3>R — Recência</h3><p>Dias desde a última compra. Os limites devem crescer.</p></div></div>
@@ -587,6 +604,12 @@
     const proximity=Number(item.desvio_km_estimado||0)<=0?'fica no caminho da rota atual':`exige um desvio estimado de apenas ${item.desvio_km_estimado} km`;
     return `${item.motivo_momento||item.status_recompra} É ${item.segmento_rfm} (${item.rfm}), ${history} e ${proximity}.`;
   }
+  function opportunityFuelEstimate(item){
+    const price=Number(document.getElementById('fuelPrice').value), autonomy=Number(document.getElementById('fuelAutonomy').value);
+    if(!(price>0)||!(autonomy>0))return 'Combustível adicional: informe preço e autonomia no topo da rota.';
+    const liters=Number(item.desvio_km_estimado||0)/autonomy;
+    return `Combustível adicional estimado: +${liters.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})} L · +${money(liters*price)}`;
+  }
   function contactLinks(item){
     const phone=String(item.telefone||'').trim(), phoneDigits=phone.replace(/\D/g,'');
     return `<div class="dr-contact">${phone?`<a href="tel:${esc(phoneDigits)}" onclick="event.stopPropagation()">☎ ${esc(phone)}</a>`:'<span style="color:#738096;font-size:9px">Telefone não informado</span>'}${item.whatsapp?`<a class="whatsapp-link" href="https://wa.me/${esc(item.whatsapp)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">WhatsApp</a>`:''}</div>`;
@@ -605,7 +628,7 @@
       <div class="dr-opportunity-info" data-opportunity-detail="${item.id}" role="button" tabindex="0"><div class="dr-opportunity-title">${esc(item.nome)}</div>
       <div class="dr-opportunity-meta"><span class="dr-rfm">${esc(item.rfm)} · ${esc(item.segmento_rfm)}</span><span class="dr-priority" title="Combina potencial de recompra, RFM e proximidade da rota">Prioridade ${esc(item.prioridade)}/100 ⓘ</span><br>${esc(item.endereco_texto)}<br>${esc(item.status_recompra)} · ${item.dias_sem_comprar==null?'sem data de última compra':esc(item.dias_sem_comprar)+' dias sem comprar'} · ticket médio ${money(item.valor_medio)}</div>
       <div class="dr-opportunity-why"><strong>Por que foi sugerido?</strong> ${esc(opportunityExplanation(item))}</div>
-      ${contactLinks(item)}<div class="dr-opportunity-reason">Desvio estimado: +${esc(item.desvio_km_estimado)} km / +${esc(item.desvio_min_estimado)} min · ${esc(item.qtd_compras)} compras no histórico · Clique para ver produtos e pedidos</div></div>
+      ${contactLinks(item)}<div class="dr-opportunity-reason">Desvio estimado desde o ponto mais próximo da rota: +${esc(item.desvio_km_estimado)} km / +${esc(item.desvio_min_estimado)} min<br>${esc(opportunityFuelEstimate(item))} · ${esc(item.qtd_compras)} compras no histórico · Clique para ver produtos e pedidos</div></div>
       <button class="dr-button ${added?'':'green'}" type="button" data-add-opportunity="${item.id}" ${added?'disabled':''}>${added?'Na rota':'Adicionar à rota'}</button>
     </article>`}).join('');
     list.querySelectorAll('[data-opportunity-detail]').forEach(card=>{const open=()=>openOpportunityDetail(opportunitiesCache.find(item=>String(item.id)===card.dataset.opportunityDetail));card.addEventListener('click',open);card.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open();}});});
@@ -758,8 +781,8 @@
   document.getElementById('addressForm').addEventListener('submit',saveAddress);
   document.getElementById('stopMinutes').addEventListener('change',()=>{saveRouteConfig();scheduleAutomaticCalculation(false,100);});
   document.getElementById('routeDeparture').addEventListener('change',()=>scheduleAutomaticCalculation(false,100));
-  document.getElementById('fuelPrice').addEventListener('input',()=>{renderFuelCost();saveRouteConfig();});
-  document.getElementById('fuelAutonomy').addEventListener('input',()=>{renderFuelCost();saveRouteConfig();});
+  document.getElementById('fuelPrice').addEventListener('input',()=>{renderFuelCost();saveRouteConfig();if(opportunitiesCache.length)filterOpportunities();});
+  document.getElementById('fuelAutonomy').addEventListener('input',()=>{renderFuelCost();saveRouteConfig();if(opportunitiesCache.length)filterOpportunities();});
   loadDraft();
   applySavedConfig();
   if(!document.getElementById('routeDeparture').value){const now=new Date();document.getElementById('routeDeparture').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;}
