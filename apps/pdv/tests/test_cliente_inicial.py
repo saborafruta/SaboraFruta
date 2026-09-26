@@ -77,6 +77,15 @@ class ClienteInicialTests(TestCase):
         self.assertEqual(dados['razao_social'], 'LUCIENE SANTOS')
         self.assertEqual(dados['celular'], '84986226692')
 
+    def test_pdv_tem_integracao_com_rota_delivery(self):
+        filial = self._filial('AAA', '11222333000181')
+        self._logar(filial)
+
+        resp = self.client.get(reverse('pdv:home'), {'route_delivery': '1'})
+
+        self.assertContains(resp, 'delivery-route-sale-completed')
+        self.assertContains(resp, "get('route_delivery') === '1'")
+
     def test_payload_tem_os_campos_que_o_pdv_consome(self):
         """
         Contrato com `selecionarCliente()` do template.

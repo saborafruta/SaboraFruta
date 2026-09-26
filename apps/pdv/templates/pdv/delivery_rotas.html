@@ -142,6 +142,11 @@
   .dr-cep-status.error { color:#ff9ba5; }
   .dr-opportunity-list { overflow:auto; display:grid; gap:7px; padding-right:3px; }
   .dr-opportunity { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; border:1px solid #303744; border-radius:10px; background:#252a31; padding:10px 12px; }
+  .dr-opportunity-actions { display:flex; flex-direction:column; gap:7px; min-width:132px; }
+  .dr-opportunity-actions .dr-button { flex:1; }
+  .dr-pdv-modal { width:min(1500px,98vw); height:min(94vh,960px); padding:0; overflow:hidden; display:flex; flex-direction:column; }
+  .dr-pdv-modal-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 13px; border-bottom:1px solid #303744; }
+  .dr-pdv-modal iframe { flex:1; width:100%; border:0; background:#0a0a12; }
   .dr-opportunity:hover { border-color:#5272a8; }
   .dr-opportunity-info { min-width:0; cursor:pointer; }
   .dr-opportunity-title { color:#f3f6fb; font-size:12px; font-weight:850; }
@@ -168,7 +173,7 @@
   .dr-sale-history:first-of-type { border-top:0; }
   .dr-sale-history summary { color:#e8eef7; font-size:10px; font-weight:800; cursor:pointer; }
   .dr-sale-items { margin:6px 0 0; padding-left:16px; color:#9caabd; font-size:9px; }
-  @media(max-width:760px){.dr-detail-columns{grid-template-columns:1fr}.dr-detail-modal{max-height:94vh}.dr-opportunity{grid-template-columns:1fr}.dr-opportunity .dr-button{width:100%}.dr-rfm-tooltip{position:fixed;top:50%;left:50%;right:auto;transform:translate(-50%,-50%);width:min(410px,calc(100vw - 32px))}.dr-rfm-config-grid{grid-template-columns:1fr}.dr-opportunity-toolbar-row{align-items:stretch;flex-wrap:wrap}.dr-opportunity-search{flex-basis:100%}.dr-opportunity-toolbar-row.filters select{flex:1;min-width:120px}.dr-toolbar-caption{flex-basis:100%}}
+  @media(max-width:760px){.dr-detail-columns{grid-template-columns:1fr}.dr-detail-modal{max-height:94vh}.dr-opportunity{grid-template-columns:1fr}.dr-opportunity-actions{min-width:0;flex-direction:row}.dr-opportunity .dr-button{width:100%}.dr-rfm-tooltip{position:fixed;top:50%;left:50%;right:auto;transform:translate(-50%,-50%);width:min(410px,calc(100vw - 32px))}.dr-rfm-config-grid{grid-template-columns:1fr}.dr-opportunity-toolbar-row{align-items:stretch;flex-wrap:wrap}.dr-opportunity-search{flex-basis:100%}.dr-opportunity-toolbar-row.filters select{flex:1;min-width:120px}.dr-toolbar-caption{flex-basis:100%}}
   body.tema-claro .dr-title, body.tema-claro .dr-stat-value, body.tema-claro .dr-panel-title, body.tema-claro .dr-client { color:#142033; }
   body.tema-claro .dr-subtitle, body.tema-claro .dr-meta { color:#65748a; }
   body.tema-claro .dr-stat, body.tema-claro .dr-panel, body.tema-claro .dr-footer { background:#fff; border-color:#dfe5ee; }
@@ -333,6 +338,22 @@
     <div class="dr-detail-columns" id="opportunityDetailBody"><div class="dr-empty">Carregando histórico…</div></div>
   </section>
 </div>
+<div class="dr-address-modal-bg" id="stopObservationModal" style="z-index:6200" onclick="if(event.target===this)closeStopObservationModal()">
+  <form class="dr-address-modal" id="stopObservationForm">
+    <h2 id="stopObservationTitle">Observação da parada</h2>
+    <p>Esta informação aparece na sequência da rota e no painel do motoboy.</p>
+    <div class="dr-address-grid">
+      <label class="dr-address-wide">O que deve ser feito?<textarea id="stopObservationText" maxlength="240" required placeholder="Ex.: oferecer reposição, buscar embalagem, entregar documento"></textarea></label>
+    </div>
+    <div class="dr-address-modal-actions"><button class="dr-button" type="button" onclick="closeStopObservationModal()">Cancelar</button><button class="dr-button primary" type="submit">Salvar parada</button></div>
+  </form>
+</div>
+<div class="dr-address-modal-bg" id="routePdvModal" style="z-index:6300" onclick="if(event.target===this)closeRoutePdv()">
+  <section class="dr-address-modal dr-pdv-modal">
+    <div class="dr-pdv-modal-head"><div><h2>Fazer venda</h2><p id="routePdvCaption" style="margin-bottom:0">O PDV já abrirá em modo Delivery.</p></div><button class="dr-button" type="button" onclick="closeRoutePdv()">Fechar</button></div>
+    <iframe id="routePdvFrame" title="PDV para a parada"></iframe>
+  </section>
+</div>
 <div class="dr-address-modal-bg" id="manualStopModal" onclick="if(event.target===this)closeManualStopModal()">
   <form class="dr-address-modal" id="manualStopForm">
     <h2>Adicionar parada manual</h2>
@@ -396,11 +417,14 @@
   const rfmConfigUrl = '{% url "pdv:delivery_rota_salvar_configuracao_rfm" %}';
   const opportunitiesUrl = '{% url "pdv:delivery_rota_oportunidades" %}';
   const customerHistoryUrlTemplate = '{% url "pdv:api_historico_cliente" 0 %}';
+  const pdvUrl = '{% url "pdv:home" %}';
   const pageUrl = '{% url "pdv:delivery_rotas" %}';
   let map, routeLine, markers = [];
   let automaticCalculationTimer = null;
   let calculationSequence = 0;
   let opportunitiesCache = [];
+  let pendingObservation = null;
+  let pdvSourceKey = null;
 
   function esc(value) { const d=document.createElement('div'); d.textContent=value ?? ''; return d.innerHTML; }
   function money(value) { return Number(value || 0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
@@ -435,15 +459,17 @@
     if(document.fullscreenElement)document.exitFullscreen();
     else if(panel.requestFullscreen)panel.requestFullscreen();
   }
-  function addMarker(lat,lng,label,kind,title) {
-    const icon=L.divIcon({className:'',iconSize:[25,25],iconAnchor:[12,12],html:`<div class="dr-marker ${kind||''}">${esc(label)}</div>`});
+  function addMarker(lat,lng,label,kind,title,offsetIndex=0) {
+    const offsets=[[0,0],[28,0],[-28,0],[0,28],[0,-28],[22,22],[-22,-22]], offset=offsets[offsetIndex%offsets.length];
+    const icon=L.divIcon({className:'',iconSize:[25,25],iconAnchor:[12-offset[0],12-offset[1]],html:`<div class="dr-marker ${kind||''}">${esc(label)}</div>`});
     const marker=L.marker([lat,lng],{icon,title}).addTo(map).bindPopup(esc(title)); markers.push(marker); return marker;
   }
   function clearRoute() { if(routeLine){map.removeLayer(routeLine);routeLine=null;} markers.forEach(m=>map.removeLayer(m)); markers=[]; if(branch.tem_coordenada)addMarker(branch.lat,branch.lng,'⌂','base',branch.nome); }
   function drawRoute(result) {
     clearRoute();
     routeLine=L.polyline(result.geometria,{color:'#2f7df4',weight:5,opacity:.9}).addTo(map);
-    result.paradas.forEach(p=>addMarker(p.lat,p.lng,p.ordem,p.tipo==='manual'?'manual':'',p.tipo==='manual'?p.observacao:`#${p.numero} · ${p.cliente}`));
+    const sobrepostos={};
+    result.paradas.forEach(p=>{const bucket=`${Number(p.lat).toFixed(4)}:${Number(p.lng).toFixed(4)}`, offset=sobrepostos[bucket]||0;sobrepostos[bucket]=offset+1;addMarker(p.lat,p.lng,p.ordem,p.tipo==='manual'?'manual':'',p.tipo==='manual'?p.observacao:`#${p.numero} · ${p.cliente}`,offset);});
     map.fitBounds(routeLine.getBounds(),{padding:[35,35]});
   }
 
@@ -468,10 +494,12 @@
       <div class="dr-card ${manual?'dr-manual-card':''}" draggable="true" data-route-id="${esc(key)}">
         <span class="dr-order">${i+1}</span>
         <div><div class="dr-client">☰ &nbsp;${manual?(opportunity?'Oportunidade · ':'Parada manual · ')+esc(o.observacao):'#'+esc(o.numero)+' · '+esc(o.cliente)}</div><div class="dr-meta">${esc(manual?o.endereco_texto:address(o))}${state.result?.paradas?.[i]?.eta?` · ETA <strong>${esc(state.result.paradas[i].eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge ${manual?'warn':'blue'}">${opportunity?'Oportunidade de Venda':manual?'Parada avulsa':esc(o.status_label)}</span>${opportunity&&o.rfm?`<span class="dr-badge">${esc(o.rfm)}</span>`:''}${state.locked.has(key)?'<span class="dr-badge">Posição travada</span>':''}</div></div>
-        <div class="dr-card-actions">${manual?`<button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:''}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição':'Travar posição'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
+        <div class="dr-card-actions">${manual?`<button class="dr-edit-address" type="button" data-edit-stop="${esc(key)}">✎ Observação</button><button class="dr-edit-address" type="button" data-sale-stop="${esc(key)}">＋ Venda</button><button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:''}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição':'Travar posição'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
       </div>`}).join(''):'<div class="dr-empty">Marque pedidos ou adicione uma parada manual.</div>';
     document.querySelectorAll('[data-lock]').forEach(b=>b.addEventListener('click',()=>{const key=b.dataset.lock;state.locked.has(key)?state.locked.delete(key):state.locked.add(key);renderRoute();}));
     document.querySelectorAll('[data-remove-stop]').forEach(b=>b.addEventListener('click',()=>removeManualStop(b.dataset.removeStop)));
+    document.querySelectorAll('[data-edit-stop]').forEach(b=>b.addEventListener('click',()=>openStopObservationForEdit(b.dataset.editStop)));
+    document.querySelectorAll('[data-sale-stop]').forEach(b=>b.addEventListener('click',()=>openPdvForStop(b.dataset.saleStop)));
     document.querySelectorAll('[data-route-id]').forEach(el=>{
       el.addEventListener('dragstart',()=>{state.dragging=el.dataset.routeId;el.classList.add('dragging');});
       el.addEventListener('dragend',()=>{state.dragging=null;el.classList.remove('dragging');});
@@ -629,10 +657,11 @@
       <div class="dr-opportunity-meta"><span class="dr-rfm">${esc(item.rfm)} · ${esc(item.segmento_rfm)}</span><span class="dr-priority" title="Combina potencial de recompra, RFM e proximidade da rota">Prioridade ${esc(item.prioridade)}/100 ⓘ</span><br>${esc(item.endereco_texto)}<br>${esc(item.status_recompra)} · ${item.dias_sem_comprar==null?'sem data de última compra':esc(item.dias_sem_comprar)+' dias sem comprar'} · ticket médio ${money(item.valor_medio)}</div>
       <div class="dr-opportunity-why"><strong>Por que foi sugerido?</strong> ${esc(opportunityExplanation(item))}</div>
       ${contactLinks(item)}<div class="dr-opportunity-reason">Desvio estimado desde o ponto mais próximo da rota: +${esc(item.desvio_km_estimado)} km / +${esc(item.desvio_min_estimado)} min<br>${esc(opportunityFuelEstimate(item))} · ${esc(item.qtd_compras)} compras no histórico · Clique para ver produtos e pedidos</div></div>
-      <button class="dr-button ${added?'':'green'}" type="button" data-add-opportunity="${item.id}" ${added?'disabled':''}>${added?'Na rota':'Adicionar à rota'}</button>
+      <div class="dr-opportunity-actions"><button class="dr-button green" type="button" data-sale-opportunity="${item.id}">Fazer venda</button><button class="dr-button ${added?'':'primary'}" type="button" data-add-opportunity="${item.id}" ${added?'disabled':''}>${added?'Na rota':'Adicionar como parada'}</button></div>
     </article>`}).join('');
     list.querySelectorAll('[data-opportunity-detail]').forEach(card=>{const open=()=>openOpportunityDetail(opportunitiesCache.find(item=>String(item.id)===card.dataset.opportunityDetail));card.addEventListener('click',open);card.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open();}});});
-    list.querySelectorAll('[data-add-opportunity]').forEach(button=>button.addEventListener('click',event=>{event.stopPropagation();addOpportunity(opportunitiesCache.find(item=>String(item.id)===button.dataset.addOpportunity));}));
+    list.querySelectorAll('[data-add-opportunity]').forEach(button=>button.addEventListener('click',event=>{event.stopPropagation();openStopObservationForOpportunity(opportunitiesCache.find(item=>String(item.id)===button.dataset.addOpportunity));}));
+    list.querySelectorAll('[data-sale-opportunity]').forEach(button=>button.addEventListener('click',event=>{event.stopPropagation();openPdvForOpportunity(opportunitiesCache.find(item=>String(item.id)===button.dataset.saleOpportunity));}));
   }
   function renderOpportunityDetail(item,data){
     const total=Math.max(Number(data.total_compras||0),1);
@@ -662,11 +691,47 @@
       const data=await resp.json();if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);opportunitiesCache=data.oportunidades||[];filterOpportunities();
     }catch(error){list.innerHTML=`<div class="dr-empty">${esc(error.message)}</div>`;}
   }
-  function addOpportunity(item){
+  function addOpportunity(item, observation){
     if(!item)return;const id=`oportunidade-${item.id}`;if(state.manualStops[id])return;
-    state.manualStops[id]={id,tipo:'manual',origem:'oportunidade',cliente_id:item.id,observacao:item.nome,endereco:item.endereco,endereco_texto:item.endereco_texto,lat:item.lat,lng:item.lng,telefone:item.telefone,whatsapp:item.whatsapp,rfm:item.rfm,segmento_rfm:item.segmento_rfm,score_crm:item.score_crm};
+    state.manualStops[id]={id,tipo:'manual',origem:'oportunidade',cliente_id:item.id,observacao:observation||`Visita comercial — ${item.nome}`,endereco:item.endereco,endereco_texto:item.endereco_texto,lat:item.lat,lng:item.lng,telefone:item.telefone,whatsapp:item.whatsapp,rfm:item.rfm,segmento_rfm:item.segmento_rfm,score_crm:item.score_crm};
     state.selected.push(`manual:${id}`);state.result=null;renderRoute();resetSummary();filterOpportunities();scheduleAutomaticCalculation(true,150);toast(`${item.nome} adicionado. Buscando a melhor posição na rota…`);
   }
+
+  function openStopObservationForOpportunity(item){
+    if(!item)return;
+    pendingObservation={mode:'opportunity',item};
+    document.getElementById('stopObservationTitle').textContent=`Adicionar ${item.nome} como parada`;
+    document.getElementById('stopObservationText').value=`Visita comercial — ${item.nome}`;
+    document.getElementById('stopObservationModal').classList.add('open');
+    document.getElementById('stopObservationText').focus();
+  }
+  function openStopObservationForEdit(key){
+    const stop=stopByKey(key);if(!stop)return;
+    pendingObservation={mode:'edit',key};
+    document.getElementById('stopObservationTitle').textContent='Editar observação da parada';
+    document.getElementById('stopObservationText').value=stop.observacao||'';
+    document.getElementById('stopObservationModal').classList.add('open');
+    document.getElementById('stopObservationText').focus();
+  }
+  window.closeStopObservationModal=function(){pendingObservation=null;document.getElementById('stopObservationModal').classList.remove('open');};
+  function saveStopObservation(event){
+    event.preventDefault();const observation=document.getElementById('stopObservationText').value.trim();if(!observation)return;
+    const action=pendingObservation;if(!action)return;
+    if(action.mode==='opportunity')addOpportunity(action.item,observation);
+    else {const stop=stopByKey(action.key);if(stop){stop.observacao=observation;state.result=null;renderRoute();resetSummary();scheduleAutomaticCalculation(false,120);toast('Observação atualizada.');}}
+    closeStopObservationModal();
+  }
+
+  function openPdv(sourceKey, clientId, label){
+    pdvSourceKey=sourceKey||null;
+    const params=new URLSearchParams({delivery:'1',route_delivery:'1',embed:'1'});if(clientId)params.set('cliente',clientId);
+    document.getElementById('routePdvCaption').textContent=label?`${label} · o PDV abrirá em modo Delivery.`:'O PDV abrirá em modo Delivery.';
+    document.getElementById('routePdvFrame').src=`${pdvUrl}?${params.toString()}`;
+    document.getElementById('routePdvModal').classList.add('open');
+  }
+  function openPdvForOpportunity(item){if(item)openPdv(`manual:oportunidade-${item.id}`,item.id,item.nome);}
+  function openPdvForStop(key){const stop=stopByKey(key);if(stop)openPdv(key,stop.cliente_id||'',stop.observacao||'Parada manual');}
+  window.closeRoutePdv=function(){document.getElementById('routePdvModal').classList.remove('open');document.getElementById('routePdvFrame').src='about:blank';pdvSourceKey=null;};
 
   let configSaveTimer=null;
   function applySavedConfig(){
@@ -742,8 +807,13 @@
     return url.toString();
   }
   function openMaps(){const url=googleFullUrl();if(!url)return toast('Gere a rota antes de abrir o GPS.',true);window.open(url,'_blank','noopener');toast(`Confira se o Google carregou todas as ${state.result.paradas.length} paradas.`);}
-  function saveDraft(){const payload={selected:state.selected,manualStops:state.manualStops,locked:[...state.locked],driver:document.getElementById('routeDriver').value,minutes:document.getElementById('stopMinutes').value,departure:document.getElementById('routeDeparture').value,fuelPrice:document.getElementById('fuelPrice').value,fuelAutonomy:document.getElementById('fuelAutonomy').value};localStorage.setItem('delivery-route-draft',JSON.stringify(payload));toast('Rascunho salvo neste navegador.');}
+  function saveDraft(silent=false){const payload={selected:state.selected,manualStops:state.manualStops,locked:[...state.locked],driver:document.getElementById('routeDriver').value,minutes:document.getElementById('stopMinutes').value,departure:document.getElementById('routeDeparture').value,fuelPrice:document.getElementById('fuelPrice').value,fuelAutonomy:document.getElementById('fuelAutonomy').value};localStorage.setItem('delivery-route-draft',JSON.stringify(payload));if(!silent)toast('Rascunho salvo neste navegador.');}
   function loadDraft(){try{const d=JSON.parse(localStorage.getItem('delivery-route-draft')||'null');if(!d)return;state.manualStops=d.manualStops||{};state.selected=(d.selected||[]).map(item=>String(item).includes(':')?String(item):orderKey(item)).filter(key=>stopByKey(key)&&(key.startsWith('manual:')||stopByKey(key).tem_coordenada));state.locked=new Set((d.locked||[]).map(String).map(item=>item.includes(':')?item:orderKey(item)).filter(key=>state.selected.includes(key)));document.getElementById('routeDriver').value=d.driver||'';document.getElementById('stopMinutes').value=d.minutes||5;document.getElementById('routeDeparture').value=d.departure||'';document.getElementById('fuelPrice').value=d.fuelPrice||'';document.getElementById('fuelAutonomy').value=d.fuelAutonomy||'';}catch(e){}}
+  function applyPendingPdvSale(){
+    const id=sessionStorage.getItem('delivery-route-new-order');if(!id)return;
+    const key=orderKey(id), order=stopByKey(key);sessionStorage.removeItem('delivery-route-new-order');
+    if(order?.tem_coordenada&&!state.selected.includes(key))state.selected.push(key);
+  }
   async function publishRoute(){
     if(!state.result)throw new Error('Gere a rota antes de publicá-la.');
     const etas=Object.fromEntries(state.result.paradas.map(parada=>[parada.chave||String(parada.id),parada.eta]));
@@ -765,11 +835,12 @@
   ['opportunitySegment','opportunityR','opportunityF','opportunityM'].forEach(id=>document.getElementById(id).addEventListener('change',filterOpportunities));
   document.getElementById('routeAddManual').addEventListener('click',openManualStopModal);
   document.getElementById('manualStopForm').addEventListener('submit',saveManualStop);
+  document.getElementById('stopObservationForm').addEventListener('submit',saveStopObservation);
   document.getElementById('manualCepLookup').addEventListener('click',lookupManualCep);
   document.getElementById('manualCep').addEventListener('input',event=>{event.target.value=formatCep(event.target.value);clearTimeout(manualCepTimer);if(event.target.value.replace(/\D/g,'').length===8)manualCepTimer=setTimeout(lookupManualCep,350);});
   document.getElementById('routeGenerate').addEventListener('click',generateBestRoute);
   document.getElementById('routeOptimize').addEventListener('click',()=>calculate(true));
-  document.getElementById('routeSave').addEventListener('click',saveDraft);
+  document.getElementById('routeSave').addEventListener('click',()=>saveDraft());
   document.getElementById('routeDriverLink').addEventListener('click',copyDriverLink);
   document.getElementById('routeShare').addEventListener('click',share);
   document.getElementById('routeMaps').addEventListener('click',openMaps);
@@ -783,7 +854,14 @@
   document.getElementById('routeDeparture').addEventListener('change',()=>scheduleAutomaticCalculation(false,100));
   document.getElementById('fuelPrice').addEventListener('input',()=>{renderFuelCost();saveRouteConfig();if(opportunitiesCache.length)filterOpportunities();});
   document.getElementById('fuelAutonomy').addEventListener('input',()=>{renderFuelCost();saveRouteConfig();if(opportunitiesCache.length)filterOpportunities();});
+  window.addEventListener('message',event=>{
+    if(event.origin!==window.location.origin||event.data?.type!=='delivery-route-sale-completed'||!event.data.delivery||!event.data.venda_id)return;
+    if(pdvSourceKey?.startsWith('manual:')){const id=pdvSourceKey.slice(7);delete state.manualStops[id];state.selected=state.selected.filter(key=>key!==pdvSourceKey);state.locked.delete(pdvSourceKey);}
+    sessionStorage.setItem('delivery-route-new-order',String(event.data.venda_id));
+    saveDraft(true);closeRoutePdv();window.location.reload();
+  });
   loadDraft();
+  applyPendingPdvSale();
   applySavedConfig();
   if(!document.getElementById('routeDeparture').value){const now=new Date();document.getElementById('routeDeparture').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;}
   renderAvailable();renderRoute();initMap();renderFuelCost();

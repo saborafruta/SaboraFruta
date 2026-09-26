@@ -4248,7 +4248,13 @@ function pdv() {
       await this.renovarProtecaoOffline();
       const restaurado = await this.restaurarRascunhoLocal();
       await this.atualizarListasTopo();
-      if (!restaurado) {
+      const rotaDelivery = new URLSearchParams(window.location.search).get('route_delivery') === '1';
+      if (rotaDelivery) {
+        this.novaVenda();
+        await this.aplicarClienteInicial();
+        this.modo='venda';
+        this.solicitarDelivery();
+      } else if (!restaurado) {
         await this.aplicarClienteInicial();
         await this.aplicarComandaInicial();
       }
@@ -4683,6 +4689,17 @@ function pdv() {
       } catch (e) {
         this.toast_('Nao foi possivel pre-selecionar o cliente.', 'erro');
       }
+    },
+
+    notificarRotaDelivery(d, payload) {
+      if (new URLSearchParams(window.location.search).get('route_delivery') !== '1') return;
+      window.parent?.postMessage({
+        type: 'delivery-route-sale-completed',
+        venda_id: d.venda_id || d.id || null,
+        numero_venda: d.numero_venda,
+        cliente_id: payload?.cliente_id || null,
+        delivery: Boolean(payload?.delivery),
+      }, window.location.origin);
     },
 
     _hora() {
@@ -5741,6 +5758,7 @@ function pdv() {
           this.vendaFinalizadaData = { id: d.venda_id || d.id || null, numero: d.numero_venda };
           this.toast_('✓ Venda #'+String(d.numero_venda).padStart(6,'0')+' finalizada!','ok');
           this.showModalImpressao = true;
+          this.notificarRotaDelivery(d, payload);
         } else if (d.tipo === 'estoque_insuficiente' && !forcar) {
           this.modalEstoque = { show: true, msg: d.erro || 'Estoque insuficiente.', itens: [] };
         } else {
@@ -5798,6 +5816,7 @@ function pdv() {
           this.toast_('✓ Venda #'+String(d.numero_venda).padStart(6,'0')+' finalizada!','ok');
           this.showModalImpressao = true;
           this.$nextTick(() => this.fecharModalEstoque());
+          this.notificarRotaDelivery(d, payload);
         } else {
           this.toast_('Erro: '+(d.erro||''),'erro');
         }
