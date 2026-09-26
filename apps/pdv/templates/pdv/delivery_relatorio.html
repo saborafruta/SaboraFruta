@@ -126,6 +126,8 @@
             <td class="px-4 py-3 text-center">
               {% if p.pago %}
                 <span class="soft-pill is-green">Pago</span>
+              {% elif p.pagamento_pendente %}
+                <span class="soft-pill is-amber">Pagamento pendente</span>
               {% else %}
                 <span class="soft-pill is-amber">Cobrar na entrega</span>
               {% endif %}

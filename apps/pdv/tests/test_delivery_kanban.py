@@ -85,6 +85,24 @@ class MudarStatusDeliveryModelTests(DeliveryKanbanBase):
 
 class DeliveryMoverViewTests(DeliveryKanbanBase):
 
+    def test_venda_salva_como_pendente_nao_aparece_como_paga(self):
+        venda = self._venda(numero=10)
+        venda.status = 'aberta'
+        venda.save(update_fields=['status'])
+
+        resp = self.client.get(reverse('pdv:delivery'))
+
+        self.assertEqual(resp.status_code, 200)
+        pedido = next(
+            pedido
+            for coluna in resp.context['colunas']
+            for pedido in coluna['pedidos']
+            if pedido.pk == venda.pk
+        )
+        self.assertFalse(pedido.pago)
+        self.assertTrue(pedido.pagamento_pendente)
+        self.assertContains(resp, 'Pagamento pendente')
+
     def test_move_o_pedido_no_kanban(self):
         venda = self._venda()
         resp = self.client.post(
@@ -312,6 +330,18 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         self.assertContains(resp, 'PAGO')
         self.assertContains(resp, 'Marcar entrega como concluída')
         self.assertEqual(resp.headers['Cache-Control'], 'private, no-store')
+
+    def test_painel_publico_nao_marca_venda_pendente_como_paga(self):
+        venda = self._venda(numero=411)
+        venda.status = 'aberta'
+        venda.save(update_fields=['status'])
+        url = self._publicar([venda]).json()['url']
+        self.client.logout()
+
+        resp = self.client.get(url)
+
+        self.assertContains(resp, 'PAGAMENTO PENDENTE')
+        self.assertNotContains(resp, '<span class="tag paid">PAGO</span>', html=True)
 
     def test_motoboy_conclui_somente_pedido_da_rota(self):
         permitido = self._venda(numero=420)

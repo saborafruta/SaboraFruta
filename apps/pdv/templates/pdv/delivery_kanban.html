@@ -275,6 +275,8 @@
 
               {% if pedido.pago %}
                 <span class="kcard-pgto-badge is-pago">✓ Pago</span>
+              {% elif pedido.pagamento_pendente %}
+                <span class="kcard-pgto-badge is-pendente">⏳ Pagamento pendente</span>
               {% else %}
                 <span class="kcard-pgto-badge is-pendente">⏳ Cobrar na entrega</span>
               {% endif %}
@@ -685,7 +687,9 @@
     (d.pedidos || []).forEach(p => {
       const situacao = p.pago
         ? '<span style="color:#059669;font-weight:700;">Pago</span>'
-        : '<span style="color:#d97706;font-weight:700;">Cobrar na entrega</span>';
+        : (p.pagamento_pendente
+          ? '<span style="color:#d97706;font-weight:700;">Pagamento pendente</span>'
+          : '<span style="color:#d97706;font-weight:700;">Cobrar na entrega</span>');
       linhas += `<tr>
         <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">${p.data_venda}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">#${p.numero_venda}</td>

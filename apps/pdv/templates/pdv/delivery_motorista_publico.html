@@ -48,7 +48,7 @@
       <div class="order-title">
         <h2>#{{ pedido.venda.numero_venda }} · {{ pedido.cliente }}</h2>
         <p>{{ pedido.endereco|default:"Endereço não informado" }}{% if pedido.complemento %} · {{ pedido.complemento }}{% endif %}</p>
-        {% if pedido.pago %}<span class="tag paid">PAGO</span>{% else %}<span class="tag collect">COBRAR R$ {{ pedido.venda.valor_total|floatformat:2 }}</span>{% endif %}
+        {% if pedido.pago %}<span class="tag paid">PAGO</span>{% elif pedido.pagamento_pendente %}<span class="tag collect">PAGAMENTO PENDENTE</span>{% else %}<span class="tag collect">COBRAR R$ {{ pedido.venda.valor_total|floatformat:2 }}</span>{% endif %}
       </div>
     </div>
 

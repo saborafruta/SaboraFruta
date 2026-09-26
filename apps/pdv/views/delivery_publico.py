@@ -155,7 +155,11 @@ def _dados_pedidos(pedidos):
             'telefone': telefone,
             'whatsapp': whatsapp,
             'observacoes': observacoes,
-            'pago': pedido.pk not in nao_pagos,
+            # Venda aberta/orcamento e apenas um rascunho: nao existe
+            # pagamento real ainda, mesmo que nenhuma conta a receber tenha
+            # sido criada. So uma venda finalizada pode aparecer como paga.
+            'pago': pedido.status == 'finalizada' and pedido.pk not in nao_pagos,
+            'pagamento_pendente': pedido.status != 'finalizada',
             'formas_pagamento': ', '.join(
                 pagamento.forma_pagamento.descricao
                 for pagamento in pedido.pagamentos.all()

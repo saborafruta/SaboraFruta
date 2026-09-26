@@ -3177,7 +3177,8 @@ def delivery_kanban(request):
         encerrado_em__lt=corte,
     )
 
-    # Pedido é considerado "não pago" (cobrar na entrega) se ainda existir
+    # Um rascunho salvo como pendente ainda nao teve pagamento efetivado.
+    # Depois da finalizacao, o pedido so fica pendente de cobranca se houver
     # uma conta a receber em aberto/vencida gerada por ele (boleto/vale).
     from apps.financeiro.constants.enums import StatusContaReceber
     from apps.financeiro.models import ContaReceber
@@ -3190,7 +3191,8 @@ def delivery_kanban(request):
         ).values_list('documento_id', flat=True)
     )
     for v in qs:
-        v.pago = v.pk not in pks_nao_pagos
+        v.pagamento_pendente = v.status != 'finalizada'
+        v.pago = not v.pagamento_pendente and v.pk not in pks_nao_pagos
 
     colunas = []
     for status_key, label, cor in DELIVERY_COLUNAS:
@@ -3677,7 +3679,8 @@ def _delivery_relatorio_dados(filial, data_ini, data_fim):
     total_geral = Decimal('0')
     total_pago = Decimal('0')
     for v in qs:
-        pago = v.pk not in pks_nao_pagos
+        pagamento_pendente = v.status != 'finalizada'
+        pago = not pagamento_pendente and v.pk not in pks_nao_pagos
         total_geral += v.valor_total
         if pago:
             total_pago += v.valor_total
@@ -3689,6 +3692,7 @@ def _delivery_relatorio_dados(filial, data_ini, data_fim):
             'entregador': v.entregador or '',
             'valor_total': v.valor_total,
             'pago': pago,
+            'pagamento_pendente': pagamento_pendente,
         })
 
     return {
