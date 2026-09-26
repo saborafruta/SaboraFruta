@@ -83,6 +83,7 @@ urlpatterns = [
     path("delivery/rotas/calcular/", pdv.delivery_rota_calcular, name="delivery_rota_calcular"),
     path("delivery/rotas/publicar/", pdv.delivery_rota_publicar, name="delivery_rota_publicar"),
     path("delivery/rotas/configuracao/", pdv.delivery_rota_salvar_configuracao, name="delivery_rota_salvar_configuracao"),
+    path("delivery/rotas/configuracao-rfm/", pdv.delivery_rota_salvar_configuracao_rfm, name="delivery_rota_salvar_configuracao_rfm"),
     path("delivery/rotas/oportunidades/", pdv.delivery_rota_oportunidades, name="delivery_rota_oportunidades"),
     path("delivery/rotas/parada-manual/localizar/", pdv.delivery_rota_localizar_parada_manual, name="delivery_rota_localizar_parada_manual"),
     path(

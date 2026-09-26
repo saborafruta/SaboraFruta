@@ -3364,6 +3364,15 @@ def _delivery_rota_filial(filial):
     }
 
 
+def _delivery_configuracao_rfm(configuracao=None):
+    return {
+        'r5_dias': configuracao.rfm_r5_dias if configuracao else 30,
+        'r4_dias': configuracao.rfm_r4_dias if configuracao else 60,
+        'r3_dias': configuracao.rfm_r3_dias if configuracao else 90,
+        'r2_dias': configuracao.rfm_r2_dias if configuracao else 180,
+    }
+
+
 @xframe_options_sameorigin
 @requer_permissao('pdv', 'ver')
 def delivery_rotas(request):
@@ -3381,6 +3390,7 @@ def delivery_rotas(request):
             'combustivel_preco': float(configuracao.combustivel_preco) if configuracao else 0,
             'autonomia_km_l': float(configuracao.autonomia_km_l) if configuracao else 0,
             'minutos_por_parada': configuracao.minutos_por_parada if configuracao else 5,
+            'rfm': _delivery_configuracao_rfm(configuracao),
         }),
         'embedded': request.GET.get('embed') == '1',
     })
@@ -3413,6 +3423,30 @@ def delivery_rota_salvar_configuracao(request):
         'combustivel_preco', 'autonomia_km_l', 'minutos_por_parada', 'updated_at',
     ])
     return JsonResponse({'ok': True})
+
+
+@require_POST
+@requer_permissao('pdv', 'ver')
+def delivery_rota_salvar_configuracao_rfm(request):
+    """Salva os limites de recência RFM compartilhados pela filial."""
+    from apps.pdv.models import RotaDeliveryPublica
+
+    try:
+        corpo = json.loads(request.body or b'{}')
+        limites = [int(corpo[chave]) for chave in ('r5_dias', 'r4_dias', 'r3_dias', 'r2_dias')]
+    except (KeyError, TypeError, ValueError):
+        return JsonResponse({'erro': 'Informe os quatro limites de dias do RFM.'}, status=400)
+    if any(valor < 1 or valor > 3650 for valor in limites):
+        return JsonResponse({'erro': 'Os limites devem ficar entre 1 e 3.650 dias.'}, status=400)
+    if limites != sorted(limites) or len(set(limites)) != 4:
+        return JsonResponse({'erro': 'Os limites precisam ser crescentes: R5 < R4 < R3 < R2.'}, status=400)
+
+    rota, _ = RotaDeliveryPublica.objects.get_or_create(filial=request.filial_ativa)
+    rota.rfm_r5_dias, rota.rfm_r4_dias, rota.rfm_r3_dias, rota.rfm_r2_dias = limites
+    rota.save(update_fields=[
+        'rfm_r5_dias', 'rfm_r4_dias', 'rfm_r3_dias', 'rfm_r2_dias', 'updated_at',
+    ])
+    return JsonResponse({'ok': True, 'rfm': _delivery_configuracao_rfm(rota)})
 
 
 def _delivery_pontos_oportunidades(corpo):
@@ -3479,6 +3513,9 @@ def delivery_rota_oportunidades(request):
     candidatos = [item[0] for item in encontrados.values()]
     frequencias = [getattr(getattr(c, 'recompra', None), 'qtd_compras', 0) for c in candidatos]
     monetarios = [float(getattr(getattr(c, 'recompra', None), 'valor_total_periodo', 0) or 0) for c in candidatos]
+    from apps.pdv.models import RotaDeliveryPublica
+    configuracao = RotaDeliveryPublica.objects.filter(filial=request.filial_ativa).first()
+    limites_rfm = _delivery_configuracao_rfm(configuracao)
     oportunidades = []
     for cliente in candidatos:
         recompra = getattr(cliente, 'recompra', None)
@@ -3486,13 +3523,13 @@ def delivery_rota_oportunidades(request):
         dias = recompra.dias_desde_ultima_compra if recompra else None
         if dias is None:
             r = 1
-        elif dias <= 30:
+        elif dias <= limites_rfm['r5_dias']:
             r = 5
-        elif dias <= 60:
+        elif dias <= limites_rfm['r4_dias']:
             r = 4
-        elif dias <= 90:
+        elif dias <= limites_rfm['r3_dias']:
             r = 3
-        elif dias <= 180:
+        elif dias <= limites_rfm['r2_dias']:
             r = 2
         else:
             r = 1
@@ -3543,6 +3580,7 @@ def delivery_rota_oportunidades(request):
     oportunidades.sort(key=lambda item: (-item['prioridade'], item['distancia_m'], item['nome']))
     return JsonResponse({
         'oportunidades': oportunidades[:20], 'total': len(oportunidades), 'raio_m': raio_m,
+        'configuracao_rfm': limites_rfm,
         'criterio': 'momento de recompra + RFM + proximidade da rota',
     })
 

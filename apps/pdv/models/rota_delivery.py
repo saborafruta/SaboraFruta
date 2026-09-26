@@ -35,6 +35,10 @@ class RotaDeliveryPublica(TimestampedModel):
         max_digits=8, decimal_places=2, default=Decimal('0.00'),
     )
     minutos_por_parada = models.PositiveSmallIntegerField(default=5)
+    rfm_r5_dias = models.PositiveSmallIntegerField(default=30)
+    rfm_r4_dias = models.PositiveSmallIntegerField(default=60)
+    rfm_r3_dias = models.PositiveSmallIntegerField(default=90)
+    rfm_r2_dias = models.PositiveSmallIntegerField(default=180)
     entregador = models.CharField(max_length=100, blank=True)
     ativa = models.BooleanField(default=True)
 

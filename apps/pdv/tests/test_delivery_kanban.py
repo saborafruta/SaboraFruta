@@ -175,6 +175,8 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'fuelAutonomy')
         self.assertContains(tela, 'opportunitySegment')
         self.assertContains(tela, 'Entenda os filtros RFM')
+        self.assertContains(tela, 'Configurar RFM')
+        self.assertContains(tela, 'rfmConfigModal')
         self.assertContains(tela, 'R5 F5 M5:')
         self.assertContains(tela, 'Para recuperar clientes:')
         self.assertContains(tela, 'Por que foi sugerido?')
@@ -431,6 +433,30 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertEqual(configuracao['minutos_por_parada'], 8)
         self.assertContains(tela, 'Oportunidades de Venda')
 
+    def test_configuracao_rfm_fica_guardada_na_filial_e_valida_ordem(self):
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_salvar_configuracao_rfm'),
+            data=json.dumps({'r5_dias': 15, 'r4_dias': 35, 'r3_dias': 70, 'r2_dias': 140}),
+            content_type='application/json',
+        )
+        rota = RotaDeliveryPublica.objects.get(filial=self.filial)
+        tela = self.client.get(reverse('pdv:delivery_rotas'))
+        configuracao = json.loads(tela.context['configuracao_rota_json'])['rfm']
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(rota.rfm_r5_dias, 15)
+        self.assertEqual(rota.rfm_r2_dias, 140)
+        self.assertEqual(configuracao, {
+            'r5_dias': 15, 'r4_dias': 35, 'r3_dias': 70, 'r2_dias': 140,
+        })
+
+        invalida = self.client.post(
+            reverse('pdv:delivery_rota_salvar_configuracao_rfm'),
+            data=json.dumps({'r5_dias': 60, 'r4_dias': 30, 'r3_dias': 90, 'r2_dias': 180}),
+            content_type='application/json',
+        )
+        self.assertEqual(invalida.status_code, 400)
+
     @patch('apps.mapas.services.proximidade.ProximidadeService.clientes_proximos')
     def test_oportunidades_combina_rfm_recompra_e_proximidade(self, proximos):
         candidato = Cliente.objects.create(
@@ -465,6 +491,19 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertEqual(oportunidade['segmento_rfm'], 'Campeão')
         self.assertGreaterEqual(oportunidade['prioridade'], 90)
         self.assertEqual(oportunidade['desvio_km_estimado'], 0.8)
+
+        rota = RotaDeliveryPublica.objects.create(
+            filial=self.filial, rfm_r5_dias=10, rfm_r4_dias=30,
+            rfm_r3_dias=60, rfm_r2_dias=120,
+        )
+        resp_configurada = self.client.post(
+            reverse('pdv:delivery_rota_oportunidades'),
+            data=json.dumps({'paradas': [{'lat': -5.80, 'lng': -35.22}], 'raio_m': 3000}),
+            content_type='application/json',
+        )
+        configurada = resp_configurada.json()['oportunidades'][0]
+        self.assertEqual(configurada['rfm_r'], 4)
+        self.assertEqual(resp_configurada.json()['configuracao_rfm']['r5_dias'], 10)
 
     @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.rota')
     def test_calculo_aceita_parada_manual_misturada_com_pedido(self, mock_rota):
