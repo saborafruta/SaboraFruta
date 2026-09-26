@@ -128,6 +128,23 @@
   }
   body.tema-claro .delivery-modal { background: #fff; }
   body:not(.tema-claro) .delivery-modal { background: #1c1c1f; }
+  .delivery-list-modal { width:min(1100px,96vw); height:min(90vh,850px); display:flex;
+    flex-direction:column; border-radius:16px; padding:18px; box-shadow:0 24px 60px rgba(0,0,0,.35); }
+  body.tema-claro .delivery-list-modal { background:#fff; }
+  body:not(.tema-claro) .delivery-list-modal { background:#1c1c1f; }
+  .delivery-list-search { width:100%; margin-top:12px; border:1px solid rgba(127,127,127,.3);
+    border-radius:9px; background:transparent; padding:10px 12px; color:inherit; font-size:13px; outline:none; }
+  .delivery-list-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;
+    margin-top:12px; padding:2px; overflow:auto; }
+  .delivery-list-card { border:1px solid rgba(127,127,127,.24); border-left:4px solid #3b82f6;
+    border-radius:10px; background:rgba(127,127,127,.06); padding:11px; text-align:left; color:inherit; cursor:pointer; }
+  .delivery-list-card:hover { border-color:#60a5fa; background:rgba(59,130,246,.09); }
+  .delivery-list-card-head { display:flex; justify-content:space-between; gap:8px; font-size:11px; }
+  .delivery-list-card-client { margin-top:5px; font-size:13px; font-weight:800; }
+  .delivery-list-card-meta { margin-top:5px; color:#9ca3af; font-size:11px; line-height:1.4; }
+  .delivery-list-status { color:#93c5fd; font-weight:800; }
+  @media(max-width:850px){.delivery-list-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+  @media(max-width:560px){.delivery-list-grid{grid-template-columns:1fr;}.delivery-list-modal{height:94vh;}}
 
   /* ── Sugestão de clientes próximos à entrega (§8) ── */
   .delivery-modal.largo { max-width: 900px; max-height: 88vh; display: flex;
@@ -191,6 +208,10 @@
       <button onclick="abrirRotaDelivery()" class="btn-primary text-sm">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.4-2.7A1 1 0 013 16.4V5.6a1 1 0 011.4-.9L9 7m0 13l6-3m-6 3V7m6 10l4.6 2.3A1 1 0 0021 18.4V7.6a1 1 0 00-.6-.9L15 4m0 13V4m0 0L9 7"/></svg>
         Rota do Delivery
+      </button>
+      <button onclick="abrirListaDelivery()" class="btn-secondary text-sm">
+        <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        Lista
       </button>
       <button onclick="abrirRelatorioModal()" class="btn-secondary text-sm">
         <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -341,7 +362,20 @@
         <button type="button" class="btn-secondary text-xs" onclick="fecharRotaDelivery()">Fechar</button>
       </div>
     </div>
-    <iframe id="routeDeliveryFrame" title="Rota do Delivery" data-src="{% url 'pdv:delivery_rotas' %}?embed=1"></iframe>
+    <iframe id="routeDeliveryFrame" title="Rota do Delivery" data-src="{% url 'pdv:delivery_rotas' %}?embed=1" allowfullscreen></iframe>
+  </div>
+</div>
+
+<!-- Lista pesquisável para visualizar muitos pedidos sem percorrer as colunas. -->
+<div class="delivery-modal-bg" id="deliveryListModal" onclick="if(event.target===this) fecharListaDelivery()">
+  <div class="delivery-list-modal">
+    <div class="flex items-center justify-between gap-3">
+      <div><h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">Lista de pedidos</h3><p class="text-xs mt-1" id="deliveryListCount"></p></div>
+      <button onclick="fecharListaDelivery()" class="text-lg w-7 h-7 rounded-full flex items-center justify-center"
+              :style="temaClaro ? 'color:#6b7280; background:#f3f4f6;' : 'color:#9ca3af; background:#2a2a2e;'">&times;</button>
+    </div>
+    <input class="delivery-list-search" id="deliveryListSearch" placeholder="Pesquisar cliente, pedido, endereço ou status" oninput="renderListaDelivery()">
+    <div class="delivery-list-grid" id="deliveryListGrid"></div>
   </div>
 </div>
 
@@ -488,6 +522,48 @@
     else if (panel.requestFullscreen) panel.requestFullscreen();
   }
 
+  function abrirListaDelivery() {
+    document.getElementById('deliveryListModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    renderListaDelivery();
+    setTimeout(() => document.getElementById('deliveryListSearch').focus(), 50);
+  }
+
+  function fecharListaDelivery() {
+    document.getElementById('deliveryListModal').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  function renderListaDelivery() {
+    const dados = window.deliveryData || {};
+    const busca = (document.getElementById('deliveryListSearch').value || '').toLowerCase().trim();
+    const cores = {novo:'#3b82f6',preparando:'#f59e0b',em_entrega:'#8b5cf6',entregue:'#10b981',finalizado:'#94a3b8'};
+    const itens = Object.entries(dados).filter(([, d]) => {
+      const endereco=d.endereco_entrega||{};
+      return !busca || [
+        d.numero_venda,d.cliente_nome,d.status_label,endereco.rua,endereco.logradouro,
+        endereco.numero,endereco.bairro,d.entregador
+      ].filter(Boolean).join(' ').toLowerCase().includes(busca);
+    });
+    document.getElementById('deliveryListCount').textContent=`${itens.length} pedido${itens.length===1?'':'s'} encontrado${itens.length===1?'':'s'}`;
+    const grid=document.getElementById('deliveryListGrid');
+    grid.innerHTML=itens.length?itens.map(([pk,d])=>{
+      const endereco=d.endereco_entrega||{};
+      const linha=[endereco.rua||endereco.logradouro,endereco.numero].filter(Boolean).join(', ');
+      const local=[endereco.bairro,endereco.cidade].filter(Boolean).join(' · ');
+      const pagamento=d.pago?'Pago':(d.pagamento_pendente?'Pagamento pendente':'Cobrar na entrega');
+      return `<button type="button" class="delivery-list-card" data-list-pk="${pk}" style="border-left-color:${cores[d.status_delivery]||'#64748b'}">
+        <div class="delivery-list-card-head"><strong>#${esc(d.numero_venda)}</strong><span class="delivery-list-status">${esc(d.status_label)}</span></div>
+        <div class="delivery-list-card-client">${esc(d.cliente_nome)}</div>
+        <div class="delivery-list-card-meta">${esc([linha,local].filter(Boolean).join(' — ')||'Endereço não informado')}<br>R$ ${Number(d.valor_total||0).toLocaleString('pt-BR',{minimumFractionDigits:2})} · ${esc(pagamento)}</div>
+      </button>`;
+    }).join(''):'<div class="text-sm" style="color:#9ca3af;">Nenhum pedido encontrado.</div>';
+    grid.querySelectorAll('[data-list-pk]').forEach(card=>card.addEventListener('click',()=>{
+      const pk=card.dataset.listPk,d=dados[pk];fecharListaDelivery();
+      abrirModal(Number(pk),d.status_delivery,d.entregador||'',d.observacao_delivery||'');
+    }));
+  }
+
   // ── Drag & Drop ──────────────────────────────────────────────────────────
 
   function kanbanDragStart(ev, el) {
@@ -544,6 +620,13 @@
       });
       const data = await resp.json();
       if (data.ok) {
+        const detalhe = window.deliveryData && window.deliveryData[String(pk)];
+        if (detalhe) {
+          detalhe.status_delivery = status;
+          detalhe.status_label = data.status_label;
+          if (Object.prototype.hasOwnProperty.call(extra, 'entregador')) detalhe.entregador = extra.entregador || '';
+          if (Object.prototype.hasOwnProperty.call(extra, 'observacao_delivery')) detalhe.observacao_delivery = extra.observacao_delivery || '';
+        }
         mostrarToast('Pedido movido para ' + data.status_label);
         // A sugestão (§8) aparece ao sair para entrega: é o último momento em
         // que ela ainda dá para usar. Depois que o entregador voltou, saber
@@ -567,6 +650,10 @@
       });
       const data = await resp.json();
       if (!data.ok) mostrarToast(data.erro || 'Erro ao salvar', true);
+      else {
+        const detalhe = window.deliveryData && window.deliveryData[String(pk)];
+        if (detalhe) Object.assign(detalhe, campos);
+      }
     } catch {
       mostrarToast('Erro de rede', true);
     }

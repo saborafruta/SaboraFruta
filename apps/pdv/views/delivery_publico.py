@@ -98,7 +98,7 @@ def _pedidos_da_rota(rota):
     return [encontrados[pk] for pk in ids if pk in encontrados]
 
 
-def _dados_pedidos(pedidos):
+def _dados_pedidos(pedidos, etas=None):
     from apps.financeiro.constants.enums import StatusContaReceber
     from apps.financeiro.models import ContaReceber
 
@@ -109,6 +109,7 @@ def _dados_pedidos(pedidos):
             status__in=[StatusContaReceber.ABERTO, StatusContaReceber.VENCIDO],
         ).values_list('documento_id', flat=True)
     )
+    etas = etas if isinstance(etas, dict) else {}
     dados = []
     for ordem, pedido in enumerate(pedidos, start=1):
         cliente = pedido.cliente
@@ -119,10 +120,10 @@ def _dados_pedidos(pedidos):
             str(endereco.get('numero') or (cliente.numero if cliente else '') or ''),
             endereco.get('bairro') or (cliente.bairro if cliente else ''),
         ]))
-        observacoes = [
+        observacoes = list(dict.fromkeys(
             texto.strip() for texto in (pedido.observacao_delivery, pedido.observacao)
             if texto and texto.strip()
-        ]
+        ))
         dados.append({
             'ordem': ordem,
             'venda': pedido,
@@ -135,6 +136,7 @@ def _dados_pedidos(pedidos):
             'telefone': telefone,
             'whatsapp': whatsapp,
             'observacoes': observacoes,
+            'eta': str(etas.get(str(pedido.pk)) or ''),
             # Venda aberta/orcamento e apenas um rascunho: nao existe
             # pagamento real ainda, mesmo que nenhuma conta a receber tenha
             # sido criada. So uma venda finalizada pode aparecer como paga.
@@ -172,7 +174,7 @@ def _dados_pedidos(pedidos):
 def painel(request, token):
     rota = _buscar_rota(token)
     pedidos = _pedidos_da_rota(rota)
-    dados = _dados_pedidos(pedidos)
+    dados = _dados_pedidos(pedidos, rota.pedido_etas)
     response = render(request, 'pdv/delivery_motorista_publico.html', {
         'rota': rota,
         'pedidos': dados,
@@ -198,6 +200,10 @@ def concluir(request, token, pk):
         entregue = corpo.get('entregue', True) is not False
 
     with transaction.atomic():
+        rota = get_object_or_404(
+            RotaDeliveryPublica._base_manager.select_for_update(),
+            pk=rota.pk, ativa=True,
+        )
         venda = get_object_or_404(
             VendaPDV._base_manager.select_for_update(),
             pk=pk, filial=rota.filial, delivery=True,
@@ -209,17 +215,32 @@ def concluir(request, token, pk):
             return _privado(JsonResponse({
                 'erro': 'Esta entrega já foi encerrada e não pode ser alterada.'
             }, status=400))
-        novo_status = (
-            VendaPDV.StatusDelivery.ENTREGUE
-            if entregue else VendaPDV.StatusDelivery.EM_ENTREGA
-        )
+        anteriores = dict(rota.pedido_status_anteriores or {})
+        chave = str(pk)
+        if entregue:
+            if venda.status_delivery != VendaPDV.StatusDelivery.ENTREGUE:
+                anteriores[chave] = venda.status_delivery
+            novo_status = VendaPDV.StatusDelivery.ENTREGUE
+        else:
+            novo_status = anteriores.pop(
+                chave, VendaPDV.StatusDelivery.EM_ENTREGA,
+            )
+            if novo_status not in (
+                VendaPDV.StatusDelivery.NOVO,
+                VendaPDV.StatusDelivery.PREPARANDO,
+                VendaPDV.StatusDelivery.EM_ENTREGA,
+            ):
+                novo_status = VendaPDV.StatusDelivery.EM_ENTREGA
         if venda.status_delivery != novo_status:
             venda.mudar_status_delivery(novo_status)
+        rota.pedido_status_anteriores = anteriores
+        rota.save(update_fields=['pedido_status_anteriores', 'updated_at'])
     if 'application/json' in request.headers.get('Accept', ''):
         return _privado(JsonResponse({
             'ok': True,
             'pedido_id': pk,
             'status': novo_status,
+            'status_label': venda.get_status_delivery_display(),
             'concluido': entregue,
         }))
     return redirect(reverse('delivery_publico:painel', args=[token]) + f'#pedido-{pk}')

@@ -162,13 +162,22 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'Melhor rota')
         self.assertContains(tela, 'Reotimizar livres')
         self.assertContains(tela, 'Google Maps')
+        self.assertContains(tela, 'Expandir mapa')
+        self.assertContains(tela, 'requestFullscreen')
         self.assertNotContains(tela, 'Waze')
         pedidos = json.loads(tela.context['pedidos_json'])
         self.assertIn(ativo.pk, [p['id'] for p in pedidos])
         self.assertNotIn(em_entrega.pk, [p['id'] for p in pedidos])
         self.assertNotIn(102, [p['numero'] for p in pedidos])
         self.assertContains(kanban, 'Rota do Delivery')
+        self.assertContains(kanban, 'abrirListaDelivery()')
+        self.assertContains(kanban, 'Lista de pedidos')
+        self.assertContains(kanban, 'deliveryListModal')
+        self.assertContains(kanban, 'Pesquisar cliente, pedido, endereço ou status')
         self.assertContains(kanban, '?embed=1')
+        dados_kanban = json.loads(kanban.context['pedidos_json'])
+        self.assertEqual(dados_kanban[str(ativo.pk)]['status_delivery'], 'preparando')
+        self.assertEqual(dados_kanban[str(ativo.pk)]['status_label'], 'Em Preparo')
 
     @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.rota')
     def test_calculo_preserva_ordem_e_inclui_retorno(self, mock_rota):
@@ -339,10 +348,13 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
             'geo_fixado',
         ])
 
-    def _publicar(self, pedidos, entregador='João'):
+    def _publicar(self, pedidos, entregador='João', etas=None):
+        payload = {'pedidos': [p.pk for p in pedidos], 'entregador': entregador}
+        if etas is not None:
+            payload['etas'] = etas
         return self.client.post(
             reverse('pdv:delivery_rota_publicar'),
-            data=json.dumps({'pedidos': [p.pk for p in pedidos], 'entregador': entregador}),
+            data=json.dumps(payload),
             content_type='application/json',
         )
 
@@ -373,12 +385,26 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         self.assertContains(resp, '#410')
         self.assertContains(resp, 'Cliente Delivery')
         self.assertContains(resp, 'Entregar na recepção lateral.')
+        self.assertContains(resp, 'class="card-note"', html=False)
         self.assertContains(resp, '(84) 99999-1234')
         self.assertContains(resp, 'WhatsApp do cliente')
         self.assertContains(resp, 'PAGO')
         self.assertContains(resp, 'Marcar parada 1 como entregue')
         self.assertContains(resp, 'Ver mais')
         self.assertEqual(resp.headers['Cache-Control'], 'private, no-store')
+
+    def test_painel_publico_exibe_eta_publicada_em_cada_entrega(self):
+        venda = self._venda(numero=412)
+        url = self._publicar(
+            [venda], etas={str(venda.pk): '14:35'},
+        ).json()['url']
+        rota = RotaDeliveryPublica.objects.get(filial=self.filial)
+        self.client.logout()
+
+        resp = self.client.get(url)
+
+        self.assertEqual(rota.pedido_etas, {str(venda.pk): '14:35'})
+        self.assertContains(resp, 'Chegada 14:35')
 
     def test_painel_publico_nao_marca_venda_pendente_como_paga(self):
         venda = self._venda(numero=411)
@@ -430,8 +456,8 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         self.assertEqual(resp.json()['status'], VendaPDV.StatusDelivery.ENTREGUE)
         self.assertEqual(venda.status_delivery, VendaPDV.StatusDelivery.ENTREGUE)
 
-    def test_motoboy_pode_desmarcar_e_pedido_volta_para_em_entrega(self):
-        venda = self._venda(numero=423)
+    def test_motoboy_pode_desmarcar_e_pedido_volta_para_status_anterior(self):
+        venda = self._venda(numero=423, status_delivery='preparando')
         self._publicar([venda])
         rota = RotaDeliveryPublica.objects.get(filial=self.filial)
         self.client.logout()
@@ -441,6 +467,11 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
             url, data=json.dumps({'entregue': True}),
             content_type='application/json', HTTP_ACCEPT='application/json',
         )
+        rota.refresh_from_db()
+        self.assertEqual(
+            rota.pedido_status_anteriores,
+            {str(venda.pk): VendaPDV.StatusDelivery.PREPARANDO},
+        )
         resp = self.client.post(
             url, data=json.dumps({'entregue': False}),
             content_type='application/json', HTTP_ACCEPT='application/json',
@@ -449,7 +480,10 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         venda.refresh_from_db()
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(resp.json()['concluido'])
-        self.assertEqual(venda.status_delivery, VendaPDV.StatusDelivery.EM_ENTREGA)
+        self.assertEqual(resp.json()['status_label'], 'Em Preparo')
+        self.assertEqual(venda.status_delivery, VendaPDV.StatusDelivery.PREPARANDO)
+        rota.refresh_from_db()
+        self.assertEqual(rota.pedido_status_anteriores, {})
 
     def test_painel_joga_concluidos_para_o_final_sem_trocar_numero_da_rota(self):
         concluida = self._venda(numero=424)

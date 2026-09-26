@@ -37,6 +37,9 @@
   .dr-panel { display:flex; min-width:0; flex-direction:column; overflow:hidden; border:1px solid #2d3440; border-radius:11px; background:#1f2329; }
   .dr-panel-head { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:42px; padding:9px 11px; border-bottom:1px solid #2d3440; }
   .dr-panel-title { color:#f3f6fb; font-size:12px; font-weight:800; }
+  .dr-panel-head-actions { display:flex; align-items:center; gap:6px; }
+  .dr-map-expand { border:1px solid #465164; border-radius:6px; background:#303744; padding:4px 7px;
+    color:#dbe4f0; font-size:9px; font-weight:800; cursor:pointer; }
   .dr-count { border-radius:999px; padding:2px 7px; background:#303744; color:#9eabc0; font-size:9px; font-weight:800; }
   .dr-search { margin:9px 9px 3px; padding:8px 10px; border:1px solid #313846; border-radius:8px; background:#171a1f; color:#e6edf7; font-size:11px; outline:none; }
   .dr-list { overflow:auto; padding:7px; scrollbar-width:thin; }
@@ -61,6 +64,8 @@
   .dr-lock.locked { background:#14543f; color:#67e3b0; }
   .dr-empty { padding:35px 14px; color:#69768a; font-size:11px; line-height:1.5; text-align:center; }
   .dr-map { position:relative; flex:1; min-height:390px; }
+  .map-panel:fullscreen { width:100vw; height:100vh; border:0; border-radius:0; background:#1f2329; }
+  .map-panel:fullscreen .dr-map { min-height:0; }
   #deliveryRouteMap { position:absolute; inset:0; background:#111820; }
   .dr-map-note { position:absolute; z-index:500; right:9px; bottom:9px; max-width:270px; border:1px solid #344154; border-radius:8px; background:rgba(21,25,31,.92); padding:7px 9px; color:#aeb9c9; font-size:9px; }
   .dr-marker { display:flex; align-items:center; justify-content:center; width:25px; height:25px; border:2px solid #fff; border-radius:50%; background:#16a36e; color:#fff; box-shadow:0 2px 8px #0008; font-size:10px; font-weight:900; }
@@ -139,7 +144,7 @@
       <div class="dr-list" id="routeList"></div>
     </section>
     <section class="dr-panel map-panel">
-      <div class="dr-panel-head"><span class="dr-panel-title">Mapa da rota</span><span class="dr-count" id="routeProvider">Aguardando rota</span></div>
+      <div class="dr-panel-head"><span class="dr-panel-title">Mapa da rota</span><div class="dr-panel-head-actions"><span class="dr-count" id="routeProvider">Aguardando rota</span><button class="dr-map-expand" id="mapExpand" type="button">⛶ Expandir mapa</button></div></div>
       <div class="dr-map"><div id="deliveryRouteMap"></div><div class="dr-map-note" id="mapNote">Selecione os pedidos e clique em “Melhor rota”.</div></div>
     </section>
   </div>
@@ -202,6 +207,11 @@
     map=L.map('deliveryRouteMap',{zoomControl:true,preferCanvas:true}).setView(center,branch.tem_coordenada?13:4);
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles &copy; Esri'}).addTo(map);
     if(branch.tem_coordenada) addMarker(branch.lat,branch.lng,'⌂','base',branch.nome);
+  }
+  function toggleMapFullscreen(){
+    const panel=document.querySelector('.map-panel');
+    if(document.fullscreenElement)document.exitFullscreen();
+    else if(panel.requestFullscreen)panel.requestFullscreen();
   }
   function addMarker(lat,lng,label,kind,title) {
     const icon=L.divIcon({className:'',iconSize:[25,25],iconAnchor:[12,12],html:`<div class="dr-marker ${kind||''}">${esc(label)}</div>`});
@@ -355,7 +365,8 @@
   function loadDraft(){try{const d=JSON.parse(localStorage.getItem('delivery-route-draft')||'null');if(!d)return;state.selected=(d.selected||[]).map(Number).filter(id=>byId[String(id)]?.tem_coordenada);state.locked=new Set((d.locked||[]).map(Number));document.getElementById('routeDriver').value=d.driver||'';document.getElementById('stopMinutes').value=d.minutes||5;}catch(e){}}
   async function publishRoute(){
     if(!state.result)throw new Error('Gere a rota antes de publicá-la.');
-    const resp=await fetch(publishUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({pedidos:state.result.ordem,entregador:document.getElementById('routeDriver').value.trim()})});
+    const etas=Object.fromEntries(state.result.paradas.map(parada=>[String(parada.id),parada.eta]));
+    const resp=await fetch(publishUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({pedidos:state.result.ordem,entregador:document.getElementById('routeDriver').value.trim(),etas})});
     const data=await resp.json();if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);return data;
   }
   async function copyDriverLink(){try{const data=await publishRoute();if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(data.url);toast('Link fixo do motoboy copiado.');}else{window.prompt('Copie o link fixo do motoboy:',data.url);}}catch(error){toast(error.message,true);}}
@@ -368,6 +379,11 @@
   document.getElementById('routeDriverLink').addEventListener('click',copyDriverLink);
   document.getElementById('routeShare').addEventListener('click',share);
   document.getElementById('routeMaps').addEventListener('click',openMaps);
+  document.getElementById('mapExpand').addEventListener('click',toggleMapFullscreen);
+  document.addEventListener('fullscreenchange',()=>{
+    document.getElementById('mapExpand').textContent=document.fullscreenElement?'✕ Fechar mapa':'⛶ Expandir mapa';
+    setTimeout(()=>map?.invalidateSize(),120);
+  });
   document.getElementById('addressForm').addEventListener('submit',saveAddress);
   document.getElementById('stopMinutes').addEventListener('change',()=>scheduleAutomaticCalculation(false,100));
   loadDraft();renderAvailable();renderRoute();initMap();

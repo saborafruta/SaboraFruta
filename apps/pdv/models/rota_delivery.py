@@ -22,6 +22,8 @@ class RotaDeliveryPublica(TimestampedModel):
         max_length=32, unique=True, editable=False, default=gerar_token_rota_delivery,
     )
     pedido_ids = models.JSONField(default=list, blank=True)
+    pedido_etas = models.JSONField(default=dict, blank=True)
+    pedido_status_anteriores = models.JSONField(default=dict, blank=True)
     entregador = models.CharField(max_length=100, blank=True)
     ativa = models.BooleanField(default=True)
 

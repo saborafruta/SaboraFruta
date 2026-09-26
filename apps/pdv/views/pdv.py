@@ -3227,12 +3227,16 @@ def delivery_kanban(request):
         pedidos_data[str(v.pk)] = {
             'numero_venda': v.numero_venda,
             'data_venda': v.data_venda.strftime('%d/%m/%Y %H:%M'),
+            'status_delivery': v.status_delivery,
+            'status_label': v.get_status_delivery_display(),
+            'entregador': v.entregador or '',
             'cliente_nome': (v.cliente.nome_fantasia or v.cliente.razao_social) if v.cliente else 'Consumidor Final',
             'cliente_cpf_cnpj': v.cliente.cpf_cnpj if v.cliente else '',
-            'endereco_entrega': v.endereco_entrega or {},
+            'endereco_entrega': v.endereco_entrega or _cliente_endereco_preferencial(v.cliente),
             'observacao_delivery': v.observacao_delivery or '',
             'valor_total': float(v.valor_total),
             'pago': v.pago,
+            'pagamento_pendente': v.pagamento_pendente,
             'itens': itens,
             'pagamentos': pagamentos,
         }
@@ -3674,11 +3678,19 @@ def delivery_rota_publicar(request):
         return JsonResponse({'erro': 'A rota contém pedidos inválidos.'}, status=400)
 
     entregador = str(corpo.get('entregador') or '').strip()[:100]
+    etas_recebidas = corpo.get('etas') if isinstance(corpo.get('etas'), dict) else {}
+    etas = {}
+    for pk in ids:
+        eta = str(etas_recebidas.get(str(pk)) or '').strip()
+        if re.fullmatch(r'\d{2}:\d{2}', eta):
+            etas[str(pk)] = eta
     with tenant_atomic():
         rota, _criada = RotaDeliveryPublica.objects.get_or_create(
             filial=request.filial_ativa,
         )
         rota.pedido_ids = ids
+        rota.pedido_etas = etas
+        rota.pedido_status_anteriores = {}
         rota.entregador = entregador
         rota.ativa = True
         rota.save()
