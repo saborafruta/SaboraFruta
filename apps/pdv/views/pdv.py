@@ -333,6 +333,7 @@ def _informacoes_adicionais_request(request):
 # Tela principal
 # ---------------------------------------------------------------------------
 
+@xframe_options_sameorigin
 @requer_permissao('pdv', 'ver')
 def pdv_home(request):
     caixas = list(

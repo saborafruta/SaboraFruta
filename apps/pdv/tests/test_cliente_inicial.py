@@ -83,6 +83,7 @@ class ClienteInicialTests(TestCase):
 
         resp = self.client.get(reverse('pdv:home'), {'route_delivery': '1'})
 
+        self.assertEqual(resp.headers['X-Frame-Options'], 'SAMEORIGIN')
         self.assertContains(resp, 'delivery-route-sale-completed')
         self.assertContains(resp, "get('route_delivery') === '1'")
 
