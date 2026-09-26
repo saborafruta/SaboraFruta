@@ -47,6 +47,16 @@
   }
   body.tema-claro .kanban-col-count  { background: #e2e8f0; color: #475569; }
   body:not(.tema-claro) .kanban-col-count { background: #2a2a2e; color: #9ca3af; }
+  .kanban-col-actions { display:flex; align-items:center; gap:5px; }
+  .kanban-list-btn { display:grid; place-items:center; width:25px; height:25px; border:1px solid rgba(127,127,127,.25);
+    border-radius:7px; background:transparent; color:#94a3b8; cursor:pointer; }
+  .kanban-list-btn:hover { border-color:#60a5fa; color:#60a5fa; background:rgba(59,130,246,.09); }
+  .kanban-list-btn svg { width:14px; height:14px; }
+  .kanban-search-wrap { position:relative; width:min(520px,100%); }
+  .kanban-search { width:100%; border:1px solid rgba(127,127,127,.28); border-radius:9px; background:transparent;
+    padding:9px 12px 9px 36px; color:inherit; font-size:13px; outline:none; }
+  .kanban-search:focus { border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.14); }
+  .kanban-search-icon { position:absolute; left:12px; top:50%; width:15px; height:15px; transform:translateY(-50%); color:#64748b; pointer-events:none; }
 
   /* Cards */
   .kanban-cards { padding: 4px 10px 10px; flex: 1; min-height: 60px; overflow-y: auto; }
@@ -134,17 +144,27 @@
   body:not(.tema-claro) .delivery-list-modal { background:#1c1c1f; }
   .delivery-list-search { width:100%; margin-top:12px; border:1px solid rgba(127,127,127,.3);
     border-radius:9px; background:transparent; padding:10px 12px; color:inherit; font-size:13px; outline:none; }
-  .delivery-list-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;
-    margin-top:12px; padding:2px; overflow:auto; }
-  .delivery-list-card { border:1px solid rgba(127,127,127,.24); border-left:4px solid #3b82f6;
-    border-radius:10px; background:rgba(127,127,127,.06); padding:11px; text-align:left; color:inherit; cursor:pointer; }
-  .delivery-list-card:hover { border-color:#60a5fa; background:rgba(59,130,246,.09); }
-  .delivery-list-card-head { display:flex; justify-content:space-between; gap:8px; font-size:11px; }
-  .delivery-list-card-client { margin-top:5px; font-size:13px; font-weight:800; }
-  .delivery-list-card-meta { margin-top:5px; color:#9ca3af; font-size:11px; line-height:1.4; }
-  .delivery-list-status { color:#93c5fd; font-weight:800; }
-  @media(max-width:850px){.delivery-list-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
-  @media(max-width:560px){.delivery-list-grid{grid-template-columns:1fr;}.delivery-list-modal{height:94vh;}}
+  .delivery-list-table-wrap { margin-top:12px; overflow:auto; border:1px solid rgba(127,127,127,.22);
+    border-radius:10px; }
+  .delivery-list-table { width:100%; min-width:980px; border-collapse:separate; border-spacing:0;
+    font-size:12px; }
+  .delivery-list-table th { position:sticky; top:0; z-index:1; padding:10px 12px; border-bottom:1px solid rgba(127,127,127,.28);
+    background:#28282c; color:#9ca3af; text-align:left; font-size:10px; font-weight:800; letter-spacing:.05em;
+    text-transform:uppercase; white-space:nowrap; }
+  body.tema-claro .delivery-list-table th { background:#f1f5f9; color:#475569; }
+  .delivery-list-table td { padding:10px 12px; border-bottom:1px solid rgba(127,127,127,.16);
+    color:inherit; vertical-align:middle; }
+  .delivery-list-table tbody tr { cursor:pointer; transition:background .12s; }
+  .delivery-list-table tbody tr:hover { background:rgba(59,130,246,.10); }
+  .delivery-list-table tbody tr:last-child td { border-bottom:0; }
+  .delivery-list-number,.delivery-list-client { font-weight:800; }
+  .delivery-list-number { color:#f59e0b; white-space:nowrap; }
+  .delivery-list-address { min-width:270px; max-width:380px; color:#9ca3af !important; }
+  .delivery-list-money { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .delivery-list-status { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; font-weight:800; }
+  .delivery-list-status::before { content:''; width:7px; height:7px; border-radius:50%; background:var(--status-color,#64748b); }
+  .delivery-list-empty { padding:28px !important; color:#9ca3af !important; text-align:center; }
+  @media(max-width:560px){.delivery-list-modal{height:94vh; padding:13px;}}
 
   /* ── Sugestão de clientes próximos à entrega (§8) ── */
   .delivery-modal.largo { max-width: 900px; max-height: 88vh; display: flex;
@@ -209,10 +229,6 @@
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.4-2.7A1 1 0 013 16.4V5.6a1 1 0 011.4-.9L9 7m0 13l6-3m-6 3V7m6 10l4.6 2.3A1 1 0 0021 18.4V7.6a1 1 0 00-.6-.9L15 4m0 13V4m0 0L9 7"/></svg>
         Rota do Delivery
       </button>
-      <button onclick="abrirListaDelivery()" class="btn-secondary text-sm">
-        <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-        Lista
-      </button>
       <button onclick="abrirRelatorioModal()" class="btn-secondary text-sm">
         <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a2 2 0 012-2h2a2 2 0 012 2v2m-9 4h14a2 2 0 002-2V7a2 2 0 00-2-2h-3l-2-2H9L7 5H4a2 2 0 00-2 2v12a2 2 0 002 2z"/>
@@ -229,6 +245,11 @@
     </div>
   </div>
 
+  <div class="kanban-search-wrap">
+    <svg class="kanban-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35m1.35-5.65a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"/></svg>
+    <input id="kanbanSearch" class="kanban-search" type="search" placeholder="Pesquisar cards por cliente, pedido, endereço, status ou entregador" oninput="filtrarKanban()">
+  </div>
+
   <!-- Kanban Board -->
   <div class="kanban-board" id="kanbanBoard" style="--kanban-cols: {{ colunas|length|add:1 }};">
     {% for col in colunas %}
@@ -243,7 +264,14 @@
             <span class="kanban-col-dot" style="background:{{ col.cor }};"></span>
             <span :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">{{ col.label }}</span>
           </div>
-          <span class="kanban-col-count">{{ col.pedidos|length }}</span>
+          <div class="kanban-col-actions">
+            <button type="button" class="kanban-list-btn" title="Ver {{ col.label }} em lista"
+                    aria-label="Ver {{ col.label }} em lista"
+                    onclick="abrirListaDelivery('{{ col.key }}', '{{ col.label|escapejs }}')">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+            </button>
+            <span class="kanban-col-count">{{ col.pedidos|length }}</span>
+          </div>
         </div>
 
         <div class="kanban-cards" id="col-{{ col.key }}">
@@ -370,12 +398,17 @@
 <div class="delivery-modal-bg" id="deliveryListModal" onclick="if(event.target===this) fecharListaDelivery()">
   <div class="delivery-list-modal">
     <div class="flex items-center justify-between gap-3">
-      <div><h3 class="text-base font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">Lista de pedidos</h3><p class="text-xs mt-1" id="deliveryListCount"></p></div>
+      <div><h3 class="text-base font-semibold" id="deliveryListTitle" :style="temaClaro ? 'color:#111827;' : 'color:#f0f0f0;'">Lista de pedidos</h3><p class="text-xs mt-1" id="deliveryListCount"></p></div>
       <button onclick="fecharListaDelivery()" class="text-lg w-7 h-7 rounded-full flex items-center justify-center"
               :style="temaClaro ? 'color:#6b7280; background:#f3f4f6;' : 'color:#9ca3af; background:#2a2a2e;'">&times;</button>
     </div>
     <input class="delivery-list-search" id="deliveryListSearch" placeholder="Pesquisar cliente, pedido, endereço ou status" oninput="renderListaDelivery()">
-    <div class="delivery-list-grid" id="deliveryListGrid"></div>
+    <div class="delivery-list-table-wrap">
+      <table class="delivery-list-table">
+        <thead><tr><th>Pedido</th><th>Cliente</th><th>Endereço</th><th>Status</th><th>Pagamento</th><th style="text-align:right;">Valor</th><th>Entregador</th></tr></thead>
+        <tbody id="deliveryListBody"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -522,7 +555,12 @@
     else if (panel.requestFullscreen) panel.requestFullscreen();
   }
 
-  function abrirListaDelivery() {
+  let deliveryListStatus = '';
+
+  function abrirListaDelivery(status, label) {
+    deliveryListStatus = status || '';
+    document.getElementById('deliveryListTitle').textContent = label ? `Pedidos — ${label}` : 'Lista de pedidos';
+    document.getElementById('deliveryListSearch').value = '';
     document.getElementById('deliveryListModal').classList.add('open');
     document.body.style.overflow = 'hidden';
     renderListaDelivery();
@@ -540,28 +578,49 @@
     const cores = {novo:'#3b82f6',preparando:'#f59e0b',em_entrega:'#8b5cf6',entregue:'#10b981',finalizado:'#94a3b8'};
     const itens = Object.entries(dados).filter(([, d]) => {
       const endereco=d.endereco_entrega||{};
+      if (deliveryListStatus && d.status_delivery !== deliveryListStatus) return false;
       return !busca || [
         d.numero_venda,d.cliente_nome,d.status_label,endereco.rua,endereco.logradouro,
         endereco.numero,endereco.bairro,d.entregador
       ].filter(Boolean).join(' ').toLowerCase().includes(busca);
     });
     document.getElementById('deliveryListCount').textContent=`${itens.length} pedido${itens.length===1?'':'s'} encontrado${itens.length===1?'':'s'}`;
-    const grid=document.getElementById('deliveryListGrid');
-    grid.innerHTML=itens.length?itens.map(([pk,d])=>{
+    const body=document.getElementById('deliveryListBody');
+    body.innerHTML=itens.length?itens.map(([pk,d])=>{
       const endereco=d.endereco_entrega||{};
       const linha=[endereco.rua||endereco.logradouro,endereco.numero].filter(Boolean).join(', ');
       const local=[endereco.bairro,endereco.cidade].filter(Boolean).join(' · ');
       const pagamento=d.pago?'Pago':(d.pagamento_pendente?'Pagamento pendente':'Cobrar na entrega');
-      return `<button type="button" class="delivery-list-card" data-list-pk="${pk}" style="border-left-color:${cores[d.status_delivery]||'#64748b'}">
-        <div class="delivery-list-card-head"><strong>#${esc(d.numero_venda)}</strong><span class="delivery-list-status">${esc(d.status_label)}</span></div>
-        <div class="delivery-list-card-client">${esc(d.cliente_nome)}</div>
-        <div class="delivery-list-card-meta">${esc([linha,local].filter(Boolean).join(' — ')||'Endereço não informado')}<br>R$ ${Number(d.valor_total||0).toLocaleString('pt-BR',{minimumFractionDigits:2})} · ${esc(pagamento)}</div>
-      </button>`;
-    }).join(''):'<div class="text-sm" style="color:#9ca3af;">Nenhum pedido encontrado.</div>';
-    grid.querySelectorAll('[data-list-pk]').forEach(card=>card.addEventListener('click',()=>{
-      const pk=card.dataset.listPk,d=dados[pk];fecharListaDelivery();
+      const valor=Number(d.valor_total||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+      return `<tr data-list-pk="${pk}" tabindex="0" aria-label="Editar pedido ${esc(d.numero_venda)}">
+        <td class="delivery-list-number">#${esc(d.numero_venda)}</td>
+        <td class="delivery-list-client">${esc(d.cliente_nome)}</td>
+        <td class="delivery-list-address">${esc([linha,local].filter(Boolean).join(' — ')||'Endereço não informado')}</td>
+        <td><span class="delivery-list-status" style="--status-color:${cores[d.status_delivery]||'#64748b'}">${esc(d.status_label)}</span></td>
+        <td>${esc(pagamento)}</td><td class="delivery-list-money">R$ ${valor}</td><td>${esc(d.entregador||'—')}</td>
+      </tr>`;
+    }).join(''):'<tr><td class="delivery-list-empty" colspan="7">Nenhum pedido encontrado.</td></tr>';
+    body.querySelectorAll('[data-list-pk]').forEach(row=>{
+      const abrir=()=>{const pk=row.dataset.listPk,d=dados[pk];fecharListaDelivery();
       abrirModal(Number(pk),d.status_delivery,d.entregador||'',d.observacao_delivery||'');
-    }));
+      };
+      row.addEventListener('click',abrir);
+      row.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();abrir();}});
+    });
+  }
+
+  function filtrarKanban() {
+    const dados=window.deliveryData||{};
+    const busca=(document.getElementById('kanbanSearch').value||'').toLowerCase().trim();
+    document.querySelectorAll('.kanban-card').forEach(card=>{
+      const d=dados[String(card.dataset.pk)]||{};
+      const endereco=d.endereco_entrega||{};
+      const texto=[d.numero_venda,d.cliente_nome,d.status_label,d.entregador,d.observacao_delivery,
+        endereco.rua,endereco.logradouro,endereco.numero,endereco.bairro,endereco.cidade]
+        .filter(Boolean).join(' ').toLowerCase();
+      card.style.display=!busca||texto.includes(busca)?'':'none';
+    });
+    atualizarContadores();
   }
 
   // ── Drag & Drop ──────────────────────────────────────────────────────────
@@ -627,6 +686,7 @@
           if (Object.prototype.hasOwnProperty.call(extra, 'entregador')) detalhe.entregador = extra.entregador || '';
           if (Object.prototype.hasOwnProperty.call(extra, 'observacao_delivery')) detalhe.observacao_delivery = extra.observacao_delivery || '';
         }
+        if ((document.getElementById('kanbanSearch')?.value || '').trim()) filtrarKanban();
         mostrarToast('Pedido movido para ' + data.status_label);
         // A sugestão (§8) aparece ao sair para entrega: é o último momento em
         // que ela ainda dá para usar. Depois que o entregador voltou, saber
@@ -653,6 +713,7 @@
       else {
         const detalhe = window.deliveryData && window.deliveryData[String(pk)];
         if (detalhe) Object.assign(detalhe, campos);
+        if ((document.getElementById('kanbanSearch')?.value || '').trim()) filtrarKanban();
       }
     } catch {
       mostrarToast('Erro de rede', true);
@@ -822,11 +883,13 @@
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   function atualizarContadores() {
+    const filtrando=Boolean((document.getElementById('kanbanSearch')?.value||'').trim());
     document.querySelectorAll('.kanban-col').forEach(col => {
       const key = col.dataset.col;
       const cards = document.querySelectorAll(`#col-${key} .kanban-card`);
+      const visiveis = [...cards].filter(card => card.style.display !== 'none').length;
       const badge = col.querySelector('.kanban-col-count');
-      if (badge) badge.textContent = cards.length || '—';
+      if (badge) badge.textContent = filtrando ? `${visiveis}/${cards.length}` : (cards.length || '—');
     });
   }
 
