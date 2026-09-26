@@ -107,6 +107,15 @@
   .dr-opportunity-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:8px 0 10px; }
   .dr-opportunity-toolbar select,.dr-opportunity-toolbar input { border:1px solid #3a4557; border-radius:8px; background:#171a1f; padding:8px 10px; color:#f3f6fb; font-size:10px; }
   .dr-opportunity-toolbar input { min-width:190px; flex:1; }
+  .dr-rfm-help { position:relative; }
+  .dr-rfm-help summary { display:grid; place-items:center; width:28px; height:28px; border:1px solid #5272a8; border-radius:50%; background:#172f55; color:#a9c9ff; font-size:13px; font-weight:900; cursor:pointer; list-style:none; }
+  .dr-rfm-help summary::-webkit-details-marker { display:none; }
+  .dr-rfm-help[open] summary { border-color:#70a2f4; background:#20447a; color:#fff; }
+  .dr-rfm-tooltip { position:absolute; z-index:20; top:36px; right:0; width:min(410px,80vw); border:1px solid #46546a; border-radius:10px; background:#151a22; box-shadow:0 15px 45px #000b; padding:12px; color:#b9c5d5; font-size:10px; line-height:1.5; }
+  .dr-rfm-tooltip strong { color:#f4f7fb; }
+  .dr-rfm-tooltip-grid { display:grid; gap:7px; margin:8px 0; }
+  .dr-rfm-tooltip-item { border-left:3px solid #397be5; padding-left:8px; }
+  .dr-rfm-examples { border-radius:8px; background:#202936; padding:8px 9px; }
   .dr-opportunity-list { overflow:auto; display:grid; gap:7px; padding-right:3px; }
   .dr-opportunity { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; border:1px solid #303744; border-radius:10px; background:#252a31; padding:10px 12px; }
   .dr-opportunity:hover { border-color:#5272a8; }
@@ -114,6 +123,8 @@
   .dr-opportunity-title { color:#f3f6fb; font-size:12px; font-weight:850; }
   .dr-opportunity-meta { margin-top:4px; color:#91a0b4; font-size:10px; line-height:1.5; }
   .dr-opportunity-reason { margin-top:6px; color:#f7c66d; font-size:10px; font-weight:700; }
+  .dr-opportunity-why { margin-top:7px; border-radius:7px; background:#1b3340; padding:6px 8px; color:#a7dced; font-size:9px; line-height:1.45; }
+  .dr-opportunity-why strong { color:#d9f5ff; }
   .dr-rfm { display:inline-flex; margin-right:5px; border-radius:999px; background:#3a2d13; padding:3px 7px; color:#ffd36d; font-size:9px; font-weight:900; }
   .dr-priority { color:#67e3b0; font-weight:900; }
   .dr-contact { display:inline-flex; gap:6px; align-items:center; margin-top:6px; }
@@ -133,7 +144,7 @@
   .dr-sale-history:first-of-type { border-top:0; }
   .dr-sale-history summary { color:#e8eef7; font-size:10px; font-weight:800; cursor:pointer; }
   .dr-sale-items { margin:6px 0 0; padding-left:16px; color:#9caabd; font-size:9px; }
-  @media(max-width:760px){.dr-detail-columns{grid-template-columns:1fr}.dr-detail-modal{max-height:94vh}.dr-opportunity{grid-template-columns:1fr}.dr-opportunity .dr-button{width:100%}}
+  @media(max-width:760px){.dr-detail-columns{grid-template-columns:1fr}.dr-detail-modal{max-height:94vh}.dr-opportunity{grid-template-columns:1fr}.dr-opportunity .dr-button{width:100%}.dr-rfm-tooltip{position:fixed;top:50%;left:50%;right:auto;transform:translate(-50%,-50%);width:min(410px,calc(100vw - 32px))}}
   body.tema-claro .dr-title, body.tema-claro .dr-stat-value, body.tema-claro .dr-panel-title, body.tema-claro .dr-client { color:#142033; }
   body.tema-claro .dr-subtitle, body.tema-claro .dr-meta { color:#65748a; }
   body.tema-claro .dr-stat, body.tema-claro .dr-panel, body.tema-claro .dr-footer { background:#fff; border-color:#dfe5ee; }
@@ -216,6 +227,18 @@
         <select id="opportunityRadius"><option value="1500">1,5 km</option><option value="3000" selected>3 km</option><option value="5000">5 km</option><option value="10000">10 km</option></select>
       </label>
       <select id="opportunitySegment" aria-label="Segmento RFM"><option value="">Todos os segmentos RFM</option><option>Campeão</option><option>Cliente forte</option><option>Potencial</option><option>Reativação</option><option>Em desenvolvimento</option></select>
+      <details class="dr-rfm-help">
+        <summary aria-label="Entenda os filtros RFM" title="Entenda os filtros RFM">?</summary>
+        <div class="dr-rfm-tooltip">
+          <strong>Como funcionam os filtros RFM?</strong><br>Cada letra recebe uma nota de 1 a 5. Quanto maior, melhor naquele critério.
+          <div class="dr-rfm-tooltip-grid">
+            <div class="dr-rfm-tooltip-item"><strong>R — Recência:</strong> quando comprou. R5 comprou recentemente; R1 está há muito tempo sem comprar.</div>
+            <div class="dr-rfm-tooltip-item"><strong>F — Frequência:</strong> quantas vezes compra. F5 compra frequentemente; F1 comprou poucas vezes.</div>
+            <div class="dr-rfm-tooltip-item"><strong>M — Valor:</strong> quanto já comprou. M5 está entre os que mais gastaram; M1 tem menor valor acumulado.</div>
+          </div>
+          <div class="dr-rfm-examples"><strong>Exemplos práticos</strong><br><strong>R5 F5 M5:</strong> cliente campeão, recente, frequente e de alto valor.<br><strong>Para vender agora:</strong> use R ≥ 3, F ≥ 4 e M ≥ 3.<br><strong>Para recuperar clientes:</strong> escolha “Reativação” e deixe R, F e M como “qualquer”.<br><br>A <strong>Prioridade</strong> combina o potencial de recompra, o RFM e a proximidade da rota.</div>
+        </div>
+      </details>
       <select id="opportunityR" aria-label="Recência mínima"><option value="1">R: qualquer</option><option value="3">R ≥ 3</option><option value="4">R ≥ 4</option><option value="5">R = 5</option></select>
       <select id="opportunityF" aria-label="Frequência mínima"><option value="1">F: qualquer</option><option value="3">F ≥ 3</option><option value="4">F ≥ 4</option><option value="5">F = 5</option></select>
       <select id="opportunityM" aria-label="Valor mínimo"><option value="1">M: qualquer</option><option value="3">M ≥ 3</option><option value="4">M ≥ 4</option><option value="5">M = 5</option></select>
@@ -459,6 +482,12 @@
   window.closeOpportunityModal=function(){closeOpportunityDetail();document.getElementById('opportunityModal').classList.remove('open');};
   window.closeOpportunityDetail=function(){document.getElementById('opportunityDetailModal').classList.remove('open');};
   function opportunityAdded(id){return Boolean(state.manualStops[`oportunidade-${id}`]);}
+  function opportunityExplanation(item){
+    const recency=item.dias_sem_comprar==null?'ainda não possui data de última compra':Number(item.dias_sem_comprar)<=30?`comprou recentemente, há ${item.dias_sem_comprar} dia${Number(item.dias_sem_comprar)===1?'':'s'}`:`está há ${item.dias_sem_comprar} dias sem comprar`;
+    const history=Number(item.qtd_compras||0)===1?'tem 1 compra no histórico':`já fez ${item.qtd_compras||0} compras`;
+    const proximity=Number(item.desvio_km_estimado||0)<=0?'fica no caminho da rota atual':`exige um desvio estimado de apenas ${item.desvio_km_estimado} km`;
+    return `${item.segmento_rfm} (${item.rfm}), ${recency}, ${history} e ${proximity}.`;
+  }
   function contactLinks(item){
     const phone=String(item.telefone||'').trim(), phoneDigits=phone.replace(/\D/g,'');
     return `<div class="dr-contact">${phone?`<a href="tel:${esc(phoneDigits)}" onclick="event.stopPropagation()">☎ ${esc(phone)}</a>`:'<span style="color:#738096;font-size:9px">Telefone não informado</span>'}${item.whatsapp?`<a class="whatsapp-link" href="https://wa.me/${esc(item.whatsapp)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">WhatsApp</a>`:''}</div>`;
@@ -475,7 +504,8 @@
     if(!items.length){list.innerHTML='<div class="dr-empty">Nenhuma oportunidade corresponde aos filtros atuais.</div>';return;}
     list.innerHTML=items.map(item=>{const added=opportunityAdded(item.id);return `<article class="dr-opportunity">
       <div class="dr-opportunity-info" data-opportunity-detail="${item.id}" role="button" tabindex="0"><div class="dr-opportunity-title">${esc(item.nome)}</div>
-      <div class="dr-opportunity-meta"><span class="dr-rfm">${esc(item.rfm)} · ${esc(item.segmento_rfm)}</span><span class="dr-priority">Prioridade ${esc(item.prioridade)}/100</span><br>${esc(item.endereco_texto)}<br>${esc(item.status_recompra)} · ${item.dias_sem_comprar==null?'sem data de última compra':esc(item.dias_sem_comprar)+' dias sem comprar'} · ticket médio ${money(item.valor_medio)}</div>
+      <div class="dr-opportunity-meta"><span class="dr-rfm">${esc(item.rfm)} · ${esc(item.segmento_rfm)}</span><span class="dr-priority" title="Combina potencial de recompra, RFM e proximidade da rota">Prioridade ${esc(item.prioridade)}/100 ⓘ</span><br>${esc(item.endereco_texto)}<br>${esc(item.status_recompra)} · ${item.dias_sem_comprar==null?'sem data de última compra':esc(item.dias_sem_comprar)+' dias sem comprar'} · ticket médio ${money(item.valor_medio)}</div>
+      <div class="dr-opportunity-why"><strong>Por que foi sugerido?</strong> ${esc(opportunityExplanation(item))}</div>
       ${contactLinks(item)}<div class="dr-opportunity-reason">Desvio estimado: +${esc(item.desvio_km_estimado)} km / +${esc(item.desvio_min_estimado)} min · ${esc(item.qtd_compras)} compras no histórico · Clique para ver produtos e pedidos</div></div>
       <button class="dr-button ${added?'':'green'}" type="button" data-add-opportunity="${item.id}" ${added?'disabled':''}>${added?'Na rota':'Adicionar à rota'}</button>
     </article>`}).join('');
