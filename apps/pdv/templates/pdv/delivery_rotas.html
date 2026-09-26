@@ -103,10 +103,14 @@
   .dr-address-grid textarea { width:100%; min-height:72px; resize:vertical; margin-top:4px; border:1px solid #3a4557; border-radius:8px; background:#171a1f; padding:9px 10px; color:#f3f6fb; font:inherit; font-size:12px; outline:none; }
   .dr-address-wide { grid-column:1/-1; }
   .dr-address-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
-  .dr-opportunity-modal { width:min(920px,100%); max-height:88vh; display:flex; flex-direction:column; }
-  .dr-opportunity-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:8px 0 10px; }
+  .dr-opportunity-modal { width:min(980px,100%); max-height:88vh; display:flex; flex-direction:column; }
+  .dr-opportunity-toolbar { display:grid; gap:8px; margin:8px 0 10px; }
+  .dr-opportunity-toolbar-row { display:flex; align-items:center; gap:8px; min-width:0; }
+  .dr-opportunity-toolbar-row.filters { border-top:1px solid #303744; padding-top:8px; }
   .dr-opportunity-toolbar select,.dr-opportunity-toolbar input { border:1px solid #3a4557; border-radius:8px; background:#171a1f; padding:8px 10px; color:#f3f6fb; font-size:10px; }
-  .dr-opportunity-toolbar input { min-width:190px; flex:1; }
+  .dr-opportunity-search { min-width:240px; flex:1; }
+  .dr-toolbar-label { display:flex; align-items:center; gap:6px; color:#aab6c7; font-size:10px; font-weight:800; white-space:nowrap; }
+  .dr-toolbar-caption { color:#8090a5; font-size:9px; font-weight:900; text-transform:uppercase; white-space:nowrap; }
   .dr-rfm-help { position:relative; }
   .dr-rfm-help summary { display:grid; place-items:center; width:28px; height:28px; border:1px solid #5272a8; border-radius:50%; background:#172f55; color:#a9c9ff; font-size:13px; font-weight:900; cursor:pointer; list-style:none; }
   .dr-rfm-help summary::-webkit-details-marker { display:none; }
@@ -121,6 +125,18 @@
   .dr-rfm-config-item label { display:block; color:#f3f6fb; font-size:11px; font-weight:850; }
   .dr-rfm-config-item input { width:100%; margin-top:6px; border:1px solid #46546a; border-radius:7px; background:#20242a; padding:8px; color:#fff; font-size:12px; }
   .dr-rfm-config-item small { display:block; margin-top:5px; color:#8997aa; font-size:9px; line-height:1.4; }
+  .dr-rfm-settings-modal { width:min(820px,100%); max-height:92vh; overflow:auto; }
+  .dr-rfm-section { margin-top:12px; border:1px solid #354154; border-radius:10px; background:#191d23; padding:11px; }
+  .dr-rfm-section-head { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  .dr-rfm-section-head h3 { margin:0; color:#f3f6fb; font-size:12px; }
+  .dr-rfm-section-head p { margin:3px 0 0; }
+  .dr-rfm-auto { display:flex; align-items:center; gap:7px; color:#b9c5d5; font-size:10px; font-weight:800; white-space:nowrap; }
+  .dr-rfm-auto input { accent-color:#2f7df4; }
+  .dr-rfm-section.is-auto .dr-rfm-config-grid { opacity:.45; }
+  .dr-cep-row { display:flex; align-items:flex-end; gap:7px; }
+  .dr-cep-row label { flex:1; }
+  .dr-cep-status { grid-column:1/-1; min-height:15px; margin-top:-4px; color:#91a0b4; font-size:9px; }
+  .dr-cep-status.error { color:#ff9ba5; }
   .dr-opportunity-list { overflow:auto; display:grid; gap:7px; padding-right:3px; }
   .dr-opportunity { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; border:1px solid #303744; border-radius:10px; background:#252a31; padding:10px 12px; }
   .dr-opportunity:hover { border-color:#5272a8; }
@@ -149,7 +165,7 @@
   .dr-sale-history:first-of-type { border-top:0; }
   .dr-sale-history summary { color:#e8eef7; font-size:10px; font-weight:800; cursor:pointer; }
   .dr-sale-items { margin:6px 0 0; padding-left:16px; color:#9caabd; font-size:9px; }
-  @media(max-width:760px){.dr-detail-columns{grid-template-columns:1fr}.dr-detail-modal{max-height:94vh}.dr-opportunity{grid-template-columns:1fr}.dr-opportunity .dr-button{width:100%}.dr-rfm-tooltip{position:fixed;top:50%;left:50%;right:auto;transform:translate(-50%,-50%);width:min(410px,calc(100vw - 32px))}.dr-rfm-config-grid{grid-template-columns:1fr}}
+  @media(max-width:760px){.dr-detail-columns{grid-template-columns:1fr}.dr-detail-modal{max-height:94vh}.dr-opportunity{grid-template-columns:1fr}.dr-opportunity .dr-button{width:100%}.dr-rfm-tooltip{position:fixed;top:50%;left:50%;right:auto;transform:translate(-50%,-50%);width:min(410px,calc(100vw - 32px))}.dr-rfm-config-grid{grid-template-columns:1fr}.dr-opportunity-toolbar-row{align-items:stretch;flex-wrap:wrap}.dr-opportunity-search{flex-basis:100%}.dr-opportunity-toolbar-row.filters select{flex:1;min-width:120px}.dr-toolbar-caption{flex-basis:100%}}
   body.tema-claro .dr-title, body.tema-claro .dr-stat-value, body.tema-claro .dr-panel-title, body.tema-claro .dr-client { color:#142033; }
   body.tema-claro .dr-subtitle, body.tema-claro .dr-meta { color:#65748a; }
   body.tema-claro .dr-stat, body.tema-claro .dr-panel, body.tema-claro .dr-footer { background:#fff; border-color:#dfe5ee; }
@@ -227,43 +243,69 @@
     <h2>Oportunidades de Venda</h2>
     <p>Clientes classificados por momento de recompra, RFM e proximidade das paradas atuais.</p>
     <div class="dr-opportunity-toolbar">
-      <input id="opportunitySearch" placeholder="Buscar cliente, bairro ou telefone">
-      <label style="color:#aab6c7;font-size:10px;font-weight:800;">Buscar em até
-        <select id="opportunityRadius"><option value="1500">1,5 km</option><option value="3000" selected>3 km</option><option value="5000">5 km</option><option value="10000">10 km</option></select>
-      </label>
-      <select id="opportunitySegment" aria-label="Segmento RFM"><option value="">Todos os segmentos RFM</option><option>Campeão</option><option>Cliente forte</option><option>Potencial</option><option>Reativação</option><option>Em desenvolvimento</option></select>
-      <details class="dr-rfm-help">
-        <summary aria-label="Entenda os filtros RFM" title="Entenda os filtros RFM">?</summary>
-        <div class="dr-rfm-tooltip">
-          <strong>Como funcionam os filtros RFM?</strong><br>Cada letra recebe uma nota de 1 a 5. Quanto maior, melhor naquele critério.
-          <div class="dr-rfm-tooltip-grid">
-            <div class="dr-rfm-tooltip-item"><strong>R — Recência:</strong> quando comprou. R5 comprou recentemente; R1 está há muito tempo sem comprar.</div>
-            <div class="dr-rfm-tooltip-item"><strong>F — Frequência:</strong> quantas vezes compra. F5 compra frequentemente; F1 comprou poucas vezes.</div>
-            <div class="dr-rfm-tooltip-item"><strong>M — Valor:</strong> quanto já comprou. M5 está entre os que mais gastaram; M1 tem menor valor acumulado.</div>
+      <div class="dr-opportunity-toolbar-row search">
+        <input class="dr-opportunity-search" id="opportunitySearch" placeholder="Buscar cliente, bairro ou telefone">
+        <label class="dr-toolbar-label">Raio da rota
+          <select id="opportunityRadius"><option value="1500">1,5 km</option><option value="3000" selected>3 km</option><option value="5000">5 km</option><option value="10000">10 km</option></select>
+        </label>
+        <button class="dr-button" type="button" id="opportunityReload">Atualizar sugestões</button>
+      </div>
+      <div class="dr-opportunity-toolbar-row filters">
+        <span class="dr-toolbar-caption">Filtros RFM</span>
+        <select id="opportunitySegment" aria-label="Segmento RFM"><option value="">Todos os segmentos</option><option>Campeão</option><option>Cliente forte</option><option>Potencial</option><option>Reativação</option><option>Em desenvolvimento</option></select>
+        <select id="opportunityR" aria-label="Recência mínima"><option value="1">R: qualquer</option><option value="3">R ≥ 3</option><option value="4">R ≥ 4</option><option value="5">R = 5</option></select>
+        <select id="opportunityF" aria-label="Frequência mínima"><option value="1">F: qualquer</option><option value="3">F ≥ 3</option><option value="4">F ≥ 4</option><option value="5">F = 5</option></select>
+        <select id="opportunityM" aria-label="Valor mínimo"><option value="1">M: qualquer</option><option value="3">M ≥ 3</option><option value="4">M ≥ 4</option><option value="5">M = 5</option></select>
+        <details class="dr-rfm-help">
+          <summary aria-label="Entenda os filtros RFM" title="Entenda os filtros RFM">?</summary>
+          <div class="dr-rfm-tooltip">
+            <strong>Como funcionam os filtros RFM?</strong><br>Cada letra recebe uma nota de 1 a 5. Quanto maior, melhor naquele critério.
+            <div class="dr-rfm-tooltip-grid">
+              <div class="dr-rfm-tooltip-item"><strong>R — Recência:</strong> qualidade do relacionamento pela última compra. R5 é recente; R1 está afastado.</div>
+              <div class="dr-rfm-tooltip-item"><strong>F — Frequência:</strong> quantas compras fez. F5 compra muito; F1 comprou poucas vezes.</div>
+              <div class="dr-rfm-tooltip-item"><strong>M — Valor:</strong> total comprado. M5 tem maior valor acumulado; M1 tem menor valor.</div>
+            </div>
+            <div class="dr-rfm-examples"><strong>Importante:</strong> R5 mostra um cliente recente e valioso, mas não significa que já seja hora de vender de novo. A prioridade usa também a data prevista de recompra.<br><br><strong>Exemplos práticos</strong><br><strong>R5 F5 M5:</strong> cliente campeão, recente, frequente e de alto valor.<br><strong>Para vender agora:</strong> veja primeiro quem está próximo ou atrasado para recomprar.<br><strong>Para recuperar clientes:</strong> escolha “Reativação” e deixe R, F e M como “qualquer”.<br><br><span id="rfmCurrentRules"></span></div>
           </div>
-          <div class="dr-rfm-examples"><strong>Exemplos práticos</strong><br><strong>R5 F5 M5:</strong> cliente campeão, recente, frequente e de alto valor.<br><strong>Para vender agora:</strong> use R ≥ 3, F ≥ 4 e M ≥ 3.<br><strong>Para recuperar clientes:</strong> escolha “Reativação” e deixe R, F e M como “qualquer”.<br><br><span id="rfmCurrentRules"></span><br><br><strong>F e M são automáticos:</strong> comparam frequência e valor entre os clientes. A <strong>Prioridade</strong> combina potencial de recompra, RFM e proximidade da rota.</div>
-        </div>
-      </details>
-      <button class="dr-button" type="button" id="opportunityRfmConfig">⚙ Configurar RFM</button>
-      <select id="opportunityR" aria-label="Recência mínima"><option value="1">R: qualquer</option><option value="3">R ≥ 3</option><option value="4">R ≥ 4</option><option value="5">R = 5</option></select>
-      <select id="opportunityF" aria-label="Frequência mínima"><option value="1">F: qualquer</option><option value="3">F ≥ 3</option><option value="4">F ≥ 4</option><option value="5">F = 5</option></select>
-      <select id="opportunityM" aria-label="Valor mínimo"><option value="1">M: qualquer</option><option value="3">M ≥ 3</option><option value="4">M ≥ 4</option><option value="5">M = 5</option></select>
-      <button class="dr-button" type="button" id="opportunityReload">Atualizar sugestões</button>
+        </details>
+        <button class="dr-button" type="button" id="opportunityRfmConfig">⚙ Configurar RFM</button>
+      </div>
     </div>
     <div class="dr-opportunity-list" id="opportunityList"><div class="dr-empty">Gerando sugestões…</div></div>
     <div class="dr-address-modal-actions"><button class="dr-button" type="button" onclick="closeOpportunityModal()">Fechar</button></div>
   </section>
 </div>
 <div class="dr-address-modal-bg" id="rfmConfigModal" style="z-index:6150" onclick="if(event.target===this)closeRfmConfigModal()">
-  <form class="dr-address-modal" id="rfmConfigForm">
-    <h2>Configurar recência do RFM</h2>
-    <p>Defina depois de quantos dias o cliente muda de faixa. Esta configuração fica guardada para a filial atual.</p>
-    <div class="dr-rfm-config-grid">
-      <div class="dr-rfm-config-item"><label for="rfmR5Days">R5 — compra muito recente</label><input id="rfmR5Days" type="number" min="1" max="3650" required><small>Cliente comprou há, no máximo, esta quantidade de dias.</small></div>
-      <div class="dr-rfm-config-item"><label for="rfmR4Days">R4 — compra recente</label><input id="rfmR4Days" type="number" min="2" max="3650" required><small>Limite final da segunda faixa de recência.</small></div>
-      <div class="dr-rfm-config-item"><label for="rfmR3Days">R3 — recência intermediária</label><input id="rfmR3Days" type="number" min="3" max="3650" required><small>Limite final da faixa intermediária.</small></div>
-      <div class="dr-rfm-config-item"><label for="rfmR2Days">R2 — cliente afastado</label><input id="rfmR2Days" type="number" min="4" max="3650" required><small>Acima deste limite o cliente passa a ser R1.</small></div>
-    </div>
+  <form class="dr-address-modal dr-rfm-settings-modal" id="rfmConfigForm">
+    <h2>Configurar RFM</h2>
+    <p>Defina as faixas de recência, frequência e valor. A configuração fica guardada para a filial atual.</p>
+    <section class="dr-rfm-section">
+      <div class="dr-rfm-section-head"><div><h3>R — Recência</h3><p>Dias desde a última compra. Os limites devem crescer.</p></div></div>
+      <div class="dr-rfm-config-grid">
+        <div class="dr-rfm-config-item"><label for="rfmR5Days">R5 — até quantos dias?</label><input id="rfmR5Days" type="number" min="1" max="3650" required></div>
+        <div class="dr-rfm-config-item"><label for="rfmR4Days">R4 — até quantos dias?</label><input id="rfmR4Days" type="number" min="2" max="3650" required></div>
+        <div class="dr-rfm-config-item"><label for="rfmR3Days">R3 — até quantos dias?</label><input id="rfmR3Days" type="number" min="3" max="3650" required></div>
+        <div class="dr-rfm-config-item"><label for="rfmR2Days">R2 — até quantos dias?</label><input id="rfmR2Days" type="number" min="4" max="3650" required><small>Acima deste limite vira R1.</small></div>
+      </div>
+    </section>
+    <section class="dr-rfm-section" id="rfmFSection">
+      <div class="dr-rfm-section-head"><div><h3>F — Frequência</h3><p>Número de compras no histórico analisado.</p></div><label class="dr-rfm-auto"><input id="rfmFAutomatic" type="checkbox"> Calcular automaticamente</label></div>
+      <div class="dr-rfm-config-grid">
+        <div class="dr-rfm-config-item"><label for="rfmF5Purchases">F5 — a partir de</label><input id="rfmF5Purchases" type="number" min="0" required></div>
+        <div class="dr-rfm-config-item"><label for="rfmF4Purchases">F4 — a partir de</label><input id="rfmF4Purchases" type="number" min="0" required></div>
+        <div class="dr-rfm-config-item"><label for="rfmF3Purchases">F3 — a partir de</label><input id="rfmF3Purchases" type="number" min="0" required></div>
+        <div class="dr-rfm-config-item"><label for="rfmF2Purchases">F2 — a partir de</label><input id="rfmF2Purchases" type="number" min="0" required><small>Abaixo deste limite vira F1.</small></div>
+      </div>
+    </section>
+    <section class="dr-rfm-section" id="rfmMSection">
+      <div class="dr-rfm-section-head"><div><h3>M — Valor monetário</h3><p>Valor total comprado no período analisado.</p></div><label class="dr-rfm-auto"><input id="rfmMAutomatic" type="checkbox"> Calcular automaticamente</label></div>
+      <div class="dr-rfm-config-grid">
+        <div class="dr-rfm-config-item"><label for="rfmM5Value">M5 — a partir de R$</label><input id="rfmM5Value" type="number" min="0" step="0.01" required></div>
+        <div class="dr-rfm-config-item"><label for="rfmM4Value">M4 — a partir de R$</label><input id="rfmM4Value" type="number" min="0" step="0.01" required></div>
+        <div class="dr-rfm-config-item"><label for="rfmM3Value">M3 — a partir de R$</label><input id="rfmM3Value" type="number" min="0" step="0.01" required></div>
+        <div class="dr-rfm-config-item"><label for="rfmM2Value">M2 — a partir de R$</label><input id="rfmM2Value" type="number" min="0" step="0.01" required><small>Abaixo deste limite vira M1.</small></div>
+      </div>
+    </section>
     <p id="rfmConfigPreview" style="margin-top:12px"></p>
     <div class="dr-address-modal-actions"><button class="dr-button" type="button" onclick="closeRfmConfigModal()">Cancelar</button><button class="dr-button primary" type="submit" id="rfmConfigSave">Salvar configuração</button></div>
   </form>
@@ -280,8 +322,9 @@
     <p>Ela entra na otimização, no mapa e no painel do motoboy como qualquer outra parada.</p>
     <div class="dr-address-grid">
       <label class="dr-address-wide">O que será feito nesta parada?<textarea id="manualObservation" maxlength="240" required placeholder="Ex.: buscar embalagem, deixar documento, visitar cliente potencial"></textarea></label>
-      <label>CEP<input id="manualCep" inputmode="numeric" maxlength="9"></label>
+      <div class="dr-cep-row"><label>CEP<input id="manualCep" inputmode="numeric" maxlength="9" autocomplete="postal-code"></label><button class="dr-button" type="button" id="manualCepLookup">Buscar CEP</button></div>
       <label>Número<input id="manualNumber" maxlength="20"></label>
+      <div class="dr-cep-status" id="manualCepStatus" aria-live="polite"></div>
       <label class="dr-address-wide">Rua / Avenida<input id="manualStreet" maxlength="255" required></label>
       <label>Complemento<input id="manualComplement" maxlength="80"></label>
       <label>Bairro<input id="manualDistrict" maxlength="80" required></label>
@@ -331,6 +374,7 @@
   const publishUrl = '{% url "pdv:delivery_rota_publicar" %}';
   const addressUrlTemplate = '{% url "pdv:delivery_rota_atualizar_endereco" 0 %}';
   const manualStopUrl = '{% url "pdv:delivery_rota_localizar_parada_manual" %}';
+  const cepLookupUrl = '{% url "cadastros:consultar-cep" %}';
   const configUrl = '{% url "pdv:delivery_rota_salvar_configuracao" %}';
   const rfmConfigUrl = '{% url "pdv:delivery_rota_salvar_configuracao_rfm" %}';
   const opportunitiesUrl = '{% url "pdv:delivery_rota_oportunidades" %}';
@@ -345,6 +389,11 @@
   function money(value) { return Number(value || 0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
   function duration(seconds) { const m=Math.round(Number(seconds||0)/60); return m<60 ? `${m} min` : `${Math.floor(m/60)}h ${String(m%60).padStart(2,'0')}min`; }
   function toast(message, error=false) { const el=document.getElementById('routeToast'); el.textContent=message; el.className='dr-toast show'+(error?' error':''); clearTimeout(toast.t); toast.t=setTimeout(()=>el.className='dr-toast',3200); }
+  async function responseJson(resp) {
+    const type=resp.headers.get('content-type')||'';
+    if(!type.includes('application/json'))throw new Error(resp.ok?'O servidor devolveu uma resposta inválida.':`Não foi possível concluir a operação (HTTP ${resp.status}).`);
+    return resp.json();
+  }
   function address(o) { return [o.endereco,o.bairro,[o.cidade,o.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ') || 'Endereço não informado'; }
   function orderKey(id) { return `pedido:${id}`; }
   function stopByKey(key) {
@@ -473,8 +522,27 @@
     }catch(error){toast(error.message,true);}finally{button.disabled=false;}
   }
 
-  function openManualStopModal(){document.getElementById('manualStopModal').classList.add('open');document.getElementById('manualObservation').focus();}
+  function openManualStopModal(){document.getElementById('manualStopModal').classList.add('open');document.getElementById('manualCepStatus').textContent='Digite o CEP para preencher o endereço automaticamente.';document.getElementById('manualObservation').focus();}
   window.closeManualStopModal=function(){document.getElementById('manualStopModal').classList.remove('open');};
+  let manualCepTimer=null;
+  function formatCep(value){const digits=String(value||'').replace(/\D/g,'').slice(0,8);return digits.length>5?`${digits.slice(0,5)}-${digits.slice(5)}`:digits;}
+  async function lookupManualCep(){
+    const input=document.getElementById('manualCep'), status=document.getElementById('manualCepStatus');
+    const cep=String(input.value||'').replace(/\D/g,'');input.value=formatCep(cep);
+    if(cep.length!==8){status.textContent='Informe os 8 dígitos do CEP.';status.className='dr-cep-status error';return;}
+    status.textContent='Buscando CEP…';status.className='dr-cep-status';
+    try{
+      const resp=await fetch(`${cepLookupUrl}?cep=${encodeURIComponent(cep)}`,{headers:{'Accept':'application/json'}});
+      const data=await responseJson(resp);if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
+      document.getElementById('manualStreet').value=data.endereco||'';
+      document.getElementById('manualComplement').value=data.complemento||document.getElementById('manualComplement').value;
+      document.getElementById('manualDistrict').value=data.bairro||'';
+      document.getElementById('manualCity').value=data.cidade||'';
+      document.getElementById('manualState').value=String(data.uf||'').toUpperCase();
+      status.textContent='Endereço preenchido. Complete o número e confira os dados.';
+      document.getElementById(data.endereco?'manualNumber':'manualStreet').focus();
+    }catch(error){status.textContent=error.message;status.className='dr-cep-status error';}
+  }
   async function saveManualStop(event){
     event.preventDefault();
     const button=document.getElementById('manualStopSave');button.disabled=true;
@@ -487,7 +555,7 @@
     };
     try{
       const resp=await fetch(manualStopUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify(payload)});
-      const data=await resp.json();if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
+      const data=await responseJson(resp);if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
       const id=(crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random().toString(16).slice(2)}`).replace(/[^a-zA-Z0-9_-]/g,'');
       state.manualStops[id]={id,tipo:'manual',observacao:data.observacao,endereco:data.endereco,endereco_texto:data.endereco_texto,lat:data.lat,lng:data.lng};
       state.selected.push(`manual:${id}`);state.result=null;
@@ -502,22 +570,22 @@
   function openOpportunityModal(){document.getElementById('opportunityModal').classList.add('open');loadOpportunities();}
   window.closeOpportunityModal=function(){closeOpportunityDetail();closeRfmConfigModal();document.getElementById('opportunityModal').classList.remove('open');};
   window.closeOpportunityDetail=function(){document.getElementById('opportunityDetailModal').classList.remove('open');};
-  function rfmConfig(){return savedConfig.rfm||{r5_dias:30,r4_dias:60,r3_dias:90,r2_dias:180};}
-  function renderRfmRules(){const c=rfmConfig();document.getElementById('rfmCurrentRules').innerHTML=`<strong>Recência atual:</strong> R5 até ${esc(c.r5_dias)} dias; R4 até ${esc(c.r4_dias)}; R3 até ${esc(c.r3_dias)}; R2 até ${esc(c.r2_dias)}; R1 acima disso.`;}
-  function updateRfmPreview(){const values=['rfmR5Days','rfmR4Days','rfmR3Days','rfmR2Days'].map(id=>Number(document.getElementById(id).value||0));document.getElementById('rfmConfigPreview').textContent=`Exemplo: R5 até ${values[0]} dias; R4 de ${values[0]+1} a ${values[1]}; R3 de ${values[1]+1} a ${values[2]}; R2 de ${values[2]+1} a ${values[3]}; R1 acima de ${values[3]} dias.`;}
-  function openRfmConfigModal(){const c=rfmConfig();document.getElementById('rfmR5Days').value=c.r5_dias;document.getElementById('rfmR4Days').value=c.r4_dias;document.getElementById('rfmR3Days').value=c.r3_dias;document.getElementById('rfmR2Days').value=c.r2_dias;updateRfmPreview();document.getElementById('rfmConfigModal').classList.add('open');}
+  function rfmConfig(){return {...{r5_dias:30,r4_dias:60,r3_dias:90,r2_dias:180,f_automatico:true,f5_compras:10,f4_compras:7,f3_compras:4,f2_compras:2,m_automatico:true,m5_valor:10000,m4_valor:5000,m3_valor:2000,m2_valor:500},...(savedConfig.rfm||{})};}
+  function renderRfmRules(){const c=rfmConfig();const f=c.f_automatico?'automático':`F5 ≥ ${c.f5_compras}, F4 ≥ ${c.f4_compras}, F3 ≥ ${c.f3_compras}, F2 ≥ ${c.f2_compras}`;const m=c.m_automatico?'automático':`M5 ≥ ${money(c.m5_valor)}, M4 ≥ ${money(c.m4_valor)}, M3 ≥ ${money(c.m3_valor)}, M2 ≥ ${money(c.m2_valor)}`;document.getElementById('rfmCurrentRules').innerHTML=`<strong>Configuração atual:</strong> R5 até ${esc(c.r5_dias)} dias; R4 até ${esc(c.r4_dias)}; R3 até ${esc(c.r3_dias)}; R2 até ${esc(c.r2_dias)}. F: ${esc(f)}. M: ${esc(m)}.`;}
+  function toggleRfmModes(){[['rfmFSection','rfmFAutomatic'],['rfmMSection','rfmMAutomatic']].forEach(([sectionId,checkId])=>{const automatic=document.getElementById(checkId).checked;const section=document.getElementById(sectionId);section.classList.toggle('is-auto',automatic);section.querySelectorAll('input[type="number"]').forEach(input=>input.disabled=automatic);});updateRfmPreview();}
+  function updateRfmPreview(){const values=['rfmR5Days','rfmR4Days','rfmR3Days','rfmR2Days'].map(id=>Number(document.getElementById(id).value||0));const f=document.getElementById('rfmFAutomatic').checked?'F será calculado comparando os clientes entre si.':'F usará as quantidades de compras definidas acima.';const m=document.getElementById('rfmMAutomatic').checked?'M será calculado comparando os clientes entre si.':'M usará os valores definidos acima.';document.getElementById('rfmConfigPreview').textContent=`R5 até ${values[0]} dias; R4 até ${values[1]}; R3 até ${values[2]}; R2 até ${values[3]}. ${f} ${m}`;}
+  function openRfmConfigModal(){const c=rfmConfig();const fields={rfmR5Days:c.r5_dias,rfmR4Days:c.r4_dias,rfmR3Days:c.r3_dias,rfmR2Days:c.r2_dias,rfmF5Purchases:c.f5_compras,rfmF4Purchases:c.f4_compras,rfmF3Purchases:c.f3_compras,rfmF2Purchases:c.f2_compras,rfmM5Value:c.m5_valor,rfmM4Value:c.m4_valor,rfmM3Value:c.m3_valor,rfmM2Value:c.m2_valor};Object.entries(fields).forEach(([id,value])=>document.getElementById(id).value=value);document.getElementById('rfmFAutomatic').checked=Boolean(c.f_automatico);document.getElementById('rfmMAutomatic').checked=Boolean(c.m_automatico);toggleRfmModes();document.getElementById('rfmConfigModal').classList.add('open');}
   window.closeRfmConfigModal=function(){document.getElementById('rfmConfigModal').classList.remove('open');};
   async function saveRfmConfig(event){
     event.preventDefault();const button=document.getElementById('rfmConfigSave');button.disabled=true;
-    const payload={r5_dias:Number(document.getElementById('rfmR5Days').value),r4_dias:Number(document.getElementById('rfmR4Days').value),r3_dias:Number(document.getElementById('rfmR3Days').value),r2_dias:Number(document.getElementById('rfmR2Days').value)};
-    try{const resp=await fetch(rfmConfigUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify(payload)});const data=await resp.json();if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);savedConfig.rfm=data.rfm;renderRfmRules();closeRfmConfigModal();toast('Configuração RFM salva para esta filial.');loadOpportunities();}catch(error){toast(error.message,true);}finally{button.disabled=false;}
+    const number=id=>Number(document.getElementById(id).value);const payload={r5_dias:number('rfmR5Days'),r4_dias:number('rfmR4Days'),r3_dias:number('rfmR3Days'),r2_dias:number('rfmR2Days'),f_automatico:document.getElementById('rfmFAutomatic').checked,f5_compras:number('rfmF5Purchases'),f4_compras:number('rfmF4Purchases'),f3_compras:number('rfmF3Purchases'),f2_compras:number('rfmF2Purchases'),m_automatico:document.getElementById('rfmMAutomatic').checked,m5_valor:number('rfmM5Value'),m4_valor:number('rfmM4Value'),m3_valor:number('rfmM3Value'),m2_valor:number('rfmM2Value')};
+    try{const resp=await fetch(rfmConfigUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify(payload)});const data=await responseJson(resp);if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);savedConfig.rfm=data.rfm;renderRfmRules();closeRfmConfigModal();toast('Configuração RFM salva para esta filial.');loadOpportunities();}catch(error){toast(error.message,true);}finally{button.disabled=false;}
   }
   function opportunityAdded(id){return Boolean(state.manualStops[`oportunidade-${id}`]);}
   function opportunityExplanation(item){
-    const recency=item.dias_sem_comprar==null?'ainda não possui data de última compra':Number(item.dias_sem_comprar)<=30?`comprou recentemente, há ${item.dias_sem_comprar} dia${Number(item.dias_sem_comprar)===1?'':'s'}`:`está há ${item.dias_sem_comprar} dias sem comprar`;
     const history=Number(item.qtd_compras||0)===1?'tem 1 compra no histórico':`já fez ${item.qtd_compras||0} compras`;
     const proximity=Number(item.desvio_km_estimado||0)<=0?'fica no caminho da rota atual':`exige um desvio estimado de apenas ${item.desvio_km_estimado} km`;
-    return `${item.segmento_rfm} (${item.rfm}), ${recency}, ${history} e ${proximity}.`;
+    return `${item.motivo_momento||item.status_recompra} É ${item.segmento_rfm} (${item.rfm}), ${history} e ${proximity}.`;
   }
   function contactLinks(item){
     const phone=String(item.telefone||'').trim(), phoneDigits=phone.replace(/\D/g,'');
@@ -668,11 +736,14 @@
   document.getElementById('opportunityReload').addEventListener('click',loadOpportunities);
   document.getElementById('opportunityRfmConfig').addEventListener('click',openRfmConfigModal);
   document.getElementById('rfmConfigForm').addEventListener('submit',saveRfmConfig);
-  ['rfmR5Days','rfmR4Days','rfmR3Days','rfmR2Days'].forEach(id=>document.getElementById(id).addEventListener('input',updateRfmPreview));
+  ['rfmR5Days','rfmR4Days','rfmR3Days','rfmR2Days','rfmF5Purchases','rfmF4Purchases','rfmF3Purchases','rfmF2Purchases','rfmM5Value','rfmM4Value','rfmM3Value','rfmM2Value'].forEach(id=>document.getElementById(id).addEventListener('input',updateRfmPreview));
+  ['rfmFAutomatic','rfmMAutomatic'].forEach(id=>document.getElementById(id).addEventListener('change',toggleRfmModes));
   document.getElementById('opportunitySearch').addEventListener('input',filterOpportunities);
   ['opportunitySegment','opportunityR','opportunityF','opportunityM'].forEach(id=>document.getElementById(id).addEventListener('change',filterOpportunities));
   document.getElementById('routeAddManual').addEventListener('click',openManualStopModal);
   document.getElementById('manualStopForm').addEventListener('submit',saveManualStop);
+  document.getElementById('manualCepLookup').addEventListener('click',lookupManualCep);
+  document.getElementById('manualCep').addEventListener('input',event=>{event.target.value=formatCep(event.target.value);clearTimeout(manualCepTimer);if(event.target.value.replace(/\D/g,'').length===8)manualCepTimer=setTimeout(lookupManualCep,350);});
   document.getElementById('routeGenerate').addEventListener('click',generateBestRoute);
   document.getElementById('routeOptimize').addEventListener('click',()=>calculate(true));
   document.getElementById('routeSave').addEventListener('click',saveDraft);

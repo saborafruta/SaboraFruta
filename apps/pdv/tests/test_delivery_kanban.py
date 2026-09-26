@@ -177,6 +177,11 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'Entenda os filtros RFM')
         self.assertContains(tela, 'Configurar RFM')
         self.assertContains(tela, 'rfmConfigModal')
+        self.assertContains(tela, 'rfmFAutomatic')
+        self.assertContains(tela, 'rfmMAutomatic')
+        self.assertContains(tela, 'manualCepLookup')
+        self.assertContains(tela, reverse('cadastros:consultar-cep'))
+        self.assertContains(tela, 'dr-opportunity-toolbar-row')
         self.assertContains(tela, 'R5 F5 M5:')
         self.assertContains(tela, 'Para recuperar clientes:')
         self.assertContains(tela, 'Por que foi sugerido?')
@@ -414,6 +419,22 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertEqual(resp.json()['endereco']['uf'], 'RN')
         self.assertEqual(Cliente.objects.count(), quantidade_clientes)
 
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_parada_manual_retorna_json_quando_geocodificador_falha(self, resolver):
+        resolver.side_effect = RuntimeError('provider indisponível')
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_localizar_parada_manual'),
+            data=json.dumps({
+                'observacao': 'Buscar material', 'rua': 'Rua Manual',
+                'numero': '50', 'bairro': 'Centro', 'cidade': 'Natal', 'uf': 'RN',
+            }), content_type='application/json',
+        )
+
+        self.assertEqual(resp.status_code, 503)
+        self.assertEqual(resp.headers['Content-Type'], 'application/json')
+        self.assertIn('serviço de localização', resp.json()['erro'])
+
     def test_configuracao_de_custo_fica_guardada_na_filial(self):
         resp = self.client.post(
             reverse('pdv:delivery_rota_salvar_configuracao'),
@@ -436,7 +457,14 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
     def test_configuracao_rfm_fica_guardada_na_filial_e_valida_ordem(self):
         resp = self.client.post(
             reverse('pdv:delivery_rota_salvar_configuracao_rfm'),
-            data=json.dumps({'r5_dias': 15, 'r4_dias': 35, 'r3_dias': 70, 'r2_dias': 140}),
+            data=json.dumps({
+                'r5_dias': 15, 'r4_dias': 35, 'r3_dias': 70, 'r2_dias': 140,
+                'f_automatico': False,
+                'f5_compras': 20, 'f4_compras': 10, 'f3_compras': 5, 'f2_compras': 2,
+                'm_automatico': False,
+                'm5_valor': 20000, 'm4_valor': 10000,
+                'm3_valor': 5000, 'm2_valor': 1000,
+            }),
             content_type='application/json',
         )
         rota = RotaDeliveryPublica.objects.get(filial=self.filial)
@@ -446,13 +474,22 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(rota.rfm_r5_dias, 15)
         self.assertEqual(rota.rfm_r2_dias, 140)
-        self.assertEqual(configuracao, {
-            'r5_dias': 15, 'r4_dias': 35, 'r3_dias': 70, 'r2_dias': 140,
-        })
+        self.assertEqual(configuracao['r5_dias'], 15)
+        self.assertFalse(configuracao['f_automatico'])
+        self.assertEqual(configuracao['f5_compras'], 20)
+        self.assertFalse(configuracao['m_automatico'])
+        self.assertEqual(configuracao['m4_valor'], 10000.0)
 
         invalida = self.client.post(
             reverse('pdv:delivery_rota_salvar_configuracao_rfm'),
-            data=json.dumps({'r5_dias': 60, 'r4_dias': 30, 'r3_dias': 90, 'r2_dias': 180}),
+            data=json.dumps({
+                'r5_dias': 60, 'r4_dias': 30, 'r3_dias': 90, 'r2_dias': 180,
+                'f_automatico': True,
+                'f5_compras': 10, 'f4_compras': 7, 'f3_compras': 4, 'f2_compras': 2,
+                'm_automatico': True,
+                'm5_valor': 10000, 'm4_valor': 5000,
+                'm3_valor': 2000, 'm2_valor': 500,
+            }),
             content_type='application/json',
         )
         self.assertEqual(invalida.status_code, 400)
@@ -469,6 +506,8 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
             ultima_compra=timezone.localdate() - datetime.timedelta(days=20),
             valor_medio='850.00', valor_total_periodo='15300.00', score=92,
             status=RecompraCliente.Status.VERMELHO,
+            dias_restantes=-5,
+            proxima_compra_prevista=timezone.localdate() - datetime.timedelta(days=5),
             frequencia=RecompraCliente.Frequencia.SEMANAL,
         )
         candidato.recompra = recompra
@@ -491,10 +530,32 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertEqual(oportunidade['segmento_rfm'], 'Campeão')
         self.assertGreaterEqual(oportunidade['prioridade'], 90)
         self.assertEqual(oportunidade['desvio_km_estimado'], 0.8)
+        self.assertEqual(oportunidade['momento_recompra'], 100)
+        self.assertIn('atrasada há 5', oportunidade['motivo_momento'])
+
+        prioridade_atrasada = oportunidade['prioridade']
+        recompra.dias_restantes = 20
+        recompra.proxima_compra_prevista = timezone.localdate() + datetime.timedelta(days=20)
+        recompra.status = RecompraCliente.Status.VERDE
+        resp_recente = self.client.post(
+            reverse('pdv:delivery_rota_oportunidades'),
+            data=json.dumps({'paradas': [{'lat': -5.80, 'lng': -35.22}], 'raio_m': 3000}),
+            content_type='application/json',
+        )
+        oportunidade_recente = resp_recente.json()['oportunidades'][0]
+        self.assertLess(oportunidade_recente['prioridade'], prioridade_atrasada)
+        self.assertIn('daqui a 20', oportunidade_recente['motivo_momento'])
 
         rota = RotaDeliveryPublica.objects.create(
             filial=self.filial, rfm_r5_dias=10, rfm_r4_dias=30,
             rfm_r3_dias=60, rfm_r2_dias=120,
+            rfm_configuracao={
+                'f_automatico': False,
+                'f5_compras': 20, 'f4_compras': 10, 'f3_compras': 5, 'f2_compras': 2,
+                'm_automatico': False,
+                'm5_valor': 20000, 'm4_valor': 10000,
+                'm3_valor': 5000, 'm2_valor': 1000,
+            },
         )
         resp_configurada = self.client.post(
             reverse('pdv:delivery_rota_oportunidades'),
@@ -503,6 +564,8 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         )
         configurada = resp_configurada.json()['oportunidades'][0]
         self.assertEqual(configurada['rfm_r'], 4)
+        self.assertEqual(configurada['rfm_f'], 4)
+        self.assertEqual(configurada['rfm_m'], 4)
         self.assertEqual(resp_configurada.json()['configuracao_rfm']['r5_dias'], 10)
 
     @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.rota')

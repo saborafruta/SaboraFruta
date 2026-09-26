@@ -39,6 +39,7 @@ class RotaDeliveryPublica(TimestampedModel):
     rfm_r4_dias = models.PositiveSmallIntegerField(default=60)
     rfm_r3_dias = models.PositiveSmallIntegerField(default=90)
     rfm_r2_dias = models.PositiveSmallIntegerField(default=180)
+    rfm_configuracao = models.JSONField(default=dict, blank=True)
     entregador = models.CharField(max_length=100, blank=True)
     ativa = models.BooleanField(default=True)
 

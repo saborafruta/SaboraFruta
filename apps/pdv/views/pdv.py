@@ -3365,12 +3365,19 @@ def _delivery_rota_filial(filial):
 
 
 def _delivery_configuracao_rfm(configuracao=None):
-    return {
+    padrao = {
         'r5_dias': configuracao.rfm_r5_dias if configuracao else 30,
         'r4_dias': configuracao.rfm_r4_dias if configuracao else 60,
         'r3_dias': configuracao.rfm_r3_dias if configuracao else 90,
         'r2_dias': configuracao.rfm_r2_dias if configuracao else 180,
+        'f_automatico': True,
+        'f5_compras': 10, 'f4_compras': 7, 'f3_compras': 4, 'f2_compras': 2,
+        'm_automatico': True,
+        'm5_valor': 10000.0, 'm4_valor': 5000.0, 'm3_valor': 2000.0, 'm2_valor': 500.0,
     }
+    if configuracao and isinstance(configuracao.rfm_configuracao, dict):
+        padrao.update({chave: valor for chave, valor in configuracao.rfm_configuracao.items() if chave in padrao})
+    return padrao
 
 
 @xframe_options_sameorigin
@@ -3428,23 +3435,54 @@ def delivery_rota_salvar_configuracao(request):
 @require_POST
 @requer_permissao('pdv', 'ver')
 def delivery_rota_salvar_configuracao_rfm(request):
-    """Salva os limites de recência RFM compartilhados pela filial."""
+    """Salva os limites R, F e M compartilhados pela filial."""
     from apps.pdv.models import RotaDeliveryPublica
 
+    existente = RotaDeliveryPublica.objects.filter(filial=request.filial_ativa).first()
+    atual = _delivery_configuracao_rfm(existente)
     try:
         corpo = json.loads(request.body or b'{}')
-        limites = [int(corpo[chave]) for chave in ('r5_dias', 'r4_dias', 'r3_dias', 'r2_dias')]
-    except (KeyError, TypeError, ValueError):
-        return JsonResponse({'erro': 'Informe os quatro limites de dias do RFM.'}, status=400)
-    if any(valor < 1 or valor > 3650 for valor in limites):
+        limites_r = [int(corpo[chave]) for chave in ('r5_dias', 'r4_dias', 'r3_dias', 'r2_dias')]
+        f_automatico = corpo.get('f_automatico', atual['f_automatico'])
+        m_automatico = corpo.get('m_automatico', atual['m_automatico'])
+        limites_f = [
+            int(corpo.get(chave, atual[chave]))
+            for chave in ('f5_compras', 'f4_compras', 'f3_compras', 'f2_compras')
+        ]
+        limites_m = [
+            Decimal(str(corpo.get(chave, atual[chave])).replace(',', '.'))
+            for chave in ('m5_valor', 'm4_valor', 'm3_valor', 'm2_valor')
+        ]
+    except (KeyError, TypeError, ValueError, InvalidOperation):
+        return JsonResponse({'erro': 'Informe valores válidos para R, F e M.'}, status=400)
+    if not isinstance(f_automatico, bool) or not isinstance(m_automatico, bool):
+        return JsonResponse({'erro': 'O modo automático de F e M é inválido.'}, status=400)
+    if any(valor < 1 or valor > 3650 for valor in limites_r):
         return JsonResponse({'erro': 'Os limites devem ficar entre 1 e 3.650 dias.'}, status=400)
-    if limites != sorted(limites) or len(set(limites)) != 4:
+    if limites_r != sorted(limites_r) or len(set(limites_r)) != 4:
         return JsonResponse({'erro': 'Os limites precisam ser crescentes: R5 < R4 < R3 < R2.'}, status=400)
+    if any(valor < 0 or valor > 1000000 for valor in limites_f) or not all(
+        limites_f[i] > limites_f[i + 1] for i in range(3)
+    ):
+        return JsonResponse({'erro': 'Em F, use limites decrescentes: F5 > F4 > F3 > F2.'}, status=400)
+    if any(valor < 0 or valor > Decimal('999999999999.99') for valor in limites_m) or not all(
+        limites_m[i] > limites_m[i + 1] for i in range(3)
+    ):
+        return JsonResponse({'erro': 'Em M, use limites decrescentes: M5 > M4 > M3 > M2.'}, status=400)
 
     rota, _ = RotaDeliveryPublica.objects.get_or_create(filial=request.filial_ativa)
-    rota.rfm_r5_dias, rota.rfm_r4_dias, rota.rfm_r3_dias, rota.rfm_r2_dias = limites
+    rota.rfm_r5_dias, rota.rfm_r4_dias, rota.rfm_r3_dias, rota.rfm_r2_dias = limites_r
+    rota.rfm_configuracao = {
+        'f_automatico': f_automatico,
+        'f5_compras': limites_f[0], 'f4_compras': limites_f[1],
+        'f3_compras': limites_f[2], 'f2_compras': limites_f[3],
+        'm_automatico': m_automatico,
+        'm5_valor': float(limites_m[0]), 'm4_valor': float(limites_m[1]),
+        'm3_valor': float(limites_m[2]), 'm2_valor': float(limites_m[3]),
+    }
     rota.save(update_fields=[
-        'rfm_r5_dias', 'rfm_r4_dias', 'rfm_r3_dias', 'rfm_r2_dias', 'updated_at',
+        'rfm_r5_dias', 'rfm_r4_dias', 'rfm_r3_dias', 'rfm_r2_dias',
+        'rfm_configuracao', 'updated_at',
     ])
     return JsonResponse({'ok': True, 'rfm': _delivery_configuracao_rfm(rota)})
 
@@ -3471,6 +3509,13 @@ def _delivery_faixa_quintil(valor, valores):
     ordenados = sorted(valores)
     menores_ou_iguais = sum(1 for atual in ordenados if atual <= valor)
     return max(1, min(5, (menores_ou_iguais * 5 + len(ordenados) - 1) // len(ordenados)))
+
+
+def _delivery_faixa_limites(valor, limites):
+    for nota, limite in zip((5, 4, 3, 2), limites):
+        if valor >= limite:
+            return nota
+    return 1
 
 
 @require_POST
@@ -3535,8 +3580,22 @@ def delivery_rota_oportunidades(request):
             r = 1
         qtd = recompra.qtd_compras if recompra else 0
         total = float(recompra.valor_total_periodo or 0) if recompra else 0
-        f = _delivery_faixa_quintil(qtd, frequencias)
-        m = _delivery_faixa_quintil(total, monetarios)
+        f = (
+            _delivery_faixa_quintil(qtd, frequencias)
+            if limites_rfm['f_automatico'] else
+            _delivery_faixa_limites(qtd, [
+                limites_rfm['f5_compras'], limites_rfm['f4_compras'],
+                limites_rfm['f3_compras'], limites_rfm['f2_compras'],
+            ])
+        )
+        m = (
+            _delivery_faixa_quintil(total, monetarios)
+            if limites_rfm['m_automatico'] else
+            _delivery_faixa_limites(total, [
+                limites_rfm['m5_valor'], limites_rfm['m4_valor'],
+                limites_rfm['m3_valor'], limites_rfm['m2_valor'],
+            ])
+        )
         total_rfm = r + f + m
         if total_rfm >= 13:
             segmento = 'Campeão'
@@ -3549,8 +3608,33 @@ def delivery_rota_oportunidades(request):
         else:
             segmento = 'Em desenvolvimento'
         score_crm = recompra.score if recompra else 0
+        dias_restantes = recompra.dias_restantes if recompra else None
+        if dias_restantes is None:
+            momento_recompra = 10
+            motivo_momento = 'Ainda não há padrão suficiente para prever a próxima compra.'
+        elif dias_restantes < 0:
+            momento_recompra = 100
+            atraso = abs(dias_restantes)
+            motivo_momento = f'A recompra prevista está atrasada há {atraso} dia(s).'
+        elif dias_restantes == 0:
+            momento_recompra = 95
+            motivo_momento = 'A recompra prevista é para hoje.'
+        elif dias_restantes <= 3:
+            momento_recompra = 80
+            motivo_momento = f'Faltam {dias_restantes} dia(s) para a recompra prevista.'
+        else:
+            # Comprar recentemente melhora a qualidade RFM do cliente, mas não
+            # significa que seja o melhor momento para abordá-lo novamente.
+            momento_recompra = max(0, 50 - dias_restantes * 2)
+            motivo_momento = (
+                f'A recompra prevista é para daqui a {dias_restantes} dia(s); '
+                'por isso o momento comercial recebe menos peso agora.'
+            )
         proximidade = max(0, 100 - (distancia / raio_m * 100))
-        prioridade = round(score_crm * .65 + proximidade * .25 + (total_rfm / 15 * 10))
+        prioridade = round(
+            score_crm * .55 + proximidade * .25
+            + (total_rfm / 15 * 10) + momento_recompra * .10
+        )
         desvio_km = round(distancia * 2 / 1000, 1)
         telefone = (cliente.celular or cliente.telefone or '').strip()
         whatsapp = re.sub(r'\D', '', telefone)
@@ -3574,6 +3658,13 @@ def delivery_rota_oportunidades(request):
             'score_crm': score_crm, 'prioridade': prioridade,
             'status_recompra': recompra.get_status_display() if recompra else 'Sem histórico suficiente',
             'dias_sem_comprar': dias,
+            'dias_restantes': dias_restantes,
+            'proxima_compra_prevista': (
+                recompra.proxima_compra_prevista.strftime('%d/%m/%Y')
+                if recompra and recompra.proxima_compra_prevista else ''
+            ),
+            'momento_recompra': momento_recompra,
+            'motivo_momento': motivo_momento,
             'valor_medio': float(recompra.valor_medio or 0) if recompra else 0,
             'qtd_compras': qtd,
         })
@@ -3716,7 +3807,13 @@ def delivery_rota_localizar_parada_manual(request):
         return JsonResponse({'erro': 'Informe o que será feito nesta parada.'}, status=400)
     texto = _delivery_endereco_manual_texto(endereco)
     endereco_hash = hashlib.sha256(texto.lower().encode('utf-8')).hexdigest()
-    resultado = GeocodificacaoService().resolver(texto, endereco_hash)
+    try:
+        resultado = GeocodificacaoService().resolver(texto, endereco_hash)
+    except Exception:
+        logger.exception('falha ao geocodificar parada manual para a filial %s', request.filial_ativa.pk)
+        return JsonResponse({
+            'erro': 'O serviço de localização não respondeu. Tente novamente em instantes.'
+        }, status=503)
     if not resultado.ok:
         return JsonResponse({
             'erro': 'Não foi possível localizar esse endereço. Confira os dados e tente novamente.'
