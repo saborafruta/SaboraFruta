@@ -98,7 +98,6 @@
       <button class="dr-button" id="routeSave">Salvar rascunho</button>
       <button class="dr-button" id="routeDriverLink">Copiar link do motoboy</button>
       <button class="dr-button green" id="routeShare">Compartilhar no WhatsApp</button>
-      <button class="dr-button green" id="routeOsmAnd">OsmAnd completo</button>
       <button class="dr-button" id="routeMaps">Google Maps</button>
     </div>
   </div>
@@ -182,9 +181,9 @@
     const shown=orders.filter(o=>!q||`${o.numero} ${o.cliente} ${o.bairro}`.toLowerCase().includes(q));
     document.getElementById('availableCount').textContent=orders.length;
     document.getElementById('availableList').innerHTML=shown.length?shown.map(o=>`
-      <label class="dr-card ${o.tem_coordenada?'':'unavailable'}" title="${o.tem_coordenada?'':'Cliente sem coordenada confirmada'}">
+      <label class="dr-card ${o.tem_coordenada?'':'unavailable'}" title="${o.tem_coordenada?'':'Confira o endereço do cliente para gerar a coordenada'}">
         <input class="dr-check" type="checkbox" data-select="${o.id}" ${state.selected.includes(o.id)?'checked':''} ${o.tem_coordenada?'':'disabled'}>
-        <div><div class="dr-client">#${esc(o.numero)} · ${esc(o.cliente)}</div><div class="dr-meta">${esc(address(o))}</div><div class="dr-badges"><span class="dr-badge">${esc(o.status_label)}</span><span class="dr-badge blue">${esc(o.pagamento)}</span>${o.tem_coordenada?'':'<span class="dr-badge warn">Sem coordenada</span>'}</div></div>
+        <div><div class="dr-client">#${esc(o.numero)} · ${esc(o.cliente)}</div><div class="dr-meta">${esc(address(o))}</div><div class="dr-badges"><span class="dr-badge">${esc(o.status_label)}</span><span class="dr-badge blue">${esc(o.pagamento)}</span>${o.tem_coordenada?'':'<span class="dr-badge warn">Sem coordenada — confira o endereço</span>'}</div></div>
         <div class="dr-price">${money(o.valor)}</div>
       </label>`).join(''):'<div class="dr-empty">Nenhum pedido encontrado.</div>';
     document.querySelectorAll('[data-select]').forEach(el=>el.addEventListener('change',()=>toggleOrder(Number(el.dataset.select),el.checked)));
@@ -262,17 +261,7 @@
     if(state.result.paradas.length)url.searchParams.set('waypoints',state.result.paradas.map(mapsLocation).join('|'));
     return url.toString();
   }
-  function osmandUrl(){
-    if(!state.result)return'';
-    const url=new URL('https://osmand.net/map/');
-    const base=`${branch.lat},${branch.lng}`;
-    url.searchParams.set('start',base);url.searchParams.set('finish',base);
-    state.result.paradas.forEach(stop=>url.searchParams.append('via',coords(stop)));
-    url.searchParams.set('type','osmand');url.searchParams.set('profile','car');
-    return url.toString();
-  }
   function openMaps(){const url=googleFullUrl();if(!url)return toast('Gere a rota antes de abrir o GPS.',true);window.open(url,'_blank','noopener');toast(`Confira se o Google carregou todas as ${state.result.paradas.length} entregas.`);}
-  function openOsmAnd(){const url=osmandUrl();if(!url)return toast('Gere a rota antes de testar.',true);window.open(url,'_blank','noopener');}
   function saveDraft(){const payload={selected:state.selected,locked:[...state.locked],driver:document.getElementById('routeDriver').value,minutes:document.getElementById('stopMinutes').value};localStorage.setItem('delivery-route-draft',JSON.stringify(payload));toast('Rascunho salvo neste navegador.');}
   function loadDraft(){try{const d=JSON.parse(localStorage.getItem('delivery-route-draft')||'null');if(!d)return;state.selected=(d.selected||[]).map(Number).filter(id=>byId[String(id)]?.tem_coordenada);state.locked=new Set((d.locked||[]).map(Number));document.getElementById('routeDriver').value=d.driver||'';document.getElementById('stopMinutes').value=d.minutes||5;}catch(e){}}
   async function publishRoute(){
@@ -289,7 +278,6 @@
   document.getElementById('routeSave').addEventListener('click',saveDraft);
   document.getElementById('routeDriverLink').addEventListener('click',copyDriverLink);
   document.getElementById('routeShare').addEventListener('click',share);
-  document.getElementById('routeOsmAnd').addEventListener('click',openOsmAnd);
   document.getElementById('routeMaps').addEventListener('click',openMaps);
   document.getElementById('stopMinutes').addEventListener('change',()=>scheduleAutomaticCalculation(false,100));
   loadDraft();renderAvailable();renderRoute();initMap();

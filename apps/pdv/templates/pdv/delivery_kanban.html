@@ -883,11 +883,12 @@
     return d ? `${d}/${m}/${a}` : iso;
   }
 
-  // Auto-refresh a cada 60 segundos. Não recarrega com um modal aberto: a
+  // Auto-refresh a cada 30 segundos. Não recarrega com um modal aberto: a
   // página sumindo no meio da leitura perderia o que o usuário estava fazendo.
   setInterval(() => {
-    if (!document.querySelector('.delivery-modal-bg.open')) location.reload();
-  }, 60000);
+    const modalAberto = document.querySelector('.delivery-modal-bg.open, .delivery-route-modal-bg.open');
+    if (!document.hidden && !modalAberto && !draggingCard) location.reload();
+  }, 30000);
 
   // ── Dados para impressão ────────────────────────────────────────────────────
   window.deliveryData = {{ pedidos_json|safe }};

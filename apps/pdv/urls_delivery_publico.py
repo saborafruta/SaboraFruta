@@ -7,6 +7,5 @@ app_name = 'delivery_publico'
 
 urlpatterns = [
     path('<str:token>/', delivery_publico.painel, name='painel'),
-    path('<str:token>/rota.gpx', delivery_publico.gpx, name='gpx'),
     path('<str:token>/pedido/<int:pk>/concluir/', delivery_publico.concluir, name='concluir'),
 ]

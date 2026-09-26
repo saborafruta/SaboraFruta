@@ -328,7 +328,8 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         self.assertContains(resp, '(84) 99999-1234')
         self.assertContains(resp, 'WhatsApp do cliente')
         self.assertContains(resp, 'PAGO')
-        self.assertContains(resp, 'Marcar entrega como concluída')
+        self.assertContains(resp, 'Marcar parada 1 como entregue')
+        self.assertContains(resp, 'Ver mais')
         self.assertEqual(resp.headers['Cache-Control'], 'private, no-store')
 
     def test_painel_publico_nao_marca_venda_pendente_como_paga(self):
@@ -340,7 +341,8 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
 
         resp = self.client.get(url)
 
-        self.assertContains(resp, 'PAGAMENTO PENDENTE')
+        self.assertContains(resp, 'Venda com pagamento pendente.')
+        self.assertContains(resp, 'RECEBER NA ENTREGA')
         self.assertNotContains(resp, '<span class="tag paid">PAGO</span>', html=True)
 
     def test_motoboy_conclui_somente_pedido_da_rota(self):
@@ -364,34 +366,33 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         self.assertEqual(negado.status_code, 404)
         self.assertEqual(fora_da_rota.status_delivery, VendaPDV.StatusDelivery.NOVO)
 
-    def test_painel_oferece_osmand_e_google_em_rota_unica(self):
+    def test_motoboy_conclui_pedido_sem_recarregar_a_pagina(self):
+        venda = self._venda(numero=422)
+        self._publicar([venda])
+        rota = RotaDeliveryPublica.objects.get(filial=self.filial)
+        self.client.logout()
+
+        resp = self.client.post(
+            reverse('delivery_publico:concluir', args=[rota.token, venda.pk]),
+            HTTP_ACCEPT='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['status'], VendaPDV.StatusDelivery.ENTREGUE)
+        self.assertEqual(venda.status_delivery, VendaPDV.StatusDelivery.ENTREGUE)
+
+    def test_painel_oferece_somente_google_em_rota_unica(self):
         pedidos = [self._venda(numero=440 + indice) for indice in range(7)]
         url = self._publicar(pedidos).json()['url']
         self.client.logout()
 
         resp = self.client.get(url)
 
-        self.assertContains(resp, 'OsmAnd — rota completa')
-        self.assertContains(resp, 'Baixar GPX para OsmAnd')
-        self.assertContains(resp, '>Google Maps<', html=False)
-        self.assertNotContains(resp, 'Google Maps em etapas')
-        self.assertContains(resp, 'https://osmand.net/map/?', html=False)
+        self.assertContains(resp, 'Abrir no Google Maps')
+        self.assertNotContains(resp, 'OsmAnd')
+        self.assertNotContains(resp, 'GPX')
         self.assertContains(resp, 'waypoints=', html=False)
         parametros = parse_qs(urlparse(resp.context['google_maps_completa']).query)
         self.assertNotIn('dir_action', parametros)
         self.assertIn('Rua do Cliente', parametros['waypoints'][0])
-
-    def test_gpx_contem_todos_os_pedidos_em_uma_unica_rota(self):
-        pedidos = [self._venda(numero=450 + indice) for indice in range(3)]
-        self._publicar(pedidos)
-        rota = RotaDeliveryPublica.objects.get(filial=self.filial)
-        self.client.logout()
-
-        resp = self.client.get(reverse('delivery_publico:gpx', args=[rota.token]))
-
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp['Content-Type'], 'application/gpx+xml')
-        self.assertIn('attachment; filename="rota-delivery.gpx"', resp['Content-Disposition'])
-        self.assertEqual(resp.content.count(b'<rtept '), 5)
-        for numero in range(450, 453):
-            self.assertIn(f'#{numero}'.encode(), resp.content)
