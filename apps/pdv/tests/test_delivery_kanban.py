@@ -164,6 +164,10 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'Google Maps')
         self.assertContains(tela, 'Expandir mapa')
         self.assertContains(tela, 'requestFullscreen')
+        self.assertContains(tela, 'Hora prevista de saída')
+        self.assertContains(tela, 'Combustível necessário')
+        self.assertContains(tela, 'Custo estimado da rota')
+        self.assertContains(tela, 'fuelAutonomy')
         self.assertNotContains(tela, 'Waze')
         pedidos = json.loads(tela.context['pedidos_json'])
         self.assertIn(ativo.pk, [p['id'] for p in pedidos])
@@ -182,6 +186,7 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(kanban, '<th>Status</th>', html=True)
         self.assertContains(kanban, '<th>Pagamento</th>', html=True)
         self.assertContains(kanban, 'deliveryListBody')
+        self.assertContains(kanban, 'data-columns="off"', html=False)
         self.assertContains(kanban, '?embed=1')
         dados_kanban = json.loads(kanban.context['pedidos_json'])
         self.assertEqual(dados_kanban[str(ativo.pk)]['status_delivery'], 'preparando')
@@ -218,6 +223,28 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertEqual(len(dados['paradas']), 2)
         pontos = mock_rota.call_args.args[0]
         self.assertEqual(pontos[0], pontos[-1])
+
+    @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.rota')
+    def test_calculo_usa_hora_prevista_informada(self, mock_rota):
+        venda = self._venda(numero=204)
+        mock_rota.return_value = Rota(
+            distancia_m=10000, duracao_s=3600,
+            geometria=[[-5.79, -35.21], [-5.80, -35.22], [-5.79, -35.21]],
+        )
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_calcular'),
+            data=json.dumps({
+                'pedidos': [venda.pk],
+                'minutos_parada': 5,
+                'saida_prevista': '08:30',
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['saida'], '08:30')
+        self.assertEqual(resp.json()['retorno'], '09:35')
 
     @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.matriz_distancias')
     @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.rota')

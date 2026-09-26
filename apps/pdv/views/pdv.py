@@ -3615,6 +3615,14 @@ def delivery_rota_calcular(request):
     pesos = [distancia_haversine_m(pontos[i], pontos[i + 1]) for i in range(len(pontos) - 1)]
     peso_total = sum(pesos) or 1
     agora = timezone.localtime()
+    saida_texto = str(corpo.get('saida_prevista') or '').strip()
+    if saida_texto:
+        if not re.fullmatch(r'\d{2}:\d{2}', saida_texto):
+            return JsonResponse({'erro': 'Informe a saída prevista no formato HH:MM.'}, status=400)
+        hora, minuto = (int(parte) for parte in saida_texto.split(':'))
+        if hora > 23 or minuto > 59:
+            return JsonResponse({'erro': 'Informe uma hora de saída válida.'}, status=400)
+        agora = agora.replace(hour=hora, minute=minuto, second=0, microsecond=0)
     try:
         minutos_parada = int(corpo.get('minutos_parada') or 5)
     except (TypeError, ValueError):

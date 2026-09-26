@@ -29,10 +29,15 @@
   .dr-button.green { color:#fff; border-color:#12845b; background:#12845b; }
   .dr-button:disabled { opacity:.45; cursor:not-allowed; }
   .dr-summary { display:grid; grid-template-columns:1.25fr repeat(4,minmax(105px,.7fr)); gap:9px; }
+  .dr-cost-summary { display:grid; grid-template-columns:repeat(4,minmax(140px,1fr)); gap:9px; }
   .dr-stat { min-height:66px; border:1px solid #2d3440; border-radius:10px; background:#20242a; padding:10px 12px; }
   .dr-stat-label { color:#7f8b9d; font-size:9px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; }
   .dr-stat-value { margin-top:5px; color:#f8fafc; font-size:16px; font-weight:800; font-variant-numeric:tabular-nums; }
   .dr-stat select, .dr-stat input { width:100%; margin-top:4px; border:0; outline:0; background:transparent; color:#f8fafc; font-size:13px; font-weight:700; }
+  .dr-stat input[type="time"] { color-scheme:dark; font-size:16px; }
+  .dr-stat .dr-unit-input { display:flex; align-items:baseline; gap:5px; }
+  .dr-stat .dr-unit-input input { min-width:0; font-size:16px; font-variant-numeric:tabular-nums; }
+  .dr-stat .dr-unit { color:#7f8b9d; font-size:10px; font-weight:700; white-space:nowrap; }
   .dr-grid { display:grid; grid-template-columns:minmax(245px,.82fr) minmax(300px,1fr) minmax(390px,1.45fr); gap:10px; min-height:560px; flex:1; }
   .dr-panel { display:flex; min-width:0; flex-direction:column; overflow:hidden; border:1px solid #2d3440; border-radius:11px; background:#1f2329; }
   .dr-panel-head { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:42px; padding:9px 11px; border-bottom:1px solid #2d3440; }
@@ -100,7 +105,7 @@
   body.tema-claro .dr-search { background:#fff; color:#142033; border-color:#d9e0ea; }
   body.tema-claro .dr-button { background:#fff; color:#334155; border-color:#d9e0ea; }
   @media (max-width:1200px) { .dr-grid { grid-template-columns:minmax(230px,.8fr) minmax(280px,1fr); } .dr-panel.map-panel { grid-column:1/-1; min-height:430px; } }
-  @media (max-width:760px) { .dr-head { flex-direction:column; } .dr-actions { justify-content:flex-start; } .dr-summary { grid-template-columns:repeat(2,1fr); } .dr-summary .dr-stat:first-child { grid-column:1/-1; } .dr-grid { grid-template-columns:1fr; } .dr-panel.map-panel { grid-column:auto; } .dr-footer { grid-template-columns:1fr; } }
+  @media (max-width:760px) { .dr-head { flex-direction:column; } .dr-actions { justify-content:flex-start; } .dr-summary,.dr-cost-summary { grid-template-columns:repeat(2,1fr); } .dr-summary .dr-stat:first-child { grid-column:1/-1; } .dr-grid { grid-template-columns:1fr; } .dr-panel.map-panel { grid-column:auto; } .dr-footer { grid-template-columns:1fr; } }
   @media (max-width:480px) { .dr-address-grid { grid-template-columns:1fr; } .dr-address-wide { grid-column:auto; } }
 </style>
 {% endblock %}
@@ -128,9 +133,16 @@
   <div class="dr-summary">
     <div class="dr-stat"><div class="dr-stat-label">Motoboy</div><input id="routeDriver" placeholder="Nome do entregador"></div>
     <div class="dr-stat"><div class="dr-stat-label">Entregas</div><div class="dr-stat-value" id="routeDeliveries">0</div></div>
-    <div class="dr-stat"><div class="dr-stat-label">Saída prevista</div><div class="dr-stat-value" id="routeDeparture">—</div></div>
+    <div class="dr-stat"><label class="dr-stat-label" for="routeDeparture">Saída prevista</label><input id="routeDeparture" type="time" aria-label="Hora prevista de saída"></div>
     <div class="dr-stat"><div class="dr-stat-label">Retorno previsto</div><div class="dr-stat-value" id="routeReturn">—</div></div>
     <div class="dr-stat"><div class="dr-stat-label">Distância / tempo</div><div class="dr-stat-value" id="routeDistance">—</div></div>
+  </div>
+
+  <div class="dr-cost-summary">
+    <div class="dr-stat"><label class="dr-stat-label" for="fuelPrice">Combustível</label><div class="dr-unit-input"><span class="dr-unit">R$</span><input id="fuelPrice" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0,00"><span class="dr-unit">/ litro</span></div></div>
+    <div class="dr-stat"><label class="dr-stat-label" for="fuelAutonomy">Autonomia</label><div class="dr-unit-input"><input id="fuelAutonomy" type="number" min="0.1" step="0.1" inputmode="decimal" placeholder="0,0"><span class="dr-unit">km/l</span></div></div>
+    <div class="dr-stat"><div class="dr-stat-label">Combustível necessário</div><div class="dr-stat-value" id="routeFuelLiters">—</div></div>
+    <div class="dr-stat"><div class="dr-stat-label">Custo estimado da rota</div><div class="dr-stat-value" id="routeFuelCost">—</div></div>
   </div>
 
   <div class="dr-grid">
@@ -264,7 +276,7 @@
   }
   function toggleOrder(id,checked) { if(checked&&!state.selected.includes(id))state.selected.push(id); if(!checked){state.selected=state.selected.filter(x=>x!==id);state.locked.delete(id);} state.result=null; renderAvailable();renderRoute();resetSummary();scheduleAutomaticCalculation(false); }
   function moveOrder(from,to) { if(!from||from===to)return; const old=state.selected.indexOf(from), target=state.selected.indexOf(to); if(old<0||target<0)return; state.selected.splice(old,1);state.selected.splice(target,0,from);state.locked.add(from);state.result=null;renderRoute();resetSummary();scheduleAutomaticCalculation(false,150); }
-  function resetSummary(){document.getElementById('routeDeparture').textContent='—';document.getElementById('routeReturn').textContent='—';document.getElementById('routeDistance').textContent='—';document.getElementById('routeTimeline').innerHTML='<div class="dr-empty" style="width:100%;padding:6px;">Recalcule a rota para atualizar os horários.</div>';}
+  function resetSummary(){document.getElementById('routeReturn').textContent='—';document.getElementById('routeDistance').textContent='—';document.getElementById('routeTimeline').innerHTML='<div class="dr-empty" style="width:100%;padding:6px;">Recalcule a rota para atualizar os horários.</div>';renderFuelCost();}
 
   function openAddressModal(id) {
     const order=byId[String(id)]; if(!order)return;
@@ -330,7 +342,7 @@
     const buttons=[document.getElementById('routeGenerate'),document.getElementById('routeOptimize')]; buttons.forEach(b=>b.disabled=true);
     document.getElementById('mapNote').textContent=optimize?'Reotimizando pedidos livres…':'Calculando trajeto por ruas…';
     try{
-      const resp=await fetch(calculateUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({pedidos:state.selected,travados:[...state.locked],otimizar:optimize,minutos_parada:Number(document.getElementById('stopMinutes').value||5)})});
+      const resp=await fetch(calculateUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({pedidos:state.selected,travados:[...state.locked],otimizar:optimize,minutos_parada:Number(document.getElementById('stopMinutes').value||5),saida_prevista:document.getElementById('routeDeparture').value})});
       const data=await resp.json(); if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
       if(sequence!==calculationSequence)return;
       state.selected=data.ordem; state.result=data; renderAvailable();renderRoute();drawRoute(data);renderSummary(data);
@@ -339,9 +351,23 @@
     }catch(error){if(sequence===calculationSequence){document.getElementById('mapNote').textContent=error.message;toast(error.message,true);}}finally{if(sequence===calculationSequence)buttons.forEach(b=>b.disabled=false);}
   }
   function renderSummary(data){
-    document.getElementById('routeDeparture').textContent=data.saida;document.getElementById('routeReturn').textContent=data.retorno;document.getElementById('routeDistance').textContent=`${data.distancia_km} km · ${duration(data.tempo_total_s)}`;document.getElementById('routeProvider').textContent=data.provider;
+    document.getElementById('routeDeparture').value=data.saida;document.getElementById('routeReturn').textContent=data.retorno;document.getElementById('routeDistance').textContent=`${data.distancia_km} km · ${duration(data.tempo_total_s)}`;document.getElementById('routeProvider').textContent=data.provider;
     const points=[{ordem:'⌂',eta:data.saida,cliente:'Saída'},...data.paradas,{ordem:'⌂',eta:data.retorno,cliente:'Retorno'}];
     document.getElementById('routeTimeline').innerHTML=points.map(p=>`<div class="dr-timepoint"><span class="dr-dot">${esc(p.ordem)}</span><strong style="display:block;color:#e0e8f4;">${esc(p.eta)}</strong><span>${esc(p.cliente)}</span></div>`).join('');
+    renderFuelCost();
+  }
+  function fuelMetrics(){
+    const price=Number(document.getElementById('fuelPrice').value);
+    const autonomy=Number(document.getElementById('fuelAutonomy').value);
+    const distance=Number(state.result?.distancia_km);
+    if(!(price>0)||!(autonomy>0)||!(distance>=0))return null;
+    const liters=distance/autonomy;
+    return {liters,cost:liters*price};
+  }
+  function renderFuelCost(){
+    const metrics=fuelMetrics();
+    document.getElementById('routeFuelLiters').textContent=metrics?`${metrics.liters.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})} L`:'—';
+    document.getElementById('routeFuelCost').textContent=metrics?metrics.cost.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}):'—';
   }
   function coords(o){return `${o.lat},${o.lng}`;}
   function mapsLocation(o){
@@ -361,8 +387,8 @@
     return url.toString();
   }
   function openMaps(){const url=googleFullUrl();if(!url)return toast('Gere a rota antes de abrir o GPS.',true);window.open(url,'_blank','noopener');toast(`Confira se o Google carregou todas as ${state.result.paradas.length} entregas.`);}
-  function saveDraft(){const payload={selected:state.selected,locked:[...state.locked],driver:document.getElementById('routeDriver').value,minutes:document.getElementById('stopMinutes').value};localStorage.setItem('delivery-route-draft',JSON.stringify(payload));toast('Rascunho salvo neste navegador.');}
-  function loadDraft(){try{const d=JSON.parse(localStorage.getItem('delivery-route-draft')||'null');if(!d)return;state.selected=(d.selected||[]).map(Number).filter(id=>byId[String(id)]?.tem_coordenada);state.locked=new Set((d.locked||[]).map(Number));document.getElementById('routeDriver').value=d.driver||'';document.getElementById('stopMinutes').value=d.minutes||5;}catch(e){}}
+  function saveDraft(){const payload={selected:state.selected,locked:[...state.locked],driver:document.getElementById('routeDriver').value,minutes:document.getElementById('stopMinutes').value,departure:document.getElementById('routeDeparture').value,fuelPrice:document.getElementById('fuelPrice').value,fuelAutonomy:document.getElementById('fuelAutonomy').value};localStorage.setItem('delivery-route-draft',JSON.stringify(payload));toast('Rascunho salvo neste navegador.');}
+  function loadDraft(){try{const d=JSON.parse(localStorage.getItem('delivery-route-draft')||'null');if(!d)return;state.selected=(d.selected||[]).map(Number).filter(id=>byId[String(id)]?.tem_coordenada);state.locked=new Set((d.locked||[]).map(Number));document.getElementById('routeDriver').value=d.driver||'';document.getElementById('stopMinutes').value=d.minutes||5;document.getElementById('routeDeparture').value=d.departure||'';document.getElementById('fuelPrice').value=d.fuelPrice||'';document.getElementById('fuelAutonomy').value=d.fuelAutonomy||'';}catch(e){}}
   async function publishRoute(){
     if(!state.result)throw new Error('Gere a rota antes de publicá-la.');
     const etas=Object.fromEntries(state.result.paradas.map(parada=>[String(parada.id),parada.eta]));
@@ -386,7 +412,12 @@
   });
   document.getElementById('addressForm').addEventListener('submit',saveAddress);
   document.getElementById('stopMinutes').addEventListener('change',()=>scheduleAutomaticCalculation(false,100));
-  loadDraft();renderAvailable();renderRoute();initMap();
+  document.getElementById('routeDeparture').addEventListener('change',()=>scheduleAutomaticCalculation(false,100));
+  document.getElementById('fuelPrice').addEventListener('input',renderFuelCost);
+  document.getElementById('fuelAutonomy').addEventListener('input',renderFuelCost);
+  loadDraft();
+  if(!document.getElementById('routeDeparture').value){const now=new Date();document.getElementById('routeDeparture').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;}
+  renderAvailable();renderRoute();initMap();renderFuelCost();
   if(!branch.tem_coordenada)document.getElementById('mapNote').textContent='A filial precisa de coordenadas para calcular saída e retorno.';
   else if(state.selected.length)scheduleAutomaticCalculation(true,150);
 })();
