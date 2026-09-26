@@ -445,9 +445,11 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resolver.call_count, 2)
         primeira_consulta = resolver.call_args_list[0].args[0]
+        primeira_chave = resolver.call_args_list[0].args[1]
         segunda_consulta = resolver.call_args_list[1].args[0]
         self.assertNotIn('Bloco teste', primeira_consulta)
         self.assertIn('Rua Arnaldo Neves da Silva, 15', primeira_consulta)
+        self.assertEqual(len(primeira_chave), 32)
         self.assertNotIn(', 15,', segunda_consulta)
         self.assertEqual(resp.json()['endereco']['complemento'], 'Bloco teste')
 

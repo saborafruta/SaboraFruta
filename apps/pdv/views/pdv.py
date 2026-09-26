@@ -3836,7 +3836,10 @@ def delivery_rota_localizar_parada_manual(request):
         servico = GeocodificacaoService()
         resultado = None
         for consulta in _delivery_consultas_geocodificacao_manual(endereco):
-            endereco_hash = hashlib.sha256(consulta.lower().encode('utf-8')).hexdigest()
+            # CacheGeocodificacao usa a mesma chave MD5 de 32 caracteres do
+            # CoordenadaMixin. SHA-256 gera 64 caracteres e estoura a PK
+            # varchar(32) no PostgreSQL ao gravar um endereço ainda não visto.
+            endereco_hash = hashlib.md5(consulta.lower().encode('utf-8')).hexdigest()
             resultado = servico.resolver(consulta, endereco_hash)
             if resultado.ok:
                 break

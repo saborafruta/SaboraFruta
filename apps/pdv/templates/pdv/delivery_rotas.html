@@ -665,7 +665,7 @@
   function addOpportunity(item){
     if(!item)return;const id=`oportunidade-${item.id}`;if(state.manualStops[id])return;
     state.manualStops[id]={id,tipo:'manual',origem:'oportunidade',cliente_id:item.id,observacao:item.nome,endereco:item.endereco,endereco_texto:item.endereco_texto,lat:item.lat,lng:item.lng,telefone:item.telefone,whatsapp:item.whatsapp,rfm:item.rfm,segmento_rfm:item.segmento_rfm,score_crm:item.score_crm};
-    state.selected.push(`manual:${id}`);state.result=null;renderRoute();resetSummary();filterOpportunities();scheduleAutomaticCalculation(false,150);toast(`${item.nome} adicionado como oportunidade de venda.`);
+    state.selected.push(`manual:${id}`);state.result=null;renderRoute();resetSummary();filterOpportunities();scheduleAutomaticCalculation(true,150);toast(`${item.nome} adicionado. Buscando a melhor posição na rota…`);
   }
 
   let configSaveTimer=null;
