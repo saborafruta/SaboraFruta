@@ -31,9 +31,16 @@
   .dr-tab { display:flex; align-items:center; gap:7px; border:1px solid #323947; border-radius:9px; background:#20242a; padding:7px 11px; color:#9eabc0; font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap; }
   .dr-tab.route-tab { border-color:var(--route-color); background:var(--route-bg); color:#e5edf8; }
   .dr-tab.route-tab.active { color:#fff; box-shadow:inset 0 0 0 1px var(--route-color),0 0 0 2px var(--route-ring); }
+  .dr-tab-active-label { border-radius:999px; background:var(--route-color); padding:2px 5px; color:#111827; font-size:7px; font-weight:950; letter-spacing:.04em; }
   .dr-tab-status { width:7px; height:7px; border-radius:50%; background:#f59e0b; }
   .dr-tab.route-tab .dr-tab-status { background:var(--route-color); box-shadow:0 0 8px var(--route-color); }
   .dr-autosave { color:#7f8b9d; font-size:10px; white-space:nowrap; }
+  .dr-active-route { display:flex; align-items:center; gap:10px; border:1px solid var(--active-route-color,#3b82f6); border-left-width:5px; border-radius:10px; background:var(--active-route-bg,rgba(37,99,235,.12)); padding:9px 12px; }
+  .dr-active-route-dot { width:10px; height:10px; flex:0 0 auto; border-radius:50%; background:var(--active-route-color,#3b82f6); box-shadow:0 0 10px var(--active-route-color,#3b82f6); }
+  .dr-active-route-copy { display:flex; align-items:baseline; gap:7px; min-width:0; }
+  .dr-active-route-label { color:#aeb9c9; font-size:10px; font-weight:750; text-transform:uppercase; letter-spacing:.05em; }
+  .dr-active-route-name { overflow:hidden; color:#fff; font-size:14px; font-weight:900; text-overflow:ellipsis; white-space:nowrap; }
+  .dr-active-route-help { margin-left:auto; color:#aeb9c9; font-size:10px; text-align:right; }
   .dr-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:34px;
     padding:7px 11px; border-radius:8px; border:1px solid #323947; background:#24282f;
     color:#dbe4f0; font-size:11px; font-weight:750; cursor:pointer; white-space:nowrap; }
@@ -227,7 +234,7 @@
   body.tema-claro .dr-search { background:#fff; color:#142033; border-color:#d9e0ea; }
   body.tema-claro .dr-button { background:#fff; color:#334155; border-color:#d9e0ea; }
   @media (max-width:1200px) { .dr-grid { grid-template-columns:minmax(230px,.8fr) minmax(280px,1fr); } .dr-panel.map-panel { grid-column:1/-1; min-height:430px; } }
-  @media (max-width:760px) { .dr-head { flex-direction:column; } .dr-actions { justify-content:flex-start; } .dr-summary,.dr-cost-summary,.dr-report-kpis { grid-template-columns:repeat(2,1fr); } .dr-summary .dr-stat:first-child { grid-column:1/-1; } .dr-grid { grid-template-columns:1fr; } .dr-panel.map-panel { grid-column:auto; } .dr-footer { grid-template-columns:1fr; } .dr-tabs-row{align-items:flex-start;flex-wrap:wrap}.dr-route-tabs-wrap{flex-basis:100%}.dr-report-toolbar{flex-wrap:wrap}.dr-report-columns{margin-left:0}.dr-report-toolbar input[type="date"]{flex:1 1 140px!important;width:auto!important} }
+  @media (max-width:760px) { .dr-head { flex-direction:column; } .dr-actions { justify-content:flex-start; } .dr-summary,.dr-cost-summary,.dr-report-kpis { grid-template-columns:repeat(2,1fr); } .dr-summary .dr-stat:first-child { grid-column:1/-1; } .dr-grid { grid-template-columns:1fr; } .dr-panel.map-panel { grid-column:auto; } .dr-footer { grid-template-columns:1fr; } .dr-tabs-row{align-items:flex-start;flex-wrap:wrap}.dr-route-tabs-wrap{flex-basis:100%}.dr-active-route{align-items:flex-start;flex-wrap:wrap}.dr-active-route-copy{align-items:flex-start;flex-direction:column;gap:2px}.dr-active-route-help{width:100%;margin-left:20px;text-align:left}.dr-report-toolbar{flex-wrap:wrap}.dr-report-columns{margin-left:0}.dr-report-toolbar input[type="date"]{flex:1 1 140px!important;width:auto!important} }
   @media (max-width:480px) { .dr-address-grid { grid-template-columns:1fr; } .dr-address-wide { grid-column:auto; } }
 </style>
 {% endblock %}
@@ -266,6 +273,12 @@
     <button class="dr-tab" id="routeReport" type="button">📊 Relatório</button>
   </div>
 
+  <div class="dr-active-route" id="activeRouteIdentity">
+    <span class="dr-active-route-dot" aria-hidden="true"></span>
+    <div class="dr-active-route-copy"><span class="dr-active-route-label">Você está editando</span><strong class="dr-active-route-name" id="activeRouteName">—</strong></div>
+    <span class="dr-active-route-help">Pedidos, sequência, mapa e link abaixo pertencem a esta rota.</span>
+  </div>
+
   <div class="dr-summary">
     <div class="dr-stat"><div class="dr-stat-label">Motoboy</div><input id="routeDriver" placeholder="Nome do entregador"></div>
     <div class="dr-stat"><div class="dr-stat-label">Paradas</div><div class="dr-stat-value" id="routeDeliveries">0</div></div>
@@ -288,11 +301,11 @@
       <div class="dr-list" id="availableList"></div>
     </section>
     <section class="dr-panel route-accent">
-      <div class="dr-panel-head"><span class="dr-panel-title">Sequência da rota</span><span class="dr-count" id="selectedCount">0 paradas</span></div>
+      <div class="dr-panel-head"><span class="dr-panel-title">Sequência · <strong id="routeSequenceName">—</strong></span><span class="dr-count" id="selectedCount">0 paradas</span></div>
       <div class="dr-list" id="routeList"></div>
     </section>
     <section class="dr-panel map-panel route-accent">
-      <div class="dr-panel-head"><span class="dr-panel-title">Mapa da rota</span><div class="dr-panel-head-actions"><span class="dr-count" id="routeProvider">Aguardando rota</span><button class="dr-map-expand" id="mapExpand" type="button">⛶ Expandir mapa</button></div></div>
+      <div class="dr-panel-head"><span class="dr-panel-title">Mapa · <strong id="routeMapName">—</strong></span><div class="dr-panel-head-actions"><span class="dr-count" id="routeProvider">Aguardando rota</span><button class="dr-map-expand" id="mapExpand" type="button">⛶ Expandir mapa</button></div></div>
       <div class="dr-map"><div id="deliveryRouteMap"></div><div class="dr-map-note" id="mapNote">Selecione os pedidos e clique em “Otimizar rota inteira”.</div></div>
     </section>
   </div>
@@ -529,13 +542,15 @@
     return resp.json();
   }
   function routeSnapshot(){return {selected:[...state.selected],manualStops:state.manualStops,locked:[...state.locked],driver:document.getElementById('routeDriver').value,minutes:document.getElementById('stopMinutes').value,departure:document.getElementById('routeDeparture').value,fuelPrice:document.getElementById('fuelPrice').value,fuelAutonomy:document.getElementById('fuelAutonomy').value,result:state.result};}
-  function activeRouteColor(){const index=Math.max(0,routes.findIndex(route=>route.id===currentRoute?.id));return routeColors[index%routeColors.length][0];}
-  function applyRouteAccent(){document.getElementById('deliveryRouteApp').style.setProperty('--active-route-color',activeRouteColor());}
+  function activeRoutePalette(){const index=Math.max(0,routes.findIndex(route=>route.id===currentRoute?.id));return routeColors[index%routeColors.length];}
+  function activeRouteColor(){return activeRoutePalette()[0];}
+  function applyRouteAccent(){const palette=activeRoutePalette(),name=currentRoute?.nome||'Rota';const app=document.getElementById('deliveryRouteApp');app.style.setProperty('--active-route-color',palette[0]);app.style.setProperty('--active-route-bg',palette[1]);document.getElementById('activeRouteName').textContent=name;document.getElementById('routeSequenceName').textContent=name;document.getElementById('routeMapName').textContent=name;}
   function renderTabs(){
     document.getElementById('routeTabs').innerHTML=routes.map((route,index)=>{
       const color=routeColors[index%routeColors.length];
       const style=`--route-color:${color[0]};--route-bg:${color[1]};--route-ring:${color[2]}`;
-      return `<span class="dr-tab-group" style="${style}"><button class="dr-tab route-tab ${route.id===currentRoute?.id?'active':''}" data-route-tab="${route.id}" title="Duplo clique para renomear"><span class="dr-tab-status ${esc(route.status)}"></span>${esc(route.nome)}</button><button class="dr-route-link" type="button" data-route-link="${route.id}" title="Copiar link individual desta rota">🔗</button></span>`;
+      const active=route.id===currentRoute?.id;
+      return `<span class="dr-tab-group" style="${style}"><button class="dr-tab route-tab ${active?'active':''}" data-route-tab="${route.id}" ${active?'aria-current="true"':''} title="Duplo clique para renomear"><span class="dr-tab-status ${esc(route.status)}"></span>${esc(route.nome)}${active?'<span class="dr-tab-active-label">EM EDIÇÃO</span>':''}</button><button class="dr-route-link" type="button" data-route-link="${route.id}" title="Copiar link individual desta rota">🔗</button></span>`;
     }).join('');
     document.querySelectorAll('[data-route-tab]').forEach(tab=>{tab.addEventListener('click',()=>switchRoute(Number(tab.dataset.routeTab)));tab.addEventListener('dblclick',()=>renameRoute(Number(tab.dataset.routeTab)));});
     document.querySelectorAll('[data-route-link]').forEach(button=>button.addEventListener('click',()=>copyIndividualRouteLink(Number(button.dataset.routeLink))));
@@ -544,7 +559,7 @@
   let lastSavedSignature='';
   function loadRoute(route){currentRoute=route;applyRouteAccent();const saved=route.estado||{};state.manualStops=saved.manualStops||Object.fromEntries((route.paradas_extras||[]).map(item=>[String(item.id),item]));state.selected=(saved.selected||route.ordem_paradas||[]).map(String).filter(key=>stopByKey(key));state.locked=new Set((saved.locked||[]).filter(key=>state.selected.includes(key)));state.result=saved.result||null;conference=route.conferencia_itens||{};document.getElementById('routeDriver').value=saved.driver||route.entregador||'';document.getElementById('stopMinutes').value=saved.minutes??savedConfig.minutos_por_parada??5;document.getElementById('routeDeparture').value=saved.departure||'';document.getElementById('fuelPrice').value=saved.fuelPrice||savedConfig.combustivel_preco||'';document.getElementById('fuelAutonomy').value=saved.fuelAutonomy||savedConfig.autonomia_km_l||'';renderTabs();renderAvailable();renderRoute();if(state.result){drawRoute(state.result);renderSummary(state.result);}else resetSummary();updateFinalizeButton();lastSavedSignature=JSON.stringify({estado:routeSnapshot(),conferencia_itens:conference,nome:currentRoute.nome});}
   async function switchRoute(id){const route=routes.find(item=>item.id===id);if(!route||route===currentRoute)return;await persistRoute();loadRoute(route);if(!document.getElementById('routeDeparture').value){const now=new Date();document.getElementById('routeDeparture').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;}if(state.selected.length&&!state.result)scheduleAutomaticCalculation(true,120);}
-  async function renameRoute(id){const route=routes.find(item=>item.id===id);if(!route)return;const nome=window.prompt('Nome da rota:',route.nome);if(!nome?.trim())return;route.nome=nome.trim().slice(0,100);if(route===currentRoute)await persistRoute(true);renderTabs();}
+  async function renameRoute(id){const route=routes.find(item=>item.id===id);if(!route)return;const nome=window.prompt('Nome da rota:',route.nome);if(!nome?.trim())return;route.nome=nome.trim().slice(0,100);if(route===currentRoute){applyRouteAccent();await persistRoute(true);}renderTabs();}
   async function createRoute(){const nome=window.prompt('Nome da nova rota:',`Rota ${routes.length+1}`);if(!nome?.trim())return;await persistRoute();const resp=await fetch(createRouteUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({nome:nome.trim()})});const data=await responseJson(resp);if(!resp.ok)return toast(data.erro||`HTTP ${resp.status}`,true);routes.push(data.rota);loadRoute(data.rota);toast('Nova rota criada.');}
   function address(o) { return [o.endereco,o.bairro,[o.cidade,o.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ') || 'Endereço não informado'; }
   function orderKey(id) { return `pedido:${id}`; }
