@@ -53,6 +53,7 @@
   .dr-stat .dr-unit { color:#7f8b9d; font-size:10px; font-weight:700; white-space:nowrap; }
   .dr-grid { display:grid; grid-template-columns:minmax(245px,.82fr) minmax(300px,1fr) minmax(390px,1.45fr); gap:10px; min-height:560px; flex:1; }
   .dr-panel { display:flex; min-width:0; flex-direction:column; overflow:hidden; border:1px solid #2d3440; border-radius:11px; background:#1f2329; }
+  .dr-panel.route-accent { border-top:2px solid var(--active-route-color,#2d3440); }
   .dr-panel-head { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:42px; padding:9px 11px; border-bottom:1px solid #2d3440; }
   .dr-panel-title { color:#f3f6fb; font-size:12px; font-weight:800; }
   .dr-panel-head-actions { display:flex; align-items:center; gap:6px; }
@@ -67,7 +68,7 @@
   .dr-card.unavailable { opacity:.55; }
   .dr-card.dragging { opacity:.35; }
   .dr-check { margin-top:3px; accent-color:#2563eb; }
-  .dr-order { display:flex; align-items:center; justify-content:center; width:23px; height:23px; border-radius:50%; background:#2563eb; color:#fff; font-size:10px; font-weight:850; }
+  .dr-order { display:flex; align-items:center; justify-content:center; width:23px; height:23px; border-radius:50%; background:var(--active-route-color,#2563eb); color:#fff; font-size:10px; font-weight:850; }
   .dr-client { overflow:hidden; color:#eef3fb; font-size:10.5px; font-weight:750; text-overflow:ellipsis; white-space:nowrap; }
   .dr-meta { margin-top:3px; color:#8491a4; font-size:9px; line-height:1.4; }
   .dr-badges { display:flex; flex-wrap:wrap; gap:3px; margin-top:5px; }
@@ -246,8 +247,8 @@
     <div class="dr-actions">
       <button class="dr-button green" id="routeOpportunities" type="button">✦ Oportunidades de Venda</button>
       <button class="dr-button" id="routeAddManual" type="button">＋ Parada manual</button>
-      <button class="dr-button primary" id="routeGenerate" title="Remove as travas e busca a menor rota para todos os pedidos">Melhor rota</button>
-      <button class="dr-button" id="routeOptimize" title="Mantém posições travadas e reorganiza somente as demais">Reotimizar livres</button>
+      <button class="dr-button primary" id="routeGenerate" title="Remove todas as travas e reorganiza a rota inteira">Otimizar rota inteira</button>
+      <button class="dr-button" id="routeOptimize" title="Mantém as posições travadas e reorganiza somente as paradas livres">Otimizar não travados</button>
       <button class="dr-button" id="routeSave">Salvar rascunho</button>
       <button class="dr-button" id="routeDriverLink">Copiar link desta rota</button>
       <button class="dr-button green" id="routeShare">Compartilhar no WhatsApp</button>
@@ -286,13 +287,13 @@
       <input class="dr-search" id="orderSearch" placeholder="Buscar cliente, pedido ou bairro">
       <div class="dr-list" id="availableList"></div>
     </section>
-    <section class="dr-panel">
+    <section class="dr-panel route-accent">
       <div class="dr-panel-head"><span class="dr-panel-title">Sequência da rota</span><span class="dr-count" id="selectedCount">0 paradas</span></div>
       <div class="dr-list" id="routeList"></div>
     </section>
-    <section class="dr-panel map-panel">
+    <section class="dr-panel map-panel route-accent">
       <div class="dr-panel-head"><span class="dr-panel-title">Mapa da rota</span><div class="dr-panel-head-actions"><span class="dr-count" id="routeProvider">Aguardando rota</span><button class="dr-map-expand" id="mapExpand" type="button">⛶ Expandir mapa</button></div></div>
-      <div class="dr-map"><div id="deliveryRouteMap"></div><div class="dr-map-note" id="mapNote">Selecione os pedidos e clique em “Melhor rota”.</div></div>
+      <div class="dr-map"><div id="deliveryRouteMap"></div><div class="dr-map-note" id="mapNote">Selecione os pedidos e clique em “Otimizar rota inteira”.</div></div>
     </section>
   </div>
 
@@ -528,6 +529,8 @@
     return resp.json();
   }
   function routeSnapshot(){return {selected:[...state.selected],manualStops:state.manualStops,locked:[...state.locked],driver:document.getElementById('routeDriver').value,minutes:document.getElementById('stopMinutes').value,departure:document.getElementById('routeDeparture').value,fuelPrice:document.getElementById('fuelPrice').value,fuelAutonomy:document.getElementById('fuelAutonomy').value,result:state.result};}
+  function activeRouteColor(){const index=Math.max(0,routes.findIndex(route=>route.id===currentRoute?.id));return routeColors[index%routeColors.length][0];}
+  function applyRouteAccent(){document.getElementById('deliveryRouteApp').style.setProperty('--active-route-color',activeRouteColor());}
   function renderTabs(){
     document.getElementById('routeTabs').innerHTML=routes.map((route,index)=>{
       const color=routeColors[index%routeColors.length];
@@ -539,7 +542,7 @@
   }
   async function persistRoute(showToast=false){if(!currentRoute)return false;const indicator=document.getElementById('routeAutosave');indicator.textContent='Salvando…';const payload={nome:currentRoute.nome,estado:routeSnapshot(),conferencia_itens:conference};try{const resp=await fetch(saveRouteUrlTemplate.replace('/0/','/'+currentRoute.id+'/'),{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify(payload)});const data=await responseJson(resp);if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);Object.assign(currentRoute,data.rota);lastSavedSignature=JSON.stringify({estado:routeSnapshot(),conferencia_itens:conference,nome:currentRoute.nome});indicator.textContent='Salvo agora';if(showToast)toast('Rota salva.');renderTabs();return true;}catch(error){indicator.textContent='Erro ao salvar';toast(error.message,true);return false;}}
   let lastSavedSignature='';
-  function loadRoute(route){currentRoute=route;const saved=route.estado||{};state.manualStops=saved.manualStops||Object.fromEntries((route.paradas_extras||[]).map(item=>[String(item.id),item]));state.selected=(saved.selected||route.ordem_paradas||[]).map(String).filter(key=>stopByKey(key));state.locked=new Set((saved.locked||[]).filter(key=>state.selected.includes(key)));state.result=saved.result||null;conference=route.conferencia_itens||{};document.getElementById('routeDriver').value=saved.driver||route.entregador||'';document.getElementById('stopMinutes').value=saved.minutes??savedConfig.minutos_por_parada??5;document.getElementById('routeDeparture').value=saved.departure||'';document.getElementById('fuelPrice').value=saved.fuelPrice||savedConfig.combustivel_preco||'';document.getElementById('fuelAutonomy').value=saved.fuelAutonomy||savedConfig.autonomia_km_l||'';renderTabs();renderAvailable();renderRoute();if(state.result){drawRoute(state.result);renderSummary(state.result);}else resetSummary();updateFinalizeButton();lastSavedSignature=JSON.stringify({estado:routeSnapshot(),conferencia_itens:conference,nome:currentRoute.nome});}
+  function loadRoute(route){currentRoute=route;applyRouteAccent();const saved=route.estado||{};state.manualStops=saved.manualStops||Object.fromEntries((route.paradas_extras||[]).map(item=>[String(item.id),item]));state.selected=(saved.selected||route.ordem_paradas||[]).map(String).filter(key=>stopByKey(key));state.locked=new Set((saved.locked||[]).filter(key=>state.selected.includes(key)));state.result=saved.result||null;conference=route.conferencia_itens||{};document.getElementById('routeDriver').value=saved.driver||route.entregador||'';document.getElementById('stopMinutes').value=saved.minutes??savedConfig.minutos_por_parada??5;document.getElementById('routeDeparture').value=saved.departure||'';document.getElementById('fuelPrice').value=saved.fuelPrice||savedConfig.combustivel_preco||'';document.getElementById('fuelAutonomy').value=saved.fuelAutonomy||savedConfig.autonomia_km_l||'';renderTabs();renderAvailable();renderRoute();if(state.result){drawRoute(state.result);renderSummary(state.result);}else resetSummary();updateFinalizeButton();lastSavedSignature=JSON.stringify({estado:routeSnapshot(),conferencia_itens:conference,nome:currentRoute.nome});}
   async function switchRoute(id){const route=routes.find(item=>item.id===id);if(!route||route===currentRoute)return;await persistRoute();loadRoute(route);if(!document.getElementById('routeDeparture').value){const now=new Date();document.getElementById('routeDeparture').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;}if(state.selected.length&&!state.result)scheduleAutomaticCalculation(true,120);}
   async function renameRoute(id){const route=routes.find(item=>item.id===id);if(!route)return;const nome=window.prompt('Nome da rota:',route.nome);if(!nome?.trim())return;route.nome=nome.trim().slice(0,100);if(route===currentRoute)await persistRoute(true);renderTabs();}
   async function createRoute(){const nome=window.prompt('Nome da nova rota:',`Rota ${routes.length+1}`);if(!nome?.trim())return;await persistRoute();const resp=await fetch(createRouteUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({nome:nome.trim()})});const data=await responseJson(resp);if(!resp.ok)return toast(data.erro||`HTTP ${resp.status}`,true);routes.push(data.rota);loadRoute(data.rota);toast('Nova rota criada.');}
@@ -578,7 +581,7 @@
   function clearRoute() { if(routeLine){map.removeLayer(routeLine);routeLine=null;} markers.forEach(m=>map.removeLayer(m)); markers=[]; if(branch.tem_coordenada)addMarker(branch.lat,branch.lng,'⌂','base',branch.nome); }
   function drawRoute(result) {
     clearRoute();
-    routeLine=L.polyline(result.geometria,{color:'#2f7df4',weight:5,opacity:.9}).addTo(map);
+    routeLine=L.polyline(result.geometria,{color:activeRouteColor(),weight:5,opacity:.9}).addTo(map);
     const sobrepostos={};
     result.paradas.forEach(p=>{const bucket=`${Number(p.lat).toFixed(4)}:${Number(p.lng).toFixed(4)}`, offset=sobrepostos[bucket]||0;sobrepostos[bucket]=offset+1;addMarker(p.lat,p.lng,p.ordem,p.tipo==='manual'?'manual':'',p.tipo==='manual'?p.observacao:`#${p.numero} · ${p.cliente}`,offset);});
     map.fitBounds(routeLine.getBounds(),{padding:[35,35]});
@@ -605,7 +608,7 @@
       <div class="dr-card ${manual?'dr-manual-card':deliveryComplete(o)?'delivery-complete':''}" draggable="true" data-route-id="${esc(key)}">
         <span class="dr-order">${i+1}</span>
         <div ${manual?'':`data-conference="${o.id}" style="cursor:pointer" title="Abrir conferência dos itens"`}><div class="dr-client">☰ &nbsp;${manual?(opportunity?'Oportunidade · ':'Parada manual · ')+esc(o.observacao):'#'+esc(o.numero)+' · '+esc(o.cliente)}</div><div class="dr-meta">${esc(manual?o.endereco_texto:address(o))}${state.result?.paradas?.[i]?.eta?` · ETA <strong>${esc(state.result.paradas[i].eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge ${manual?'warn':'blue'}">${opportunity?'Oportunidade de Venda':manual?'Parada avulsa':esc(o.status_label)}</span>${!manual?`<span class="dr-badge ${conferenceComplete(o)?'':'danger'}">${conferenceComplete(o)?'✓ Conferido':'⚠ Conferência pendente'}</span>`:''}${opportunity&&o.rfm?`<span class="dr-badge">${esc(o.rfm)}</span>`:''}${state.locked.has(key)?'<span class="dr-badge">Posição travada</span>':''}</div></div>
-        <div class="dr-card-actions">${manual?`<button class="dr-edit-address" type="button" data-edit-manual="${esc(key)}">✎ Endereço</button><button class="dr-edit-address" type="button" data-edit-stop="${esc(key)}">✎ Observação</button><button class="dr-edit-address" type="button" data-sale-stop="${esc(key)}">＋ Venda</button><button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:`<button class="dr-complete-stop ${deliveryComplete(o)?'completed':''}" type="button" data-complete-order="${o.id}" ${o.status==='finalizado'?'disabled':''}>${deliveryComplete(o)?(o.status==='finalizado'?'✓ Concluída':'↶ Reabrir'):'✓ Marcar concluída'}</button>`}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição':'Travar posição'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
+        <div class="dr-card-actions">${manual?`<button class="dr-edit-address" type="button" data-edit-manual="${esc(key)}">✎ Endereço</button><button class="dr-edit-address" type="button" data-edit-stop="${esc(key)}">✎ Observação</button><button class="dr-edit-address" type="button" data-sale-stop="${esc(key)}">＋ Venda</button><button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:`<button class="dr-complete-stop ${deliveryComplete(o)?'completed':''}" type="button" data-complete-order="${o.id}" ${o.status==='finalizado'?'disabled':''}>${deliveryComplete(o)?(o.status==='finalizado'?'✓ Concluída':'↶ Reabrir'):'✓ Marcar concluída'}</button>`}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição: esta parada voltará a participar da otimização.':'Travar posição. Paradas movidas manualmente são travadas automaticamente.'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
       </div>`}).join(''):'<div class="dr-empty">Marque pedidos ou adicione uma parada manual.</div>';
     document.querySelectorAll('[data-lock]').forEach(b=>b.addEventListener('click',()=>{const key=b.dataset.lock;state.locked.has(key)?state.locked.delete(key):state.locked.add(key);renderRoute();}));
     document.querySelectorAll('[data-remove-stop]').forEach(b=>b.addEventListener('click',()=>removeManualStop(b.dataset.removeStop)));
