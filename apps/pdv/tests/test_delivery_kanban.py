@@ -149,9 +149,16 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.filial.latitude = -5.7900
         self.filial.longitude = -35.2100
         self.filial.save(update_fields=['latitude', 'longitude'])
-        self.cliente.latitude = -5.8000
-        self.cliente.longitude = -35.2200
-        self.cliente.save(update_fields=['latitude', 'longitude'])
+        Cliente.objects.filter(pk=self.cliente.pk).update(
+            cep='59158155', endereco='Avenida Antártida', numero='25',
+            bairro='Parque das Nações', cidade='Parnamirim', uf='RN',
+            latitude=-5.8000, longitude=-35.2200, geo_precisao='exata',
+        )
+        self.cliente.refresh_from_db()
+        Cliente.objects.filter(pk=self.cliente.pk).update(
+            geo_endereco_hash=self.cliente.hash_endereco_atual(),
+        )
+        self.cliente.refresh_from_db()
 
     def test_tela_exibe_pedidos_ativos_e_botao_existe_no_kanban(self):
         ativo = self._venda(numero=101, status_delivery='preparando')
@@ -302,7 +309,7 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         primeiro = self._venda(numero=201)
         segundo_cliente = Cliente.objects.create(
             filial=self.filial, razao_social='Segundo Cliente', cpf_cnpj='98765432100',
-            latitude=-5.8100, longitude=-35.2300,
+            latitude=-5.8100, longitude=-35.2300, geo_fixado=True,
         )
         segundo = VendaPDV.objects.create(
             filial=self.filial, numero_venda=202, cliente=segundo_cliente,
@@ -357,7 +364,7 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         proximo = self._venda(numero=211)
         cliente_distante = Cliente.objects.create(
             filial=self.filial, razao_social='Cliente Distante', cpf_cnpj='98765432101',
-            latitude=-5.9000, longitude=-35.3100,
+            latitude=-5.9000, longitude=-35.3100, geo_fixado=True,
         )
         distante = VendaPDV.objects.create(
             filial=self.filial, numero_venda=212, cliente=cliente_distante,
@@ -366,7 +373,7 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         )
         cliente_intermediario = Cliente.objects.create(
             filial=self.filial, razao_social='Cliente Intermediario', cpf_cnpj='98765432102',
-            latitude=-5.8100, longitude=-35.2300,
+            latitude=-5.8100, longitude=-35.2300, geo_fixado=True,
         )
         intermediario = VendaPDV.objects.create(
             filial=self.filial, numero_venda=213, cliente=cliente_intermediario,
@@ -420,9 +427,16 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.filial.latitude = -5.7900
         self.filial.longitude = -35.2100
         self.filial.save(update_fields=['latitude', 'longitude'])
-        self.cliente.latitude = -5.8000
-        self.cliente.longitude = -35.2200
-        self.cliente.save(update_fields=['latitude', 'longitude'])
+        Cliente.objects.filter(pk=self.cliente.pk).update(
+            cep='59158155', endereco='Avenida Antártida', numero='25',
+            bairro='Parque das Nações', cidade='Parnamirim', uf='RN',
+            latitude=-5.8000, longitude=-35.2200, geo_precisao='exata',
+        )
+        self.cliente.refresh_from_db()
+        Cliente.objects.filter(pk=self.cliente.pk).update(
+            geo_endereco_hash=self.cliente.hash_endereco_atual(),
+        )
+        self.cliente.refresh_from_db()
 
     def test_cria_duas_rotas_nomeadas_e_salva_conferencia_no_servidor(self):
         primeira = self.client.get(reverse('pdv:delivery_rotas'))
@@ -612,7 +626,9 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertEqual(resp.json()['resumo']['distancia_km'], 40.0)
         self.assertEqual(resp.json()['resumo']['custo'], 28.0)
 
-    def test_endereco_pode_ser_confirmado_mesmo_com_coordenada(self):
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_endereco_pode_ser_confirmado_mesmo_com_coordenada(self, resolver):
+        resolver.return_value = Resultado(-5.79, -35.21, 'exata')
         self.cliente.endereco = 'Rua Confirmada'
         self.cliente.numero = '25'
         self.cliente.bairro = 'Centro'
@@ -646,6 +662,83 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertEqual(self.cliente.endereco, 'Rua Confirmada')
         self.assertEqual(self.cliente.uf, 'RN')
         self.assertEqual(venda.endereco_entrega['complemento'], 'Sala 2')
+        self.assertEqual(venda.endereco_entrega['_latitude'], -5.79)
+
+    def test_pedido_com_cep_mas_sem_numero_fica_bloqueado_e_com_alerta(self):
+        Cliente.objects.filter(pk=self.cliente.pk).update(
+            numero='', geo_precisao='aproximada', latitude=-5.65, longitude=-35.30,
+        )
+        self.cliente.refresh_from_db()
+        venda = self._venda(numero=304)
+
+        tela = self.client.get(reverse('pdv:delivery_rotas'))
+        pedidos = json.loads(tela.context['pedidos_json'])
+        pedido = next(item for item in pedidos if item['id'] == venda.pk)
+
+        self.assertFalse(pedido['tem_coordenada'])
+        self.assertIn('número', pedido['coordenada_aviso'])
+
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_endereco_pode_ser_salvo_apenas_na_entrega(self, resolver):
+        resolver.return_value = Resultado(-5.91, -35.19, 'exata')
+        venda = self._venda(numero=305)
+        endereco_cliente_original = self.cliente.endereco
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
+            data=json.dumps({
+                'cep': '59158-155', 'rua': 'Rua da Entrega', 'numero': '90',
+                'bairro': 'Parque das Nações', 'cidade': 'Parnamirim', 'uf': 'RN',
+                'atualizar_cliente': False,
+            }), content_type='application/json',
+        )
+
+        self.cliente.refresh_from_db()
+        venda.refresh_from_db()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(self.cliente.endereco, endereco_cliente_original)
+        self.assertEqual(venda.endereco_entrega['rua'], 'Rua da Entrega')
+        self.assertEqual(venda.endereco_entrega['_longitude'], -35.19)
+
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_endereco_pode_atualizar_tambem_o_cadastro_do_cliente(self, resolver):
+        resolver.return_value = Resultado(-5.92, -35.20, 'exata')
+        venda = self._venda(numero=307)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
+            data=json.dumps({
+                'cep': '59158-155', 'rua': 'Rua Nova', 'numero': '101',
+                'bairro': 'Parque das Nações', 'cidade': 'Parnamirim', 'uf': 'RN',
+                'atualizar_cliente': True,
+            }), content_type='application/json',
+        )
+
+        self.cliente.refresh_from_db()
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['atualizou_cliente'])
+        self.assertEqual(self.cliente.endereco, 'Rua Nova')
+        self.assertEqual(self.cliente.numero, '101')
+        self.assertEqual(self.cliente.latitude, -5.92)
+
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_resultado_aproximado_nao_e_colocado_na_rota(self, resolver):
+        resolver.return_value = Resultado(-5.65, -35.30, 'aproximada')
+        venda = self._venda(numero=306)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
+            data=json.dumps({
+                'cep': '59158-155', 'rua': 'Avenida Antártida', 'numero': '25',
+                'bairro': 'Parque das Nações', 'cidade': 'Parnamirim', 'uf': 'RN',
+                'atualizar_cliente': False,
+            }), content_type='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resp.status_code, 422)
+        self.assertIn('aproximada', resp.json()['erro'])
+        self.assertFalse(venda.endereco_entrega)
 
     def test_endereco_da_rota_exige_dados_para_localizacao(self):
         venda = self._venda(numero=303)
@@ -667,7 +760,8 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         resp = self.client.post(
             reverse('pdv:delivery_rota_localizar_parada_manual'),
             data=json.dumps({
-                'observacao': 'Buscar caixas térmicas', 'rua': 'Rua Manual',
+                'observacao': 'Buscar caixas térmicas', 'cep': '59080000',
+                'rua': 'Rua Manual',
                 'numero': '50', 'bairro': 'Centro', 'cidade': 'Natal', 'uf': 'rn',
             }), content_type='application/json',
         )
@@ -678,11 +772,10 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertEqual(Cliente.objects.count(), quantidade_clientes)
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
-    def test_parada_manual_tenta_endereco_sem_complemento_e_faz_fallback(self, resolver):
+    def test_parada_manual_tenta_dois_provedores_sem_relaxar_endereco(self, resolver):
         resolver.side_effect = [
             Resultado(erro='endereco nao encontrado'),
-            Resultado(erro='endereco nao encontrado'),
-            Resultado(-5.87, -35.20, 'aproximada'),
+            Resultado(-5.87, -35.20, 'exata'),
         ]
 
         resp = self.client.post(
@@ -696,14 +789,12 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         )
 
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resolver.call_count, 3)
+        self.assertEqual(resolver.call_count, 2)
         primeira_consulta = resolver.call_args_list[1].args[0]
         primeira_chave = resolver.call_args_list[1].args[1]
-        segunda_consulta = resolver.call_args_list[2].args[0]
         self.assertNotIn('Bloco teste', primeira_consulta)
         self.assertIn('Rua Arnaldo Neves da Silva, 15', primeira_consulta)
         self.assertEqual(len(primeira_chave), 32)
-        self.assertNotIn(', 15,', segunda_consulta)
         self.assertEqual(resp.json()['endereco']['complemento'], 'Bloco teste')
         self.assertIn('59080-460', resp.json()['endereco_texto'])
 
@@ -714,7 +805,7 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         resp = self.client.post(
             reverse('pdv:delivery_rota_localizar_parada_manual'),
             data=json.dumps({
-                'observacao': 'Buscar material', 'rua': 'Rua Manual',
+                'observacao': 'Buscar material', 'cep': '59080000', 'rua': 'Rua Manual',
                 'numero': '50', 'bairro': 'Centro', 'cidade': 'Natal', 'uf': 'RN',
             }), content_type='application/json',
         )

@@ -158,7 +158,10 @@ class GeocoderTests(TestCase):
         resposta.raise_for_status.return_value = None
         resposta.json.return_value = {'candidates': [{
             'score': 98.82, 'location': {'x': -35.211635, 'y': -5.859397},
-            'attributes': {'Addr_type': 'PointAddress', 'Postal': '59080-460'},
+            'attributes': {
+                'Addr_type': 'PointAddress', 'Postal': '59080-460',
+                'City': 'Natal', 'Region': 'Rio Grande do Norte', 'AddNum': '15',
+            },
         }]}
         with patch('apps.mapas.services.geocoder.requests.get', return_value=resposta):
             resultado = ArcGISGeocoder().geocodificar(
@@ -192,6 +195,42 @@ class GeocoderTests(TestCase):
             resultado = NominatimGeocoder().geocodificar('59080-460, Natal, RN, Brasil')
         self.assertFalse(resultado.ok)
         self.assertIn('CEP', resultado.erro)
+
+    def test_nominatim_rejeita_mesmo_cep_em_municipio_diferente(self):
+        resposta = Mock()
+        resposta.raise_for_status.return_value = None
+        resposta.json.return_value = [{
+            'lat': '-5.6500', 'lon': '-35.3000', 'type': 'road', 'class': 'highway',
+            'address': {
+                'postcode': '59158-155', 'house_number': '25', 'city': 'Ceará-Mirim',
+                'state': 'Rio Grande do Norte',
+            },
+        }]
+        with patch('apps.mapas.services.geocoder.requests.get', return_value=resposta):
+            resultado = NominatimGeocoder().geocodificar(
+                'Avenida Antártida, 25, Parque das Nações, Parnamirim, RN, '
+                '59158-155, Brasil'
+            )
+        self.assertFalse(resultado.ok)
+        self.assertIn('município', resultado.erro)
+
+    def test_nominatim_nao_aceita_rua_quando_numero_foi_solicitado(self):
+        resposta = Mock()
+        resposta.raise_for_status.return_value = None
+        resposta.json.return_value = [{
+            'lat': '-5.91', 'lon': '-35.19', 'type': 'road', 'class': 'highway',
+            'address': {
+                'postcode': '59158-155', 'city': 'Parnamirim',
+                'state': 'Rio Grande do Norte',
+            },
+        }]
+        with patch('apps.mapas.services.geocoder.requests.get', return_value=resposta):
+            resultado = NominatimGeocoder().geocodificar(
+                'Avenida Antártida, 25, Parque das Nações, Parnamirim, RN, '
+                '59158-155, Brasil'
+            )
+        self.assertFalse(resultado.ok)
+        self.assertIn('número', resultado.erro)
 
 
 class ProximidadeTests(TestCase):

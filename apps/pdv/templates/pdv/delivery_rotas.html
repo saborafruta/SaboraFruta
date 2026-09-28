@@ -452,11 +452,11 @@
     <p>Ela entra na otimização, no mapa e no painel do motoboy como qualquer outra parada.</p>
     <div class="dr-address-grid">
       <label class="dr-address-wide">O que será feito nesta parada?<textarea id="manualObservation" maxlength="240" required placeholder="Ex.: buscar embalagem, deixar documento, visitar cliente potencial"></textarea></label>
-      <div class="dr-cep-row"><label>CEP<input id="manualCep" inputmode="numeric" maxlength="9" autocomplete="postal-code"></label><button class="dr-button" type="button" id="manualCepLookup">Buscar CEP</button></div>
-      <label>Número<input id="manualNumber" maxlength="20"></label>
+      <div class="dr-cep-row"><label>CEP *<input id="manualCep" inputmode="numeric" maxlength="9" autocomplete="postal-code" required></label><button class="dr-button" type="button" id="manualCepLookup">Buscar CEP</button></div>
+      <label>Número *<input id="manualNumber" maxlength="20" required></label>
       <div class="dr-cep-status" id="manualCepStatus" aria-live="polite"></div>
       <label class="dr-address-wide">Rua / Avenida<input id="manualStreet" maxlength="255" required></label>
-      <label>Complemento<input id="manualComplement" maxlength="80"></label>
+      <label>Complemento (opcional)<input id="manualComplement" maxlength="80"></label>
       <label>Bairro<input id="manualDistrict" maxlength="80" required></label>
       <label>Cidade<input id="manualCity" maxlength="80" required></label>
       <label>UF<input id="manualState" maxlength="2" required></label>
@@ -473,13 +473,19 @@
     <p id="addressOrderLabel"></p>
     <input type="hidden" id="addressOrderId">
     <div class="dr-address-grid">
-      <label>CEP<input id="addressCep" inputmode="numeric" maxlength="9"></label>
-      <label>Número<input id="addressNumber" maxlength="10"></label>
+      <div class="dr-cep-row"><label>CEP *<input id="addressCep" inputmode="numeric" maxlength="9" required></label><button class="dr-button" type="button" id="addressCepLookup">Buscar CEP</button></div>
+      <label>Número *<input id="addressNumber" maxlength="10" required></label>
+      <div class="dr-cep-status" id="addressCepStatus" aria-live="polite"></div>
       <label class="dr-address-wide">Rua / Avenida<input id="addressStreet" maxlength="255" required></label>
-      <label>Complemento<input id="addressComplement" maxlength="60"></label>
+      <label>Complemento (opcional)<input id="addressComplement" maxlength="60"></label>
       <label>Bairro<input id="addressDistrict" maxlength="80" required></label>
       <label>Cidade<input id="addressCity" maxlength="80" required></label>
       <label>UF<input id="addressState" maxlength="2" required></label>
+      <fieldset class="dr-address-wide">
+        <legend>Onde deseja aplicar este endereço?</legend>
+        <label><input type="radio" name="addressScope" value="delivery" checked> Somente nesta entrega</label>
+        <label><input type="radio" name="addressScope" value="customer"> Nesta entrega e no cadastro do cliente</label>
+      </fieldset>
     </div>
     <div class="dr-address-modal-actions">
       <button class="dr-button" type="button" onclick="closeAddressModal()">Cancelar</button>
@@ -567,7 +573,24 @@
   }
   async function persistRoute(showToast=false){if(!currentRoute)return false;const indicator=document.getElementById('routeAutosave');indicator.textContent='Salvando…';const payload={nome:currentRoute.nome,estado:routeSnapshot(),conferencia_itens:conference};try{const resp=await fetch(saveRouteUrlTemplate.replace('/0/','/'+currentRoute.id+'/'),{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify(payload)});const data=await responseJson(resp);if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);Object.assign(currentRoute,data.rota);lastSavedSignature=JSON.stringify({estado:routeSnapshot(),conferencia_itens:conference,nome:currentRoute.nome});indicator.textContent='Salvo agora';if(showToast)toast('Rota salva.');renderTabs();return true;}catch(error){indicator.textContent='Erro ao salvar';toast(error.message,true);return false;}}
   let lastSavedSignature='';
-  function loadRoute(route){currentRoute=route;applyRouteAccent();const saved=route.estado||{};state.manualStops=saved.manualStops||Object.fromEntries((route.paradas_extras||[]).map(item=>[String(item.id),item]));state.selected=(saved.selected||route.ordem_paradas||[]).map(String).filter(key=>stopByKey(key));state.locked=new Set((saved.locked||[]).filter(key=>state.selected.includes(key)));state.result=saved.result||null;conference=route.conferencia_itens||{};document.getElementById('routeDriver').value=saved.driver||route.entregador||'';document.getElementById('stopMinutes').value=saved.minutes??savedConfig.minutos_por_parada??5;document.getElementById('routeDeparture').value=saved.departure||'';document.getElementById('fuelPrice').value=saved.fuelPrice||savedConfig.combustivel_preco||'';document.getElementById('fuelAutonomy').value=saved.fuelAutonomy||savedConfig.autonomia_km_l||'';renderTabs();renderAvailable();renderRoute();if(state.result){drawRoute(state.result);renderSummary(state.result);}else resetSummary();updateFinalizeButton();lastSavedSignature=JSON.stringify({estado:routeSnapshot(),conferencia_itens:conference,nome:currentRoute.nome});}
+  function loadRoute(route){
+    currentRoute=route;applyRouteAccent();const saved=route.estado||{};
+    state.manualStops=saved.manualStops||Object.fromEntries((route.paradas_extras||[]).map(item=>[String(item.id),item]));
+    const selectedBeforeValidation=(saved.selected||route.ordem_paradas||[]).map(String);
+    state.selected=selectedBeforeValidation.filter(key=>{const stop=stopByKey(key);return stop&&(String(key).startsWith('manual:')||stop.tem_coordenada);});
+    state.locked=new Set((saved.locked||[]).filter(key=>state.selected.includes(key)));
+    const removedUnsafeStop=state.selected.length!==selectedBeforeValidation.length;
+    state.result=!removedUnsafeStop&&state.selected.length?saved.result||null:null;
+    conference=route.conferencia_itens||{};
+    document.getElementById('routeDriver').value=saved.driver||route.entregador||'';
+    document.getElementById('stopMinutes').value=saved.minutes??savedConfig.minutos_por_parada??5;
+    document.getElementById('routeDeparture').value=saved.departure||'';
+    document.getElementById('fuelPrice').value=saved.fuelPrice||savedConfig.combustivel_preco||'';
+    document.getElementById('fuelAutonomy').value=saved.fuelAutonomy||savedConfig.autonomia_km_l||'';
+    renderTabs();renderAvailable();renderRoute();
+    if(state.result){drawRoute(state.result);renderSummary(state.result);}else resetSummary();
+    updateFinalizeButton();lastSavedSignature=JSON.stringify({estado:routeSnapshot(),conferencia_itens:conference,nome:currentRoute.nome});
+  }
   async function switchRoute(id){const route=routes.find(item=>item.id===id);if(!route||route===currentRoute)return;await persistRoute();loadRoute(route);if(!document.getElementById('routeDeparture').value){const now=new Date();document.getElementById('routeDeparture').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;}if(state.selected.length&&!state.result)scheduleAutomaticCalculation(true,120);}
   async function renameRoute(id){const route=routes.find(item=>item.id===id);if(!route)return;const nome=window.prompt('Nome da rota:',route.nome);if(!nome?.trim())return;route.nome=nome.trim().slice(0,100);if(route===currentRoute){applyRouteAccent();await persistRoute(true);}renderTabs();}
   async function createRoute(){const nome=window.prompt('Nome da nova rota:',`Rota ${routes.length+1}`);if(!nome?.trim())return;await persistRoute();const resp=await fetch(createRouteUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({nome:nome.trim()})});const data=await responseJson(resp);if(!resp.ok)return toast(data.erro||`HTTP ${resp.status}`,true);routes.push(data.rota);loadRoute(data.rota);toast('Nova rota criada.');}
@@ -617,13 +640,13 @@
     const shown=orders.filter(o=>!q||`${o.numero} ${o.cliente} ${o.bairro}`.toLowerCase().includes(q));
     document.getElementById('availableCount').textContent=orders.length;
     document.getElementById('availableList').innerHTML=shown.length?shown.map(o=>`
-      <div class="dr-card ${o.tem_coordenada?'':'unavailable'}" title="${o.tem_coordenada?'':'Confira o endereço do cliente para gerar a coordenada'}">
+      <div class="dr-card ${o.tem_coordenada?'':'unavailable'}" title="${o.tem_coordenada?'':esc(o.coordenada_aviso||'Confira o endereço da entrega')}">
         <input class="dr-check" type="checkbox" data-select="${o.id}" ${state.selected.includes(orderKey(o.id))?'checked':''} ${o.tem_coordenada?'':'disabled'}>
-        <div><div class="dr-client">#${esc(o.numero)} · ${esc(o.cliente)}</div><div class="dr-meta">${esc(address(o))}</div><div class="dr-badges"><span class="dr-badge">${esc(o.status_label)}</span><span class="dr-badge blue">${esc(o.pagamento)}</span>${paymentBadge(o)}${o.tem_coordenada?'':'<span class="dr-badge warn">Sem coordenada — confira o endereço</span>'}</div></div>
+        <div><div class="dr-client">#${esc(o.numero)} · ${esc(o.cliente)}</div><div class="dr-meta">${esc(address(o))}</div><div class="dr-badges"><span class="dr-badge">${esc(o.status_label)}</span><span class="dr-badge blue">${esc(o.pagamento)}</span>${paymentBadge(o)}${o.tem_coordenada?'':`<span class="dr-badge warn">${esc(o.coordenada_aviso||'⚠ Confira o endereço')}</span>`}</div></div>
         <div class="dr-card-actions"><div class="dr-price">${money(o.valor)}</div>${receiptLink(o)}<button class="dr-edit-address" type="button" data-edit-address="${o.id}" title="Editar ou confirmar endereço">✎ Endereço</button></div>
       </div>`).join(''):'<div class="dr-empty">Nenhum pedido encontrado.</div>';
     document.querySelectorAll('[data-select]').forEach(el=>el.addEventListener('change',()=>toggleOrder(Number(el.dataset.select),el.checked)));
-    document.querySelectorAll('[data-edit-address]').forEach(el=>el.addEventListener('click',()=>openAddressModal(Number(el.dataset.editAddress))));
+    document.querySelectorAll('#availableList [data-edit-address]').forEach(el=>el.addEventListener('click',()=>openAddressModal(Number(el.dataset.editAddress))));
   }
   function renderRoute() {
     const list=currentStops();
@@ -633,7 +656,7 @@
       <div class="dr-card ${manual?'dr-manual-card':deliveryComplete(o)?'delivery-complete':''}" draggable="true" data-route-id="${esc(key)}">
         <span class="dr-order">${i+1}</span>
         <div ${manual?'':`data-conference="${o.id}" style="cursor:pointer" title="Abrir conferência dos itens"`}><div class="dr-client">☰ &nbsp;${manual?(opportunity?'Oportunidade · ':'Parada manual · ')+esc(o.observacao):'#'+esc(o.numero)+' · '+esc(o.cliente)}</div><div class="dr-meta">${esc(manual?o.endereco_texto:address(o))}${state.result?.paradas?.[i]?.eta?` · ETA <strong>${esc(state.result.paradas[i].eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge ${manual?'warn':'blue'}">${opportunity?'Oportunidade de Venda':manual?'Parada avulsa':esc(o.status_label)}</span>${!manual?`<span class="dr-badge ${conferenceComplete(o)?'':'danger'}">${conferenceComplete(o)?'✓ Conferido':'⚠ Conferência pendente'}</span>${paymentBadge(o)}`:''}${opportunity&&o.rfm?`<span class="dr-badge">${esc(o.rfm)}</span>`:''}${state.locked.has(key)?'<span class="dr-badge">Posição travada</span>':''}</div>${!manual&&deliveryComplete(o)?`<span class="dr-completion-meta">${esc(completionText(o))}</span>`:''}</div>
-        <div class="dr-card-actions">${manual?`<button class="dr-edit-address" type="button" data-edit-manual="${esc(key)}">✎ Endereço</button><button class="dr-edit-address" type="button" data-edit-stop="${esc(key)}">✎ Observação</button><button class="dr-edit-address" type="button" data-sale-stop="${esc(key)}">＋ Venda</button><button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:`${receiptLink(o)}<button class="dr-complete-stop ${deliveryComplete(o)?'completed':''}" type="button" data-complete-order="${o.id}">${deliveryComplete(o)?'↶ Desmarcar conclusão':'✓ Marcar concluída'}</button>`}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição: esta parada voltará a participar da otimização.':'Travar posição. Paradas movidas manualmente são travadas automaticamente.'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
+        <div class="dr-card-actions">${manual?`<button class="dr-edit-address" type="button" data-edit-manual="${esc(key)}">✎ Endereço</button><button class="dr-edit-address" type="button" data-edit-stop="${esc(key)}">✎ Observação</button><button class="dr-edit-address" type="button" data-sale-stop="${esc(key)}">＋ Venda</button><button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:`${receiptLink(o)}<button class="dr-edit-address" type="button" data-edit-address="${o.id}">✎ Endereço</button><button class="dr-complete-stop ${deliveryComplete(o)?'completed':''}" type="button" data-complete-order="${o.id}">${deliveryComplete(o)?'↶ Desmarcar conclusão':'✓ Marcar concluída'}</button>`}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição: esta parada voltará a participar da otimização.':'Travar posição. Paradas movidas manualmente são travadas automaticamente.'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
       </div>`}).join(''):'<div class="dr-empty">Marque pedidos ou adicione uma parada manual.</div>';
     document.querySelectorAll('[data-lock]').forEach(b=>b.addEventListener('click',()=>{const key=b.dataset.lock;state.locked.has(key)?state.locked.delete(key):state.locked.add(key);renderRoute();}));
     document.querySelectorAll('[data-remove-stop]').forEach(b=>b.addEventListener('click',()=>removeManualStop(b.dataset.removeStop)));
@@ -641,6 +664,7 @@
     document.querySelectorAll('[data-edit-stop]').forEach(b=>b.addEventListener('click',()=>openStopObservationForEdit(b.dataset.editStop)));
     document.querySelectorAll('[data-sale-stop]').forEach(b=>b.addEventListener('click',()=>openPdvForStop(b.dataset.saleStop)));
     document.querySelectorAll('[data-complete-order]').forEach(b=>b.addEventListener('click',()=>toggleRouteOrderCompleted(Number(b.dataset.completeOrder),b)));
+    document.querySelectorAll('#routeList [data-edit-address]').forEach(el=>el.addEventListener('click',()=>openAddressModal(Number(el.dataset.editAddress))));
     document.querySelectorAll('[data-conference]').forEach(el=>el.addEventListener('click',()=>openConference(Number(el.dataset.conference))));
     document.querySelectorAll('[data-route-id]').forEach(el=>{
       el.addEventListener('dragstart',()=>{state.dragging=el.dataset.routeId;el.classList.add('dragging');});
@@ -680,6 +704,9 @@
     document.getElementById('addressDistrict').value=fields.bairro||'';
     document.getElementById('addressCity').value=fields.cidade||'';
     document.getElementById('addressState').value=fields.uf||'';
+    document.querySelector('[name="addressScope"][value="delivery"]').checked=true;
+    document.getElementById('addressCepStatus').textContent='Rua, número, bairro, cidade, UF e CEP são obrigatórios. Complemento é opcional.';
+    document.getElementById('addressCepStatus').className='dr-cep-status';
     document.getElementById('addressModal').classList.add('open');
     document.getElementById('addressStreet').focus();
   }
@@ -697,6 +724,7 @@
       bairro:document.getElementById('addressDistrict').value,
       cidade:document.getElementById('addressCity').value,
       uf:document.getElementById('addressState').value,
+      atualizar_cliente:document.querySelector('[name="addressScope"]:checked')?.value==='customer',
     };
     try{
       const url=addressUrlTemplate.replace('/0/','/'+id+'/');
@@ -713,7 +741,7 @@
       if(data.tem_coordenada&&!state.selected.includes(key))state.selected.push(key);
       if(!data.tem_coordenada){state.selected=state.selected.filter(item=>item!==key);state.locked.delete(key);}
       state.result=null;renderAvailable();renderRoute();resetSummary();closeAddressModal();
-      if(data.tem_coordenada){toast('Endereço salvo e localizado.');scheduleAutomaticCalculation(false,150);}
+      if(data.tem_coordenada){toast(data.atualizou_cliente?'Entrega e cadastro do cliente atualizados. Rota recalculada.':'Endereço desta entrega atualizado. Rota recalculada.');scheduleAutomaticCalculation(false,150);}
       else toast(data.aviso||'Endereço salvo sem coordenada.',true);
     }catch(error){toast(error.message,true);}finally{button.disabled=false;}
   }
@@ -748,6 +776,22 @@
       document.getElementById('manualState').value=String(data.uf||'').toUpperCase();
       status.textContent='Endereço preenchido. Complete o número e confira os dados.';
       document.getElementById(data.endereco?'manualNumber':'manualStreet').focus();
+    }catch(error){status.textContent=error.message;status.className='dr-cep-status error';}
+  }
+  async function lookupAddressCep(){
+    const input=document.getElementById('addressCep'), status=document.getElementById('addressCepStatus');
+    const cep=String(input.value||'').replace(/\D/g,'');input.value=formatCep(cep);
+    if(cep.length!==8){status.textContent='Informe os 8 dígitos do CEP.';status.className='dr-cep-status error';return;}
+    status.textContent='Buscando CEP…';status.className='dr-cep-status';
+    try{
+      const resp=await fetch(`${cepLookupUrl}?cep=${encodeURIComponent(cep)}`,{headers:{'Accept':'application/json'}});
+      const data=await responseJson(resp);if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
+      document.getElementById('addressStreet').value=data.endereco||'';
+      document.getElementById('addressDistrict').value=data.bairro||'';
+      document.getElementById('addressCity').value=data.cidade||'';
+      document.getElementById('addressState').value=String(data.uf||'').toUpperCase();
+      status.textContent='CEP encontrado. Informe e confira o número antes de salvar.';
+      document.getElementById('addressNumber').focus();
     }catch(error){status.textContent=error.message;status.className='dr-cep-status error';}
   }
   async function saveManualStop(event){
@@ -1007,6 +1051,8 @@
   document.getElementById('manualStopForm').addEventListener('submit',saveManualStop);
   document.getElementById('stopObservationForm').addEventListener('submit',saveStopObservation);
   document.getElementById('manualCepLookup').addEventListener('click',lookupManualCep);
+  document.getElementById('addressCepLookup').addEventListener('click',lookupAddressCep);
+  document.getElementById('addressCep').addEventListener('input',event=>{event.target.value=formatCep(event.target.value);});
   document.getElementById('manualCep').addEventListener('input',event=>{event.target.value=formatCep(event.target.value);clearTimeout(manualCepTimer);if(event.target.value.replace(/\D/g,'').length===8)manualCepTimer=setTimeout(lookupManualCep,350);});
   document.getElementById('routeGenerate').addEventListener('click',generateBestRoute);
   document.getElementById('routeOptimize').addEventListener('click',()=>calculate(true));

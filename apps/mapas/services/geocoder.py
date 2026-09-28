@@ -19,6 +19,7 @@ import logging
 import re
 import threading
 import time
+import unicodedata
 from dataclasses import dataclass
 
 import requests
@@ -117,10 +118,25 @@ class NominatimGeocoder(GeocoderBase):
             return Resultado(erro='endereco nao encontrado')
 
         item = dados[0]
+        endereco_encontrado = item.get('address') or {}
         cep_solicitado = _cep_no_texto(endereco)
-        cep_encontrado = re.sub(r'\D', '', str((item.get('address') or {}).get('postcode') or ''))
+        cep_encontrado = re.sub(r'\D', '', str(endereco_encontrado.get('postcode') or ''))
         if cep_solicitado and cep_encontrado != cep_solicitado:
             return Resultado(erro='resultado incompatível com o CEP informado')
+        erro_numero = _validar_numero(endereco, endereco_encontrado.get('house_number'))
+        if erro_numero:
+            return Resultado(erro=erro_numero)
+        erro_localidade = _validar_localidade(
+            endereco,
+            cidades=[endereco_encontrado.get(chave) for chave in (
+                'city', 'town', 'village', 'municipality',
+            )],
+            uf=(endereco_encontrado.get('ISO3166-2-lvl4')
+                or endereco_encontrado.get('state_code')
+                or endereco_encontrado.get('state')),
+        )
+        if erro_localidade:
+            return Resultado(erro=erro_localidade)
         return Resultado(
             latitude=float(item['lat']),
             longitude=float(item['lon']),
@@ -145,7 +161,8 @@ class ArcGISGeocoder(GeocoderBase):
             'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates',
             params={
                 'SingleLine': endereco, 'f': 'json', 'countryCode': 'BRA',
-                'maxLocations': 1, 'outFields': 'Match_addr,Addr_type,Postal',
+                'maxLocations': 1,
+                'outFields': 'Match_addr,Addr_type,Postal,City,Subregion,Region,AddNum',
             },
             headers={'User-Agent': 'ERP-iNoovaTed/1.0'},
             timeout=c.GEOCODER_TIMEOUT_S,
@@ -161,6 +178,17 @@ class ArcGISGeocoder(GeocoderBase):
         cep_encontrado = re.sub(r'\D', '', str((candidato.get('attributes') or {}).get('Postal') or ''))
         if cep_solicitado and cep_encontrado != cep_solicitado:
             return Resultado(erro='resultado incompatível com o CEP informado')
+        atributos = candidato.get('attributes') or {}
+        erro_numero = _validar_numero(endereco, atributos.get('AddNum'))
+        if erro_numero:
+            return Resultado(erro=erro_numero)
+        erro_localidade = _validar_localidade(
+            endereco,
+            cidades=[atributos.get('City'), atributos.get('Subregion')],
+            uf=atributos.get('Region'),
+        )
+        if erro_localidade:
+            return Resultado(erro=erro_localidade)
         local = candidato.get('location') or {}
         if local.get('y') is None or local.get('x') is None:
             return Resultado(erro='coordenada ausente')
@@ -174,6 +202,88 @@ class ArcGISGeocoder(GeocoderBase):
 def _cep_no_texto(texto: str) -> str:
     encontrado = re.search(r'(?<!\d)(\d{5})-?(\d{3})(?!\d)', texto or '')
     return ''.join(encontrado.groups()) if encontrado else ''
+
+
+def _numero_solicitado(endereco: str) -> str:
+    partes = [parte.strip() for parte in str(endereco or '').split(',')]
+    if len(partes) <= 1 or _cep_no_texto(partes[0]) or not re.search(r'\d', partes[1]):
+        return ''
+    return _normalizar_localidade(partes[1])
+
+
+def _validar_numero(endereco: str, numero_encontrado) -> str:
+    solicitado = _numero_solicitado(endereco)
+    if not solicitado:
+        return ''
+    encontrado = _normalizar_localidade(numero_encontrado)
+    if not encontrado:
+        return 'resultado sem número verificável'
+    if encontrado != solicitado:
+        return 'resultado incompatível com o número informado'
+    return ''
+
+
+_UF_POR_NOME = {
+    'acre': 'AC', 'alagoas': 'AL', 'amapa': 'AP', 'amazonas': 'AM',
+    'bahia': 'BA', 'ceara': 'CE', 'distrito federal': 'DF',
+    'espirito santo': 'ES', 'goias': 'GO', 'maranhao': 'MA',
+    'mato grosso': 'MT', 'mato grosso do sul': 'MS', 'minas gerais': 'MG',
+    'para': 'PA', 'paraiba': 'PB', 'parana': 'PR', 'pernambuco': 'PE',
+    'piaui': 'PI', 'rio de janeiro': 'RJ', 'rio grande do norte': 'RN',
+    'rio grande do sul': 'RS', 'rondonia': 'RO', 'roraima': 'RR',
+    'santa catarina': 'SC', 'sao paulo': 'SP', 'sergipe': 'SE',
+    'tocantins': 'TO',
+}
+
+
+def _normalizar_localidade(valor) -> str:
+    texto = unicodedata.normalize('NFKD', str(valor or ''))
+    return re.sub(
+        r'[^a-z0-9]+', ' ', texto.encode('ascii', 'ignore').decode().lower(),
+    ).strip()
+
+
+def _localidade_solicitada(endereco: str) -> tuple[str, str]:
+    """Extrai município/UF do formato produzido por CoordenadaMixin."""
+    partes = [parte.strip() for parte in str(endereco or '').split(',') if parte.strip()]
+    uf_indice = next((
+        indice for indice in range(len(partes) - 1, -1, -1)
+        if re.fullmatch(r'[A-Za-z]{2}', partes[indice])
+    ), None)
+    if uf_indice is None:
+        return '', ''
+    cidade = partes[uf_indice - 1] if uf_indice > 0 else ''
+    return _normalizar_localidade(cidade), partes[uf_indice].upper()
+
+
+def _normalizar_uf(valor) -> str:
+    normalizado = _normalizar_localidade(valor)
+    if normalizado.startswith('br ') and len(normalizado) == 5:
+        return normalizado[-2:].upper()
+    if len(normalizado) == 2:
+        return normalizado.upper()
+    return _UF_POR_NOME.get(normalizado, '')
+
+
+def _validar_localidade(endereco: str, *, cidades, uf) -> str:
+    """Rejeita homônimos encontrados em outro município ou estado."""
+    cidade_solicitada, uf_solicitada = _localidade_solicitada(endereco)
+    cidades_encontradas = {
+        normalizada for cidade in cidades
+        if (normalizada := _normalizar_localidade(cidade))
+    }
+    uf_encontrada = _normalizar_uf(uf)
+    if cidade_solicitada:
+        if not cidades_encontradas:
+            return 'resultado sem município verificável'
+        if cidade_solicitada not in cidades_encontradas:
+            return 'resultado incompatível com o município informado'
+    if uf_solicitada:
+        if not uf_encontrada:
+            return 'resultado sem UF verificável'
+        if uf_encontrada != uf_solicitada:
+            return 'resultado incompatível com a UF informada'
+    return ''
 
 
 class LocationIQGeocoder(GeocoderBase):
@@ -191,7 +301,7 @@ class LocationIQGeocoder(GeocoderBase):
             'https://us1.locationiq.com/v1/search',
             params={
                 'key': self.api_key, 'q': endereco, 'format': 'json',
-                'limit': 1, 'countrycodes': 'br',
+                'limit': 1, 'countrycodes': 'br', 'addressdetails': 1,
             },
             timeout=c.GEOCODER_TIMEOUT_S,
         )
@@ -202,6 +312,25 @@ class LocationIQGeocoder(GeocoderBase):
         if not dados:
             return Resultado(erro='endereco nao encontrado')
         item = dados[0]
+        endereco_encontrado = item.get('address') or {}
+        cep_solicitado = _cep_no_texto(endereco)
+        cep_encontrado = re.sub(r'\D', '', str(endereco_encontrado.get('postcode') or ''))
+        if cep_solicitado and cep_encontrado != cep_solicitado:
+            return Resultado(erro='resultado incompatível com o CEP informado')
+        erro_numero = _validar_numero(endereco, endereco_encontrado.get('house_number'))
+        if erro_numero:
+            return Resultado(erro=erro_numero)
+        erro_localidade = _validar_localidade(
+            endereco,
+            cidades=[endereco_encontrado.get(chave) for chave in (
+                'city', 'town', 'village', 'municipality',
+            )],
+            uf=(endereco_encontrado.get('ISO3166-2-lvl4')
+                or endereco_encontrado.get('state_code')
+                or endereco_encontrado.get('state')),
+        )
+        if erro_localidade:
+            return Resultado(erro=erro_localidade)
         return Resultado(
             latitude=float(item['lat']),
             longitude=float(item['lon']),
@@ -232,6 +361,20 @@ class GeoapifyGeocoder(GeocoderBase):
         if not itens:
             return Resultado(erro='endereco nao encontrado')
         item = itens[0]
+        cep_solicitado = _cep_no_texto(endereco)
+        cep_encontrado = re.sub(r'\D', '', str(item.get('postcode') or ''))
+        if cep_solicitado and cep_encontrado != cep_solicitado:
+            return Resultado(erro='resultado incompatível com o CEP informado')
+        erro_numero = _validar_numero(endereco, item.get('housenumber'))
+        if erro_numero:
+            return Resultado(erro=erro_numero)
+        erro_localidade = _validar_localidade(
+            endereco,
+            cidades=[item.get('city'), item.get('municipality'), item.get('county')],
+            uf=item.get('state_code') or item.get('state'),
+        )
+        if erro_localidade:
+            return Resultado(erro=erro_localidade)
         rank = (item.get('rank') or {}).get('match_type', '')
         precisao = {
             'full_match': 'exata',
