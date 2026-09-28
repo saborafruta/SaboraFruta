@@ -3368,7 +3368,7 @@ def _delivery_rota_endereco_texto(endereco):
 
 
 def _delivery_rota_localizacao(venda):
-    """Retorna apenas uma coordenada comprovadamente ligada a esta entrega."""
+    """Aceita ponto aproximado sinalizado, mas nunca coordenada incompatível."""
     endereco = _delivery_rota_endereco_campos(venda)
     snapshot = venda.endereco_entrega or {}
     cliente = venda.cliente
@@ -3380,19 +3380,23 @@ def _delivery_rota_localizacao(venda):
             'ok': True, 'lat': float(cliente.latitude), 'lng': float(cliente.longitude),
             'aviso': '', 'endereco': endereco,
         }
-    rotulos = {
-        'cep': 'CEP', 'rua': 'rua', 'numero': 'número', 'bairro': 'bairro',
-        'cidade': 'cidade', 'uf': 'UF',
-    }
-    ausentes = [rotulo for campo, rotulo in rotulos.items() if not endereco[campo]]
-    if len(endereco['cep']) != 8 and 'CEP' not in ausentes:
-        ausentes.append('CEP válido')
-    if ausentes:
+    rotulos = {'numero': 'número', 'bairro': 'bairro'}
+    pendencias = [rotulo for campo, rotulo in rotulos.items() if not endereco[campo]]
+    bloqueadores = [
+        rotulo for campo, rotulo in (
+            ('cep', 'CEP'), ('rua', 'rua'), ('cidade', 'cidade'), ('uf', 'UF'),
+        ) if not endereco[campo]
+    ]
+    if endereco['cep'] and len(endereco['cep']) != 8:
+        bloqueadores.append('CEP válido')
+    if bloqueadores:
         return {
             'ok': False, 'lat': None, 'lng': None,
-            'aviso': f'⚠ Faltando: {", ".join(ausentes)}',
+            'aviso': f'❗ Faltando para localizar: {", ".join(bloqueadores)}',
             'endereco': endereco,
         }
+
+    aviso = f'❗ Faltando: {", ".join(pendencias)}' if pendencias else ''
 
     hash_atual = _delivery_rota_endereco_hash(endereco)
     if (
@@ -3402,7 +3406,12 @@ def _delivery_rota_localizacao(venda):
     ):
         return {
             'ok': True, 'lat': float(snapshot['_latitude']),
-            'lng': float(snapshot['_longitude']), 'aviso': '', 'endereco': endereco,
+            'lng': float(snapshot['_longitude']),
+            'aviso': aviso or (
+                '❗ Localização aproximada — confira o endereço'
+                if snapshot.get('_geo_precisao') != 'exata' else ''
+            ),
+            'endereco': endereco,
         }
 
     if not cliente or cliente.latitude is None or cliente.longitude is None:
@@ -3418,21 +3427,25 @@ def _delivery_rota_localizacao(venda):
     mesmo_endereco = all(
         str(endereco[campo]).strip().casefold()
         == str(endereco_cliente[campo]).strip().casefold()
-        for campo in ('cep', 'rua', 'numero', 'bairro', 'cidade', 'uf')
+        for campo in ('cep', 'rua', 'cidade', 'uf')
     )
     hash_confere = (
         not cliente.geo_endereco_hash
         or cliente.geo_endereco_hash == cliente.hash_endereco_atual()
     )
-    precisao_confiavel = cliente.geo_fixado or cliente.geo_precisao == cliente.Precisao.EXATA
+    precisao_confiavel = cliente.geo_fixado or cliente.geo_precisao != cliente.Precisao.CIDADE
     if mesmo_endereco and hash_confere and precisao_confiavel:
         return {
             'ok': True, 'lat': float(cliente.latitude), 'lng': float(cliente.longitude),
-            'aviso': '', 'endereco': endereco,
+            'aviso': aviso or (
+                '❗ Localização aproximada — confira o endereço'
+                if cliente.geo_precisao != cliente.Precisao.EXATA else ''
+            ),
+            'endereco': endereco,
         }
     return {
         'ok': False, 'lat': None, 'lng': None,
-        'aviso': '⚠ Localização aproximada ou de outro endereço — confirme novamente',
+        'aviso': '❗ A coordenada pertence a outro endereço — confirme novamente',
         'endereco': endereco,
     }
 
@@ -4148,8 +4161,7 @@ def delivery_rota_atualizar_endereco(request, pk):
     atualizar_cliente = corpo.get('atualizar_cliente') is True
     ausentes = [
         rotulo for campo, rotulo in (
-            ('cep', 'CEP'), ('rua', 'rua'), ('numero', 'número'),
-            ('bairro', 'bairro'), ('cidade', 'cidade'), ('uf', 'UF'),
+            ('cep', 'CEP'), ('rua', 'rua'), ('cidade', 'cidade'), ('uf', 'UF'),
         )
         if not endereco[campo]
     ]
@@ -4171,14 +4183,6 @@ def delivery_rota_atualizar_endereco(request, pk):
                 f'bairro, cidade e UF. O mapa não usará um ponto aproximado ({resultado.erro}).'
             ),
         }, status=422)
-    if resultado.precisao != 'exata':
-        return JsonResponse({
-            'erro': (
-                'O endereço retornou apenas uma localização aproximada. Confira o número '
-                'e os demais campos; nenhum ponto aproximado será colocado na rota.'
-            ),
-        }, status=422)
-
     with tenant_atomic():
         snapshot = dict(venda.endereco_entrega or {})
         snapshot.update(endereco)
@@ -4225,6 +4229,15 @@ def delivery_rota_atualizar_endereco(request, pk):
                 geo_erro='',
             )
 
+    pendencias = [
+        rotulo for campo, rotulo in (('numero', 'número'), ('bairro', 'bairro'))
+        if not endereco[campo]
+    ]
+    aviso = (
+        f'❗ Faltando: {", ".join(pendencias)}' if pendencias
+        else ('❗ Localização aproximada — confira o endereço'
+              if resultado.precisao != 'exata' else '')
+    )
     return JsonResponse({
         'ok': True,
         'pedido_id': venda.pk,
@@ -4232,6 +4245,7 @@ def delivery_rota_atualizar_endereco(request, pk):
         'lat': float(resultado.latitude),
         'lng': float(resultado.longitude),
         'tem_coordenada': True,
+        'coordenada_aviso': aviso,
         'atualizou_cliente': atualizar_cliente,
         'aviso': '',
     })

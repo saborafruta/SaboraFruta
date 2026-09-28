@@ -664,19 +664,23 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertEqual(venda.endereco_entrega['complemento'], 'Sala 2')
         self.assertEqual(venda.endereco_entrega['_latitude'], -5.79)
 
-    def test_pedido_com_cep_mas_sem_numero_fica_bloqueado_e_com_alerta(self):
+    def test_pedido_com_cep_mas_sem_numero_entra_com_alerta(self):
         Cliente.objects.filter(pk=self.cliente.pk).update(
             numero='', geo_precisao='aproximada', latitude=-5.65, longitude=-35.30,
         )
         self.cliente.refresh_from_db()
+        Cliente.objects.filter(pk=self.cliente.pk).update(
+            geo_endereco_hash=self.cliente.hash_endereco_atual(),
+        )
         venda = self._venda(numero=304)
 
         tela = self.client.get(reverse('pdv:delivery_rotas'))
         pedidos = json.loads(tela.context['pedidos_json'])
         pedido = next(item for item in pedidos if item['id'] == venda.pk)
 
-        self.assertFalse(pedido['tem_coordenada'])
+        self.assertTrue(pedido['tem_coordenada'])
         self.assertIn('número', pedido['coordenada_aviso'])
+        self.assertContains(tela, 'dr-address-warning-icon')
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_endereco_pode_ser_salvo_apenas_na_entrega(self, resolver):
@@ -722,7 +726,7 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertEqual(self.cliente.latitude, -5.92)
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
-    def test_resultado_aproximado_nao_e_colocado_na_rota(self, resolver):
+    def test_resultado_aproximado_e_aceito_com_alerta(self, resolver):
         resolver.return_value = Resultado(-5.65, -35.30, 'aproximada')
         venda = self._venda(numero=306)
 
@@ -736,9 +740,9 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         )
 
         venda.refresh_from_db()
-        self.assertEqual(resp.status_code, 422)
-        self.assertIn('aproximada', resp.json()['erro'])
-        self.assertFalse(venda.endereco_entrega)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('aproximada', resp.json()['coordenada_aviso'])
+        self.assertEqual(venda.endereco_entrega['_geo_precisao'], 'aproximada')
 
     def test_endereco_da_rota_exige_dados_para_localizacao(self):
         venda = self._venda(numero=303)
