@@ -727,7 +727,7 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertEqual(self.cliente.latitude, -5.92)
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
-    def test_resultado_aproximado_e_aceito_com_alerta(self, resolver):
+    def test_resultado_aproximado_com_endereco_completo_e_aceito_sem_alerta(self, resolver):
         resolver.return_value = Resultado(-5.65, -35.30, 'aproximada')
         venda = self._venda(numero=306)
 
@@ -742,7 +742,7 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
 
         venda.refresh_from_db()
         self.assertEqual(resp.status_code, 200)
-        self.assertIn('número exato', resp.json()['coordenada_aviso'])
+        self.assertEqual(resp.json()['coordenada_aviso'], '')
         self.assertEqual(venda.endereco_entrega['_geo_precisao'], 'aproximada')
 
     def test_endereco_da_rota_exige_dados_para_localizacao(self):

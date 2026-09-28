@@ -3407,10 +3407,7 @@ def _delivery_rota_localizacao(venda):
         return {
             'ok': True, 'lat': float(snapshot['_latitude']),
             'lng': float(snapshot['_longitude']),
-            'aviso': aviso or (
-                '❗ Endereço completo, mas o mapa não confirmou o número exato'
-                if snapshot.get('_geo_precisao') != 'exata' else ''
-            ),
+            'aviso': aviso,
             'endereco': endereco,
         }
 
@@ -3437,10 +3434,7 @@ def _delivery_rota_localizacao(venda):
     if mesmo_endereco and hash_confere and precisao_confiavel:
         return {
             'ok': True, 'lat': float(cliente.latitude), 'lng': float(cliente.longitude),
-            'aviso': aviso or (
-                '❗ Endereço completo, mas o mapa não confirmou o número exato'
-                if cliente.geo_precisao != cliente.Precisao.EXATA else ''
-            ),
+            'aviso': aviso,
             'endereco': endereco,
         }
     return {
@@ -4235,8 +4229,7 @@ def delivery_rota_atualizar_endereco(request, pk):
     ]
     aviso = (
         f'❗ Faltando: {", ".join(pendencias)}' if pendencias
-        else ('❗ Endereço completo, mas o mapa não confirmou o número exato'
-              if resultado.precisao != 'exata' else '')
+        else ''
     )
     return JsonResponse({
         'ok': True,
