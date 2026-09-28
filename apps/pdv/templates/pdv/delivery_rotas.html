@@ -83,6 +83,7 @@
   .dr-badge.blue { background:#172f55; color:#73a9ff; }
   .dr-badge.warn { background:#4a3215; color:#f9bd5b; }
   .dr-badge.danger { background:#4a1d27; color:#fda4af; }
+  .dr-badge.collect { background:#5b3513; color:#ffd166; }
   .dr-price { color:#dce5f1; font-size:9px; font-weight:800; white-space:nowrap; }
   .dr-card-actions { display:flex; align-items:flex-end; flex-direction:column; gap:7px; }
   .dr-edit-address { border:1px solid #465164; border-radius:6px; background:#303744; padding:4px 6px;
@@ -95,6 +96,10 @@
   .dr-complete-stop:hover { border-color:#4fd39b; color:#e7fff5; }
   .dr-complete-stop.completed { border-color:#8b3d4a; background:#4a2228; color:#ffabb4; }
   .dr-complete-stop:disabled { cursor:not-allowed; opacity:.55; }
+  .dr-receipt-link { display:grid; place-items:center; width:27px; height:27px; border:1px solid #526176; border-radius:7px; background:#303744; color:#dce9ff; font-size:14px; text-decoration:none; }
+  .dr-receipt-link:hover { border-color:#7ca9ee; background:#39465a; color:#fff; }
+  .dr-receipt-link.disabled { opacity:.42; cursor:not-allowed; }
+  .dr-receipt-link.disabled:hover { border-color:#526176; background:#303744; color:#dce9ff; }
   .dr-lock { display:flex; align-items:center; justify-content:center; width:25px; height:25px; border:0; border-radius:6px; background:#303744; color:#8e9aad; cursor:pointer; }
   .dr-lock.locked { background:#14543f; color:#67e3b0; }
   .dr-empty { padding:35px 14px; color:#69768a; font-size:11px; line-height:1.5; text-align:center; }
@@ -523,6 +528,7 @@
   const finalizeRouteUrlTemplate = '{% url "pdv:delivery_rota_finalizar" 0 %}';
   const routeStatusUrlTemplate = '{% url "pdv:delivery_rota_situacao" 0 %}';
   const completeOrderUrlTemplate = '{% url "pdv:delivery_rota_concluir_pedido" 0 0 %}';
+  const receiptUrlTemplate = '{% url "pdv:comprovante_venda" 0 %}';
   const reportUrl = '{% url "pdv:delivery_rotas_relatorio_consumo" %}';
   let map, routeLine, markers = [];
   let automaticCalculationTimer = null;
@@ -534,6 +540,8 @@
 
   function esc(value) { const d=document.createElement('div'); d.textContent=value ?? ''; return d.innerHTML; }
   function money(value) { return Number(value || 0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+  function receiptLink(order){if(!order.comprovante_disponivel)return `<span class="dr-receipt-link disabled" aria-label="Comprovante indisponível para a venda ${esc(order.numero)}" title="O comprovante fica disponível após finalizar a venda">🧾</span>`;const url=receiptUrlTemplate.replace('/0/','/'+order.id+'/');return `<a class="dr-receipt-link" href="${esc(url)}" target="_blank" rel="noopener" draggable="false" aria-label="Ver comprovante da venda ${esc(order.numero)}" title="Ver comprovante da venda">🧾</a>`;}
+  function paymentBadge(order){return order.pago?'<span class="dr-badge">✓ Pago</span>':`<span class="dr-badge collect">💵 Cobrar na entrega · ${money(order.valor)}</span>`;}
   function duration(seconds) { const m=Math.round(Number(seconds||0)/60); return m<60 ? `${m} min` : `${Math.floor(m/60)}h ${String(m%60).padStart(2,'0')}min`; }
   function toast(message, error=false) { const el=document.getElementById('routeToast'); el.textContent=message; el.className='dr-toast show'+(error?' error':''); clearTimeout(toast.t); toast.t=setTimeout(()=>el.className='dr-toast',3200); }
   async function responseJson(resp) {
@@ -609,8 +617,8 @@
     document.getElementById('availableList').innerHTML=shown.length?shown.map(o=>`
       <div class="dr-card ${o.tem_coordenada?'':'unavailable'}" title="${o.tem_coordenada?'':'Confira o endereço do cliente para gerar a coordenada'}">
         <input class="dr-check" type="checkbox" data-select="${o.id}" ${state.selected.includes(orderKey(o.id))?'checked':''} ${o.tem_coordenada?'':'disabled'}>
-        <div><div class="dr-client">#${esc(o.numero)} · ${esc(o.cliente)}</div><div class="dr-meta">${esc(address(o))}</div><div class="dr-badges"><span class="dr-badge">${esc(o.status_label)}</span><span class="dr-badge blue">${esc(o.pagamento)}</span>${o.tem_coordenada?'':'<span class="dr-badge warn">Sem coordenada — confira o endereço</span>'}</div></div>
-        <div class="dr-card-actions"><div class="dr-price">${money(o.valor)}</div><button class="dr-edit-address" type="button" data-edit-address="${o.id}" title="Editar ou confirmar endereço">✎ Endereço</button></div>
+        <div><div class="dr-client">#${esc(o.numero)} · ${esc(o.cliente)}</div><div class="dr-meta">${esc(address(o))}</div><div class="dr-badges"><span class="dr-badge">${esc(o.status_label)}</span><span class="dr-badge blue">${esc(o.pagamento)}</span>${paymentBadge(o)}${o.tem_coordenada?'':'<span class="dr-badge warn">Sem coordenada — confira o endereço</span>'}</div></div>
+        <div class="dr-card-actions"><div class="dr-price">${money(o.valor)}</div>${receiptLink(o)}<button class="dr-edit-address" type="button" data-edit-address="${o.id}" title="Editar ou confirmar endereço">✎ Endereço</button></div>
       </div>`).join(''):'<div class="dr-empty">Nenhum pedido encontrado.</div>';
     document.querySelectorAll('[data-select]').forEach(el=>el.addEventListener('change',()=>toggleOrder(Number(el.dataset.select),el.checked)));
     document.querySelectorAll('[data-edit-address]').forEach(el=>el.addEventListener('click',()=>openAddressModal(Number(el.dataset.editAddress))));
@@ -622,8 +630,8 @@
     document.getElementById('routeList').innerHTML=list.length?list.map((o,i)=>{const key=state.selected[i], manual=String(key).startsWith('manual:'), opportunity=manual&&o.origem==='oportunidade';return `
       <div class="dr-card ${manual?'dr-manual-card':deliveryComplete(o)?'delivery-complete':''}" draggable="true" data-route-id="${esc(key)}">
         <span class="dr-order">${i+1}</span>
-        <div ${manual?'':`data-conference="${o.id}" style="cursor:pointer" title="Abrir conferência dos itens"`}><div class="dr-client">☰ &nbsp;${manual?(opportunity?'Oportunidade · ':'Parada manual · ')+esc(o.observacao):'#'+esc(o.numero)+' · '+esc(o.cliente)}</div><div class="dr-meta">${esc(manual?o.endereco_texto:address(o))}${state.result?.paradas?.[i]?.eta?` · ETA <strong>${esc(state.result.paradas[i].eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge ${manual?'warn':'blue'}">${opportunity?'Oportunidade de Venda':manual?'Parada avulsa':esc(o.status_label)}</span>${!manual?`<span class="dr-badge ${conferenceComplete(o)?'':'danger'}">${conferenceComplete(o)?'✓ Conferido':'⚠ Conferência pendente'}</span>`:''}${opportunity&&o.rfm?`<span class="dr-badge">${esc(o.rfm)}</span>`:''}${state.locked.has(key)?'<span class="dr-badge">Posição travada</span>':''}</div></div>
-        <div class="dr-card-actions">${manual?`<button class="dr-edit-address" type="button" data-edit-manual="${esc(key)}">✎ Endereço</button><button class="dr-edit-address" type="button" data-edit-stop="${esc(key)}">✎ Observação</button><button class="dr-edit-address" type="button" data-sale-stop="${esc(key)}">＋ Venda</button><button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:`<button class="dr-complete-stop ${deliveryComplete(o)?'completed':''}" type="button" data-complete-order="${o.id}" ${o.status==='finalizado'?'disabled':''}>${deliveryComplete(o)?(o.status==='finalizado'?'✓ Concluída':'↶ Reabrir'):'✓ Marcar concluída'}</button>`}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição: esta parada voltará a participar da otimização.':'Travar posição. Paradas movidas manualmente são travadas automaticamente.'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
+        <div ${manual?'':`data-conference="${o.id}" style="cursor:pointer" title="Abrir conferência dos itens"`}><div class="dr-client">☰ &nbsp;${manual?(opportunity?'Oportunidade · ':'Parada manual · ')+esc(o.observacao):'#'+esc(o.numero)+' · '+esc(o.cliente)}</div><div class="dr-meta">${esc(manual?o.endereco_texto:address(o))}${state.result?.paradas?.[i]?.eta?` · ETA <strong>${esc(state.result.paradas[i].eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge ${manual?'warn':'blue'}">${opportunity?'Oportunidade de Venda':manual?'Parada avulsa':esc(o.status_label)}</span>${!manual?`<span class="dr-badge ${conferenceComplete(o)?'':'danger'}">${conferenceComplete(o)?'✓ Conferido':'⚠ Conferência pendente'}</span>${paymentBadge(o)}`:''}${opportunity&&o.rfm?`<span class="dr-badge">${esc(o.rfm)}</span>`:''}${state.locked.has(key)?'<span class="dr-badge">Posição travada</span>':''}</div></div>
+        <div class="dr-card-actions">${manual?`<button class="dr-edit-address" type="button" data-edit-manual="${esc(key)}">✎ Endereço</button><button class="dr-edit-address" type="button" data-edit-stop="${esc(key)}">✎ Observação</button><button class="dr-edit-address" type="button" data-sale-stop="${esc(key)}">＋ Venda</button><button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:`${receiptLink(o)}<button class="dr-complete-stop ${deliveryComplete(o)?'completed':''}" type="button" data-complete-order="${o.id}" ${o.status==='finalizado'?'disabled':''}>${deliveryComplete(o)?(o.status==='finalizado'?'✓ Concluída':'↶ Reabrir'):'✓ Marcar concluída'}</button>`}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição: esta parada voltará a participar da otimização.':'Travar posição. Paradas movidas manualmente são travadas automaticamente.'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
       </div>`}).join(''):'<div class="dr-empty">Marque pedidos ou adicione uma parada manual.</div>';
     document.querySelectorAll('[data-lock]').forEach(b=>b.addEventListener('click',()=>{const key=b.dataset.lock;state.locked.has(key)?state.locked.delete(key):state.locked.add(key);renderRoute();}));
     document.querySelectorAll('[data-remove-stop]').forEach(b=>b.addEventListener('click',()=>removeManualStop(b.dataset.removeStop)));

@@ -213,6 +213,9 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'Copiar link desta rota')
         self.assertContains(tela, 'data-route-link')
         self.assertContains(tela, 'Link individual de')
+        self.assertContains(tela, 'Ver comprovante da venda')
+        self.assertContains(tela, reverse('pdv:comprovante_venda', args=[0]))
+        self.assertContains(tela, 'Cobrar na entrega')
         self.assertContains(tela, 'Marcar concluída')
         self.assertContains(tela, 'data-complete-order')
         self.assertContains(tela, 'conferenceModal')
@@ -249,6 +252,19 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         dados_kanban = json.loads(kanban.context['pedidos_json'])
         self.assertEqual(dados_kanban[str(ativo.pk)]['status_delivery'], 'preparando')
         self.assertEqual(dados_kanban[str(ativo.pk)]['status_label'], 'Em Preparo')
+
+    def test_rota_identifica_venda_que_deve_ser_cobrada_na_entrega(self):
+        venda = self._venda(numero=104)
+        venda.status = 'aberta'
+        venda.save(update_fields=['status'])
+
+        tela = self.client.get(reverse('pdv:delivery_rotas'))
+        pedidos = json.loads(tela.context['pedidos_json'])
+        pedido = next(item for item in pedidos if item['id'] == venda.pk)
+
+        self.assertFalse(pedido['pago'])
+        self.assertTrue(pedido['pagamento_pendente'])
+        self.assertFalse(pedido['comprovante_disponivel'])
 
     def test_historico_cliente_traz_ranking_com_frequencia_valor_e_ultima_compra(self):
         unidade = UnidadeMedida.objects.create(
@@ -948,7 +964,7 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         resp = self.client.get(url)
 
         self.assertContains(resp, 'Venda com pagamento pendente.')
-        self.assertContains(resp, 'RECEBER NA ENTREGA')
+        self.assertContains(resp, 'COBRAR NA ENTREGA')
         self.assertNotContains(resp, '<span class="tag paid">PAGO</span>', html=True)
 
     def test_motoboy_conclui_somente_pedido_da_rota(self):

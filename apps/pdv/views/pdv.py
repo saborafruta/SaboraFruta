@@ -3351,6 +3351,9 @@ def _delivery_rota_serializar_pedido(venda):
         'uf': endereco.get('uf') or (cliente.uf if cliente else '') or '',
         'valor': float(venda.valor_total),
         'pagamento': forma or 'Não informado',
+        'pago': bool(getattr(venda, 'pago', False)),
+        'pagamento_pendente': bool(getattr(venda, 'pagamento_pendente', True)),
+        'comprovante_disponivel': venda.status == 'finalizada',
         'status': venda.status_delivery,
         'status_label': venda.get_status_delivery_display(),
         'entregador': venda.entregador or '',
@@ -3417,6 +3420,8 @@ def _delivery_configuracao_rfm(configuracao=None):
 @requer_permissao('pdv', 'ver')
 def delivery_rotas(request):
     from apps.pdv.models import RotaDelivery, RotaDeliveryPublica
+    from apps.financeiro.constants.enums import StatusContaReceber
+    from apps.financeiro.models import ContaReceber
 
     rotas = list(RotaDelivery.objects.filter(
         filial=request.filial_ativa,
@@ -3425,10 +3430,18 @@ def delivery_rotas(request):
     if not rotas:
         rotas = [RotaDelivery.objects.create(filial=request.filial_ativa, nome='Rota 1')]
 
-    pedidos = [
-        _delivery_rota_serializar_pedido(v)
-        for v in _delivery_rota_pedidos(request.filial_ativa)
-    ]
+    vendas = list(_delivery_rota_pedidos(request.filial_ativa))
+    pks_nao_pagos = set(
+        ContaReceber.objects.filter(
+            documento_tipo='venda_pdv',
+            documento_id__in=[venda.pk for venda in vendas],
+            status__in=[StatusContaReceber.ABERTO, StatusContaReceber.VENCIDO],
+        ).values_list('documento_id', flat=True)
+    )
+    for venda in vendas:
+        venda.pagamento_pendente = venda.status != 'finalizada'
+        venda.pago = not venda.pagamento_pendente and venda.pk not in pks_nao_pagos
+    pedidos = [_delivery_rota_serializar_pedido(venda) for venda in vendas]
     configuracao = RotaDeliveryPublica.objects.filter(filial=request.filial_ativa).first()
     return render(request, 'pdv/delivery_rotas.html', {
         'pedidos_json': json.dumps(pedidos, ensure_ascii=False),
