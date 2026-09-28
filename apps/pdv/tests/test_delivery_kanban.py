@@ -712,7 +712,7 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_endereco_com_numero_tambem_rejeita_coordenada_longe_do_cep(self, resolver):
         resolver.side_effect = [
-            Resultado(-5.89556, -35.26278, 'aproximada'),
+            Resultado(-5.89556, -35.26278, 'exata'),
             Resultado(-5.91556, -35.26278, 'aproximada'),
         ]
         venda = self._venda(numero=309)

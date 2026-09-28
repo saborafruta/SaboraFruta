@@ -3452,12 +3452,8 @@ def _delivery_rota_serializar_pedido(venda):
     if cliente:
         nome = cliente.nome_fantasia or cliente.razao_social or nome
     snapshot = venda.endereco_entrega or {}
-    precisao_atual = snapshot.get('_geo_precisao') or (
-        cliente.geo_precisao if cliente else ''
-    )
     localizacao_requer_revisao = bool(
         localizacao['ok']
-        and precisao_atual != 'exata'
         and not snapshot.get('_geo_cep_validado')
     )
     forma = ', '.join(
@@ -4184,7 +4180,7 @@ def delivery_rota_atualizar_endereco(request, pk):
     resultado = GeocodificacaoService().resolver(endereco_texto, endereco_hash)
     resultado_cep = None
     cep_validado = False
-    usar_referencia_cep = not endereco['numero'] or not resultado.ok or resultado.precisao != 'exata'
+    usar_referencia_cep = True
     if usar_referencia_cep:
         hash_cep = hashlib.md5(
             (
