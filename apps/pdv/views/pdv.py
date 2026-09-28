@@ -3465,6 +3465,7 @@ def _delivery_rota_serializar(rota):
         'status_label': rota.get_status_display(),
         'estado': rota.estado or {},
         'pedido_ids': rota.pedido_ids or [],
+        'conclusoes_pedidos': rota.conclusoes_pedidos or {},
         'paradas_extras': rota.paradas_extras or [],
         'paradas_extras_concluidas': rota.paradas_extras_concluidas or [],
         'ordem_paradas': rota.ordem_paradas or [],
@@ -3600,6 +3601,7 @@ def delivery_rota_situacao(request, pk):
         'ok': True, 'concluida': bool(rota.pedido_ids or extras) and not pendentes and extras <= extras_concluidas,
         'pedidos_pendentes': pendentes, 'status_pedidos': status_pedidos,
         'status_labels': status_labels,
+        'conclusoes_pedidos': rota.conclusoes_pedidos or {},
         'paradas_extras_concluidas': sorted(extras_concluidas),
     })
 
@@ -3630,20 +3632,23 @@ def delivery_rota_concluir_pedido(request, pk, pedido_pk):
             pk=pedido_pk,
             delivery=True,
         )
-        if venda.status_delivery in (
-            VendaPDV.StatusDelivery.FINALIZADO,
-            VendaPDV.StatusDelivery.CANCELADO,
-        ):
+        if venda.status_delivery == VendaPDV.StatusDelivery.CANCELADO:
             return JsonResponse({
                 'erro': 'Esta entrega já foi encerrada e não pode ser alterada.',
             }, status=400)
 
         anteriores = dict(rota.pedido_status_anteriores or {})
+        conclusoes = dict(rota.conclusoes_pedidos or {})
         chave = str(pedido_pk)
         if concluido:
             if venda.status_delivery != VendaPDV.StatusDelivery.ENTREGUE:
                 anteriores[chave] = venda.status_delivery
             novo_status = VendaPDV.StatusDelivery.ENTREGUE
+            conclusoes[chave] = {
+                'origem': 'sistema',
+                'nome': (request.user.nome or request.user.email)[:120],
+                'em': timezone.now().isoformat(),
+            }
         else:
             novo_status = anteriores.pop(chave, VendaPDV.StatusDelivery.EM_ENTREGA)
             if novo_status not in (
@@ -3652,10 +3657,14 @@ def delivery_rota_concluir_pedido(request, pk, pedido_pk):
                 VendaPDV.StatusDelivery.EM_ENTREGA,
             ):
                 novo_status = VendaPDV.StatusDelivery.EM_ENTREGA
+            conclusoes.pop(chave, None)
         if venda.status_delivery != novo_status:
             venda.mudar_status_delivery(novo_status)
         rota.pedido_status_anteriores = anteriores
-        rota.save(update_fields=['pedido_status_anteriores', 'updated_at'])
+        rota.conclusoes_pedidos = conclusoes
+        rota.save(update_fields=[
+            'pedido_status_anteriores', 'conclusoes_pedidos', 'updated_at',
+        ])
 
     return JsonResponse({
         'ok': True,
@@ -3663,6 +3672,8 @@ def delivery_rota_concluir_pedido(request, pk, pedido_pk):
         'status': novo_status,
         'status_label': venda.get_status_delivery_display(),
         'concluido': concluido,
+        'conclusao': conclusoes.get(chave),
+        'conclusoes_pedidos': conclusoes,
     })
 
 
@@ -4635,6 +4646,10 @@ def delivery_rota_publicar(request):
         rota.pedido_ids = ids
         rota.pedido_etas = etas
         rota.pedido_status_anteriores = {}
+        rota.conclusoes_pedidos = {
+            str(pk): info for pk, info in (rota.conclusoes_pedidos or {}).items()
+            if str(pk).isdigit() and int(pk) in ids and isinstance(info, dict)
+        }
         rota.paradas_extras = extras
         rota.ordem_paradas = ordem_paradas
         rota.paradas_extras_concluidas = []
@@ -4645,8 +4660,9 @@ def delivery_rota_publicar(request):
         rota.save()
         if rota_legada is not None:
             for campo in (
-                'pedido_ids', 'pedido_etas', 'pedido_status_anteriores', 'paradas_extras',
-                'ordem_paradas', 'paradas_extras_concluidas', 'entregador', 'ativa',
+                'pedido_ids', 'pedido_etas', 'pedido_status_anteriores',
+                'conclusoes_pedidos', 'paradas_extras', 'ordem_paradas',
+                'paradas_extras_concluidas', 'entregador', 'ativa',
             ):
                 setattr(rota_legada, campo, getattr(rota, campo))
             rota_legada.save()

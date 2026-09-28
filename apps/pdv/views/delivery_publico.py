@@ -4,12 +4,15 @@ import re
 from urllib.parse import urlencode
 
 from django.db import transaction
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.pdv.models import RotaDelivery, VendaPDV
+from apps.pdv.services.comprovante_service import dados_comprovante, gerar_pdf
 
 
 def _privado(response):
@@ -37,9 +40,11 @@ def _sincronizar_rota_legada(rota):
     if not legada:
         return
     legada.pedido_status_anteriores = rota.pedido_status_anteriores
+    legada.conclusoes_pedidos = rota.conclusoes_pedidos
     legada.paradas_extras_concluidas = rota.paradas_extras_concluidas
     legada.save(update_fields=[
-        'pedido_status_anteriores', 'paradas_extras_concluidas', 'updated_at',
+        'pedido_status_anteriores', 'conclusoes_pedidos',
+        'paradas_extras_concluidas', 'updated_at',
     ])
 
 
@@ -109,6 +114,21 @@ def _pedidos_da_rota(rota):
     return [encontrados[pk] for pk in ids if pk in encontrados]
 
 
+def _texto_conclusao(info):
+    if not isinstance(info, dict):
+        return ''
+    if info.get('origem') == 'motoboy':
+        texto = 'Finalizado pelo motoboy'
+    else:
+        texto = f"Finalizado por {info.get('nome') or 'usuário do sistema'}"
+    momento = parse_datetime(str(info.get('em') or ''))
+    if momento:
+        if timezone.is_aware(momento):
+            momento = timezone.localtime(momento)
+        texto += f" em {momento.strftime('%d/%m/%Y %H:%M')}"
+    return texto
+
+
 def _dados_pedidos(pedidos, etas=None):
     from apps.financeiro.constants.enums import StatusContaReceber
     from apps.financeiro.models import ContaReceber
@@ -164,10 +184,7 @@ def _dados_pedidos(pedidos, etas=None):
                 VendaPDV.StatusDelivery.ENTREGUE,
                 VendaPDV.StatusDelivery.FINALIZADO,
             ),
-            'pode_alterar': pedido.status_delivery not in (
-                VendaPDV.StatusDelivery.FINALIZADO,
-                VendaPDV.StatusDelivery.CANCELADO,
-            ),
+            'pode_alterar': pedido.status_delivery != VendaPDV.StatusDelivery.CANCELADO,
             'navegar_url': (
                 'https://www.google.com/maps/dir/?' + urlencode({
                     'api': '1',
@@ -186,6 +203,14 @@ def _dados_pedidos(pedidos, etas=None):
 
 def _dados_paradas_rota(rota, pedidos):
     entregas = _dados_pedidos(pedidos, rota.pedido_etas)
+    conclusoes = rota.conclusoes_pedidos or {}
+    for entrega in entregas:
+        pedido_id = entrega['venda'].pk
+        entrega['conclusao_texto'] = _texto_conclusao(conclusoes.get(str(pedido_id)))
+        entrega['comprovante_url'] = (
+            reverse('delivery_publico:comprovante', args=[rota.token, pedido_id])
+            if entrega['venda'].status == 'finalizada' else ''
+        )
     por_chave = {item['chave']: item for item in entregas}
     concluidas = {str(item) for item in (rota.paradas_extras_concluidas or [])}
     for extra in rota.paradas_extras or []:
@@ -245,6 +270,38 @@ def painel(request, token):
     return _privado(response)
 
 
+def _buscar_venda_da_rota(rota, pk):
+    if pk not in {int(item) for item in rota.pedido_ids if str(item).isdigit()}:
+        raise Http404
+    return get_object_or_404(
+        VendaPDV._base_manager
+        .select_related('filial__empresa', 'cliente')
+        .prefetch_related('itens__produto', 'pagamentos__forma_pagamento'),
+        pk=pk, filial=rota.filial, delivery=True, status='finalizada',
+    )
+
+
+@require_GET
+def comprovante(request, token, pk):
+    rota = _buscar_rota(token)
+    venda = _buscar_venda_da_rota(rota, pk)
+    return _privado(render(request, 'pdv/comprovante_publico.html', {
+        'cupom': dados_comprovante(venda),
+        'pdf_url': reverse('delivery_publico:comprovante_pdf', args=[token, pk]),
+    }))
+
+
+@require_GET
+def comprovante_pdf(request, token, pk):
+    rota = _buscar_rota(token)
+    venda = _buscar_venda_da_rota(rota, pk)
+    response = HttpResponse(gerar_pdf(venda), content_type='application/pdf')
+    response['Content-Disposition'] = (
+        f'attachment; filename="comprovante-{venda.numero_venda:06d}.pdf"'
+    )
+    return _privado(response)
+
+
 @require_POST
 def concluir(request, token, pk):
     rota = _buscar_rota(token)
@@ -268,19 +325,22 @@ def concluir(request, token, pk):
             VendaPDV._base_manager.select_for_update(),
             pk=pk, filial=rota.filial, delivery=True,
         )
-        if venda.status_delivery in (
-            VendaPDV.StatusDelivery.FINALIZADO,
-            VendaPDV.StatusDelivery.CANCELADO,
-        ):
+        if venda.status_delivery == VendaPDV.StatusDelivery.CANCELADO:
             return _privado(JsonResponse({
                 'erro': 'Esta entrega já foi encerrada e não pode ser alterada.'
             }, status=400))
         anteriores = dict(rota.pedido_status_anteriores or {})
+        conclusoes = dict(rota.conclusoes_pedidos or {})
         chave = str(pk)
         if entregue:
             if venda.status_delivery != VendaPDV.StatusDelivery.ENTREGUE:
                 anteriores[chave] = venda.status_delivery
             novo_status = VendaPDV.StatusDelivery.ENTREGUE
+            conclusoes[chave] = {
+                'origem': 'motoboy',
+                'nome': rota.entregador or 'Motoboy',
+                'em': timezone.now().isoformat(),
+            }
         else:
             novo_status = anteriores.pop(
                 chave, VendaPDV.StatusDelivery.EM_ENTREGA,
@@ -291,10 +351,14 @@ def concluir(request, token, pk):
                 VendaPDV.StatusDelivery.EM_ENTREGA,
             ):
                 novo_status = VendaPDV.StatusDelivery.EM_ENTREGA
+            conclusoes.pop(chave, None)
         if venda.status_delivery != novo_status:
             venda.mudar_status_delivery(novo_status)
         rota.pedido_status_anteriores = anteriores
-        rota.save(update_fields=['pedido_status_anteriores', 'updated_at'])
+        rota.conclusoes_pedidos = conclusoes
+        rota.save(update_fields=[
+            'pedido_status_anteriores', 'conclusoes_pedidos', 'updated_at',
+        ])
         _sincronizar_rota_legada(rota)
     if 'application/json' in request.headers.get('Accept', ''):
         return _privado(JsonResponse({
@@ -303,6 +367,7 @@ def concluir(request, token, pk):
             'status': novo_status,
             'status_label': venda.get_status_delivery_display(),
             'concluido': entregue,
+            'conclusao_texto': _texto_conclusao(conclusoes.get(chave)),
         }))
     return redirect(reverse('delivery_publico:painel', args=[token]) + f'#pedido-{pk}')
 

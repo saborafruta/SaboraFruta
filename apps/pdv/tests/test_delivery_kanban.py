@@ -533,6 +533,10 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
             rota.pedido_status_anteriores[str(venda.pk)],
             VendaPDV.StatusDelivery.PREPARANDO,
         )
+        self.assertEqual(rota.conclusoes_pedidos[str(venda.pk)]['origem'], 'sistema')
+        self.assertEqual(rota.conclusoes_pedidos[str(venda.pk)]['nome'], 'Fulano')
+        self.assertTrue(rota.conclusoes_pedidos[str(venda.pk)]['em'])
+        self.assertEqual(concluida.json()['conclusao']['nome'], 'Fulano')
 
         reaberta = self.client.post(
             url, data=json.dumps({'concluido': False}), content_type='application/json',
@@ -542,6 +546,26 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertEqual(reaberta.status_code, 200)
         self.assertEqual(venda.status_delivery, VendaPDV.StatusDelivery.PREPARANDO)
         self.assertEqual(reaberta.json()['status_label'], 'Em Preparo')
+        rota.refresh_from_db()
+        self.assertEqual(rota.conclusoes_pedidos, {})
+
+    def test_usuario_pode_desmarcar_pedido_finalizado_na_rota(self):
+        venda = self._venda(
+            numero=397,
+            status_delivery=VendaPDV.StatusDelivery.FINALIZADO,
+        )
+        rota = RotaDelivery.objects.create(
+            filial=self.filial, nome='Rota Centro', pedido_ids=[venda.pk],
+        )
+
+        resposta = self.client.post(
+            reverse('pdv:delivery_rota_concluir_pedido', args=[rota.pk, venda.pk]),
+            data=json.dumps({'concluido': False}), content_type='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(venda.status_delivery, VendaPDV.StatusDelivery.EM_ENTREGA)
 
     def test_nao_conclui_pedido_que_nao_pertence_a_rota(self):
         permitido = self._venda(numero=395)
@@ -936,6 +960,7 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         self.assertContains(resp, 'class="card-note"', html=False)
         self.assertContains(resp, '(84) 99999-1234')
         self.assertContains(resp, 'WhatsApp do cliente')
+        self.assertContains(resp, 'Ver comprovante')
         self.assertContains(resp, 'PAGO')
         self.assertContains(resp, 'Marcar parada 1 como entregue')
         self.assertContains(resp, 'Ver mais')
@@ -990,7 +1015,7 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
 
     def test_motoboy_conclui_pedido_sem_recarregar_a_pagina(self):
         venda = self._venda(numero=422)
-        self._publicar([venda])
+        url_painel = self._publicar([venda]).json()['url']
         rota = RotaDeliveryPublica.objects.get(filial=self.filial)
         self.client.logout()
 
@@ -1002,7 +1027,14 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         venda.refresh_from_db()
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()['status'], VendaPDV.StatusDelivery.ENTREGUE)
+        self.assertIn('Finalizado pelo motoboy', resp.json()['conclusao_texto'])
         self.assertEqual(venda.status_delivery, VendaPDV.StatusDelivery.ENTREGUE)
+        rota_operacional = RotaDelivery.objects.get(token=rota.token)
+        self.assertEqual(
+            rota_operacional.conclusoes_pedidos[str(venda.pk)]['origem'],
+            'motoboy',
+        )
+        self.assertContains(self.client.get(url_painel), 'Finalizado pelo motoboy')
 
     def test_motoboy_pode_desmarcar_e_pedido_volta_para_status_anterior(self):
         venda = self._venda(numero=423, status_delivery='preparando')
@@ -1032,6 +1064,53 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         self.assertEqual(venda.status_delivery, VendaPDV.StatusDelivery.PREPARANDO)
         rota.refresh_from_db()
         self.assertEqual(rota.pedido_status_anteriores, {})
+        rota_operacional = RotaDelivery.objects.get(token=rota.token)
+        self.assertEqual(rota_operacional.conclusoes_pedidos, {})
+
+    def test_motoboy_pode_desmarcar_pedido_finalizado(self):
+        venda = self._venda(
+            numero=426,
+            status_delivery=VendaPDV.StatusDelivery.FINALIZADO,
+        )
+        url = self._publicar([venda]).json()['url']
+        rota = RotaDeliveryPublica.objects.get(filial=self.filial)
+        self.client.logout()
+
+        resposta = self.client.post(
+            reverse('delivery_publico:concluir', args=[rota.token, venda.pk]),
+            data=json.dumps({'entregue': False}),
+            content_type='application/json', HTTP_ACCEPT='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(venda.status_delivery, VendaPDV.StatusDelivery.EM_ENTREGA)
+        painel = self.client.get(url)
+        pedido = next(item for item in painel.context['pedidos'] if item['venda'].pk == venda.pk)
+        self.assertTrue(pedido['pode_alterar'])
+
+    def test_motoboy_abre_comprovante_da_venda_da_rota(self):
+        venda = self._venda(numero=427)
+        self._publicar([venda])
+        rota = RotaDeliveryPublica.objects.get(filial=self.filial)
+        fora_da_rota = self._venda(numero=428)
+        self.client.logout()
+
+        comprovante = self.client.get(reverse(
+            'delivery_publico:comprovante', args=[rota.token, venda.pk],
+        ))
+        pdf = self.client.get(reverse(
+            'delivery_publico:comprovante_pdf', args=[rota.token, venda.pk],
+        ))
+        negado = self.client.get(reverse(
+            'delivery_publico:comprovante', args=[rota.token, fora_da_rota.pk],
+        ))
+
+        self.assertEqual(comprovante.status_code, 200)
+        self.assertContains(comprovante, 'Este comprovante não é um documento fiscal.')
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf['Content-Type'], 'application/pdf')
+        self.assertEqual(negado.status_code, 404)
 
     def test_painel_joga_concluidos_para_o_final_sem_trocar_numero_da_rota(self):
         concluida = self._venda(numero=424)
