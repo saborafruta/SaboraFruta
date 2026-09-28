@@ -3404,6 +3404,14 @@ def _delivery_rota_localizacao(venda):
         and snapshot.get('_latitude') is not None
         and snapshot.get('_longitude') is not None
     ):
+        if (
+            not aviso and snapshot.get('_geo_origem') == 'cep'
+            and endereco['numero']
+        ):
+            aviso = (
+                f'⚠ Localização aproximada pelo CEP; o número {endereco["numero"]} '
+                'não foi confirmado no mapa.'
+            )
         return {
             'ok': True, 'lat': float(snapshot['_latitude']),
             'lng': float(snapshot['_longitude']),
@@ -3453,11 +3461,7 @@ def _delivery_rota_serializar_pedido(venda):
         nome = cliente.nome_fantasia or cliente.razao_social or nome
     snapshot = venda.endereco_entrega or {}
     localizacao_requer_revisao = bool(
-        localizacao['ok']
-        and (
-            not snapshot.get('_geo_cep_validado')
-            or (snapshot.get('_geo_origem') == 'cep' and bool(endereco['numero']))
-        )
+        localizacao['ok'] and not snapshot.get('_geo_cep_validado')
     )
     forma = ', '.join(
         pg.forma_pagamento.descricao if pg.forma_pagamento else 'Pagamento'
@@ -4189,31 +4193,25 @@ def delivery_rota_atualizar_endereco(request, pk):
     cep_validado = resultado.ok and resultado.precisao == 'exata'
     usar_referencia_cep = not cep_validado
     if usar_referencia_cep:
-        if endereco['numero']:
-            resultado = Resultado(
-                erro='não foi possível confirmar rua, número e CEP no mesmo endereço'
-            )
-            origem_coordenada = 'geocoder'
+        hash_cep = hashlib.md5(
+            (
+                f'brasilapi-cep-v2:{endereco["cep"]}:'
+                f'{endereco["rua"].casefold()}:{endereco["cidade"].casefold()}:'
+                f'{endereco["uf"]}'
+            ).encode('utf-8')
+        ).hexdigest()
+        resultado_cep = GeocodificacaoService(
+            geocoder=BrasilApiCepGeocoder(),
+        ).resolver(endereco_texto, hash_cep)
+        cep_validado = resultado_cep.ok
+        if resultado_cep.ok:
+            resultado = resultado_cep
+            origem_coordenada = 'cep'
         else:
-            hash_cep = hashlib.md5(
-                (
-                    f'brasilapi-cep-v2:{endereco["cep"]}:'
-                    f'{endereco["rua"].casefold()}:{endereco["cidade"].casefold()}:'
-                    f'{endereco["uf"]}'
-                ).encode('utf-8')
-            ).hexdigest()
-            resultado_cep = GeocodificacaoService(
-                geocoder=BrasilApiCepGeocoder(),
-            ).resolver(endereco_texto, hash_cep)
-            cep_validado = resultado_cep.ok
-            if resultado_cep.ok:
-                resultado = resultado_cep
-                origem_coordenada = 'cep'
-            else:
-                resultado = Resultado(
-                    erro=f'não foi possível validar a localização pelo CEP: {resultado_cep.erro}'
-                )
-                origem_coordenada = 'cep'
+            resultado = Resultado(
+                erro=f'não foi possível validar a localização pelo CEP: {resultado_cep.erro}'
+            )
+            origem_coordenada = 'cep'
     else:
         origem_coordenada = 'arcgis'
     if not resultado.ok:
@@ -4275,10 +4273,15 @@ def delivery_rota_atualizar_endereco(request, pk):
         rotulo for campo, rotulo in (('numero', 'número'), ('bairro', 'bairro'))
         if not endereco[campo]
     ]
-    aviso = (
-        f'❗ Faltando: {", ".join(pendencias)}' if pendencias
-        else ''
-    )
+    if pendencias:
+        aviso = f'❗ Faltando: {", ".join(pendencias)}'
+    elif origem_coordenada == 'cep' and endereco['numero']:
+        aviso = (
+            f'⚠ Localização aproximada pelo CEP; o número {endereco["numero"]} '
+            'não foi confirmado no mapa.'
+        )
+    else:
+        aviso = ''
     return JsonResponse({
         'ok': True,
         'pedido_id': venda.pk,

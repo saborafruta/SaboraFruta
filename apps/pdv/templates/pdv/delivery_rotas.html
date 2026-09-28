@@ -85,6 +85,7 @@
   .dr-address-warning-icon { display:inline-grid; place-items:center; width:17px; height:17px;
     border:1px solid #ef4444; border-radius:50%; background:#7f1d1d; color:#fff;
     font-size:11px; font-weight:950; line-height:1; }
+  .dr-address-warning-icon.approximate { border-color:#f59e0b; background:#78350f; color:#fde68a; }
   .dr-address-warning-trigger { display:inline-flex; vertical-align:middle; cursor:help; }
   .dr-address-warning-trigger:focus-visible { border-radius:50%; outline:2px solid #fca5a5; outline-offset:2px; }
   .dr-address-warning-tooltip { position:fixed; z-index:10000; visibility:hidden; max-width:290px;
@@ -559,8 +560,8 @@
   function esc(value) { const d=document.createElement('div'); d.textContent=value ?? ''; return d.innerHTML; }
   function addressWarningIcon(order) {
     if(!order.coordenada_aviso)return '';
-    const message=String(order.coordenada_aviso).replace(/^[❗⚠]\s*/, '');
-    return `<span class="dr-address-warning-trigger" tabindex="0" data-address-warning="${encodeURIComponent(message)}"><span class="dr-address-warning-icon" aria-hidden="true">!</span></span>`;
+    const raw=String(order.coordenada_aviso), message=raw.replace(/^[❗⚠]\s*/, ''), approximate=raw.startsWith('⚠');
+    return `<span class="dr-address-warning-trigger" tabindex="0" data-address-warning="${encodeURIComponent(message)}"><span class="dr-address-warning-icon${approximate?' approximate':''}" aria-hidden="true">!</span></span>`;
   }
   function bindAddressWarnings(scope) {
     let tooltip=document.getElementById('addressWarningTooltip');
