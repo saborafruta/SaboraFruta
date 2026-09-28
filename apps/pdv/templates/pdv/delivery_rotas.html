@@ -85,6 +85,13 @@
   .dr-address-warning-icon { display:inline-grid; place-items:center; width:17px; height:17px;
     border:1px solid #ef4444; border-radius:50%; background:#7f1d1d; color:#fff;
     font-size:11px; font-weight:950; line-height:1; }
+  .dr-address-warning-trigger { display:inline-flex; vertical-align:middle; cursor:help; }
+  .dr-address-warning-trigger:focus-visible { border-radius:50%; outline:2px solid #fca5a5; outline-offset:2px; }
+  .dr-address-warning-tooltip { position:fixed; z-index:10000; visibility:hidden; max-width:290px;
+    transform:translateX(-50%); border:1px solid #ef4444; border-radius:7px; background:#171b22;
+    box-shadow:0 8px 24px rgba(0,0,0,.48); padding:7px 9px; color:#fecaca;
+    font-size:11px; font-weight:750; line-height:1.35; opacity:0; pointer-events:none; }
+  .dr-address-warning-tooltip.show { visibility:visible; opacity:1; }
   .dr-badge.danger { background:#4a1d27; color:#fda4af; }
   .dr-badge.collect { background:#5b3513; color:#ffd166; }
   .dr-price { color:#dce5f1; font-size:9px; font-weight:800; white-space:nowrap; }
@@ -549,6 +556,29 @@
   let editingManualKey = null;
 
   function esc(value) { const d=document.createElement('div'); d.textContent=value ?? ''; return d.innerHTML; }
+  function addressWarningIcon(order) {
+    if(!order.coordenada_aviso)return '';
+    const message=String(order.coordenada_aviso).replace(/^[❗⚠]\s*/, '');
+    return `<span class="dr-address-warning-trigger" tabindex="0" data-address-warning="${encodeURIComponent(message)}"><span class="dr-address-warning-icon" aria-hidden="true">!</span></span>`;
+  }
+  function bindAddressWarnings(scope) {
+    let tooltip=document.getElementById('addressWarningTooltip');
+    if(!tooltip){tooltip=document.createElement('div');tooltip.id='addressWarningTooltip';tooltip.className='dr-address-warning-tooltip';tooltip.setAttribute('role','tooltip');document.body.appendChild(tooltip);}
+    const hide=()=>tooltip.classList.remove('show');
+    scope.querySelectorAll('[data-address-warning]').forEach(trigger=>{
+      const show=()=>{
+        tooltip.textContent=decodeURIComponent(trigger.dataset.addressWarning||'Confira o endereço da entrega');
+        tooltip.classList.add('show');
+        const rect=trigger.getBoundingClientRect(), box=tooltip.getBoundingClientRect();
+        const half=box.width/2, left=Math.max(12+half,Math.min(window.innerWidth-12-half,rect.left+rect.width/2));
+        let top=rect.bottom+8;
+        if(top+box.height>window.innerHeight-12)top=Math.max(12,rect.top-box.height-8);
+        tooltip.style.left=`${left}px`;tooltip.style.top=`${top}px`;
+      };
+      trigger.addEventListener('mouseenter',show);trigger.addEventListener('mouseleave',hide);
+      trigger.addEventListener('focus',show);trigger.addEventListener('blur',hide);
+    });
+  }
   function money(value) { return Number(value || 0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
   function receiptLink(order){if(!order.comprovante_disponivel)return `<span class="dr-receipt-link disabled" aria-label="Comprovante indisponível para a venda ${esc(order.numero)}" title="O comprovante fica disponível após finalizar a venda">🧾</span>`;const url=receiptUrlTemplate.replace('/0/','/'+order.id+'/');return `<a class="dr-receipt-link" href="${esc(url)}" target="_blank" rel="noopener" draggable="false" aria-label="Ver comprovante da venda ${esc(order.numero)}" title="Ver comprovante da venda">🧾</a>`;}
   function paymentBadge(order){return order.pago?'<span class="dr-badge">✓ Pago</span>':`<span class="dr-badge collect">💵 Cobrar na entrega · ${money(order.valor)}</span>`;}
@@ -643,13 +673,14 @@
     const shown=orders.filter(o=>!q||`${o.numero} ${o.cliente} ${o.bairro}`.toLowerCase().includes(q));
     document.getElementById('availableCount').textContent=orders.length;
     document.getElementById('availableList').innerHTML=shown.length?shown.map(o=>`
-      <div class="dr-card ${o.tem_coordenada?'':'unavailable'}" title="${o.tem_coordenada?'':esc(o.coordenada_aviso||'Confira o endereço da entrega')}">
+      <div class="dr-card ${o.tem_coordenada?'':'unavailable'}">
         <input class="dr-check" type="checkbox" data-select="${o.id}" ${state.selected.includes(orderKey(o.id))?'checked':''} ${o.tem_coordenada?'':'disabled'}>
-        <div><div class="dr-client">#${esc(o.numero)} · ${esc(o.cliente)} ${o.coordenada_aviso?`<span class="dr-address-warning-icon" aria-label="Endereço incompleto">!</span>`:''}</div><div class="dr-meta">${esc(address(o))}</div><div class="dr-badges"><span class="dr-badge">${esc(o.status_label)}</span><span class="dr-badge blue">${esc(o.pagamento)}</span>${paymentBadge(o)}</div></div>
+        <div><div class="dr-client">#${esc(o.numero)} · ${esc(o.cliente)} ${addressWarningIcon(o)}</div><div class="dr-meta">${esc(address(o))}</div><div class="dr-badges"><span class="dr-badge">${esc(o.status_label)}</span><span class="dr-badge blue">${esc(o.pagamento)}</span>${paymentBadge(o)}</div></div>
         <div class="dr-card-actions"><div class="dr-price">${money(o.valor)}</div>${receiptLink(o)}<button class="dr-edit-address" type="button" data-edit-address="${o.id}" title="Editar ou confirmar endereço">✎ Endereço</button></div>
       </div>`).join(''):'<div class="dr-empty">Nenhum pedido encontrado.</div>';
     document.querySelectorAll('[data-select]').forEach(el=>el.addEventListener('change',()=>toggleOrder(Number(el.dataset.select),el.checked)));
     document.querySelectorAll('#availableList [data-edit-address]').forEach(el=>el.addEventListener('click',()=>openAddressModal(Number(el.dataset.editAddress))));
+    bindAddressWarnings(document.getElementById('availableList'));
   }
   function renderRoute() {
     const list=currentStops();
@@ -658,7 +689,7 @@
     document.getElementById('routeList').innerHTML=list.length?list.map((o,i)=>{const key=state.selected[i], manual=String(key).startsWith('manual:'), opportunity=manual&&o.origem==='oportunidade';return `
       <div class="dr-card ${manual?'dr-manual-card':deliveryComplete(o)?'delivery-complete':''}" draggable="true" data-route-id="${esc(key)}">
         <span class="dr-order">${i+1}</span>
-        <div ${manual?'':`data-conference="${o.id}" style="cursor:pointer" title="Abrir conferência dos itens"`}><div class="dr-client">☰ &nbsp;${manual?(opportunity?'Oportunidade · ':'Parada manual · ')+esc(o.observacao):'#'+esc(o.numero)+' · '+esc(o.cliente)}${!manual&&o.coordenada_aviso?` <span class="dr-address-warning-icon" aria-label="Endereço incompleto">!</span>`:''}</div><div class="dr-meta">${esc(manual?o.endereco_texto:address(o))}${state.result?.paradas?.[i]?.eta?` · ETA <strong>${esc(state.result.paradas[i].eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge ${manual?'warn':'blue'}">${opportunity?'Oportunidade de Venda':manual?'Parada avulsa':esc(o.status_label)}</span>${!manual?`<span class="dr-badge ${conferenceComplete(o)?'':'danger'}">${conferenceComplete(o)?'✓ Conferido':'⚠ Conferência pendente'}</span>${paymentBadge(o)}`:''}${opportunity&&o.rfm?`<span class="dr-badge">${esc(o.rfm)}</span>`:''}${state.locked.has(key)?'<span class="dr-badge">Posição travada</span>':''}</div>${!manual&&deliveryComplete(o)?`<span class="dr-completion-meta">${esc(completionText(o))}</span>`:''}</div>
+        <div ${manual?'':`data-conference="${o.id}" style="cursor:pointer" title="Abrir conferência dos itens"`}><div class="dr-client">☰ &nbsp;${manual?(opportunity?'Oportunidade · ':'Parada manual · ')+esc(o.observacao):'#'+esc(o.numero)+' · '+esc(o.cliente)}${!manual?addressWarningIcon(o):''}</div><div class="dr-meta">${esc(manual?o.endereco_texto:address(o))}${state.result?.paradas?.[i]?.eta?` · ETA <strong>${esc(state.result.paradas[i].eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge ${manual?'warn':'blue'}">${opportunity?'Oportunidade de Venda':manual?'Parada avulsa':esc(o.status_label)}</span>${!manual?`<span class="dr-badge ${conferenceComplete(o)?'':'danger'}">${conferenceComplete(o)?'✓ Conferido':'⚠ Conferência pendente'}</span>${paymentBadge(o)}`:''}${opportunity&&o.rfm?`<span class="dr-badge">${esc(o.rfm)}</span>`:''}${state.locked.has(key)?'<span class="dr-badge">Posição travada</span>':''}</div>${!manual&&deliveryComplete(o)?`<span class="dr-completion-meta">${esc(completionText(o))}</span>`:''}</div>
         <div class="dr-card-actions">${manual?`<button class="dr-edit-address" type="button" data-edit-manual="${esc(key)}">✎ Endereço</button><button class="dr-edit-address" type="button" data-edit-stop="${esc(key)}">✎ Observação</button><button class="dr-edit-address" type="button" data-sale-stop="${esc(key)}">＋ Venda</button><button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:`${receiptLink(o)}<button class="dr-edit-address" type="button" data-edit-address="${o.id}">✎ Endereço</button><button class="dr-complete-stop ${deliveryComplete(o)?'completed':''}" type="button" data-complete-order="${o.id}">${deliveryComplete(o)?'↶ Desmarcar conclusão':'✓ Marcar concluída'}</button>`}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição: esta parada voltará a participar da otimização.':'Travar posição. Paradas movidas manualmente são travadas automaticamente.'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
       </div>`}).join(''):'<div class="dr-empty">Marque pedidos ou adicione uma parada manual.</div>';
     document.querySelectorAll('[data-lock]').forEach(b=>b.addEventListener('click',()=>{const key=b.dataset.lock;state.locked.has(key)?state.locked.delete(key):state.locked.add(key);renderRoute();}));
@@ -669,6 +700,7 @@
     document.querySelectorAll('[data-complete-order]').forEach(b=>b.addEventListener('click',()=>toggleRouteOrderCompleted(Number(b.dataset.completeOrder),b)));
     document.querySelectorAll('#routeList [data-edit-address]').forEach(el=>el.addEventListener('click',()=>openAddressModal(Number(el.dataset.editAddress))));
     document.querySelectorAll('[data-conference]').forEach(el=>el.addEventListener('click',()=>openConference(Number(el.dataset.conference))));
+    bindAddressWarnings(document.getElementById('routeList'));
     document.querySelectorAll('[data-route-id]').forEach(el=>{
       el.addEventListener('dragstart',()=>{state.dragging=el.dataset.routeId;el.classList.add('dragging');});
       el.addEventListener('dragend',()=>{state.dragging=null;el.classList.remove('dragging');});

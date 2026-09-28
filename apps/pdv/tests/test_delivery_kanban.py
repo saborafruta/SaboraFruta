@@ -681,6 +681,7 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertTrue(pedido['tem_coordenada'])
         self.assertIn('número', pedido['coordenada_aviso'])
         self.assertContains(tela, 'dr-address-warning-icon')
+        self.assertContains(tela, 'dr-address-warning-tooltip')
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_endereco_pode_ser_salvo_apenas_na_entrega(self, resolver):
@@ -741,7 +742,7 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
 
         venda.refresh_from_db()
         self.assertEqual(resp.status_code, 200)
-        self.assertIn('aproximada', resp.json()['coordenada_aviso'])
+        self.assertIn('número exato', resp.json()['coordenada_aviso'])
         self.assertEqual(venda.endereco_entrega['_geo_precisao'], 'aproximada')
 
     def test_endereco_da_rota_exige_dados_para_localizacao(self):
