@@ -736,10 +736,7 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_endereco_sem_numero_troca_coordenada_distante_pela_do_cep(self, resolver):
-        resolver.side_effect = [
-            Resultado(-5.65, -35.30, 'aproximada'),
-            Resultado(-5.9293706, -35.2108215, 'aproximada'),
-        ]
+        resolver.return_value = Resultado(-5.65, -35.30, 'aproximada')
         venda = self._venda(numero=308)
 
         resp = self.client.post(
@@ -747,6 +744,11 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
             data=json.dumps({
                 'cep': '59158-155', 'rua': 'Avenida Antártida', 'numero': '',
                 'bairro': 'Parque das Nações', 'cidade': 'Parnamirim', 'uf': 'RN',
+                'coordenada_cep': {
+                    'provider': 'awesomeapi_cep', 'cep': '59158155',
+                    'rua': 'Avenida Antártida', 'cidade': 'Parnamirim', 'uf': 'RN',
+                    'lat': '-5.9293706', 'lng': '-35.2108215',
+                },
                 'atualizar_cliente': False,
             }), content_type='application/json',
         )
@@ -759,6 +761,7 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertTrue(venda.endereco_entrega['_geo_cep_validado'])
         self.assertIn('número', resp.json()['coordenada_aviso'])
         self.assertFalse(resp.json()['localizacao_requer_revisao'])
+        resolver.assert_called_once()
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_endereco_com_numero_preserva_ponto_exato_do_arcgis(self, resolver):

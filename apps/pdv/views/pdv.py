@@ -4183,6 +4183,30 @@ def delivery_rota_atualizar_endereco(request, pk):
     endereco['cep'] = re.sub(r'\D', '', endereco['cep'])[:8]
     endereco['uf'] = endereco['uf'].upper()
     atualizar_cliente = corpo.get('atualizar_cliente') is True
+    coordenada_cep_cliente = corpo.get('coordenada_cep')
+    resultado_cep_cliente = None
+    if isinstance(coordenada_cep_cliente, dict) and not endereco['numero']:
+        normalizar = lambda valor: re.sub(r'\W+', '', str(valor or '').casefold())
+        try:
+            latitude_cliente = float(coordenada_cep_cliente.get('lat'))
+            longitude_cliente = float(coordenada_cep_cliente.get('lng'))
+        except (TypeError, ValueError):
+            latitude_cliente = longitude_cliente = None
+        campos_cliente_conferem = (
+            re.sub(r'\D', '', str(coordenada_cep_cliente.get('cep') or '')) == endereco['cep']
+            and normalizar(coordenada_cep_cliente.get('rua')) == normalizar(endereco['rua'])
+            and normalizar(coordenada_cep_cliente.get('cidade')) == normalizar(endereco['cidade'])
+            and str(coordenada_cep_cliente.get('uf') or '').upper() == endereco['uf']
+        )
+        if (
+            coordenada_cep_cliente.get('provider') == AwesomeApiCepGeocoder.nome
+            and campos_cliente_conferem
+            and latitude_cliente is not None and longitude_cliente is not None
+            and -34 <= latitude_cliente <= 6 and -74 <= longitude_cliente <= -32
+        ):
+            resultado_cep_cliente = Resultado(
+                latitude_cliente, longitude_cliente, 'aproximada',
+            )
     ausentes = [
         rotulo for campo, rotulo in (
             ('cep', 'CEP'), ('rua', 'rua'), ('cidade', 'cidade'), ('uf', 'UF'),
@@ -4236,7 +4260,7 @@ def delivery_rota_atualizar_endereco(request, pk):
                     f'{endereco["uf"]}'
                 ).encode('utf-8')
             ).hexdigest()
-            resultado_cep = GeocodificacaoService(
+            resultado_cep = resultado_cep_cliente or GeocodificacaoService(
                 geocoder=AwesomeApiCepGeocoder(),
             ).resolver(endereco_texto, hash_cep)
             cep_validado = resultado_cep.ok
