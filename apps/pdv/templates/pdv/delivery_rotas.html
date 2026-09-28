@@ -120,7 +120,12 @@
   .map-panel:fullscreen .dr-map { min-height:0; }
   #deliveryRouteMap { position:absolute; inset:0; background:#111820; }
   .dr-map-note { position:absolute; z-index:500; right:9px; bottom:9px; max-width:270px; border:1px solid #344154; border-radius:8px; background:rgba(21,25,31,.92); padding:7px 9px; color:#aeb9c9; font-size:9px; }
-  .dr-marker { display:flex; align-items:center; justify-content:center; width:25px; height:25px; border:2px solid #fff; border-radius:50%; background:#16a36e; color:#fff; box-shadow:0 2px 8px #0008; font-size:10px; font-weight:900; }
+  .dr-map-legend { position:absolute; z-index:500; top:9px; right:9px; display:flex; align-items:center; gap:10px; border:1px solid #344154; border-radius:8px; background:rgba(21,25,31,.92); padding:7px 9px; color:#dbe4f0; font-size:9px; font-weight:800; pointer-events:none; }
+  .dr-map-legend[hidden] { display:none; }
+  .dr-map-legend-item { display:flex; align-items:center; gap:5px; white-space:nowrap; }
+  .dr-map-legend-line { position:relative; display:inline-block; width:26px; height:5px; border-radius:999px; background:var(--active-route-color,#38bdf8); }
+  .dr-map-legend-line.return::after { position:absolute; inset:1px 0; content:""; background:repeating-linear-gradient(90deg,#fff 0 6px,transparent 6px 10px); }
+  .dr-marker { box-sizing:border-box; display:flex; align-items:center; justify-content:center; width:30px; height:30px; border:3px solid #fff; border-radius:50%; background:var(--active-route-color,#16a36e); color:#fff; box-shadow:0 0 0 3px rgba(15,23,42,.5),0 3px 10px #000a; font-size:11px; font-weight:950; }
   .dr-marker.base { background:#2563eb; }
   .dr-marker.manual { background:#d28a18; }
   .dr-footer { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; border:1px solid #2d3440; border-radius:10px; background:#20242a; padding:9px 11px; }
@@ -323,7 +328,7 @@
     </section>
     <section class="dr-panel map-panel route-accent">
       <div class="dr-panel-head"><span class="dr-panel-title">Mapa · <strong id="routeMapName">—</strong></span><div class="dr-panel-head-actions"><span class="dr-count" id="routeProvider">Aguardando rota</span><button class="dr-map-expand" id="mapExpand" type="button">⛶ Expandir mapa</button></div></div>
-      <div class="dr-map"><div id="deliveryRouteMap"></div><div class="dr-map-note" id="mapNote">Selecione os pedidos e clique em “Otimizar rota inteira”.</div></div>
+      <div class="dr-map"><div id="deliveryRouteMap"></div><div class="dr-map-legend" id="mapLegend" hidden><span class="dr-map-legend-item"><i class="dr-map-legend-line"></i>Ida</span><span class="dr-map-legend-item"><i class="dr-map-legend-line return"></i>Volta</span></div><div class="dr-map-note" id="mapNote">Selecione os pedidos e clique em “Otimizar rota inteira”.</div></div>
     </section>
   </div>
 
@@ -549,7 +554,7 @@
   const completeOrderUrlTemplate = '{% url "pdv:delivery_rota_concluir_pedido" 0 0 %}';
   const receiptUrlTemplate = '{% url "pdv:comprovante_venda" 0 %}';
   const reportUrl = '{% url "pdv:delivery_rotas_relatorio_consumo" %}';
-  let map, routeLine, markers = [];
+  let map, routeLine, returnLine, returnAccentLine, markers = [];
   let automaticCalculationTimer = null;
   let calculationSequence = 0;
   let opportunitiesCache = [];
@@ -659,10 +664,15 @@
   }
   function addMarker(lat,lng,label,kind,title,offsetIndex=0) {
     const offsets=[[0,0],[28,0],[-28,0],[0,28],[0,-28],[22,22],[-22,-22]], offset=offsets[offsetIndex%offsets.length];
-    const icon=L.divIcon({className:'',iconSize:[25,25],iconAnchor:[12-offset[0],12-offset[1]],html:`<div class="dr-marker ${kind||''}">${esc(label)}</div>`});
+    const icon=L.divIcon({className:'',iconSize:[30,30],iconAnchor:[15-offset[0],15-offset[1]],html:`<div class="dr-marker ${kind||''}">${esc(label)}</div>`});
     const marker=L.marker([lat,lng],{icon,title}).addTo(map).bindPopup(esc(title)); markers.push(marker); return marker;
   }
-  function clearRoute() { if(routeLine){map.removeLayer(routeLine);routeLine=null;} markers.forEach(m=>map.removeLayer(m)); markers=[]; if(branch.tem_coordenada)addMarker(branch.lat,branch.lng,'⌂','base',branch.nome); }
+  function clearRoute() {
+    [routeLine,returnLine,returnAccentLine].forEach(layer=>{if(layer)map.removeLayer(layer);});
+    routeLine=returnLine=returnAccentLine=null;markers.forEach(m=>map.removeLayer(m));markers=[];
+    document.getElementById('mapLegend').hidden=true;
+    if(branch.tem_coordenada)addMarker(branch.lat,branch.lng,'⌂','base',branch.nome);
+  }
   function resetRouteMap() {
     clearRoute();
     const center=branch.tem_coordenada?[branch.lat,branch.lng]:[-14.235,-51.925];
@@ -670,10 +680,24 @@
   }
   function drawRoute(result) {
     clearRoute();
-    routeLine=L.polyline(result.geometria,{color:activeRouteColor(),weight:5,opacity:.9}).addTo(map);
+    const geometry=result.geometria||[],stops=result.paradas||[];
+    let returnStart=Math.max(0,geometry.length-1);
+    let searchStart=0;
+    stops.forEach(stop=>{
+      let bestDistance=Infinity,bestIndex=searchStart;
+      for(let index=searchStart;index<geometry.length;index+=1){const point=geometry[index],distance=(Number(point[0])-Number(stop.lat))**2+(Number(point[1])-Number(stop.lng))**2;if(distance<bestDistance){bestDistance=distance;bestIndex=index;}}
+      searchStart=bestIndex;returnStart=bestIndex;
+    });
+    const outbound=geometry.slice(0,returnStart+1),returning=geometry.slice(returnStart);
+    routeLine=L.polyline(outbound,{color:activeRouteColor(),weight:6,opacity:.92,lineCap:'round'}).addTo(map);
+    if(returning.length>1){
+      returnLine=L.polyline(returning,{color:activeRouteColor(),weight:7,opacity:.78,lineCap:'round'}).addTo(map);
+      returnAccentLine=L.polyline(returning,{color:'#f8fafc',weight:3,opacity:.95,dashArray:'8 10',lineCap:'butt'}).addTo(map);
+    }
     const sobrepostos={};
     result.paradas.forEach(p=>{const bucket=`${Number(p.lat).toFixed(4)}:${Number(p.lng).toFixed(4)}`, offset=sobrepostos[bucket]||0;sobrepostos[bucket]=offset+1;addMarker(p.lat,p.lng,p.ordem,p.tipo==='manual'?'manual':'',p.tipo==='manual'?p.observacao:`#${p.numero} · ${p.cliente}`,offset);});
-    map.fitBounds(routeLine.getBounds(),{padding:[35,35]});
+    document.getElementById('mapLegend').hidden=false;
+    map.fitBounds(L.latLngBounds(geometry),{padding:[35,35]});
   }
 
   function renderAvailable() {
