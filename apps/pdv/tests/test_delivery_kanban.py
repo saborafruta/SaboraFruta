@@ -680,8 +680,79 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
 
         self.assertTrue(pedido['tem_coordenada'])
         self.assertIn('número', pedido['coordenada_aviso'])
+        self.assertTrue(pedido['localizacao_requer_revisao'])
         self.assertContains(tela, 'dr-address-warning-icon')
         self.assertContains(tela, 'dr-address-warning-tooltip')
+
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_endereco_sem_numero_troca_coordenada_distante_pela_do_cep(self, resolver):
+        resolver.side_effect = [
+            Resultado(-5.65, -35.30, 'aproximada'),
+            Resultado(-5.91556, -35.26278, 'aproximada'),
+        ]
+        venda = self._venda(numero=308)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
+            data=json.dumps({
+                'cep': '59158-155', 'rua': 'Avenida Antártida', 'numero': '',
+                'bairro': 'Parque das Nações', 'cidade': 'Parnamirim', 'uf': 'RN',
+                'atualizar_cliente': False,
+            }), content_type='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resp.status_code, 200)
+        self.assertAlmostEqual(venda.endereco_entrega['_latitude'], -5.91556)
+        self.assertEqual(venda.endereco_entrega['_geo_origem'], 'cep')
+        self.assertTrue(venda.endereco_entrega['_geo_cep_validado'])
+        self.assertIn('número', resp.json()['coordenada_aviso'])
+        self.assertFalse(resp.json()['localizacao_requer_revisao'])
+
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_endereco_com_numero_tambem_rejeita_coordenada_longe_do_cep(self, resolver):
+        resolver.side_effect = [
+            Resultado(-5.89556, -35.26278, 'aproximada'),
+            Resultado(-5.91556, -35.26278, 'aproximada'),
+        ]
+        venda = self._venda(numero=309)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
+            data=json.dumps({
+                'cep': '59158-155', 'rua': 'Avenida Antártida', 'numero': '501',
+                'bairro': 'Parque das Nações', 'cidade': 'Parnamirim', 'uf': 'RN',
+                'atualizar_cliente': False,
+            }), content_type='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resp.status_code, 200)
+        self.assertAlmostEqual(venda.endereco_entrega['_longitude'], -35.26278)
+        self.assertEqual(venda.endereco_entrega['_geo_origem'], 'cep')
+        self.assertEqual(resp.json()['coordenada_aviso'], '')
+
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_endereco_aproximado_sem_validacao_do_cep_nao_entra_na_rota(self, resolver):
+        resolver.side_effect = [
+            Resultado(-5.65, -35.30, 'aproximada'),
+            Resultado(erro='CEP sem coordenada disponível'),
+        ]
+        venda = self._venda(numero=310)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
+            data=json.dumps({
+                'cep': '59158-155', 'rua': 'Avenida Antártida', 'numero': '',
+                'bairro': 'Parque das Nações', 'cidade': 'Parnamirim', 'uf': 'RN',
+                'atualizar_cliente': False,
+            }), content_type='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resp.status_code, 422)
+        self.assertIn('validar a localização pelo CEP', resp.json()['erro'])
+        self.assertFalse(venda.endereco_entrega)
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_endereco_pode_ser_salvo_apenas_na_entrega(self, resolver):

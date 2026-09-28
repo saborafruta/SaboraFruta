@@ -3451,6 +3451,15 @@ def _delivery_rota_serializar_pedido(venda):
     nome = 'Consumidor Final'
     if cliente:
         nome = cliente.nome_fantasia or cliente.razao_social or nome
+    snapshot = venda.endereco_entrega or {}
+    precisao_atual = snapshot.get('_geo_precisao') or (
+        cliente.geo_precisao if cliente else ''
+    )
+    localizacao_requer_revisao = bool(
+        localizacao['ok']
+        and precisao_atual != 'exata'
+        and not snapshot.get('_geo_cep_validado')
+    )
     forma = ', '.join(
         pg.forma_pagamento.descricao if pg.forma_pagamento else 'Pagamento'
         for pg in venda.pagamentos.all()
@@ -3479,6 +3488,7 @@ def _delivery_rota_serializar_pedido(venda):
         'lng': localizacao['lng'],
         'tem_coordenada': localizacao['ok'],
         'coordenada_aviso': localizacao['aviso'],
+        'localizacao_requer_revisao': localizacao_requer_revisao,
         'endereco_campos': endereco,
         'itens': [
             {
@@ -4121,7 +4131,10 @@ def delivery_rota_oportunidades(request):
 @requer_permissao('pdv', 'ver')
 def delivery_rota_atualizar_endereco(request, pk):
     """Localiza o endereço da entrega e, opcionalmente, atualiza o cliente."""
-    from apps.mapas.services.geocoder import GeocodificacaoService
+    from apps.mapas.services.geocoder import (
+        BrasilApiCepGeocoder, GeocodificacaoService, Resultado,
+    )
+    from apps.mapas.services.otimizacao import distancia_haversine_m
     try:
         corpo = json.loads(request.body or b'{}')
     except ValueError:
@@ -4167,9 +4180,43 @@ def delivery_rota_atualizar_endereco(request, pk):
         }, status=400)
 
     endereco_hash = _delivery_rota_endereco_hash(endereco)
-    resultado = GeocodificacaoService().resolver(
-        _delivery_rota_endereco_texto(endereco), endereco_hash,
-    )
+    endereco_texto = _delivery_rota_endereco_texto(endereco)
+    resultado = GeocodificacaoService().resolver(endereco_texto, endereco_hash)
+    resultado_cep = None
+    cep_validado = False
+    usar_referencia_cep = not endereco['numero'] or not resultado.ok or resultado.precisao != 'exata'
+    if usar_referencia_cep:
+        hash_cep = hashlib.md5(
+            (
+                f'brasilapi-cep-v2:{endereco["cep"]}:'
+                f'{endereco["rua"].casefold()}:{endereco["cidade"].casefold()}:'
+                f'{endereco["uf"]}'
+            ).encode('utf-8')
+        ).hexdigest()
+        resultado_cep = GeocodificacaoService(
+            geocoder=BrasilApiCepGeocoder(),
+        ).resolver(endereco_texto, hash_cep)
+        cep_validado = resultado_cep.ok
+        if resultado_cep.ok:
+            muito_distante = (
+                resultado.ok
+                and distancia_haversine_m(
+                    (resultado.latitude, resultado.longitude),
+                    (resultado_cep.latitude, resultado_cep.longitude),
+                ) > 2_000
+            )
+            if not endereco['numero'] or not resultado.ok or muito_distante:
+                resultado = resultado_cep
+                origem_coordenada = 'cep'
+            else:
+                origem_coordenada = 'geocoder'
+        else:
+            resultado = Resultado(
+                erro=f'não foi possível validar a localização pelo CEP: {resultado_cep.erro}'
+            )
+            origem_coordenada = 'cep'
+    else:
+        origem_coordenada = 'geocoder'
     if not resultado.ok:
         return JsonResponse({
             'erro': (
@@ -4185,6 +4232,8 @@ def delivery_rota_atualizar_endereco(request, pk):
             '_longitude': resultado.longitude,
             '_geo_hash': endereco_hash,
             '_geo_precisao': resultado.precisao,
+            '_geo_origem': origem_coordenada,
+            '_geo_cep_validado': cep_validado,
         })
         venda.endereco_entrega = snapshot
         venda.save(update_fields=['endereco_entrega', 'updated_at'])
@@ -4239,6 +4288,9 @@ def delivery_rota_atualizar_endereco(request, pk):
         'lng': float(resultado.longitude),
         'tem_coordenada': True,
         'coordenada_aviso': aviso,
+        'localizacao_requer_revisao': bool(
+            resultado.precisao != 'exata' and not cep_validado
+        ),
         'atualizou_cliente': atualizar_cliente,
         'aviso': '',
     })

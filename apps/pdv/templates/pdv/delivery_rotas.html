@@ -723,7 +723,30 @@
     if(!state.selected.length||!branch.tem_coordenada)return;
     automaticCalculationTimer=setTimeout(()=>calculate(optimize),delay);
   }
-  function toggleOrder(id,checked) { const key=orderKey(id);if(checked&&!state.selected.includes(key))state.selected.push(key); if(!checked){state.selected=state.selected.filter(x=>x!==key);state.locked.delete(key);} state.result=null; renderAvailable();renderRoute();resetSummary();scheduleAutomaticCalculation(false); }
+  async function refreshOrderLocation(order) {
+    if(!order?.localizacao_requer_revisao)return true;
+    try{
+      const url=addressUrlTemplate.replace('/0/','/'+order.id+'/');
+      const resp=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({...order.endereco_campos,atualizar_cliente:false})});
+      const data=await responseJson(resp);if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
+      order.endereco_campos=data.endereco;order.endereco=[data.endereco.rua,data.endereco.numero].filter(Boolean).join(', ');
+      order.complemento=data.endereco.complemento||'';order.bairro=data.endereco.bairro||'';order.cidade=data.endereco.cidade||'';order.uf=data.endereco.uf||'';
+      order.lat=data.lat;order.lng=data.lng;order.tem_coordenada=data.tem_coordenada;order.coordenada_aviso=data.coordenada_aviso||'';
+      order.localizacao_requer_revisao=Boolean(data.localizacao_requer_revisao);
+      return data.tem_coordenada;
+    }catch(error){order.tem_coordenada=false;order.coordenada_aviso='Não foi possível validar a localização pelo CEP';toast(`${order.cliente}: ${error.message}`,true);return false;}
+  }
+  async function refreshSelectedLocations() {
+    let changed=false;
+    for(const key of [...state.selected]){
+      const order=stopByKey(key);
+      if(!String(key).startsWith('pedido:')||!order?.localizacao_requer_revisao)continue;
+      const ok=await refreshOrderLocation(order);changed=true;
+      if(!ok){state.selected=state.selected.filter(item=>item!==key);state.locked.delete(key);}
+    }
+    if(changed){state.result=null;renderAvailable();renderRoute();resetSummary();}
+  }
+  async function toggleOrder(id,checked) { const key=orderKey(id),order=byId[String(id)];if(checked&&order?.localizacao_requer_revisao&&!await refreshOrderLocation(order)){renderAvailable();return;}if(checked&&!state.selected.includes(key))state.selected.push(key); if(!checked){state.selected=state.selected.filter(x=>x!==key);state.locked.delete(key);} state.result=null; renderAvailable();renderRoute();resetSummary();scheduleAutomaticCalculation(false); }
   function moveOrder(from,to) { if(!from||from===to)return; const old=state.selected.indexOf(from), target=state.selected.indexOf(to); if(old<0||target<0)return; state.selected.splice(old,1);state.selected.splice(target,0,from);state.locked.add(from);state.result=null;renderRoute();resetSummary();scheduleAutomaticCalculation(false,150); }
   function resetSummary(){document.getElementById('routeReturn').textContent='—';document.getElementById('routeDistance').textContent='—';document.getElementById('routeTimeline').innerHTML='<div class="dr-empty" style="width:100%;padding:6px;">Recalcule a rota para atualizar os horários.</div>';renderFuelCost();}
 
@@ -773,6 +796,7 @@
       order.uf=data.endereco.uf||'';
       order.lat=data.lat;order.lng=data.lng;order.tem_coordenada=data.tem_coordenada;
       order.coordenada_aviso=data.coordenada_aviso||'';
+      order.localizacao_requer_revisao=Boolean(data.localizacao_requer_revisao);
       const key=orderKey(id);
       if(data.tem_coordenada&&!state.selected.includes(key))state.selected.push(key);
       if(!data.tem_coordenada){state.selected=state.selected.filter(item=>item!==key);state.locked.delete(key);}
@@ -1125,8 +1149,7 @@
   applyPendingPdvSale();
   if(!document.getElementById('routeDeparture').value){const now=new Date();document.getElementById('routeDeparture').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;}
   renderFuelCost();
-  if(!branch.tem_coordenada)document.getElementById('mapNote').textContent='A filial precisa de coordenadas para calcular saída e retorno.';
-  else if(state.selected.length)scheduleAutomaticCalculation(true,150);
+  (async()=>{await refreshSelectedLocations();if(!branch.tem_coordenada)document.getElementById('mapNote').textContent='A filial precisa de coordenadas para calcular saída e retorno.';else if(state.selected.length)scheduleAutomaticCalculation(true,150);})();
   setInterval(()=>{if(!currentRoute)return;const signature=JSON.stringify({estado:routeSnapshot(),conferencia_itens:conference,nome:currentRoute.nome});if(signature!==lastSavedSignature)persistRoute();},1500);
   refreshRouteCompletion();setInterval(refreshRouteCompletion,5000);
 })();

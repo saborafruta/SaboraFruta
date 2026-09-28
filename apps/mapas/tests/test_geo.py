@@ -12,7 +12,8 @@ from django.db import connection
 from apps.mapas import constants as c
 from apps.mapas.serializers import formatar_distancia
 from apps.mapas.services.geocoder import (
-    ArcGISGeocoder, GeocodificacaoService, NominatimGeocoder, Resultado, _Throttle,
+    ArcGISGeocoder, BrasilApiCepGeocoder, GeocodificacaoService,
+    NominatimGeocoder, Resultado, _Throttle,
 )
 
 
@@ -182,6 +183,43 @@ class GeocoderTests(TestCase):
             resultado = ArcGISGeocoder().geocodificar('59080-460, Natal, RN, Brasil')
         self.assertFalse(resultado.ok)
         self.assertIn('CEP', resultado.erro)
+
+    def test_brasilapi_localiza_e_valida_o_cep(self):
+        resposta = Mock(status_code=200)
+        resposta.raise_for_status.return_value = None
+        resposta.json.return_value = {
+            'cep': '59158155', 'state': 'RN', 'city': 'Parnamirim',
+            'neighborhood': 'Parque das Nações', 'street': 'Avenida Antártida',
+            'location': {'coordinates': {
+                'latitude': '-5.91556', 'longitude': '-35.26278',
+            }},
+        }
+        with patch('apps.mapas.services.geocoder.requests.get', return_value=resposta):
+            resultado = BrasilApiCepGeocoder().geocodificar(
+                'Avenida Antártida, Parque das Nações, Parnamirim, RN, '
+                '59158-155, Brasil'
+            )
+        self.assertTrue(resultado.ok)
+        self.assertEqual(resultado.precisao, 'aproximada')
+        self.assertAlmostEqual(resultado.latitude, -5.91556)
+
+    def test_brasilapi_rejeita_cep_de_outro_municipio(self):
+        resposta = Mock(status_code=200)
+        resposta.raise_for_status.return_value = None
+        resposta.json.return_value = {
+            'cep': '59158155', 'state': 'RN', 'city': 'Ceará-Mirim',
+            'street': 'Avenida Antártida',
+            'location': {'coordinates': {
+                'latitude': '-5.65', 'longitude': '-35.30',
+            }},
+        }
+        with patch('apps.mapas.services.geocoder.requests.get', return_value=resposta):
+            resultado = BrasilApiCepGeocoder().geocodificar(
+                'Avenida Antártida, Parque das Nações, Parnamirim, RN, '
+                '59158-155, Brasil'
+            )
+        self.assertFalse(resultado.ok)
+        self.assertIn('município', resultado.erro)
 
     def test_nominatim_rejeita_falso_positivo_de_outro_cep(self):
         resposta = Mock()
