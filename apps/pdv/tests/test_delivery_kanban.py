@@ -225,6 +225,7 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, reverse('pdv:comprovante_venda', args=[0]))
         self.assertContains(tela, 'data-receipt-overlay')
         self.assertContains(tela, 'receiptOverlayFrame')
+        self.assertContains(tela, 'frame.srcdoc = frameDocument(html, response.url)')
         self.assertContains(tela, 'Cobrar na entrega')
         self.assertContains(tela, 'Marcar concluída')
         self.assertContains(tela, 'data-complete-order')

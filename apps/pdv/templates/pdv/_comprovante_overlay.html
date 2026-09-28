@@ -33,28 +33,54 @@
   const title = document.getElementById('receiptOverlayTitle');
   const closeButton = document.getElementById('receiptOverlayClose');
   let previousOverflow = '';
+  let loadSequence = 0;
+
+  function frameDocument(html, url) {
+    const base = String(url || location.href)
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    const tag = `<base href="${base}">`;
+    return /<head(?:\s[^>]*)?>/i.test(html)
+      ? html.replace(/<head(\s[^>]*)?>/i, match => `${match}${tag}`)
+      : `${tag}${html}`;
+  }
 
   function closeReceiptOverlay() {
     if (!overlay.classList.contains('open')) return;
     overlay.classList.remove('open');
     overlay.hidden = true;
     overlay.setAttribute('aria-hidden', 'true');
-    frame.src = 'about:blank';
+    loadSequence += 1;
+    frame.removeAttribute('src');
+    frame.srcdoc = '';
     document.body.style.overflow = previousOverflow;
   }
 
-  document.addEventListener('click', event => {
+  document.addEventListener('click', async event => {
     const link = event.target.closest('[data-receipt-overlay]');
     if (!link || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
+    const sequence = ++loadSequence;
     previousOverflow = document.body.style.overflow;
     title.textContent = link.dataset.receiptTitle || 'Comprovante de pagamento';
-    frame.src = link.href;
+    frame.removeAttribute('src');
+    frame.srcdoc = '<!doctype html><html><body style="margin:0;display:grid;min-height:100vh;place-items:center;background:#f1f5f9;color:#334155;font:600 14px system-ui">Carregando comprovante…</body></html>';
     overlay.hidden = false;
     overlay.setAttribute('aria-hidden', 'false');
     overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
     closeButton.focus();
+    try {
+      const response = await fetch(link.href, {
+        headers: {Accept: 'text/html'}, credentials: 'same-origin',
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const html = await response.text();
+      if (sequence !== loadSequence || !overlay.classList.contains('open')) return;
+      frame.srcdoc = frameDocument(html, response.url);
+    } catch (_) {
+      if (sequence !== loadSequence || !overlay.classList.contains('open')) return;
+      frame.srcdoc = '<!doctype html><html><body style="margin:0;display:grid;min-height:100vh;place-items:center;background:#fff1f2;color:#9f1239;font:700 14px system-ui;text-align:center;padding:24px">Não foi possível carregar o comprovante.<br>Feche esta janela e tente novamente.</body></html>';
+    }
   });
   closeButton.addEventListener('click', closeReceiptOverlay);
   overlay.addEventListener('click', event => {
