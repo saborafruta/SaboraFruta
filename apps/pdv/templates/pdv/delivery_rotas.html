@@ -281,7 +281,7 @@
       <button class="dr-button" id="routeSave">Salvar rascunho</button>
       <button class="dr-button" id="routeDriverLink">Copiar link desta rota</button>
       <button class="dr-button green" id="routeShare">Compartilhar no WhatsApp</button>
-      <button class="dr-button" id="routeMaps">Google Maps</button>
+      <button class="dr-button" id="routeMaps">Google Maps · moto</button>
       <button class="dr-button green" id="routeFinalize" disabled>Finalizar rota</button>
     </div>
   </div>
@@ -1101,10 +1101,12 @@
   }
   function coords(o){return `${o.lat},${o.lng}`;}
   function mapsLocation(o){
+    if(o.lat!=null&&o.lng!=null&&Number.isFinite(Number(o.lat))&&Number.isFinite(Number(o.lng)))return coords(o);
     const full=[o.endereco,o.bairro,[o.cidade,o.uf].filter(Boolean).join('/')].filter(Boolean).join(', ');
     return full||coords(o);
   }
   function branchMapsLocation(){
+    if(branch.tem_coordenada)return `${branch.lat},${branch.lng}`;
     const full=[branch.endereco,branch.bairro,[branch.cidade,branch.uf].filter(Boolean).join('/')].filter(Boolean).join(', ');
     return full||`${branch.lat},${branch.lng}`;
   }
@@ -1112,7 +1114,7 @@
     if(!state.result)return'';
     const url=new URL('https://www.google.com/maps/dir/');
     const base=branchMapsLocation();
-    url.searchParams.set('api','1');url.searchParams.set('origin',base);url.searchParams.set('destination',base);url.searchParams.set('travelmode','driving');
+    url.searchParams.set('api','1');url.searchParams.set('origin',base);url.searchParams.set('destination',base);url.searchParams.set('travelmode','two-wheeler');
     if(state.result.paradas.length)url.searchParams.set('waypoints',state.result.paradas.map(mapsLocation).join('|'));
     return url.toString();
   }

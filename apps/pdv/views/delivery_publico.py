@@ -80,12 +80,12 @@ def _url_google_maps_completa(filial, paradas):
     roteaveis = [parada for parada in paradas if parada.get('maps_location')]
     if not roteaveis or filial.latitude is None or filial.longitude is None:
         return ''
-    base = _endereco_filial(filial)
+    base = _coordenada(filial)
     return 'https://www.google.com/maps/dir/?' + urlencode({
         'api': '1',
         'origin': base,
         'destination': base,
-        'travelmode': 'driving',
+        'travelmode': 'two-wheeler',
         'waypoints': '|'.join(parada['maps_location'] for parada in roteaveis),
     })
 
@@ -133,6 +133,7 @@ def _texto_conclusao(info):
 def _dados_pedidos(pedidos, etas=None):
     from apps.financeiro.constants.enums import StatusContaReceber
     from apps.financeiro.models import ContaReceber
+    from apps.pdv.views.pdv import _delivery_rota_localizacao
 
     nao_pagos = set(
         ContaReceber.objects.filter(
@@ -152,6 +153,11 @@ def _dados_pedidos(pedidos, etas=None):
             str(endereco.get('numero') or (cliente.numero if cliente else '') or ''),
             endereco.get('bairro') or (cliente.bairro if cliente else ''),
         ]))
+        localizacao = _delivery_rota_localizacao(pedido)
+        maps_location = (
+            f"{localizacao['lat']},{localizacao['lng']}"
+            if localizacao['ok'] else _endereco_pedido(pedido)
+        )
         observacoes = list(dict.fromkeys(
             texto.strip() for texto in (pedido.observacao_delivery, pedido.observacao)
             if texto and texto.strip()
@@ -189,14 +195,14 @@ def _dados_pedidos(pedidos, etas=None):
             'navegar_url': (
                 'https://www.google.com/maps/dir/?' + urlencode({
                     'api': '1',
-                    'destination': _coordenada(cliente),
-                    'travelmode': 'driving',
+                    'destination': maps_location,
+                    'travelmode': 'two-wheeler',
                     'dir_action': 'navigate',
                 })
-                if cliente and cliente.latitude is not None and cliente.longitude is not None
+                if maps_location
                 else ''
             ),
-            'maps_location': _endereco_pedido(pedido),
+            'maps_location': maps_location,
         })
     # Mantém o número original da parada, mas leva as concluídas para o fim.
     return sorted(dados, key=lambda item: (item['concluido'], item['ordem']))
@@ -241,7 +247,7 @@ def _dados_paradas_rota(rota, pedidos):
             'pagamento_pendente': False, 'formas_pagamento': '',
             'concluido': identificador in concluidas, 'pode_alterar': True,
             'navegar_url': 'https://www.google.com/maps/dir/?' + urlencode({
-                'api': '1', 'destination': maps_location, 'travelmode': 'driving',
+                'api': '1', 'destination': maps_location, 'travelmode': 'two-wheeler',
                 'dir_action': 'navigate',
             }),
             'maps_location': maps_location,

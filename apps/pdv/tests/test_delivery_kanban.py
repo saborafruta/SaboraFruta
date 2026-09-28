@@ -181,6 +181,7 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'EM EDIÇÃO')
         self.assertContains(tela, 'Pedidos, sequência, mapa e link abaixo pertencem a esta rota')
         self.assertContains(tela, 'Google Maps')
+        self.assertContains(tela, 'Google Maps · moto')
         self.assertContains(tela, 'Expandir mapa')
         self.assertContains(tela, 'requestFullscreen')
         self.assertContains(tela, 'calculationSequence+=1')
@@ -1450,7 +1451,10 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         self.assertContains(resp, 'waypoints=', html=False)
         parametros = parse_qs(urlparse(resp.context['google_maps_completa']).query)
         self.assertNotIn('dir_action', parametros)
-        self.assertIn('Rua do Cliente', parametros['waypoints'][0])
+        self.assertEqual(parametros['travelmode'], ['two-wheeler'])
+        self.assertEqual(parametros['origin'], ['-5.79,-35.21'])
+        self.assertEqual(parametros['destination'], ['-5.79,-35.21'])
+        self.assertIn('-5.8,-35.22', parametros['waypoints'][0])
 
     def test_painel_publico_exibe_e_conclui_parada_manual(self):
         venda = self._venda(numero=460)
