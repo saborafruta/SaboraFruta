@@ -3454,7 +3454,10 @@ def _delivery_rota_serializar_pedido(venda):
     snapshot = venda.endereco_entrega or {}
     localizacao_requer_revisao = bool(
         localizacao['ok']
-        and not snapshot.get('_geo_cep_validado')
+        and (
+            not snapshot.get('_geo_cep_validado')
+            or (snapshot.get('_geo_origem') == 'cep' and bool(endereco['numero']))
+        )
     )
     forma = ', '.join(
         pg.forma_pagamento.descricao if pg.forma_pagamento else 'Pagamento'
@@ -4128,9 +4131,8 @@ def delivery_rota_oportunidades(request):
 def delivery_rota_atualizar_endereco(request, pk):
     """Localiza o endereço da entrega e, opcionalmente, atualiza o cliente."""
     from apps.mapas.services.geocoder import (
-        BrasilApiCepGeocoder, GeocodificacaoService, Resultado,
+        ArcGISGeocoder, BrasilApiCepGeocoder, GeocodificacaoService, Resultado,
     )
-    from apps.mapas.services.otimizacao import distancia_haversine_m
     try:
         corpo = json.loads(request.body or b'{}')
     except ValueError:
@@ -4177,42 +4179,43 @@ def delivery_rota_atualizar_endereco(request, pk):
 
     endereco_hash = _delivery_rota_endereco_hash(endereco)
     endereco_texto = _delivery_rota_endereco_texto(endereco)
-    resultado = GeocodificacaoService().resolver(endereco_texto, endereco_hash)
+    hash_arcgis = hashlib.md5(
+        f'arcgis-entrega-v2:{endereco_hash}'.encode('utf-8')
+    ).hexdigest()
+    resultado = GeocodificacaoService(
+        geocoder=ArcGISGeocoder(),
+    ).resolver(endereco_texto, hash_arcgis)
     resultado_cep = None
-    cep_validado = False
-    usar_referencia_cep = True
+    cep_validado = resultado.ok and resultado.precisao == 'exata'
+    usar_referencia_cep = not cep_validado
     if usar_referencia_cep:
-        hash_cep = hashlib.md5(
-            (
-                f'brasilapi-cep-v2:{endereco["cep"]}:'
-                f'{endereco["rua"].casefold()}:{endereco["cidade"].casefold()}:'
-                f'{endereco["uf"]}'
-            ).encode('utf-8')
-        ).hexdigest()
-        resultado_cep = GeocodificacaoService(
-            geocoder=BrasilApiCepGeocoder(),
-        ).resolver(endereco_texto, hash_cep)
-        cep_validado = resultado_cep.ok
-        if resultado_cep.ok:
-            muito_distante = (
-                resultado.ok
-                and distancia_haversine_m(
-                    (resultado.latitude, resultado.longitude),
-                    (resultado_cep.latitude, resultado_cep.longitude),
-                ) > 2_000
+        if endereco['numero']:
+            resultado = Resultado(
+                erro='não foi possível confirmar rua, número e CEP no mesmo endereço'
             )
-            if not endereco['numero'] or not resultado.ok or muito_distante:
+            origem_coordenada = 'geocoder'
+        else:
+            hash_cep = hashlib.md5(
+                (
+                    f'brasilapi-cep-v2:{endereco["cep"]}:'
+                    f'{endereco["rua"].casefold()}:{endereco["cidade"].casefold()}:'
+                    f'{endereco["uf"]}'
+                ).encode('utf-8')
+            ).hexdigest()
+            resultado_cep = GeocodificacaoService(
+                geocoder=BrasilApiCepGeocoder(),
+            ).resolver(endereco_texto, hash_cep)
+            cep_validado = resultado_cep.ok
+            if resultado_cep.ok:
                 resultado = resultado_cep
                 origem_coordenada = 'cep'
             else:
-                origem_coordenada = 'geocoder'
-        else:
-            resultado = Resultado(
-                erro=f'não foi possível validar a localização pelo CEP: {resultado_cep.erro}'
-            )
-            origem_coordenada = 'cep'
+                resultado = Resultado(
+                    erro=f'não foi possível validar a localização pelo CEP: {resultado_cep.erro}'
+                )
+                origem_coordenada = 'cep'
     else:
-        origem_coordenada = 'geocoder'
+        origem_coordenada = 'arcgis'
     if not resultado.ok:
         return JsonResponse({
             'erro': (

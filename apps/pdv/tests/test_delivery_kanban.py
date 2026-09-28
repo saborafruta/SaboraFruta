@@ -20,6 +20,7 @@ from apps.crm.models import RecompraCliente
 from apps.mapas.services.roteirizacao import Rota
 from apps.mapas.services.geocoder import Resultado
 from apps.pdv.models import ItemVendaPDV, RotaDelivery, RotaDeliveryPublica, VendaPDV
+from apps.pdv.views.pdv import _delivery_rota_endereco_hash
 from apps.produtos.models import Produto, UnidadeMedida
 
 
@@ -686,6 +687,26 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertContains(tela, 'dr-address-warning-icon')
         self.assertContains(tela, 'dr-address-warning-tooltip')
 
+    def test_pedido_numerado_salvo_com_ponto_do_cep_e_revalidado(self):
+        venda = self._venda(numero=307)
+        venda.endereco_entrega = {
+            'cep': '59072710', 'rua': 'Rua Bela Vista', 'numero': '17',
+            'bairro': 'Cidade Nova', 'cidade': 'Natal', 'uf': 'RN',
+            '_latitude': -5.795, '_longitude': -35.20944,
+            '_geo_precisao': 'aproximada', '_geo_origem': 'cep',
+            '_geo_cep_validado': True,
+        }
+        venda.endereco_entrega['_geo_hash'] = _delivery_rota_endereco_hash(
+            venda.endereco_entrega
+        )
+        venda.save(update_fields=['endereco_entrega'])
+
+        tela = self.client.get(reverse('pdv:delivery_rotas'))
+        pedidos = json.loads(tela.context['pedidos_json'])
+        pedido = next(item for item in pedidos if item['id'] == venda.pk)
+
+        self.assertTrue(pedido['localizacao_requer_revisao'])
+
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_endereco_sem_numero_troca_coordenada_distante_pela_do_cep(self, resolver):
         resolver.side_effect = [
@@ -712,11 +733,8 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertFalse(resp.json()['localizacao_requer_revisao'])
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
-    def test_endereco_com_numero_tambem_rejeita_coordenada_longe_do_cep(self, resolver):
-        resolver.side_effect = [
-            Resultado(-5.89556, -35.26278, 'exata'),
-            Resultado(-5.91556, -35.26278, 'aproximada'),
-        ]
+    def test_endereco_com_numero_preserva_ponto_exato_do_arcgis(self, resolver):
+        resolver.return_value = Resultado(-5.837797, -35.243565, 'exata')
         venda = self._venda(numero=309)
 
         resp = self.client.post(
@@ -730,9 +748,30 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
 
         venda.refresh_from_db()
         self.assertEqual(resp.status_code, 200)
-        self.assertAlmostEqual(venda.endereco_entrega['_longitude'], -35.26278)
-        self.assertEqual(venda.endereco_entrega['_geo_origem'], 'cep')
+        self.assertAlmostEqual(venda.endereco_entrega['_longitude'], -35.243565)
+        self.assertEqual(venda.endereco_entrega['_geo_origem'], 'arcgis')
         self.assertEqual(resp.json()['coordenada_aviso'], '')
+        resolver.assert_called_once()
+
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_endereco_com_numero_nao_aceita_ponto_aproximado_do_cep(self, resolver):
+        resolver.return_value = Resultado(-5.795, -35.20944, 'aproximada')
+        venda = self._venda(numero=311)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
+            data=json.dumps({
+                'cep': '59072-710', 'rua': 'Rua Bela Vista', 'numero': '17',
+                'bairro': 'Cidade Nova', 'cidade': 'Natal', 'uf': 'RN',
+                'atualizar_cliente': False,
+            }), content_type='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resp.status_code, 422)
+        self.assertIn('rua, número e CEP', resp.json()['erro'])
+        self.assertFalse(venda.endereco_entrega)
+        resolver.assert_called_once()
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_endereco_aproximado_sem_validacao_do_cep_nao_entra_na_rota(self, resolver):
@@ -800,7 +839,7 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertEqual(self.cliente.latitude, -5.92)
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
-    def test_resultado_aproximado_com_endereco_completo_e_aceito_sem_alerta(self, resolver):
+    def test_resultado_aproximado_com_numero_e_rejeitado(self, resolver):
         resolver.return_value = Resultado(-5.65, -35.30, 'aproximada')
         venda = self._venda(numero=306)
 
@@ -814,9 +853,9 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         )
 
         venda.refresh_from_db()
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()['coordenada_aviso'], '')
-        self.assertEqual(venda.endereco_entrega['_geo_precisao'], 'aproximada')
+        self.assertEqual(resp.status_code, 422)
+        self.assertIn('rua, número e CEP', resp.json()['erro'])
+        self.assertFalse(venda.endereco_entrega)
 
     def test_endereco_da_rota_exige_dados_para_localizacao(self):
         venda = self._venda(numero=303)
