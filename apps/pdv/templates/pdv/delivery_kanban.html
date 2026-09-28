@@ -385,6 +385,7 @@
     <div class="delivery-route-modal-head">
       <span class="delivery-route-modal-title">Rota do Delivery</span>
       <div class="delivery-route-modal-actions">
+        <button type="button" class="btn-secondary text-xs" onclick="atualizarRotaDelivery()" title="Recarregar os pedidos, endereços e o mapa">↻ Atualizar</button>
         <a href="{% url 'pdv:delivery_rotas' %}" target="_blank" rel="noopener" class="btn-secondary text-xs">Abrir em nova aba</a>
         <button type="button" class="btn-secondary text-xs" onclick="alternarTelaCheiaRota()">Tela cheia</button>
         <button type="button" class="btn-secondary text-xs" onclick="fecharRotaDelivery()">Fechar</button>
@@ -536,6 +537,7 @@
 {{ block.super }}
 <script>
   const CSRF = '{{ csrf_token }}';
+  const DELIVERY_ROUTE_MODAL_STORAGE_KEY = 'delivery-route-modal-open';
   let draggingCard = null;
 
   function abrirRotaDelivery() {
@@ -543,16 +545,30 @@
     if (!frame.src) frame.src = frame.dataset.src;
     document.getElementById('routeDeliveryModal').classList.add('open');
     document.body.style.overflow = 'hidden';
+    sessionStorage.setItem(DELIVERY_ROUTE_MODAL_STORAGE_KEY, '1');
+  }
+  function atualizarRotaDelivery() {
+    const frame = document.getElementById('routeDeliveryFrame');
+    const separador = frame.dataset.src.includes('?') ? '&' : '?';
+    frame.src = `${frame.dataset.src}${separador}atualizar=${Date.now()}`;
+    document.getElementById('routeDeliveryModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    sessionStorage.setItem(DELIVERY_ROUTE_MODAL_STORAGE_KEY, '1');
   }
   function fecharRotaDelivery() {
     document.getElementById('routeDeliveryModal').classList.remove('open');
     document.body.style.overflow = '';
+    sessionStorage.removeItem(DELIVERY_ROUTE_MODAL_STORAGE_KEY);
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }
   function alternarTelaCheiaRota() {
     const panel = document.getElementById('routeDeliveryPanel');
     if (document.fullscreenElement) document.exitFullscreen();
     else if (panel.requestFullscreen) panel.requestFullscreen();
+  }
+
+  if (sessionStorage.getItem(DELIVERY_ROUTE_MODAL_STORAGE_KEY) === '1') {
+    requestAnimationFrame(abrirRotaDelivery);
   }
 
   let deliveryListStatus = '';
