@@ -3466,7 +3466,10 @@ def _delivery_rota_serializar_pedido(venda):
     origem = snapshot.get('_geo_origem')
     localizacao_requer_revisao = bool(
         localizacao['ok'] and (
-            (origem == 'cep' and bool(endereco['numero']))
+            (
+                origem == 'cep'
+                and bool(endereco['numero'] or endereco['complemento'])
+            )
             or (not snapshot.get('_geo_cep_validado') and origem != 'complemento')
         )
     )
@@ -4201,7 +4204,7 @@ def delivery_rota_atualizar_endereco(request, pk):
     usar_referencia_cep = not cep_validado
     if usar_referencia_cep:
         resultado_referencia = Resultado(erro='complemento não informado')
-        if endereco['numero'] and endereco['complemento']:
+        if endereco['complemento']:
             referencia_texto = ', '.join(filter(None, [
                 endereco['complemento'], endereco['cidade'], endereco['uf'], 'Brasil',
             ]))

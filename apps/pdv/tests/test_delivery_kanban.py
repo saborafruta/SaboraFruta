@@ -712,6 +712,28 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertTrue(pedido['localizacao_requer_revisao'])
         self.assertIn('Localização aproximada pelo CEP', pedido['coordenada_aviso'])
 
+    def test_pedido_sem_numero_com_complemento_salvo_no_cep_e_revalidado(self):
+        venda = self._venda(numero=313)
+        venda.endereco_entrega = {
+            'cep': '59158155', 'rua': 'Avenida Antártida', 'numero': '',
+            'complemento': 'Condomínio Novo Leblon - Casa A N 25',
+            'bairro': 'Parque das Nações', 'cidade': 'Parnamirim', 'uf': 'RN',
+            '_latitude': -5.91556, '_longitude': -35.26278,
+            '_geo_precisao': 'aproximada', '_geo_origem': 'cep',
+            '_geo_cep_validado': True,
+        }
+        venda.endereco_entrega['_geo_hash'] = _delivery_rota_endereco_hash(
+            venda.endereco_entrega
+        )
+        venda.save(update_fields=['endereco_entrega'])
+
+        tela = self.client.get(reverse('pdv:delivery_rotas'))
+        pedidos = json.loads(tela.context['pedidos_json'])
+        pedido = next(item for item in pedidos if item['id'] == venda.pk)
+
+        self.assertTrue(pedido['localizacao_requer_revisao'])
+        self.assertIn('número', pedido['coordenada_aviso'])
+
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_endereco_sem_numero_troca_coordenada_distante_pela_do_cep(self, resolver):
         resolver.side_effect = [
@@ -802,6 +824,32 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertAlmostEqual(venda.endereco_entrega['_latitude'], -5.930077912533)
         self.assertAlmostEqual(venda.endereco_entrega['_longitude'], -35.205803891679)
         self.assertIn('Condomínio Novo Leblon', resp.json()['coordenada_aviso'])
+        self.assertFalse(resp.json()['localizacao_requer_revisao'])
+        self.assertEqual(resolver.call_count, 2)
+
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_endereco_sem_numero_do_novo_leblon_tambem_usa_complemento(self, resolver):
+        resolver.side_effect = [
+            Resultado(erro='resultado incompatível com o CEP informado'),
+            Resultado(-5.930077912533, -35.205803891679, 'aproximada'),
+        ]
+        venda = self._venda(numero=314)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
+            data=json.dumps({
+                'cep': '59158-155', 'rua': 'Avenida Antártida', 'numero': '',
+                'complemento': 'Condomínio Novo Leblon - Casa A N 25',
+                'bairro': 'Parque das Nações', 'cidade': 'Parnamirim', 'uf': 'RN',
+                'atualizar_cliente': False,
+            }), content_type='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(venda.endereco_entrega['_geo_origem'], 'complemento')
+        self.assertAlmostEqual(venda.endereco_entrega['_latitude'], -5.930077912533)
+        self.assertAlmostEqual(venda.endereco_entrega['_longitude'], -35.205803891679)
         self.assertFalse(resp.json()['localizacao_requer_revisao'])
         self.assertEqual(resolver.call_count, 2)
 
