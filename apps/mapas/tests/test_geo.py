@@ -12,7 +12,7 @@ from django.db import connection
 from apps.mapas import constants as c
 from apps.mapas.serializers import formatar_distancia
 from apps.mapas.services.geocoder import (
-    ArcGISGeocoder, BrasilApiCepGeocoder, GeocodificacaoService,
+    ArcGISGeocoder, AwesomeApiCepGeocoder, BrasilApiCepGeocoder, GeocodificacaoService,
     NominatimGeocoder, Resultado, _Throttle,
 )
 
@@ -220,6 +220,24 @@ class GeocoderTests(TestCase):
             )
         self.assertFalse(resultado.ok)
         self.assertIn('município', resultado.erro)
+
+    def test_awesomeapi_retorna_ponto_do_logradouro_do_cep(self):
+        resposta = Mock(status_code=200)
+        resposta.raise_for_status.return_value = None
+        resposta.json.return_value = {
+            'cep': '59158155', 'address': 'Avenida Antártida',
+            'district': 'Parque das Nações', 'city': 'Parnamirim', 'state': 'RN',
+            'lat': '-5.9293706', 'lng': '-35.2108215',
+        }
+        with patch('apps.mapas.services.geocoder.requests.get', return_value=resposta):
+            resultado = AwesomeApiCepGeocoder().geocodificar(
+                'Avenida Antártida, Parque das Nações, Parnamirim, RN, '
+                '59158-155, Brasil'
+            )
+        self.assertTrue(resultado.ok)
+        self.assertAlmostEqual(resultado.latitude, -5.9293706)
+        self.assertAlmostEqual(resultado.longitude, -35.2108215)
+        self.assertEqual(resultado.precisao, 'aproximada')
 
     def test_nominatim_rejeita_falso_positivo_de_outro_cep(self):
         resposta = Mock()

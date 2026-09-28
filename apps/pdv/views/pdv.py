@@ -3464,9 +3464,14 @@ def _delivery_rota_serializar_pedido(venda):
         nome = cliente.nome_fantasia or cliente.razao_social or nome
     snapshot = venda.endereco_entrega or {}
     origem = snapshot.get('_geo_origem')
+    cep_com_fonte_antiga = (
+        origem == 'cep'
+        and snapshot.get('_geo_provider') != 'awesomeapi_cep'
+    )
     localizacao_requer_revisao = bool(
         localizacao['ok'] and (
-            (
+            cep_com_fonte_antiga
+            or (
                 origem == 'cep'
                 and bool(endereco['numero'] or endereco['complemento'])
             )
@@ -4145,7 +4150,7 @@ def delivery_rota_oportunidades(request):
 def delivery_rota_atualizar_endereco(request, pk):
     """Localiza o endereço da entrega e, opcionalmente, atualiza o cliente."""
     from apps.mapas.services.geocoder import (
-        ArcGISGeocoder, BrasilApiCepGeocoder, GeocodificacaoService, Resultado,
+        ArcGISGeocoder, AwesomeApiCepGeocoder, GeocodificacaoService, Resultado,
     )
     try:
         corpo = json.loads(request.body or b'{}')
@@ -4204,7 +4209,7 @@ def delivery_rota_atualizar_endereco(request, pk):
     usar_referencia_cep = not cep_validado
     if usar_referencia_cep:
         resultado_referencia = Resultado(erro='complemento não informado')
-        if endereco['complemento']:
+        if endereco['numero'] and endereco['complemento']:
             referencia_texto = ', '.join(filter(None, [
                 endereco['complemento'], endereco['cidade'], endereco['uf'], 'Brasil',
             ]))
@@ -4226,13 +4231,13 @@ def delivery_rota_atualizar_endereco(request, pk):
         else:
             hash_cep = hashlib.md5(
                 (
-                    f'brasilapi-cep-v2:{endereco["cep"]}:'
+                    f'awesomeapi-cep-v1:{endereco["cep"]}:'
                     f'{endereco["rua"].casefold()}:{endereco["cidade"].casefold()}:'
                     f'{endereco["uf"]}'
                 ).encode('utf-8')
             ).hexdigest()
             resultado_cep = GeocodificacaoService(
-                geocoder=BrasilApiCepGeocoder(),
+                geocoder=AwesomeApiCepGeocoder(),
             ).resolver(endereco_texto, hash_cep)
             cep_validado = resultado_cep.ok
             if resultado_cep.ok:
@@ -4261,6 +4266,10 @@ def delivery_rota_atualizar_endereco(request, pk):
             '_geo_hash': endereco_hash,
             '_geo_precisao': resultado.precisao,
             '_geo_origem': origem_coordenada,
+            '_geo_provider': (
+                AwesomeApiCepGeocoder.nome
+                if origem_coordenada == 'cep' else ArcGISGeocoder.nome
+            ),
             '_geo_cep_validado': cep_validado,
         })
         venda.endereco_entrega = snapshot

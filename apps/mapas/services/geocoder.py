@@ -244,6 +244,50 @@ class BrasilApiCepGeocoder(GeocoderBase):
         return Resultado(latitude, longitude, 'aproximada')
 
 
+class AwesomeApiCepGeocoder(GeocoderBase):
+    """Localiza o logradouro do CEP usando a base geográfica da AwesomeAPI.
+
+    A BrasilAPI pode devolver coordenadas genéricas distantes do logradouro
+    mesmo quando rua, bairro e município estão corretos. A resposta daqui
+    também é validada contra esses campos antes de ser aceita pela rota.
+    """
+
+    nome = 'awesomeapi_cep'
+    permite_uso_comercial = True
+
+    def geocodificar(self, endereco: str) -> Resultado:
+        cep_solicitado = _cep_no_texto(endereco)
+        if not cep_solicitado:
+            return Resultado(erro='CEP não informado')
+        resp = requests.get(
+            f'https://cep.awesomeapi.com.br/json/{cep_solicitado}',
+            headers={'User-Agent': 'ERP-iNoovaTed/1.0'},
+            timeout=c.GEOCODER_TIMEOUT_S,
+        )
+        if resp.status_code == 404:
+            return Resultado(erro='CEP não encontrado')
+        resp.raise_for_status()
+        item = resp.json()
+        cep_encontrado = re.sub(r'\D', '', str(item.get('cep') or ''))
+        if cep_encontrado != cep_solicitado:
+            return Resultado(erro='resultado incompatível com o CEP informado')
+        erro_localidade = _validar_localidade(
+            endereco, cidades=[item.get('city')], uf=item.get('state'),
+        )
+        if erro_localidade:
+            return Resultado(erro=erro_localidade)
+        rua_solicitada = _normalizar_localidade(str(endereco).split(',', 1)[0])
+        rua_encontrada = _normalizar_localidade(item.get('address'))
+        if rua_solicitada and rua_encontrada and rua_solicitada != rua_encontrada:
+            return Resultado(erro='resultado incompatível com a rua informada')
+        try:
+            latitude = float(item['lat'])
+            longitude = float(item['lng'])
+        except (KeyError, TypeError, ValueError):
+            return Resultado(erro='CEP sem coordenada disponível')
+        return Resultado(latitude, longitude, 'aproximada')
+
+
 def _cep_no_texto(texto: str) -> str:
     encontrado = re.search(r'(?<!\d)(\d{5})-?(\d{3})(?!\d)', texto or '')
     return ''.join(encontrado.groups()) if encontrado else ''
