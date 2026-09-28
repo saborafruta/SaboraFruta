@@ -1,0 +1,67 @@
+<style>
+  .receipt-overlay { position:fixed; inset:0; z-index:9000; display:none; align-items:center; justify-content:center;
+    background:rgba(3,7,18,.82); padding:18px; }
+  .receipt-overlay.open { display:flex; }
+  .receipt-overlay-panel { display:flex; width:min(920px,100%); height:min(90vh,900px); flex-direction:column;
+    overflow:hidden; border:1px solid #3a4557; border-radius:14px; background:#f1f5f9; box-shadow:0 24px 80px #000b; }
+  .receipt-overlay-head { display:flex; align-items:center; justify-content:space-between; gap:12px;
+    min-height:54px; padding:10px 12px 10px 16px; background:#171b22; color:#f3f6fb; }
+  .receipt-overlay-title { overflow:hidden; margin:0; font:800 14px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif;
+    text-overflow:ellipsis; white-space:nowrap; }
+  .receipt-overlay-close { flex:0 0 auto; min-height:34px; border:1px solid #465164; border-radius:8px;
+    background:#303744; padding:7px 12px; color:#f3f6fb; font:750 12px/1 system-ui,-apple-system,"Segoe UI",sans-serif; cursor:pointer; }
+  .receipt-overlay-close:hover { border-color:#7ca9ee; background:#39465a; }
+  .receipt-overlay-frame { width:100%; min-height:0; flex:1; border:0; background:#f1f5f9; }
+  @media(max-width:600px) {
+    .receipt-overlay { padding:0; }
+    .receipt-overlay-panel { width:100%; height:100%; max-height:none; border:0; border-radius:0; }
+  }
+</style>
+<div class="receipt-overlay" id="receiptOverlay" hidden aria-hidden="true">
+  <section class="receipt-overlay-panel" role="dialog" aria-modal="true" aria-labelledby="receiptOverlayTitle">
+    <header class="receipt-overlay-head">
+      <h2 class="receipt-overlay-title" id="receiptOverlayTitle">Comprovante de pagamento</h2>
+      <button class="receipt-overlay-close" id="receiptOverlayClose" type="button">Fechar</button>
+    </header>
+    <iframe class="receipt-overlay-frame" id="receiptOverlayFrame" title="Comprovante de pagamento"></iframe>
+  </section>
+</div>
+<script>
+(function () {
+  const overlay = document.getElementById('receiptOverlay');
+  const frame = document.getElementById('receiptOverlayFrame');
+  const title = document.getElementById('receiptOverlayTitle');
+  const closeButton = document.getElementById('receiptOverlayClose');
+  let previousOverflow = '';
+
+  function closeReceiptOverlay() {
+    if (!overlay.classList.contains('open')) return;
+    overlay.classList.remove('open');
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    frame.src = 'about:blank';
+    document.body.style.overflow = previousOverflow;
+  }
+
+  document.addEventListener('click', event => {
+    const link = event.target.closest('[data-receipt-overlay]');
+    if (!link || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    previousOverflow = document.body.style.overflow;
+    title.textContent = link.dataset.receiptTitle || 'Comprovante de pagamento';
+    frame.src = link.href;
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    closeButton.focus();
+  });
+  closeButton.addEventListener('click', closeReceiptOverlay);
+  overlay.addEventListener('click', event => {
+    if (event.target === overlay) closeReceiptOverlay();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeReceiptOverlay();
+  });
+})();
+</script>

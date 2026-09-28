@@ -503,6 +503,7 @@
     </div>
   </form>
 </div>
+{% include "pdv/_comprovante_overlay.html" %}
 {% endblock %}
 
 {% block extra_js %}
@@ -580,7 +581,7 @@
     });
   }
   function money(value) { return Number(value || 0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
-  function receiptLink(order){if(!order.comprovante_disponivel)return `<span class="dr-receipt-link disabled" aria-label="Comprovante indisponível para a venda ${esc(order.numero)}" title="O comprovante fica disponível após finalizar a venda">🧾</span>`;const url=receiptUrlTemplate.replace('/0/','/'+order.id+'/');return `<a class="dr-receipt-link" href="${esc(url)}" target="_blank" rel="noopener" draggable="false" aria-label="Ver comprovante da venda ${esc(order.numero)}" title="Ver comprovante da venda">🧾</a>`;}
+  function receiptLink(order){if(!order.comprovante_disponivel)return `<span class="dr-receipt-link disabled" aria-label="Comprovante indisponível para a venda ${esc(order.numero)}" title="O comprovante fica disponível após finalizar a venda">🧾</span>`;const url=receiptUrlTemplate.replace('/0/','/'+order.id+'/');return `<a class="dr-receipt-link" href="${esc(url)}" data-receipt-overlay data-receipt-title="Comprovante da venda ${esc(order.numero)}" draggable="false" aria-label="Ver comprovante da venda ${esc(order.numero)}" title="Ver comprovante da venda">🧾</a>`;}
   function paymentBadge(order){return order.pago?'<span class="dr-badge">✓ Pago</span>':`<span class="dr-badge collect">💵 Cobrar na entrega · ${money(order.valor)}</span>`;}
   function completionText(order){if(!deliveryComplete(order))return '';const info=currentRoute?.conclusoes_pedidos?.[String(order.id)];if(!info)return 'Conclusão anterior sem identificação';const who=info.origem==='motoboy'?'Finalizado pelo motoboy':`Finalizado por ${info.nome||'usuário do sistema'}`;if(!info.em)return who;const date=new Date(info.em);return Number.isNaN(date.getTime())?who:`${who} em ${date.toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}`;}
   function duration(seconds) { const m=Math.round(Number(seconds||0)/60); return m<60 ? `${m} min` : `${Math.floor(m/60)}h ${String(m%60).padStart(2,'0')}min`; }

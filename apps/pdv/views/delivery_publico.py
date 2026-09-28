@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.pdv.models import RotaDelivery, VendaPDV
@@ -282,6 +283,7 @@ def _buscar_venda_da_rota(rota, pk):
 
 
 @require_GET
+@xframe_options_sameorigin
 def comprovante(request, token, pk):
     rota = _buscar_rota(token)
     venda = _buscar_venda_da_rota(rota, pk)

@@ -9,6 +9,7 @@ import secrets
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.core.services.permissions import requer_permissao
@@ -60,6 +61,7 @@ def buscar_interno(request, pk):
 
 @requer_permissao('pdv', 'ver')
 @require_GET
+@xframe_options_sameorigin
 def visualizar_interno(request, pk):
     venda = buscar_interno(request, pk)
     return privado(render(request, 'pdv/comprovante_publico.html', {

@@ -222,6 +222,8 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'Link individual de')
         self.assertContains(tela, 'Ver comprovante da venda')
         self.assertContains(tela, reverse('pdv:comprovante_venda', args=[0]))
+        self.assertContains(tela, 'data-receipt-overlay')
+        self.assertContains(tela, 'receiptOverlayFrame')
         self.assertContains(tela, 'Cobrar na entrega')
         self.assertContains(tela, 'Marcar concluída')
         self.assertContains(tela, 'data-complete-order')
@@ -1128,6 +1130,8 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         self.assertContains(resp, '(84) 99999-1234')
         self.assertContains(resp, 'WhatsApp do cliente')
         self.assertContains(resp, 'Ver comprovante')
+        self.assertContains(resp, 'data-receipt-overlay data-receipt-title', count=2)
+        self.assertContains(resp, 'receiptOverlayFrame')
         self.assertContains(resp, 'PAGO')
         self.assertContains(resp, 'Marcar parada 1 como entregue')
         self.assertContains(resp, 'Ver mais')
@@ -1261,6 +1265,9 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         self._publicar([venda])
         rota = RotaDeliveryPublica.objects.get(filial=self.filial)
         fora_da_rota = self._venda(numero=428)
+        comprovante_interno = self.client.get(reverse(
+            'pdv:comprovante_venda', args=[venda.pk],
+        ))
         self.client.logout()
 
         comprovante = self.client.get(reverse(
@@ -1275,6 +1282,8 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
 
         self.assertEqual(comprovante.status_code, 200)
         self.assertContains(comprovante, 'Este comprovante não é um documento fiscal.')
+        self.assertEqual(comprovante['X-Frame-Options'], 'SAMEORIGIN')
+        self.assertEqual(comprovante_interno['X-Frame-Options'], 'SAMEORIGIN')
         self.assertEqual(pdf.status_code, 200)
         self.assertEqual(pdf['Content-Type'], 'application/pdf')
         self.assertEqual(negado.status_code, 404)

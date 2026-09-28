@@ -55,7 +55,7 @@
         </div>
         {% for observacao in pedido.observacoes %}<div class="card-note">⚠ {{ observacao }}</div>{% endfor %}
       </div>
-      <div class="card-actions">{% if pedido.comprovante_url %}<a class="btn receipt" href="{{ pedido.comprovante_url }}" target="_blank" rel="noopener" aria-label="Ver comprovante da venda" title="Ver comprovante">🧾</a>{% endif %}{% if pedido.whatsapp %}<a class="btn whatsapp" href="https://wa.me/{{ pedido.whatsapp }}" target="_blank" rel="noopener" aria-label="Falar com o cliente pelo WhatsApp" title="WhatsApp do cliente"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5A11.8 11.8 0 0 0 12.1 0C5.6 0 .3 5.3.3 11.8c0 2.1.6 4.1 1.6 5.9L.2 24l6.5-1.7c1.7.9 3.6 1.4 5.5 1.4 6.5 0 11.8-5.3 11.8-11.8 0-3.2-1.2-6.2-3.5-8.4Zm-8.4 18.2c-1.7 0-3.5-.5-5-1.4l-.4-.2-3.8 1 1-3.7-.2-.4a9.8 9.8 0 1 1 8.4 4.7Zm5.4-7.3c-.3-.1-1.7-.8-2-.9-.3-.1-.5-.1-.7.2-.2.3-.8.9-1 1.1-.2.2-.4.2-.7.1-1.8-.9-3-1.6-4.2-3.7-.3-.6.3-.5.9-1.7.1-.2 0-.4 0-.6l-.9-2.1c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.3-1.2 1.2-1.2 2.9 0 1.7 1.2 3.3 1.4 3.6.2.2 2.4 3.7 5.9 5.2.8.4 1.5.6 2 .7.8.3 1.6.2 2.2.1.7-.1 1.7-.7 1.9-1.4.2-.7.2-1.3.2-1.4-.2-.1-.4-.2-.7-.3Z"/></svg></a>{% endif %}</div>
+      <div class="card-actions">{% if pedido.comprovante_url %}<a class="btn receipt" href="{{ pedido.comprovante_url }}" data-receipt-overlay data-receipt-title="Comprovante da venda {{ pedido.venda.numero_venda }}" aria-label="Ver comprovante da venda" title="Ver comprovante">🧾</a>{% endif %}{% if pedido.whatsapp %}<a class="btn whatsapp" href="https://wa.me/{{ pedido.whatsapp }}" target="_blank" rel="noopener" aria-label="Falar com o cliente pelo WhatsApp" title="WhatsApp do cliente"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5A11.8 11.8 0 0 0 12.1 0C5.6 0 .3 5.3.3 11.8c0 2.1.6 4.1 1.6 5.9L.2 24l6.5-1.7c1.7.9 3.6 1.4 5.5 1.4 6.5 0 11.8-5.3 11.8-11.8 0-3.2-1.2-6.2-3.5-8.4Zm-8.4 18.2c-1.7 0-3.5-.5-5-1.4l-.4-.2-3.8 1 1-3.7-.2-.4a9.8 9.8 0 1 1 8.4 4.7Zm5.4-7.3c-.3-.1-1.7-.8-2-.9-.3-.1-.5-.1-.7.2-.2.3-.8.9-1 1.1-.2.2-.4.2-.7.1-1.8-.9-3-1.6-4.2-3.7-.3-.6.3-.5.9-1.7.1-.2 0-.4 0-.6l-.9-2.1c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.3-1.2 1.2-1.2 2.9 0 1.7 1.2 3.3 1.4 3.6.2.2 2.4 3.7 5.9 5.2.8.4 1.5.6 2 .7.8.3 1.6.2 2.2.1.7-.1 1.7-.7 1.9-1.4.2-.7.2-1.3.2-1.4-.2-.1-.4-.2-.7-.3Z"/></svg></a>{% endif %}</div>
     </div>
 
     <button class="details-toggle" type="button" aria-expanded="false" aria-controls="details-{{ pedido.ordem }}" data-details-toggle>Ver mais</button>
@@ -75,7 +75,7 @@
           {% empty %}<li><span>Itens não disponíveis</span></li>{% endfor %}
         </ul>
         <div class="details-actions">
-          {% if pedido.comprovante_url %}<a class="btn outline" href="{{ pedido.comprovante_url }}" target="_blank" rel="noopener">🧾 Ver comprovante</a>{% endif %}
+          {% if pedido.comprovante_url %}<a class="btn outline" href="{{ pedido.comprovante_url }}" data-receipt-overlay data-receipt-title="Comprovante da venda {{ pedido.venda.numero_venda }}">🧾 Ver comprovante</a>{% endif %}
           {% if pedido.navegar_url %}<a class="btn outline" href="{{ pedido.navegar_url }}" target="_blank" rel="noopener">Navegar até esta entrega</a>{% endif %}
           {% if pedido.telefone %}<a class="btn outline" href="tel:{{ pedido.telefone }}">Ligar</a>{% endif %}
           {% if pedido.concluido %}<span class="done-state" data-done-state>✓ Entrega concluída</span>{% else %}<span class="done-state" data-done-state hidden>✓ Entrega concluída</span>{% endif %}
@@ -88,6 +88,7 @@
 
   <p class="foot">Link privado da rota. Não encaminhe para pessoas que não participam da entrega.</p>
 </main>
+{% include "pdv/_comprovante_overlay.html" %}
 <script>
   document.querySelectorAll('[data-details-toggle]').forEach(button => {
     button.addEventListener('click', () => {
