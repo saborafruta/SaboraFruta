@@ -184,6 +184,15 @@ class DepositoAviamentoViewTests(DepositoViewsBase):
         self.assertEqual(resp.status_code, 200)
         self.assertNotContains(resp, 'id="aviamentos"')
 
+    def test_deposito_so_de_tecido_nao_mostra_painel_de_aviamento(self):
+        tecidos = Deposito.objects.create(
+            filial=self.filial, nome='Tecidos', tipo='producao',
+            tipos_material=['tecido_principal', 'forro'],
+        )
+        resp = self.client.get(reverse('estoque:deposito-update', args=[tecidos.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, 'id="aviamentos"')
+
     def test_cadastra_aviamento_com_saldo_no_deposito(self):
         from apps.moda.models import Aviamento
 

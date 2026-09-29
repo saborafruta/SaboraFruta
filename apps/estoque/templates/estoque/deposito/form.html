@@ -144,7 +144,7 @@
     </div>
   {% endif %}
 
-  <div class="{% if deposito %}dep-grid{% endif %}"
+  <div class="{% if deposito and deposito_tem_aviamento %}dep-grid{% endif %}"
        x-data="{ aviamentoMarcado: {{ deposito_tem_aviamento|yesno:'true,false' }} }">
 
     {# ───────────── Configuração do depósito ───────────── #}
@@ -238,8 +238,8 @@
       </div>
     </form>
 
-    {# ───────────── Aviamentos (só na edição) ───────────── #}
-    {% if deposito %}
+    {# ───────────── Aviamentos (só na edição, e só quando o depósito aceita algum tipo de aviamento) ───────────── #}
+    {% if deposito and deposito_tem_aviamento %}
     <section id="aviamentos" class="card" style="overflow:visible;"
              x-data="{ busca: '', tipo: '' }">
 
