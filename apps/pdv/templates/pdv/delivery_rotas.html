@@ -929,20 +929,9 @@
   }
   async function refreshOrderLocation(order,force=false,silent=false) {
     if(!force&&!order?.localizacao_requer_revisao&&!order?.localizacao_revalidacao_pendente)return Boolean(order?.tem_coordenada);
-    const previousLocation={lat:order.lat,lng:order.lng,tem_coordenada:order.tem_coordenada,coordenada_aviso:order.coordenada_aviso};
     try{
       const url=addressUrlTemplate.replace('/0/','/'+order.id+'/');
       const payload={...order.endereco_campos,atualizar_cliente:false};
-      const cep=String(payload.cep||'').replace(/\D/g,'');
-      if(!payload.numero&&cep.length===8){
-        try{
-          const cepResp=await fetch(`https://cep.awesomeapi.com.br/json/${cep}`,{headers:{Accept:'application/json'}});
-          if(cepResp.ok){
-            const ponto=await cepResp.json();
-            payload.coordenada_cep={provider:'awesomeapi_cep',cep:ponto.cep,rua:ponto.address,cidade:ponto.city,uf:ponto.state,lat:ponto.lat,lng:ponto.lng};
-          }
-        }catch(_){}
-      }
       const resp=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify(payload)});
       const data=await responseJson(resp);if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
       order.endereco_campos=data.endereco;order.endereco=[data.endereco.rua,data.endereco.numero].filter(Boolean).join(', ');
@@ -953,12 +942,7 @@
       order.localizacao_revalidacao_pendente=false;
       return data.tem_coordenada;
     }catch(error){
-      if(order.localizacao_revalidacao_pendente&&previousLocation.tem_coordenada&&order.localizacao_origem!=='complemento'){
-        Object.assign(order,previousLocation);
-        if(!silent)toast(`${order.cliente}: não foi possível revalidar o ponto aproximado; confira-o no mapa.`,true);
-        return true;
-      }
-      order.tem_coordenada=false;order.coordenada_aviso='Não foi possível validar a localização pelo CEP';if(!silent)toast(`${order.cliente}: ${error.message}`,true);return false;
+      order.lat=null;order.lng=null;order.tem_coordenada=false;order.coordenada_aviso='Não foi possível validar a localização pelo CEP';if(!silent)toast(`${order.cliente}: ${error.message}`,true);return false;
     }
   }
   function shouldRefreshLocation(order){

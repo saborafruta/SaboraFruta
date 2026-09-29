@@ -3368,6 +3368,22 @@ def _delivery_rota_endereco_texto(endereco):
     return ', '.join(partes)
 
 
+_DELIVERY_MAX_DISTANCIA_CEP_M = 2000
+_DELIVERY_GEO_VERSAO = 5
+
+
+def _delivery_ponto_compativel_com_cep(snapshot):
+    """Só reutiliza coordenada automática com referência de CEP validada."""
+    from apps.mapas.services.otimizacao import distancia_haversine_m
+
+    try:
+        ponto = (float(snapshot['_latitude']), float(snapshot['_longitude']))
+        cep = (float(snapshot['_geo_cep_lat']), float(snapshot['_geo_cep_lng']))
+    except (KeyError, TypeError, ValueError):
+        return False
+    return distancia_haversine_m(ponto, cep) <= _DELIVERY_MAX_DISTANCIA_CEP_M
+
+
 def _delivery_rota_localizacao(venda):
     """Aceita ponto aproximado sinalizado, mas nunca coordenada incompatível."""
     endereco = _delivery_rota_endereco_campos(venda)
@@ -3407,10 +3423,13 @@ def _delivery_rota_localizacao(venda):
         and snapshot.get('_longitude') is not None
     ):
         origem = snapshot.get('_geo_origem')
-        if origem == 'complemento' and snapshot.get('_geo_lookup_version') != 4:
+        if origem != 'manual' and (
+            snapshot.get('_geo_lookup_version') != _DELIVERY_GEO_VERSAO
+            or not _delivery_ponto_compativel_com_cep(snapshot)
+        ):
             return {
                 'ok': False, 'lat': None, 'lng': None,
-                'aviso': '⚠ Ponto antigo por complemento precisa ser localizado novamente.',
+                'aviso': '⚠ Ponto automático precisa ser validado com o CEP novamente.',
                 'endereco': endereco,
             }
         if origem == 'manual':
@@ -3464,8 +3483,12 @@ def _delivery_rota_localizacao(venda):
         not cliente.geo_endereco_hash
         or cliente.geo_endereco_hash == cliente.hash_endereco_atual()
     )
-    precisao_confiavel = cliente.geo_fixado or cliente.geo_precisao != cliente.Precisao.CIDADE
-    if mesmo_endereco and hash_confere and precisao_confiavel:
+    mesmo_endereco = mesmo_endereco and all(
+        str(endereco[campo]).strip().casefold()
+        == str(endereco_cliente[campo]).strip().casefold()
+        for campo in ('numero', 'bairro')
+    )
+    if mesmo_endereco and hash_confere and cliente.geo_fixado:
         return {
             'ok': True, 'lat': float(cliente.latitude), 'lng': float(cliente.longitude),
             'aviso': aviso,
@@ -3532,9 +3555,11 @@ def _delivery_rota_serializar_pedido(venda):
         'coordenada_aviso': localizacao['aviso'],
         'localizacao_requer_revisao': localizacao_requer_revisao,
         'localizacao_revalidacao_pendente': bool(
-            (origem == 'complemento' and snapshot.get('_geo_lookup_version') != 4)
-            or (origem == 'cep' and endereco['numero'] and
-                snapshot.get('_geo_lookup_version') not in {3, 4})
+            (snapshot.get('_latitude') is not None and origem != 'manual'
+             and (snapshot.get('_geo_lookup_version') != _DELIVERY_GEO_VERSAO
+                  or not _delivery_ponto_compativel_com_cep(snapshot)))
+            or (not snapshot and cliente and not cliente.geo_fixado
+                and cliente.latitude is not None and cliente.longitude is not None)
         ),
         'localizacao_origem': origem or ('manual' if cliente and cliente.geo_fixado else ''),
         'endereco_campos': endereco,
@@ -4213,30 +4238,6 @@ def delivery_rota_atualizar_endereco(request, pk):
     endereco['cep'] = re.sub(r'\D', '', endereco['cep'])[:8]
     endereco['uf'] = endereco['uf'].upper()
     atualizar_cliente = corpo.get('atualizar_cliente') is True
-    coordenada_cep_cliente = corpo.get('coordenada_cep')
-    resultado_cep_cliente = None
-    if isinstance(coordenada_cep_cliente, dict) and not endereco['numero']:
-        normalizar = lambda valor: re.sub(r'\W+', '', str(valor or '').casefold())
-        try:
-            latitude_cliente = float(coordenada_cep_cliente.get('lat'))
-            longitude_cliente = float(coordenada_cep_cliente.get('lng'))
-        except (TypeError, ValueError):
-            latitude_cliente = longitude_cliente = None
-        campos_cliente_conferem = (
-            re.sub(r'\D', '', str(coordenada_cep_cliente.get('cep') or '')) == endereco['cep']
-            and normalizar(coordenada_cep_cliente.get('rua')) == normalizar(endereco['rua'])
-            and normalizar(coordenada_cep_cliente.get('cidade')) == normalizar(endereco['cidade'])
-            and str(coordenada_cep_cliente.get('uf') or '').upper() == endereco['uf']
-        )
-        if (
-            coordenada_cep_cliente.get('provider') == AwesomeApiCepGeocoder.nome
-            and campos_cliente_conferem
-            and latitude_cliente is not None and longitude_cliente is not None
-            and -34 <= latitude_cliente <= 6 and -74 <= longitude_cliente <= -32
-        ):
-            resultado_cep_cliente = Resultado(
-                latitude_cliente, longitude_cliente, 'aproximada',
-            )
     ausentes = [
         rotulo for campo, rotulo in (
             ('cep', 'CEP'), ('rua', 'rua'), ('cidade', 'cidade'), ('uf', 'UF'),
@@ -4259,32 +4260,38 @@ def delivery_rota_atualizar_endereco(request, pk):
         geocoder=ArcGISGeocoder(),
     ).resolver(endereco_texto, hash_arcgis)
     resultado_endereco = resultado
-    endereco_exato = resultado.ok and resultado.precisao == 'exata'
+    endereco_exato = bool(endereco['numero']) and resultado.ok and resultado.precisao == 'exata'
     origem_coordenada = 'arcgis'
     referencia_usada = ''
     numero_confirmado = endereco_exato
 
-    resultado_cep = None
-    cep_validado = endereco_exato
+    from apps.mapas.services.otimizacao import distancia_haversine_m
+
+    # Todo ponto automático, inclusive o considerado exato, precisa passar
+    # pela mesma referência independente do CEP. Nunca aceite coordenadas de
+    # CEP fornecidas pelo navegador nem use a filial como substituta.
+    hash_cep = hashlib.md5(
+        (
+            f'awesomeapi-cep-v2:{endereco["cep"]}:'
+            f'{endereco["rua"].casefold()}:{endereco["cidade"].casefold()}:'
+            f'{endereco["uf"]}'
+        ).encode('utf-8')
+    ).hexdigest()
+    resultado_cep = GeocodificacaoService(
+        geocoder=AwesomeApiCepGeocoder(),
+    ).resolver(endereco_texto, hash_cep)
+    if not resultado_cep.ok:
+        return JsonResponse({
+            'erro': (
+                'Não foi possível validar a localização pelo CEP. '
+                'Nenhum ponto automático será usado até a consulta funcionar '
+                f'({resultado_cep.erro or "CEP sem coordenadas"}).'
+            ),
+        }, status=422)
+    cep_validado = True
     cep_resultado_divergente = ''
 
     if not endereco_exato:
-        from apps.mapas.services.otimizacao import distancia_haversine_m
-
-        # O ponto do CEP serve para validar um estabelecimento homônimo e,
-        # quando nada é exato, como fallback visual ajustável.
-        hash_cep = hashlib.md5(
-            (
-                f'awesomeapi-cep-v2:{endereco["cep"]}:'
-                f'{endereco["rua"].casefold()}:{endereco["cidade"].casefold()}:'
-                f'{endereco["uf"]}'
-            ).encode('utf-8')
-        ).hexdigest()
-        resultado_cep = resultado_cep_cliente or GeocodificacaoService(
-            geocoder=AwesomeApiCepGeocoder(),
-        ).resolver(endereco_texto, hash_cep)
-        cep_validado = resultado_cep.ok
-
         # Em avenidas que separam bairros, os dois lados podem ter CEPs
         # diferentes. Se o ArcGIS só rejeitou o CEP, tente o número sem ele:
         # aceite apenas a mesma rua e cidade, próximo ao ponto do CEP. Ainda
@@ -4439,6 +4446,15 @@ def delivery_rota_atualizar_endereco(request, pk):
                         or resultado_rua.erro or 'local não encontrado'
                     ))
                     origem_coordenada = 'generica'
+    if resultado.ok and distancia_haversine_m(
+        (resultado.latitude, resultado.longitude),
+        (resultado_cep.latitude, resultado_cep.longitude),
+    ) > _DELIVERY_MAX_DISTANCIA_CEP_M:
+        resultado = resultado_cep
+        origem_coordenada = 'cep'
+        referencia_usada = ''
+        numero_confirmado = False
+        cep_resultado_divergente = ''
     if not resultado.ok:
         return JsonResponse({
             'erro': (
@@ -4463,8 +4479,10 @@ def delivery_rota_atualizar_endereco(request, pk):
                 if origem_coordenada == 'cep' else ArcGISGeocoder.nome
             ),
             '_geo_cep_validado': cep_validado,
+            '_geo_cep_lat': resultado_cep.latitude,
+            '_geo_cep_lng': resultado_cep.longitude,
             '_geo_cep_divergente': cep_resultado_divergente,
-            '_geo_lookup_version': 4,
+            '_geo_lookup_version': _DELIVERY_GEO_VERSAO,
         })
         venda.endereco_entrega = snapshot
         venda.save(update_fields=['endereco_entrega', 'updated_at'])
@@ -5345,14 +5363,26 @@ def delivery_rota_publicar(request):
     if not ids and not extras:
         return JsonResponse({'erro': 'Gere uma rota antes de publicá-la.'}, status=400)
 
-    encontrados = set(
+    pedidos_publicar = list(
         VendaPDV.objects.for_filial(request.filial_ativa)
         .filter(pk__in=ids, delivery=True)
         .exclude(status='cancelada')
-        .values_list('pk', flat=True)
+        .select_related('cliente')
     )
+    encontrados = {venda.pk for venda in pedidos_publicar}
     if any(pk not in encontrados for pk in ids):
         return JsonResponse({'erro': 'A rota contém pedidos inválidos.'}, status=400)
+    nao_validados = [
+        f'#{venda.numero_venda}' for venda in pedidos_publicar
+        if not _delivery_rota_localizacao(venda)['ok']
+    ]
+    if nao_validados:
+        return JsonResponse({
+            'erro': (
+                'Revalide a localização pelo CEP antes de enviar ao motoboy: '
+                f'{", ".join(nao_validados)}.'
+            ),
+        }, status=400)
 
     entregador = str(corpo.get('entregador') or '').strip()[:100]
     etas_recebidas = corpo.get('etas') if isinstance(corpo.get('etas'), dict) else {}
