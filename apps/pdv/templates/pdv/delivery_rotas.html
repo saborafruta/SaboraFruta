@@ -71,6 +71,7 @@
   .dr-list { overflow:auto; padding:7px; scrollbar-width:thin; }
   .dr-card { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:8px; align-items:flex-start; margin-bottom:6px; padding:9px; border:1px solid #303744; border-radius:9px; background:#252a31; }
   .dr-card:hover { border-color:#3d4a5f; }
+  #routeList .dr-card.route-leg-active { border-color:#f6b73c; box-shadow:0 0 0 2px rgba(246,183,60,.2),0 8px 24px rgba(0,0,0,.22); }
   .dr-card.delivery-complete { border-color:#237a58; background:#202f2a; }
   .dr-card.unavailable { opacity:.55; }
   .dr-card.dragging { opacity:.35; }
@@ -125,9 +126,11 @@
   .dr-map-legend-item { display:flex; align-items:center; gap:5px; white-space:nowrap; }
   .dr-map-legend-line { position:relative; display:inline-block; width:26px; height:5px; border-radius:999px; background:var(--active-route-color,#38bdf8); }
   .dr-map-legend-line.return::after { position:absolute; inset:1px 0; content:""; background:repeating-linear-gradient(90deg,#fff 0 6px,transparent 6px 10px); }
-  .dr-marker { box-sizing:border-box; display:flex; align-items:center; justify-content:center; width:30px; height:30px; border:3px solid #fff; border-radius:50%; background:var(--active-route-color,#16a36e); color:#fff; box-shadow:0 0 0 3px rgba(15,23,42,.5),0 3px 10px #000a; font-size:11px; font-weight:950; }
+  .dr-marker { box-sizing:border-box; display:flex; align-items:center; justify-content:center; width:30px; height:30px; border:3px solid #fff; border-radius:50%; background:var(--active-route-color,#16a36e); color:#fff; box-shadow:0 0 0 3px rgba(15,23,42,.5),0 3px 10px #000a; font-size:11px; font-weight:950; transition:transform .15s ease,background .15s ease,box-shadow .15s ease; }
   .dr-marker.base { background:#2563eb; }
   .dr-marker.manual { background:#d28a18; }
+  .dr-marker.route-leg-origin { transform:scale(1.14); background:#0ea5e9; box-shadow:0 0 0 5px rgba(14,165,233,.28),0 4px 14px #000b; }
+  .dr-marker.route-leg-target { transform:scale(1.22); background:#f59e0b; color:#17130a; box-shadow:0 0 0 6px rgba(245,158,11,.34),0 5px 16px #000c; }
   .dr-footer { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; border:1px solid #2d3440; border-radius:10px; background:#20242a; padding:9px 11px; }
   .dr-timeline { display:flex; align-items:flex-start; overflow-x:auto; padding:2px 0; }
   .dr-timepoint { position:relative; flex:1 0 90px; color:#92a0b3; font-size:8px; text-align:center; }
@@ -554,7 +557,9 @@
   const completeOrderUrlTemplate = '{% url "pdv:delivery_rota_concluir_pedido" 0 0 %}';
   const receiptUrlTemplate = '{% url "pdv:comprovante_venda" 0 %}';
   const reportUrl = '{% url "pdv:delivery_rotas_relatorio_consumo" %}';
-  let map, routeLine, returnLine, returnAccentLine, markers = [];
+  let map, routeLine, returnLine, returnAccentLine, routeLegGlow, routeLegLine, markers = [];
+  let routeGeometry = [], routeStopIndexes = [], routeStopMarkers = [];
+  let highlightedStopIndex = null, pinnedStopIndex = null, mapNoteBeforeHighlight = '';
   let automaticCalculationTimer = null;
   let calculationSequence = 0;
   let opportunitiesCache = [];
@@ -655,7 +660,8 @@
     const center = branch.tem_coordenada ? [branch.lat, branch.lng] : [-14.235,-51.925];
     map=L.map('deliveryRouteMap',{zoomControl:true,preferCanvas:true}).setView(center,branch.tem_coordenada?13:4);
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles &copy; Esri'}).addTo(map);
-    if(branch.tem_coordenada) addMarker(branch.lat,branch.lng,'⌂','base',branch.nome);
+    if(branch.tem_coordenada){const baseMarker=addMarker(branch.lat,branch.lng,'⌂','base',branch.nome);baseMarker.routeRole='base';}
+    map.on('click',()=>{if(pinnedStopIndex!==null){pinnedStopIndex=null;clearRouteLegHighlight();}});
   }
   function toggleMapFullscreen(){
     const panel=document.querySelector('.map-panel');
@@ -667,11 +673,47 @@
     const icon=L.divIcon({className:'',iconSize:[30,30],iconAnchor:[15-offset[0],15-offset[1]],html:`<div class="dr-marker ${kind||''}">${esc(label)}</div>`});
     const marker=L.marker([lat,lng],{icon,title}).addTo(map).bindPopup(esc(title)); markers.push(marker); return marker;
   }
+  function markerElement(marker){return marker?.getElement()?.querySelector('.dr-marker')||null;}
+  function removeRouteLegLayers(){
+    [routeLegGlow,routeLegLine].forEach(layer=>{if(layer&&map.hasLayer(layer))map.removeLayer(layer);});
+    routeLegGlow=routeLegLine=null;
+  }
+  function clearRouteLegHighlight(restorePinned=false){
+    if(restorePinned&&pinnedStopIndex!==null){highlightRouteLeg(pinnedStopIndex);return;}
+    removeRouteLegLayers();highlightedStopIndex=null;
+    routeLine?.setStyle({opacity:.92});returnLine?.setStyle({opacity:.78});returnAccentLine?.setStyle({opacity:.95});
+    markers.forEach(marker=>{const el=markerElement(marker);el?.classList.remove('route-leg-origin','route-leg-target');marker.setZIndexOffset(0);});
+    document.querySelectorAll('#routeList [data-route-index]').forEach(card=>card.classList.remove('route-leg-active'));
+    if(mapNoteBeforeHighlight)document.getElementById('mapNote').textContent=mapNoteBeforeHighlight;
+  }
+  function highlightRouteLeg(stopIndex,fit=false){
+    stopIndex=Number(stopIndex);
+    if(!Number.isInteger(stopIndex)||stopIndex<0||stopIndex>=routeStopIndexes.length||!routeGeometry.length)return;
+    if(highlightedStopIndex===null)mapNoteBeforeHighlight=document.getElementById('mapNote').textContent;
+    removeRouteLegLayers();highlightedStopIndex=stopIndex;
+    const startIndex=stopIndex===0?0:routeStopIndexes[stopIndex-1],endIndex=routeStopIndexes[stopIndex];
+    const leg=routeGeometry.slice(startIndex,endIndex+1);
+    routeLine?.setStyle({opacity:.18});returnLine?.setStyle({opacity:.12});returnAccentLine?.setStyle({opacity:.18});
+    if(leg.length>1){
+      routeLegGlow=L.polyline(leg,{color:'#111827',weight:12,opacity:.72,lineCap:'round',interactive:false}).addTo(map);
+      routeLegLine=L.polyline(leg,{color:'#fbbf24',weight:7,opacity:1,lineCap:'round',interactive:false}).addTo(map);
+    }
+    markers.forEach(marker=>{const el=markerElement(marker);el?.classList.remove('route-leg-origin','route-leg-target');marker.setZIndexOffset(0);});
+    const originMarker=stopIndex===0?markers.find(marker=>marker.routeRole==='base'):routeStopMarkers[stopIndex-1];
+    const targetMarker=routeStopMarkers[stopIndex];
+    markerElement(originMarker)?.classList.add('route-leg-origin');markerElement(targetMarker)?.classList.add('route-leg-target');
+    originMarker?.setZIndexOffset(900);targetMarker?.setZIndexOffset(1000);
+    document.querySelectorAll('#routeList [data-route-index]').forEach(card=>card.classList.toggle('route-leg-active',Number(card.dataset.routeIndex)===stopIndex));
+    const from=stopIndex===0?'saída':`parada ${stopIndex}`,to=`parada ${stopIndex+1}`;
+    document.getElementById('mapNote').textContent=`Trecho destacado: ${from} → ${to}. Clique novamente no marcador para desfazer.`;
+    if(fit&&leg.length>1)map.fitBounds(L.latLngBounds(leg),{padding:[55,55],maxZoom:16});
+  }
   function clearRoute() {
+    pinnedStopIndex=null;clearRouteLegHighlight();
     [routeLine,returnLine,returnAccentLine].forEach(layer=>{if(layer)map.removeLayer(layer);});
-    routeLine=returnLine=returnAccentLine=null;markers.forEach(m=>map.removeLayer(m));markers=[];
+    routeLine=returnLine=returnAccentLine=null;routeGeometry=[];routeStopIndexes=[];routeStopMarkers=[];markers.forEach(m=>map.removeLayer(m));markers=[];
     document.getElementById('mapLegend').hidden=true;
-    if(branch.tem_coordenada)addMarker(branch.lat,branch.lng,'⌂','base',branch.nome);
+    if(branch.tem_coordenada){const baseMarker=addMarker(branch.lat,branch.lng,'⌂','base',branch.nome);baseMarker.routeRole='base';}
   }
   function resetRouteMap() {
     clearRoute();
@@ -681,12 +723,13 @@
   function drawRoute(result) {
     clearRoute();
     const geometry=result.geometria||[],stops=result.paradas||[];
+    routeGeometry=geometry;
     let returnStart=Math.max(0,geometry.length-1);
     let searchStart=0;
     stops.forEach(stop=>{
       let bestDistance=Infinity,bestIndex=searchStart;
       for(let index=searchStart;index<geometry.length;index+=1){const point=geometry[index],distance=(Number(point[0])-Number(stop.lat))**2+(Number(point[1])-Number(stop.lng))**2;if(distance<bestDistance){bestDistance=distance;bestIndex=index;}}
-      searchStart=bestIndex;returnStart=bestIndex;
+      searchStart=bestIndex;returnStart=bestIndex;routeStopIndexes.push(bestIndex);
     });
     const outbound=geometry.slice(0,returnStart+1),returning=geometry.slice(returnStart);
     routeLine=L.polyline(outbound,{color:activeRouteColor(),weight:6,opacity:.92,lineCap:'round'}).addTo(map);
@@ -695,7 +738,7 @@
       returnAccentLine=L.polyline(returning,{color:'#f8fafc',weight:3,opacity:.95,dashArray:'8 10',lineCap:'butt'}).addTo(map);
     }
     const sobrepostos={};
-    result.paradas.forEach(p=>{const bucket=`${Number(p.lat).toFixed(4)}:${Number(p.lng).toFixed(4)}`, offset=sobrepostos[bucket]||0;sobrepostos[bucket]=offset+1;addMarker(p.lat,p.lng,p.ordem,p.tipo==='manual'?'manual':'',p.tipo==='manual'?p.observacao:`#${p.numero} · ${p.cliente}`,offset);});
+    result.paradas.forEach((p,index)=>{const bucket=`${Number(p.lat).toFixed(4)}:${Number(p.lng).toFixed(4)}`, offset=sobrepostos[bucket]||0;sobrepostos[bucket]=offset+1;const marker=addMarker(p.lat,p.lng,p.ordem,p.tipo==='manual'?'manual':'',p.tipo==='manual'?p.observacao:`#${p.numero} · ${p.cliente}`,offset);marker.routeStopIndex=index;routeStopMarkers[index]=marker;marker.on('click',event=>{if(event.originalEvent)L.DomEvent.stopPropagation(event.originalEvent);if(pinnedStopIndex===index){pinnedStopIndex=null;clearRouteLegHighlight();}else{pinnedStopIndex=index;highlightRouteLeg(index,true);}});});
     document.getElementById('mapLegend').hidden=false;
     map.fitBounds(L.latLngBounds(geometry),{padding:[35,35]});
   }
@@ -719,7 +762,7 @@
     document.getElementById('selectedCount').textContent=`${list.length} parada${list.length===1?'':'s'}`;
     document.getElementById('routeDeliveries').textContent=list.length;
     document.getElementById('routeList').innerHTML=list.length?list.map((o,i)=>{const key=state.selected[i], manual=String(key).startsWith('manual:'), opportunity=manual&&o.origem==='oportunidade';return `
-      <div class="dr-card ${manual?'dr-manual-card':deliveryComplete(o)?'delivery-complete':''}" draggable="true" data-route-id="${esc(key)}">
+      <div class="dr-card ${manual?'dr-manual-card':deliveryComplete(o)?'delivery-complete':''}" draggable="true" data-route-id="${esc(key)}" data-route-index="${i}">
         <span class="dr-order">${i+1}</span>
         <div ${manual?'':`data-conference="${o.id}" style="cursor:pointer" title="Abrir conferência dos itens"`}><div class="dr-client">☰ &nbsp;${manual?(opportunity?'Oportunidade · ':'Parada manual · ')+esc(o.observacao):'#'+esc(o.numero)+' · '+esc(o.cliente)}${!manual?addressWarningIcon(o):''}</div><div class="dr-meta">${esc(manual?o.endereco_texto:address(o))}${state.result?.paradas?.[i]?.eta?` · ETA <strong>${esc(state.result.paradas[i].eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge ${manual?'warn':'blue'}">${opportunity?'Oportunidade de Venda':manual?'Parada avulsa':esc(o.status_label)}</span>${!manual?`<span class="dr-badge ${conferenceComplete(o)?'':'danger'}">${conferenceComplete(o)?'✓ Conferido':'⚠ Conferência pendente'}</span>${paymentBadge(o)}`:''}${opportunity&&o.rfm?`<span class="dr-badge">${esc(o.rfm)}</span>`:''}${state.locked.has(key)?'<span class="dr-badge">Posição travada</span>':''}</div>${!manual&&deliveryComplete(o)?`<span class="dr-completion-meta">${esc(completionText(o))}</span>`:''}</div>
         <div class="dr-card-actions">${manual?`<button class="dr-edit-address" type="button" data-edit-manual="${esc(key)}">✎ Endereço</button><button class="dr-edit-address" type="button" data-edit-stop="${esc(key)}">✎ Observação</button><button class="dr-edit-address" type="button" data-sale-stop="${esc(key)}">＋ Venda</button><button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:`${receiptLink(o)}<button class="dr-edit-address" type="button" data-edit-address="${o.id}">✎ Endereço</button><button class="dr-complete-stop ${deliveryComplete(o)?'completed':''}" type="button" data-complete-order="${o.id}">${deliveryComplete(o)?'↶ Desmarcar conclusão':'✓ Marcar concluída'}</button>`}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição: esta parada voltará a participar da otimização.':'Travar posição. Paradas movidas manualmente são travadas automaticamente.'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
@@ -734,6 +777,8 @@
     document.querySelectorAll('[data-conference]').forEach(el=>el.addEventListener('click',()=>openConference(Number(el.dataset.conference))));
     bindAddressWarnings(document.getElementById('routeList'));
     document.querySelectorAll('[data-route-id]').forEach(el=>{
+      el.addEventListener('mouseenter',()=>highlightRouteLeg(Number(el.dataset.routeIndex)));
+      el.addEventListener('mouseleave',()=>clearRouteLegHighlight(true));
       el.addEventListener('dragstart',()=>{state.dragging=el.dataset.routeId;el.classList.add('dragging');});
       el.addEventListener('dragend',()=>{state.dragging=null;el.classList.remove('dragging');});
       el.addEventListener('dragover',e=>e.preventDefault());
