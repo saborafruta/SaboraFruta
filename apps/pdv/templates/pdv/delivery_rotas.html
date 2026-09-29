@@ -647,10 +647,11 @@
     currentRoute=route;applyRouteAccent();const saved=route.estado||{};
     state.manualStops=saved.manualStops||Object.fromEntries((route.paradas_extras||[]).map(item=>[String(item.id),item]));
     const selectedBeforeValidation=(saved.selected||route.ordem_paradas||[]).map(String);
-    state.selected=selectedBeforeValidation.filter(key=>{const stop=stopByKey(key);return stop&&(String(key).startsWith('manual:')||stop.tem_coordenada);});
+    state.selected=selectedBeforeValidation.filter(key=>{const stop=stopByKey(key);return stop&&(String(key).startsWith('manual:')||stop.tem_coordenada||stop.localizacao_revalidacao_pendente);});
     state.locked=new Set((saved.locked||[]).filter(key=>state.selected.includes(key)));
     const removedUnsafeStop=state.selected.length!==selectedBeforeValidation.length;
-    state.result=!removedUnsafeStop&&state.selected.length&&saved.result?.agrupamento_versao===2?saved.result:null;
+    const pendingLocation=state.selected.some(key=>stopByKey(key)?.localizacao_revalidacao_pendente);
+    state.result=!removedUnsafeStop&&!pendingLocation&&state.selected.length&&saved.result?.agrupamento_versao===2?saved.result:null;
     conference=route.conferencia_itens||{};
     document.getElementById('routeDriver').value=saved.driver||route.entregador||'';
     document.getElementById('stopMinutes').value=saved.minutes??savedConfig.minutos_por_parada??5;
@@ -661,7 +662,7 @@
     if(state.result){drawRoute(state.result);renderSummary(state.result);}else {resetRouteMap();resetSummary();}
     updateFinalizeButton();lastSavedSignature=JSON.stringify({estado:routeSnapshot(),conferencia_itens:conference,nome:currentRoute.nome});
   }
-  async function switchRoute(id){const route=routes.find(item=>item.id===id);if(!route||route===currentRoute)return;await persistRoute();loadRoute(route);if(!document.getElementById('routeDeparture').value){const now=new Date();document.getElementById('routeDeparture').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;}if(state.selected.length&&!state.result)scheduleAutomaticCalculation(true,120);}
+  async function switchRoute(id){const route=routes.find(item=>item.id===id);if(!route||route===currentRoute)return;await persistRoute();loadRoute(route);if(!document.getElementById('routeDeparture').value){const now=new Date();document.getElementById('routeDeparture').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;}await refreshSelectedLocations();if(state.selected.length&&!state.result)scheduleAutomaticCalculation(true,120);}
   async function renameRoute(id){const route=routes.find(item=>item.id===id);if(!route)return;const nome=window.prompt('Nome da rota:',route.nome);if(!nome?.trim())return;route.nome=nome.trim().slice(0,100);if(route===currentRoute){applyRouteAccent();await persistRoute(true);}renderTabs();}
   async function createRoute(){const nome=window.prompt('Nome da nova rota:',`Rota ${routes.length+1}`);if(!nome?.trim())return;await persistRoute();const resp=await fetch(createRouteUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({nome:nome.trim()})});const data=await responseJson(resp);if(!resp.ok)return toast(data.erro||`HTTP ${resp.status}`,true);routes.push(data.rota);loadRoute(data.rota);toast('Nova rota criada.');}
   function formatCep(value){const digits=String(value||'').replace(/\D/g,'').slice(0,8);return digits.length>5?`${digits.slice(0,5)}-${digits.slice(5)}`:digits;}
@@ -921,7 +922,7 @@
     automaticCalculationTimer=setTimeout(()=>calculate(optimize),delay);
   }
   async function refreshOrderLocation(order,force=false,silent=false) {
-    if(!force&&!order?.localizacao_requer_revisao)return Boolean(order?.tem_coordenada);
+    if(!force&&!order?.localizacao_requer_revisao&&!order?.localizacao_revalidacao_pendente)return Boolean(order?.tem_coordenada);
     const previousLocation={lat:order.lat,lng:order.lng,tem_coordenada:order.tem_coordenada,coordenada_aviso:order.coordenada_aviso};
     try{
       const url=addressUrlTemplate.replace('/0/','/'+order.id+'/');
@@ -946,7 +947,7 @@
       order.localizacao_revalidacao_pendente=false;
       return data.tem_coordenada;
     }catch(error){
-      if(order.localizacao_revalidacao_pendente&&previousLocation.tem_coordenada){
+      if(order.localizacao_revalidacao_pendente&&previousLocation.tem_coordenada&&order.localizacao_origem!=='complemento'){
         Object.assign(order,previousLocation);
         if(!silent)toast(`${order.cliente}: não foi possível revalidar o ponto aproximado; confira-o no mapa.`,true);
         return true;

@@ -982,7 +982,7 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertEqual(venda.endereco_entrega['_geo_origem'], 'interpolado')
         self.assertAlmostEqual(venda.endereco_entrega['_latitude'], -5.8071367)
         self.assertEqual(venda.endereco_entrega['_geo_cep_divergente'], '59015350')
-        self.assertEqual(venda.endereco_entrega['_geo_lookup_version'], 3)
+        self.assertEqual(venda.endereco_entrega['_geo_lookup_version'], 4)
         self.assertIn('outro CEP', resp.json()['coordenada_aviso'])
         self.assertTrue(resp.json()['localizacao_requer_revisao'])
         self.assertEqual(resolver.call_count, 3)
@@ -1117,6 +1117,83 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertIn('Condomínio Novo Leblon', resp.json()['coordenada_aviso'])
         self.assertFalse(resp.json()['localizacao_requer_revisao'])
         self.assertEqual(resolver.call_count, 4)
+
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_numero_valido_prevalece_sobre_instrucao_no_complemento(self, resolver):
+        resolver.side_effect = [
+            Resultado(-5.8899051, -35.2021521, 'aproximada', detalhes={
+                'tipo': 'streetaddress', 'numero': '274', 'pontuacao': 98.04,
+            }),
+            Resultado(-5.8902925, -35.2025551, 'aproximada'),
+        ]
+        venda = self._venda(numero=2415)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
+            data=json.dumps({
+                'cep': '59152-360', 'rua': 'Rua Paraú', 'numero': '274',
+                'complemento': 'ou chamar na escola', 'bairro': 'Nova Parnamirim',
+                'cidade': 'Parnamirim', 'uf': 'RN',
+            }), content_type='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(venda.endereco_entrega['_geo_origem'], 'interpolado')
+        self.assertAlmostEqual(venda.endereco_entrega['_latitude'], -5.8899051)
+        self.assertEqual(venda.endereco_entrega['_geo_lookup_version'], 4)
+        self.assertEqual(resolver.call_count, 2)
+
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_complemento_distante_nao_substitui_cep(self, resolver):
+        resolver.side_effect = [
+            Resultado(erro='número não encontrado'),
+            Resultado(-5.8902925, -35.2025551, 'aproximada'),
+            Resultado(-5.9194102, -35.2675198, 'aproximada'),
+            Resultado(erro='estabelecimento não encontrado'),
+        ]
+        venda = self._venda(numero=2416)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
+            data=json.dumps({
+                'cep': '59152-360', 'rua': 'Rua Paraú', 'numero': '274',
+                'complemento': 'Condomínio com nome semelhante',
+                'bairro': 'Nova Parnamirim', 'cidade': 'Parnamirim', 'uf': 'RN',
+            }), content_type='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(venda.endereco_entrega['_geo_origem'], 'cep')
+        self.assertAlmostEqual(venda.endereco_entrega['_latitude'], -5.8902925)
+
+    def test_ponto_antigo_por_complemento_nao_e_aceito_sem_revalidacao(self):
+        venda = self._venda(numero=2417)
+        venda.endereco_entrega = {
+            'cep': '59152360', 'rua': 'Rua Paraú', 'numero': '274',
+            'complemento': 'ou chamar na escola', 'bairro': 'Nova Parnamirim',
+            'cidade': 'Parnamirim', 'uf': 'RN',
+            '_latitude': -5.9194102, '_longitude': -35.2675198,
+            '_geo_origem': 'complemento', '_geo_cep_validado': False,
+        }
+        venda.endereco_entrega['_geo_hash'] = _delivery_rota_endereco_hash(venda.endereco_entrega)
+        venda.save(update_fields=['endereco_entrega'])
+
+        tela = self.client.get(reverse('pdv:delivery_rotas'))
+        pedido = next(item for item in json.loads(tela.context['pedidos_json']) if item['id'] == venda.pk)
+
+        self.assertFalse(pedido['tem_coordenada'])
+        self.assertTrue(pedido['localizacao_revalidacao_pendente'])
+        self.assertContains(tela, 'stop.localizacao_revalidacao_pendente')
+        self.assertContains(tela, 'await refreshSelectedLocations()')
+
+        calculo = self.client.post(
+            reverse('pdv:delivery_rota_calcular'),
+            data=json.dumps({'pedidos': [venda.pk]}), content_type='application/json',
+        )
+        self.assertEqual(calculo.status_code, 400)
+        self.assertIn('sem coordenada confirmada', calculo.json()['erro'])
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_endereco_sem_numero_e_complemento_prioriza_coordenada_do_cep(self, resolver):

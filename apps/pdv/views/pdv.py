@@ -3407,6 +3407,12 @@ def _delivery_rota_localizacao(venda):
         and snapshot.get('_longitude') is not None
     ):
         origem = snapshot.get('_geo_origem')
+        if origem == 'complemento' and snapshot.get('_geo_lookup_version') != 4:
+            return {
+                'ok': False, 'lat': None, 'lng': None,
+                'aviso': '⚠ Ponto antigo por complemento precisa ser localizado novamente.',
+                'endereco': endereco,
+            }
         if origem == 'manual':
             aviso = aviso_pendencias
         elif origem == 'interpolado':
@@ -3526,8 +3532,9 @@ def _delivery_rota_serializar_pedido(venda):
         'coordenada_aviso': localizacao['aviso'],
         'localizacao_requer_revisao': localizacao_requer_revisao,
         'localizacao_revalidacao_pendente': bool(
-            origem == 'cep' and endereco['numero'] and
-            snapshot.get('_geo_lookup_version') != 3
+            (origem == 'complemento' and snapshot.get('_geo_lookup_version') != 4)
+            or (origem == 'cep' and endereco['numero'] and
+                snapshot.get('_geo_lookup_version') not in {3, 4})
         ),
         'localizacao_origem': origem or ('manual' if cliente and cliente.geo_fixado else ''),
         'endereco_campos': endereco,
@@ -4277,7 +4284,6 @@ def delivery_rota_atualizar_endereco(request, pk):
             geocoder=AwesomeApiCepGeocoder(),
         ).resolver(endereco_texto, hash_cep)
         cep_validado = resultado_cep.ok
-        numero_sem_cep_compativel = False
 
         # Em avenidas que separam bairros, os dois lados podem ter CEPs
         # diferentes. Se o ArcGIS só rejeitou o CEP, tente o número sem ele:
@@ -4317,8 +4323,23 @@ def delivery_rota_atualizar_endereco(request, pk):
                 ) <= 2000
             ):
                 resultado_endereco = candidato_numero
-                numero_sem_cep_compativel = True
                 cep_resultado_divergente = str(detalhes_numero.get('cep') or '')
+
+        normalizar_numero = lambda valor: re.sub(
+            r'[^a-z0-9]+', '', str(valor or '').casefold()
+        )
+        detalhes_endereco = resultado_endereco.detalhes or {}
+        numero_interpolado = (
+            resultado_endereco.ok and resultado_cep.ok and bool(endereco['numero'])
+            and str(detalhes_endereco.get('tipo') or '').casefold() == 'streetaddress'
+            and normalizar_numero(detalhes_endereco.get('numero'))
+            == normalizar_numero(endereco['numero'])
+            and float(detalhes_endereco.get('pontuacao') or 0) >= 95
+            and distancia_haversine_m(
+                (resultado_cep.latitude, resultado_cep.longitude),
+                (resultado_endereco.latitude, resultado_endereco.longitude),
+            ) <= 2000
+        )
 
         cliente_nome = ''
         if venda.cliente:
@@ -4326,16 +4347,18 @@ def delivery_rota_atualizar_endereco(request, pk):
                 venda.cliente.nome_fantasia or venda.cliente.razao_social or ''
             ).strip()
         referencias = []
-        if not numero_sem_cep_compativel and endereco['numero'] and endereco['complemento']:
+        complemento = endereco['complemento']
+        complemento_e_instrucao = bool(re.search(
+            r'\b(?:ou\s+chamar|chamar|ligar|telefone|entregar|deixar|'
+            r'pr[oó]ximo|perto|ao\s+lado|em\s+frente)\b',
+            complemento.casefold(),
+        ))
+        if not numero_interpolado and not complemento_e_instrucao and endereco['numero'] and complemento:
             referencias.append(('complemento', endereco['complemento']))
-        if not numero_sem_cep_compativel and endereco['numero'] and cliente_nome and cliente_nome.casefold() not in {
+        if not numero_interpolado and endereco['numero'] and cliente_nome and cliente_nome.casefold() not in {
             valor.casefold() for _, valor in referencias
         }:
             referencias.append(('estabelecimento', cliente_nome))
-
-        normalizar_numero = lambda valor: re.sub(
-            r'[^a-z0-9]+', '', str(valor or '').casefold()
-        )
         for origem_referencia, referencia in referencias:
             referencia_texto = ', '.join(filter(None, [
                 referencia, endereco['cidade'], endereco['uf'], 'Brasil',
@@ -4363,6 +4386,8 @@ def delivery_rota_atualizar_endereco(request, pk):
             # Complementos já eram aceitos como referência. O nome do cliente
             # só vale como POI próximo ao CEP; um nome de rua homônimo não
             # identifica o estabelecimento.
+            if origem_referencia == 'complemento' and not perto_do_cep:
+                continue
             if origem_referencia == 'estabelecimento':
                 tipo_resultado = str(detalhes.get('tipo') or '').casefold()
                 pontuacao = float(detalhes.get('pontuacao') or 0)
@@ -4379,18 +4404,6 @@ def delivery_rota_atualizar_endereco(request, pk):
             numero_confirmado = confirma_numero
             break
         else:
-            detalhes_endereco = resultado_endereco.detalhes or {}
-            numero_interpolado = (
-                resultado_endereco.ok and resultado_cep.ok
-                and str(detalhes_endereco.get('tipo') or '').casefold() == 'streetaddress'
-                and normalizar_numero(detalhes_endereco.get('numero'))
-                == normalizar_numero(endereco['numero'])
-                and float(detalhes_endereco.get('pontuacao') or 0) >= 95
-                and distancia_haversine_m(
-                    (resultado_cep.latitude, resultado_cep.longitude),
-                    (resultado_endereco.latitude, resultado_endereco.longitude),
-                ) <= 2000
-            )
             if numero_interpolado:
                 resultado = resultado_endereco
                 origem_coordenada = 'interpolado'
@@ -4451,7 +4464,7 @@ def delivery_rota_atualizar_endereco(request, pk):
             ),
             '_geo_cep_validado': cep_validado,
             '_geo_cep_divergente': cep_resultado_divergente,
-            '_geo_lookup_version': 3,
+            '_geo_lookup_version': 4,
         })
         venda.endereco_entrega = snapshot
         venda.save(update_fields=['endereco_entrega', 'updated_at'])
