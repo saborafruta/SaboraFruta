@@ -184,6 +184,11 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'Google Maps · moto')
         self.assertContains(tela, 'Expandir mapa')
         self.assertContains(tela, 'requestFullscreen')
+        self.assertContains(tela, 'Todos os pinos podem ser arrastados')
+        self.assertContains(tela, 'manualCoordinateUrl')
+        self.assertContains(tela, 'draggable:true')
+        self.assertContains(tela, 'saveDraggedBranch')
+        self.assertContains(tela, 'saveDraggedStop')
         self.assertContains(tela, 'calculationSequence+=1')
         self.assertContains(tela, 'else {resetRouteMap();resetSummary();}')
         self.assertContains(tela, 'function resetRouteMap()')
@@ -718,7 +723,8 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         pedido = next(item for item in pedidos if item['id'] == venda.pk)
 
         self.assertTrue(pedido['localizacao_requer_revisao'])
-        self.assertIn('Localização aproximada pelo CEP', pedido['coordenada_aviso'])
+        self.assertIn('Local exato não encontrado no mapa', pedido['coordenada_aviso'])
+        self.assertIn('Arraste o pino', pedido['coordenada_aviso'])
 
     def test_pedido_sem_numero_com_complemento_salvo_no_cep_e_revalidado(self):
         venda = self._venda(numero=313)
@@ -768,7 +774,7 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertEqual(venda.endereco_entrega['_geo_provider'], 'awesomeapi_cep')
         self.assertTrue(venda.endereco_entrega['_geo_cep_validado'])
         self.assertIn('número', resp.json()['coordenada_aviso'])
-        self.assertFalse(resp.json()['localizacao_requer_revisao'])
+        self.assertTrue(resp.json()['localizacao_requer_revisao'])
         resolver.assert_called_once()
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
@@ -793,8 +799,12 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         resolver.assert_called_once()
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
-    def test_endereco_com_numero_nao_usa_ponto_generico_do_cep(self, resolver):
-        resolver.return_value = Resultado(erro='resultado incompatível com o CEP informado')
+    def test_endereco_com_numero_usa_ponto_generico_do_cep_com_aviso(self, resolver):
+        resolver.side_effect = [
+            Resultado(erro='resultado incompatível com o CEP informado'),
+            Resultado(-5.795, -35.20944, 'aproximada'),
+            Resultado(erro='estabelecimento não encontrado'),
+        ]
         venda = self._venda(numero=311)
 
         resp = self.client.post(
@@ -807,15 +817,48 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         )
 
         venda.refresh_from_db()
-        self.assertEqual(resp.status_code, 422)
-        self.assertIn('número e o complemento', resp.json()['erro'])
-        self.assertFalse(venda.endereco_entrega)
-        resolver.assert_called_once()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(venda.endereco_entrega['_geo_origem'], 'cep')
+        self.assertTrue(venda.endereco_entrega['_geo_requer_revisao'])
+        self.assertIn('Local exato não encontrado no mapa', resp.json()['coordenada_aviso'])
+        self.assertTrue(resp.json()['localizacao_requer_revisao'])
+        self.assertEqual(resolver.call_count, 3)
+
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_endereco_nao_encontrado_busca_cliente_pelo_nome(self, resolver):
+        resolver.side_effect = [
+            Resultado(erro='número não encontrado'),
+            Resultado(-5.8516429, -35.2039826, 'aproximada'),
+            Resultado(
+                -5.8488, -35.2068, 'aproximada',
+                detalhes={'numero': '2835', 'tipo': 'poi'},
+            ),
+        ]
+        venda = self._venda(numero=315)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
+            data=json.dumps({
+                'cep': '59078-570', 'rua': 'Rua Leôncio Etelvino de Medeiros',
+                'numero': '2835', 'bairro': 'Capim Macio', 'cidade': 'Natal',
+                'uf': 'RN', 'atualizar_cliente': False,
+            }), content_type='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(venda.endereco_entrega['_geo_origem'], 'estabelecimento')
+        self.assertEqual(venda.endereco_entrega['_geo_referencia'], 'Cliente Delivery')
+        self.assertTrue(venda.endereco_entrega['_geo_numero_confirmado'])
+        self.assertIn('encontrada pelo nome', resp.json()['coordenada_aviso'])
+        self.assertFalse(resp.json()['localizacao_requer_revisao'])
+        self.assertIn('Cliente Delivery', resolver.call_args_list[2].args[0])
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_endereco_do_novo_leblon_usa_complemento_em_vez_do_ponto_do_cep(self, resolver):
         resolver.side_effect = [
             Resultado(erro='resultado incompatível com o CEP informado'),
+            Resultado(-5.9293706, -35.2108215, 'aproximada'),
             Resultado(-5.930077912533, -35.205803891679, 'aproximada'),
         ]
         venda = self._venda(numero=312)
@@ -837,7 +880,7 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertAlmostEqual(venda.endereco_entrega['_longitude'], -35.205803891679)
         self.assertIn('Condomínio Novo Leblon', resp.json()['coordenada_aviso'])
         self.assertFalse(resp.json()['localizacao_requer_revisao'])
-        self.assertEqual(resolver.call_count, 2)
+        self.assertEqual(resolver.call_count, 3)
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_endereco_sem_numero_e_complemento_prioriza_coordenada_do_cep(self, resolver):
@@ -863,11 +906,11 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertEqual(venda.endereco_entrega['_geo_provider'], 'awesomeapi_cep')
         self.assertAlmostEqual(venda.endereco_entrega['_latitude'], -5.9293706)
         self.assertAlmostEqual(venda.endereco_entrega['_longitude'], -35.2108215)
-        self.assertFalse(resp.json()['localizacao_requer_revisao'])
+        self.assertTrue(resp.json()['localizacao_requer_revisao'])
         self.assertEqual(resolver.call_count, 2)
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
-    def test_endereco_aproximado_sem_validacao_do_cep_nao_entra_na_rota(self, resolver):
+    def test_endereco_aproximado_sem_validacao_do_cep_usa_ponto_da_rua(self, resolver):
         resolver.side_effect = [
             Resultado(-5.65, -35.30, 'aproximada'),
             Resultado(erro='CEP sem coordenada disponível'),
@@ -884,9 +927,11 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         )
 
         venda.refresh_from_db()
-        self.assertEqual(resp.status_code, 422)
-        self.assertIn('validar a localização pelo CEP', resp.json()['erro'])
-        self.assertFalse(venda.endereco_entrega)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(venda.endereco_entrega['_geo_origem'], 'rua')
+        self.assertAlmostEqual(venda.endereco_entrega['_latitude'], -5.65)
+        self.assertTrue(resp.json()['localizacao_requer_revisao'])
+        self.assertIn('ponto genérico da rua', resp.json()['coordenada_aviso'])
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_endereco_pode_ser_salvo_apenas_na_entrega(self, resolver):
@@ -932,8 +977,12 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertEqual(self.cliente.latitude, -5.92)
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
-    def test_resultado_aproximado_com_numero_sem_referencia_e_rejeitado(self, resolver):
-        resolver.return_value = Resultado(-5.65, -35.30, 'aproximada')
+    def test_resultado_aproximado_com_numero_sem_referencia_usa_cep(self, resolver):
+        resolver.side_effect = [
+            Resultado(-5.65, -35.30, 'aproximada'),
+            Resultado(-5.9293706, -35.2108215, 'aproximada'),
+            Resultado(erro='estabelecimento não encontrado'),
+        ]
         venda = self._venda(numero=306)
 
         resp = self.client.post(
@@ -946,9 +995,44 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         )
 
         venda.refresh_from_db()
-        self.assertEqual(resp.status_code, 422)
-        self.assertIn('número e o complemento', resp.json()['erro'])
-        self.assertFalse(venda.endereco_entrega)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(venda.endereco_entrega['_geo_origem'], 'cep')
+        self.assertTrue(resp.json()['localizacao_requer_revisao'])
+        self.assertIn('Arraste o pino', resp.json()['coordenada_aviso'])
+
+    def test_coordenada_manual_do_pedido_e_persistida_e_auditada(self):
+        venda = self._venda(numero=316)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_coordenada_manual'),
+            data=json.dumps({
+                'tipo': 'pedido', 'id': venda.pk,
+                'lat': -5.93011, 'lng': -35.20591,
+            }), content_type='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(venda.endereco_entrega['_geo_origem'], 'manual')
+        self.assertEqual(venda.endereco_entrega['_geo_precisao'], 'manual')
+        self.assertEqual(venda.endereco_entrega['_geo_provider'], 'usuario')
+        self.assertEqual(venda.endereco_entrega['_geo_ajustado_por'], 'Fulano')
+        self.assertFalse(venda.endereco_entrega['_geo_requer_revisao'])
+        self.assertAlmostEqual(venda.endereco_entrega['_latitude'], -5.93011)
+
+    def test_coordenada_manual_da_filial_fica_protegida(self):
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_coordenada_manual'),
+            data=json.dumps({
+                'tipo': 'filial', 'lat': -5.78991, 'lng': -35.20981,
+            }), content_type='application/json',
+        )
+
+        self.filial.refresh_from_db()
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(self.filial.geo_fixado)
+        self.assertEqual(self.filial.geo_precisao, 'manual')
+        self.assertAlmostEqual(self.filial.latitude, -5.78991)
 
     def test_endereco_da_rota_exige_dados_para_localizacao(self):
         venda = self._venda(numero=303)

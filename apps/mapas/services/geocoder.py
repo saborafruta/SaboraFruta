@@ -21,6 +21,7 @@ import threading
 import time
 import unicodedata
 from dataclasses import dataclass
+from typing import Any
 
 import requests
 from django.conf import settings
@@ -40,6 +41,7 @@ class Resultado:
     longitude: float | None = None
     precisao: str = ''
     erro: str = ''
+    detalhes: dict[str, Any] | None = None
 
     @property
     def ok(self) -> bool:
@@ -156,6 +158,9 @@ class ArcGISGeocoder(GeocoderBase):
     nome = 'arcgis'
     permite_uso_comercial = False
 
+    def __init__(self, *, validar_numero: bool = True):
+        self.validar_numero = validar_numero
+
     def geocodificar(self, endereco: str) -> Resultado:
         resp = requests.get(
             'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates',
@@ -180,7 +185,7 @@ class ArcGISGeocoder(GeocoderBase):
             return Resultado(erro='resultado incompatível com o CEP informado')
         atributos = candidato.get('attributes') or {}
         erro_numero = _validar_numero(endereco, atributos.get('AddNum'))
-        if erro_numero:
+        if self.validar_numero and erro_numero:
             return Resultado(erro=erro_numero)
         erro_localidade = _validar_localidade(
             endereco,
@@ -196,6 +201,13 @@ class ArcGISGeocoder(GeocoderBase):
         return Resultado(
             latitude=float(local['y']), longitude=float(local['x']),
             precisao='exata' if tipo in ('pointaddress', 'subaddress') else 'aproximada',
+            detalhes={
+                'numero': str(atributos.get('AddNum') or '').strip(),
+                'cep': cep_encontrado,
+                'tipo': tipo,
+                'pontuacao': float(candidato.get('score') or 0),
+                'endereco': str(atributos.get('Match_addr') or candidato.get('address') or ''),
+            },
         )
 
 

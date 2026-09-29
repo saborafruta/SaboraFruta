@@ -101,6 +101,11 @@ urlpatterns = [
         pdv.delivery_rota_atualizar_endereco,
         name="delivery_rota_atualizar_endereco",
     ),
+    path(
+        "delivery/rotas/coordenada-manual/",
+        pdv.delivery_rota_atualizar_coordenada_manual,
+        name="delivery_rota_atualizar_coordenada_manual",
+    ),
     path("delivery/relatorio/", pdv.delivery_relatorio, name="delivery_relatorio"),
     path("delivery/relatorio/imprimir/", pdv.delivery_relatorio_pagina, name="delivery_relatorio_pagina"),
     path("delivery/<int:pk>/mover/", pdv.delivery_mover, name="delivery_mover"),

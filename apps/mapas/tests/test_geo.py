@@ -171,6 +171,27 @@ class GeocoderTests(TestCase):
         self.assertTrue(resultado.ok)
         self.assertEqual(resultado.precisao, 'exata')
         self.assertAlmostEqual(resultado.latitude, -5.859397)
+        self.assertEqual(resultado.detalhes['numero'], '15')
+        self.assertEqual(resultado.detalhes['cep'], '59080460')
+
+    def test_arcgis_pode_retornar_rua_quando_numero_nao_e_obrigatorio(self):
+        resposta = Mock()
+        resposta.raise_for_status.return_value = None
+        resposta.json.return_value = {'candidates': [{
+            'score': 91, 'location': {'x': -35.211635, 'y': -5.859397},
+            'attributes': {
+                'Addr_type': 'StreetName', 'Postal': '59080-460',
+                'City': 'Natal', 'Region': 'Rio Grande do Norte', 'AddNum': '',
+            },
+        }]}
+        with patch('apps.mapas.services.geocoder.requests.get', return_value=resposta):
+            resultado = ArcGISGeocoder(validar_numero=False).geocodificar(
+                'Rua Arnaldo Neves da Silva, 999, Natal, RN, 59080-460, Brasil'
+            )
+
+        self.assertTrue(resultado.ok)
+        self.assertEqual(resultado.precisao, 'aproximada')
+        self.assertEqual(resultado.detalhes['tipo'], 'streetname')
 
     def test_arcgis_rejeita_cep_diferente(self):
         resposta = Mock()

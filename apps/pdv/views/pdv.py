@@ -3396,7 +3396,8 @@ def _delivery_rota_localizacao(venda):
             'endereco': endereco,
         }
 
-    aviso = f'❗ Faltando: {", ".join(pendencias)}' if pendencias else ''
+    aviso_pendencias = f'❗ Faltando: {", ".join(pendencias)}' if pendencias else ''
+    aviso = aviso_pendencias
 
     hash_atual = _delivery_rota_endereco_hash(endereco)
     if (
@@ -3405,16 +3406,24 @@ def _delivery_rota_localizacao(venda):
         and snapshot.get('_longitude') is not None
     ):
         origem = snapshot.get('_geo_origem')
-        if not aviso and origem == 'cep' and endereco['numero']:
+        if origem == 'manual':
+            aviso = aviso_pendencias
+        elif origem == 'estabelecimento':
+            referencia = snapshot.get('_geo_referencia') or 'estabelecimento'
+            aviso = f'⚠ Localização encontrada pelo nome "{referencia}"; confira o pino.'
+        elif origem in {'cep', 'rua', 'filial'}:
+            referencia = {'cep': 'do CEP', 'rua': 'da rua', 'filial': 'da filial'}[origem]
             aviso = (
-                f'⚠ Localização aproximada pelo CEP; o número {endereco["numero"]} '
-                'não foi confirmado no mapa.'
+                f'⚠ Local exato não encontrado no mapa; ponto genérico {referencia}. '
+                'Arraste o pino para ajustar o local.'
             )
-        elif not aviso and origem == 'complemento':
+        elif origem == 'complemento':
             aviso = (
                 f'⚠ Localização aproximada por "{endereco["complemento"]}"; '
                 f'o número {endereco["numero"]} não foi confirmado no mapa.'
             )
+        if aviso_pendencias and aviso != aviso_pendencias:
+            aviso = f'{aviso} {aviso_pendencias}'
         return {
             'ok': True, 'lat': float(snapshot['_latitude']),
             'lng': float(snapshot['_longitude']),
@@ -3468,16 +3477,15 @@ def _delivery_rota_serializar_pedido(venda):
         origem == 'cep'
         and snapshot.get('_geo_provider') != 'awesomeapi_cep'
     )
-    localizacao_requer_revisao = bool(
-        localizacao['ok'] and (
-            cep_com_fonte_antiga
-            or (
-                origem == 'cep'
-                and bool(endereco['numero'] or endereco['complemento'])
-            )
-            or (not snapshot.get('_geo_cep_validado') and origem != 'complemento')
+    localizacao_requer_revisao = bool(localizacao['ok'] and (
+        snapshot.get('_geo_requer_revisao')
+        or cep_com_fonte_antiga
+        or (origem == 'cep' and bool(endereco['numero'] or endereco['complemento']))
+        or (
+            not snapshot.get('_geo_cep_validado')
+            and origem not in {'complemento', 'estabelecimento', 'manual'}
         )
-    )
+    ))
     forma = ', '.join(
         pg.forma_pagamento.descricao if pg.forma_pagamento else 'Pagamento'
         for pg in venda.pagamentos.all()
@@ -3507,6 +3515,7 @@ def _delivery_rota_serializar_pedido(venda):
         'tem_coordenada': localizacao['ok'],
         'coordenada_aviso': localizacao['aviso'],
         'localizacao_requer_revisao': localizacao_requer_revisao,
+        'localizacao_origem': origem or ('manual' if cliente and cliente.geo_fixado else ''),
         'endereco_campos': endereco,
         'itens': [
             {
@@ -4228,52 +4237,119 @@ def delivery_rota_atualizar_endereco(request, pk):
     resultado = GeocodificacaoService(
         geocoder=ArcGISGeocoder(),
     ).resolver(endereco_texto, hash_arcgis)
+    resultado_endereco = resultado
+    endereco_exato = resultado.ok and resultado.precisao == 'exata'
+    origem_coordenada = 'arcgis'
+    referencia_usada = ''
+    numero_confirmado = endereco_exato
+
     resultado_cep = None
-    cep_validado = resultado.ok and resultado.precisao == 'exata'
-    usar_referencia_cep = not cep_validado
-    if usar_referencia_cep:
-        resultado_referencia = Resultado(erro='complemento não informado')
+    cep_validado = endereco_exato
+
+    if not endereco_exato:
+        from apps.mapas.services.otimizacao import distancia_haversine_m
+
+        # O ponto do CEP serve para validar um estabelecimento homônimo e,
+        # quando nada é exato, como fallback visual ajustável.
+        hash_cep = hashlib.md5(
+            (
+                f'awesomeapi-cep-v2:{endereco["cep"]}:'
+                f'{endereco["rua"].casefold()}:{endereco["cidade"].casefold()}:'
+                f'{endereco["uf"]}'
+            ).encode('utf-8')
+        ).hexdigest()
+        resultado_cep = resultado_cep_cliente or GeocodificacaoService(
+            geocoder=AwesomeApiCepGeocoder(),
+        ).resolver(endereco_texto, hash_cep)
+        cep_validado = resultado_cep.ok
+
+        cliente_nome = ''
+        if venda.cliente:
+            cliente_nome = (
+                venda.cliente.nome_fantasia or venda.cliente.razao_social or ''
+            ).strip()
+        referencias = []
         if endereco['numero'] and endereco['complemento']:
+            referencias.append(('complemento', endereco['complemento']))
+        if endereco['numero'] and cliente_nome and cliente_nome.casefold() not in {
+            valor.casefold() for _, valor in referencias
+        }:
+            referencias.append(('estabelecimento', cliente_nome))
+
+        normalizar_numero = lambda valor: re.sub(
+            r'[^a-z0-9]+', '', str(valor or '').casefold()
+        )
+        for origem_referencia, referencia in referencias:
             referencia_texto = ', '.join(filter(None, [
-                endereco['complemento'], endereco['cidade'], endereco['uf'], 'Brasil',
+                referencia, endereco['cidade'], endereco['uf'], 'Brasil',
             ]))
             hash_referencia = hashlib.md5(
-                f'arcgis-complemento-v1:{referencia_texto.casefold()}'.encode('utf-8')
+                f'arcgis-referencia-v2:{referencia_texto.casefold()}'.encode('utf-8')
             ).hexdigest()
-            resultado_referencia = GeocodificacaoService(
+            candidato = GeocodificacaoService(
                 geocoder=ArcGISGeocoder(),
             ).resolver(referencia_texto, hash_referencia)
-        if resultado_referencia.ok:
-            resultado = resultado_referencia
-            origem_coordenada = 'complemento'
-        elif endereco['numero']:
-            resultado = Resultado(erro=(
-                'não foi possível confirmar o número e o complemento informado '
-                f'({resultado_referencia.erro})'
-            ))
-            origem_coordenada = 'complemento'
+            if not candidato.ok:
+                continue
+            detalhes = candidato.detalhes or {}
+            numero_encontrado = normalizar_numero(detalhes.get('numero'))
+            numero_esperado = normalizar_numero(endereco['numero'])
+            confirma_numero = bool(
+                numero_esperado and numero_encontrado == numero_esperado
+            )
+            perto_do_cep = True
+            if resultado_cep.ok:
+                perto_do_cep = distancia_haversine_m(
+                    (resultado_cep.latitude, resultado_cep.longitude),
+                    (candidato.latitude, candidato.longitude),
+                ) <= 2000
+            # Complementos já eram aceitos como referência. Para o nome do
+            # cliente rejeitamos um número diferente quando o provider o
+            # informa e exigimos proximidade do CEP para evitar homônimos.
+            # O cache atual guarda a coordenada, mas não os atributos do
+            # candidato; por isso número ausente não invalida um ponto próximo.
+            if origem_referencia == 'estabelecimento' and (
+                not perto_do_cep
+                or (numero_esperado and numero_encontrado and not confirma_numero)
+            ):
+                continue
+            resultado = candidato
+            origem_coordenada = origem_referencia
+            referencia_usada = referencia
+            numero_confirmado = confirma_numero
+            break
         else:
-            hash_cep = hashlib.md5(
-                (
-                    f'awesomeapi-cep-v1:{endereco["cep"]}:'
-                    f'{endereco["rua"].casefold()}:{endereco["cidade"].casefold()}:'
-                    f'{endereco["uf"]}'
-                ).encode('utf-8')
-            ).hexdigest()
-            resultado_cep = resultado_cep_cliente or GeocodificacaoService(
-                geocoder=AwesomeApiCepGeocoder(),
-            ).resolver(endereco_texto, hash_cep)
-            cep_validado = resultado_cep.ok
             if resultado_cep.ok:
                 resultado = resultado_cep
                 origem_coordenada = 'cep'
+            elif resultado_endereco.ok:
+                resultado = resultado_endereco
+                origem_coordenada = 'rua'
             else:
-                resultado = Resultado(
-                    erro=f'não foi possível validar a localização pelo CEP: {resultado_cep.erro}'
-                )
-                origem_coordenada = 'cep'
-    else:
-        origem_coordenada = 'arcgis'
+                # Recupera o centro da rua ignorando somente a exigência do
+                # número. Continua validando CEP, município e UF.
+                hash_rua = hashlib.md5(
+                    f'arcgis-entrega-generica-v1:{endereco_hash}'.encode('utf-8')
+                ).hexdigest()
+                resultado_rua = GeocodificacaoService(
+                    geocoder=ArcGISGeocoder(validar_numero=False),
+                ).resolver(endereco_texto, hash_rua)
+                if resultado_rua.ok:
+                    resultado = resultado_rua
+                    origem_coordenada = 'rua'
+                elif request.filial_ativa.tem_coordenada:
+                    resultado = Resultado(
+                        float(request.filial_ativa.latitude),
+                        float(request.filial_ativa.longitude),
+                        'cidade',
+                    )
+                    origem_coordenada = 'filial'
+                else:
+                    resultado = Resultado(erro=(
+                        resultado_endereco.erro or resultado_cep.erro
+                        or resultado_rua.erro or 'local não encontrado'
+                    ))
+                    origem_coordenada = 'generica'
     if not resultado.ok:
         return JsonResponse({
             'erro': (
@@ -4290,6 +4366,9 @@ def delivery_rota_atualizar_endereco(request, pk):
             '_geo_hash': endereco_hash,
             '_geo_precisao': resultado.precisao,
             '_geo_origem': origem_coordenada,
+            '_geo_referencia': referencia_usada,
+            '_geo_numero_confirmado': numero_confirmado,
+            '_geo_requer_revisao': origem_coordenada in {'cep', 'rua', 'filial'},
             '_geo_provider': (
                 AwesomeApiCepGeocoder.nome
                 if origem_coordenada == 'cep' else ArcGISGeocoder.nome
@@ -4337,20 +4416,29 @@ def delivery_rota_atualizar_endereco(request, pk):
         rotulo for campo, rotulo in (('numero', 'número'), ('bairro', 'bairro'))
         if not endereco[campo]
     ]
-    if pendencias:
-        aviso = f'❗ Faltando: {", ".join(pendencias)}'
+    aviso_pendencias = f'❗ Faltando: {", ".join(pendencias)}' if pendencias else ''
+    if origem_coordenada == 'estabelecimento':
+        aviso = (
+            f'⚠ Localização encontrada pelo nome "{referencia_usada}"; '
+            'confira o pino no mapa.'
+        )
     elif origem_coordenada == 'complemento':
         aviso = (
             f'⚠ Localização aproximada por "{endereco["complemento"]}"; '
             f'o número {endereco["numero"]} não foi confirmado no mapa.'
         )
-    elif origem_coordenada == 'cep' and endereco['numero']:
+    elif origem_coordenada in {'cep', 'rua', 'filial'}:
+        referencia_generica = {
+            'cep': 'do CEP', 'rua': 'da rua', 'filial': 'da filial',
+        }[origem_coordenada]
         aviso = (
-            f'⚠ Localização aproximada pelo CEP; o número {endereco["numero"]} '
-            'não foi confirmado no mapa.'
+            f'⚠ Local exato não encontrado no mapa; foi usado o ponto genérico '
+            f'{referencia_generica}. Arraste o pino para ajustar o local.'
         )
     else:
-        aviso = ''
+        aviso = aviso_pendencias
+    if aviso_pendencias and aviso != aviso_pendencias:
+        aviso = f'{aviso} {aviso_pendencias}'
     return JsonResponse({
         'ok': True,
         'pedido_id': venda.pk,
@@ -4360,12 +4448,99 @@ def delivery_rota_atualizar_endereco(request, pk):
         'tem_coordenada': True,
         'coordenada_aviso': aviso,
         'localizacao_requer_revisao': bool(
-            resultado.precisao != 'exata'
-            and not cep_validado
-            and origem_coordenada != 'complemento'
+            origem_coordenada in {'cep', 'rua', 'filial'}
         ),
         'atualizou_cliente': atualizar_cliente,
         'aviso': '',
+    })
+
+
+@require_POST
+@requer_permissao('pdv', 'ver')
+def delivery_rota_atualizar_coordenada_manual(request):
+    """Persiste um pino arrastado sem alterar os demais dados do endereço."""
+    try:
+        corpo = json.loads(request.body or b'{}')
+        if not isinstance(corpo, dict):
+            raise ValueError
+        latitude = float(corpo.get('lat'))
+        longitude = float(corpo.get('lng'))
+    except (TypeError, ValueError):
+        return JsonResponse({'erro': 'Informe uma coordenada válida.'}, status=400)
+    if not (-34 <= latitude <= 6 and -74 <= longitude <= -32):
+        return JsonResponse({'erro': 'A coordenada precisa estar dentro do Brasil.'}, status=400)
+
+    tipo = str(corpo.get('tipo') or '')
+    usuario = (
+        getattr(request.user, 'nome', '')
+        or request.user.get_username()
+        or 'Usuário'
+    )[:150]
+    ajustado_em = timezone.now()
+    if tipo == 'filial':
+        filial = request.filial_ativa
+        filial.latitude = latitude
+        filial.longitude = longitude
+        filial.geo_precisao = filial.Precisao.MANUAL
+        filial.geo_atualizado_em = ajustado_em
+        filial.geo_endereco_hash = filial.hash_endereco_atual()
+        filial.geo_fixado = True
+        filial.geo_erro = ''
+        filial.save(update_fields=[
+            'latitude', 'longitude', 'geo_precisao', 'geo_atualizado_em',
+            'geo_endereco_hash', 'geo_fixado', 'geo_erro', 'updated_at',
+        ])
+        return JsonResponse({
+            'ok': True, 'tipo': 'filial', 'lat': latitude, 'lng': longitude,
+            'ajustado_por': usuario, 'ajustado_em': ajustado_em.isoformat(),
+        })
+
+    if tipo != 'pedido':
+        return JsonResponse({'erro': 'Tipo de ponto inválido.'}, status=400)
+    try:
+        pedido_id = int(corpo.get('id'))
+    except (TypeError, ValueError):
+        return JsonResponse({'erro': 'Pedido inválido.'}, status=400)
+    venda = get_object_or_404(
+        _delivery_rota_pedidos(request.filial_ativa), pk=pedido_id,
+    )
+    endereco = _delivery_rota_endereco_campos(venda)
+    snapshot = dict(venda.endereco_entrega or {})
+    snapshot.update(endereco)
+    snapshot.update({
+        '_latitude': latitude,
+        '_longitude': longitude,
+        '_geo_hash': _delivery_rota_endereco_hash(endereco),
+        '_geo_precisao': 'manual',
+        '_geo_origem': 'manual',
+        '_geo_provider': 'usuario',
+        '_geo_cep_validado': True,
+        '_geo_numero_confirmado': True,
+        '_geo_requer_revisao': False,
+        '_geo_ajustado_por': usuario,
+        '_geo_ajustado_em': ajustado_em.isoformat(),
+    })
+    with tenant_atomic():
+        venda.endereco_entrega = snapshot
+        venda.save(update_fields=['endereco_entrega', 'updated_at'])
+        if corpo.get('atualizar_cliente') is True and venda.cliente_id:
+            cliente = Cliente.objects.select_for_update().get(pk=venda.cliente_id)
+            cliente.latitude = latitude
+            cliente.longitude = longitude
+            cliente.geo_precisao = cliente.Precisao.MANUAL
+            cliente.geo_atualizado_em = ajustado_em
+            cliente.geo_endereco_hash = cliente.hash_endereco_atual()
+            cliente.geo_fixado = True
+            cliente.geo_erro = ''
+            cliente.save(update_fields=[
+                'latitude', 'longitude', 'geo_precisao', 'geo_atualizado_em',
+                'geo_endereco_hash', 'geo_fixado', 'geo_erro', 'updated_at',
+            ])
+    return JsonResponse({
+        'ok': True, 'tipo': 'pedido', 'pedido_id': venda.pk,
+        'lat': latitude, 'lng': longitude,
+        'coordenada_aviso': '', 'localizacao_requer_revisao': False,
+        'ajustado_por': usuario, 'ajustado_em': ajustado_em.isoformat(),
     })
 
 

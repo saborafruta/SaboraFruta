@@ -129,6 +129,9 @@
   .dr-marker { box-sizing:border-box; display:flex; align-items:center; justify-content:center; width:30px; height:30px; border:3px solid #fff; border-radius:50%; background:var(--active-route-color,#16a36e); color:#fff; box-shadow:0 0 0 3px rgba(15,23,42,.5),0 3px 10px #000a; font-size:11px; font-weight:950; transition:transform .15s ease,background .15s ease,box-shadow .15s ease; }
   .dr-marker.base { background:#2563eb; }
   .dr-marker.manual { background:#d28a18; }
+  .dr-marker.approximate { background:#b45309; box-shadow:0 0 0 4px rgba(245,158,11,.35),0 3px 10px #000a; }
+  .leaflet-marker-draggable .dr-marker { cursor:grab; }
+  .leaflet-marker-draggable:active .dr-marker { cursor:grabbing; transform:scale(1.08); }
   .dr-marker.route-leg-origin { transform:scale(1.14); background:#0ea5e9; box-shadow:0 0 0 5px rgba(14,165,233,.28),0 4px 14px #000b; }
   .dr-marker.route-leg-target { transform:scale(1.22); background:#f59e0b; color:#17130a; box-shadow:0 0 0 6px rgba(245,158,11,.34),0 5px 16px #000c; }
   .dr-footer { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; border:1px solid #2d3440; border-radius:10px; background:#20242a; padding:9px 11px; }
@@ -331,7 +334,7 @@
     </section>
     <section class="dr-panel map-panel route-accent">
       <div class="dr-panel-head"><span class="dr-panel-title">Mapa · <strong id="routeMapName">—</strong></span><div class="dr-panel-head-actions"><span class="dr-count" id="routeProvider">Aguardando rota</span><button class="dr-map-expand" id="mapExpand" type="button">⛶ Expandir mapa</button></div></div>
-      <div class="dr-map"><div id="deliveryRouteMap"></div><div class="dr-map-legend" id="mapLegend" hidden><span class="dr-map-legend-item"><i class="dr-map-legend-line"></i>Ida</span><span class="dr-map-legend-item"><i class="dr-map-legend-line return"></i>Volta</span></div><div class="dr-map-note" id="mapNote">Selecione os pedidos e clique em “Otimizar rota inteira”.</div></div>
+      <div class="dr-map"><div id="deliveryRouteMap"></div><div class="dr-map-legend" id="mapLegend" hidden><span class="dr-map-legend-item"><i class="dr-map-legend-line"></i>Ida</span><span class="dr-map-legend-item"><i class="dr-map-legend-line return"></i>Volta</span></div><div class="dr-map-note" id="mapNote">Selecione os pedidos e otimize. Todos os pinos podem ser arrastados.</div></div>
     </section>
   </div>
 
@@ -542,6 +545,7 @@
   const calculateUrl = '{% url "pdv:delivery_rota_calcular" %}';
   const publishUrl = '{% url "pdv:delivery_rota_publicar" %}';
   const addressUrlTemplate = '{% url "pdv:delivery_rota_atualizar_endereco" 0 %}';
+  const manualCoordinateUrl = '{% url "pdv:delivery_rota_atualizar_coordenada_manual" %}';
   const manualStopUrl = '{% url "pdv:delivery_rota_localizar_parada_manual" %}';
   const cepLookupUrl = '{% url "cadastros:consultar-cep" %}';
   const configUrl = '{% url "pdv:delivery_rota_salvar_configuracao" %}';
@@ -660,7 +664,7 @@
     const center = branch.tem_coordenada ? [branch.lat, branch.lng] : [-14.235,-51.925];
     map=L.map('deliveryRouteMap',{zoomControl:true,preferCanvas:true}).setView(center,branch.tem_coordenada?13:4);
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles &copy; Esri'}).addTo(map);
-    if(branch.tem_coordenada){const baseMarker=addMarker(branch.lat,branch.lng,'⌂','base',branch.nome);baseMarker.routeRole='base';}
+    if(branch.tem_coordenada){const baseMarker=addMarker(branch.lat,branch.lng,'⌂','base',branch.nome,0,{draggable:true,onDragEnd:saveDraggedBranch});baseMarker.routeRole='base';}
     map.on('click',()=>{if(pinnedStopIndex!==null){pinnedStopIndex=null;clearRouteLegHighlight();}});
   }
   function toggleMapFullscreen(){
@@ -668,10 +672,15 @@
     if(document.fullscreenElement)document.exitFullscreen();
     else if(panel.requestFullscreen)panel.requestFullscreen();
   }
-  function addMarker(lat,lng,label,kind,title,offsetIndex=0) {
+  function addMarker(lat,lng,label,kind,title,offsetIndex=0,options={}) {
     const offsets=[[0,0],[28,0],[-28,0],[0,28],[0,-28],[22,22],[-22,-22]], offset=offsets[offsetIndex%offsets.length];
     const icon=L.divIcon({className:'',iconSize:[30,30],iconAnchor:[15-offset[0],15-offset[1]],html:`<div class="dr-marker ${kind||''}">${esc(label)}</div>`});
-    const marker=L.marker([lat,lng],{icon,title}).addTo(map).bindPopup(esc(title)); markers.push(marker); return marker;
+    const marker=L.marker([lat,lng],{icon,title,draggable:Boolean(options.draggable)}).addTo(map).bindPopup(esc(title));
+    if(options.draggable){
+      marker.on('dragstart',()=>{pinnedStopIndex=null;clearRouteLegHighlight();marker.closePopup();});
+      marker.on('dragend',()=>options.onDragEnd?.(marker));
+    }
+    markers.push(marker); return marker;
   }
   function markerElement(marker){return marker?.getElement()?.querySelector('.dr-marker')||null;}
   function removeRouteLegLayers(){
@@ -713,7 +722,7 @@
     [routeLine,returnLine,returnAccentLine].forEach(layer=>{if(layer)map.removeLayer(layer);});
     routeLine=returnLine=returnAccentLine=null;routeGeometry=[];routeStopIndexes=[];routeStopMarkers=[];markers.forEach(m=>map.removeLayer(m));markers=[];
     document.getElementById('mapLegend').hidden=true;
-    if(branch.tem_coordenada){const baseMarker=addMarker(branch.lat,branch.lng,'⌂','base',branch.nome);baseMarker.routeRole='base';}
+    if(branch.tem_coordenada){const baseMarker=addMarker(branch.lat,branch.lng,'⌂','base',branch.nome,0,{draggable:true,onDragEnd:saveDraggedBranch});baseMarker.routeRole='base';}
   }
   function resetRouteMap() {
     clearRoute();
@@ -738,9 +747,39 @@
       returnAccentLine=L.polyline(returning,{color:'#f8fafc',weight:3,opacity:.95,dashArray:'8 10',lineCap:'butt'}).addTo(map);
     }
     const sobrepostos={};
-    result.paradas.forEach((p,index)=>{const bucket=`${Number(p.lat).toFixed(4)}:${Number(p.lng).toFixed(4)}`, offset=sobrepostos[bucket]||0;sobrepostos[bucket]=offset+1;const marker=addMarker(p.lat,p.lng,p.ordem,p.tipo==='manual'?'manual':'',p.tipo==='manual'?p.observacao:`#${p.numero} · ${p.cliente}`,offset);marker.routeStopIndex=index;routeStopMarkers[index]=marker;marker.on('click',event=>{if(event.originalEvent)L.DomEvent.stopPropagation(event.originalEvent);if(pinnedStopIndex===index){pinnedStopIndex=null;clearRouteLegHighlight();}else{pinnedStopIndex=index;highlightRouteLeg(index,true);}});});
+    result.paradas.forEach((p,index)=>{const bucket=`${Number(p.lat).toFixed(4)}:${Number(p.lng).toFixed(4)}`, offset=sobrepostos[bucket]||0;sobrepostos[bucket]=offset+1;const kind=[p.tipo==='manual'?'manual':'',p.localizacao_requer_revisao?'approximate':''].filter(Boolean).join(' ');const marker=addMarker(p.lat,p.lng,p.ordem,kind,p.tipo==='manual'?p.observacao:`#${p.numero} · ${p.cliente}`,offset,{draggable:true,onDragEnd:m=>saveDraggedStop(m,p)});marker.routeStopIndex=index;routeStopMarkers[index]=marker;marker.on('click',event=>{if(event.originalEvent)L.DomEvent.stopPropagation(event.originalEvent);if(pinnedStopIndex===index){pinnedStopIndex=null;clearRouteLegHighlight();}else{pinnedStopIndex=index;highlightRouteLeg(index,true);}});});
     document.getElementById('mapLegend').hidden=false;
     map.fitBounds(L.latLngBounds(geometry),{padding:[35,35]});
+  }
+
+  async function saveDraggedBranch(marker){
+    const previous=[Number(branch.lat),Number(branch.lng)],point=marker.getLatLng();
+    try{
+      const resp=await fetch(manualCoordinateUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({tipo:'filial',lat:point.lat,lng:point.lng})});
+      const data=await responseJson(resp);if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
+      branch.lat=data.lat;branch.lng=data.lng;branch.tem_coordenada=true;state.result=null;resetSummary();
+      document.getElementById('mapNote').textContent='Origem ajustada manualmente. Recalculando a rota…';
+      scheduleAutomaticCalculation(false,120);toast('Local da filial ajustado manualmente.');
+    }catch(error){marker.setLatLng(previous);toast(error.message,true);}
+  }
+
+  async function saveDraggedStop(marker,stop){
+    const previous=[Number(stop.lat),Number(stop.lng)],point=marker.getLatLng(),key=String(stop.chave||'');
+    try{
+      if(stop.tipo==='manual'){
+        const manual=stopByKey(key);if(!manual)throw new Error('Parada manual não encontrada.');
+        manual.lat=point.lat;manual.lng=point.lng;
+      }else{
+        const resp=await fetch(manualCoordinateUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({tipo:'pedido',id:stop.id,lat:point.lat,lng:point.lng})});
+        const data=await responseJson(resp);if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
+        const order=byId[String(stop.id)];
+        if(order){order.lat=data.lat;order.lng=data.lng;order.tem_coordenada=true;order.coordenada_aviso='';order.localizacao_requer_revisao=false;order.localizacao_origem='manual';}
+      }
+      stop.lat=point.lat;stop.lng=point.lng;stop.localizacao_requer_revisao=false;stop.localizacao_origem='manual';
+      if(key)state.locked.add(key);state.result=null;renderAvailable();renderRoute();resetSummary();
+      document.getElementById('mapNote').textContent='Ponto ajustado manualmente. Recalculando a rota…';
+      scheduleAutomaticCalculation(false,120);toast('Local da parada ajustado manualmente.');
+    }catch(error){marker.setLatLng(previous);toast(error.message,true);}
   }
 
   function renderAvailable() {
@@ -824,17 +863,20 @@
       return data.tem_coordenada;
     }catch(error){order.tem_coordenada=false;order.coordenada_aviso='Não foi possível validar a localização pelo CEP';toast(`${order.cliente}: ${error.message}`,true);return false;}
   }
+  function shouldRefreshLocation(order){
+    return Boolean(order?.localizacao_requer_revisao&&!['cep','rua','filial'].includes(order.localizacao_origem));
+  }
   async function refreshSelectedLocations() {
     let changed=false;
     for(const key of [...state.selected]){
       const order=stopByKey(key);
-      if(!String(key).startsWith('pedido:')||!order?.localizacao_requer_revisao)continue;
+      if(!String(key).startsWith('pedido:')||!shouldRefreshLocation(order))continue;
       const ok=await refreshOrderLocation(order);changed=true;
       if(!ok){state.selected=state.selected.filter(item=>item!==key);state.locked.delete(key);}
     }
     if(changed){state.result=null;renderAvailable();renderRoute();resetSummary();}
   }
-  async function toggleOrder(id,checked) { const key=orderKey(id),order=byId[String(id)];if(checked&&order?.localizacao_requer_revisao&&!await refreshOrderLocation(order)){renderAvailable();return;}if(checked&&!state.selected.includes(key))state.selected.push(key); if(!checked){state.selected=state.selected.filter(x=>x!==key);state.locked.delete(key);} state.result=null; renderAvailable();renderRoute();resetSummary();scheduleAutomaticCalculation(false); }
+  async function toggleOrder(id,checked) { const key=orderKey(id),order=byId[String(id)];if(checked&&shouldRefreshLocation(order)&&!await refreshOrderLocation(order)){renderAvailable();return;}if(checked&&!state.selected.includes(key))state.selected.push(key); if(!checked){state.selected=state.selected.filter(x=>x!==key);state.locked.delete(key);} state.result=null; renderAvailable();renderRoute();resetSummary();scheduleAutomaticCalculation(false); }
   function moveOrder(from,to) { if(!from||from===to)return; const old=state.selected.indexOf(from), target=state.selected.indexOf(to); if(old<0||target<0)return; state.selected.splice(old,1);state.selected.splice(target,0,from);state.locked.add(from);state.result=null;renderRoute();resetSummary();scheduleAutomaticCalculation(false,150); }
   function resetSummary(){document.getElementById('routeReturn').textContent='—';document.getElementById('routeDistance').textContent='—';document.getElementById('routeTimeline').innerHTML='<div class="dr-empty" style="width:100%;padding:6px;">Recalcule a rota para atualizar os horários.</div>';renderFuelCost();}
 
@@ -1121,7 +1163,7 @@
       const data=await resp.json(); if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
       if(sequence!==calculationSequence)return;
       state.selected=data.ordem_paradas; state.result=data; renderAvailable();renderRoute();drawRoute(data);renderSummary(data);
-      document.getElementById('mapNote').textContent=data.uso_comercial_liberado?'Rota calculada por ruas. Arraste uma parada para ajustar.':`Provider público ${data.provider}: configure um provider comercial antes do uso em produção.`;
+      document.getElementById('mapNote').textContent=data.uso_comercial_liberado?'Rota calculada por ruas. Arraste qualquer parada ou a origem para ajustar.':`Provider público ${data.provider}: configure um provider comercial antes do uso em produção. Os pinos continuam ajustáveis.`;
       toast(optimize?'Pedidos livres reotimizados.':'Rota calculada com sucesso.');
     }catch(error){if(sequence===calculationSequence){document.getElementById('mapNote').textContent=error.message;toast(error.message,true);}}finally{if(sequence===calculationSequence)buttons.forEach(b=>b.disabled=false);}
   }
