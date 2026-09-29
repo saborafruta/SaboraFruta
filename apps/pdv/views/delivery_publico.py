@@ -210,18 +210,26 @@ def _dados_pedidos(pedidos, etas=None):
 
 def _dados_paradas_rota(rota, pedidos):
     entregas = _dados_pedidos(pedidos, rota.pedido_etas)
-    from apps.pdv.views.pdv import _delivery_agrupar_paradas
+    from apps.pdv.views.pdv import _delivery_agrupar_paradas, _delivery_rota_endereco_campos
     grupos, _ = _delivery_agrupar_paradas([
         {'tipo': 'pedido', 'chave': entrega['chave'], 'venda': entrega['venda'],
          'ponto': (0, 0)}
         for entrega in entregas
     ], set())
+    entregas_por_chave = {entrega['chave']: entrega for entrega in entregas}
     for grupo in grupos:
-        if len(grupo['paradas']) < 2:
-            continue
+        representante = next(
+            (parada for parada in grupo['paradas']
+             if _delivery_rota_endereco_campos(parada['venda']).get('numero')),
+            grupo['paradas'][0],
+        )
+        entrega_representante = entregas_por_chave[representante['chave']]
+        endereco_local = entrega_representante['endereco']
         for parada in grupo['paradas']:
-            entrega = next(item for item in entregas if item['chave'] == parada['chave'])
-            entrega['mesmo_local_total'] = len(grupo['paradas'])
+            entrega = entregas_por_chave[parada['chave']]
+            entrega['local_chave'] = grupo['chave']
+            entrega['local_endereco'] = endereco_local
+            entrega['local_navegar_url'] = entrega_representante['navegar_url']
     conclusoes = rota.conclusoes_pedidos or {}
     for entrega in entregas:
         pedido_id = entrega['venda'].pk
@@ -274,14 +282,35 @@ def _dados_paradas_rota(rota, pedidos):
     return sorted(paradas, key=lambda item: (item['concluido'], item['ordem']))
 
 
+def _locais_painel(paradas):
+    """Mantém cada pedido independente, mas mostra os do mesmo acesso juntos."""
+    por_chave = {}
+    for parada in sorted(paradas, key=lambda item: item['ordem']):
+        chave = parada.get('local_chave') or parada['chave']
+        local = por_chave.setdefault(chave, {
+            'chave': chave, 'pedidos': [], 'endereco': parada.get('local_endereco') or parada['endereco'],
+            'ordem_inicial': parada['ordem'],
+            'navegar_url': parada.get('local_navegar_url') or parada['navegar_url'],
+        })
+        local['pedidos'].append(parada)
+    locais = sorted(por_chave.values(), key=lambda local: local['ordem_inicial'])
+    for numero, local in enumerate(locais, start=1):
+        local['numero'] = numero
+        local['total'] = len(local['pedidos'])
+        local['concluidos'] = sum(parada['concluido'] for parada in local['pedidos'])
+    return sorted(locais, key=lambda local: (local['concluidos'] == local['total'], local['numero']))
+
+
 @require_GET
 def painel(request, token):
     rota = _buscar_rota(token)
     pedidos = _pedidos_da_rota(rota)
     dados = _dados_paradas_rota(rota, pedidos)
+    locais = _locais_painel(dados)
     response = render(request, 'pdv/delivery_motorista_publico.html', {
         'rota': rota,
         'pedidos': dados,
+        'locais': locais,
         'total': len(dados),
         'concluidos': sum(1 for pedido in dados if pedido['concluido']),
         'google_maps_completa': _url_google_maps_completa(rota.filial, dados),

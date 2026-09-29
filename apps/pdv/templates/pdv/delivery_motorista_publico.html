@@ -13,6 +13,7 @@
     .order{background:var(--card);border:1px solid var(--line);border-radius:14px;margin:9px 0;overflow:hidden;transition:.2s}.order.done{border-color:#19865f;background:#12372e}.order.done .client-name,.order.done .address{text-decoration:line-through;color:#83b9a6}.order-main{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:11px}.route-check{display:grid;gap:6px;justify-items:center;cursor:pointer}.route-check input{width:22px;height:22px;margin:0;accent-color:var(--green)}.number{width:27px;height:27px;border-radius:50%;background:var(--blue);display:grid;place-items:center;font-size:12px;font-weight:900}.done .number{background:var(--green)}.summary-info{min-width:0}.client-name{margin:0 0 2px;color:#f2f6fc;font-size:13px;font-weight:900;overflow-wrap:anywhere}.address{font-size:12px;font-weight:650;margin:0;color:#c1cddd;overflow-wrap:anywhere}.quick-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:7px}.phone{color:#c8d6e9;text-decoration:none;font-weight:700}.eta{color:#91b7ff;font-size:11px;font-weight:850}.card-note{margin-top:7px;border-left:3px solid var(--amber);border-radius:5px;background:rgba(233,164,35,.1);padding:6px 8px;color:#ffd889;font-size:11px;white-space:pre-wrap}.tag{display:inline-flex;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:900}.paid{background:rgba(22,163,106,.16);color:#54dda7}.collect{background:rgba(233,164,35,.16);color:#ffc85c}.card-actions{display:grid;gap:7px}.card-actions .btn{width:36px;height:36px;min-height:36px;padding:0;border-radius:50%}.receipt{background:#27364a;border:1px solid #48617f;font-size:17px}.whatsapp{background:var(--green)}.whatsapp svg{width:19px;height:19px;fill:currentColor}
     .details-toggle{width:100%;border:0;border-top:1px solid var(--line);background:#111925;color:#91b7ff;padding:8px 12px;text-align:left;font:inherit;font-size:11px;font-weight:800;cursor:pointer}.details{border-top:1px solid var(--line)}.section{padding:10px 12px}.section+.section{border-top:1px solid var(--line)}.section-title{color:var(--muted);font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px}.info{margin:3px 0}.note{padding:8px;border-radius:9px;background:rgba(233,164,35,.1);color:#ffd889;margin-top:6px}.items{margin:0;padding:0;list-style:none}.items li{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px dashed #2d3b4e}.items li:first-child{border-top:0}.items span:last-child{white-space:nowrap;color:#c7d3e3}.item-note{display:block;color:#ffd889;font-size:11px;margin-top:2px}.details-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}.done-state{color:#60e3ad;font-weight:900}.empty{text-align:center;padding:35px 16px;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:14px}.foot{text-align:center;color:#718197;font-size:10px;margin-top:16px}
     .completion-meta{display:block;width:100%;color:#78e8ba;font-size:10px;font-weight:800;margin-top:2px}
+    .delivery-location.multi{margin:12px 0;border:1px solid #456487;border-radius:14px;overflow:hidden;background:#151e2b}.delivery-location.multi.done{border-color:#19865f}.location-head{display:flex;align-items:center;gap:10px;padding:11px;background:#213149}.location-number{flex:0 0 28px;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--blue);font-weight:900}.location-copy{min-width:0;flex:1}.location-copy strong{display:block;font-size:12px;overflow-wrap:anywhere}.location-copy small{display:block;color:#aebfd4;font-size:11px;margin-top:2px}.location-head .btn{min-height:32px;padding:5px 8px;font-size:10px}.delivery-location.multi .order{margin:0;border:0;border-top:1px solid #33445b;border-radius:0}.delivery-location.multi .order.done{background:#12372e}.delivery-location.multi .client-name{font-size:12px}.delivery-location.multi .address{color:#f0d898}.delivery-location.multi .order-main{padding:10px}.delivery-location.multi .route-check{padding-top:2px}
     @media(max-width:430px){.maps{align-items:stretch;flex-direction:column}.maps .btn{width:100%}.address{font-size:12px}.quick-meta{font-size:12px}}
   </style>
 </head>
@@ -23,31 +24,35 @@
     <h1>{{ rota.nome|default:"Rota do Delivery" }}</h1>
     <p class="sub">{% if rota.entregador %}Motoboy: {{ rota.entregador }} · {% endif %}atualizada em {{ rota.updated_at|date:"d/m/Y H:i" }}</p>
     <div class="summary">
-      <div class="stat"><small>Paradas</small><strong>{{ total }}</strong></div>
+      <div class="stat"><small>Locais / pedidos</small><strong>{{ locais|length }} / {{ total }}</strong></div>
       <div class="stat"><small>Concluídas</small><strong><span id="completedCount">{{ concluidos }}</span>/{{ total }}</strong></div>
     </div>
   </header>
 
   {% if google_maps_completa %}
   <section class="maps">
-    <div class="maps-text"><h2>Rota completa</h2><p>Confira as {{ total }} paradas antes de iniciar.</p></div>
+    <div class="maps-text"><h2>Rota completa</h2><p>Confira os {{ locais|length }} locais e {{ total }} pedidos antes de iniciar.</p></div>
     <a class="btn" href="{{ google_maps_completa }}" target="_blank" rel="noopener">Abrir no Google Maps · moto</a>
   </section>
   {% endif %}
 
   <section id="orderList">
-  {% for pedido in pedidos %}
+  {% for local in locais %}
+  <section class="delivery-location{% if local.total > 1 %} multi{% endif %}{% if local.concluidos == local.total %} done{% endif %}" data-location data-route-order="{{ local.numero }}">
+  {% if local.total > 1 %}
+    <header class="location-head"><span class="location-number">{{ local.numero }}</span><div class="location-copy"><strong>{{ local.endereco|default:"Local sem endereço" }}</strong><small>{{ local.total }} pedidos neste local · <span data-location-progress>{{ local.concluidos }}/{{ local.total }} concluídos</span></small></div>{% if local.navegar_url %}<a class="btn outline" href="{{ local.navegar_url }}" target="_blank" rel="noopener" aria-label="Navegar até o local {{ local.numero }}">Navegar</a>{% endif %}</header>
+  {% endif %}
+  {% for pedido in local.pedidos %}
   <article class="order{% if pedido.concluido %} done{% endif %}" id="{% if pedido.tipo == 'manual' %}parada-{{ pedido.manual_id }}{% else %}pedido-{{ pedido.venda.pk }}{% endif %}" data-order-card data-route-order="{{ pedido.ordem }}">
     <div class="order-main">
       <form class="route-check" method="post" action="{% if pedido.tipo == 'manual' %}{% url 'delivery_publico:concluir_parada_extra' rota.token pedido.manual_id %}{% else %}{% url 'delivery_publico:concluir' rota.token pedido.venda.pk %}{% endif %}">
         {% csrf_token %}
-        <span class="number">{{ pedido.ordem }}</span>
-        <input type="checkbox" aria-label="Marcar parada {{ pedido.ordem }} como entregue" data-delivery-check {% if pedido.concluido %}checked{% endif %} {% if not pedido.pode_alterar %}disabled{% endif %}>
+        {% if local.total == 1 %}<span class="number">{{ local.numero }}</span>{% endif %}
+        <input type="checkbox" aria-label="{% if local.total > 1 %}Marcar pedido #{{ pedido.venda.numero_venda }} como entregue{% else %}Marcar parada {{ local.numero }} como entregue{% endif %}" data-delivery-check {% if pedido.concluido %}checked{% endif %} {% if not pedido.pode_alterar %}disabled{% endif %}>
       </form>
       <div class="summary-info">
-        <p class="client-name">{{ pedido.cliente }}</p>
-        <p class="address">{{ pedido.endereco|default:"Endereço não informado" }}{% if pedido.complemento %} · {{ pedido.complemento }}{% endif %}</p>
-        {% if pedido.mesmo_local_total %}<div class="card-note">Mesmo local: {{ pedido.mesmo_local_total }} pedidos. Confira a casa ou complemento de cada entrega.</div>{% endif %}
+        <p class="client-name">{% if local.total > 1 and pedido.tipo != 'manual' %}#{{ pedido.venda.numero_venda }} · {% endif %}{{ pedido.cliente }}</p>
+        <p class="address">{% if local.total > 1 and pedido.complemento %}{{ pedido.complemento }}{% else %}{{ pedido.endereco|default:"Endereço não informado" }}{% if pedido.complemento %} · {{ pedido.complemento }}{% endif %}{% endif %}</p>
         <div class="quick-meta">
           {% if pedido.tipo != 'manual' or pedido.origem == 'oportunidade' %}{% if pedido.telefone %}<a class="phone" href="tel:{{ pedido.telefone }}">☎ {{ pedido.telefone }}</a>{% else %}<span class="phone">Telefone não informado</span>{% endif %}{% endif %}
           {% if pedido.eta %}<span class="eta">◷ Chegada {{ pedido.eta }}</span>{% endif %}
@@ -84,6 +89,8 @@
       </div>{% else %}<div class="section"><div class="details-actions">{% if pedido.navegar_url %}<a class="btn outline" href="{{ pedido.navegar_url }}" target="_blank" rel="noopener">Navegar até esta parada</a>{% endif %}{% if pedido.concluido %}<span class="done-state" data-done-state>✓ Parada concluída</span>{% else %}<span class="done-state" data-done-state hidden>✓ Parada concluída</span>{% endif %}</div></div>{% endif %}
     </div>
   </article>
+  {% endfor %}
+  </section>
   {% empty %}<div class="empty">Nenhum pedido publicado nesta rota.</div>{% endfor %}
   </section>
 
@@ -101,14 +108,22 @@
     });
   });
 
-  function reorderCards() {
+  function reorderLocations() {
     const list = document.getElementById('orderList');
-    [...list.querySelectorAll('[data-order-card]')]
+    [...list.querySelectorAll('[data-location]')]
       .sort((a, b) => (
-        Number(a.classList.contains('done')) - Number(b.classList.contains('done'))
+        Number([...a.querySelectorAll('[data-order-card]')].every(card => card.classList.contains('done')))
+        - Number([...b.querySelectorAll('[data-order-card]')].every(card => card.classList.contains('done')))
         || Number(a.dataset.routeOrder) - Number(b.dataset.routeOrder)
       ))
-      .forEach(card => list.appendChild(card));
+      .forEach(local => {
+        const cards = [...local.querySelectorAll('[data-order-card]')];
+        const completed = cards.filter(card => card.classList.contains('done')).length;
+        local.classList.toggle('done', completed === cards.length);
+        const progress = local.querySelector('[data-location-progress]');
+        if (progress) progress.textContent = `${completed}/${cards.length} concluídos`;
+        list.appendChild(local);
+      });
   }
 
   document.querySelectorAll('[data-delivery-check]:not(:disabled)').forEach(check => {
@@ -147,7 +162,7 @@
         }
         const count = document.getElementById('completedCount');
         count.textContent = String(Number(count.textContent) + (concluindo ? 1 : -1));
-        reorderCards();
+        reorderLocations();
         check.disabled = false;
       } catch (error) {
         check.checked = !concluindo;

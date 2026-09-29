@@ -1544,9 +1544,10 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         self.assertEqual(rota.pedido_etas, {str(venda.pk): '14:35'})
         self.assertContains(resp, 'Chegada 14:35')
 
-    def test_painel_avisa_quando_pedidos_compartilham_o_condominio(self):
+    def test_painel_agrupa_pedidos_do_mesmo_condominio_sem_repetir_aviso(self):
         numerado = self._venda(numero=413)
         sem_numero = self._venda(numero=414)
+        outro_local = self._venda(numero=415)
         endereco = {'cep': '59158155', 'rua': 'Avenida Antartida',
                     'bairro': 'Parque das Nacoes', 'cidade': 'Parnamirim', 'uf': 'RN'}
         numerado.endereco_entrega = {**endereco, 'numero': '501',
@@ -1555,14 +1556,31 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
                                       'complemento': 'Condominio Novo Leblon - Casa A N 25'}
         numerado.save(update_fields=['endereco_entrega'])
         sem_numero.save(update_fields=['endereco_entrega'])
-        url = self._publicar([numerado, sem_numero]).json()['url']
+        url = self._publicar([numerado, outro_local, sem_numero]).json()['url']
         self.client.logout()
 
         resp = self.client.get(url)
 
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, 'Mesmo local: 2 pedidos', count=2)
+        self.assertEqual(len(resp.context['locais']), 2)
+        self.assertEqual(resp.context['locais'][0]['total'], 2)
+        self.assertEqual(
+            [pedido['venda'].pk for pedido in resp.context['locais'][0]['pedidos']],
+            [numerado.pk, sem_numero.pk],
+        )
+        self.assertContains(resp, '2 pedidos neste local', count=1)
+        self.assertContains(resp, ' data-location data-route-order=', count=2)
+        self.assertNotContains(resp, 'Mesmo local:')
+        self.assertContains(resp, 'Marcar pedido #413 como entregue')
+        self.assertContains(resp, 'Marcar pedido #414 como entregue')
         self.assertContains(resp, 'Casa A N 25')
+
+        numerado.status_delivery = VendaPDV.StatusDelivery.ENTREGUE
+        numerado.save(update_fields=['status_delivery'])
+        parcial = self.client.get(url)
+        self.assertEqual(parcial.context['locais'][0]['concluidos'], 1)
+        self.assertContains(parcial, '1/2 concluídos')
+        self.assertContains(parcial, 'Marcar pedido #414 como entregue')
 
     def test_painel_publico_nao_marca_venda_pendente_como_paga(self):
         venda = self._venda(numero=411)
