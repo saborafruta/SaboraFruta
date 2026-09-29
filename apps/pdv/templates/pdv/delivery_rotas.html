@@ -139,7 +139,14 @@
   .dr-marker.base { background:#2563eb; }
   .dr-marker.manual { background:#d28a18; }
   .dr-marker.approximate { background:#b45309; box-shadow:0 0 0 4px rgba(245,158,11,.35),0 3px 10px #000a; }
-  .dr-marker-count { position:absolute; top:-8px; right:-11px; min-width:17px; height:17px; border:2px solid #fff; border-radius:999px; background:#111827; padding:0 3px; color:#fff; font-size:8px; line-height:13px; text-align:center; }
+  .dr-marker-count { position:absolute; top:-11px; left:22px; width:max-content; height:19px; border:2px solid #fff; border-radius:999px; background:#111827; padding:0 5px; color:#fff; font-size:9px; line-height:15px; text-align:center; white-space:nowrap; }
+  .dr-location-popup { color:#1f2937; font-size:11px; }
+  .dr-location-popup strong { display:block; margin-bottom:3px; font-size:12px; }
+  .dr-location-popup-address { color:#475569; line-height:1.35; }
+  .dr-location-popup-list { max-height:210px; overflow-y:auto; margin:8px 0 0; padding:0; list-style:none; }
+  .dr-location-popup-list li { padding:6px 0; border-top:1px solid #e2e8f0; }
+  .dr-location-popup-list small { display:block; margin-top:2px; color:#475569; font-size:10px; }
+  .dr-location-popup-missing { color:#b91c1c; font-weight:800; }
   .leaflet-marker-draggable .dr-marker { cursor:grab; }
   .leaflet-marker-draggable:active .dr-marker { cursor:grabbing; transform:scale(1.08); }
   .dr-marker.route-leg-origin { transform:scale(1.14); background:#0ea5e9; box-shadow:0 0 0 5px rgba(14,165,233,.28),0 4px 14px #000b; }
@@ -716,9 +723,9 @@
   }
   function addMarker(lat,lng,label,kind,title,offsetIndex=0,options={}) {
     const offsets=[[0,0],[28,0],[-28,0],[0,28],[0,-28],[22,22],[-22,-22]], offset=offsets[offsetIndex%offsets.length];
-    const count=Number(options.count||0),countBadge=count>1?`<span class="dr-marker-count">${count}</span>`:'';
+    const count=Number(options.count||0),countBadge=count>1?`<span class="dr-marker-count">${count} pedidos</span>`:'';
     const icon=L.divIcon({className:'',iconSize:[30,30],iconAnchor:[15-offset[0],15-offset[1]],html:`<div class="dr-marker ${kind||''}">${esc(label)}${countBadge}</div>`});
-    const marker=L.marker([lat,lng],{icon,title,draggable:Boolean(options.draggable)}).addTo(map).bindPopup(esc(title));
+    const marker=L.marker([lat,lng],{icon,title,draggable:Boolean(options.draggable)}).addTo(map).bindPopup(options.popupHtml||esc(title),options.popupOptions||{});
     if(options.draggable){
       marker.on('dragstart',()=>{pinnedStopIndex=null;clearRouteLegHighlight();marker.closePopup();});
       marker.on('dragend',()=>options.onDragEnd?.(marker));
@@ -772,6 +779,15 @@
     const center=branch.tem_coordenada?[branch.lat,branch.lng]:[-14.235,-51.925];
     map.setView(center,branch.tem_coordenada?13:4);
   }
+  function locationPopupHtml(stop,index){
+    const members=(stop.membros||stop.pedidos||[]).filter(member=>member.tipo==='pedido');
+    if(members.length<2)return '';
+    const rows=members.map(member=>{
+      const order=byId[String(member.id)],complement=order?.complemento||order?.endereco_campos?.complemento||'',missingNumber=order&&!String(order.endereco_campos?.numero||'').trim();
+      return `<li><span><b>#${esc(member.numero)}</b> · ${esc(member.cliente)}</span>${complement?`<small>${esc(complement)}</small>`:''}${missingNumber?'<small class="dr-location-popup-missing">! Número do endereço não informado</small>':''}</li>`;
+    }).join('');
+    return `<div class="dr-location-popup"><strong>Local ${index+1} · ${members.length} pedidos</strong><div class="dr-location-popup-address">${esc(physicalAddress(stop))}</div><ul class="dr-location-popup-list">${rows}</ul></div>`;
+  }
   function drawRoute(result) {
     clearRoute();
     const geometry=result.geometria||[],stops=result.locais||result.paradas||[];
@@ -790,7 +806,7 @@
       returnAccentLine=L.polyline(returning,{color:'#f8fafc',weight:3,opacity:.95,dashArray:'8 10',lineCap:'butt'}).addTo(map);
     }
     const sobrepostos={};
-    stops.forEach((p,index)=>{const bucket=`${Number(p.lat).toFixed(4)}:${Number(p.lng).toFixed(4)}`, offset=sobrepostos[bucket]||0;sobrepostos[bucket]=offset+1;const kind=[p.tipo==='manual'?'manual':'',p.localizacao_requer_revisao?'approximate':''].filter(Boolean).join(' '),count=Number(p.total_pedidos||0),title=p.tipo==='manual'?p.observacao:count>1?`${count} pedidos · ${physicalAddress(p)}`:`#${p.pedidos?.[0]?.numero||''} · ${p.pedidos?.[0]?.cliente||p.cliente}`;const marker=addMarker(p.lat,p.lng,p.ordem,kind,title,offset,{draggable:true,count,onDragEnd:m=>saveDraggedStop(m,p)});marker.routeStopIndex=index;routeStopMarkers[index]=marker;marker.on('click',event=>{if(event.originalEvent)L.DomEvent.stopPropagation(event.originalEvent);if(pinnedStopIndex===index){pinnedStopIndex=null;clearRouteLegHighlight();}else{pinnedStopIndex=index;highlightRouteLeg(index,true);}});});
+    stops.forEach((p,index)=>{const bucket=`${Number(p.lat).toFixed(4)}:${Number(p.lng).toFixed(4)}`, offset=sobrepostos[bucket]||0;sobrepostos[bucket]=offset+1;const kind=[p.tipo==='manual'?'manual':'',p.localizacao_requer_revisao?'approximate':''].filter(Boolean).join(' '),count=Number(p.total_pedidos||0),title=p.tipo==='manual'?p.observacao:count>1?`${count} pedidos · ${physicalAddress(p)}`:`#${p.pedidos?.[0]?.numero||''} · ${p.pedidos?.[0]?.cliente||p.cliente}`;const popupHtml=locationPopupHtml(p,index);const marker=addMarker(p.lat,p.lng,p.ordem,kind,title,offset,{draggable:true,count,popupHtml,popupOptions:popupHtml?{minWidth:250,maxWidth:340,autoPanPadding:[25,25]}:{},onDragEnd:m=>saveDraggedStop(m,p)});marker.routeStopIndex=index;routeStopMarkers[index]=marker;marker.on('click',event=>{if(event.originalEvent)L.DomEvent.stopPropagation(event.originalEvent);if(pinnedStopIndex===index){pinnedStopIndex=null;clearRouteLegHighlight();}else{pinnedStopIndex=index;highlightRouteLeg(index,count<2);}});});
     document.getElementById('mapLegend').hidden=false;
     map.fitBounds(L.latLngBounds(geometry),{padding:[35,35]});
   }
