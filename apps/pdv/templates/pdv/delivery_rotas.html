@@ -82,7 +82,7 @@
   .dr-location-group-head strong { color:var(--active-route-color,#60a5fa); }
   .dr-location-group-count { margin-left:auto; border-radius:999px; background:#303b4c; padding:2px 6px; color:#cbd8e8; white-space:nowrap; }
   .dr-location-group.route-leg-active { border-color:#f6b73c; box-shadow:0 0 0 2px rgba(246,183,60,.2); }
-  .dr-card.unavailable { opacity:.55; }
+  .dr-card.needs-location { border-color:#6b4a1f; }
   .dr-card.dragging { opacity:.35; }
   .dr-check { margin-top:3px; accent-color:#2563eb; }
   .dr-order { display:flex; align-items:center; justify-content:center; width:23px; height:23px; border-radius:50%; background:var(--active-route-color,#2563eb); color:#fff; font-size:10px; font-weight:850; }
@@ -848,9 +848,9 @@
     document.getElementById('selectAllOrders').disabled=!orders.some(o=>!state.selected.includes(orderKey(o.id)));
     document.getElementById('deselectAllOrders').disabled=!state.selected.some(key=>key.startsWith('pedido:'));
     document.getElementById('availableList').innerHTML=shown.length?shown.map(o=>`
-      <div class="dr-card ${o.tem_coordenada?'':'unavailable'}">
-        <input class="dr-check" type="checkbox" data-select="${o.id}" ${state.selected.includes(orderKey(o.id))?'checked':''} ${o.tem_coordenada?'':'disabled'}>
-        <div><div class="dr-client">#${esc(o.numero)} · ${esc(o.cliente)} ${addressWarningIcon(o)}</div><div class="dr-meta">${esc(address(o))}</div><div class="dr-badges"><span class="dr-badge">${esc(o.status_label)}</span><span class="dr-badge blue">${esc(o.pagamento)}</span>${paymentBadge(o)}</div></div>
+      <div class="dr-card ${o.tem_coordenada?'':'needs-location'}">
+        <input class="dr-check" type="checkbox" data-select="${o.id}" ${state.selected.includes(orderKey(o.id))?'checked':''} title="${o.tem_coordenada?'Adicionar ou remover da rota':'Marcar e tentar localizar este endereço'}">
+        <div><div class="dr-client">#${esc(o.numero)} · ${esc(o.cliente)} ${addressWarningIcon(o)}</div><div class="dr-meta">${esc(address(o))}</div><div class="dr-badges"><span class="dr-badge">${esc(o.status_label)}</span><span class="dr-badge blue">${esc(o.pagamento)}</span>${!o.tem_coordenada?'<span class="dr-badge warn">Localizar ao marcar</span>':''}${paymentBadge(o)}</div></div>
         <div class="dr-card-actions"><div class="dr-price">${money(o.valor)}</div>${receiptLink(o)}<button class="dr-edit-address" type="button" data-edit-address="${o.id}" title="Editar ou confirmar endereço">✎ Endereço</button></div>
       </div>`).join(''):'<div class="dr-empty">Nenhum pedido encontrado.</div>';
     document.querySelectorAll('[data-select]').forEach(el=>el.addEventListener('change',()=>toggleOrder(Number(el.dataset.select),el.checked)));
@@ -942,7 +942,18 @@
     }
     if(changed){state.result=null;renderAvailable();renderRoute();resetSummary();}
   }
-  async function toggleOrder(id,checked) { const key=orderKey(id),order=byId[String(id)];if(checked&&shouldRefreshLocation(order)&&!await refreshOrderLocation(order)){renderAvailable();return;}if(checked&&!state.selected.includes(key))state.selected.push(key); if(!checked){state.selected=state.selected.filter(x=>x!==key);state.locked.delete(key);} state.result=null; renderAvailable();renderRoute();resetSummary();scheduleAutomaticCalculation(false); }
+  async function toggleOrder(id,checked) {
+    const key=orderKey(id),order=byId[String(id)];
+    if(checked&&!order.tem_coordenada&&!await refreshOrderLocation(order,true)){
+      renderAvailable();openAddressModal(id);return;
+    }
+    if(checked&&shouldRefreshLocation(order)&&!await refreshOrderLocation(order)){
+      renderAvailable();openAddressModal(id);return;
+    }
+    if(checked&&!state.selected.includes(key))state.selected.push(key);
+    if(!checked){state.selected=state.selected.filter(x=>x!==key);state.locked.delete(key);}
+    state.result=null;renderAvailable();renderRoute();resetSummary();scheduleAutomaticCalculation(false);
+  }
   async function selectAllOrders(){
     const button=document.getElementById('selectAllOrders');button.disabled=true;
     const pendentes=[];
