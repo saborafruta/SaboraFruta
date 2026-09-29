@@ -3414,6 +3414,8 @@ def _delivery_rota_localizacao(venda):
                 f'⚠ O número {endereco["numero"]} foi estimado ao longo da rua, '
                 'não confirmado na porta. Confira e arraste o pino se necessário.'
             )
+            if snapshot.get('_geo_cep_divergente'):
+                aviso += f' O mapa informa outro CEP: {snapshot["_geo_cep_divergente"]}.'
         elif origem == 'estabelecimento':
             referencia = snapshot.get('_geo_referencia') or 'estabelecimento'
             aviso = f'⚠ Localização encontrada pelo nome "{referencia}"; confira o pino.'
@@ -3523,6 +3525,10 @@ def _delivery_rota_serializar_pedido(venda):
         'tem_coordenada': localizacao['ok'],
         'coordenada_aviso': localizacao['aviso'],
         'localizacao_requer_revisao': localizacao_requer_revisao,
+        'localizacao_revalidacao_pendente': bool(
+            origem == 'cep' and endereco['numero'] and
+            snapshot.get('_geo_lookup_version') != 3
+        ),
         'localizacao_origem': origem or ('manual' if cliente and cliente.geo_fixado else ''),
         'endereco_campos': endereco,
         'itens': [
@@ -4253,6 +4259,7 @@ def delivery_rota_atualizar_endereco(request, pk):
 
     resultado_cep = None
     cep_validado = endereco_exato
+    cep_resultado_divergente = ''
 
     if not endereco_exato:
         from apps.mapas.services.otimizacao import distancia_haversine_m
@@ -4270,6 +4277,48 @@ def delivery_rota_atualizar_endereco(request, pk):
             geocoder=AwesomeApiCepGeocoder(),
         ).resolver(endereco_texto, hash_cep)
         cep_validado = resultado_cep.ok
+        numero_sem_cep_compativel = False
+
+        # Em avenidas que separam bairros, os dois lados podem ter CEPs
+        # diferentes. Se o ArcGIS só rejeitou o CEP, tente o número sem ele:
+        # aceite apenas a mesma rua e cidade, próximo ao ponto do CEP. Ainda
+        # assim é uma posição interpolada, nunca uma porta confirmada.
+        if (
+            resultado_endereco.erro == 'resultado incompatível com o CEP informado'
+            and resultado_cep.ok and endereco['numero']
+        ):
+            consulta_sem_cep = ', '.join(filter(None, [
+                f'{endereco["rua"]}, {endereco["numero"]}', endereco['bairro'],
+                endereco['cidade'], endereco['uf'], 'Brasil',
+            ]))
+            hash_sem_cep = hashlib.md5(
+                f'arcgis-entrega-sem-cep-v1:{endereco_hash}'.encode('utf-8')
+            ).hexdigest()
+            candidato_numero = GeocodificacaoService(
+                geocoder=ArcGISGeocoder(),
+            ).resolver(consulta_sem_cep, hash_sem_cep)
+            detalhes_numero = candidato_numero.detalhes or {}
+
+            def normalizar_rua(valor):
+                texto = unicodedata.normalize('NFD', str(valor or '').casefold())
+                return re.sub(r'[^a-z0-9]+', '', ''.join(
+                    char for char in texto if not unicodedata.combining(char)
+                ))
+
+            if (
+                candidato_numero.ok
+                and str(detalhes_numero.get('tipo') or '').casefold() == 'streetaddress'
+                and float(detalhes_numero.get('pontuacao') or 0) >= 95
+                and normalizar_rua(detalhes_numero.get('numero')) == normalizar_rua(endereco['numero'])
+                and normalizar_rua(endereco['rua']) in normalizar_rua(detalhes_numero.get('endereco'))
+                and distancia_haversine_m(
+                    (resultado_cep.latitude, resultado_cep.longitude),
+                    (candidato_numero.latitude, candidato_numero.longitude),
+                ) <= 2000
+            ):
+                resultado_endereco = candidato_numero
+                numero_sem_cep_compativel = True
+                cep_resultado_divergente = str(detalhes_numero.get('cep') or '')
 
         cliente_nome = ''
         if venda.cliente:
@@ -4277,9 +4326,9 @@ def delivery_rota_atualizar_endereco(request, pk):
                 venda.cliente.nome_fantasia or venda.cliente.razao_social or ''
             ).strip()
         referencias = []
-        if endereco['numero'] and endereco['complemento']:
+        if not numero_sem_cep_compativel and endereco['numero'] and endereco['complemento']:
             referencias.append(('complemento', endereco['complemento']))
-        if endereco['numero'] and cliente_nome and cliente_nome.casefold() not in {
+        if not numero_sem_cep_compativel and endereco['numero'] and cliente_nome and cliente_nome.casefold() not in {
             valor.casefold() for _, valor in referencias
         }:
             referencias.append(('estabelecimento', cliente_nome))
@@ -4401,6 +4450,8 @@ def delivery_rota_atualizar_endereco(request, pk):
                 if origem_coordenada == 'cep' else ArcGISGeocoder.nome
             ),
             '_geo_cep_validado': cep_validado,
+            '_geo_cep_divergente': cep_resultado_divergente,
+            '_geo_lookup_version': 3,
         })
         venda.endereco_entrega = snapshot
         venda.save(update_fields=['endereco_entrega', 'updated_at'])
@@ -4459,6 +4510,8 @@ def delivery_rota_atualizar_endereco(request, pk):
             f'⚠ O número {endereco["numero"]} foi estimado ao longo da rua, '
             'não confirmado na porta. Confira e arraste o pino se necessário.'
         )
+        if cep_resultado_divergente:
+            aviso += f' O mapa informa outro CEP: {cep_resultado_divergente}.'
     elif origem_coordenada in {'cep', 'rua', 'filial'}:
         referencia_generica = {
             'cep': 'do CEP', 'rua': 'da rua', 'filial': 'da filial',
@@ -4997,8 +5050,6 @@ def delivery_rota_calcular(request):
             ids.append(pk)
     if not entradas:
         return JsonResponse({'erro': 'Adicione ao menos uma parada.'}, status=400)
-    if len(entradas) > MAX_PARADAS:
-        return JsonResponse({'erro': f'Adicione no máximo {MAX_PARADAS} paradas.'}, status=400)
 
     encontrados = {
         v.pk: v for v in _delivery_rota_pedidos(request.filial_ativa).filter(pk__in=ids)
@@ -5072,6 +5123,8 @@ def delivery_rota_calcular(request):
 
     travados = {str(chave) for chave in (corpo.get('travados') or []) if str(chave) in chaves_vistas}
     grupos, travados_locais = _delivery_agrupar_paradas(paradas, travados)
+    if len(grupos) > MAX_PARADAS:
+        return JsonResponse({'erro': f'Adicione no máximo {MAX_PARADAS} locais à rota.'}, status=400)
     pontos_entrega_originais = [grupo['ponto'] for grupo in grupos]
     roteirizador = construir_roteirizador()
     if corpo.get('otimizar'):

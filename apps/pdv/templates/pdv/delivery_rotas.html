@@ -878,6 +878,15 @@
           <div class="dr-card-actions">${manual?`<button class="dr-edit-address" type="button" data-edit-manual="${esc(key)}">✎ Endereço</button><button class="dr-edit-address" type="button" data-edit-stop="${esc(key)}">✎ Observação</button><button class="dr-edit-address" type="button" data-sale-stop="${esc(key)}">＋ Venda</button><button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:`${receiptLink(o)}<button class="dr-edit-address" type="button" data-edit-address="${o.id}">✎ Endereço</button><button class="dr-complete-stop ${deliveryComplete(o)?'completed':''}" type="button" data-complete-order="${o.id}">${deliveryComplete(o)?'↶ Desmarcar conclusão':'✓ Marcar concluída'}</button>`}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição: esta parada voltará a participar da otimização.':'Travar posição. Paradas movidas manualmente são travadas automaticamente.'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
         </div>`}).join('')}
       </section>`;}).join(''):'<div class="dr-empty">Marque pedidos ou adicione uma parada manual.</div>';
+    document.querySelectorAll('#routeList [data-route-id^="pedido:"]').forEach(card=>{
+      const order=stopByKey(card.dataset.routeId);
+      if(!order||!['cep','rua','filial','interpolado'].includes(order.localizacao_origem))return;
+      const badge=document.createElement('span');
+      badge.className='dr-badge warn';
+      badge.textContent='Ponto aproximado · confira no mapa';
+      badge.title=order.coordenada_aviso||'Arraste o pino para ajustar a localização.';
+      card.querySelector('.dr-badges')?.appendChild(badge);
+    });
     document.querySelectorAll('[data-lock]').forEach(b=>b.addEventListener('click',()=>{const key=b.dataset.lock;state.locked.has(key)?state.locked.delete(key):state.locked.add(key);renderRoute();}));
     document.querySelectorAll('[data-remove-stop]').forEach(b=>b.addEventListener('click',()=>removeManualStop(b.dataset.removeStop)));
     document.querySelectorAll('[data-edit-manual]').forEach(b=>b.addEventListener('click',()=>openManualStopModal(b.dataset.editManual)));
@@ -913,6 +922,7 @@
   }
   async function refreshOrderLocation(order,force=false,silent=false) {
     if(!force&&!order?.localizacao_requer_revisao)return Boolean(order?.tem_coordenada);
+    const previousLocation={lat:order.lat,lng:order.lng,tem_coordenada:order.tem_coordenada,coordenada_aviso:order.coordenada_aviso};
     try{
       const url=addressUrlTemplate.replace('/0/','/'+order.id+'/');
       const payload={...order.endereco_campos,atualizar_cliente:false};
@@ -933,11 +943,20 @@
       order.lat=data.lat;order.lng=data.lng;order.tem_coordenada=data.tem_coordenada;order.coordenada_aviso=data.coordenada_aviso||'';
       order.localizacao_origem=data.localizacao_origem||order.localizacao_origem;
       order.localizacao_requer_revisao=Boolean(data.localizacao_requer_revisao);
+      order.localizacao_revalidacao_pendente=false;
       return data.tem_coordenada;
-    }catch(error){order.tem_coordenada=false;order.coordenada_aviso='Não foi possível validar a localização pelo CEP';if(!silent)toast(`${order.cliente}: ${error.message}`,true);return false;}
+    }catch(error){
+      if(order.localizacao_revalidacao_pendente&&previousLocation.tem_coordenada){
+        Object.assign(order,previousLocation);
+        if(!silent)toast(`${order.cliente}: não foi possível revalidar o ponto aproximado; confira-o no mapa.`,true);
+        return true;
+      }
+      order.tem_coordenada=false;order.coordenada_aviso='Não foi possível validar a localização pelo CEP';if(!silent)toast(`${order.cliente}: ${error.message}`,true);return false;
+    }
   }
   function shouldRefreshLocation(order){
-    return Boolean(order?.localizacao_requer_revisao&&!['interpolado','cep','rua','filial'].includes(order.localizacao_origem));
+    return Boolean(order?.localizacao_revalidacao_pendente||
+      (order?.localizacao_requer_revisao&&!['interpolado','cep','rua','filial'].includes(order.localizacao_origem)));
   }
   async function refreshSelectedLocations() {
     let changed=false;
