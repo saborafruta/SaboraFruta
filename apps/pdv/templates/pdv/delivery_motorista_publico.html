@@ -47,6 +47,7 @@
       <div class="summary-info">
         <p class="client-name">{{ pedido.cliente }}</p>
         <p class="address">{{ pedido.endereco|default:"Endereço não informado" }}{% if pedido.complemento %} · {{ pedido.complemento }}{% endif %}</p>
+        {% if pedido.mesmo_local_total %}<div class="card-note">Mesmo local: {{ pedido.mesmo_local_total }} pedidos. Confira a casa ou complemento de cada entrega.</div>{% endif %}
         <div class="quick-meta">
           {% if pedido.tipo != 'manual' or pedido.origem == 'oportunidade' %}{% if pedido.telefone %}<a class="phone" href="tel:{{ pedido.telefone }}">☎ {{ pedido.telefone }}</a>{% else %}<span class="phone">Telefone não informado</span>{% endif %}{% endif %}
           {% if pedido.eta %}<span class="eta">◷ Chegada {{ pedido.eta }}</span>{% endif %}

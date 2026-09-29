@@ -4541,11 +4541,13 @@ def delivery_rota_atualizar_coordenada_manual(request):
     if len(vendas) != len(pedido_ids):
         return JsonResponse({'erro': 'Há pedidos inválidos na parada.'}, status=400)
     if len(vendas) > 1:
-        chaves = {
-            _delivery_chave_local({'tipo': 'pedido', 'chave': f'pedido:{venda.pk}', 'venda': venda})
+        paradas = [
+            {'tipo': 'pedido', 'chave': f'pedido:{venda.pk}', 'venda': venda,
+             'ponto': (latitude, longitude)}
             for venda in vendas
-        }
-        if len(chaves) != 1 or next(iter(chaves)).startswith('pedido:'):
+        ]
+        grupos, _ = _delivery_agrupar_paradas(paradas, set())
+        if len(grupos) != 1 or grupos[0]['chave'].startswith('pedido:'):
             return JsonResponse({'erro': 'Os pedidos não pertencem ao mesmo endereço.'}, status=400)
     with tenant_atomic():
         for venda in vendas:
@@ -4800,6 +4802,31 @@ def _delivery_chave_local(parada):
     return f'local:{digest}'
 
 
+def _delivery_condominio(parada):
+    if parada['tipo'] != 'pedido':
+        return ''
+    complemento = _delivery_rota_endereco_campos(parada['venda']).get('complemento') or ''
+    texto = unicodedata.normalize('NFD', complemento.casefold())
+    texto = ''.join(char for char in texto if not unicodedata.combining(char))
+    encontrado = re.search(
+        r'\b(?:condominio|residencial)\s+(.+?)(?=\s*[-,]?\s*'
+        r'(?:casa|apto|apartamento|bloco|lote|quadra)\b|$)', texto,
+    )
+    return re.sub(r'[^a-z0-9]+', '', encontrado.group(1)) if encontrado else ''
+
+
+def _delivery_chave_rua(parada):
+    if parada['tipo'] != 'pedido':
+        return ''
+    endereco = _delivery_rota_endereco_campos(parada['venda'])
+    campos = [endereco.get(campo) or '' for campo in ('cep', 'rua', 'cidade', 'uf')]
+    campos = [re.sub(r'[^a-z0-9]+', '', ''.join(
+        char for char in unicodedata.normalize('NFD', valor.casefold())
+        if not unicodedata.combining(char)
+    )) for valor in campos]
+    return '|'.join(campos) if all(campos) else ''
+
+
 def _delivery_prioridade_ponto(parada):
     if parada['tipo'] != 'pedido':
         return 100
@@ -4845,6 +4872,29 @@ def _delivery_agrupar_paradas(paradas, travadas):
         if prioridade > grupo['prioridade_ponto']:
             grupo['ponto'] = parada['ponto']
             grupo['prioridade_ponto'] = prioridade
+    # Sem número, somente anexe a um endereço numerado quando o condomínio
+    # informado no complemento e toda a rua/CEP/cidade/UF coincidirem.
+    for grupo in list(grupos):
+        if not grupo['chave'].startswith('pedido:') or len(grupo['paradas']) != 1:
+            continue
+        parada = grupo['paradas'][0]
+        condominio = _delivery_condominio(parada)
+        rua = _delivery_chave_rua(parada)
+        if not condominio or not rua:
+            continue
+        candidatos = [outro for outro in grupos if outro is not grupo
+                      and outro['chave'].startswith('local:')
+                      and any(_delivery_chave_rua(item) == rua
+                              and _delivery_condominio(item) == condominio
+                              for item in outro['paradas'])]
+        if len(candidatos) != 1:
+            continue
+        destino = candidatos[0]
+        destino['paradas'].append(parada)
+        grupos.remove(grupo)
+        if grupo['prioridade_ponto'] > destino['prioridade_ponto']:
+            destino['ponto'] = grupo['ponto']
+            destino['prioridade_ponto'] = grupo['prioridade_ponto']
     travados_locais = {
         grupo['chave'] for grupo in grupos
         if any(parada['chave'] in travadas for parada in grupo['paradas'])
@@ -5142,6 +5192,7 @@ def delivery_rota_calcular(request):
         'ordem_paradas': [p['chave'] for p in paradas],
         'paradas': paradas_resposta,
         'locais': locais_resposta,
+        'agrupamento_versao': 2,
         'total_locais': len(locais_resposta),
         'geometria': rota.geometria,
         'distancia_km': round(rota.distancia_m / 1000, 1),

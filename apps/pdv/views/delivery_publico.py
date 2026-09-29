@@ -210,6 +210,18 @@ def _dados_pedidos(pedidos, etas=None):
 
 def _dados_paradas_rota(rota, pedidos):
     entregas = _dados_pedidos(pedidos, rota.pedido_etas)
+    from apps.pdv.views.pdv import _delivery_agrupar_paradas
+    grupos, _ = _delivery_agrupar_paradas([
+        {'tipo': 'pedido', 'chave': entrega['chave'], 'venda': entrega['venda'],
+         'ponto': (0, 0)}
+        for entrega in entregas
+    ], set())
+    for grupo in grupos:
+        if len(grupo['paradas']) < 2:
+            continue
+        for parada in grupo['paradas']:
+            entrega = next(item for item in entregas if item['chave'] == parada['chave'])
+            entrega['mesmo_local_total'] = len(grupo['paradas'])
     conclusoes = rota.conclusoes_pedidos or {}
     for entrega in entregas:
         pedido_id = entrega['venda'].pk

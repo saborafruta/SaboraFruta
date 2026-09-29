@@ -20,7 +20,7 @@ from apps.crm.models import RecompraCliente
 from apps.mapas.services.roteirizacao import Rota
 from apps.mapas.services.geocoder import Resultado
 from apps.pdv.models import ItemVendaPDV, RotaDelivery, RotaDeliveryPublica, VendaPDV
-from apps.pdv.views.pdv import _delivery_rota_endereco_hash
+from apps.pdv.views.pdv import _delivery_agrupar_paradas, _delivery_rota_endereco_hash
 from apps.produtos.models import Produto, UnidadeMedida
 
 
@@ -189,9 +189,9 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'draggable:true')
         self.assertContains(tela, 'saveDraggedBranch')
         self.assertContains(tela, 'saveDraggedStop')
-        self.assertContains(tela, 'id="mapLocationDetail"')
-        self.assertContains(tela, 'dr-location-orders')
-        self.assertContains(tela, 'Mesmo CEP e rua do local')
+        self.assertContains(tela, 'id="selectAllOrders"')
+        self.assertContains(tela, 'id="deselectAllOrders"')
+        self.assertNotContains(tela, 'id="mapLocationDetail"')
         self.assertContains(tela, 'new ResizeObserver')
         self.assertContains(tela, 'calculationSequence+=1')
         self.assertContains(tela, 'else {resetRouteMap();resetSummary();}')
@@ -414,6 +414,35 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertEqual(dados['paradas'][0]['cep'], '59158155')
         self.assertEqual(dados['paradas'][0]['eta'], dados['paradas'][1]['eta'])
         self.assertEqual(len(mock_rota.call_args.args[0]), 4)
+
+    def test_sem_numero_entra_no_mesmo_condominio_mas_nao_so_pelo_cep(self):
+        numerado = self._venda(numero=601)
+        sem_numero = self._venda(numero=602)
+        outro_condominio = self._venda(numero=603)
+        comum = {
+            'cep': '59158155', 'rua': 'Avenida Antartida',
+            'bairro': 'Parque das Nacoes', 'cidade': 'Parnamirim', 'uf': 'RN',
+        }
+        numerado.endereco_entrega = {**comum, 'numero': '501',
+                                     'complemento': 'Condominio Novo Leblon, Casa R2'}
+        sem_numero.endereco_entrega = {**comum, 'numero': '',
+                                      'complemento': 'Condominio Novo Leblon - Casa A N 25'}
+        outro_condominio.endereco_entrega = {**comum, 'numero': '',
+                                             'complemento': 'Condominio Outro - Casa 1'}
+        for venda in (numerado, sem_numero, outro_condominio):
+            venda.save(update_fields=['endereco_entrega'])
+        paradas = [
+            {'tipo': 'pedido', 'chave': f'pedido:{venda.pk}', 'venda': venda,
+             'ponto': (-5.93, -35.2)}
+            for venda in (numerado, sem_numero, outro_condominio)
+        ]
+
+        grupos, _ = _delivery_agrupar_paradas(paradas, set())
+
+        self.assertEqual(len(grupos), 2)
+        self.assertEqual([p['venda'].pk for p in grupos[0]['paradas']],
+                         [numerado.pk, sem_numero.pk])
+        self.assertEqual(grupos[1]['paradas'][0]['venda'].pk, outro_condominio.pk)
 
     @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.matriz_distancias')
     @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.rota')
@@ -1123,6 +1152,29 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertEqual(segundo.endereco_entrega['_geo_origem'], 'manual')
         self.assertEqual(primeiro.endereco_entrega['_latitude'], segundo.endereco_entrega['_latitude'])
 
+    def test_coordenada_manual_aceita_mesmo_condominio_sem_numero(self):
+        numerado = self._venda(numero=321)
+        sem_numero = self._venda(numero=322)
+        endereco = {'cep': '59158155', 'rua': 'Avenida Antartida',
+                    'bairro': 'Parque das Nacoes', 'cidade': 'Parnamirim', 'uf': 'RN'}
+        numerado.endereco_entrega = {**endereco, 'numero': '501',
+                                     'complemento': 'Condominio Novo Leblon, Casa R2'}
+        sem_numero.endereco_entrega = {**endereco, 'numero': '',
+                                      'complemento': 'Condominio Novo Leblon - Casa A N 25'}
+        numerado.save(update_fields=['endereco_entrega'])
+        sem_numero.save(update_fields=['endereco_entrega'])
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_coordenada_manual'),
+            data=json.dumps({'tipo': 'pedido', 'ids': [numerado.pk, sem_numero.pk],
+                             'lat': -5.93011, 'lng': -35.20591}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        sem_numero.refresh_from_db()
+        self.assertEqual(sem_numero.endereco_entrega['_geo_origem'], 'manual')
+
     def test_coordenada_manual_recusa_pedidos_de_enderecos_diferentes(self):
         primeiro = self._venda(numero=319)
         segundo = self._venda(numero=320)
@@ -1491,6 +1543,26 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
 
         self.assertEqual(rota.pedido_etas, {str(venda.pk): '14:35'})
         self.assertContains(resp, 'Chegada 14:35')
+
+    def test_painel_avisa_quando_pedidos_compartilham_o_condominio(self):
+        numerado = self._venda(numero=413)
+        sem_numero = self._venda(numero=414)
+        endereco = {'cep': '59158155', 'rua': 'Avenida Antartida',
+                    'bairro': 'Parque das Nacoes', 'cidade': 'Parnamirim', 'uf': 'RN'}
+        numerado.endereco_entrega = {**endereco, 'numero': '501',
+                                     'complemento': 'Condominio Novo Leblon - Casa R2'}
+        sem_numero.endereco_entrega = {**endereco, 'numero': '',
+                                      'complemento': 'Condominio Novo Leblon - Casa A N 25'}
+        numerado.save(update_fields=['endereco_entrega'])
+        sem_numero.save(update_fields=['endereco_entrega'])
+        url = self._publicar([numerado, sem_numero]).json()['url']
+        self.client.logout()
+
+        resp = self.client.get(url)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Mesmo local: 2 pedidos', count=2)
+        self.assertContains(resp, 'Casa A N 25')
 
     def test_painel_publico_nao_marca_venda_pendente_como_paga(self):
         venda = self._venda(numero=411)
