@@ -3,6 +3,7 @@ import hashlib
 import json
 import logging
 import re
+import unicodedata
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
@@ -3408,6 +3409,11 @@ def _delivery_rota_localizacao(venda):
         origem = snapshot.get('_geo_origem')
         if origem == 'manual':
             aviso = aviso_pendencias
+        elif origem == 'interpolado':
+            aviso = (
+                f'⚠ O número {endereco["numero"]} foi estimado ao longo da rua, '
+                'não confirmado na porta. Confira e arraste o pino se necessário.'
+            )
         elif origem == 'estabelecimento':
             referencia = snapshot.get('_geo_referencia') or 'estabelecimento'
             aviso = f'⚠ Localização encontrada pelo nome "{referencia}"; confira o pino.'
@@ -3481,6 +3487,7 @@ def _delivery_rota_serializar_pedido(venda):
         snapshot.get('_geo_requer_revisao')
         or cep_com_fonte_antiga
         or (origem == 'cep' and bool(endereco['numero'] or endereco['complemento']))
+        or (origem == 'estabelecimento' and not snapshot.get('_geo_cep_validado'))
         or (
             not snapshot.get('_geo_cep_validado')
             and origem not in {'complemento', 'estabelecimento', 'manual'}
@@ -3495,6 +3502,7 @@ def _delivery_rota_serializar_pedido(venda):
         'numero': venda.numero_venda,
         'cliente': nome,
         'cliente_id': cliente.pk if cliente else None,
+        'cep': endereco['cep'],
         'bairro': endereco['bairro'],
         'endereco': ', '.join(filter(None, [
             endereco['rua'], endereco['numero'],
@@ -4297,29 +4305,48 @@ def delivery_rota_atualizar_endereco(request, pk):
             confirma_numero = bool(
                 numero_esperado and numero_encontrado == numero_esperado
             )
-            perto_do_cep = True
+            perto_do_cep = False
             if resultado_cep.ok:
                 perto_do_cep = distancia_haversine_m(
                     (resultado_cep.latitude, resultado_cep.longitude),
                     (candidato.latitude, candidato.longitude),
                 ) <= 2000
-            # Complementos já eram aceitos como referência. Para o nome do
-            # cliente rejeitamos um número diferente quando o provider o
-            # informa e exigimos proximidade do CEP para evitar homônimos.
-            # O cache atual guarda a coordenada, mas não os atributos do
-            # candidato; por isso número ausente não invalida um ponto próximo.
-            if origem_referencia == 'estabelecimento' and (
-                not perto_do_cep
-                or (numero_esperado and numero_encontrado and not confirma_numero)
-            ):
-                continue
+            # Complementos já eram aceitos como referência. O nome do cliente
+            # só vale como POI próximo ao CEP; um nome de rua homônimo não
+            # identifica o estabelecimento.
+            if origem_referencia == 'estabelecimento':
+                tipo_resultado = str(detalhes.get('tipo') or '').casefold()
+                pontuacao = float(detalhes.get('pontuacao') or 0)
+                if (
+                    not perto_do_cep
+                    or tipo_resultado != 'poi'
+                    or (pontuacao and pontuacao < 90)
+                    or (numero_esperado and numero_encontrado and not confirma_numero)
+                ):
+                    continue
             resultado = candidato
             origem_coordenada = origem_referencia
             referencia_usada = referencia
             numero_confirmado = confirma_numero
             break
         else:
-            if resultado_cep.ok:
+            detalhes_endereco = resultado_endereco.detalhes or {}
+            numero_interpolado = (
+                resultado_endereco.ok and resultado_cep.ok
+                and str(detalhes_endereco.get('tipo') or '').casefold() == 'streetaddress'
+                and normalizar_numero(detalhes_endereco.get('numero'))
+                == normalizar_numero(endereco['numero'])
+                and float(detalhes_endereco.get('pontuacao') or 0) >= 95
+                and distancia_haversine_m(
+                    (resultado_cep.latitude, resultado_cep.longitude),
+                    (resultado_endereco.latitude, resultado_endereco.longitude),
+                ) <= 2000
+            )
+            if numero_interpolado:
+                resultado = resultado_endereco
+                origem_coordenada = 'interpolado'
+                numero_confirmado = False
+            elif resultado_cep.ok:
                 resultado = resultado_cep
                 origem_coordenada = 'cep'
             elif resultado_endereco.ok:
@@ -4368,7 +4395,7 @@ def delivery_rota_atualizar_endereco(request, pk):
             '_geo_origem': origem_coordenada,
             '_geo_referencia': referencia_usada,
             '_geo_numero_confirmado': numero_confirmado,
-            '_geo_requer_revisao': origem_coordenada in {'cep', 'rua', 'filial'},
+            '_geo_requer_revisao': origem_coordenada in {'interpolado', 'cep', 'rua', 'filial'},
             '_geo_provider': (
                 AwesomeApiCepGeocoder.nome
                 if origem_coordenada == 'cep' else ArcGISGeocoder.nome
@@ -4427,6 +4454,11 @@ def delivery_rota_atualizar_endereco(request, pk):
             f'⚠ Localização aproximada por "{endereco["complemento"]}"; '
             f'o número {endereco["numero"]} não foi confirmado no mapa.'
         )
+    elif origem_coordenada == 'interpolado':
+        aviso = (
+            f'⚠ O número {endereco["numero"]} foi estimado ao longo da rua, '
+            'não confirmado na porta. Confira e arraste o pino se necessário.'
+        )
     elif origem_coordenada in {'cep', 'rua', 'filial'}:
         referencia_generica = {
             'cep': 'do CEP', 'rua': 'da rua', 'filial': 'da filial',
@@ -4443,12 +4475,13 @@ def delivery_rota_atualizar_endereco(request, pk):
         'ok': True,
         'pedido_id': venda.pk,
         'endereco': endereco,
+        'localizacao_origem': origem_coordenada,
         'lat': float(resultado.latitude),
         'lng': float(resultado.longitude),
         'tem_coordenada': True,
         'coordenada_aviso': aviso,
         'localizacao_requer_revisao': bool(
-            origem_coordenada in {'cep', 'rua', 'filial'}
+            origem_coordenada in {'interpolado', 'cep', 'rua', 'filial'}
         ),
         'atualizou_cliente': atualizar_cliente,
         'aviso': '',
@@ -4497,34 +4530,45 @@ def delivery_rota_atualizar_coordenada_manual(request):
 
     if tipo != 'pedido':
         return JsonResponse({'erro': 'Tipo de ponto inválido.'}, status=400)
+    ids_brutos = corpo.get('ids', [corpo.get('id')])
+    if not isinstance(ids_brutos, list) or not ids_brutos or len(ids_brutos) > 100:
+        return JsonResponse({'erro': 'Pedidos inválidos.'}, status=400)
     try:
-        pedido_id = int(corpo.get('id'))
+        pedido_ids = list(dict.fromkeys(int(item) for item in ids_brutos))
     except (TypeError, ValueError):
-        return JsonResponse({'erro': 'Pedido inválido.'}, status=400)
-    venda = get_object_or_404(
-        _delivery_rota_pedidos(request.filial_ativa), pk=pedido_id,
-    )
-    endereco = _delivery_rota_endereco_campos(venda)
-    snapshot = dict(venda.endereco_entrega or {})
-    snapshot.update(endereco)
-    snapshot.update({
-        '_latitude': latitude,
-        '_longitude': longitude,
-        '_geo_hash': _delivery_rota_endereco_hash(endereco),
-        '_geo_precisao': 'manual',
-        '_geo_origem': 'manual',
-        '_geo_provider': 'usuario',
-        '_geo_cep_validado': True,
-        '_geo_numero_confirmado': True,
-        '_geo_requer_revisao': False,
-        '_geo_ajustado_por': usuario,
-        '_geo_ajustado_em': ajustado_em.isoformat(),
-    })
+        return JsonResponse({'erro': 'Pedidos inválidos.'}, status=400)
+    vendas = list(_delivery_rota_pedidos(request.filial_ativa).filter(pk__in=pedido_ids))
+    if len(vendas) != len(pedido_ids):
+        return JsonResponse({'erro': 'Há pedidos inválidos na parada.'}, status=400)
+    if len(vendas) > 1:
+        chaves = {
+            _delivery_chave_local({'tipo': 'pedido', 'chave': f'pedido:{venda.pk}', 'venda': venda})
+            for venda in vendas
+        }
+        if len(chaves) != 1 or next(iter(chaves)).startswith('pedido:'):
+            return JsonResponse({'erro': 'Os pedidos não pertencem ao mesmo endereço.'}, status=400)
     with tenant_atomic():
-        venda.endereco_entrega = snapshot
-        venda.save(update_fields=['endereco_entrega', 'updated_at'])
-        if corpo.get('atualizar_cliente') is True and venda.cliente_id:
-            cliente = Cliente.objects.select_for_update().get(pk=venda.cliente_id)
+        for venda in vendas:
+            endereco = _delivery_rota_endereco_campos(venda)
+            snapshot = dict(venda.endereco_entrega or {})
+            snapshot.update(endereco)
+            snapshot.update({
+                '_latitude': latitude,
+                '_longitude': longitude,
+                '_geo_hash': _delivery_rota_endereco_hash(endereco),
+                '_geo_precisao': 'manual',
+                '_geo_origem': 'manual',
+                '_geo_provider': 'usuario',
+                '_geo_cep_validado': True,
+                '_geo_numero_confirmado': True,
+                '_geo_requer_revisao': False,
+                '_geo_ajustado_por': usuario,
+                '_geo_ajustado_em': ajustado_em.isoformat(),
+            })
+            venda.endereco_entrega = snapshot
+            venda.save(update_fields=['endereco_entrega', 'updated_at'])
+        if corpo.get('atualizar_cliente') is True and len(vendas) == 1 and vendas[0].cliente_id:
+            cliente = Cliente.objects.select_for_update().get(pk=vendas[0].cliente_id)
             cliente.latitude = latitude
             cliente.longitude = longitude
             cliente.geo_precisao = cliente.Precisao.MANUAL
@@ -4537,7 +4581,8 @@ def delivery_rota_atualizar_coordenada_manual(request):
                 'geo_endereco_hash', 'geo_fixado', 'geo_erro', 'updated_at',
             ])
     return JsonResponse({
-        'ok': True, 'tipo': 'pedido', 'pedido_id': venda.pk,
+        'ok': True, 'tipo': 'pedido', 'pedido_id': pedido_ids[0],
+        'pedido_ids': pedido_ids,
         'lat': latitude, 'lng': longitude,
         'coordenada_aviso': '', 'localizacao_requer_revisao': False,
         'ajustado_por': usuario, 'ajustado_em': ajustado_em.isoformat(),
@@ -4732,6 +4777,81 @@ def _delivery_otimizar_livres(pedidos, travados, matriz_distancias):
     return resultado
 
 
+def _delivery_chave_local(parada):
+    """Agrupa somente endereços físicos completos; CEP isolado nunca basta."""
+    if parada['tipo'] != 'pedido':
+        return parada['chave']
+    endereco = _delivery_rota_endereco_campos(parada['venda'])
+    def normalizar(valor):
+        texto = unicodedata.normalize('NFD', str(valor or '').casefold())
+        return re.sub(r'[^a-z0-9]+', '', ''.join(
+            char for char in texto if not unicodedata.combining(char)
+        ))
+    campos = (
+        re.sub(r'\D', '', endereco['cep']),
+        normalizar(endereco['rua']),
+        normalizar(endereco['numero']),
+        normalizar(endereco['cidade']),
+        normalizar(endereco['uf']),
+    )
+    if not all(campos):
+        return parada['chave']
+    digest = hashlib.md5('|'.join(campos).encode('utf-8')).hexdigest()[:16]
+    return f'local:{digest}'
+
+
+def _delivery_prioridade_ponto(parada):
+    if parada['tipo'] != 'pedido':
+        return 100
+    venda = parada['venda']
+    snapshot = venda.endereco_entrega or {}
+    origem = snapshot.get('_geo_origem')
+    if origem == 'manual':
+        return 100
+    if origem == 'arcgis' and snapshot.get('_geo_precisao') == 'exata':
+        return 90
+    if (
+        origem == 'estabelecimento'
+        and snapshot.get('_geo_cep_validado')
+        and snapshot.get('_geo_numero_confirmado')
+    ):
+        return 80
+    if origem == 'interpolado':
+        return 70
+    if origem in {'complemento', 'cep', 'rua'}:
+        return 50
+    cliente = venda.cliente
+    if cliente and cliente.geo_fixado:
+        return 95
+    return 40
+
+
+def _delivery_agrupar_paradas(paradas, travadas):
+    """Converte vários pedidos no mesmo endereço em um único local roteável."""
+    grupos = []
+    por_chave = {}
+    for parada in paradas:
+        chave_local = _delivery_chave_local(parada)
+        grupo = por_chave.get(chave_local)
+        prioridade = _delivery_prioridade_ponto(parada)
+        if grupo is None:
+            grupo = {
+                'tipo': 'local', 'chave': chave_local, 'ponto': parada['ponto'],
+                'paradas': [], 'prioridade_ponto': prioridade,
+            }
+            por_chave[chave_local] = grupo
+            grupos.append(grupo)
+        grupo['paradas'].append(parada)
+        if prioridade > grupo['prioridade_ponto']:
+            grupo['ponto'] = parada['ponto']
+            grupo['prioridade_ponto'] = prioridade
+    travados_locais = {
+        grupo['chave'] for grupo in grupos
+        if any(parada['chave'] in travadas for parada in grupo['paradas'])
+    }
+    return grupos, travados_locais
+
+
 def _delivery_otimizar_paradas(paradas, travadas, matriz_distancias):
     """Versão genérica do otimizador para entregas e paradas avulsas misturadas."""
     indice_por_chave = {parada['chave']: i + 1 for i, parada in enumerate(paradas)}
@@ -4901,22 +5021,24 @@ def delivery_rota_calcular(request):
         return JsonResponse({'erro': 'Adicione ao menos uma parada.'}, status=400)
 
     travados = {str(chave) for chave in (corpo.get('travados') or []) if str(chave) in chaves_vistas}
-    pontos_entrega_originais = [parada['ponto'] for parada in paradas]
+    grupos, travados_locais = _delivery_agrupar_paradas(paradas, travados)
+    pontos_entrega_originais = [grupo['ponto'] for grupo in grupos]
     roteirizador = construir_roteirizador()
     if corpo.get('otimizar'):
         try:
             matriz = roteirizador.matriz_distancias([origem] + pontos_entrega_originais)
-            tamanho = len(paradas) + 1
+            tamanho = len(grupos) + 1
             if len(matriz) != tamanho or any(len(linha) != tamanho for linha in matriz):
                 raise ValueError('matriz de distâncias incompleta')
-            paradas = _delivery_otimizar_paradas(paradas, travados, matriz)
+            grupos = _delivery_otimizar_paradas(grupos, travados_locais, matriz)
         except Exception as exc:
             logger.warning('falha ao otimizar rota de delivery pelas ruas: %s', exc)
             return JsonResponse({
                 'erro': 'Não foi possível comparar as distâncias pelas ruas. Tente novamente.'
             }, status=503)
 
-    pontos_entrega = [parada['ponto'] for parada in paradas]
+    paradas = [parada for grupo in grupos for parada in grupo['paradas']]
+    pontos_entrega = [grupo['ponto'] for grupo in grupos]
     pontos = [origem] + pontos_entrega + [origem]
     try:
         rota = roteirizador.rota(pontos)
@@ -4948,26 +5070,70 @@ def delivery_rota_calcular(request):
     servico_s = max(0, min(minutos_parada, 60)) * 60
     acumulado_s = 0.0
     paradas_resposta = []
-    for i, parada in enumerate(paradas):
+    locais_resposta = []
+    paradas_anteriores = 0
+    ordem_pedido = 0
+    for i, grupo in enumerate(grupos):
         acumulado_s += rota.duracao_s * (pesos[i] / peso_total)
-        chegada = agora + datetime.timedelta(seconds=acumulado_s + servico_s * i)
-        if parada['tipo'] == 'pedido':
-            dado = _delivery_rota_serializar_pedido(parada['venda'])
-            dado.update({'tipo': 'pedido', 'chave': parada['chave']})
-        else:
-            manual = parada['manual']
-            endereco = manual['endereco']
-            dado = {
-                'id': manual['id'], 'tipo': 'manual', 'chave': parada['chave'],
-                'cliente': manual['observacao'], 'observacao': manual['observacao'],
-                'endereco': ', '.join(filter(None, [endereco.get('rua'), endereco.get('numero')])),
-                'complemento': endereco.get('complemento', ''),
-                'bairro': endereco.get('bairro', ''), 'cidade': endereco.get('cidade', ''),
-                'uf': endereco.get('uf', ''), 'lat': manual['lat'], 'lng': manual['lng'],
-                'endereco_texto': manual['endereco_texto'],
-            }
-        dado.update({'ordem': i + 1, 'eta': chegada.strftime('%H:%M')})
-        paradas_resposta.append(dado)
+        chegada = agora + datetime.timedelta(
+            seconds=acumulado_s + servico_s * paradas_anteriores
+        )
+        dados_local = []
+        membros = []
+        for parada in grupo['paradas']:
+            ordem_pedido += 1
+            if parada['tipo'] == 'pedido':
+                dado = _delivery_rota_serializar_pedido(parada['venda'])
+                dado.update({'tipo': 'pedido', 'chave': parada['chave']})
+            else:
+                manual = parada['manual']
+                endereco = manual['endereco']
+                dado = {
+                    'id': manual['id'], 'tipo': 'manual', 'chave': parada['chave'],
+                    'cliente': manual['observacao'], 'observacao': manual['observacao'],
+                    'cep': endereco.get('cep', ''),
+                    'endereco': ', '.join(filter(None, [
+                        endereco.get('rua'), endereco.get('numero'),
+                    ])),
+                    'complemento': endereco.get('complemento', ''),
+                    'bairro': endereco.get('bairro', ''),
+                    'cidade': endereco.get('cidade', ''), 'uf': endereco.get('uf', ''),
+                    'lat': manual['lat'], 'lng': manual['lng'],
+                    'endereco_texto': manual['endereco_texto'],
+                }
+            dado.update({
+                'lat': grupo['ponto'][0], 'lng': grupo['ponto'][1],
+                'ordem': ordem_pedido, 'ordem_local': i + 1,
+                'grupo_chave': grupo['chave'],
+                'total_no_local': len(grupo['paradas']),
+                'eta': chegada.strftime('%H:%M'),
+            })
+            paradas_resposta.append(dado)
+            dados_local.append(dado)
+            membros.append({
+                'tipo': parada['tipo'], 'id': dado['id'], 'chave': parada['chave'],
+                'numero': dado.get('numero'), 'cliente': dado.get('cliente', ''),
+            })
+        primeiro = dados_local[0]
+        total_pedidos = sum(1 for membro in membros if membro['tipo'] == 'pedido')
+        locais_resposta.append({
+            'tipo': 'manual' if primeiro['tipo'] == 'manual' else 'local',
+            'chave': grupo['chave'], 'ordem': i + 1,
+            'lat': grupo['ponto'][0], 'lng': grupo['ponto'][1],
+            'eta': chegada.strftime('%H:%M'), 'membros': membros,
+            'pedidos': [membro for membro in membros if membro['tipo'] == 'pedido'],
+            'total_pedidos': total_pedidos, 'total_paradas': len(membros),
+            'cliente': primeiro.get('cliente', ''),
+            'observacao': primeiro.get('observacao', ''),
+            'cep': primeiro.get('cep', ''), 'endereco': primeiro.get('endereco', ''),
+            'complemento': primeiro.get('complemento', ''),
+            'bairro': primeiro.get('bairro', ''), 'cidade': primeiro.get('cidade', ''),
+            'uf': primeiro.get('uf', ''),
+            'localizacao_requer_revisao': any(
+                bool(dado.get('localizacao_requer_revisao')) for dado in dados_local
+            ),
+        })
+        paradas_anteriores += len(grupo['paradas'])
     tempo_total_s = rota.duracao_s + servico_s * len(paradas)
     retorno = agora + datetime.timedelta(seconds=tempo_total_s)
 
@@ -4975,6 +5141,8 @@ def delivery_rota_calcular(request):
         'ordem': [p['venda'].pk for p in paradas if p['tipo'] == 'pedido'],
         'ordem_paradas': [p['chave'] for p in paradas],
         'paradas': paradas_resposta,
+        'locais': locais_resposta,
+        'total_locais': len(locais_resposta),
         'geometria': rota.geometria,
         'distancia_km': round(rota.distancia_m / 1000, 1),
         'tempo_deslocamento_s': round(rota.duracao_s),

@@ -22,6 +22,7 @@ class CacheGeocodificacao(TimestampedModel):
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
     precisao = models.CharField(max_length=12, blank=True)
+    detalhes = models.JSONField(default=dict, blank=True)
     provider = models.CharField(max_length=30, blank=True)
     # Guarda também as falhas: evita reconsultar eternamente um endereço que
     # o provider não resolve. `tentativas` permite desistir depois de N.

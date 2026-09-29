@@ -542,7 +542,10 @@ class GeocodificacaoService:
         cache = CacheGeocodificacao.objects.filter(pk=endereco_hash).first()
         if cache is not None:
             if cache.encontrado:
-                return Resultado(cache.latitude, cache.longitude, cache.precisao)
+                return Resultado(
+                    cache.latitude, cache.longitude, cache.precisao,
+                    detalhes=cache.detalhes or {},
+                )
             if cache.tentativas >= c.GEOCODER_MAX_TENTATIVAS:
                 # Já falhou o suficiente: não gasta mais quota com ele.
                 return Resultado(erro=cache.erro or 'endereco nao encontrado')
@@ -573,6 +576,7 @@ class GeocodificacaoService:
                 'latitude': res.latitude,
                 'longitude': res.longitude,
                 'precisao': res.precisao,
+                'detalhes': res.detalhes or {},
                 'provider': self.geocoder.nome,
                 'encontrado': res.ok,
                 'erro': res.erro[:160],

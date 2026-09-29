@@ -117,6 +117,19 @@ class GeocoderTests(TestCase):
         servico.resolver('Natal, RN, Brasil', 'h2')
         self.assertEqual(chamada.call_count, 1)
 
+    def test_cache_preserva_tipo_e_numero_para_validar_estabelecimento(self):
+        servico, chamada = self._servico(Resultado(
+            -5.79, -35.21, 'aproximada',
+            detalhes={'tipo': 'poi', 'numero': '122', 'pontuacao': 97},
+        ))
+
+        servico.resolver('Estabelecimento em Natal', 'poi-122')
+        segunda = servico.resolver('Estabelecimento em Natal', 'poi-122')
+
+        self.assertEqual(segunda.detalhes['tipo'], 'poi')
+        self.assertEqual(segunda.detalhes['numero'], '122')
+        self.assertEqual(chamada.call_count, 1)
+
     def test_coordenada_fora_do_brasil_e_descartada(self):
         """'Natal' resolve para a África do Sul em provider sem filtro."""
         servico, _ = self._servico(Resultado(-29.85, 31.02, 'cidade'))

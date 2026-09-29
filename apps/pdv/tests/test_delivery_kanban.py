@@ -378,6 +378,39 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertEqual(resp.json()['saida'], '08:30')
         self.assertEqual(resp.json()['retorno'], '09:35')
 
+    @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.rota')
+    def test_pedidos_nao_consecutivos_no_mesmo_endereco_formam_um_local(self, mock_rota):
+        primeiro = self._venda(numero=221)
+        outro = self._venda(numero=222)
+        ultimo = self._venda(numero=223)
+        outro.endereco_entrega = {
+            'cep': '59073150', 'rua': 'Rua Monte Rei', 'numero': '122',
+            'bairro': 'Planalto', 'cidade': 'Natal', 'uf': 'RN',
+            '_latitude': -5.859, '_longitude': -35.253,
+        }
+        outro.endereco_entrega['_geo_hash'] = _delivery_rota_endereco_hash(outro.endereco_entrega)
+        outro.save(update_fields=['endereco_entrega'])
+        mock_rota.return_value = Rota(
+            distancia_m=12000, duracao_s=1800,
+            geometria=[[-5.79, -35.21], [-5.8, -35.22], [-5.859, -35.253], [-5.79, -35.21]],
+        )
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_calcular'),
+            data=json.dumps({'pedidos': [primeiro.pk, outro.pk, ultimo.pk]}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        dados = resp.json()
+        self.assertEqual(dados['ordem'], [primeiro.pk, ultimo.pk, outro.pk])
+        self.assertEqual(dados['total_locais'], 2)
+        self.assertEqual(len(dados['locais'][0]['pedidos']), 2)
+        self.assertEqual(dados['locais'][0]['total_pedidos'], 2)
+        self.assertEqual(dados['paradas'][0]['cep'], '59158155')
+        self.assertEqual(dados['paradas'][0]['eta'], dados['paradas'][1]['eta'])
+        self.assertEqual(len(mock_rota.call_args.args[0]), 4)
+
     @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.matriz_distancias')
     @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.rota')
     def test_gerar_rota_otimiza_distancia_pelas_ruas(self, mock_rota, mock_matriz):
@@ -855,6 +888,52 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertIn('Cliente Delivery', resolver.call_args_list[2].args[0])
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_nome_do_cliente_nao_pode_virar_rua_homonima_distante(self, resolver):
+        resolver.side_effect = [
+            Resultado(-5.8567, -35.2491, 'aproximada', detalhes={
+                'tipo': 'streetaddress', 'numero': '122', 'pontuacao': 100,
+            }),
+            Resultado(-5.8590, -35.2534, 'aproximada'),
+            Resultado(-5.8050, -35.2197, 'aproximada', detalhes={
+                'tipo': 'StreetName', 'pontuacao': 82.07,
+            }),
+        ]
+        venda = self._venda(numero=2374)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
+            data=json.dumps({
+                'cep': '59073-150', 'rua': 'Rua Monte Rei', 'numero': '122',
+                'bairro': 'Planalto', 'cidade': 'Natal', 'uf': 'RN',
+                'atualizar_cliente': False,
+            }), content_type='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(venda.endereco_entrega['_geo_origem'], 'interpolado')
+        self.assertAlmostEqual(venda.endereco_entrega['_latitude'], -5.8567)
+        self.assertTrue(resp.json()['localizacao_requer_revisao'])
+        self.assertEqual(resp.json()['localizacao_origem'], 'interpolado')
+        self.assertIn('estimado ao longo da rua', resp.json()['coordenada_aviso'])
+
+    def test_ponto_antigo_pelo_nome_sem_cep_validado_exige_revisao(self):
+        venda = self._venda(numero=2374)
+        venda.endereco_entrega = {
+            'cep': '59073150', 'rua': 'Rua Monte Rei', 'numero': '122',
+            'bairro': 'Planalto', 'cidade': 'Natal', 'uf': 'RN',
+            '_latitude': -5.8050, '_longitude': -35.2197,
+            '_geo_origem': 'estabelecimento', '_geo_cep_validado': False,
+        }
+        venda.endereco_entrega['_geo_hash'] = _delivery_rota_endereco_hash(venda.endereco_entrega)
+        venda.save(update_fields=['endereco_entrega'])
+
+        tela = self.client.get(reverse('pdv:delivery_rotas'))
+        pedido = next(item for item in json.loads(tela.context['pedidos_json']) if item['id'] == venda.pk)
+
+        self.assertTrue(pedido['localizacao_requer_revisao'])
+
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_endereco_do_novo_leblon_usa_complemento_em_vez_do_ponto_do_cep(self, resolver):
         resolver.side_effect = [
             Resultado(erro='resultado incompatível com o CEP informado'),
@@ -1019,6 +1098,49 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertEqual(venda.endereco_entrega['_geo_ajustado_por'], 'Fulano')
         self.assertFalse(venda.endereco_entrega['_geo_requer_revisao'])
         self.assertAlmostEqual(venda.endereco_entrega['_latitude'], -5.93011)
+
+    def test_coordenada_manual_atualiza_todos_os_pedidos_do_mesmo_local(self):
+        primeiro = self._venda(numero=317)
+        segundo = self._venda(numero=318)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_coordenada_manual'),
+            data=json.dumps({
+                'tipo': 'pedido', 'ids': [primeiro.pk, segundo.pk],
+                'lat': -5.93011, 'lng': -35.20591,
+            }), content_type='application/json',
+        )
+
+        primeiro.refresh_from_db()
+        segundo.refresh_from_db()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(set(resp.json()['pedido_ids']), {primeiro.pk, segundo.pk})
+        self.assertEqual(primeiro.endereco_entrega['_geo_origem'], 'manual')
+        self.assertEqual(segundo.endereco_entrega['_geo_origem'], 'manual')
+        self.assertEqual(primeiro.endereco_entrega['_latitude'], segundo.endereco_entrega['_latitude'])
+
+    def test_coordenada_manual_recusa_pedidos_de_enderecos_diferentes(self):
+        primeiro = self._venda(numero=319)
+        segundo = self._venda(numero=320)
+        segundo.endereco_entrega = {
+            'cep': '59073150', 'rua': 'Rua Monte Rei', 'numero': '122',
+            'bairro': 'Planalto', 'cidade': 'Natal', 'uf': 'RN',
+        }
+        segundo.save(update_fields=['endereco_entrega'])
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_coordenada_manual'),
+            data=json.dumps({
+                'tipo': 'pedido', 'ids': [primeiro.pk, segundo.pk],
+                'lat': -5.93011, 'lng': -35.20591,
+            }), content_type='application/json',
+        )
+
+        primeiro.refresh_from_db()
+        segundo.refresh_from_db()
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(primeiro.endereco_entrega)
+        self.assertNotIn('_latitude', segundo.endereco_entrega)
 
     def test_coordenada_manual_da_filial_fica_protegida(self):
         resp = self.client.post(
