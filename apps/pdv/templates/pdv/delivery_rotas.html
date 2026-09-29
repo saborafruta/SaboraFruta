@@ -335,7 +335,7 @@
   <div class="dr-grid">
     <section class="dr-panel">
       <div class="dr-panel-head"><span class="dr-panel-title">Pedidos disponíveis</span><span class="dr-count" id="availableCount">0</span></div>
-      <div class="dr-selection-actions"><button class="dr-map-expand" id="selectAllOrders" type="button">Marcar todos</button><button class="dr-map-expand" id="deselectAllOrders" type="button">Desmarcar todos</button></div>
+      <div class="dr-selection-actions"><button class="dr-map-expand" id="selectAllOrders" type="button">Marcar todos e otimizar</button><button class="dr-map-expand" id="deselectAllOrders" type="button">Desmarcar todos</button></div>
       <input class="dr-search" id="orderSearch" placeholder="Buscar cliente, pedido ou bairro">
       <div class="dr-list" id="availableList"></div>
     </section>
@@ -829,7 +829,7 @@
     const q=document.getElementById('orderSearch').value.toLowerCase().trim();
     const shown=orders.filter(o=>!q||`${o.numero} ${o.cliente} ${o.bairro}`.toLowerCase().includes(q));
     document.getElementById('availableCount').textContent=orders.length;
-    document.getElementById('selectAllOrders').disabled=!orders.some(o=>o.tem_coordenada&&!state.selected.includes(orderKey(o.id)));
+    document.getElementById('selectAllOrders').disabled=!orders.some(o=>!state.selected.includes(orderKey(o.id)));
     document.getElementById('deselectAllOrders').disabled=!state.selected.some(key=>key.startsWith('pedido:'));
     document.getElementById('availableList').innerHTML=shown.length?shown.map(o=>`
       <div class="dr-card ${o.tem_coordenada?'':'unavailable'}">
@@ -888,8 +888,8 @@
     if(!state.selected.length||!branch.tem_coordenada)return;
     automaticCalculationTimer=setTimeout(()=>calculate(optimize),delay);
   }
-  async function refreshOrderLocation(order) {
-    if(!order?.localizacao_requer_revisao)return true;
+  async function refreshOrderLocation(order,force=false,silent=false) {
+    if(!force&&!order?.localizacao_requer_revisao)return Boolean(order?.tem_coordenada);
     try{
       const url=addressUrlTemplate.replace('/0/','/'+order.id+'/');
       const payload={...order.endereco_campos,atualizar_cliente:false};
@@ -911,7 +911,7 @@
       order.localizacao_origem=data.localizacao_origem||order.localizacao_origem;
       order.localizacao_requer_revisao=Boolean(data.localizacao_requer_revisao);
       return data.tem_coordenada;
-    }catch(error){order.tem_coordenada=false;order.coordenada_aviso='Não foi possível validar a localização pelo CEP';toast(`${order.cliente}: ${error.message}`,true);return false;}
+    }catch(error){order.tem_coordenada=false;order.coordenada_aviso='Não foi possível validar a localização pelo CEP';if(!silent)toast(`${order.cliente}: ${error.message}`,true);return false;}
   }
   function shouldRefreshLocation(order){
     return Boolean(order?.localizacao_requer_revisao&&!['interpolado','cep','rua','filial'].includes(order.localizacao_origem));
@@ -929,13 +929,23 @@
   async function toggleOrder(id,checked) { const key=orderKey(id),order=byId[String(id)];if(checked&&shouldRefreshLocation(order)&&!await refreshOrderLocation(order)){renderAvailable();return;}if(checked&&!state.selected.includes(key))state.selected.push(key); if(!checked){state.selected=state.selected.filter(x=>x!==key);state.locked.delete(key);} state.result=null; renderAvailable();renderRoute();resetSummary();scheduleAutomaticCalculation(false); }
   async function selectAllOrders(){
     const button=document.getElementById('selectAllOrders');button.disabled=true;
+    const pendentes=[];
     for(const order of orders){
       const key=orderKey(order.id);
-      if(!order.tem_coordenada||state.selected.includes(key))continue;
-      if(shouldRefreshLocation(order)&&!await refreshOrderLocation(order))continue;
+      if(state.selected.includes(key))continue;
+      if(!order.tem_coordenada){
+        if(!await refreshOrderLocation(order,true,true)){pendentes.push(`#${order.numero}`);continue;}
+      }else if(shouldRefreshLocation(order)&&!await refreshOrderLocation(order,false,true)){
+        pendentes.push(`#${order.numero}`);continue;
+      }
       state.selected.push(key);
     }
-    state.result=null;renderAvailable();renderRoute();resetSummary();if(!state.selected.length)resetRouteMap();scheduleAutomaticCalculation(false);
+    state.locked.clear();
+    state.result=null;renderAvailable();renderRoute();resetSummary();
+    if(!state.selected.length)resetRouteMap();
+    else scheduleAutomaticCalculation(true);
+    if(pendentes.length)toast(`Não foi possível incluir ${pendentes.join(', ')}. Revise os endereços indicados.`,true);
+    else toast(`Todos os ${state.selected.filter(key=>key.startsWith('pedido:')).length} pedidos foram marcados. Otimizando a rota completa…`);
   }
   function deselectAllOrders(){
     state.selected=state.selected.filter(key=>!key.startsWith('pedido:'));
