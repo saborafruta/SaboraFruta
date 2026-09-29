@@ -136,8 +136,8 @@
   .dr-map-legend-line { position:relative; display:inline-block; width:26px; height:5px; border-radius:999px; background:var(--active-route-color,#38bdf8); }
   .dr-map-legend-line.return::after { position:absolute; inset:1px 0; content:""; background:repeating-linear-gradient(90deg,#fff 0 6px,transparent 6px 10px); }
   .dr-marker { box-sizing:border-box; display:flex; align-items:center; justify-content:center; width:30px; height:30px; border:3px solid #fff; border-radius:50%; background:var(--active-route-color,#16a36e); color:#fff; box-shadow:0 0 0 3px rgba(15,23,42,.5),0 3px 10px #000a; font-size:11px; font-weight:950; transition:transform .15s ease,background .15s ease,box-shadow .15s ease; }
-  .dr-marker.base { background:#2563eb; }
-  .dr-marker.base::after { content:'SAÍDA'; position:absolute; top:31px; left:50%; transform:translateX(-50%); border:2px solid #fff; border-radius:999px; background:#2563eb; padding:1px 5px; color:#fff; font-size:8px; line-height:12px; white-space:nowrap; box-shadow:0 2px 8px #0008; }
+  .dr-marker.base { width:26px; height:26px; margin:2px; border-width:2px; background:#2563eb; font-size:14px; }
+  .dr-marker.base::after { content:'SAÍDA'; position:absolute; top:27px; left:50%; transform:translateX(-50%); border:2px solid #fff; border-radius:999px; background:#2563eb; padding:1px 5px; color:#fff; font-size:8px; line-height:12px; white-space:nowrap; box-shadow:0 2px 8px #0008; }
   .dr-marker.manual { background:#d28a18; }
   .dr-marker.approximate { background:#b45309; box-shadow:0 0 0 4px rgba(245,158,11,.35),0 3px 10px #000a; }
   .dr-marker-count { position:absolute; top:-11px; left:22px; width:max-content; height:19px; border:2px solid #fff; border-radius:999px; background:#111827; padding:0 5px; color:#fff; font-size:9px; line-height:15px; text-align:center; white-space:nowrap; }
@@ -742,7 +742,7 @@
   }
   function addBranchMarker(){
     if(!branch.tem_coordenada)return null;
-    const baseMarker=addMarker(branch.lat,branch.lng,'S','base',`Saída · ${branch.nome}`,0,{draggable:true,onDragEnd:saveDraggedBranch});
+    const baseMarker=addMarker(branch.lat,branch.lng,'⌂','base',`Saída · ${branch.nome}`,0,{draggable:true,onDragEnd:saveDraggedBranch});
     baseMarker.routeRole='base';baseMarker.setZIndexOffset(800);return baseMarker;
   }
   function markerElement(marker){return marker?.getElement()?.querySelector('.dr-marker')||null;}
@@ -861,13 +861,24 @@
         const ids=members.filter(item=>item.tipo==='pedido').map(item=>item.id);
         const resp=await fetch(manualCoordinateUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({tipo:'pedido',ids,lat:point.lat,lng:point.lng})});
         const data=await responseJson(resp);if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
-        ids.forEach(id=>{const order=byId[String(id)];if(order){order.lat=data.lat;order.lng=data.lng;order.tem_coordenada=true;order.coordenada_aviso='';order.localizacao_requer_revisao=false;order.localizacao_origem='manual';}});
+        ids.forEach(id=>{const order=byId[String(id)];if(order){order.lat=data.lat;order.lng=data.lng;order.tem_coordenada=true;order.coordenada_aviso='';order.localizacao_requer_revisao=false;order.localizacao_revalidacao_pendente=false;order.localizacao_origem='manual';}});
       }
       stop.lat=point.lat;stop.lng=point.lng;stop.localizacao_requer_revisao=false;stop.localizacao_origem='manual';
       keys.filter(Boolean).forEach(key=>state.locked.add(key));state.result=null;renderAvailable();renderRoute();resetSummary();
       document.getElementById('mapNote').textContent='Ponto ajustado manualmente. Recalculando a rota…';
       scheduleAutomaticCalculation(false,120);toast('Local da parada ajustado manualmente.');
     }catch(error){marker.setLatLng(previous);toast(error.message,true);}
+  }
+
+  async function resetOrderLocation(id,button){
+    const order=byId[String(id)];if(!order)return;
+    button.disabled=true;
+    const key=orderKey(id);
+    if(!await refreshOrderLocation(order,true)){
+      renderAvailable();renderRoute();resetRouteMap();drawPendingMarkers();openAddressModal(id);return;
+    }
+    state.locked.delete(key);state.result=null;renderAvailable();renderRoute();resetRouteMap();resetSummary();
+    toast(`Localização automática do pedido #${order.numero} restaurada.`);scheduleAutomaticCalculation(false,150);
   }
 
   function renderAvailable() {
@@ -897,7 +908,7 @@
         <div class="dr-card ${manual?'dr-manual-card':deliveryComplete(o)?'delivery-complete':''}" draggable="true" data-route-id="${esc(key)}" data-route-index="${groupIndex}">
           <span class="dr-order" aria-hidden="true">${manual?'•':'☰'}</span>
           <div ${manual?'':`data-conference="${o.id}" style="cursor:pointer" title="Abrir conferência dos itens"`}><div class="dr-client">${manual?(opportunity?'Oportunidade · ':'Parada manual · ')+esc(o.observacao):'#'+esc(o.numero)+' · '+esc(o.cliente)}${!manual?addressWarningIcon(o):''}</div><div class="dr-meta">${esc(manual?o.endereco_texto:address(o))}${routeResult?.eta?` · ETA <strong>${esc(routeResult.eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge ${manual?'warn':'blue'}">${opportunity?'Oportunidade de Venda':manual?'Parada avulsa':esc(o.status_label)}</span>${!manual?`<span class="dr-badge ${conferenceComplete(o)?'':'danger'}">${conferenceComplete(o)?'✓ Conferido':'⚠ Conferência pendente'}</span>${paymentBadge(o)}`:''}${opportunity&&o.rfm?`<span class="dr-badge">${esc(o.rfm)}</span>`:''}${state.locked.has(key)?'<span class="dr-badge">Posição travada</span>':''}</div>${!manual&&deliveryComplete(o)?`<span class="dr-completion-meta">${esc(completionText(o))}</span>`:''}</div>
-          <div class="dr-card-actions">${manual?`<button class="dr-edit-address" type="button" data-edit-manual="${esc(key)}">✎ Endereço</button><button class="dr-edit-address" type="button" data-edit-stop="${esc(key)}">✎ Observação</button><button class="dr-edit-address" type="button" data-sale-stop="${esc(key)}">＋ Venda</button><button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:`${receiptLink(o)}<button class="dr-edit-address" type="button" data-edit-address="${o.id}">✎ Endereço</button><button class="dr-complete-stop ${deliveryComplete(o)?'completed':''}" type="button" data-complete-order="${o.id}">${deliveryComplete(o)?'↶ Desmarcar conclusão':'✓ Marcar concluída'}</button>`}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição: esta parada voltará a participar da otimização.':'Travar posição. Paradas movidas manualmente são travadas automaticamente.'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
+          <div class="dr-card-actions">${manual?`<button class="dr-edit-address" type="button" data-edit-manual="${esc(key)}">✎ Endereço</button><button class="dr-edit-address" type="button" data-edit-stop="${esc(key)}">✎ Observação</button><button class="dr-edit-address" type="button" data-sale-stop="${esc(key)}">＋ Venda</button><button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:`${receiptLink(o)}<button class="dr-edit-address" type="button" data-edit-address="${o.id}">✎ Endereço</button>${o.localizacao_origem==='manual'?`<button class="dr-edit-address" type="button" data-reset-location="${o.id}" title="Voltar à localização calculada pelo endereço">↺ Local automático</button>`:''}<button class="dr-complete-stop ${deliveryComplete(o)?'completed':''}" type="button" data-complete-order="${o.id}">${deliveryComplete(o)?'↶ Desmarcar conclusão':'✓ Marcar concluída'}</button>`}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição: esta parada voltará a participar da otimização.':'Travar posição. Paradas movidas manualmente são travadas automaticamente.'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
         </div>`}).join('')}
       </section>`;}).join(''):'<div class="dr-empty">Marque pedidos ou adicione uma parada manual.</div>';
     document.querySelectorAll('#routeList [data-route-id^="pedido:"]').forEach(card=>{
@@ -915,6 +926,7 @@
     document.querySelectorAll('[data-edit-stop]').forEach(b=>b.addEventListener('click',()=>openStopObservationForEdit(b.dataset.editStop)));
     document.querySelectorAll('[data-sale-stop]').forEach(b=>b.addEventListener('click',()=>openPdvForStop(b.dataset.saleStop)));
     document.querySelectorAll('[data-complete-order]').forEach(b=>b.addEventListener('click',()=>toggleRouteOrderCompleted(Number(b.dataset.completeOrder),b)));
+    document.querySelectorAll('[data-reset-location]').forEach(b=>b.addEventListener('click',()=>resetOrderLocation(Number(b.dataset.resetLocation),b)));
     document.querySelectorAll('#routeList [data-edit-address]').forEach(el=>el.addEventListener('click',()=>openAddressModal(Number(el.dataset.editAddress))));
     document.querySelectorAll('[data-conference]').forEach(el=>el.addEventListener('click',()=>openConference(Number(el.dataset.conference))));
     bindAddressWarnings(document.getElementById('routeList'));
@@ -968,7 +980,7 @@
       order.localizacao_revalidacao_pendente=false;
       return data.tem_coordenada;
     }catch(error){
-      order.tem_coordenada=false;order.coordenada_aviso=`Ponto antigo ainda visível, mas não validado pelo CEP. ${error.message}`;if(!silent)toast(`${order.cliente}: ${error.message}`,true);return false;
+      order.tem_coordenada=false;order.localizacao_revalidacao_pendente=true;order.coordenada_aviso=`Ponto antigo ainda visível, mas não validado pelo CEP. ${error.message}`;if(!silent)toast(`${order.cliente}: ${error.message}`,true);return false;
     }
   }
   function shouldRefreshLocation(order){
@@ -1004,17 +1016,18 @@
       const key=orderKey(order.id);
       if(state.selected.includes(key))continue;
       if(!order.tem_coordenada){
-        if(!await refreshOrderLocation(order,true,true)){pendentes.push(`#${order.numero}`);continue;}
+        if(!await refreshOrderLocation(order,true,true))pendentes.push(`#${order.numero}`);
       }else if(shouldRefreshLocation(order)&&!await refreshOrderLocation(order,false,true)){
-        pendentes.push(`#${order.numero}`);continue;
+        pendentes.push(`#${order.numero}`);
       }
       state.selected.push(key);
     }
     state.locked.clear();
     state.result=null;renderAvailable();renderRoute();resetSummary();
     if(!state.selected.length)resetRouteMap();
+    else if(pendentes.length){resetRouteMap();drawPendingMarkers();}
     else scheduleAutomaticCalculation(true);
-    if(pendentes.length)toast(`Não foi possível incluir ${pendentes.join(', ')}. Revise os endereços indicados.`,true);
+    if(pendentes.length)toast(`Todos os pedidos foram marcados. Corrija o endereço de ${pendentes.join(', ')} para otimizar a rota.`,true);
     else toast(`Todos os ${state.selected.filter(key=>key.startsWith('pedido:')).length} pedidos foram marcados. Otimizando a rota completa…`);
   }
   function deselectAllOrders(){
@@ -1085,6 +1098,7 @@
       order.coordenada_aviso=data.coordenada_aviso||'';
       order.localizacao_origem=data.localizacao_origem||order.localizacao_origem;
       order.localizacao_requer_revisao=Boolean(data.localizacao_requer_revisao);
+      order.localizacao_revalidacao_pendente=false;
       const key=orderKey(id);
       if(data.tem_coordenada&&!state.selected.includes(key))state.selected.push(key);
       if(!data.tem_coordenada){state.selected=state.selected.filter(item=>item!==key);state.locked.delete(key);}
