@@ -162,6 +162,7 @@
   .dr-toast { position:fixed; z-index:5000; right:22px; bottom:22px; max-width:360px; transform:translateY(12px); border-radius:9px; background:#12845b; padding:10px 14px; color:#fff; font-size:11px; font-weight:700; opacity:0; pointer-events:none; transition:.2s; }
   .dr-toast.show { transform:none; opacity:1; }
   .dr-toast.error { background:#b42332; }
+  .dr-toast.warning { background:#a85b08; }
   .dr-address-modal-bg { position:fixed; inset:0; z-index:6000; display:none; align-items:center;
     justify-content:center; background:rgba(3,7,18,.78); padding:18px; }
   .dr-address-modal-bg.open { display:flex; }
@@ -626,7 +627,7 @@
   function paymentBadge(order){return order.pago?'<span class="dr-badge">✓ Pago</span>':`<span class="dr-badge collect">💵 Cobrar na entrega · ${money(order.valor)}</span>`;}
   function completionText(order){if(!deliveryComplete(order))return '';const info=currentRoute?.conclusoes_pedidos?.[String(order.id)];if(!info)return 'Conclusão anterior sem identificação';const who=info.origem==='motoboy'?'Finalizado pelo motoboy':`Finalizado por ${info.nome||'usuário do sistema'}`;if(!info.em)return who;const date=new Date(info.em);return Number.isNaN(date.getTime())?who:`${who} em ${date.toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}`;}
   function duration(seconds) { const m=Math.round(Number(seconds||0)/60); return m<60 ? `${m} min` : `${Math.floor(m/60)}h ${String(m%60).padStart(2,'0')}min`; }
-  function toast(message, error=false) { const el=document.getElementById('routeToast'); el.textContent=message; el.className='dr-toast show'+(error?' error':''); clearTimeout(toast.t); toast.t=setTimeout(()=>el.className='dr-toast',3200); }
+  function toast(message, tone=false) { const el=document.getElementById('routeToast'); el.textContent=message; el.className='dr-toast show'+(tone===true?' error':tone==='warning'?' warning':''); clearTimeout(toast.t); toast.t=setTimeout(()=>el.className='dr-toast',3200); }
   async function responseJson(resp) {
     const type=resp.headers.get('content-type')||'';
     if(!type.includes('application/json'))throw new Error(resp.ok?'O servidor devolveu uma resposta inválida.':`Não foi possível concluir a operação (HTTP ${resp.status}).`);
@@ -656,8 +657,8 @@
     state.selected=selectedBeforeValidation.filter(key=>{const stop=stopByKey(key);return stop&&(String(key).startsWith('manual:')||stop.tem_coordenada||stop.localizacao_revalidacao_pendente);});
     state.locked=new Set((saved.locked||[]).filter(key=>state.selected.includes(key)));
     const removedUnsafeStop=state.selected.length!==selectedBeforeValidation.length;
-    const pendingLocation=state.selected.some(key=>stopByKey(key)?.localizacao_revalidacao_pendente);
-    state.result=!removedUnsafeStop&&!pendingLocation&&state.selected.length&&saved.result?.agrupamento_versao===2?saved.result:null;
+    const unsafeSavedResult=(saved.result?.ordem_paradas||[]).some(key=>!routeKeyCanCalculate(String(key)));
+    state.result=!removedUnsafeStop&&!unsafeSavedResult&&state.selected.length&&saved.result?.agrupamento_versao===2?saved.result:null;
     conference=route.conferencia_itens||{};
     document.getElementById('routeDriver').value=saved.driver||route.entregador||'';
     document.getElementById('stopMinutes').value=saved.minutes??savedConfig.minutos_por_parada??5;
@@ -709,6 +710,11 @@
     return null;
   }
   function currentStops() { return state.selected.map(stopByKey).filter(Boolean); }
+  function routeKeyCanCalculate(key) {
+    const stop=stopByKey(key);
+    return Boolean(stop&&(String(key).startsWith('manual:')||(stop.tem_coordenada&&!stop.localizacao_revalidacao_pendente)));
+  }
+  function pendingRouteKeys(){return state.selected.filter(key=>!routeKeyCanCalculate(key));}
   function checkedItems(order){return new Set((conference[String(order.id)]||[]).map(String));}
   function conferenceComplete(order){const items=order?.itens||[];const checked=checkedItems(order);return items.length>0&&items.every(item=>checked.has(String(item.id)));}
   function deliveryComplete(order){return ['entregue','finalizado'].includes(order?.status);}
@@ -898,16 +904,16 @@
     bindAddressWarnings(document.getElementById('availableList'));
   }
   function renderRoute() {
-    const list=currentStops(),groups=currentLocationGroups(),orderCount=state.selected.filter(key=>key.startsWith('pedido:')).length,resultByKey=Object.fromEntries((state.result?.paradas||[]).map(item=>[String(item.chave),item]));
-    document.getElementById('selectedCount').textContent=list.length?`${orderCount} pedidos · ${groups.length} locais`:'0 paradas';
-    document.getElementById('routeDeliveries').textContent=list.length?`${groups.length} locais / ${orderCount} pedidos`:'0';
+    const list=currentStops(),groups=currentLocationGroups(),orderCount=state.selected.filter(key=>key.startsWith('pedido:')).length,pendingCount=pendingRouteKeys().filter(key=>key.startsWith('pedido:')).length,routedOrders=state.result?.paradas?.filter(stop=>stop.tipo==='pedido').length??Math.max(0,orderCount-pendingCount),routedLocations=(state.result?.locais||state.result?.paradas||[]).length,resultByKey=Object.fromEntries((state.result?.paradas||[]).map(item=>[String(item.chave),item]));
+    document.getElementById('selectedCount').textContent=list.length?(pendingCount?`${orderCount} marcados · ${routedOrders} na rota · ${pendingCount} pendente${pendingCount===1?'':'s'}`:`${orderCount} pedidos · ${groups.length} locais`):'0 paradas';
+    document.getElementById('routeDeliveries').textContent=list.length?(pendingCount&&state.result?`${routedLocations} locais / ${routedOrders} pedidos · ${pendingCount} pendente${pendingCount===1?'':'s'}`:`${groups.length} locais / ${orderCount} pedidos`):'0';
     document.getElementById('routeList').innerHTML=groups.length?groups.map((group,groupIndex)=>{const first=group.stops[0],manualGroup=String(group.keys[0]).startsWith('manual:'),groupAddress=manualGroup?(first.endereco_texto||physicalAddress(first)):physicalAddress(first),countLabel=manualGroup?'Parada avulsa':`${group.stops.length} ${group.stops.length===1?'pedido':'pedidos'}`;return `
       <section class="dr-location-group" data-location-index="${groupIndex}" data-route-index="${groupIndex}">
         <div class="dr-location-group-head"><strong>Local ${groupIndex+1}</strong><span>${esc(groupAddress)}</span><span class="dr-location-group-count">${countLabel}</span></div>
         ${group.stops.map((o,groupItemIndex)=>{const key=group.keys[groupItemIndex],manual=String(key).startsWith('manual:'),opportunity=manual&&o.origem==='oportunidade',routeResult=resultByKey[String(key)];return `
         <div class="dr-card ${manual?'dr-manual-card':deliveryComplete(o)?'delivery-complete':''}" draggable="true" data-route-id="${esc(key)}" data-route-index="${groupIndex}">
           <span class="dr-order" aria-hidden="true">${manual?'•':'☰'}</span>
-          <div ${manual?'':`data-conference="${o.id}" style="cursor:pointer" title="Abrir conferência dos itens"`}><div class="dr-client">${manual?(opportunity?'Oportunidade · ':'Parada manual · ')+esc(o.observacao):'#'+esc(o.numero)+' · '+esc(o.cliente)}${!manual?addressWarningIcon(o):''}</div><div class="dr-meta">${esc(manual?o.endereco_texto:address(o))}${routeResult?.eta?` · ETA <strong>${esc(routeResult.eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge ${manual?'warn':'blue'}">${opportunity?'Oportunidade de Venda':manual?'Parada avulsa':esc(o.status_label)}</span>${!manual?`<span class="dr-badge ${conferenceComplete(o)?'':'danger'}">${conferenceComplete(o)?'✓ Conferido':'⚠ Conferência pendente'}</span>${paymentBadge(o)}`:''}${opportunity&&o.rfm?`<span class="dr-badge">${esc(o.rfm)}</span>`:''}${state.locked.has(key)?'<span class="dr-badge">Posição travada</span>':''}</div>${!manual&&deliveryComplete(o)?`<span class="dr-completion-meta">${esc(completionText(o))}</span>`:''}</div>
+          <div ${manual?'':`data-conference="${o.id}" style="cursor:pointer" title="Abrir conferência dos itens"`}><div class="dr-client">${manual?(opportunity?'Oportunidade · ':'Parada manual · ')+esc(o.observacao):'#'+esc(o.numero)+' · '+esc(o.cliente)}${!manual?addressWarningIcon(o):''}</div><div class="dr-meta">${esc(manual?o.endereco_texto:address(o))}${routeResult?.eta?` · ETA <strong>${esc(routeResult.eta)}</strong>`:''}</div><div class="dr-badges"><span class="dr-badge ${manual?'warn':'blue'}">${opportunity?'Oportunidade de Venda':manual?'Parada avulsa':esc(o.status_label)}</span>${!manual?`<span class="dr-badge ${conferenceComplete(o)?'':'danger'}">${conferenceComplete(o)?'✓ Conferido':'⚠ Conferência pendente'}</span>${!routeKeyCanCalculate(key)?'<span class="dr-badge danger">⚠ Fora do cálculo · corrija o endereço</span>':''}${paymentBadge(o)}`:''}${opportunity&&o.rfm?`<span class="dr-badge">${esc(o.rfm)}</span>`:''}${state.locked.has(key)?'<span class="dr-badge">Posição travada</span>':''}</div>${!manual&&deliveryComplete(o)?`<span class="dr-completion-meta">${esc(completionText(o))}</span>`:''}</div>
           <div class="dr-card-actions">${manual?`<button class="dr-edit-address" type="button" data-edit-manual="${esc(key)}">✎ Endereço</button><button class="dr-edit-address" type="button" data-edit-stop="${esc(key)}">✎ Observação</button><button class="dr-edit-address" type="button" data-sale-stop="${esc(key)}">＋ Venda</button><button class="dr-remove-stop" type="button" data-remove-stop="${esc(key)}">Remover</button>`:`${receiptLink(o)}<button class="dr-edit-address" type="button" data-edit-address="${o.id}">✎ Endereço</button>${o.localizacao_origem==='manual'?`<button class="dr-edit-address" type="button" data-reset-location="${o.id}" title="Voltar à localização calculada pelo endereço">↺ Local automático</button>`:''}<button class="dr-complete-stop ${deliveryComplete(o)?'completed':''}" type="button" data-complete-order="${o.id}">${deliveryComplete(o)?'↶ Desmarcar conclusão':'✓ Marcar concluída'}</button>`}<button class="dr-lock ${state.locked.has(key)?'locked':''}" data-lock="${esc(key)}" title="${state.locked.has(key)?'Destravar posição: esta parada voltará a participar da otimização.':'Travar posição. Paradas movidas manualmente são travadas automaticamente.'}">${state.locked.has(key)?'🔒':'🔓'}</button></div>
         </div>`}).join('')}
       </section>`;}).join(''):'<div class="dr-empty">Marque pedidos ou adicione uma parada manual.</div>';
@@ -951,7 +957,7 @@
   function scheduleAutomaticCalculation(optimize=false, delay=450) {
     clearTimeout(automaticCalculationTimer);
     calculationSequence += 1;
-    if(!state.selected.length||!branch.tem_coordenada||state.selected.some(key=>stopByKey(key)?.localizacao_revalidacao_pendente))return;
+    if(!state.selected.some(routeKeyCanCalculate)||!branch.tem_coordenada)return;
     automaticCalculationTimer=setTimeout(()=>calculate(optimize),delay);
   }
   const cepLookupPromises=new Map();
@@ -1025,9 +1031,8 @@
     state.locked.clear();
     state.result=null;renderAvailable();renderRoute();resetSummary();
     if(!state.selected.length)resetRouteMap();
-    else if(pendentes.length){resetRouteMap();drawPendingMarkers();}
     else scheduleAutomaticCalculation(true);
-    if(pendentes.length)toast(`Todos os pedidos foram marcados. Corrija o endereço de ${pendentes.join(', ')} para otimizar a rota.`,true);
+    if(pendentes.length)toast(`Todos foram marcados. Otimizando os demais; ${pendentes.join(', ')} ficará pendente até corrigir o endereço.`,'warning');
     else toast(`Todos os ${state.selected.filter(key=>key.startsWith('pedido:')).length} pedidos foram marcados. Otimizando a rota completa…`);
   }
   function deselectAllOrders(){
@@ -1326,16 +1331,19 @@
   async function calculate(optimize=false) {
     clearTimeout(automaticCalculationTimer);
     if(!state.selected.length){toast('Selecione ao menos um pedido.',true);return;}
+    const pendingKeys=pendingRouteKeys(),calculableKeys=state.selected.filter(routeKeyCanCalculate);
+    if(!calculableKeys.length){toast('Nenhum pedido possui localização válida para calcular a rota.',true);resetRouteMap();drawPendingMarkers();return;}
     const sequence=++calculationSequence;
     const buttons=[document.getElementById('routeGenerate'),document.getElementById('routeOptimize')]; buttons.forEach(b=>b.disabled=true);
     document.getElementById('mapNote').textContent=optimize?'Reotimizando pedidos livres…':'Calculando trajeto por ruas…';
     try{
-      const resp=await fetch(calculateUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({paradas:state.selected.map(stopPayload),travados:[...state.locked],otimizar:optimize,minutos_parada:Number(document.getElementById('stopMinutes').value||5),saida_prevista:document.getElementById('routeDeparture').value})});
+      const resp=await fetch(calculateUrl,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify({paradas:calculableKeys.map(stopPayload),travados:[...state.locked].filter(key=>calculableKeys.includes(key)),otimizar:optimize,minutos_parada:Number(document.getElementById('stopMinutes').value||5),saida_prevista:document.getElementById('routeDeparture').value})});
       const data=await resp.json(); if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
       if(sequence!==calculationSequence)return;
-      state.selected=data.ordem_paradas; state.result=data; renderAvailable();renderRoute();drawRoute(data);renderSummary(data);
-      document.getElementById('mapNote').textContent=data.uso_comercial_liberado?'Rota calculada por ruas. Arraste qualquer parada ou a origem para ajustar.':`Provider público ${data.provider}: configure um provider comercial antes do uso em produção. Os pinos continuam ajustáveis.`;
-      toast(optimize?'Pedidos livres reotimizados.':'Rota calculada com sucesso.');
+      state.selected=[...data.ordem_paradas,...pendingKeys]; state.result=data; renderAvailable();renderRoute();drawRoute(data);renderSummary(data);
+      const pendingLabels=pendingKeys.map(key=>stopByKey(key)).filter(Boolean).map(stop=>`#${stop.numero}`).join(', ');
+      document.getElementById('mapNote').textContent=pendingKeys.length?`Rota calculada sem ${pendingLabels}. O pedido continua marcado e entrará após corrigir o endereço.`:(data.uso_comercial_liberado?'Rota calculada por ruas. Arraste qualquer parada ou a origem para ajustar.':`Provider público ${data.provider}: configure um provider comercial antes do uso em produção. Os pinos continuam ajustáveis.`);
+      toast(pendingKeys.length?`Rota otimizada com os pedidos localizáveis. ${pendingLabels} continua pendente.`:(optimize?'Pedidos livres reotimizados.':'Rota calculada com sucesso.'),pendingKeys.length?'warning':false);
     }catch(error){if(sequence===calculationSequence){document.getElementById('mapNote').textContent=error.message;toast(error.message,true);}}finally{if(sequence===calculationSequence)buttons.forEach(b=>b.disabled=false);}
   }
   function renderSummary(data){
@@ -1398,6 +1406,8 @@
   }
   async function publishRoute(){
     if(!state.result)throw new Error('Gere a rota antes de publicá-la.');
+    const pendingLabels=pendingRouteKeys().map(key=>stopByKey(key)).filter(Boolean).map(stop=>`#${stop.numero}`).join(', ');
+    if(pendingLabels)throw new Error(`Corrija o endereço de ${pendingLabels} antes de publicar a rota.`);
     const etas=Object.fromEntries(state.result.paradas.map(parada=>[parada.chave||String(parada.id),parada.eta]));
     state.result.paradas.filter(p=>p.tipo==='pedido').forEach(p=>etas[String(p.id)]=p.eta);
     await persistRoute();
