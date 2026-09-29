@@ -799,18 +799,23 @@
     map.setView(center,branch.tem_coordenada?13:4);
   }
   function drawPendingMarkers(){
-    const buckets={},visible=[];
-    orders.filter(order=>order.localizacao_revalidacao_pendente&&order.lat!=null&&order.lng!=null&&Number.isFinite(Number(order.lat))&&Number.isFinite(Number(order.lng))).forEach(order=>{
+    const buckets={},visible=[],hiddenAtBranch=[];
+    const branchBucket=branch.tem_coordenada?`${Number(branch.lat).toFixed(4)}:${Number(branch.lng).toFixed(4)}`:'';
+    const pendingOrders=orders.filter(order=>state.selected.includes(orderKey(order.id))&&order.localizacao_revalidacao_pendente);
+    pendingOrders.filter(order=>order.lat!=null&&order.lng!=null&&Number.isFinite(Number(order.lat))&&Number.isFinite(Number(order.lng))).forEach(order=>{
       const bucket=`${Number(order.lat).toFixed(4)}:${Number(order.lng).toFixed(4)}`;
+      if(branchBucket&&bucket===branchBucket){hiddenAtBranch.push(`#${order.numero}`);return;}
       const offset=buckets[bucket]||0;buckets[bucket]=offset+1;
       visible.push([Number(order.lat),Number(order.lng)]);
       addMarker(order.lat,order.lng,'?', 'approximate',`#${order.numero} · ${order.cliente} · Ponto antigo, CEP ainda não validado`,offset,{
         popupHtml:`<strong>#${esc(order.numero)} · ${esc(order.cliente)}</strong><br>${esc(address(order))}<br><strong>⚠ Ponto antigo: não use para entrega até validar o CEP.</strong>`,
       });
     });
-    const count=orders.filter(order=>order.localizacao_revalidacao_pendente).length;
     if(visible.length){if(branch.tem_coordenada)visible.push([branch.lat,branch.lng]);map.fitBounds(L.latLngBounds(visible),{padding:[35,35],maxZoom:13});}
-    if(count)document.getElementById('mapNote').textContent=`${count} pontos antigos aparecem com ?. Aguardam validação do CEP; não entram no cálculo da rota.`;
+    const notes=[];
+    if(visible.length)notes.push(`${visible.length-(branch.tem_coordenada?1:0)} ponto(s) antigo(s) aparecem com ?. Aguardam validação do CEP; não entram no cálculo da rota.`);
+    if(hiddenAtBranch.length)notes.push(`${hiddenAtBranch.join(', ')} está pendente e não foi exibido sobre a saída.`);
+    if(notes.length)document.getElementById('mapNote').textContent=notes.join(' ');
   }
   function locationPopupHtml(stop,index){
     const members=(stop.membros||stop.pedidos||[]).filter(member=>member.tipo==='pedido');
