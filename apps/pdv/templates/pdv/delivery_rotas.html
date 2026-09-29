@@ -137,6 +137,7 @@
   .dr-map-legend-line.return::after { position:absolute; inset:1px 0; content:""; background:repeating-linear-gradient(90deg,#fff 0 6px,transparent 6px 10px); }
   .dr-marker { box-sizing:border-box; display:flex; align-items:center; justify-content:center; width:30px; height:30px; border:3px solid #fff; border-radius:50%; background:var(--active-route-color,#16a36e); color:#fff; box-shadow:0 0 0 3px rgba(15,23,42,.5),0 3px 10px #000a; font-size:11px; font-weight:950; transition:transform .15s ease,background .15s ease,box-shadow .15s ease; }
   .dr-marker.base { background:#2563eb; }
+  .dr-marker.base::after { content:'SAÍDA'; position:absolute; top:31px; left:50%; transform:translateX(-50%); border:2px solid #fff; border-radius:999px; background:#2563eb; padding:1px 5px; color:#fff; font-size:8px; line-height:12px; white-space:nowrap; box-shadow:0 2px 8px #0008; }
   .dr-marker.manual { background:#d28a18; }
   .dr-marker.approximate { background:#b45309; box-shadow:0 0 0 4px rgba(245,158,11,.35),0 3px 10px #000a; }
   .dr-marker-count { position:absolute; top:-11px; left:22px; width:max-content; height:19px; border:2px solid #fff; border-radius:999px; background:#111827; padding:0 5px; color:#fff; font-size:9px; line-height:15px; text-align:center; white-space:nowrap; }
@@ -713,7 +714,7 @@
     const center = branch.tem_coordenada ? [branch.lat, branch.lng] : [-14.235,-51.925];
     map=L.map('deliveryRouteMap',{zoomControl:true,preferCanvas:true}).setView(center,branch.tem_coordenada?13:4);
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles &copy; Esri'}).addTo(map);
-    if(branch.tem_coordenada){const baseMarker=addMarker(branch.lat,branch.lng,'⌂','base',branch.nome,0,{draggable:true,onDragEnd:saveDraggedBranch});baseMarker.routeRole='base';}
+    addBranchMarker();
     map.on('click',()=>{if(pinnedStopIndex!==null){pinnedStopIndex=null;clearRouteLegHighlight();}});
   }
   function toggleMapFullscreen(){
@@ -731,6 +732,11 @@
       marker.on('dragend',()=>options.onDragEnd?.(marker));
     }
     markers.push(marker); return marker;
+  }
+  function addBranchMarker(){
+    if(!branch.tem_coordenada)return null;
+    const baseMarker=addMarker(branch.lat,branch.lng,'S','base',`Saída · ${branch.nome}`,0,{draggable:true,onDragEnd:saveDraggedBranch});
+    baseMarker.routeRole='base';baseMarker.setZIndexOffset(800);return baseMarker;
   }
   function markerElement(marker){return marker?.getElement()?.querySelector('.dr-marker')||null;}
   function removeRouteLegLayers(){
@@ -772,7 +778,7 @@
     [routeLine,returnLine,returnAccentLine].forEach(layer=>{if(layer)map.removeLayer(layer);});
     routeLine=returnLine=returnAccentLine=null;routeGeometry=[];routeStopIndexes=[];routeStopMarkers=[];markers.forEach(m=>map.removeLayer(m));markers=[];
     document.getElementById('mapLegend').hidden=true;
-    if(branch.tem_coordenada){const baseMarker=addMarker(branch.lat,branch.lng,'⌂','base',branch.nome,0,{draggable:true,onDragEnd:saveDraggedBranch});baseMarker.routeRole='base';}
+    addBranchMarker();
   }
   function resetRouteMap() {
     clearRoute();
@@ -806,6 +812,7 @@
       returnAccentLine=L.polyline(returning,{color:'#f8fafc',weight:3,opacity:.95,dashArray:'8 10',lineCap:'butt'}).addTo(map);
     }
     const sobrepostos={};
+    if(branch.tem_coordenada)sobrepostos[`${Number(branch.lat).toFixed(4)}:${Number(branch.lng).toFixed(4)}`]=1;
     stops.forEach((p,index)=>{const bucket=`${Number(p.lat).toFixed(4)}:${Number(p.lng).toFixed(4)}`, offset=sobrepostos[bucket]||0;sobrepostos[bucket]=offset+1;const kind=[p.tipo==='manual'?'manual':'',p.localizacao_requer_revisao?'approximate':''].filter(Boolean).join(' '),count=Number(p.total_pedidos||0),title=p.tipo==='manual'?p.observacao:count>1?`${count} pedidos · ${physicalAddress(p)}`:`#${p.pedidos?.[0]?.numero||''} · ${p.pedidos?.[0]?.cliente||p.cliente}`;const popupHtml=locationPopupHtml(p,index);const marker=addMarker(p.lat,p.lng,p.ordem,kind,title,offset,{draggable:true,count,popupHtml,popupOptions:popupHtml?{minWidth:250,maxWidth:340,autoPanPadding:[25,25]}:{},onDragEnd:m=>saveDraggedStop(m,p)});marker.routeStopIndex=index;routeStopMarkers[index]=marker;marker.on('click',event=>{if(event.originalEvent)L.DomEvent.stopPropagation(event.originalEvent);if(pinnedStopIndex===index){pinnedStopIndex=null;clearRouteLegHighlight();}else{pinnedStopIndex=index;highlightRouteLeg(index,count<2);}});});
     document.getElementById('mapLegend').hidden=false;
     map.fitBounds(L.latLngBounds(geometry),{padding:[35,35]});
