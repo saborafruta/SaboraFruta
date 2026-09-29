@@ -217,7 +217,7 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertNotContains(tela, 'id="mapLocationDetail"')
         self.assertContains(tela, 'new ResizeObserver')
         self.assertContains(tela, 'calculationSequence+=1')
-        self.assertContains(tela, 'else {resetRouteMap();resetSummary();}')
+        self.assertContains(tela, 'else {resetRouteMap();drawPendingMarkers();resetSummary();}')
         self.assertContains(tela, 'function resetRouteMap()')
         self.assertContains(tela, 'dr-map-legend-line return')
         self.assertContains(tela, 'returnAccentLine')
@@ -862,6 +862,7 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
 
         self.assertFalse(pedido['tem_coordenada'])
         self.assertTrue(pedido['localizacao_revalidacao_pendente'])
+        self.assertAlmostEqual(pedido['lat'], -5.795)
         self.assertIn('validado com o CEP novamente', pedido['coordenada_aviso'])
 
     def test_pedido_sem_numero_com_complemento_salvo_no_cep_e_revalidado(self):
@@ -956,6 +957,30 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertAlmostEqual(venda.endereco_entrega['_latitude'], -5.9293706)
         self.assertAlmostEqual(venda.endereco_entrega['_geo_cep_lat'], -5.9293706)
         self.assertTrue(resp.json()['localizacao_requer_revisao'])
+
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_cep_consultado_no_navegador_evitar_erro_429_do_servidor(self, resolver):
+        resolver.return_value = Resultado(-5.65, -35.30, 'exata')
+        venda = self._venda(numero=3094)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
+            data=json.dumps({
+                'cep': '59158-155', 'rua': 'Avenida Antártida', 'numero': '501',
+                'bairro': 'Parque das Nações', 'cidade': 'Parnamirim', 'uf': 'RN',
+                'coordenada_cep': {
+                    'provider': 'awesomeapi_cep', 'cep': '59158155',
+                    'rua': 'Avenida Antártida', 'cidade': 'Parnamirim', 'uf': 'RN',
+                    'lat': '-5.9293706', 'lng': '-35.2108215',
+                },
+            }), content_type='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resolver.call_count, 1)
+        self.assertEqual(venda.endereco_entrega['_geo_origem'], 'cep')
+        self.assertAlmostEqual(venda.endereco_entrega['_latitude'], -5.9293706)
 
     def test_ponto_automatico_salvo_fora_do_raio_do_cep_e_bloqueado(self):
         venda = self._venda(numero=3092)

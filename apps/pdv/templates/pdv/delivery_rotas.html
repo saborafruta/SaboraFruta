@@ -665,7 +665,7 @@
     document.getElementById('fuelPrice').value=saved.fuelPrice||savedConfig.combustivel_preco||'';
     document.getElementById('fuelAutonomy').value=saved.fuelAutonomy||savedConfig.autonomia_km_l||'';
     renderTabs();renderAvailable();renderRoute();
-    if(state.result){drawRoute(state.result);renderSummary(state.result);}else {resetRouteMap();resetSummary();}
+    if(state.result){drawRoute(state.result);renderSummary(state.result);}else {resetRouteMap();drawPendingMarkers();resetSummary();}
     updateFinalizeButton();lastSavedSignature=JSON.stringify({estado:routeSnapshot(),conferencia_itens:conference,nome:currentRoute.nome});
   }
   async function switchRoute(id){const route=routes.find(item=>item.id===id);if(!route||route===currentRoute)return;await persistRoute();loadRoute(route);if(!document.getElementById('routeDeparture').value){const now=new Date();document.getElementById('routeDeparture').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;}await refreshSelectedLocations();if(state.selected.length&&!state.result)scheduleAutomaticCalculation(true,120);}
@@ -792,6 +792,20 @@
     const center=branch.tem_coordenada?[branch.lat,branch.lng]:[-14.235,-51.925];
     map.setView(center,branch.tem_coordenada?13:4);
   }
+  function drawPendingMarkers(){
+    const buckets={},visible=[];
+    orders.filter(order=>order.localizacao_revalidacao_pendente&&order.lat!=null&&order.lng!=null&&Number.isFinite(Number(order.lat))&&Number.isFinite(Number(order.lng))).forEach(order=>{
+      const bucket=`${Number(order.lat).toFixed(4)}:${Number(order.lng).toFixed(4)}`;
+      const offset=buckets[bucket]||0;buckets[bucket]=offset+1;
+      visible.push([Number(order.lat),Number(order.lng)]);
+      addMarker(order.lat,order.lng,'?', 'approximate',`#${order.numero} · ${order.cliente} · Ponto antigo, CEP ainda não validado`,offset,{
+        popupHtml:`<strong>#${esc(order.numero)} · ${esc(order.cliente)}</strong><br>${esc(address(order))}<br><strong>⚠ Ponto antigo: não use para entrega até validar o CEP.</strong>`,
+      });
+    });
+    const count=orders.filter(order=>order.localizacao_revalidacao_pendente).length;
+    if(visible.length){if(branch.tem_coordenada)visible.push([branch.lat,branch.lng]);map.fitBounds(L.latLngBounds(visible),{padding:[35,35],maxZoom:13});}
+    if(count)document.getElementById('mapNote').textContent=`${count} pontos antigos aparecem com ?. Aguardam validação do CEP; não entram no cálculo da rota.`;
+  }
   function locationPopupHtml(stop,index){
     const members=(stop.membros||stop.pedidos||[]).filter(member=>member.tipo==='pedido');
     if(members.length<2)return '';
@@ -823,6 +837,7 @@
     stops.forEach((p,index)=>{const bucket=`${Number(p.lat).toFixed(4)}:${Number(p.lng).toFixed(4)}`, offset=sobrepostos[bucket]||0;sobrepostos[bucket]=offset+1;const kind=[p.tipo==='manual'?'manual':'',p.localizacao_requer_revisao?'approximate':''].filter(Boolean).join(' '),count=Number(p.total_pedidos||0),title=p.tipo==='manual'?p.observacao:count>1?`${count} pedidos · ${physicalAddress(p)}`:`#${p.pedidos?.[0]?.numero||''} · ${p.pedidos?.[0]?.cliente||p.cliente}`;const popupHtml=locationPopupHtml(p,index);const marker=addMarker(p.lat,p.lng,p.ordem,kind,title,offset,{draggable:true,count,popupHtml,popupOptions:popupHtml?{minWidth:250,maxWidth:340,autoPanPadding:[25,25]}:{},onDragEnd:m=>saveDraggedStop(m,p)});marker.routeStopIndex=index;routeStopMarkers[index]=marker;marker.on('click',event=>{if(event.originalEvent)L.DomEvent.stopPropagation(event.originalEvent);if(pinnedStopIndex===index){pinnedStopIndex=null;clearRouteLegHighlight();}else{pinnedStopIndex=index;highlightRouteLeg(index,count<2);}});});
     document.getElementById('mapLegend').hidden=false;
     map.fitBounds(L.latLngBounds(geometry),{padding:[35,35]});
+    drawPendingMarkers();
   }
 
   async function saveDraggedBranch(marker){
@@ -924,14 +939,25 @@
   function scheduleAutomaticCalculation(optimize=false, delay=450) {
     clearTimeout(automaticCalculationTimer);
     calculationSequence += 1;
-    if(!state.selected.length||!branch.tem_coordenada)return;
+    if(!state.selected.length||!branch.tem_coordenada||state.selected.some(key=>stopByKey(key)?.localizacao_revalidacao_pendente))return;
     automaticCalculationTimer=setTimeout(()=>calculate(optimize),delay);
+  }
+  const cepLookupPromises=new Map();
+  async function browserCepCoordinate(cep){
+    if(!cepLookupPromises.has(cep))cepLookupPromises.set(cep,fetch(`https://cep.awesomeapi.com.br/json/${cep}`,{headers:{Accept:'application/json'}})
+      .then(async resp=>resp.ok?await resp.json():null).catch(()=>null));
+    return cepLookupPromises.get(cep);
   }
   async function refreshOrderLocation(order,force=false,silent=false) {
     if(!force&&!order?.localizacao_requer_revisao&&!order?.localizacao_revalidacao_pendente)return Boolean(order?.tem_coordenada);
     try{
       const url=addressUrlTemplate.replace('/0/','/'+order.id+'/');
       const payload={...order.endereco_campos,atualizar_cliente:false};
+      const cep=String(payload.cep||'').replace(/\D/g,'');
+      if(cep.length===8){
+        const ponto=await browserCepCoordinate(cep);
+        if(ponto)payload.coordenada_cep={provider:'awesomeapi_cep',cep:ponto.cep,rua:ponto.address,cidade:ponto.city,uf:ponto.state,lat:ponto.lat,lng:ponto.lng};
+      }
       const resp=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'Accept':'application/json'},body:JSON.stringify(payload)});
       const data=await responseJson(resp);if(!resp.ok)throw new Error(data.erro||`HTTP ${resp.status}`);
       order.endereco_campos=data.endereco;order.endereco=[data.endereco.rua,data.endereco.numero].filter(Boolean).join(', ');
@@ -942,7 +968,7 @@
       order.localizacao_revalidacao_pendente=false;
       return data.tem_coordenada;
     }catch(error){
-      order.lat=null;order.lng=null;order.tem_coordenada=false;order.coordenada_aviso='Não foi possível validar a localização pelo CEP';if(!silent)toast(`${order.cliente}: ${error.message}`,true);return false;
+      order.tem_coordenada=false;order.coordenada_aviso=`Ponto antigo ainda visível, mas não validado pelo CEP. ${error.message}`;if(!silent)toast(`${order.cliente}: ${error.message}`,true);return false;
     }
   }
   function shouldRefreshLocation(order){
@@ -955,9 +981,9 @@
       const order=stopByKey(key);
       if(!String(key).startsWith('pedido:')||!shouldRefreshLocation(order))continue;
       const ok=await refreshOrderLocation(order);changed=true;
-      if(!ok){state.selected=state.selected.filter(item=>item!==key);state.locked.delete(key);}
+      if(!ok&&(order?.lat==null||order?.lng==null)){state.selected=state.selected.filter(item=>item!==key);state.locked.delete(key);}
     }
-    if(changed){state.result=null;renderAvailable();renderRoute();resetSummary();}
+    if(changed){state.result=null;renderAvailable();renderRoute();resetRouteMap();drawPendingMarkers();resetSummary();}
   }
   async function toggleOrder(id,checked) {
     const key=orderKey(id),order=byId[String(id)];

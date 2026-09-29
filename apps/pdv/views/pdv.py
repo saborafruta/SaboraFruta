@@ -3428,7 +3428,12 @@ def _delivery_rota_localizacao(venda):
             or not _delivery_ponto_compativel_com_cep(snapshot)
         ):
             return {
-                'ok': False, 'lat': None, 'lng': None,
+                'ok': False,
+                # Ponto antigo só para visualização. Calcular/publicar continuam
+                # exigindo ok=True, mas a indisponibilidade do CEP não apaga
+                # os pinos que o operador já havia visto no mapa.
+                'lat': float(snapshot['_latitude']),
+                'lng': float(snapshot['_longitude']),
                 'aviso': '⚠ Ponto automático precisa ser validado com o CEP novamente.',
                 'endereco': endereco,
             }
@@ -4238,6 +4243,30 @@ def delivery_rota_atualizar_endereco(request, pk):
     endereco['cep'] = re.sub(r'\D', '', endereco['cep'])[:8]
     endereco['uf'] = endereco['uf'].upper()
     atualizar_cliente = corpo.get('atualizar_cliente') is True
+    # A consulta feita no navegador usa outra origem de rede quando o IP do
+    # servidor recebe 429. Aceite-a somente para o CEP e logradouro pedidos.
+    coordenada_cep_cliente = corpo.get('coordenada_cep')
+    resultado_cep_cliente = None
+    if isinstance(coordenada_cep_cliente, dict):
+        normalizar = lambda valor: re.sub(r'\W+', '', str(valor or '').casefold())
+        try:
+            latitude_cliente = float(coordenada_cep_cliente.get('lat'))
+            longitude_cliente = float(coordenada_cep_cliente.get('lng'))
+        except (TypeError, ValueError):
+            latitude_cliente = longitude_cliente = None
+        campos_cliente_conferem = (
+            re.sub(r'\D', '', str(coordenada_cep_cliente.get('cep') or '')) == endereco['cep']
+            and normalizar(coordenada_cep_cliente.get('rua')) == normalizar(endereco['rua'])
+            and normalizar(coordenada_cep_cliente.get('cidade')) == normalizar(endereco['cidade'])
+            and str(coordenada_cep_cliente.get('uf') or '').upper() == endereco['uf']
+        )
+        if (
+            coordenada_cep_cliente.get('provider') == AwesomeApiCepGeocoder.nome
+            and campos_cliente_conferem
+            and latitude_cliente is not None and longitude_cliente is not None
+            and -34 <= latitude_cliente <= 6 and -74 <= longitude_cliente <= -32
+        ):
+            resultado_cep_cliente = Resultado(latitude_cliente, longitude_cliente, 'aproximada')
     ausentes = [
         rotulo for campo, rotulo in (
             ('cep', 'CEP'), ('rua', 'rua'), ('cidade', 'cidade'), ('uf', 'UF'),
@@ -4277,7 +4306,7 @@ def delivery_rota_atualizar_endereco(request, pk):
             f'{endereco["uf"]}'
         ).encode('utf-8')
     ).hexdigest()
-    resultado_cep = GeocodificacaoService(
+    resultado_cep = resultado_cep_cliente or GeocodificacaoService(
         geocoder=AwesomeApiCepGeocoder(),
     ).resolver(endereco_texto, hash_cep)
     if not resultado_cep.ok:
