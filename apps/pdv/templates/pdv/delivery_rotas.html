@@ -363,6 +363,12 @@
   </div>
 </div>
 <div class="dr-toast" id="routeToast"></div>
+<div class="dr-address-modal-bg" id="googleRoutesModal" style="z-index:6500" onclick="if(event.target===this)closeGoogleRoutesModal()">
+  <section class="dr-address-modal">
+    <div class="dr-detail-head"><div><h2>Rota dividida no Google Maps</h2><p id="googleRoutesMessage">O limite de pontos do Google Maps foi atingido.</p></div><button class="dr-button" type="button" onclick="closeGoogleRoutesModal()">Fechar</button></div>
+    <div id="googleRoutesButtons" class="dr-conference-list"></div>
+  </section>
+</div>
 <div class="dr-address-modal-bg" id="conferenceModal" style="z-index:6400" onclick="if(event.target===this)closeConferenceModal()">
   <section class="dr-address-modal">
     <div class="dr-detail-head"><div><h2 id="conferenceTitle">Conferir pedido</h2><p>Marque os itens separados antes da saída.</p></div><button class="dr-button" type="button" onclick="closeConferenceModal()">Fechar</button></div>
@@ -1338,16 +1344,28 @@
     const full=[branch.endereco,branch.bairro,[branch.cidade,branch.uf].filter(Boolean).join('/')].filter(Boolean).join(', ');
     return full||`${branch.lat},${branch.lng}`;
   }
-  function googleFullUrl(){
-    if(!state.result)return'';
+  function googleRouteUrl(origin,destination,waypoints=[]){
     const url=new URL('https://www.google.com/maps/dir/');
-    const base=branchMapsLocation();
-    url.searchParams.set('api','1');url.searchParams.set('origin',base);url.searchParams.set('destination',base);url.searchParams.set('travelmode','two-wheeler');
-    const locations=state.result.locais||state.result.paradas;
-    if(locations.length)url.searchParams.set('waypoints',locations.map(mapsLocation).join('|'));
+    url.searchParams.set('api','1');url.searchParams.set('origin',origin);url.searchParams.set('destination',destination);url.searchParams.set('travelmode','two-wheeler');
+    if(waypoints.length)url.searchParams.set('waypoints',waypoints.join('|'));
     return url.toString();
   }
-  function openMaps(){const url=googleFullUrl();if(!url)return toast('Gere a rota antes de abrir o GPS.',true);window.open(url,'_blank','noopener');const total=(state.result.locais||state.result.paradas).length;toast(`Confira se o Google carregou todos os ${total} locais.`);}
+  function googleRouteSections(){
+    if(!state.result)return[];
+    const base=branchMapsLocation();
+    const locations=state.result.locais||state.result.paradas;
+    if(!locations.length)return[];
+    const size=9,total=Math.ceil(locations.length/size),sections=[];
+    for(let start=0;start<locations.length;start+=size){
+      const chunk=locations.slice(start,start+size),last=start+size>=locations.length,number=sections.length+1;
+      const origin=start===0?base:mapsLocation(locations[start-1]),destination=last?base:mapsLocation(chunk[chunk.length-1]);
+      const waypoints=(last?chunk:chunk.slice(0,-1)).map(mapsLocation);
+      sections.push({number,total,start:start+1,end:start+chunk.length,url:googleRouteUrl(origin,destination,waypoints)});
+    }
+    return sections;
+  }
+  window.closeGoogleRoutesModal=function(){document.getElementById('googleRoutesModal').classList.remove('open');};
+  function openMaps(){const sections=googleRouteSections();if(!sections.length)return toast('Gere a rota antes de abrir o GPS.',true);if(sections.length===1){window.open(sections[0].url,'_blank','noopener');return;}document.getElementById('googleRoutesMessage').textContent=`O Google Maps aceita somente parte dos pontos por link. Esta rota foi dividida em ${sections.length} trechos. Abra os botões na ordem para visitar todos os locais e voltar ao depósito.`;document.getElementById('googleRoutesButtons').innerHTML=sections.map(section=>`<a class="dr-button primary" href="${esc(section.url)}" target="_blank" rel="noopener" style="text-decoration:none">Trecho ${section.number} de ${section.total} · locais ${section.start}–${section.end}</a>`).join('');document.getElementById('googleRoutesModal').classList.add('open');}
   function saveDraft(silent=false){return persistRoute(!silent);}
   function applyPendingPdvSale(){
     const id=sessionStorage.getItem('delivery-route-new-order');if(!id)return;

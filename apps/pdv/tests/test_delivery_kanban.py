@@ -21,6 +21,7 @@ from apps.mapas.services.roteirizacao import Rota
 from apps.mapas.services.geocoder import Resultado
 from apps.pdv.models import ItemVendaPDV, RotaDelivery, RotaDeliveryPublica, VendaPDV
 from apps.pdv.views.pdv import _delivery_agrupar_paradas, _delivery_rota_endereco_hash
+from apps.pdv.views.delivery_publico import _urls_google_maps_em_trechos
 from apps.produtos.models import Produto, UnidadeMedida
 
 
@@ -182,6 +183,9 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertContains(tela, 'Pedidos, sequência, mapa e link abaixo pertencem a esta rota')
         self.assertContains(tela, 'Google Maps')
         self.assertContains(tela, 'Google Maps · moto')
+        self.assertContains(tela, 'googleRouteSections')
+        self.assertContains(tela, 'O limite de pontos do Google Maps foi atingido')
+        self.assertContains(tela, 'Trecho ${section.number} de ${section.total}')
         self.assertContains(tela, 'Expandir mapa')
         self.assertContains(tela, 'requestFullscreen')
         self.assertContains(tela, 'Todos os pinos podem ser arrastados')
@@ -1956,6 +1960,29 @@ class DeliveryMotoristaPublicoTests(DeliveryKanbanBase):
         self.assertEqual(parametros['origin'], ['-5.79,-35.21'])
         self.assertEqual(parametros['destination'], ['-5.79,-35.21'])
         self.assertIn('-5.8,-35.22', parametros['waypoints'][0])
+
+    def test_google_maps_divide_rota_grande_em_trechos_visiveis(self):
+        paradas = [
+            {
+                'ordem': indice, 'chave': f'pedido:{indice}',
+                'maps_location': f'-5.{indice:02d},-35.{indice:02d}',
+            }
+            for indice in range(1, 21)
+        ]
+
+        trechos = _urls_google_maps_em_trechos(self.filial, paradas)
+
+        self.assertEqual(len(trechos), 3)
+        self.assertEqual([(item['local_inicio'], item['local_fim']) for item in trechos], [(1, 9), (10, 18), (19, 20)])
+        primeiro = parse_qs(urlparse(trechos[0]['url']).query)
+        segundo = parse_qs(urlparse(trechos[1]['url']).query)
+        ultimo = parse_qs(urlparse(trechos[2]['url']).query)
+        self.assertEqual(primeiro['origin'], ['-5.79,-35.21'])
+        self.assertEqual(primeiro['destination'], ['-5.09,-35.09'])
+        self.assertEqual(segundo['origin'], ['-5.09,-35.09'])
+        self.assertEqual(ultimo['destination'], ['-5.79,-35.21'])
+        self.assertEqual(len(primeiro['waypoints'][0].split('|')), 8)
+        self.assertEqual(len(ultimo['waypoints'][0].split('|')), 2)
 
     def test_painel_publico_exibe_e_conclui_parada_manual(self):
         venda = self._venda(numero=460)

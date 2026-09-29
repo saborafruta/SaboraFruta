@@ -75,19 +75,52 @@ def _endereco_pedido(pedido):
     ])) or _coordenada(cliente)
 
 
-def _url_google_maps_completa(filial, paradas):
-    """URL oficial única para comparar o comportamento do Maps no aparelho."""
-    roteaveis = [parada for parada in paradas if parada.get('maps_location')]
-    if not roteaveis or filial.latitude is None or filial.longitude is None:
-        return ''
+GOOGLE_MAPS_LOCAIS_POR_TRECHO = 9
+
+
+def _urls_google_maps_em_trechos(filial, paradas):
+    """Divide a viagem sem ultrapassar o limite de pontos do Google Maps."""
+    if filial.latitude is None or filial.longitude is None:
+        return []
+    roteaveis = []
+    chaves_vistas = set()
+    for parada in sorted(paradas, key=lambda item: item.get('ordem') or 0):
+        localizacao = parada.get('maps_location')
+        chave = parada.get('local_chave') or parada.get('chave') or localizacao
+        if not localizacao or chave in chaves_vistas:
+            continue
+        chaves_vistas.add(chave)
+        roteaveis.append(localizacao)
+    if not roteaveis:
+        return []
+
     base = _coordenada(filial)
-    return 'https://www.google.com/maps/dir/?' + urlencode({
-        'api': '1',
-        'origin': base,
-        'destination': base,
-        'travelmode': 'two-wheeler',
-        'waypoints': '|'.join(parada['maps_location'] for parada in roteaveis),
-    })
+    trechos = []
+    total = (len(roteaveis) + GOOGLE_MAPS_LOCAIS_POR_TRECHO - 1) // GOOGLE_MAPS_LOCAIS_POR_TRECHO
+    for indice, inicio in enumerate(range(0, len(roteaveis), GOOGLE_MAPS_LOCAIS_POR_TRECHO)):
+        locais = roteaveis[inicio:inicio + GOOGLE_MAPS_LOCAIS_POR_TRECHO]
+        ultimo = indice == total - 1
+        origem = base if indice == 0 else roteaveis[inicio - 1]
+        destino = base if ultimo else locais[-1]
+        intermediarios = locais if ultimo else locais[:-1]
+        parametros = {
+            'api': '1', 'origin': origem, 'destination': destino,
+            'travelmode': 'two-wheeler',
+        }
+        if intermediarios:
+            parametros['waypoints'] = '|'.join(intermediarios)
+        trechos.append({
+            'numero': indice + 1, 'total': total,
+            'local_inicio': inicio + 1, 'local_fim': inicio + len(locais),
+            'url': 'https://www.google.com/maps/dir/?' + urlencode(parametros),
+        })
+    return trechos
+
+
+def _url_google_maps_completa(filial, paradas):
+    """Compatibilidade para rotas que cabem em um único link do Maps."""
+    trechos = _urls_google_maps_em_trechos(filial, paradas)
+    return trechos[0]['url'] if len(trechos) == 1 else ''
 
 
 def _telefone_whatsapp(cliente):
@@ -307,13 +340,15 @@ def painel(request, token):
     pedidos = _pedidos_da_rota(rota)
     dados = _dados_paradas_rota(rota, pedidos)
     locais = _locais_painel(dados)
+    google_maps_trechos = _urls_google_maps_em_trechos(rota.filial, dados)
     response = render(request, 'pdv/delivery_motorista_publico.html', {
         'rota': rota,
         'pedidos': dados,
         'locais': locais,
         'total': len(dados),
         'concluidos': sum(1 for pedido in dados if pedido['concluido']),
-        'google_maps_completa': _url_google_maps_completa(rota.filial, dados),
+        'google_maps_trechos': google_maps_trechos,
+        'google_maps_completa': google_maps_trechos[0]['url'] if len(google_maps_trechos) == 1 else '',
     })
     return _privado(response)
 
