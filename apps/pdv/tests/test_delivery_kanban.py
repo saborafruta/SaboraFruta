@@ -1364,8 +1364,10 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         resp = self.client.post(
             reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
             data=json.dumps({
-                'cep': '59160-414', 'rua': 'Residencial Catuana',
-                'numero': 'Rua Camapuã casa 420', 'bairro': 'Pium (Distrito Litoral)',
+                'cep': '59160-414',
+                'rua': 'Residencial Catuana, Rua Camapuã casa 420',
+                'numero': '', 'complemento': 'ALPHAVILLE NATAL RESIDENCIAL C',
+                'bairro': 'Pium (Distrito Litoral)',
                 'cidade': 'Parnamirim', 'uf': 'RN', 'atualizar_cliente': False,
             }), content_type='application/json',
         )
@@ -1387,6 +1389,10 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         self.assertTrue(pedido['tem_coordenada'])
         self.assertFalse(pedido['localizacao_revalidacao_pendente'])
         self.assertEqual(resolver.call_count, 3)
+        self.assertEqual(
+            resolver.call_args_list[2].args[0],
+            'Residencial Catuana, Parnamirim, RN, Brasil',
+        )
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_endereco_pode_ser_salvo_apenas_na_entrega(self, resolver):

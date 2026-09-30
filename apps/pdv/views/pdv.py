@@ -4326,22 +4326,50 @@ def delivery_rota_atualizar_endereco(request, pk):
     ).resolver(endereco_texto, hash_cep)
     rua_validada_sem_cep = False
     if not resultado_cep.ok:
-        # Alguns cadastros antigos guardam condomínio/logradouro no campo da
-        # rua e a rua/número no campo do número. Nesses casos a comparação
-        # literal do provider de CEP falha. Procure o conjunto completo sem
-        # exigir CEP ou porta e aceite somente um logradouro na cidade/UF.
-        consulta_rua_sem_cep = ', '.join(filter(None, [
-            endereco['rua'], endereco['numero'], endereco['complemento'],
-            endereco['bairro'], endereco['cidade'], endereco['uf'], 'Brasil',
-        ]))
-        hash_rua_sem_cep = hashlib.md5(
-            f'arcgis-entrega-rua-sem-cep-v1:{consulta_rua_sem_cep.casefold()}'.encode('utf-8')
-        ).hexdigest()
-        resultado_rua_sem_cep = GeocodificacaoService(
-            geocoder=ArcGISGeocoder(validar_numero=False),
-        ).resolver(consulta_rua_sem_cep, hash_rua_sem_cep)
-        tipo_rua = str((resultado_rua_sem_cep.detalhes or {}).get('tipo') or '').casefold()
-        if resultado_rua_sem_cep.ok and tipo_rua in {'streetname', 'streetaddress'}:
+        # Alguns cadastros antigos misturam condomínio, rua e número em um só
+        # campo. Nesses casos a comparação literal do provider de CEP falha.
+        # Consulte cada trecho sem exigir CEP ou porta e aceite somente um
+        # logradouro correspondente na cidade/UF.
+        referencias_rua = [
+            parte.strip()
+            for parte in re.split(r'[,;]+', endereco['rua'])
+            if parte.strip()
+        ]
+        resultado_rua_sem_cep = Resultado(erro='logradouro não encontrado')
+        for referencia_rua in referencias_rua:
+            consulta_rua_sem_cep = ', '.join(filter(None, [
+                referencia_rua, endereco['cidade'], endereco['uf'], 'Brasil',
+            ]))
+            hash_rua_sem_cep = hashlib.md5(
+                (
+                    'arcgis-entrega-rua-sem-cep-v2:'
+                    f'{consulta_rua_sem_cep.casefold()}'
+                ).encode('utf-8')
+            ).hexdigest()
+            candidato_rua = GeocodificacaoService(
+                geocoder=ArcGISGeocoder(validar_numero=False),
+            ).resolver(consulta_rua_sem_cep, hash_rua_sem_cep)
+            detalhes_rua = candidato_rua.detalhes or {}
+            tipo_rua = str(detalhes_rua.get('tipo') or '').casefold()
+            referencia_normalizada = re.sub(
+                r'[^a-z0-9]+', '', unicodedata.normalize(
+                    'NFD', referencia_rua.casefold(),
+                ).encode('ascii', 'ignore').decode('ascii'),
+            )
+            endereco_normalizado = re.sub(
+                r'[^a-z0-9]+', '', unicodedata.normalize(
+                    'NFD', str(detalhes_rua.get('endereco') or '').casefold(),
+                ).encode('ascii', 'ignore').decode('ascii'),
+            )
+            if (
+                candidato_rua.ok
+                and tipo_rua in {'streetname', 'streetaddress'}
+                and referencia_normalizada
+                and referencia_normalizada in endereco_normalizado
+            ):
+                resultado_rua_sem_cep = candidato_rua
+                break
+        if resultado_rua_sem_cep.ok:
             resultado = resultado_rua_sem_cep
             origem_coordenada = 'rua'
             numero_confirmado = False
