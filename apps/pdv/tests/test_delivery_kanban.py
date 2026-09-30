@@ -1331,6 +1331,7 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         resolver.side_effect = [
             Resultado(-5.65, -35.30, 'aproximada'),
             Resultado(erro='CEP sem coordenada disponível'),
+            Resultado(erro='logradouro não encontrado'),
         ]
         venda = self._venda(numero=310)
 
@@ -1346,7 +1347,46 @@ class DeliveryRotasPersistentesTests(DeliveryKanbanBase):
         venda.refresh_from_db()
         self.assertEqual(resp.status_code, 422)
         self.assertNotIn('_latitude', venda.endereco_entrega)
-        self.assertIn('validar a localização pelo CEP', resp.json()['erro'])
+        self.assertIn('nem localizar o logradouro', resp.json()['erro'])
+
+    @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
+    def test_endereco_desestruturado_usa_ponto_aproximado_do_logradouro(self, resolver):
+        resolver.side_effect = [
+            Resultado(erro='resultado incompatível com o CEP informado'),
+            Resultado(erro='resultado incompatível com a rua informada'),
+            Resultado(-5.9416, -35.1718, 'aproximada', detalhes={
+                'tipo': 'streetname', 'pontuacao': 88.12,
+                'endereco': 'Residencial Catuana, Parnamirim, RN',
+            }),
+        ]
+        venda = self._venda(numero=2401)
+
+        resp = self.client.post(
+            reverse('pdv:delivery_rota_atualizar_endereco', args=[venda.pk]),
+            data=json.dumps({
+                'cep': '59160-414', 'rua': 'Residencial Catuana',
+                'numero': 'Rua Camapuã casa 420', 'bairro': 'Pium (Distrito Litoral)',
+                'cidade': 'Parnamirim', 'uf': 'RN', 'atualizar_cliente': False,
+            }), content_type='application/json',
+        )
+
+        venda.refresh_from_db()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(venda.endereco_entrega['_geo_origem'], 'rua')
+        self.assertTrue(venda.endereco_entrega['_geo_rua_validada'])
+        self.assertFalse(venda.endereco_entrega['_geo_cep_validado'])
+        self.assertAlmostEqual(venda.endereco_entrega['_latitude'], -5.9416)
+        self.assertIn('ponto genérico da rua', resp.json()['coordenada_aviso'])
+        self.assertTrue(resp.json()['localizacao_requer_revisao'])
+
+        tela = self.client.get(reverse('pdv:delivery_rotas'))
+        pedido = next(
+            item for item in json.loads(tela.context['pedidos_json'])
+            if item['id'] == venda.pk
+        )
+        self.assertTrue(pedido['tem_coordenada'])
+        self.assertFalse(pedido['localizacao_revalidacao_pendente'])
+        self.assertEqual(resolver.call_count, 3)
 
     @patch('apps.mapas.services.geocoder.GeocodificacaoService.resolver')
     def test_endereco_pode_ser_salvo_apenas_na_entrega(self, resolver):

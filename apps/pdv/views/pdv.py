@@ -3384,6 +3384,21 @@ def _delivery_ponto_compativel_com_cep(snapshot):
     return distancia_haversine_m(ponto, cep) <= _DELIVERY_MAX_DISTANCIA_CEP_M
 
 
+def _delivery_ponto_automatico_valido(snapshot):
+    """Aceita CEP compatível ou um logradouro explicitamente validado."""
+    if (
+        snapshot.get('_geo_origem') == 'rua'
+        and snapshot.get('_geo_rua_validada') is True
+    ):
+        try:
+            latitude = float(snapshot['_latitude'])
+            longitude = float(snapshot['_longitude'])
+        except (KeyError, TypeError, ValueError):
+            return False
+        return -34 <= latitude <= 6 and -74 <= longitude <= -32
+    return _delivery_ponto_compativel_com_cep(snapshot)
+
+
 def _delivery_rota_localizacao(venda):
     """Aceita ponto aproximado sinalizado, mas nunca coordenada incompatível."""
     endereco = _delivery_rota_endereco_campos(venda)
@@ -3425,7 +3440,7 @@ def _delivery_rota_localizacao(venda):
         origem = snapshot.get('_geo_origem')
         if origem != 'manual' and (
             snapshot.get('_geo_lookup_version') != _DELIVERY_GEO_VERSAO
-            or not _delivery_ponto_compativel_com_cep(snapshot)
+            or not _delivery_ponto_automatico_valido(snapshot)
         ):
             return {
                 'ok': False,
@@ -3562,7 +3577,7 @@ def _delivery_rota_serializar_pedido(venda):
         'localizacao_revalidacao_pendente': bool(
             (snapshot.get('_latitude') is not None and origem != 'manual'
              and (snapshot.get('_geo_lookup_version') != _DELIVERY_GEO_VERSAO
-                  or not _delivery_ponto_compativel_com_cep(snapshot)))
+                  or not _delivery_ponto_automatico_valido(snapshot)))
             or (not snapshot and cliente and not cliente.geo_fixado
                 and cliente.latitude is not None and cliente.longitude is not None)
         ),
@@ -4309,18 +4324,40 @@ def delivery_rota_atualizar_endereco(request, pk):
     resultado_cep = resultado_cep_cliente or GeocodificacaoService(
         geocoder=AwesomeApiCepGeocoder(),
     ).resolver(endereco_texto, hash_cep)
+    rua_validada_sem_cep = False
     if not resultado_cep.ok:
-        return JsonResponse({
-            'erro': (
-                'Não foi possível validar a localização pelo CEP. '
-                'Nenhum ponto automático será usado até a consulta funcionar '
-                f'({resultado_cep.erro or "CEP sem coordenadas"}).'
-            ),
-        }, status=422)
-    cep_validado = True
+        # Alguns cadastros antigos guardam condomínio/logradouro no campo da
+        # rua e a rua/número no campo do número. Nesses casos a comparação
+        # literal do provider de CEP falha. Procure o conjunto completo sem
+        # exigir CEP ou porta e aceite somente um logradouro na cidade/UF.
+        consulta_rua_sem_cep = ', '.join(filter(None, [
+            endereco['rua'], endereco['numero'], endereco['complemento'],
+            endereco['bairro'], endereco['cidade'], endereco['uf'], 'Brasil',
+        ]))
+        hash_rua_sem_cep = hashlib.md5(
+            f'arcgis-entrega-rua-sem-cep-v1:{consulta_rua_sem_cep.casefold()}'.encode('utf-8')
+        ).hexdigest()
+        resultado_rua_sem_cep = GeocodificacaoService(
+            geocoder=ArcGISGeocoder(validar_numero=False),
+        ).resolver(consulta_rua_sem_cep, hash_rua_sem_cep)
+        tipo_rua = str((resultado_rua_sem_cep.detalhes or {}).get('tipo') or '').casefold()
+        if resultado_rua_sem_cep.ok and tipo_rua in {'streetname', 'streetaddress'}:
+            resultado = resultado_rua_sem_cep
+            origem_coordenada = 'rua'
+            numero_confirmado = False
+            rua_validada_sem_cep = True
+        else:
+            return JsonResponse({
+                'erro': (
+                    'Não foi possível validar a localização pelo CEP nem localizar '
+                    'o logradouro. Revise rua, cidade e UF '
+                    f'({resultado_cep.erro or "CEP sem coordenadas"}).'
+                ),
+            }, status=422)
+    cep_validado = resultado_cep.ok
     cep_resultado_divergente = ''
 
-    if not endereco_exato:
+    if not endereco_exato and not rua_validada_sem_cep:
         # Em avenidas que separam bairros, os dois lados podem ter CEPs
         # diferentes. Se o ArcGIS só rejeitou o CEP, tente o número sem ele:
         # aceite apenas a mesma rua e cidade, próximo ao ponto do CEP. Ainda
@@ -4475,7 +4512,7 @@ def delivery_rota_atualizar_endereco(request, pk):
                         or resultado_rua.erro or 'local não encontrado'
                     ))
                     origem_coordenada = 'generica'
-    if resultado.ok and distancia_haversine_m(
+    if resultado.ok and resultado_cep.ok and distancia_haversine_m(
         (resultado.latitude, resultado.longitude),
         (resultado_cep.latitude, resultado_cep.longitude),
     ) > _DELIVERY_MAX_DISTANCIA_CEP_M:
@@ -4508,6 +4545,7 @@ def delivery_rota_atualizar_endereco(request, pk):
                 if origem_coordenada == 'cep' else ArcGISGeocoder.nome
             ),
             '_geo_cep_validado': cep_validado,
+            '_geo_rua_validada': rua_validada_sem_cep,
             '_geo_cep_lat': resultado_cep.latitude,
             '_geo_cep_lng': resultado_cep.longitude,
             '_geo_cep_divergente': cep_resultado_divergente,
