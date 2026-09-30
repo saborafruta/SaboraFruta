@@ -458,12 +458,12 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         self.assertEqual(len(mock_rota.call_args.args[0]), 4)
 
     @patch('apps.mapas.services.roteirizacao.OSRMRoteirizador.rota')
-    def test_limite_de_25_considera_locais_e_nao_pedidos(self, mock_rota):
-        pedidos = [self._venda(numero=700 + i) for i in range(26)]
+    def test_limite_de_50_considera_locais_e_nao_pedidos(self, mock_rota):
+        pedidos = [self._venda(numero=700 + i) for i in range(51)]
         for i, pedido in enumerate(pedidos):
             endereco = {
                 'cep': '59158155', 'rua': 'Avenida Antártida',
-                'numero': str(100 + (i if i < 20 else 0)),
+                'numero': str(100 + (i if i < 50 else 0)),
                 'bairro': 'Parque das Nações', 'cidade': 'Parnamirim', 'uf': 'RN',
                 '_latitude': -5.8, '_longitude': -35.22,
                 '_geo_origem': 'manual',
@@ -483,9 +483,9 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         )
 
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()['total_locais'], 20)
-        self.assertEqual(len(resp.json()['paradas']), 26)
-        self.assertEqual(len(mock_rota.call_args.args[0]), 22)
+        self.assertEqual(resp.json()['total_locais'], 50)
+        self.assertEqual(len(resp.json()['paradas']), 51)
+        self.assertEqual(len(mock_rota.call_args.args[0]), 52)
 
         for i, pedido in enumerate(pedidos):
             endereco = dict(pedido.endereco_entrega)
@@ -501,7 +501,7 @@ class DeliveryRotasViewTests(DeliveryKanbanBase):
         )
 
         self.assertEqual(resp.status_code, 400)
-        self.assertIn('25 locais', resp.json()['erro'])
+        self.assertIn('50 locais', resp.json()['erro'])
         mock_rota.assert_called_once()
 
     def test_sem_numero_entra_no_mesmo_condominio_mas_nao_so_pelo_cep(self):

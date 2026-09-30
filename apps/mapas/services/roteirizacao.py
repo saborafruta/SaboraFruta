@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 #: Teto de paradas por rota. Protege o tamanho da URL (OSRM recebe as
 #: coordenadas no path) e o tempo de resposta.
-MAX_PARADAS = 25
+MAX_PARADAS = 50
 TIMEOUT_S = 20
 
 
