@@ -135,6 +135,14 @@ def _telefone_whatsapp(cliente):
 
 def _pedidos_da_rota(rota):
     ids = [int(pk) for pk in rota.pedido_ids if str(pk).isdigit()]
+    conclusoes = {
+        int(pk) for pk in (rota.conclusoes_pedidos or {}) if str(pk).isdigit()
+    }
+    encerrados = {
+        VendaPDV.StatusDelivery.ENTREGUE,
+        VendaPDV.StatusDelivery.FINALIZADO,
+        VendaPDV.StatusDelivery.CANCELADO,
+    }
     encontrados = {
         venda.pk: venda
         for venda in (
@@ -144,6 +152,7 @@ def _pedidos_da_rota(rota):
             .select_related('cliente')
             .prefetch_related('itens__produto', 'pagamentos__forma_pagamento')
         )
+        if venda.status_delivery not in encerrados or venda.pk in conclusoes
     }
     return [encontrados[pk] for pk in ids if pk in encontrados]
 

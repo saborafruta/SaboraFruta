@@ -3305,6 +3305,18 @@ def delivery_kanban(request):
 
 
 DELIVERY_ROTA_STATUS = {'novo', 'preparando'}
+DELIVERY_ROTA_STATUS_ENCERRADOS = {'entregue', 'finalizado', 'cancelado'}
+
+
+def _delivery_pedido_disponivel_na_rota(venda, rota):
+    if venda.status_delivery in DELIVERY_ROTA_STATUS:
+        return True
+    ids_da_rota = {int(pk) for pk in (rota.pedido_ids or []) if str(pk).isdigit()}
+    if venda.pk not in ids_da_rota:
+        return False
+    if venda.status_delivery not in DELIVERY_ROTA_STATUS_ENCERRADOS:
+        return True
+    return str(venda.pk) in (rota.conclusoes_pedidos or {})
 
 
 def _delivery_rota_pedidos(filial):
@@ -3312,14 +3324,27 @@ def _delivery_rota_pedidos(filial):
     from apps.pdv.models import RotaDelivery
 
     ids_em_rotas = set()
-    for ids in RotaDelivery.objects.filter(
+    ids_concluidos_nas_rotas = set()
+    for ids, conclusoes in RotaDelivery.objects.filter(
         filial=filial, status__in=[RotaDelivery.Status.RASCUNHO, RotaDelivery.Status.EM_ROTA],
-    ).values_list('pedido_ids', flat=True):
+    ).values_list('pedido_ids', 'conclusoes_pedidos'):
         ids_em_rotas.update(int(pk) for pk in (ids or []) if str(pk).isdigit())
+        ids_concluidos_nas_rotas.update(
+            int(pk) for pk in (conclusoes or {}) if str(pk).isdigit()
+        )
+    criterio = Q(status_delivery__in=DELIVERY_ROTA_STATUS)
+    if ids_em_rotas:
+        criterio |= (
+            Q(pk__in=ids_em_rotas)
+            & ~Q(status_delivery__in=DELIVERY_ROTA_STATUS_ENCERRADOS)
+        )
+    if ids_concluidos_nas_rotas:
+        criterio |= Q(pk__in=ids_concluidos_nas_rotas)
     return (
         VendaPDV.objects.for_filial(filial)
         .filter(delivery=True)
-        .filter(Q(status_delivery__in=DELIVERY_ROTA_STATUS) | Q(pk__in=ids_em_rotas))
+        .filter(criterio)
+        .exclude(status_delivery=VendaPDV.StatusDelivery.CANCELADO)
         .exclude(status='cancelada')
         .select_related('cliente')
         .prefetch_related('pagamentos__forma_pagamento', 'itens__produto')
@@ -5458,15 +5483,22 @@ def delivery_rota_publicar(request):
     if not ids and not extras:
         return JsonResponse({'erro': 'Gere uma rota antes de publicá-la.'}, status=400)
 
-    pedidos_publicar = list(
+    candidatos_publicar = list(
         VendaPDV.objects.for_filial(request.filial_ativa)
-        .filter(pk__in=ids, delivery=True)
+        .filter(pk__in=ids)
+        .filter(delivery=True)
         .exclude(status='cancelada')
         .select_related('cliente')
     )
+    pedidos_publicar = [
+        venda for venda in candidatos_publicar
+        if _delivery_pedido_disponivel_na_rota(venda, rota)
+    ]
     encontrados = {venda.pk for venda in pedidos_publicar}
     if any(pk not in encontrados for pk in ids):
-        return JsonResponse({'erro': 'A rota contém pedidos inválidos.'}, status=400)
+        return JsonResponse({
+            'erro': 'A rota contém pedidos que não estão mais disponíveis para entrega.',
+        }, status=400)
     nao_validados = [
         f'#{venda.numero_venda}' for venda in pedidos_publicar
         if not _delivery_rota_localizacao(venda)['ok']
