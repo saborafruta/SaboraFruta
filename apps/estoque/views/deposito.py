@@ -14,7 +14,7 @@ from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.services.request_scope import empresa_operacional
 from apps.core.tenant_context import tenant_atomic
-from apps.estoque.forms import AviamentoRapidoForm, DepositoForm, TransferenciaInternaForm
+from apps.estoque.forms import AviamentoRapidoForm, DepositoForm, TecidoRapidoForm, TransferenciaInternaForm
 from apps.estoque.models import Deposito, Estoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.estoque.views.permissoes import permissoes_estoque
@@ -80,6 +80,56 @@ def _painel_aviamentos(request, deposito, form_rapido=None):
                 'tipo': request.GET.get('tipo', ''),
                 'unidade_medida': request.GET.get('un', ''),
             },
+        ),
+    }
+
+
+def _painel_tecidos(request, deposito, form_rapido=None):
+    """
+    Dados do painel "Tecidos" da tela do depósito -- mesmo formato de
+    `_painel_aviamentos`, mas pro catálogo `moda.Tecido`. Só aparece em
+    depósito marcado para tecido principal e/ou forro (ver
+    `deposito_tem_tecido`); um depósito só de aviamento não precisa dele.
+    """
+    from apps.moda.models import MaterialFicha, Tecido
+    from apps.moda.permissoes import pode_na_area
+
+    filial = request.filial_ativa
+    catalogo = list(
+        Tecido.objects.for_filial(filial)
+        .select_related('produto_estoque__unidade_medida')
+        .order_by('nome')
+    )
+    produto_ids = [t.produto_estoque_id for t in catalogo if t.produto_estoque_id]
+    saldos = {}
+    if produto_ids:
+        for row in (
+            Estoque.objects.filter(filial=filial, produto_id__in=produto_ids)
+            .values('produto_id', 'deposito_id')
+            .annotate(total=Sum('quantidade_atual'))
+        ):
+            por_deposito = saldos.setdefault(row['produto_id'], {})
+            por_deposito[row['deposito_id']] = row['total'] or Decimal('0')
+
+    for tecido in catalogo:
+        por_deposito = saldos.get(tecido.produto_estoque_id, {})
+        tecido.saldo_aqui = por_deposito.get(deposito.pk, Decimal('0'))
+        tecido.saldo_total = sum(por_deposito.values(), Decimal('0'))
+
+    pode_cadastrar = (
+        request.user.tem_permissao('estoque', 'criar')
+        and pode_na_area(request.user, 'comercial', 'criar')
+    )
+    return {
+        'tecidos': catalogo,
+        'deposito_tem_tecido': bool(
+            {MaterialFicha.Tipo.TECIDO_PRINCIPAL, MaterialFicha.Tipo.FORRO}
+            & set(deposito.tipos_material or [])
+        ),
+        'pode_cadastrar_tecido': pode_cadastrar,
+        'form_tecido': form_rapido or TecidoRapidoForm(
+            filial=filial, empresa=empresa_operacional(request),
+            initial={'unidade_medida': request.GET.get('un', '')},
         ),
     }
 
@@ -168,6 +218,7 @@ class DepositoUpdateView(PermissaoRequiredMixin, View):
             'deposito': deposito,
             'title': f'Editar depósito — {deposito.nome}',
             **_painel_aviamentos(request, deposito),
+            **_painel_tecidos(request, deposito),
         })
 
     def post(self, request, pk):
@@ -187,6 +238,7 @@ class DepositoUpdateView(PermissaoRequiredMixin, View):
             'form': form, 'deposito': deposito,
             'title': f'Editar depósito — {deposito.nome}',
             **_painel_aviamentos(request, deposito),
+            **_painel_tecidos(request, deposito),
         })
 
 
@@ -225,6 +277,7 @@ class DepositoAviamentoCreateView(PermissaoRequiredMixin, View):
                 'deposito': deposito,
                 'title': f'Editar depósito — {deposito.nome}',
                 **_painel_aviamentos(request, deposito, form_rapido=form),
+                **_painel_tecidos(request, deposito),
             })
 
         dados = form.cleaned_data
@@ -263,6 +316,69 @@ class DepositoAviamentoCreateView(PermissaoRequiredMixin, View):
         return redirect(
             f'{destino}?{urlencode({"tipo": tipo_volta, "un": unidade.pk})}#aviamentos'
         )
+
+
+class DepositoTecidoCreateView(PermissaoRequiredMixin, View):
+    """
+    Cadastro rápido de tecido a partir da tela do depósito -- mesmo fluxo
+    de `DepositoAviamentoCreateView`, pro catálogo `moda.Tecido`.
+    """
+
+    permissao_modulo = 'estoque'
+    permissao_acao = 'criar'
+    template_name = 'estoque/deposito/form.html'
+
+    def post(self, request, pk):
+        from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE
+        from apps.moda.models import Tecido
+        from apps.moda.permissoes import pode_na_area
+        from apps.moda.views_apoio import criar_produto_materia_prima
+
+        filial = request.filial_ativa
+        deposito = get_object_or_404(Deposito.objects.filter(filial=filial), pk=pk)
+        if not pode_na_area(request.user, 'comercial', 'criar'):
+            messages.error(request, PERMISSION_DENIED_MESSAGE)
+            return redirect('estoque:deposito-update', pk=deposito.pk)
+
+        form = TecidoRapidoForm(
+            request.POST, filial=filial, empresa=empresa_operacional(request),
+        )
+        if not form.is_valid():
+            return render(request, self.template_name, {
+                'form': DepositoForm(instance=deposito, filial=filial),
+                'deposito': deposito,
+                'title': f'Editar depósito — {deposito.nome}',
+                **_painel_aviamentos(request, deposito),
+                **_painel_tecidos(request, deposito, form_rapido=form),
+            })
+
+        dados = form.cleaned_data
+        with tenant_atomic():
+            unidade = form.obter_unidade()
+            dados['unidade_medida'] = unidade
+            produto = criar_produto_materia_prima(filial, dados, 'Cadastro de Tecidos')
+            tecido = Tecido.objects.create(
+                filial=filial, nome=dados['nome'],
+                produto_estoque=produto,
+            )
+            quantidade = dados.get('quantidade_inicial')
+            if quantidade:
+                MovimentacaoService.ajustar_manual(
+                    produto_id=produto.pk, filial_id=filial.pk,
+                    quantidade_nova=quantidade, usuario_id=request.user.pk,
+                    justificativa=(
+                        'Saldo inicial informado ao cadastrar o tecido '
+                        f'no depósito {deposito.nome}.'
+                    ),
+                    deposito_id=deposito.pk,
+                )
+        registrar_auditoria(
+            request=request, modulo='estoque', acao='criar', objeto=tecido,
+            descricao=f'Tecido {tecido.nome} cadastrado pelo depósito {deposito.nome}',
+        )
+        messages.success(request, f'Tecido "{tecido.nome}" cadastrado.')
+        destino = reverse('estoque:deposito-update', args=[deposito.pk])
+        return redirect(f'{destino}?{urlencode({"un": unidade.pk})}#tecidos')
 
 
 class EstoquePorDepositoJsonView(PermissaoRequiredMixin, View):

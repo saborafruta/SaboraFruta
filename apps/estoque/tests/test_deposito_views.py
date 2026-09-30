@@ -352,3 +352,129 @@ class DepositoAviamentoViewTests(DepositoViewsBase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'Informe o nome do tipo.')
         self.assertFalse(Aviamento.objects.filter(filial=self.filial).exists())
+
+
+class DepositoTecidoViewTests(DepositoViewsBase):
+    """Painel de tecidos dentro da edição do depósito."""
+
+    def setUp(self):
+        super().setUp()
+        self._set_filial_sessao()
+        self.tecidos = Deposito.objects.create(
+            filial=self.filial, nome='Tecidos', tipo='producao',
+            tipos_material=['tecido_principal', 'forro'],
+        )
+        self.url_novo = reverse('estoque:deposito-tecido-create', args=[self.tecidos.pk])
+
+    def _payload(self, **extra):
+        dados = {
+            'nome': 'Dry (Preto)', 'unidade_medida': self.unidade.pk,
+            'codigo': 'DRY-PT', 'quantidade_inicial': '25',
+        }
+        dados.update(extra)
+        return dados
+
+    def test_edicao_mostra_painel_e_formulario_rapido(self):
+        resp = self.client.get(reverse('estoque:deposito-update', args=[self.tecidos.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="tecidos"')
+        self.assertContains(resp, self.url_novo)
+
+    def test_criacao_de_deposito_nao_mostra_painel(self):
+        resp = self.client.get(reverse('estoque:deposito-create'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, 'id="tecidos"')
+
+    def test_deposito_so_de_aviamento_nao_mostra_painel_de_tecido(self):
+        aviamentos = Deposito.objects.create(
+            filial=self.filial, nome='Aviamentos', tipo='producao',
+            tipos_material=['linha', 'ziper'],
+        )
+        resp = self.client.get(reverse('estoque:deposito-update', args=[aviamentos.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, 'id="tecidos"')
+
+    def test_cadastra_tecido_com_saldo_no_deposito(self):
+        from apps.moda.models import Tecido
+
+        resp = self.client.post(self.url_novo, self._payload())
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('#tecidos', resp['Location'])
+
+        tecido = Tecido.objects.get(filial=self.filial, nome='Dry (Preto)')
+        self.assertIsNotNone(tecido.produto_estoque_id)
+        saldo = Estoque.objects.get(
+            filial=self.filial, produto=tecido.produto_estoque, deposito=self.tecidos,
+        )
+        self.assertEqual(saldo.quantidade_atual, Decimal('25'))
+
+        resp = self.client.get(reverse('estoque:deposito-update', args=[self.tecidos.pk]))
+        self.assertContains(resp, 'Dry (Preto)')
+
+    def test_cadastra_sem_saldo_inicial(self):
+        from apps.moda.models import Tecido
+
+        resp = self.client.post(self.url_novo, self._payload(quantidade_inicial=''))
+        self.assertEqual(resp.status_code, 302)
+        tecido = Tecido.objects.get(filial=self.filial, nome='Dry (Preto)')
+        self.assertFalse(Estoque.objects.filter(produto=tecido.produto_estoque).exists())
+
+    def test_nome_repetido_e_recusado(self):
+        from apps.moda.models import Tecido
+
+        Tecido.objects.create(filial=self.filial, nome='Piquet (Branco)')
+        resp = self.client.post(self.url_novo, self._payload(nome='piquet (BRANCO)'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Já existe')
+        self.assertEqual(Tecido.objects.filter(filial=self.filial).count(), 1)
+
+    def test_deposito_de_outra_filial_da_404(self):
+        outra = Filial.objects.create(
+            empresa=self.empresa, razao_social='G', nome_fantasia='Filial 2',
+            cnpj='29345678000203', uf='RN',
+        )
+        alheio = Deposito.objects.create(filial=outra, nome='Alheio')
+        resp = self.client.post(
+            reverse('estoque:deposito-tecido-create', args=[alheio.pk]), self._payload(),
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_cria_unidade_nova_junto_com_o_tecido(self):
+        from apps.moda.models import Tecido
+        from apps.produtos.models import UnidadeMedida, UnidadeMedidaFilial
+
+        resp = self.client.post(self.url_novo, self._payload(
+            nome='Malha PV', unidade_medida='__nova__', nova_unidade_sigla='m',
+            nova_unidade_descricao='Metro', nova_unidade_tipo='comprimento',
+            quantidade_inicial='50',
+        ))
+        self.assertEqual(resp.status_code, 302)
+        metro = UnidadeMedida.objects.get(empresa=self.empresa, sigla='M')
+        self.assertEqual(metro.descricao, 'Metro')
+        self.assertEqual(metro.tipo, 'comprimento')
+        self.assertTrue(UnidadeMedidaFilial.objects.filter(unidade=metro, filial=self.filial).exists())
+        tecido = Tecido.objects.get(filial=self.filial, nome='Malha PV')
+        self.assertEqual(tecido.produto_estoque.unidade_medida, metro)
+        self.assertIn(f'un={metro.pk}', resp['Location'])
+
+    def test_unidade_nova_com_sigla_repetida_e_recusada(self):
+        from apps.produtos.models import UnidadeMedida
+
+        resp = self.client.post(self.url_novo, self._payload(
+            unidade_medida='__nova__', nova_unidade_sigla='un',
+            nova_unidade_descricao='Outra unidade',
+        ))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Já existe a unidade')
+        self.assertEqual(UnidadeMedida.objects.filter(empresa=self.empresa).count(), 1)
+
+    def test_sem_unidade_nenhuma_e_recusado(self):
+        resp = self.client.post(self.url_novo, self._payload(unidade_medida=''))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'obrigat')
+
+    def test_lista_oferece_metro_e_kg_prontos_e_nao_repete_unidade_existente(self):
+        resp = self.client.get(reverse('estoque:deposito-update', args=[self.tecidos.pk]))
+        self.assertContains(resp, 'value="padrao:M"')
+        self.assertContains(resp, 'value="padrao:KG"')
+        self.assertContains(resp, 'Tipo de unidade')

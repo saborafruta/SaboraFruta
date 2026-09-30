@@ -144,7 +144,7 @@
     </div>
   {% endif %}
 
-  <div class="{% if deposito and deposito_tem_aviamento %}dep-grid{% endif %}"
+  <div class="{% if deposito_tem_aviamento or deposito_tem_tecido %}dep-grid{% endif %}"
        x-data="{ aviamentoMarcado: {{ deposito_tem_aviamento|yesno:'true,false' }} }">
 
     {# ───────────── Configuração do depósito ───────────── #}
@@ -237,6 +237,153 @@
         <button type="submit" class="btn-primary">Salvar depósito</button>
       </div>
     </form>
+
+    {# ───────────── Tecidos (só na edição, e só quando o depósito aceita tecido principal e/ou forro) ───────────── #}
+    {% if deposito and deposito_tem_tecido %}
+    <section id="tecidos" class="card" style="overflow:visible;"
+             x-data="{ busca: '' }">
+
+      <div class="dep-section" style="border-top:0;">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 class="text-lg font-semibold dep-text">Tecidos</h3>
+            <p class="text-sm dep-muted mt-0.5">
+              Cadastre aqui e o tecido já nasce ligado ao estoque
+              {% if pode_cadastrar_tecido %}— com saldo inicial neste depósito{% endif %}.
+            </p>
+          </div>
+          <span class="dep-badge">{{ tecidos|length }} cadastrado{{ tecidos|length|pluralize }}</span>
+        </div>
+      </div>
+
+      {% if pode_cadastrar_tecido %}
+      <div class="dep-section">
+        <p class="dep-section-title">Novo tecido</p>
+
+        <form method="post" action="{% url 'estoque:deposito-tecido-create' deposito.pk %}"
+              x-data="{ unidade: '{% if form_tecido.criando_unidade %}{{ form_tecido.unidade_escolhida }}{% else %}{{ form_tecido.unidade_medida.value|default:'' }}{% endif %}' }"
+              @submit="$refs.enviar.disabled = true">
+          {% csrf_token %}
+          <div class="dep-avi-add">
+            <div class="col-nome">
+              <label for="tec-nome">Nome</label>
+              <input id="tec-nome" type="text" name="nome" maxlength="80" required class="form-input"
+                     value="{{ form_tecido.nome.value|default:'' }}" placeholder="Ex.: Dry (Preto)"
+                     {% if form_tecido.errors %}autofocus{% endif %}>
+              {% if form_tecido.nome.errors %}<p class="dep-error">{{ form_tecido.nome.errors.0 }}</p>{% endif %}
+            </div>
+            <div class="col-un">
+              <label for="tec-un">Tipo de unidade</label>
+              <select id="tec-un" name="unidade_medida" required class="form-input" x-model="unidade">
+                <option value="">Selecione…</option>
+                {% for u in form_tecido.fields.unidade_medida.queryset %}
+                  <option value="{{ u.pk }}"
+                          {% if form_tecido.unidade_medida.value|stringformat:'s' == u.pk|stringformat:'s' %}selected{% endif %}>{{ u.sigla }} — {{ u.descricao }}</option>
+                {% endfor %}
+                {% for valor, sigla, descricao in form_tecido.unidades_padrao_faltando %}
+                  <option value="{{ valor }}" {% if form_tecido.unidade_escolhida == valor %}selected{% endif %}>{{ sigla }} — {{ descricao }}</option>
+                {% endfor %}
+                <option value="__nova__" {% if form_tecido.unidade_escolhida == '__nova__' %}selected{% endif %}>+ Criar outra unidade…</option>
+              </select>
+              {% if form_tecido.unidade_medida.errors %}<p class="dep-error">{{ form_tecido.unidade_medida.errors.0 }}</p>{% endif %}
+            </div>
+            <div class="col-nova" x-show="unidade === '__nova__'" x-cloak>
+              <div class="dep-nova-unidade">
+                <p class="dep-hint" style="margin:0 0 10px;">Outra unidade de medida — fica disponível para os próximos tecidos e produtos.</p>
+                <div class="dep-nova-grid">
+                  <div>
+                    <label for="tec-un-sigla">Sigla</label>
+                    <input id="tec-un-sigla" type="text" name="nova_unidade_sigla" maxlength="6" class="form-input"
+                           :required="unidade === '__nova__'" value="{{ form_tecido.nova_unidade_sigla.value|default:'' }}" placeholder="Ex.: M">
+                    {% if form_tecido.nova_unidade_sigla.errors %}<p class="dep-error">{{ form_tecido.nova_unidade_sigla.errors.0 }}</p>{% endif %}
+                  </div>
+                  <div>
+                    <label for="tec-un-desc">Nome da unidade</label>
+                    <input id="tec-un-desc" type="text" name="nova_unidade_descricao" maxlength="40" class="form-input"
+                           :required="unidade === '__nova__'" value="{{ form_tecido.nova_unidade_descricao.value|default:'' }}" placeholder="Ex.: Metro">
+                    {% if form_tecido.nova_unidade_descricao.errors %}<p class="dep-error">{{ form_tecido.nova_unidade_descricao.errors.0 }}</p>{% endif %}
+                  </div>
+                  <div>
+                    <label for="tec-un-tipo">Tipo de medida</label>
+                    <select id="tec-un-tipo" name="nova_unidade_tipo" class="form-input">
+                      {% for valor, rotulo in form_tecido.fields.nova_unidade_tipo.choices %}
+                        <option value="{{ valor }}" {% if form_tecido.nova_unidade_tipo.value == valor %}selected{% endif %}>{{ rotulo }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-cod">
+              <label for="tec-cod">Código</label>
+              <input id="tec-cod" type="text" name="codigo" maxlength="30" class="form-input"
+                     value="{{ form_tecido.codigo.value|default:'' }}" placeholder="Opcional">
+            </div>
+            <div class="col-qtd">
+              <label for="tec-qtd">Saldo inicial</label>
+              <input id="tec-qtd" type="text" inputmode="decimal" name="quantidade_inicial" class="form-input"
+                     value="{{ form_tecido.quantidade_inicial.value|default:'' }}" placeholder="0">
+              {% if form_tecido.quantidade_inicial.errors %}<p class="dep-error">{{ form_tecido.quantidade_inicial.errors.0 }}</p>{% endif %}
+            </div>
+            <div class="col-btn">
+              <button type="submit" x-ref="enviar" class="btn-primary" style="width:100%;">Cadastrar</button>
+            </div>
+          </div>
+          <p class="dep-hint">Depois de cadastrar, a tela volta aqui com a unidade mantida — é só digitar o próximo.</p>
+        </form>
+      </div>
+      {% endif %}
+
+      <div class="dep-section" style="padding:0;">
+        <div class="flex flex-wrap gap-2" style="padding:14px 24px;">
+          <input type="search" class="form-input" style="flex:1; min-width:180px;" placeholder="Buscar tecido ou código…"
+                 x-model="busca" aria-label="Buscar tecido">
+        </div>
+
+        {% if tecidos %}
+        <div class="dep-scroll">
+          <table class="dep-table" data-columns="off">
+            <thead>
+              <tr>
+                <th>Tecido</th>
+                <th class="num">Neste depósito</th>
+                <th class="num">Total</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for t in tecidos %}
+              <tr data-busca="{{ t.nome|lower }}"
+                  x-show="!busca || $el.dataset.busca.includes(busca.toLowerCase())">
+                <td>
+                  <span class="font-medium">{{ t.nome }}</span>
+                  {% if not t.ativo %}<span class="dep-badge is-warn" style="margin-left:6px;">inativo</span>{% endif %}
+                </td>
+                {% if t.produto_estoque_id %}
+                  <td class="num">{{ t.saldo_aqui|floatformat:"-3" }} <span class="dep-muted">{{ t.produto_estoque.unidade_medida.sigla|lower }}</span></td>
+                  <td class="num dep-muted">{{ t.saldo_total|floatformat:"-3" }}</td>
+                {% else %}
+                  <td class="num" colspan="2"><span class="dep-badge is-warn">sem vínculo com estoque</span></td>
+                {% endif %}
+                <td class="num">
+                  <a href="{% url 'moda:apoio-update' 'engenharia' 'materiais' t.pk %}" style="color:var(--dep-accent); font-size:13px;">Editar</a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="dep-empty">
+          <p class="text-sm font-medium dep-text">Nenhum tecido cadastrado ainda.</p>
+          <p class="text-sm dep-muted" style="margin-top:4px;">
+            {% if pode_cadastrar_tecido %}Use o formulário acima para cadastrar o primeiro.{% else %}Peça a quem tem acesso ao cadastro para incluí-los.{% endif %}
+          </p>
+        </div>
+        {% endif %}
+      </div>
+    </section>
+    {% endif %}
 
     {# ───────────── Aviamentos (só na edição, e só quando o depósito aceita algum tipo de aviamento) ───────────── #}
     {% if deposito and deposito_tem_aviamento %}

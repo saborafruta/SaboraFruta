@@ -256,6 +256,134 @@ class AviamentoRapidoForm(forms.Form):
         return sigla if sigla in validas else Aviamento.Unidade.UNIDADE
 
 
+class TecidoRapidoForm(forms.Form):
+    """
+    Cadastro rápido de tecido dentro da tela do depósito -- mesmo espírito
+    de `AviamentoRapidoForm`, mas mais simples: Tecido não tem "tipo" (é o
+    próprio depósito que classifica tecido principal/forro) nem uma sigla
+    de unidade denormalizada, então a unidade do produto de estoque já
+    basta.
+
+    Grava o catálogo (`moda.Tecido`) ligado a um produto de estoque enxuto
+    e, se vier quantidade, lança o saldo inicial NESTE depósito.
+    """
+
+    NOVA_UNIDADE = '__nova__'
+    PREFIXO_PADRAO = 'padrao:'
+    # A tela de Estoque › Tecidos lê saldo em metros sem converter; quem
+    # importa peso usa quilo. As duas prontas cobrem o caso comum sem
+    # obrigar a criar a unidade à parte antes.
+    UNIDADES_PADRAO = {
+        'M': ('Metro', 'comprimento'),
+        'KG': ('Quilograma', 'peso'),
+    }
+
+    nome = forms.CharField(max_length=80, label='Nome')
+    unidade_medida = forms.ModelChoiceField(queryset=None, label='Unidade')
+    nova_unidade_sigla = forms.CharField(max_length=6, required=False, label='Sigla')
+    nova_unidade_descricao = forms.CharField(max_length=40, required=False, label='Nome da unidade')
+    nova_unidade_tipo = forms.ChoiceField(required=False, label='Tipo de medida')
+    codigo = forms.CharField(max_length=30, required=False, label='Código')
+    quantidade_inicial = forms.DecimalField(
+        max_digits=12, decimal_places=3, required=False, min_value=0,
+        label='Saldo inicial',
+    )
+
+    def __init__(self, *args, filial=None, empresa=None, **kwargs):
+        from apps.produtos.models import UnidadeMedida
+
+        self.filial = filial
+        self.empresa = empresa
+        super().__init__(*args, **kwargs)
+        escolha = self.data.get('unidade_medida') or ''
+        padrao = self.UNIDADES_PADRAO.get(escolha.removeprefix(self.PREFIXO_PADRAO).upper()) \
+            if escolha.startswith(self.PREFIXO_PADRAO) else None
+        self.criando_unidade = escolha == self.NOVA_UNIDADE or padrao is not None
+        if self.criando_unidade:
+            self.data = self.data.copy()
+            self.data['unidade_medida'] = ''
+            if padrao:
+                sigla = escolha.removeprefix(self.PREFIXO_PADRAO).upper()
+                self.data['nova_unidade_sigla'] = sigla
+                self.data['nova_unidade_descricao'] = padrao[0]
+                self.data['nova_unidade_tipo'] = padrao[1]
+            self.fields['unidade_medida'].required = False
+        self.fields['nova_unidade_tipo'].choices = [
+            ('', 'Não informar'), *UnidadeMedida.Tipo.choices,
+        ]
+        self.fields['unidade_medida'].queryset = (
+            UnidadeMedida.objects.filter(empresa=empresa).order_by('sigla')
+            if empresa else UnidadeMedida.objects.none()
+        )
+        self.fields['unidade_medida'].empty_label = 'Unidade'
+        existentes = {u.sigla.upper() for u in self.fields['unidade_medida'].queryset}
+        self.unidades_padrao_faltando = [
+            (f'{self.PREFIXO_PADRAO}{sigla}', sigla, descricao)
+            for sigla, (descricao, _tipo) in self.UNIDADES_PADRAO.items()
+            if sigla not in existentes
+        ]
+        self.unidade_escolhida = escolha
+        self.fields['nome'].widget.attrs['placeholder'] = 'Ex.: Dry (Preto)'
+        self.fields['codigo'].widget.attrs['placeholder'] = 'Opcional'
+        self.fields['nova_unidade_sigla'].widget.attrs['placeholder'] = 'Ex.: M'
+        self.fields['nova_unidade_descricao'].widget.attrs['placeholder'] = 'Ex.: Metro'
+        self.fields['quantidade_inicial'].widget = forms.TextInput(
+            attrs={'inputmode': 'decimal', 'placeholder': '0'},
+        )
+        for campo in self.fields.values():
+            css = campo.widget.attrs.get('class', '')
+            if 'form-input' not in css:
+                campo.widget.attrs['class'] = (css + ' form-input').strip()
+
+    def clean_nome(self):
+        from apps.moda.models import Tecido
+
+        nome = (self.cleaned_data['nome'] or '').strip()
+        if not nome:
+            raise forms.ValidationError('Informe o nome.')
+        if Tecido.all_objects.filter(filial=self.filial, nome__iexact=nome).exists():
+            raise forms.ValidationError(f'Já existe "{nome}" cadastrado nesta filial.')
+        return nome
+
+    def clean(self):
+        from apps.produtos.models import UnidadeMedida
+
+        dados = super().clean()
+        if self.criando_unidade:
+            sigla = (dados.get('nova_unidade_sigla') or '').strip().upper()
+            descricao = (dados.get('nova_unidade_descricao') or '').strip()
+            if not sigla:
+                self.add_error('nova_unidade_sigla', 'Informe a sigla.')
+            elif UnidadeMedida.objects.filter(empresa=self.empresa, sigla__iexact=sigla).exists():
+                self.add_error(
+                    'nova_unidade_sigla',
+                    f'Já existe a unidade "{sigla}". Escolha-a na lista.',
+                )
+            if not descricao:
+                self.add_error('nova_unidade_descricao', 'Informe o nome.')
+        elif not dados.get('unidade_medida') and 'unidade_medida' not in self.errors:
+            self.add_error('unidade_medida', 'Selecione a unidade.')
+        return dados
+
+    def obter_unidade(self):
+        """A unidade escolhida — ou criada agora, vinculada à filial."""
+        from apps.produtos.models import UnidadeMedida, UnidadeMedidaFilial
+
+        if not self.criando_unidade:
+            return self.cleaned_data['unidade_medida']
+        dados = self.cleaned_data
+        tipo = dados.get('nova_unidade_tipo') or ''
+        unidade = UnidadeMedida.objects.create(
+            empresa=self.empresa,
+            sigla=dados['nova_unidade_sigla'].strip().upper(),
+            descricao=dados['nova_unidade_descricao'].strip(),
+            tipo=tipo,
+            casas_decimais=0 if tipo == UnidadeMedida.Tipo.UNIDADE else 3,
+        )
+        UnidadeMedidaFilial.objects.get_or_create(unidade=unidade, filial=self.filial)
+        return unidade
+
+
 class TransferenciaInternaForm(forms.Form):
     """Move saldo de um depósito para outro na mesma filial (sem NF-e)."""
 
