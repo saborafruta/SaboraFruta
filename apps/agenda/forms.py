@@ -1,7 +1,6 @@
 import re
 
 from django import forms
-from django.db.models import Q
 
 from apps.cadastros.models import Cliente, Funcionario
 from apps.produtos.models import Produto
@@ -24,14 +23,7 @@ class ProfissionalAgendaForm(forms.ModelForm):
 
     def __init__(self, *args, filial, **kwargs):
         super().__init__(*args, **kwargs)
-        funcionarios = Funcionario.objects.for_filial(filial).filter(ativo=True)
-        if self.instance.pk:
-            funcionarios = funcionarios.filter(
-                Q(perfil_agenda__isnull=True) | Q(pk=self.instance.funcionario_id)
-            )
-        else:
-            funcionarios = funcionarios.filter(perfil_agenda__isnull=True)
-        self.fields['funcionario'].queryset = funcionarios
+        self.fields['funcionario'].queryset = Funcionario.objects.for_filial(filial).filter(ativo=True)
         self.fields['servicos'].queryset = Produto.objects.for_filial(filial).filter(
             ativo=True, tipo_produto=Produto.TipoProduto.SERVICO, agendavel=True,
         )
