@@ -2404,7 +2404,7 @@ class Op2ActionView(ModaBaseView):
     def _sincronizar_dados_compartilhados(
         pedido, item, produto_original_id, descricao_original,
     ):
-        """Mantém estrutura e preço iguais; grade e personalização ficam livres."""
+        """Mantém estrutura igual; preço, grade e personalização ficam livres."""
         irmaos = pedido.itens.exclude(pk=item.pk)
         if produto_original_id:
             irmaos = irmaos.filter(produto_id=produto_original_id)
@@ -2422,7 +2422,6 @@ class Op2ActionView(ModaBaseView):
             gola=item.gola,
             manga=item.manga,
             acabamento=item.acabamento,
-            valor_unitario=item.valor_unitario,
             observacoes=item.observacoes,
         )
 

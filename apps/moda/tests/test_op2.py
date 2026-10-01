@@ -2885,7 +2885,7 @@ class Op2Tests(TestCase):
             [('Adulto', 2), ('OverSized', 4)],
         )
 
-    def test_editar_variante_sincroniza_dados_comuns_sem_alterar_grade_e_personalizacao(self):
+    def test_editar_variante_sincroniza_dados_comuns_sem_alterar_preco_grade_e_personalizacao(self):
         tamanho_p = Tamanho.objects.create(filial=self.filial, sigla='P2', ordem=10)
         tamanho_g = Tamanho.objects.create(filial=self.filial, sigla='G2', ordem=20)
         adulto = Grade.objects.create(filial=self.filial, nome='Adulto 2')
@@ -2923,7 +2923,7 @@ class Op2Tests(TestCase):
 
         self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
         irmao.refresh_from_db()
-        self.assertEqual(irmao.valor_unitario, Decimal('75.50'))
+        self.assertEqual(irmao.valor_unitario, Decimal('50'))
         self.assertEqual(irmao.referencia, 'REF-COMUM')
         self.assertEqual(irmao.acabamento, 'Barra comum')
         self.assertIn('Malha: DRYTECH', irmao.observacoes)
