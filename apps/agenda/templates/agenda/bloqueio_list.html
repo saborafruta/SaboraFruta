@@ -1,0 +1,12 @@
+{% extends '_base.html' %}
+{% block title %}Bloqueios da agenda{% endblock %}
+{% block content %}
+{% include 'agenda/_styles.html' %}
+<div class="agenda-shell">
+  <div class="agenda-head"><div><h1 class="agenda-title">Bloqueios da agenda</h1><p class="agenda-muted">Férias, feriados, folgas e indisponibilidades.</p></div><a class="agenda-btn secondary" href="{% url 'agenda:agenda' %}">Voltar</a></div>
+  <form method="post" class="agenda-card">{% csrf_token %}{% if form.non_field_errors %}<div class="agenda-errors">{{ form.non_field_errors }}</div>{% endif %}<div class="agenda-form-grid">{% for field in form %}<div class="agenda-field {% if field.name == 'motivo' %}full{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.errors %}<div class="agenda-errors">{{ field.errors|first }}</div>{% endif %}</div>{% endfor %}</div><div class="agenda-actions" style="margin-top:1rem"><button class="agenda-btn" type="submit">Criar bloqueio</button></div></form>
+  <div class="agenda-card agenda-list">
+    {% for bloqueio in bloqueios %}<div class="agenda-item"><div class="agenda-time">{{ bloqueio.inicio|date:'d/m' }}</div><div><strong>{{ bloqueio.motivo }}</strong><div class="agenda-muted">{% if bloqueio.profissional %}{{ bloqueio.profissional }}{% else %}Toda a empresa{% endif %} · {{ bloqueio.inicio|date:'d/m/Y H:i' }} até {{ bloqueio.fim|date:'d/m/Y H:i' }}</div></div><form method="post" action="{% url 'agenda:bloqueio-delete' bloqueio.pk %}">{% csrf_token %}<button class="agenda-btn danger" type="submit">Remover</button></form></div>{% empty %}<div class="agenda-empty">Nenhum bloqueio futuro.</div>{% endfor %}
+  </div>
+</div>
+{% endblock %}

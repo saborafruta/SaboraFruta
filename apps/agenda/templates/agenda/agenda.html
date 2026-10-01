@@ -1,0 +1,17 @@
+{% extends '_base.html' %}
+{% block title %}Agenda{% endblock %}
+{% block content %}
+{% include 'agenda/_styles.html' %}
+<div class="agenda-shell">
+  <div class="agenda-head"><div><h1 class="agenda-title">Agenda de serviços</h1><p class="agenda-muted">{{ data_selecionada|date:'l, d/m/Y' }}</p></div><div class="agenda-actions"><a class="agenda-btn secondary" href="{% url 'agenda:bloqueio-list' %}">Bloqueios</a><a class="agenda-btn secondary" href="{% url 'agenda:profissional-list' %}">Profissionais</a><a class="agenda-btn" href="{% url 'agenda:agendamento-create' %}">+ Novo agendamento</a></div></div>
+  <form method="get" class="agenda-card agenda-filters">
+    <div class="agenda-field"><label>Data</label><input type="date" name="data" value="{{ data_selecionada|date:'Y-m-d' }}"></div>
+    <div class="agenda-field"><label>Profissional</label><select name="profissional"><option value="">Todos</option>{% for p in profissionais %}<option value="{{ p.pk }}" {% if profissional_id == p.pk|stringformat:'s' %}selected{% endif %}>{{ p }}</option>{% endfor %}</select></div>
+    <button class="agenda-btn" type="submit">Consultar</button>
+  </form>
+  <div class="agenda-actions" style="margin-top:.75rem"><a class="agenda-btn secondary" href="?data={{ data_anterior|date:'Y-m-d' }}">‹ Dia anterior</a><a class="agenda-btn secondary" href="?data={% now 'Y-m-d' %}">Hoje</a><a class="agenda-btn secondary" href="?data={{ data_seguinte|date:'Y-m-d' }}">Próximo dia ›</a></div>
+  <div class="agenda-card agenda-list">
+    {% for item in agendamentos %}<a class="agenda-item agenda-item-link" href="{% url 'agenda:agendamento-detail' item.pk %}"><div class="agenda-time">{{ item.inicio|date:'H:i' }}</div><div><strong>{{ item.pessoa_atendida_nome }}</strong><div class="agenda-muted">{{ item.profissional }} · {% for servico in item.itens.all %}{{ servico.descricao }}{% if not forloop.last %}, {% endif %}{% endfor %}</div><div class="agenda-muted">Até {{ item.fim|date:'H:i' }} · R$ {{ item.valor_total|floatformat:2 }}</div></div><span class="agenda-badge">{{ item.get_status_display }}</span></a>{% empty %}<div class="agenda-empty">Nenhum agendamento para este dia.</div>{% endfor %}
+  </div>
+</div>
+{% endblock %}

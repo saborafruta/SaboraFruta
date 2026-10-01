@@ -91,6 +91,7 @@
 
 {{ caixas|json_script:"checkout-caixas" }}
 {{ usuarios_autorizadores|json_script:"checkout-autorizadores" }}
+{{ agendamento_checkout|json_script:"checkout-agendamento" }}
 <div class="checkout-page" x-data="checkoutVenda()" x-init="init()" @keydown.window="atalhoTeclado($event)">
   <div class="co-head">
     <div>
@@ -362,6 +363,7 @@ function checkoutVenda() {
   return {
     caixas: JSON.parse(document.getElementById('checkout-caixas').textContent), sessao:null, carregando:true,
     usuariosAutorizadores:JSON.parse(document.getElementById('checkout-autorizadores').textContent),
+    agendamentoInicial:JSON.parse(document.getElementById('checkout-agendamento').textContent),
     busca:'', quantidadeEntrada:'1', buscarPorNome:false, buscando:false, resultados:[], indiceProduto:-1, erroBusca:'', itens:[],
     buscaNomeLiberada:false, modalSenhaBuscaNome:false, usuarioAutorizadorId:'', senhaBuscaNome:'', erroSenhaBuscaNome:'', liberandoBuscaNome:false,
     descontoLiberado:false, modalSenhaDesconto:false, usuarioDescontoId:'', senhaDesconto:'', erroSenhaDesconto:'', liberandoDesconto:false,
@@ -371,7 +373,16 @@ function checkoutVenda() {
     modalDocumento:false, vendaFinalizada:{id:null,numero:null}, processandoDocumento:false, mensagemDocumento:'',
     etiquetaVendaDisponivel:{% if etiqueta_venda_disponivel %}true{% else %}false{% endif %},
     abertura:{caixa_id:'',valor:'0,00'}, abrindoCaixa:false, erroCaixa:'',
-    async init(){ await this.carregarEstado(); this.focarProduto(); },
+    async init(){
+      await this.carregarEstado();
+      if(this.agendamentoInicial){
+        this.itens=this.agendamentoInicial.itens||[];
+        this.cliente=this.agendamentoInicial.cliente||null;
+        this.mensagem=this.agendamentoInicial.aviso||('Agendamento #'+this.agendamentoInicial.id+' carregado no caixa.');
+        this.sincronizarValorPagamento(true);
+      }
+      this.focarProduto();
+    },
     csrf(){ return document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || this.cookie('csrftoken'); },
     cookie(nome){ return document.cookie.split('; ').find(v=>v.startsWith(nome+'='))?.split('=').slice(1).join('=') || ''; },
     numero(valor){ const texto=String(valor??0).trim(); const normalizado=texto.includes(',')?texto.replace(/\./g,'').replace(',','.'):texto; const n=Number(normalizado); return Number.isFinite(n)?n:0; },

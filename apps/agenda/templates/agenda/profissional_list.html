@@ -1,0 +1,6 @@
+{% extends '_base.html' %}
+{% block title %}Profissionais da agenda{% endblock %}
+{% block content %}
+{% include 'agenda/_styles.html' %}
+<div class="agenda-shell"><div class="agenda-head"><h1 class="agenda-title">Profissionais da agenda</h1><div class="agenda-actions"><a class="agenda-btn secondary" href="{% url 'agenda:agenda' %}">Agenda</a><a class="agenda-btn" href="{% url 'agenda:profissional-create' %}">+ Configurar profissional</a></div></div><div class="agenda-grid">{% for p in profissionais %}<a class="agenda-card" href="{% url 'agenda:profissional-update' p.pk %}" style="text-decoration:none;color:inherit"><strong>{{ p }}</strong><div class="agenda-muted">{% for vinculo in p.servicos_vinculados.all %}{% if vinculo.ativo %}{{ vinculo.servico.descricao }}{% if not forloop.last %}, {% endif %}{% endif %}{% empty %}Sem serviços configurados{% endfor %}</div><div class="agenda-muted">Intervalo padrão: {{ p.intervalo_padrao_minutos }} min</div></a>{% empty %}<div class="agenda-card agenda-empty">Configure o primeiro profissional para começar.</div>{% endfor %}</div></div>
+{% endblock %}

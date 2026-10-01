@@ -4,6 +4,7 @@
       {% url 'cadastros:fornecedor-list' as fornecedores_url %}
       {% url 'cadastros:funcionario-list' as funcionarios_url %}
       {% url 'produtos:produto-list' as produtos_url %}
+      {% url 'agenda:agenda' as agenda_url %}
       {% url 'estoque:estoque-list' as estoque_url %}
       {% url 'estoque:ajuste-rapido' as ajuste_estoque_url %}
 
@@ -204,6 +205,16 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
         </svg>
         <span x-show="!collapsed">Produtos</span>
+      </a>
+      <a href="{{ agenda_url }}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="{% if request.resolver_match.namespace == 'agenda' %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
+         title="Agenda">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3M5 11h14M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"/>
+        </svg>
+        <span x-show="!collapsed">Agenda</span>
       </a>
       </div><!-- /cadastros -->
       {% endif %}

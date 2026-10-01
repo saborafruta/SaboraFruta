@@ -46,7 +46,7 @@ MODULOS = [
     Modulo(
         'cadastros', 'Cadastros',
         'Clientes, fornecedores e produtos.',
-        prefixos=('/cadastros/', '/produtos/'),
+        prefixos=('/cadastros/', '/produtos/', '/agenda/'),
     ),
     Modulo(
         'operacoes', 'Operações',

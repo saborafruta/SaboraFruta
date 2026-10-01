@@ -19,6 +19,7 @@ PASSWORD_HASHERS = [
 ]
 
 LOCAL_APP_LABELS = [
+    'agenda',
     'analytics',
     'cashback',
     'cadastros',

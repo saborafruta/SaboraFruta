@@ -59,6 +59,7 @@ LOCAL_APPS = [
     'apps.core',
     'apps.cadastros',
     'apps.produtos',
+    'apps.agenda',
     'apps.estoque',
     'apps.producao',
     'apps.vendas',

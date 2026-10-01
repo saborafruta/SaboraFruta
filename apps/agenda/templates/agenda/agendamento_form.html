@@ -1,0 +1,32 @@
+{% extends '_base.html' %}
+{% block title %}Novo agendamento{% endblock %}
+{% block content %}
+{% include 'agenda/_styles.html' %}
+<div class="agenda-shell"><div class="agenda-head"><h1 class="agenda-title">Novo agendamento</h1><a class="agenda-btn secondary" href="{% url 'agenda:agenda' %}">Voltar</a></div><form method="post" class="agenda-card" id="agendamento-form" data-disponibilidade-url="{% url 'agenda:disponibilidade-api' %}">{% csrf_token %}{% if form.non_field_errors %}<div class="agenda-errors">{{ form.non_field_errors }}</div>{% endif %}<div class="agenda-form-grid">{% for field in form %}<div class="agenda-field {% if field.name == 'observacao' or field.name == 'servicos' %}full{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.errors %}<div class="agenda-errors">{{ field.errors|first }}</div>{% endif %}</div>{% endfor %}</div><div class="agenda-actions" style="margin-top:1rem"><button class="agenda-btn secondary" type="button" id="consultar-horarios">Consultar horários do dia</button><button class="agenda-btn" type="submit">Confirmar agendamento</button></div><div id="horarios-disponiveis" class="agenda-slots" aria-live="polite"></div></form></div>
+<script>
+(() => {
+  const form = document.getElementById('agendamento-form');
+  const botao = document.getElementById('consultar-horarios');
+  const painel = document.getElementById('horarios-disponiveis');
+  const inicio = document.getElementById('id_inicio');
+  botao.addEventListener('click', async () => {
+    const profissional = document.getElementById('id_profissional').value;
+    const servicos = [...document.getElementById('id_servicos').selectedOptions].map(item => item.value);
+    const agora = new Date();
+    const hojeLocal = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+    const data = (inicio.value || hojeLocal).slice(0, 10);
+    if (!profissional || !servicos.length) { painel.textContent = 'Selecione o profissional e pelo menos um serviço.'; return; }
+    painel.textContent = 'Consultando horários...';
+    const params = new URLSearchParams({profissional, data});
+    servicos.forEach(servico => params.append('servico', servico));
+    try {
+      const resposta = await fetch(`${form.dataset.disponibilidadeUrl}?${params}`, {headers: {'Accept': 'application/json'}});
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível consultar os horários.');
+      painel.innerHTML = dados.horarios.length ? dados.horarios.map(valor => `<button type="button" class="agenda-slot" data-valor="${valor}">${valor.slice(11)}</button>`).join('') : 'Não há horários disponíveis neste dia.';
+      painel.querySelectorAll('[data-valor]').forEach(item => item.addEventListener('click', () => { inicio.value = item.dataset.valor; inicio.focus(); }));
+    } catch (erro) { painel.textContent = erro.message; }
+  });
+})();
+</script>
+{% endblock %}

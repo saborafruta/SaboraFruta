@@ -372,12 +372,60 @@ def checkout_venda(request):
         .values('id', 'numero', 'descricao')
     )
     config_etiqueta, _ = configuracao_etiqueta_filial(request.filial_ativa)
+    agendamento_checkout = _agendamento_para_checkout(request)
     return render(request, 'pdv/checkout.html', {
         'title': 'Checkout de venda',
         'caixas': caixas,
         'usuarios_autorizadores': usuarios_autorizadores_checkout(request),
         'etiqueta_venda_disponivel': bool(config_etiqueta and config_etiqueta.ativa),
+        'agendamento_checkout': agendamento_checkout,
     })
+
+
+def _agendamento_para_checkout(request):
+    """Converte um agendamento da filial em carrinho inicial do checkout."""
+    bruto = request.GET.get('agendamento')
+    if not bruto:
+        return None
+    try:
+        agendamento_id = int(bruto)
+    except (TypeError, ValueError):
+        return None
+
+    from apps.agenda.models import Agendamento
+
+    agendamento = (
+        Agendamento.objects.for_filial(request.filial_ativa)
+        .select_related('cliente')
+        .prefetch_related('itens__servico__linha_producao')
+        .filter(pk=agendamento_id)
+        .exclude(status__in=[Agendamento.Status.CANCELADO, Agendamento.Status.NAO_COMPARECEU])
+        .first()
+    )
+    if not agendamento:
+        return None
+
+    itens_agenda = list(agendamento.itens.all())
+    produtos = [item.servico for item in itens_agenda]
+    contexto = _preparar_contexto_ofertas(produtos, request.filial_ativa)
+    itens = []
+    avisos = []
+    for item_agenda in itens_agenda:
+        item = _serializa_produto(
+            item_agenda.servico, request.filial_ativa,
+            cliente=agendamento.cliente, contexto_ofertas=contexto,
+        )
+        if item['pode_vender']:
+            item['quantidade'] = 1
+            itens.append(item)
+        else:
+            avisos.append(f'{item_agenda.descricao}: não está disponível para venda.')
+    return {
+        'id': agendamento.pk,
+        'cliente': _serializar_cliente(agendamento.cliente) if agendamento.cliente else None,
+        'itens': itens,
+        'aviso': ' '.join(avisos),
+    }
 
 
 @sensitive_variables('senha')
