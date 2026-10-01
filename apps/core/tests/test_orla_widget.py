@@ -135,3 +135,12 @@ class OrlaWidgetContextTests(SimpleTestCase):
         self.assertIn('{% if orla_widget.enabled %}', source)
         self.assertIn('{% if orla_widget.user_token %}data-orla-user-token=', source)
         self.assertIn('data-orla-context="{{ orla_widget.context_json }}"', source)
+
+    def test_template_permite_minimizar_widget_na_barra_superior(self):
+        source = Path('templates/_base.html').read_text(encoding='utf-8')
+
+        self.assertIn('id="orla-support-topbar"', source)
+        self.assertIn("var storageKey = 'ited.support.minimized.v1'", source)
+        self.assertIn("control.className = 'ited-support-minimize'", source)
+        self.assertIn("localStorage.removeItem('orla.widget.position.v1:' + publicKey)", source)
+        self.assertIn("launcher.style.removeProperty('display')", source)
