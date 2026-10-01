@@ -2255,8 +2255,6 @@ class Op2ActionView(ModaBaseView):
             validar_estrutura_item(request.POST, estrutura_opcoes)
         valor_unitario = validar_valor_unitario(request.POST.get('valor_unitario'))
         item = get_object_or_404(pedido.itens, pk=request.POST.get('item_id'))
-        produto_original_id = item.produto_id
-        descricao_original = item.descricao
         produto_id = request.POST.get('produto_id')
         if produto_id:
             item.produto = get_object_or_404(
@@ -2329,9 +2327,6 @@ class Op2ActionView(ModaBaseView):
             'valor_unitario', 'referencia', 'acabamento', 'observacoes',
             'configuracao_conjunto',
         ])
-        self._sincronizar_dados_compartilhados(
-            pedido, item, produto_original_id, descricao_original,
-        )
         if grade:
             self._substituir_grade(item, grade, quantidades)
         else:
@@ -2399,31 +2394,6 @@ class Op2ActionView(ModaBaseView):
                 self._acao_adicionar_item(request, pedido)
         finally:
             request._post = post_original
-
-    @staticmethod
-    def _sincronizar_dados_compartilhados(
-        pedido, item, produto_original_id, descricao_original,
-    ):
-        """Mantém estrutura igual; preço, grade e personalização ficam livres."""
-        irmaos = pedido.itens.exclude(pk=item.pk)
-        if produto_original_id:
-            irmaos = irmaos.filter(produto_id=produto_original_id)
-        else:
-            irmaos = irmaos.filter(
-                produto__isnull=True, descricao__iexact=descricao_original,
-            )
-        irmaos.update(
-            produto_id=item.produto_id,
-            descricao=item.descricao,
-            referencia=item.referencia,
-            modelo_id=item.modelo_id,
-            cor_id=item.cor_id,
-            tecido_id=item.tecido_id,
-            gola=item.gola,
-            manga=item.manga,
-            acabamento=item.acabamento,
-            observacoes=item.observacoes,
-        )
 
     @staticmethod
     def _salvar_personalizacao(request, item):

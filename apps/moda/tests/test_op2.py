@@ -2885,7 +2885,7 @@ class Op2Tests(TestCase):
             [('Adulto', 2), ('OverSized', 4)],
         )
 
-    def test_editar_variante_sincroniza_dados_comuns_sem_alterar_preco_grade_e_personalizacao(self):
+    def test_editar_variante_nao_altera_outro_item_do_mesmo_produto(self):
         tamanho_p = Tamanho.objects.create(filial=self.filial, sigla='P2', ordem=10)
         tamanho_g = Tamanho.objects.create(filial=self.filial, sigla='G2', ordem=20)
         adulto = Grade.objects.create(filial=self.filial, nome='Adulto 2')
@@ -2899,8 +2899,12 @@ class Op2Tests(TestCase):
         Personalizacao.objects.create(item=item, tecnica='silk')
         irmao = self._item(quantidade=4)
         irmao.grade_tamanho = oversized
+        irmao.referencia = 'REF-ORIGINAL'
+        irmao.acabamento = 'Barra original'
         irmao.observacoes = 'Malha: ANTIGA'
-        irmao.save(update_fields=['grade_tamanho', 'observacoes'])
+        irmao.save(update_fields=[
+            'grade_tamanho', 'referencia', 'acabamento', 'observacoes',
+        ])
         ItemGradePedido.objects.create(item=irmao, tamanho=tamanho_g, quantidade=4)
         Personalizacao.objects.create(item=irmao, tecnica='sublimacao')
         self._login_op2()
@@ -2924,9 +2928,9 @@ class Op2Tests(TestCase):
         self.assertRedirects(resposta, reverse('moda:op2-detail', args=[self.pedido.pk]))
         irmao.refresh_from_db()
         self.assertEqual(irmao.valor_unitario, Decimal('50'))
-        self.assertEqual(irmao.referencia, 'REF-COMUM')
-        self.assertEqual(irmao.acabamento, 'Barra comum')
-        self.assertIn('Malha: DRYTECH', irmao.observacoes)
+        self.assertEqual(irmao.referencia, 'REF-ORIGINAL')
+        self.assertEqual(irmao.acabamento, 'Barra original')
+        self.assertEqual(irmao.observacoes, 'Malha: ANTIGA')
         self.assertEqual(irmao.grade_tamanho, oversized)
         self.assertEqual(irmao.quantidade, 4)
         self.assertEqual(
