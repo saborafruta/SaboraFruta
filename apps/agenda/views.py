@@ -62,31 +62,49 @@ def _titulo_periodo(data_referencia, inicio, fim, modo):
     return f'{MESES[data_referencia.month - 1]} de {data_referencia.year}'
 
 
-def _limites_grade(agendamentos, jornadas):
-    inicios = [8]
-    finais = [19]
-    for jornada in jornadas:
-        inicios.append(jornada.inicio.hour)
-        finais.append(jornada.fim.hour + (1 if jornada.fim.minute else 0))
-    for item in agendamentos:
-        inicio_local = timezone.localtime(item.inicio)
-        fim_local = timezone.localtime(item.fim)
-        inicios.append(inicio_local.hour)
-        finais.append(fim_local.hour + (1 if fim_local.minute else 0))
-    return min(inicios), max(finais)
+def _faixa_horarios(request):
+    padrao = (8, 19)
+    sessao = getattr(request, 'session', None)
+    filial = request.filial_ativa
+    alias = getattr(filial._state, 'db', None) or 'default'
+    chave = f'agenda_faixa_horarios_{alias}_{filial.pk}'
+    salva = sessao.get(chave, padrao) if sessao is not None else padrao
+    try:
+        inicio_salvo, fim_salvo = int(salva[0]), int(salva[1])
+    except (TypeError, ValueError, IndexError):
+        inicio_salvo, fim_salvo = padrao
+
+    try:
+        inicio = int(request.GET.get('hora_inicio', inicio_salvo))
+        fim = int(request.GET.get('hora_fim', fim_salvo))
+    except (TypeError, ValueError):
+        inicio, fim = inicio_salvo, fim_salvo
+    if not (0 <= inicio < fim <= 24):
+        inicio, fim = inicio_salvo, fim_salvo
+    if not (0 <= inicio < fim <= 24):
+        inicio, fim = padrao
+    if sessao is not None:
+        sessao[chave] = [inicio, fim]
+    return inicio, fim
 
 
-def _dados_grade(agendamentos, datas, inicio_hora):
+def _dados_grade(agendamentos, datas, inicio_hora, fim_hora):
     por_data = defaultdict(list)
     for item in agendamentos:
         inicio_local = timezone.localtime(item.inicio)
         fim_local = timezone.localtime(item.fim)
         minutos_inicio = inicio_local.hour * 60 + inicio_local.minute
         minutos_fim = fim_local.hour * 60 + fim_local.minute
+        limite_inicio = inicio_hora * 60
+        limite_fim = fim_hora * 60
+        if minutos_inicio >= limite_fim or minutos_fim <= limite_inicio:
+            continue
+        minutos_visiveis_inicio = max(minutos_inicio, limite_inicio)
+        minutos_visiveis_fim = min(minutos_fim, limite_fim)
         por_data[inicio_local.date()].append({
             'item': item,
-            'topo': round((minutos_inicio - inicio_hora * 60) * 64 / 60, 2),
-            'altura': max(30, round((minutos_fim - minutos_inicio) * 64 / 60, 2)),
+            'topo': round((minutos_visiveis_inicio - limite_inicio) * 64 / 60, 2),
+            'altura': max(30, round((minutos_visiveis_fim - minutos_visiveis_inicio) * 64 / 60, 2)),
         })
     return [
         {
@@ -112,6 +130,7 @@ class AgendaView(PermissaoRequiredMixin, View):
             modo = 'semana'
         periodo_inicio, periodo_fim = _intervalo_visualizacao(data_selecionada, modo)
         data_anterior, data_seguinte = _navegacao(data_selecionada, modo)
+        hora_inicio, hora_fim = _faixa_horarios(request)
         profissional_id = request.GET.get('profissional')
         profissionais = ProfissionalAgenda.objects.for_filial(request.filial_ativa).filter(ativo=True).select_related('funcionario')
         agendamentos = Agendamento.objects.for_filial(request.filial_ativa).filter(
@@ -146,20 +165,14 @@ class AgendaView(PermissaoRequiredMixin, View):
                 periodo_inicio + timedelta(days=indice)
                 for indice in range((periodo_fim - periodo_inicio).days + 1)
             ]
-            jornadas = JornadaTrabalho.objects.for_filial(request.filial_ativa).filter(
-                ativo=True,
-            )
-            if profissional_id:
-                jornadas = jornadas.filter(profissional_id=profissional_id)
-            inicio_hora, fim_hora = _limites_grade(agendamentos, jornadas)
-            horas = list(range(inicio_hora, fim_hora + 1))
+            horas = list(range(hora_inicio, hora_fim + 1))
             contexto_calendario.update({
-                'dias_grade': _dados_grade(agendamentos, datas, inicio_hora),
+                'dias_grade': _dados_grade(agendamentos, datas, hora_inicio, hora_fim),
                 'horas_grade': [
-                    {'rotulo': f'{hora:02d}:00', 'topo': (hora - inicio_hora) * 64}
+                    {'rotulo': f'{hora:02d}:00', 'topo': (hora - hora_inicio) * 64}
                     for hora in horas
                 ],
-                'altura_grade': (fim_hora - inicio_hora) * 64,
+                'altura_grade': (hora_fim - hora_inicio) * 64,
                 'quantidade_dias': len(datas),
             })
         return render(request, 'agenda/agenda.html', {
@@ -171,6 +184,10 @@ class AgendaView(PermissaoRequiredMixin, View):
             'profissionais': profissionais,
             'profissional_id': profissional_id or '',
             'agendamentos': agendamentos,
+            'hora_inicio': hora_inicio,
+            'hora_fim': hora_fim,
+            'opcoes_hora_inicio': range(0, 24),
+            'opcoes_hora_fim': range(1, 25),
             **contexto_calendario,
         })
 

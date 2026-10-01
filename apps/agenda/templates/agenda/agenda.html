@@ -28,20 +28,34 @@
         {% for p in profissionais %}<option value="{{ p.pk }}" {% if profissional_id == p.pk|stringformat:'s' %}selected{% endif %}>{{ p }}</option>{% endfor %}
       </select>
     </div>
+    <div class="agenda-field">
+      <label>Horários visíveis</label>
+      <div class="agenda-visible-hours">
+        <span>De</span>
+        <select name="hora_inicio" aria-label="Horário inicial da agenda">
+          {% for hora in opcoes_hora_inicio %}<option value="{{ hora }}" {% if hora == hora_inicio %}selected{% endif %}>{{ hora|stringformat:'02d' }}:00</option>{% endfor %}
+        </select>
+        <span>até</span>
+        <select name="hora_fim" aria-label="Horário final da agenda">
+          {% for hora in opcoes_hora_fim %}<option value="{{ hora }}" {% if hora == hora_fim %}selected{% endif %}>{{ hora|stringformat:'02d' }}:00</option>{% endfor %}
+        </select>
+      </div>
+      <p class="agenda-help">Essa faixa ficará salva para as próximas consultas.</p>
+    </div>
     <button class="agenda-btn" type="submit">Aplicar filtros</button>
   </form>
 
   <div class="agenda-toolbar">
     <div class="agenda-nav">
-      <a class="agenda-btn secondary" aria-label="Período anterior" href="?visualizacao={{ visualizacao }}&data={{ data_anterior|date:'Y-m-d' }}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">‹</a>
-      <a class="agenda-btn secondary" href="?visualizacao={{ visualizacao }}&data={% now 'Y-m-d' %}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">Hoje</a>
-      <a class="agenda-btn secondary" aria-label="Próximo período" href="?visualizacao={{ visualizacao }}&data={{ data_seguinte|date:'Y-m-d' }}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">›</a>
+      <a class="agenda-btn secondary" aria-label="Período anterior" href="?visualizacao={{ visualizacao }}&data={{ data_anterior|date:'Y-m-d' }}&hora_inicio={{ hora_inicio }}&hora_fim={{ hora_fim }}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">‹</a>
+      <a class="agenda-btn secondary" href="?visualizacao={{ visualizacao }}&data={% now 'Y-m-d' %}&hora_inicio={{ hora_inicio }}&hora_fim={{ hora_fim }}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">Hoje</a>
+      <a class="agenda-btn secondary" aria-label="Próximo período" href="?visualizacao={{ visualizacao }}&data={{ data_seguinte|date:'Y-m-d' }}&hora_inicio={{ hora_inicio }}&hora_fim={{ hora_fim }}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">›</a>
       <div class="agenda-period-title">{{ titulo_periodo }}</div>
     </div>
     <nav class="agenda-view-switch" aria-label="Visualização da agenda">
-      <a class="{% if visualizacao == 'dia' %}active{% endif %}" href="?visualizacao=dia&data={{ data_selecionada|date:'Y-m-d' }}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">Dia</a>
-      <a class="{% if visualizacao == 'semana' %}active{% endif %}" href="?visualizacao=semana&data={{ data_selecionada|date:'Y-m-d' }}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">Semana</a>
-      <a class="{% if visualizacao == 'mes' %}active{% endif %}" href="?visualizacao=mes&data={{ data_selecionada|date:'Y-m-d' }}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">Mês</a>
+      <a class="{% if visualizacao == 'dia' %}active{% endif %}" href="?visualizacao=dia&data={{ data_selecionada|date:'Y-m-d' }}&hora_inicio={{ hora_inicio }}&hora_fim={{ hora_fim }}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">Dia</a>
+      <a class="{% if visualizacao == 'semana' %}active{% endif %}" href="?visualizacao=semana&data={{ data_selecionada|date:'Y-m-d' }}&hora_inicio={{ hora_inicio }}&hora_fim={{ hora_fim }}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">Semana</a>
+      <a class="{% if visualizacao == 'mes' %}active{% endif %}" href="?visualizacao=mes&data={{ data_selecionada|date:'Y-m-d' }}&hora_inicio={{ hora_inicio }}&hora_fim={{ hora_fim }}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">Mês</a>
     </nav>
   </div>
 

@@ -23,9 +23,10 @@ class AgendaViewsTests(DisponibilidadeAgendaTests):
     def setUp(self):
         self.factory = RequestFactory()
 
-    def preparar_request(self, request):
+    def preparar_request(self, request, session=None):
         request.filial_ativa = self.filial
         request.user = None
+        request.session = session if session is not None else {}
         return request
 
     @patch('apps.agenda.views.messages.success')
@@ -127,3 +128,34 @@ class AgendaViewsTests(DisponibilidadeAgendaTests):
         self.assertNotIn('October', contexto_mes['titulo_periodo'])
         self.assertTrue(contexto_mes['semanas_mes'])
         self.assertTrue(all(len(semana) == 7 for semana in contexto_mes['semanas_mes']))
+
+    @patch('apps.agenda.views.render')
+    def test_faixa_de_horarios_e_salva_na_sessao(self, render):
+        render.return_value = HttpResponse()
+        session = {}
+        request = self.preparar_request(self.factory.get('/agenda/', {
+            'visualizacao': 'dia',
+            'data': self.data_teste.isoformat(),
+            'hora_inicio': '10',
+            'hora_fim': '16',
+        }), session=session)
+
+        AgendaView().get(request)
+        contexto = render.call_args.args[2]
+
+        self.assertEqual((contexto['hora_inicio'], contexto['hora_fim']), (10, 16))
+        self.assertEqual(contexto['altura_grade'], 6 * 64)
+        self.assertEqual(contexto['horas_grade'][0]['rotulo'], '10:00')
+        self.assertEqual(contexto['horas_grade'][-1]['rotulo'], '16:00')
+
+        request = self.preparar_request(self.factory.get('/agenda/', {
+            'visualizacao': 'semana',
+            'data': self.data_teste.isoformat(),
+        }), session=session)
+        AgendaView().get(request)
+        contexto_persistido = render.call_args.args[2]
+
+        self.assertEqual(
+            (contexto_persistido['hora_inicio'], contexto_persistido['hora_fim']),
+            (10, 16),
+        )
