@@ -1,9 +1,11 @@
 import json
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth.models import AnonymousUser
 from django.test import RequestFactory
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.agenda.models import AgendaLinkPublico, Agendamento
 from apps.agenda.views_publico import AgendaPublicaView, HorariosPublicosView
@@ -30,6 +32,46 @@ class AgendaPublicaTests(DisponibilidadeAgendaTests):
         self.assertContains(response, self.profissional.funcionario.nome)
         self.assertContains(response, self.corte.descricao)
         self.assertContains(response, 'class="professional-avatar"')
+
+    def test_pagina_exibe_hoje_e_os_seis_dias_seguintes(self):
+        response = self.client.get(reverse('agenda_publica:agendar', args=[self.link.token]))
+
+        dias = response.context['dias_disponiveis']
+        hoje = timezone.localdate()
+        self.assertEqual(len(dias), 7)
+        self.assertEqual(dias[0]['valor'], hoje.isoformat())
+        self.assertEqual(dias[-1]['valor'], (hoje + timedelta(days=6)).isoformat())
+        self.assertEqual(response.context['data_selecionada'], hoje.isoformat())
+
+    def test_consulta_cliente_pelo_celular_preenche_nome(self):
+        Cliente.objects.create(
+            filial=self.filial,
+            tipo_pessoa='F',
+            razao_social='Cliente já cadastrado',
+            celular='(84) 99999-0000',
+            consumidor_final=True,
+        )
+
+        response = self.client.get(
+            reverse('agenda_publica:cliente', args=[self.link.token]),
+            {'telefone': '(84) 99999-0000'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            'encontrado': True,
+            'nome': 'Cliente já cadastrado',
+        })
+        self.assertEqual(response['Cache-Control'], 'no-store')
+
+    def test_consulta_cliente_ignora_numero_incompleto(self):
+        response = self.client.get(
+            reverse('agenda_publica:cliente', args=[self.link.token]),
+            {'telefone': '9999'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'encontrado': False, 'nome': ''})
 
     def test_foto_do_funcionario_aparece_na_escolha_publica(self):
         funcionario = self.profissional.funcionario

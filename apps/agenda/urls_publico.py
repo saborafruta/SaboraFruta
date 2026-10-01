@@ -8,4 +8,5 @@ app_name = 'agenda_publica'
 urlpatterns = [
     path('<str:token>/', views_publico.AgendaPublicaView.as_view(), name='agendar'),
     path('<str:token>/horarios/', views_publico.HorariosPublicosView.as_view(), name='horarios'),
+    path('<str:token>/cliente/', views_publico.ClientePublicoView.as_view(), name='cliente'),
 ]

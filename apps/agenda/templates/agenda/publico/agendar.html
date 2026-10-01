@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0f172a">
   <title>Agendar — {{ filial.nome_fantasia|default:filial.razao_social }}</title>
   <style>
-    :root{color-scheme:light;--blue:#2563eb;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--soft:#f8fafc}*{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#eff6ff,#f8fafc 45%,#eef2ff);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}.page{width:min(720px,calc(100% - 28px));margin:32px auto}.brand{text-align:center;margin-bottom:22px}.brand-logo{min-height:48px;display:flex;align-items:center;justify-content:center}.brand-logo img{display:block;max-width:min(180px,60vw);max-height:84px;width:auto;height:auto;object-fit:contain}.brand-mark{display:inline-grid;place-items:center;width:48px;height:48px;border-radius:16px;background:var(--blue);color:#fff;font-size:24px;font-weight:900;box-shadow:0 12px 28px #2563eb33}.brand h1{margin:12px 0 4px;font-size:clamp(1.35rem,5vw,2rem)}.brand p{margin:0;color:var(--muted)}.card{background:#fff;border:1px solid var(--line);border-radius:22px;padding:clamp(18px,4vw,30px);box-shadow:0 18px 45px #0f172a12}.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:24px}.step{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:.76rem;font-weight:750}.step b{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#dbeafe;color:#1d4ed8}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.field{display:grid;gap:7px}.field.full{grid-column:1/-1}.field label,.slots-label{font-size:.8rem;font-weight:800}.field input,.field select{width:100%;min-height:48px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;color:var(--ink);padding:0 13px;font:inherit}.field input:focus,.field select:focus{outline:3px solid #bfdbfe;border-color:var(--blue)}.professionals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.professional{display:flex;align-items:center;gap:11px;width:100%;min-height:76px;padding:9px;border:1px solid #cbd5e1;border-radius:14px;background:#fff;color:var(--ink);font:inherit;font-weight:800;text-align:left;cursor:pointer}.professional:hover{border-color:#93c5fd;background:#f8fbff}.professional.selected{border-color:var(--blue);background:#eff6ff;box-shadow:0 0 0 2px #bfdbfe}.professional:focus-visible{outline:3px solid #bfdbfe}.professional-photo,.professional-avatar{width:56px;height:56px;flex:0 0 56px;border-radius:12px}.professional-photo{object-fit:cover}.professional-avatar{display:grid;place-items:center;background:#dbeafe;color:#1d4ed8;font-size:1.15rem}.hint{margin:0;color:var(--muted);font-size:.75rem}.slots{display:flex;flex-wrap:wrap;gap:8px;min-height:48px}.slot{position:relative}.slot input{position:absolute;opacity:0;pointer-events:none}.slot span{display:block;padding:10px 14px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;color:#1d4ed8;font-weight:800;cursor:pointer}.slot input:checked+span{background:var(--blue);border-color:var(--blue);color:#fff}.slot input:focus-visible+span{outline:3px solid #bfdbfe}.slots-empty{color:var(--muted);font-size:.84rem;padding:10px 0}.errors{margin:0 0 18px;padding:13px 16px;border-radius:12px;background:#fef2f2;color:#991b1b;font-size:.86rem}.button{width:100%;min-height:50px;margin-top:22px;border:0;border-radius:13px;background:var(--blue);color:#fff;font:inherit;font-weight:850;cursor:pointer;box-shadow:0 10px 22px #2563eb35}.button:disabled{background:#94a3b8;box-shadow:none;cursor:wait}.success{text-align:center}.success-icon{display:grid;place-items:center;width:64px;height:64px;margin:0 auto 14px;border-radius:50%;background:#dcfce7;color:#15803d;font-size:32px;font-weight:900}.success h2{margin:0 0 8px}.summary{margin:22px 0 0;padding:16px;border-radius:14px;background:var(--soft);text-align:left}.summary div+div{margin-top:10px}.summary small{display:block;color:var(--muted)}.summary strong{display:block;margin-top:2px}.privacy{margin:16px 0 0;text-align:center;color:var(--muted);font-size:.72rem}@media(max-width:600px){.page{margin:18px auto}.card{border-radius:18px}.grid{grid-template-columns:1fr}.field.full{grid-column:auto}.steps{grid-template-columns:1fr}.step{justify-content:center}.professionals{grid-template-columns:1fr}.professional{min-height:72px}.slot span{padding:11px 15px}.brand{margin-bottom:16px}.brand-logo img{max-height:70px}}
+    :root{color-scheme:light;--blue:#2563eb;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--soft:#f8fafc}*{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#eff6ff,#f8fafc 45%,#eef2ff);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}.page{width:min(720px,calc(100% - 28px));margin:32px auto}.brand{text-align:center;margin-bottom:22px}.brand-logo{min-height:48px;display:flex;align-items:center;justify-content:center}.brand-logo img{display:block;max-width:min(180px,60vw);max-height:84px;width:auto;height:auto;object-fit:contain}.brand-mark{display:inline-grid;place-items:center;width:48px;height:48px;border-radius:16px;background:var(--blue);color:#fff;font-size:24px;font-weight:900;box-shadow:0 12px 28px #2563eb33}.brand h1{margin:12px 0 4px;font-size:clamp(1.35rem,5vw,2rem)}.brand p{margin:0;color:var(--muted)}.card{background:#fff;border:1px solid var(--line);border-radius:22px;padding:clamp(18px,4vw,30px);box-shadow:0 18px 45px #0f172a12}.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:24px}.step{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:.76rem;font-weight:750}.step b{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#dbeafe;color:#1d4ed8}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.field{display:grid;gap:7px}.field.full{grid-column:1/-1}.field label,.slots-label{font-size:.8rem;font-weight:800}.field input,.field select{width:100%;min-height:48px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;color:var(--ink);padding:0 13px;font:inherit}.field input:focus,.field select:focus{outline:3px solid #bfdbfe;border-color:var(--blue)}.date-options{display:grid;grid-template-columns:repeat(7,minmax(68px,1fr));gap:7px;overflow-x:auto;padding:2px 2px 6px}.date-option{min-height:66px;padding:7px 5px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;color:var(--ink);font:inherit;cursor:pointer}.date-option span,.date-option strong{display:block}.date-option span{margin-bottom:5px;color:var(--muted);font-size:.68rem;font-weight:850}.date-option strong{font-size:.9rem}.date-option:hover{border-color:#93c5fd;background:#f8fbff}.date-option.selected{border-color:var(--blue);background:#eff6ff;color:#1d4ed8;box-shadow:0 0 0 2px #bfdbfe}.date-option.selected span{color:#2563eb}.date-option:focus-visible{outline:3px solid #bfdbfe}.professionals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.professional{display:flex;align-items:center;gap:11px;width:100%;min-height:76px;padding:9px;border:1px solid #cbd5e1;border-radius:14px;background:#fff;color:var(--ink);font:inherit;font-weight:800;text-align:left;cursor:pointer}.professional:hover{border-color:#93c5fd;background:#f8fbff}.professional.selected{border-color:var(--blue);background:#eff6ff;box-shadow:0 0 0 2px #bfdbfe}.professional:focus-visible{outline:3px solid #bfdbfe}.professional-photo,.professional-avatar{width:56px;height:56px;flex:0 0 56px;border-radius:12px}.professional-photo{object-fit:cover}.professional-avatar{display:grid;place-items:center;background:#dbeafe;color:#1d4ed8;font-size:1.15rem}.hint{margin:0;color:var(--muted);font-size:.75rem}.slots{display:flex;flex-wrap:wrap;gap:8px;min-height:48px}.slot{position:relative}.slot input{position:absolute;opacity:0;pointer-events:none}.slot span{display:block;padding:10px 14px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;color:#1d4ed8;font-weight:800;cursor:pointer}.slot input:checked+span{background:var(--blue);border-color:var(--blue);color:#fff}.slot input:focus-visible+span{outline:3px solid #bfdbfe}.slots-empty{color:var(--muted);font-size:.84rem;padding:10px 0}.errors{margin:0 0 18px;padding:13px 16px;border-radius:12px;background:#fef2f2;color:#991b1b;font-size:.86rem}.button{width:100%;min-height:50px;margin-top:22px;border:0;border-radius:13px;background:var(--blue);color:#fff;font:inherit;font-weight:850;cursor:pointer;box-shadow:0 10px 22px #2563eb35}.button:disabled{background:#94a3b8;box-shadow:none;cursor:wait}.success{text-align:center}.success-icon{display:grid;place-items:center;width:64px;height:64px;margin:0 auto 14px;border-radius:50%;background:#dcfce7;color:#15803d;font-size:32px;font-weight:900}.success h2{margin:0 0 8px}.summary{margin:22px 0 0;padding:16px;border-radius:14px;background:var(--soft);text-align:left}.summary div+div{margin-top:10px}.summary small{display:block;color:var(--muted)}.summary strong{display:block;margin-top:2px}.privacy{margin:16px 0 0;text-align:center;color:var(--muted);font-size:.72rem}@media(max-width:600px){.page{margin:18px auto}.card{border-radius:18px}.grid{grid-template-columns:1fr}.field.full{grid-column:auto}.steps{grid-template-columns:1fr}.step{justify-content:center}.professionals{grid-template-columns:1fr}.professional{min-height:72px}.slot span{padding:11px 15px}.brand{margin-bottom:16px}.brand-logo img{max-height:70px}}
   </style>
 </head>
 <body>
@@ -61,20 +61,26 @@
                 <select id="servico" name="servico" required disabled><option value="">Escolha primeiro o profissional</option></select>
               </div>
               <div class="field full">
-                <label for="data">Dia</label>
-                <input id="data" name="data" type="date" min="{{ data_minima }}" max="{{ data_maxima }}" value="{{ dados.data }}" required>
+                <label>Dia</label>
+                <input id="data" name="data" type="hidden" value="{{ data_selecionada }}" required>
+                <div class="date-options" id="date-options">
+                  {% for dia in dias_disponiveis %}
+                    <button class="date-option{% if dia.valor == data_selecionada %} selected{% endif %}" type="button" data-date="{{ dia.valor }}" aria-pressed="{% if dia.valor == data_selecionada %}true{% else %}false{% endif %}"><span>{{ dia.semana }}</span><strong>{{ dia.data }}</strong></button>
+                  {% endfor %}
+                </div>
               </div>
               <div class="field full">
                 <span class="slots-label">Horários disponíveis</span>
                 <div class="slots" id="slots"><span class="slots-empty">Escolha profissional, serviço e dia para ver os horários.</span></div>
               </div>
               <div class="field">
-                <label for="nome">Seu nome</label>
-                <input id="nome" name="nome" value="{{ dados.nome }}" maxlength="150" autocomplete="name" required>
-              </div>
-              <div class="field">
                 <label for="telefone">WhatsApp com DDD</label>
                 <input id="telefone" name="telefone" value="{{ dados.telefone }}" inputmode="tel" autocomplete="tel" placeholder="(84) 99999-0000" required>
+              </div>
+              <div class="field">
+                <label for="nome">Seu nome</label>
+                <input id="nome" name="nome" value="{{ dados.nome }}" maxlength="150" autocomplete="name" required>
+                <span class="hint" id="client-status" aria-live="polite"></span>
               </div>
             </div>
             <button class="button" id="submit-button" type="submit">Confirmar agendamento</button>
@@ -95,11 +101,18 @@
         const profissionalBotoes = [...document.querySelectorAll('[data-professional]')];
         const servico = document.getElementById('servico');
         const data = document.getElementById('data');
+        const dataBotoes = [...document.querySelectorAll('[data-date]')];
         const slots = document.getElementById('slots');
         const form = document.getElementById('booking-form');
         const submit = document.getElementById('submit-button');
+        const telefone = document.getElementById('telefone');
+        const nome = document.getElementById('nome');
+        const clienteStatus = document.getElementById('client-status');
         const servicoInicial = '{{ dados.servico|escapejs }}';
         const horarioInicial = '{{ dados.horario|escapejs }}';
+        let nomeAutomatico = '';
+        let buscaClienteTimer;
+        let buscaClienteAtual = 0;
 
         function moeda(valor) { return Number(valor).toLocaleString('pt-BR', {style:'currency', currency:'BRL'}); }
         function preencherServicos() {
@@ -142,6 +155,32 @@
             slots.innerHTML = '<span class="slots-empty">Não foi possível carregar os horários. Tente novamente.</span>';
           }
         }
+        async function buscarCliente() {
+          const numero = telefone.value.replace(/\D/g, '');
+          if (numero.length < 10 || numero.length > 15) {
+            clienteStatus.textContent = '';
+            return;
+          }
+          const identificadorBusca = ++buscaClienteAtual;
+          clienteStatus.textContent = 'Consultando cadastro…';
+          try {
+            const response = await fetch(`cliente/?telefone=${encodeURIComponent(numero)}`, {headers:{Accept:'application/json'}, cache:'no-store'});
+            if (!response.ok) throw new Error();
+            const payload = await response.json();
+            if (identificadorBusca !== buscaClienteAtual) return;
+            if (payload.encontrado) {
+              if (!nome.value.trim() || nome.value === nomeAutomatico) nome.value = payload.nome;
+              nomeAutomatico = payload.nome;
+              clienteStatus.textContent = 'Cadastro encontrado; confirme seu nome.';
+            } else {
+              if (nome.value === nomeAutomatico) nome.value = '';
+              nomeAutomatico = '';
+              clienteStatus.textContent = 'Novo cliente; informe seu nome.';
+            }
+          } catch (_) {
+            if (identificadorBusca === buscaClienteAtual) clienteStatus.textContent = '';
+          }
+        }
         profissionalBotoes.forEach(button => button.addEventListener('click', function () {
           profissional.value = button.dataset.professional;
           profissionalBotoes.forEach(item => {
@@ -151,10 +190,24 @@
           });
           preencherServicos();
         }));
+        dataBotoes.forEach(button => button.addEventListener('click', function () {
+          data.value = button.dataset.date;
+          dataBotoes.forEach(item => {
+            const selecionado = item === button;
+            item.classList.toggle('selected', selecionado);
+            item.setAttribute('aria-pressed', selecionado ? 'true' : 'false');
+          });
+          carregarHorarios();
+        }));
         servico.addEventListener('change', carregarHorarios);
-        data.addEventListener('change', carregarHorarios);
+        telefone.addEventListener('input', function () {
+          window.clearTimeout(buscaClienteTimer);
+          buscaClienteTimer = window.setTimeout(buscarCliente, 350);
+        });
+        telefone.addEventListener('blur', buscarCliente);
         form.addEventListener('submit', function () { submit.disabled = true; submit.textContent = 'Confirmando…'; });
         preencherServicos();
+        if (telefone.value) buscarCliente();
       })();
     </script>
   {% endif %}

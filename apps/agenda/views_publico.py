@@ -149,20 +149,29 @@ def _somente_digitos(valor):
     return re.sub(r'\D', '', valor or '')
 
 
+def _numero_nacional(valor):
+    numero = _somente_digitos(valor)
+    if numero.startswith('55') and len(numero) in (12, 13):
+        return numero[2:]
+    return numero
+
+
 def _localizar_cliente(filial, telefone):
-    sufixo = _somente_digitos(telefone)[-8:]
-    if len(sufixo) < 8:
+    numero = _numero_nacional(telefone)
+    if len(numero) < 8:
         return None
+    trecho_busca = numero[-4:]
     candidatos = Cliente.objects.for_filial(filial).filter(ativo=True).filter(
-        Q(celular__icontains=sufixo) | Q(telefone__icontains=sufixo),
-    )[:20]
-    return next(
-        (
-            cliente for cliente in candidatos
-            if _somente_digitos(cliente.celular or cliente.telefone).endswith(sufixo)
-        ),
-        None,
-    )
+        Q(celular__icontains=trecho_busca) | Q(telefone__icontains=trecho_busca),
+    )[:100]
+    for cliente in candidatos:
+        for contato in (cliente.celular, cliente.telefone):
+            numero_cadastrado = _numero_nacional(contato)
+            if numero_cadastrado == numero:
+                return cliente
+            if len(numero_cadastrado) == 8 and numero.endswith(numero_cadastrado):
+                return cliente
+    return None
 
 
 class AgendaPublicaView(View):
@@ -170,15 +179,28 @@ class AgendaPublicaView(View):
 
     def _contexto(self, link, *, dados=None, erros=None, agendamento=None):
         profissionais = _profissionais_publicos(link.filial)
+        hoje = timezone.localdate()
+        dados_contexto = dados or {}
+        dias_semana = ('SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM')
+        dias_disponiveis = [
+            {
+                'valor': (hoje + timedelta(days=indice)).isoformat(),
+                'semana': dias_semana[(hoje + timedelta(days=indice)).weekday()],
+                'data': (hoje + timedelta(days=indice)).strftime('%d/%m'),
+            }
+            for indice in range(7)
+        ]
         return {
             'link': link,
             'filial': link.filial,
             'logo_url': _logo_publica(link.filial),
             'profissionais': profissionais,
             'catalogo': _catalogo(profissionais),
-            'data_minima': timezone.localdate().isoformat(),
-            'data_maxima': (timezone.localdate() + timedelta(days=365)).isoformat(),
-            'dados': dados or {},
+            'data_minima': hoje.isoformat(),
+            'data_maxima': (hoje + timedelta(days=365)).isoformat(),
+            'data_selecionada': dados_contexto.get('data') or hoje.isoformat(),
+            'dias_disponiveis': dias_disponiveis,
+            'dados': dados_contexto,
             'erros': erros or [],
             'agendamento': agendamento,
         }
@@ -284,3 +306,19 @@ class HorariosPublicosView(View):
                 for item in horarios
             ],
         })
+
+
+class ClientePublicoView(View):
+    def get(self, request, token):
+        link = _link_do_token(token)
+        telefone = _somente_digitos(request.GET.get('telefone'))
+        if not 10 <= len(telefone) <= 15:
+            response = JsonResponse({'encontrado': False, 'nome': ''})
+        else:
+            cliente = _localizar_cliente(link.filial, telefone)
+            response = JsonResponse({
+                'encontrado': bool(cliente),
+                'nome': cliente.nome_display if cliente else '',
+            })
+        response['Cache-Control'] = 'no-store'
+        return response
