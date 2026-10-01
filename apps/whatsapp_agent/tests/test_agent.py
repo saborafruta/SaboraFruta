@@ -1,13 +1,17 @@
-from datetime import time, timedelta
+from datetime import time
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase, TestCase, override_settings
-from django.utils import timezone
 
-from apps.agenda.models import Agendamento, JornadaTrabalho, ProfissionalAgenda, ProfissionalServico
-from apps.cadastros.models import Cliente, Funcionario
-from apps.core.models import Empresa, Filial
+from apps.agenda.models import (
+    AgendaLinkPublico,
+    JornadaTrabalho,
+    ProfissionalAgenda,
+    ProfissionalServico,
+)
+from apps.cadastros.models import Funcionario
+from apps.core.models import Empresa, Filial, TenantPublicLink
 from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
 from apps.whatsapp_agent.agent import processar_mensagem
 from apps.whatsapp_agent.forms import ConfiguracaoWhatsAppForm
@@ -58,63 +62,59 @@ class AgenteWhatsAppTests(TestCase):
             remote_jid=f'{telefone}@s.whatsapp.net', telefone=telefone, cliente=cliente,
         )
 
-    def proxima_segunda(self):
-        hoje = timezone.localdate()
-        return hoje + timedelta(days=7 - hoje.weekday())
-
     def test_api_key_fica_criptografada(self):
         self.assertNotIn('chave-ultrassecreta', self.configuracao.api_key_criptografada)
         self.assertEqual(self.configuracao.obter_api_key(), 'chave-ultrassecreta')
 
-    def test_fluxo_completo_cadastra_cliente_e_agenda(self):
+    def test_saudacao_exibe_menu_principal(self):
         conversa = self.nova_conversa()
 
-        self.assertIn('Escolha', processar_mensagem(conversa, 'Olá'))
-        self.assertIn('Carlos', processar_mensagem(conversa, '1'))
-        self.assertIn('Horários disponíveis', processar_mensagem(conversa, self.proxima_segunda().strftime('%d/%m')))
-        self.assertIn('qual é o seu nome', processar_mensagem(conversa, '1'))
-        self.assertIn('Confirma', processar_mensagem(conversa, 'Diego'))
-        resposta = processar_mensagem(conversa, 'sim')
+        resposta = processar_mensagem(conversa, 'Olá')
 
-        self.assertIn('Agendamento confirmado', resposta)
-        cliente = Cliente.objects.get(celular='5584999990000')
-        agendamento = Agendamento.objects.get(cliente=cliente)
-        self.assertEqual(agendamento.origem, Agendamento.Origem.WHATSAPP_NAO_OFICIAL)
-        self.assertEqual(agendamento.pessoa_atendida_nome, 'Diego')
+        self.assertIn('*1.* Fazer um agendamento', resposta)
+        self.assertIn('*2.* Falar com um atendente', resposta)
+        self.assertIn('*3.* Encerrar a conversa', resposta)
+        conversa.refresh_from_db()
+        self.assertEqual(conversa.etapa, 'aguardando_opcao')
 
-    def test_confirma_ou_corrige_nome_do_cliente_existente(self):
-        cliente = Cliente.objects.create(
-            filial=self.filial, tipo_pessoa='F', razao_social='Nome Antigo',
-            celular='5584999991111',
-        )
-        conversa = self.nova_conversa('5584999991111', cliente=cliente)
-        processar_mensagem(conversa, 'oi')
-        processar_mensagem(conversa, '1')
-        processar_mensagem(conversa, self.proxima_segunda().strftime('%d/%m'))
-
-        pergunta = processar_mensagem(conversa, '1')
-        self.assertIn('Nome Antigo', pergunta)
-        confirmacao = processar_mensagem(conversa, 'Maria Silva')
-        self.assertIn('Maria Silva', confirmacao)
-        processar_mensagem(conversa, 'sim')
-
-        cliente.refresh_from_db()
-        self.assertEqual(cliente.razao_social, 'Maria Silva')
-
-    def test_nova_saudacao_reexibe_menu_quando_conversa_aguarda_servico(self):
+    @override_settings(PUBLIC_BASE_URL='https://ited.app.br')
+    def test_opcao_um_cria_e_envia_link_publico_da_agenda(self):
         conversa = self.nova_conversa()
         self.servico.agendavel = False
         self.servico.save(update_fields=['agendavel'])
 
-        primeira_resposta = processar_mensagem(conversa, 'oi')
-        self.assertIn('não há serviços', primeira_resposta)
+        resposta = processar_mensagem(conversa, '1')
 
-        self.servico.agendavel = True
-        self.servico.save(update_fields=['agendavel'])
+        link = AgendaLinkPublico.objects.get(filial=self.filial)
+        self.assertIn(f'https://ited.app.br/agendar/{link.token}/', resposta)
+        self.assertTrue(TenantPublicLink.objects.filter(tipo='agenda').exists())
+
+    def test_opcao_dois_transfere_e_silencia_automacao(self):
+        conversa = self.nova_conversa()
+
+        resposta = processar_mensagem(conversa, '2')
+
+        self.assertEqual(resposta, self.configuracao.mensagem_transferencia)
+        conversa.refresh_from_db()
+        self.assertTrue(conversa.atendimento_humano)
+        self.assertEqual(conversa.etapa, 'atendimento_humano')
+        self.assertIsNone(processar_mensagem(conversa, 'oi'))
+
+    def test_opcao_tres_encerra_e_novo_oi_reabre_conversa(self):
+        conversa = self.nova_conversa()
+
+        resposta = processar_mensagem(conversa, '3')
+
+        self.assertIn('Conversa encerrada', resposta)
+        conversa.refresh_from_db()
+        self.assertFalse(conversa.ativa)
+        self.assertEqual(conversa.etapa, 'encerrada')
+
         nova_resposta = processar_mensagem(conversa, 'oi')
 
-        self.assertIn('Escolha um ou mais serviços', nova_resposta)
-        self.assertIn('Corte de cabelo', nova_resposta)
+        self.assertIn('*1.* Fazer um agendamento', nova_resposta)
+        conversa.refresh_from_db()
+        self.assertTrue(conversa.ativa)
 
     @patch('apps.whatsapp_agent.webhook.EvolutionClient.enviar_texto')
     def test_webhook_e_idempotente(self, enviar_texto):

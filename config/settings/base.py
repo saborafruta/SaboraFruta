@@ -178,6 +178,9 @@ RAILWAY_MULTI_PROJECT_ENABLED = env.bool('RAILWAY_MULTI_PROJECT_ENABLED', defaul
 # do iTED e nunca devem ser solicitadas ao cliente final.
 WHATSAPP_EVOLUTION_URL = env('WHATSAPP_EVOLUTION_URL', default='')
 WHATSAPP_EVOLUTION_API_KEY = env('WHATSAPP_EVOLUTION_API_KEY', default='')
+# Endereço público usado nas mensagens geradas fora de uma requisição HTTP,
+# como o link da agenda enviado automaticamente pelo WhatsApp.
+PUBLIC_BASE_URL = env('PUBLIC_BASE_URL', default='https://ited.app.br')
 
 TENANT_DATABASE_ALIASES = []
 if TENANT_DATABASES_JSON:
