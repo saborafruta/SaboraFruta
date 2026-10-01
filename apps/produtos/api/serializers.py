@@ -62,12 +62,35 @@ class ProdutoSerializer(serializers.ModelSerializer):
             'id', 'codigo', 'codigo_barras', 'descricao', 'descricao_curta',
             'categoria', 'subcategoria', 'marca', 'fornecedor',
             'unidade_medida', 'tipo_produto', 'ncm',
+            'agendavel', 'duracao_servico_minutos', 'intervalo_apos_servico_minutos',
             'preco_custo', 'preco_venda', 'ativo',
             'controla_lote', 'controla_validade', 'permite_venda_sem_estoque',
             'apresentacao_principal_venda',
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate(self, attrs):
+        instance = self.instance
+        tipo = attrs.get(
+            'tipo_produto',
+            getattr(instance, 'tipo_produto', Produto.TipoProduto.UNITARIO),
+        )
+        agendavel = attrs.get('agendavel', getattr(instance, 'agendavel', False))
+        duracao = attrs.get(
+            'duracao_servico_minutos',
+            getattr(instance, 'duracao_servico_minutos', None),
+        )
+
+        if agendavel and tipo != Produto.TipoProduto.SERVICO:
+            raise serializers.ValidationError({
+                'agendavel': 'Somente itens do tipo Serviço podem ficar disponíveis para agendamento.',
+            })
+        if agendavel and not duracao:
+            raise serializers.ValidationError({
+                'duracao_servico_minutos': 'Informe a duração do serviço para disponibilizá-lo na agenda.',
+            })
+        return attrs
 
     @extend_schema_field(ProdutoApresentacaoLiteSerializer)
     def get_apresentacao_principal_venda(self, obj):

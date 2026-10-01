@@ -671,7 +671,27 @@
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.categoria required=True %}</div>
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.subcategoria %}</div>
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.tipo_produto required=True %}</div>
-          <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.tempo_preparo_minutos %}<p class="produto-help">Tempo médio de preparo (min) — usado pela fila do KDS.</p></div>
+          <div class="produto-field" x-show="tipoProduto !== 'servico'">{% include "produtos/produto/partials/_field.html" with field=form.tempo_preparo_minutos %}<p class="produto-help">Tempo médio de preparo (min) — usado pela fila do KDS.</p></div>
+          <div class="produto-field full" x-show="tipoProduto === 'servico'" x-cloak>
+            <div class="produto-card">
+              <h3 class="produto-card-title"><span>#</span> Configurações de agendamento</h3>
+              <div class="produto-field-grid">
+                <div class="produto-field md">
+                  <label class="produto-toggle-row">{{ form.agendavel }} <span>Disponível para agendamento</span></label>
+                  {% if form.agendavel.errors %}<p class="produto-error">{{ form.agendavel.errors|first }}</p>{% endif %}
+                  <p class="produto-help">Habilita este serviço para a agenda e para os canais de atendimento.</p>
+                </div>
+                <div class="produto-field sm">
+                  {% include "produtos/produto/partials/_field.html" with field=form.duracao_servico_minutos %}
+                  <p class="produto-help">Tempo ocupado pelo atendimento. Ex.: 30 minutos.</p>
+                </div>
+                <div class="produto-field sm">
+                  {% include "produtos/produto/partials/_field.html" with field=form.intervalo_apos_servico_minutos %}
+                  <p class="produto-help">Tempo livre antes do próximo cliente. Use zero quando não houver intervalo.</p>
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.linha_producao %}</div>
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.marca %}</div>
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.fornecedor %}</div>
@@ -1326,6 +1346,7 @@
     return {
       step: 1,
       loading: false,
+      tipoProduto: '{{ form.tipo_produto.value|default:"unitario"|escapejs }}',
       steps: [
         { id: 1, label: 'Identificacao', hasError: errorSteps.includes(1) },
         { id: 2, label: 'Industrial', hasError: errorSteps.includes(2) },
@@ -1425,6 +1446,11 @@
         });
       },
       init() {
+        this.$watch('tipoProduto', (value) => {
+          if (value !== 'servico' && this.$refs.agendaToggle) {
+            this.$refs.agendaToggle.checked = false;
+          }
+        });
         this.initSpecs();
         this.initBarcodeExtras();
         this.initSubcategoryFilter();

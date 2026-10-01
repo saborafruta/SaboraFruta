@@ -120,6 +120,7 @@ class ProdutoForm(forms.ModelForm):
         'peso_minimo_venda',
         'quantidade_por_embalagem',
         'empilhamento_maximo',
+        'intervalo_apos_servico_minutos',
     }
 
     imagem_produto = forms.FileField(label='Imagem do produto', required=False)
@@ -154,6 +155,9 @@ class ProdutoForm(forms.ModelForm):
             'subcategoria': 'Sub categoria',
             'linha_producao': 'Familia / Linha',
             'tempo_preparo_minutos': 'Tempo de preparo (min)',
+            'agendavel': 'Disponível para agendamento',
+            'duracao_servico_minutos': 'Duração do serviço (min)',
+            'intervalo_apos_servico_minutos': 'Intervalo após o serviço (min)',
             'ativo': 'Status ativo',
             'rascunho_comercial': 'Rascunho comercial',
             'observacao': 'Observacao interna',
@@ -258,6 +262,20 @@ class ProdutoForm(forms.ModelForm):
             'preco_venda': forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '0,00', 'data-decimal-places': '2'}),
             'preco_minimo': forms.TextInput(attrs={'inputmode': 'decimal', 'placeholder': '0,00', 'data-decimal-places': '2'}),
             'especificacoes_tecnicas': forms.HiddenInput(),
+            'duracao_servico_minutos': forms.NumberInput(attrs={
+                'min': '1',
+                'max': '1440',
+                'step': '1',
+                'placeholder': 'Ex.: 30',
+                'inputmode': 'numeric',
+            }),
+            'intervalo_apos_servico_minutos': forms.NumberInput(attrs={
+                'min': '0',
+                'max': '1440',
+                'step': '1',
+                'placeholder': 'Ex.: 10',
+                'inputmode': 'numeric',
+            }),
         }
 
     def __init__(self, *args, empresa=None, filial=None, estoque_atual=None, **kwargs):
@@ -279,6 +297,8 @@ class ProdutoForm(forms.ModelForm):
             'accept': 'image/png,image/jpeg,image/webp,image/gif',
         })
         self.fields['remover_imagem'].widget.attrs.update({'class': 'produto-image-remove-checkbox'})
+        self.fields['tipo_produto'].widget.attrs['x-model'] = 'tipoProduto'
+        self.fields['agendavel'].widget.attrs['x-ref'] = 'agendaToggle'
 
         for money_field in ('preco_custo', 'preco_venda', 'preco_minimo'):
             value = self.initial.get(money_field)
@@ -600,8 +620,29 @@ class ProdutoForm(forms.ModelForm):
                 self.add_error(field_name, 'Este codigo de barras ja pertence a outro produto.')
 
         tipo = cleaned.get('tipo_produto')
+        agendavel = bool(cleaned.get('agendavel'))
+        duracao_servico = cleaned.get('duracao_servico_minutos')
+        intervalo_servico = cleaned.get('intervalo_apos_servico_minutos')
         controla_lote = cleaned.get('controla_lote')
         controla_validade = cleaned.get('controla_validade')
+
+        if agendavel and tipo != Produto.TipoProduto.SERVICO:
+            self.add_error(
+                'agendavel',
+                'Somente itens do tipo Serviço podem ficar disponíveis para agendamento.',
+            )
+        if agendavel and not duracao_servico:
+            self.add_error(
+                'duracao_servico_minutos',
+                'Informe a duração do serviço para disponibilizá-lo na agenda.',
+            )
+        if duracao_servico is not None and duracao_servico > 1440:
+            self.add_error('duracao_servico_minutos', 'A duração máxima é de 1.440 minutos.')
+        if intervalo_servico is not None and intervalo_servico > 1440:
+            self.add_error(
+                'intervalo_apos_servico_minutos',
+                'O intervalo máximo é de 1.440 minutos.',
+            )
 
         if controla_validade and not controla_lote:
             raise forms.ValidationError(

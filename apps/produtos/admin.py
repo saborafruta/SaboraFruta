@@ -117,6 +117,9 @@ class ProdutoAdmin(admin.ModelAdmin):
                        'categoria', 'subcategoria', 'marca', 'fornecedor', 'unidade_medida', 'unidade_medida_compra',
                        'fator_conversao_compra', 'tipo_produto', 'foto_url', 'ativo'),
         }),
+        ('Agenda de serviços', {
+            'fields': ('agendavel', 'duracao_servico_minutos', 'intervalo_apos_servico_minutos'),
+        }),
         ('Fiscal', {
             'fields': ('ncm', 'cest', 'cfop_venda_interna', 'cfop_venda_interestadual',
                        'cfop_venda_exportacao', 'cfop_devolucao', 'cfop_compra',

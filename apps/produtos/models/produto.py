@@ -3,6 +3,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import unquote, urlparse
 
 from django.core.files.storage import default_storage
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from apps.core.models.base import FilialManager, FilialScopedModel, TimestampedModel
@@ -54,7 +55,7 @@ class Produto(FilialScopedModel):
         GRANEL_PESO = 'granel_peso', 'Granel (peso)'
         GRANEL_VOLUME = 'granel_volume', 'Granel (volume)'
         GRANEL_METRAGEM = 'granel_metragem', 'Granel (metragem)'
-        SERVICO = 'servico', 'Servico'
+        SERVICO = 'servico', 'Serviço'
         KIT = 'kit', 'Kit'
 
     class OrigemProduto(models.IntegerChoices):
@@ -295,6 +296,28 @@ class Produto(FilialScopedModel):
     # prazo de cada item -- quando em branco, o KDS assume um tempo padrão.
     tempo_preparo_minutos = models.PositiveSmallIntegerField(null=True, blank=True)
 
+    # Agenda de serviços. Estes campos não reutilizam tempo_preparo_minutos,
+    # pois o tempo de KDS representa preparo de cozinha, não ocupação da agenda.
+    agendavel = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name='Disponível para agendamento',
+        help_text='Permite oferecer este serviço na agenda e nos canais de atendimento.',
+    )
+    duracao_servico_minutos = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(1440)],
+        verbose_name='Duração do serviço (min)',
+        help_text='Tempo que o serviço ocupa na agenda.',
+    )
+    intervalo_apos_servico_minutos = models.PositiveSmallIntegerField(
+        default=0,
+        validators=[MaxValueValidator(1440)],
+        verbose_name='Intervalo após o serviço (min)',
+        help_text='Tempo de limpeza, preparo ou descanso antes do próximo atendimento.',
+    )
+
     # Industrial
     condicao_armazenamento = models.CharField(
         max_length=20, choices=CondicaoArmazenamento.choices,
@@ -325,6 +348,30 @@ class Produto(FilialScopedModel):
             models.Index(fields=['filial', 'codigo']),
             models.Index(fields=['filial', 'codigo_barras']),
             models.Index(fields=['filial', 'descricao']),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(agendavel=False) | models.Q(tipo_produto='servico'),
+                name='produto_agendavel_apenas_servico',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(agendavel=False)
+                    | models.Q(duracao_servico_minutos__gt=0)
+                ),
+                name='produto_agendavel_com_duracao',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(duracao_servico_minutos__isnull=True)
+                    | models.Q(duracao_servico_minutos__lte=1440)
+                ),
+                name='produto_duracao_servico_max_1440',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(intervalo_apos_servico_minutos__lte=1440),
+                name='produto_intervalo_servico_max_1440',
+            ),
         ]
 
     def __str__(self):

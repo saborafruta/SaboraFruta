@@ -772,6 +772,9 @@ PRODUTO_AUDIT_FIELDS = {
     'marca': 'Marca / Fabricante',
     'fornecedor': 'Fornecedor',
     'tipo_produto': 'Tipo produto',
+    'agendavel': 'Disponível para agendamento',
+    'duracao_servico_minutos': 'Duração do serviço (min)',
+    'intervalo_apos_servico_minutos': 'Intervalo após o serviço (min)',
     'unidade_medida': 'Unidade de medida',
     'unidade_medida_compra': 'Unidade de compra',
     'fator_conversao_compra': 'Fator de conversao da compra',
@@ -1209,6 +1212,7 @@ PRODUTO_STEP_FIELDS = {
     1: {
         'descricao', 'categoria', 'subcategoria', 'marca', 'fornecedor',
         'tipo_produto', 'linha_producao',
+        'agendavel', 'duracao_servico_minutos', 'intervalo_apos_servico_minutos',
         'unidade_medida', 'unidade_medida_compra', 'fator_conversao_compra',
         'codigo', 'codigo_barras', 'codigo_barras_extra_1', 'codigo_barras_extra_2',
         'codigo_barras_extra_3', 'descricao_curta', 'observacao', 'ativo',

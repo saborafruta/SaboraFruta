@@ -41,3 +41,11 @@ class ProdutoCreateViewTests(TestCase):
 
         conteudo = response.content.decode()
         self.assertIn('@click="stopTour()"', conteudo)
+
+    def test_tela_exibe_configuracoes_de_agendamento_para_servicos(self):
+        response = self.client.get(reverse('produtos:produto-create'))
+
+        self.assertContains(response, 'Configurações de agendamento')
+        self.assertContains(response, 'Disponível para agendamento')
+        self.assertContains(response, 'Duração do serviço (min)')
+        self.assertContains(response, "x-show=\"tipoProduto === 'servico'\"")
