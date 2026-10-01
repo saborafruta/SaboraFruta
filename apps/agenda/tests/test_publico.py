@@ -32,6 +32,9 @@ class AgendaPublicaTests(DisponibilidadeAgendaTests):
         self.assertContains(response, self.profissional.funcionario.nome)
         self.assertContains(response, self.corte.descricao)
         self.assertContains(response, 'class="professional-avatar"')
+        self.assertContains(response, "titulo:'Manhã'")
+        self.assertContains(response, "titulo:'Tarde'")
+        self.assertContains(response, "titulo:'Noite'")
 
     def test_pagina_exibe_hoje_e_os_seis_dias_seguintes(self):
         response = self.client.get(reverse('agenda_publica:agendar', args=[self.link.token]))
