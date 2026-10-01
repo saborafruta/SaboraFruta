@@ -13,7 +13,7 @@
   <main class="page">
     <header class="brand">
       <div class="brand-logo">
-        {% if logo_url %}<img src="{{ logo_url }}" alt="Logo de {{ filial.nome_fantasia|default:filial.razao_social }}" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="brand-mark" hidden>{{ filial.nome_fantasia|default:filial.razao_social|slice:':1'|upper }}</span>{% else %}<span class="brand-mark">{{ filial.nome_fantasia|default:filial.razao_social|slice:':1'|upper }}</span>{% endif %}
+        {% if logo_url %}<img src="{{ logo_url }}" alt="Logo de {{ filial.nome_fantasia|default:filial.razao_social }}">{% else %}<span class="brand-mark">{{ filial.nome_fantasia|default:filial.razao_social|slice:':1'|upper }}</span>{% endif %}
       </div>
       <h1>{{ filial.nome_fantasia|default:filial.razao_social }}</h1>
       <p>Escolha o melhor horário para você.</p>

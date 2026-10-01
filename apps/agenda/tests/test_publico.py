@@ -51,6 +51,7 @@ class AgendaPublicaTests(DisponibilidadeAgendaTests):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '/media/filiais/imagens/logo-matriz.png')
         self.assertContains(response, f'Logo de {self.filial.nome_fantasia}')
+        self.assertNotContains(response, 'class="brand-mark"')
 
     def test_api_retorna_apenas_horarios_disponiveis(self):
         request = self.anonimo(self.factory.get(f'/agendar/{self.link.token}/horarios/', {
