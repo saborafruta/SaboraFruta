@@ -1,4 +1,6 @@
-from datetime import date, timedelta
+import calendar
+from collections import defaultdict
+from datetime import date, time, timedelta
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
@@ -19,6 +21,77 @@ from .services import criar_agendamento, listar_horarios
 
 
 DIAS = list(JornadaTrabalho.DiaSemana.choices)
+MODOS_AGENDA = {'dia', 'semana', 'mes'}
+
+
+def _mover_mes(data_referencia, deslocamento):
+    indice = data_referencia.year * 12 + data_referencia.month - 1 + deslocamento
+    ano, mes_zero = divmod(indice, 12)
+    mes = mes_zero + 1
+    return date(ano, mes, min(data_referencia.day, calendar.monthrange(ano, mes)[1]))
+
+
+def _intervalo_visualizacao(data_referencia, modo):
+    if modo == 'semana':
+        inicio = data_referencia - timedelta(days=data_referencia.weekday())
+        return inicio, inicio + timedelta(days=6)
+    if modo == 'mes':
+        semanas = calendar.Calendar(firstweekday=0).monthdatescalendar(
+            data_referencia.year, data_referencia.month,
+        )
+        return semanas[0][0], semanas[-1][-1]
+    return data_referencia, data_referencia
+
+
+def _navegacao(data_referencia, modo):
+    if modo == 'mes':
+        return _mover_mes(data_referencia, -1), _mover_mes(data_referencia, 1)
+    deslocamento = 7 if modo == 'semana' else 1
+    return data_referencia - timedelta(days=deslocamento), data_referencia + timedelta(days=deslocamento)
+
+
+def _titulo_periodo(data_referencia, inicio, fim, modo):
+    if modo == 'dia':
+        return data_referencia.strftime('%d/%m/%Y')
+    if modo == 'semana':
+        return f'{inicio:%d/%m} a {fim:%d/%m/%Y}'
+    return data_referencia.strftime('%B de %Y')
+
+
+def _limites_grade(agendamentos, jornadas):
+    inicios = [8]
+    finais = [19]
+    for jornada in jornadas:
+        inicios.append(jornada.inicio.hour)
+        finais.append(jornada.fim.hour + (1 if jornada.fim.minute else 0))
+    for item in agendamentos:
+        inicio_local = timezone.localtime(item.inicio)
+        fim_local = timezone.localtime(item.fim)
+        inicios.append(inicio_local.hour)
+        finais.append(fim_local.hour + (1 if fim_local.minute else 0))
+    return min(inicios), max(finais)
+
+
+def _dados_grade(agendamentos, datas, inicio_hora):
+    por_data = defaultdict(list)
+    for item in agendamentos:
+        inicio_local = timezone.localtime(item.inicio)
+        fim_local = timezone.localtime(item.fim)
+        minutos_inicio = inicio_local.hour * 60 + inicio_local.minute
+        minutos_fim = fim_local.hour * 60 + fim_local.minute
+        por_data[inicio_local.date()].append({
+            'item': item,
+            'topo': round((minutos_inicio - inicio_hora * 60) * 64 / 60, 2),
+            'altura': max(30, round((minutos_fim - minutos_inicio) * 64 / 60, 2)),
+        })
+    return [
+        {
+            'data': dia,
+            'hoje': dia == timezone.localdate(),
+            'eventos': por_data[dia],
+        }
+        for dia in datas
+    ]
 
 
 class AgendaView(PermissaoRequiredMixin, View):
@@ -30,20 +103,71 @@ class AgendaView(PermissaoRequiredMixin, View):
             data_selecionada = date.fromisoformat(request.GET.get('data', ''))
         except ValueError:
             data_selecionada = timezone.localdate()
+        modo = request.GET.get('visualizacao', 'semana')
+        if modo not in MODOS_AGENDA:
+            modo = 'semana'
+        periodo_inicio, periodo_fim = _intervalo_visualizacao(data_selecionada, modo)
+        data_anterior, data_seguinte = _navegacao(data_selecionada, modo)
         profissional_id = request.GET.get('profissional')
         profissionais = ProfissionalAgenda.objects.for_filial(request.filial_ativa).filter(ativo=True).select_related('funcionario')
         agendamentos = Agendamento.objects.for_filial(request.filial_ativa).filter(
-            inicio__date=data_selecionada,
+            inicio__date__range=(periodo_inicio, periodo_fim),
         ).select_related('cliente', 'profissional__funcionario').prefetch_related('itens')
         if profissional_id:
             agendamentos = agendamentos.filter(profissional_id=profissional_id)
+        agendamentos = list(agendamentos)
+
+        contexto_calendario = {}
+        if modo == 'mes':
+            semanas = calendar.Calendar(firstweekday=0).monthdatescalendar(
+                data_selecionada.year, data_selecionada.month,
+            )
+            por_data = defaultdict(list)
+            for item in agendamentos:
+                por_data[timezone.localtime(item.inicio).date()].append(item)
+            contexto_calendario['semanas_mes'] = [
+                [
+                    {
+                        'data': dia,
+                        'mes_atual': dia.month == data_selecionada.month,
+                        'hoje': dia == timezone.localdate(),
+                        'eventos': por_data[dia],
+                    }
+                    for dia in semana
+                ]
+                for semana in semanas
+            ]
+        else:
+            datas = [
+                periodo_inicio + timedelta(days=indice)
+                for indice in range((periodo_fim - periodo_inicio).days + 1)
+            ]
+            jornadas = JornadaTrabalho.objects.for_filial(request.filial_ativa).filter(
+                ativo=True,
+            )
+            if profissional_id:
+                jornadas = jornadas.filter(profissional_id=profissional_id)
+            inicio_hora, fim_hora = _limites_grade(agendamentos, jornadas)
+            horas = list(range(inicio_hora, fim_hora + 1))
+            contexto_calendario.update({
+                'dias_grade': _dados_grade(agendamentos, datas, inicio_hora),
+                'horas_grade': [
+                    {'rotulo': f'{hora:02d}:00', 'topo': (hora - inicio_hora) * 64}
+                    for hora in horas
+                ],
+                'altura_grade': (fim_hora - inicio_hora) * 64,
+                'quantidade_dias': len(datas),
+            })
         return render(request, 'agenda/agenda.html', {
             'data_selecionada': data_selecionada,
-            'data_anterior': data_selecionada - timedelta(days=1),
-            'data_seguinte': data_selecionada + timedelta(days=1),
+            'data_anterior': data_anterior,
+            'data_seguinte': data_seguinte,
+            'visualizacao': modo,
+            'titulo_periodo': _titulo_periodo(data_selecionada, periodo_inicio, periodo_fim, modo),
             'profissionais': profissionais,
             'profissional_id': profissional_id or '',
             'agendamentos': agendamentos,
+            **contexto_calendario,
         })
 
 
@@ -53,6 +177,29 @@ class AgendamentoCreateView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         form = AgendamentoForm(filial=request.filial_ativa, initial={'inicio': request.GET.get('inicio')})
+        return render(request, 'agenda/agendamento_form.html', {'form': form})
+
+    def post(self, request):
+        form = AgendamentoForm(request.POST, filial=request.filial_ativa)
+        if form.is_valid():
+            try:
+                agendamento = criar_agendamento(
+                    filial=request.filial_ativa, profissional=form.cleaned_data['profissional'],
+                    servicos=form.cleaned_data['servicos'], inicio=form.cleaned_data['inicio'],
+                    pessoa_atendida_nome=form.cleaned_data['pessoa_atendida_nome'],
+                    cliente=form.cleaned_data.get('cliente'), telefone=form.cleaned_data.get('telefone_contato', ''),
+                    observacao=form.cleaned_data.get('observacao', ''), usuario=request.user,
+                )
+            except ValidationError as exc:
+                form.add_error(None, exc)
+            else:
+                LogSistema.objects.create(
+                    filial=request.filial_ativa, usuario=request.user, modulo='agenda',
+                    acao=LogSistema.Acao.CRIAR, tabela_afetada='agenda_agendamentos',
+                    registro_id=agendamento.pk, dados_novos={'cliente': agendamento.pessoa_atendida_nome, 'inicio': agendamento.inicio.isoformat()},
+                )
+                messages.success(request, 'Agendamento criado com sucesso.')
+                return redirect('agenda:agenda')
         return render(request, 'agenda/agendamento_form.html', {'form': form})
 
 
@@ -98,30 +245,6 @@ class AgendamentoStatusView(PermissaoRequiredMixin, View):
             messages.success(request, 'Status do agendamento atualizado.')
         return redirect('agenda:agendamento-detail', pk=pk)
 
-    def post(self, request):
-        form = AgendamentoForm(request.POST, filial=request.filial_ativa)
-        if form.is_valid():
-            try:
-                agendamento = criar_agendamento(
-                    filial=request.filial_ativa, profissional=form.cleaned_data['profissional'],
-                    servicos=form.cleaned_data['servicos'], inicio=form.cleaned_data['inicio'],
-                    pessoa_atendida_nome=form.cleaned_data['pessoa_atendida_nome'],
-                    cliente=form.cleaned_data.get('cliente'), telefone=form.cleaned_data.get('telefone_contato', ''),
-                    observacao=form.cleaned_data.get('observacao', ''), usuario=request.user,
-                )
-            except ValidationError as exc:
-                form.add_error(None, exc)
-            else:
-                LogSistema.objects.create(
-                    filial=request.filial_ativa, usuario=request.user, modulo='agenda',
-                    acao=LogSistema.Acao.CRIAR, tabela_afetada='agenda_agendamentos',
-                    registro_id=agendamento.pk, dados_novos={'cliente': agendamento.pessoa_atendida_nome, 'inicio': agendamento.inicio.isoformat()},
-                )
-                messages.success(request, 'Agendamento criado com sucesso.')
-                return redirect('agenda:agenda')
-        return render(request, 'agenda/agendamento_form.html', {'form': form})
-
-
 class ProfissionalListView(PermissaoRequiredMixin, View):
     permissao_modulo = 'cadastros'
     permissao_acao = 'ver'
@@ -140,14 +263,102 @@ class ProfissionalConfigView(PermissaoRequiredMixin, View):
             return ProfissionalAgenda(filial=request.filial_ativa)
         return get_object_or_404(ProfissionalAgenda.objects.for_filial(request.filial_ativa), pk=pk)
 
-    def contexto(self, form, profissional):
+    def contexto(self, form, profissional, dados=None):
         jornadas = {item.dia_semana: item for item in profissional.jornadas.all()} if profissional.pk else {}
-        return {'form': form, 'profissional': profissional if profissional.pk else None, 'dias': [(numero, nome, jornadas.get(numero)) for numero, nome in DIAS]}
+        dias = []
+        for numero, nome in DIAS:
+            jornada = jornadas.get(numero)
+            if dados is not None:
+                ativo = dados.get(f'dia_{numero}_ativo') == 'on'
+                inicio = dados.get(f'dia_{numero}_inicio', '')
+                fim = dados.get(f'dia_{numero}_fim', '')
+                pausa_inicio = dados.get(f'dia_{numero}_pausa_inicio', '')
+                pausa_fim = dados.get(f'dia_{numero}_pausa_fim', '')
+            else:
+                ativo = bool(jornada)
+                inicio = jornada.inicio.strftime('%H:%M') if jornada else ''
+                fim = jornada.fim.strftime('%H:%M') if jornada else ''
+                pausa_inicio = jornada.pausa_inicio.strftime('%H:%M') if jornada and jornada.pausa_inicio else ''
+                pausa_fim = jornada.pausa_fim.strftime('%H:%M') if jornada and jornada.pausa_fim else ''
+            dias.append({
+                'numero': numero, 'nome': nome, 'ativo': ativo, 'inicio': inicio, 'fim': fim,
+                'pausa_inicio': pausa_inicio, 'pausa_fim': pausa_fim,
+                'tem_pausa': bool(pausa_inicio or pausa_fim),
+            })
+        return {'form': form, 'profissional': profissional if profissional.pk else None, 'dias': dias}
 
     def get(self, request, pk=None):
         profissional = self.objeto(request, pk)
         form = ProfissionalAgendaForm(instance=profissional, filial=request.filial_ativa)
         return render(request, 'agenda/profissional_form.html', self.contexto(form, profissional))
+
+    def _jornadas_enviadas(self, request, form):
+        jornadas = []
+        marcou_dia = False
+        for numero, nome in DIAS:
+            if request.POST.get(f'dia_{numero}_ativo') != 'on':
+                continue
+            marcou_dia = True
+            valores = {
+                campo: request.POST.get(f'dia_{numero}_{campo}') or None
+                for campo in ('inicio', 'fim', 'pausa_inicio', 'pausa_fim')
+            }
+            if not valores['inicio'] or not valores['fim']:
+                form.add_error(None, f'Informe o início e o fim de {nome}.')
+                continue
+            try:
+                valores = {chave: time.fromisoformat(valor) if valor else None for chave, valor in valores.items()}
+            except ValueError:
+                form.add_error(None, f'Existe um horário inválido em {nome}.')
+                continue
+            if valores['inicio'] >= valores['fim']:
+                form.add_error(None, f'Em {nome}, o fim deve ser posterior ao início.')
+                continue
+            if bool(valores['pausa_inicio']) != bool(valores['pausa_fim']):
+                form.add_error(None, f'Informe o início e o fim do intervalo de {nome}.')
+                continue
+            if valores['pausa_inicio'] and not (
+                valores['inicio'] < valores['pausa_inicio'] < valores['pausa_fim'] < valores['fim']
+            ):
+                form.add_error(None, f'Em {nome}, o intervalo precisa estar dentro do expediente.')
+                continue
+            jornadas.append((numero, valores))
+        if not marcou_dia:
+            form.add_error(None, 'Marque pelo menos um dia de atendimento.')
+        return jornadas
+
+    def post(self, request, pk=None):
+        profissional = self.objeto(request, pk)
+        form = ProfissionalAgendaForm(request.POST, instance=profissional, filial=request.filial_ativa)
+        jornadas = self._jornadas_enviadas(request, form)
+        if form.is_valid() and not form.non_field_errors():
+            with transaction.atomic():
+                profissional = form.save(commit=False)
+                profissional.filial = request.filial_ativa
+                profissional.save()
+                selecionados = set(form.cleaned_data['servicos'].values_list('pk', flat=True))
+                ProfissionalServico.objects.filter(profissional=profissional).exclude(
+                    servico_id__in=selecionados,
+                ).update(ativo=False)
+                for servico in form.cleaned_data['servicos']:
+                    ProfissionalServico.objects.update_or_create(
+                        profissional=profissional, servico=servico, defaults={'ativo': True},
+                    )
+                dias_ativos = {numero for numero, _ in jornadas}
+                JornadaTrabalho.objects.filter(profissional=profissional).exclude(
+                    dia_semana__in=dias_ativos,
+                ).delete()
+                for numero, valores in jornadas:
+                    JornadaTrabalho.objects.update_or_create(
+                        profissional=profissional, dia_semana=numero,
+                        defaults={'filial': request.filial_ativa, 'ativo': True, **valores},
+                    )
+            messages.success(request, 'Configuração do profissional salva.')
+            return redirect('agenda:profissional-list')
+        return render(
+            request, 'agenda/profissional_form.html',
+            self.contexto(form, profissional, request.POST),
+        )
 
 
 class BloqueioListCreateView(PermissaoRequiredMixin, View):
@@ -190,44 +401,6 @@ class BloqueioDeleteView(PermissaoRequiredMixin, View):
         bloqueio.save(update_fields=['ativo', 'updated_at'])
         messages.success(request, 'Bloqueio removido.')
         return redirect('agenda:bloqueio-list')
-
-    def post(self, request, pk=None):
-        profissional = self.objeto(request, pk)
-        form = ProfissionalAgendaForm(request.POST, instance=profissional, filial=request.filial_ativa)
-        if form.is_valid():
-            with transaction.atomic():
-                profissional = form.save(commit=False)
-                profissional.filial = request.filial_ativa
-                profissional.save()
-                selecionados = set(form.cleaned_data['servicos'].values_list('pk', flat=True))
-                ProfissionalServico.objects.filter(profissional=profissional).exclude(servico_id__in=selecionados).update(ativo=False)
-                for servico in form.cleaned_data['servicos']:
-                    ProfissionalServico.objects.update_or_create(profissional=profissional, servico=servico, defaults={'ativo': True})
-                for numero, _ in DIAS:
-                    ativo = request.POST.get(f'dia_{numero}_ativo') == 'on'
-                    if not ativo:
-                        JornadaTrabalho.objects.filter(profissional=profissional, dia_semana=numero).delete()
-                        continue
-                    valores = {campo: request.POST.get(f'dia_{numero}_{campo}') or None for campo in ('inicio', 'fim', 'pausa_inicio', 'pausa_fim')}
-                    if not valores['inicio'] or not valores['fim']:
-                        form.add_error(None, f'Informe início e fim para {JornadaTrabalho.DiaSemana(numero).label}.')
-                        transaction.set_rollback(True)
-                        break
-                    jornada, _ = JornadaTrabalho.objects.update_or_create(
-                        profissional=profissional, dia_semana=numero,
-                        defaults={'filial': request.filial_ativa, 'ativo': True, **valores},
-                    )
-                    try:
-                        jornada.full_clean()
-                    except ValidationError as exc:
-                        form.add_error(None, exc)
-                        transaction.set_rollback(True)
-                        break
-            if not form.errors:
-                messages.success(request, 'Configuração do profissional salva.')
-                return redirect('agenda:profissional-list')
-        return render(request, 'agenda/profissional_form.html', self.contexto(form, profissional))
-
 
 class DisponibilidadeApiView(PermissaoRequiredMixin, View):
     permissao_modulo = 'cadastros'

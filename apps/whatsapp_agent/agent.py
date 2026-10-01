@@ -15,6 +15,10 @@ from apps.produtos.models import Produto
 SIM = {'sim', 's', 'ok', 'confirmo', 'confirmar', 'pode', 'isso', 'correto'}
 NAO = {'nao', 'n', 'cancelar', 'cancela'}
 HUMANO = {'atendente', 'humano', 'pessoa', 'falar com atendente', 'falar com uma pessoa'}
+SAUDACOES = {
+    'oi', 'ola', 'olá', 'bom dia', 'boa tarde', 'boa noite',
+    'e ai', 'e aí', 'opa', 'menu',
+}
 
 
 def normalizar(texto):
@@ -184,6 +188,8 @@ def processar_mensagem(conversa, texto):
         return _menu_servicos(conversa.configuracao)
 
     if conversa.etapa == 'aguardando_servico':
+        if valor in SAUDACOES:
+            return _menu_servicos(conversa.configuracao)
         servicos = _selecionar_servicos(conversa.filial, texto)
         if not servicos:
             return 'Não consegui identificar o serviço. Responda com o número mostrado no menu ou digite *menu*.'

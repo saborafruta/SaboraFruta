@@ -101,6 +101,21 @@ class AgenteWhatsAppTests(TestCase):
         cliente.refresh_from_db()
         self.assertEqual(cliente.razao_social, 'Maria Silva')
 
+    def test_nova_saudacao_reexibe_menu_quando_conversa_aguarda_servico(self):
+        conversa = self.nova_conversa()
+        self.servico.agendavel = False
+        self.servico.save(update_fields=['agendavel'])
+
+        primeira_resposta = processar_mensagem(conversa, 'oi')
+        self.assertIn('não há serviços', primeira_resposta)
+
+        self.servico.agendavel = True
+        self.servico.save(update_fields=['agendavel'])
+        nova_resposta = processar_mensagem(conversa, 'oi')
+
+        self.assertIn('Escolha um ou mais serviços', nova_resposta)
+        self.assertIn('Corte de cabelo', nova_resposta)
+
     @patch('apps.whatsapp_agent.webhook.EvolutionClient.enviar_texto')
     def test_webhook_e_idempotente(self, enviar_texto):
         enviar_texto.return_value = {'key': {'id': 'saida-1'}}

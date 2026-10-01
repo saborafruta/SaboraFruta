@@ -2,5 +2,146 @@
 {% block title %}Configurar profissional{% endblock %}
 {% block content %}
 {% include 'agenda/_styles.html' %}
-<div class="agenda-shell"><div class="agenda-head"><h1 class="agenda-title">Configurar profissional</h1><a class="agenda-btn secondary" href="{% url 'agenda:profissional-list' %}">Voltar</a></div><form method="post" class="agenda-card">{% csrf_token %}{% if form.non_field_errors %}<div class="agenda-errors">{{ form.non_field_errors }}</div>{% endif %}<div class="agenda-form-grid">{% for field in form %}<div class="agenda-field {% if field.name == 'servicos' %}full{% endif %}"><label>{{ field.label }}</label>{{ field }}{% if field.errors %}<div class="agenda-errors">{{ field.errors|first }}</div>{% endif %}</div>{% endfor %}</div><h2 style="font-weight:800;margin:1.4rem 0 .5rem">Jornada semanal</h2><p class="agenda-muted">Marque os dias atendidos e informe uma pausa quando houver.</p>{% for numero,nome,jornada in dias %}<div class="agenda-day"><strong>{{ nome }}</strong><label><input type="checkbox" name="dia_{{ numero }}_ativo" {% if jornada %}checked{% endif %}> Atende</label><div class="agenda-hours agenda-field"><input type="time" name="dia_{{ numero }}_inicio" value="{% if jornada %}{{ jornada.inicio|time:'H:i' }}{% endif %}" aria-label="Início"></div><div class="agenda-hours agenda-field"><input type="time" name="dia_{{ numero }}_fim" value="{% if jornada %}{{ jornada.fim|time:'H:i' }}{% endif %}" aria-label="Fim"></div><div class="agenda-hours agenda-field"><input type="time" name="dia_{{ numero }}_pausa_inicio" value="{% if jornada and jornada.pausa_inicio %}{{ jornada.pausa_inicio|time:'H:i' }}{% endif %}" aria-label="Início da pausa"></div><div class="agenda-hours agenda-field"><input type="time" name="dia_{{ numero }}_pausa_fim" value="{% if jornada and jornada.pausa_fim %}{{ jornada.pausa_fim|time:'H:i' }}{% endif %}" aria-label="Fim da pausa"></div></div>{% endfor %}<div class="agenda-actions" style="margin-top:1rem"><button class="agenda-btn" type="submit">Salvar configuração</button></div></form></div>
+<div class="agenda-shell">
+  <div class="agenda-head">
+    <div>
+      <h1 class="agenda-title">Configurar profissional</h1>
+      <p class="agenda-muted">Defina os serviços, a cor usada no calendário e a jornada semanal.</p>
+    </div>
+    <a class="agenda-btn secondary" href="{% url 'agenda:profissional-list' %}">Voltar</a>
+  </div>
+
+  <form method="post" class="agenda-card profissional-form" id="profissional-form">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="agenda-errors">{{ form.non_field_errors }}</div>{% endif %}
+
+    <div class="agenda-form-grid">
+      <div class="agenda-field">
+        <label for="{{ form.funcionario.id_for_label }}">Funcionário</label>
+        {{ form.funcionario }}
+        <p class="agenda-help">Selecione um funcionário já cadastrado nesta filial.</p>
+        {% if form.funcionario.errors %}<div class="agenda-errors">{{ form.funcionario.errors|first }}</div>{% endif %}
+      </div>
+
+      <div class="agenda-field">
+        <label>Cor na agenda</label>
+        {{ form.cor }}
+        <div class="agenda-color-options" role="radiogroup" aria-label="Cor do profissional">
+          <button type="button" class="agenda-color" data-color="#2563eb" style="--color:#2563eb" aria-label="Azul"></button>
+          <button type="button" class="agenda-color" data-color="#7c3aed" style="--color:#7c3aed" aria-label="Roxo"></button>
+          <button type="button" class="agenda-color" data-color="#db2777" style="--color:#db2777" aria-label="Rosa"></button>
+          <button type="button" class="agenda-color" data-color="#dc2626" style="--color:#dc2626" aria-label="Vermelho"></button>
+          <button type="button" class="agenda-color" data-color="#ea580c" style="--color:#ea580c" aria-label="Laranja"></button>
+          <button type="button" class="agenda-color" data-color="#16a34a" style="--color:#16a34a" aria-label="Verde"></button>
+          <button type="button" class="agenda-color" data-color="#0891b2" style="--color:#0891b2" aria-label="Ciano"></button>
+          <button type="button" class="agenda-color" data-color="#4b5563" style="--color:#4b5563" aria-label="Cinza"></button>
+        </div>
+        <div class="agenda-color-confirmed"><span id="cor-preview"></span> Cor selecionada: <strong id="cor-label"></strong></div>
+        {% if form.cor.errors %}<div class="agenda-errors">{{ form.cor.errors|first }}</div>{% endif %}
+      </div>
+
+      <div class="agenda-field full">
+        <label>{{ form.servicos.label }}</label>
+        <div class="agenda-service-options">{{ form.servicos }}</div>
+        <p class="agenda-help">Marque todos os serviços que este profissional pode realizar.</p>
+        {% if form.servicos.errors %}<div class="agenda-errors">{{ form.servicos.errors|first }}</div>{% endif %}
+      </div>
+
+      <div class="agenda-field">
+        <label for="{{ form.intervalo_padrao_minutos.id_for_label }}">Intervalo padrão após cada atendimento</label>
+        <div class="agenda-input-suffix">{{ form.intervalo_padrao_minutos }}<span>minutos</span></div>
+        {% if form.intervalo_padrao_minutos.errors %}<div class="agenda-errors">{{ form.intervalo_padrao_minutos.errors|first }}</div>{% endif %}
+      </div>
+
+      <div class="agenda-field agenda-active-field">
+        <label for="{{ form.ativo.id_for_label }}">{{ form.ativo }} Profissional ativo na agenda</label>
+        {% if form.ativo.errors %}<div class="agenda-errors">{{ form.ativo.errors|first }}</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="agenda-section-head">
+      <div>
+        <h2>Jornada semanal</h2>
+        <p class="agenda-muted">Informe início e fim. Adicione o intervalo somente nos dias em que houver pausa.</p>
+      </div>
+    </div>
+
+    <div class="agenda-week-config">
+      {% for dia in dias %}
+        <section class="agenda-day-config" data-day="{{ dia.numero }}">
+          <div class="agenda-day-toggle">
+            <label class="agenda-switch-row">
+              <input class="day-enabled" type="checkbox" name="dia_{{ dia.numero }}_ativo" {% if dia.ativo %}checked{% endif %}>
+              <span><strong>{{ dia.nome }}</strong><small>{% if dia.ativo %}Atendimento ativo{% else %}Sem atendimento{% endif %}</small></span>
+            </label>
+          </div>
+          <div class="agenda-day-times" {% if not dia.ativo %}hidden{% endif %}>
+            <div class="agenda-period">
+              <label>Início<input type="time" name="dia_{{ dia.numero }}_inicio" value="{{ dia.inicio }}"></label>
+              <span>até</span>
+              <label>Fim<input type="time" name="dia_{{ dia.numero }}_fim" value="{{ dia.fim }}"></label>
+            </div>
+            <button type="button" class="agenda-link-btn toggle-break" aria-expanded="{% if dia.tem_pausa %}true{% else %}false{% endif %}">
+              {% if dia.tem_pausa %}Remover intervalo{% else %}+ Adicionar intervalo{% endif %}
+            </button>
+            <div class="agenda-break" {% if not dia.tem_pausa %}hidden{% endif %}>
+              <label>Início do intervalo<input type="time" name="dia_{{ dia.numero }}_pausa_inicio" value="{{ dia.pausa_inicio }}"></label>
+              <span>até</span>
+              <label>Fim do intervalo<input type="time" name="dia_{{ dia.numero }}_pausa_fim" value="{{ dia.pausa_fim }}"></label>
+            </div>
+          </div>
+        </section>
+      {% endfor %}
+    </div>
+
+    <div class="agenda-actions agenda-form-actions">
+      <a class="agenda-btn secondary" href="{% url 'agenda:profissional-list' %}">Cancelar</a>
+      <button class="agenda-btn" type="submit">Salvar configuração</button>
+    </div>
+  </form>
+</div>
+
+<script>
+(() => {
+  const colorInput = document.getElementById('id_cor');
+  const preview = document.getElementById('cor-preview');
+  const label = document.getElementById('cor-label');
+  const colors = [...document.querySelectorAll('.agenda-color')];
+
+  function selectColor(value) {
+    colorInput.value = value;
+    preview.style.background = value;
+    label.textContent = value.toUpperCase();
+    colors.forEach(button => {
+      const selected = button.dataset.color.toLowerCase() === value.toLowerCase();
+      button.classList.toggle('selected', selected);
+      button.setAttribute('aria-checked', selected ? 'true' : 'false');
+    });
+  }
+  colors.forEach(button => button.addEventListener('click', () => selectColor(button.dataset.color)));
+  selectColor(colorInput.value || '#2563eb');
+
+  document.querySelectorAll('.agenda-day-config').forEach(day => {
+    const enabled = day.querySelector('.day-enabled');
+    const times = day.querySelector('.agenda-day-times');
+    const status = day.querySelector('.agenda-switch-row small');
+    const breakButton = day.querySelector('.toggle-break');
+    const breakFields = day.querySelector('.agenda-break');
+
+    enabled.addEventListener('change', () => {
+      times.hidden = !enabled.checked;
+      status.textContent = enabled.checked ? 'Atendimento ativo' : 'Sem atendimento';
+    });
+    breakButton.addEventListener('click', () => {
+      const opening = breakFields.hidden;
+      breakFields.hidden = !opening;
+      breakButton.textContent = opening ? 'Remover intervalo' : '+ Adicionar intervalo';
+      breakButton.setAttribute('aria-expanded', opening ? 'true' : 'false');
+      if (!opening) {
+        breakFields.querySelectorAll('input').forEach(input => { input.value = ''; });
+      }
+    });
+  });
+})();
+</script>
 {% endblock %}

@@ -3,15 +3,95 @@
 {% block content %}
 {% include 'agenda/_styles.html' %}
 <div class="agenda-shell">
-  <div class="agenda-head"><div><h1 class="agenda-title">Agenda de serviços</h1><p class="agenda-muted">{{ data_selecionada|date:'l, d/m/Y' }}</p></div><div class="agenda-actions"><a class="agenda-btn secondary" href="{% url 'agenda:bloqueio-list' %}">Bloqueios</a><a class="agenda-btn secondary" href="{% url 'agenda:profissional-list' %}">Profissionais</a><a class="agenda-btn" href="{% url 'agenda:agendamento-create' %}">+ Novo agendamento</a></div></div>
-  <form method="get" class="agenda-card agenda-filters">
-    <div class="agenda-field"><label>Data</label><input type="date" name="data" value="{{ data_selecionada|date:'Y-m-d' }}"></div>
-    <div class="agenda-field"><label>Profissional</label><select name="profissional"><option value="">Todos</option>{% for p in profissionais %}<option value="{{ p.pk }}" {% if profissional_id == p.pk|stringformat:'s' %}selected{% endif %}>{{ p }}</option>{% endfor %}</select></div>
-    <button class="agenda-btn" type="submit">Consultar</button>
-  </form>
-  <div class="agenda-actions" style="margin-top:.75rem"><a class="agenda-btn secondary" href="?data={{ data_anterior|date:'Y-m-d' }}">‹ Dia anterior</a><a class="agenda-btn secondary" href="?data={% now 'Y-m-d' %}">Hoje</a><a class="agenda-btn secondary" href="?data={{ data_seguinte|date:'Y-m-d' }}">Próximo dia ›</a></div>
-  <div class="agenda-card agenda-list">
-    {% for item in agendamentos %}<a class="agenda-item agenda-item-link" href="{% url 'agenda:agendamento-detail' item.pk %}"><div class="agenda-time">{{ item.inicio|date:'H:i' }}</div><div><strong>{{ item.pessoa_atendida_nome }}</strong><div class="agenda-muted">{{ item.profissional }} · {% for servico in item.itens.all %}{{ servico.descricao }}{% if not forloop.last %}, {% endif %}{% endfor %}</div><div class="agenda-muted">Até {{ item.fim|date:'H:i' }} · R$ {{ item.valor_total|floatformat:2 }}</div></div><span class="agenda-badge">{{ item.get_status_display }}</span></a>{% empty %}<div class="agenda-empty">Nenhum agendamento para este dia.</div>{% endfor %}
+  <div class="agenda-head">
+    <div>
+      <h1 class="agenda-title">Agenda de serviços</h1>
+      <p class="agenda-muted">Visualize os horários e organize os atendimentos da equipe.</p>
+    </div>
+    <div class="agenda-actions">
+      <a class="agenda-btn secondary" href="{% url 'agenda:bloqueio-list' %}">Bloqueios</a>
+      <a class="agenda-btn secondary" href="{% url 'agenda:profissional-list' %}">Profissionais</a>
+      <a class="agenda-btn" href="{% url 'agenda:agendamento-create' %}">+ Novo agendamento</a>
+    </div>
   </div>
+
+  <form method="get" class="agenda-card agenda-filters">
+    <input type="hidden" name="visualizacao" value="{{ visualizacao }}">
+    <div class="agenda-field">
+      <label>Ir para a data</label>
+      <input type="date" name="data" value="{{ data_selecionada|date:'Y-m-d' }}">
+    </div>
+    <div class="agenda-field">
+      <label>Profissional</label>
+      <select name="profissional">
+        <option value="">Todos</option>
+        {% for p in profissionais %}<option value="{{ p.pk }}" {% if profissional_id == p.pk|stringformat:'s' %}selected{% endif %}>{{ p }}</option>{% endfor %}
+      </select>
+    </div>
+    <button class="agenda-btn" type="submit">Aplicar filtros</button>
+  </form>
+
+  <div class="agenda-toolbar">
+    <div class="agenda-nav">
+      <a class="agenda-btn secondary" aria-label="Período anterior" href="?visualizacao={{ visualizacao }}&data={{ data_anterior|date:'Y-m-d' }}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">‹</a>
+      <a class="agenda-btn secondary" href="?visualizacao={{ visualizacao }}&data={% now 'Y-m-d' %}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">Hoje</a>
+      <a class="agenda-btn secondary" aria-label="Próximo período" href="?visualizacao={{ visualizacao }}&data={{ data_seguinte|date:'Y-m-d' }}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">›</a>
+      <div class="agenda-period-title">{{ titulo_periodo }}</div>
+    </div>
+    <nav class="agenda-view-switch" aria-label="Visualização da agenda">
+      <a class="{% if visualizacao == 'dia' %}active{% endif %}" href="?visualizacao=dia&data={{ data_selecionada|date:'Y-m-d' }}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">Dia</a>
+      <a class="{% if visualizacao == 'semana' %}active{% endif %}" href="?visualizacao=semana&data={{ data_selecionada|date:'Y-m-d' }}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">Semana</a>
+      <a class="{% if visualizacao == 'mes' %}active{% endif %}" href="?visualizacao=mes&data={{ data_selecionada|date:'Y-m-d' }}{% if profissional_id %}&profissional={{ profissional_id }}{% endif %}">Mês</a>
+    </nav>
+  </div>
+
+  {% if visualizacao == 'mes' %}
+    <div class="agenda-calendar-scroll">
+      <div class="agenda-month">
+        <div class="agenda-month-head">
+          <div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div><div>Dom</div>
+        </div>
+        {% for semana in semanas_mes %}
+          <div class="agenda-month-week">
+            {% for dia in semana %}
+              <div class="agenda-month-day{% if not dia.mes_atual %} outside{% endif %}{% if dia.hoje %} today{% endif %}">
+                <div class="agenda-month-number">{{ dia.data|date:'d' }}</div>
+                {% for evento in dia.eventos %}
+                  <a class="agenda-month-event {{ evento.status }}" style="--event-color:{{ evento.profissional.cor }}" href="{% url 'agenda:agendamento-detail' evento.pk %}" title="{{ evento.inicio|date:'H:i' }} — {{ evento.pessoa_atendida_nome }}">
+                    {{ evento.inicio|date:'H:i' }} {{ evento.pessoa_atendida_nome }}
+                  </a>
+                {% endfor %}
+              </div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% else %}
+    <div class="agenda-calendar-scroll">
+      <div class="agenda-time-calendar" style="--day-count:{{ quantidade_dias }};--calendar-min-width:{% if visualizacao == 'dia' %}600px{% else %}1050px{% endif %}">
+        <div class="agenda-time-corner"></div>
+        {% for dia in dias_grade %}
+          <div class="agenda-day-header{% if dia.hoje %} today{% endif %}">
+            <span>{{ dia.data|date:'D' }}</span>
+            <strong>{{ dia.data|date:'d' }}</strong>
+          </div>
+        {% endfor %}
+        <div class="agenda-time-axis" style="height:{{ altura_grade }}px">
+          {% for hora in horas_grade %}<span class="agenda-hour-label" style="top:{{ hora.topo }}px">{{ hora.rotulo }}</span>{% endfor %}
+        </div>
+        {% for dia in dias_grade %}
+          <div class="agenda-time-day" style="height:{{ altura_grade }}px">
+            {% for evento in dia.eventos %}
+              <a class="agenda-calendar-event {{ evento.item.status }}" style="top:{{ evento.topo }}px;height:{{ evento.altura }}px;--event-color:{{ evento.item.profissional.cor }}" href="{% url 'agenda:agendamento-detail' evento.item.pk %}" title="{{ evento.item.pessoa_atendida_nome }}">
+                <strong>{{ evento.item.inicio|date:'H:i' }} {{ evento.item.pessoa_atendida_nome }}</strong>
+                <span>{{ evento.item.profissional }}</span>
+              </a>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
 </div>
 {% endblock %}

@@ -1,4 +1,7 @@
+import re
+
 from django import forms
+from django.db.models import Q
 
 from apps.cadastros.models import Cliente, Funcionario
 from apps.produtos.models import Produto
@@ -7,21 +10,39 @@ from .models import Agendamento, BloqueioAgenda, ProfissionalAgenda
 
 
 class ProfissionalAgendaForm(forms.ModelForm):
-    servicos = forms.ModelMultipleChoiceField(queryset=Produto.objects.none(), required=True)
+    servicos = forms.ModelMultipleChoiceField(
+        queryset=Produto.objects.none(),
+        required=True,
+        widget=forms.CheckboxSelectMultiple,
+        label='Serviços realizados',
+    )
 
     class Meta:
         model = ProfissionalAgenda
         fields = ['funcionario', 'servicos', 'intervalo_padrao_minutos', 'cor', 'ativo']
-        widgets = {'cor': forms.TextInput(attrs={'type': 'color'})}
+        widgets = {'cor': forms.HiddenInput()}
 
     def __init__(self, *args, filial, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['funcionario'].queryset = Funcionario.objects.for_filial(filial).filter(ativo=True)
+        funcionarios = Funcionario.objects.for_filial(filial).filter(ativo=True)
+        if self.instance.pk:
+            funcionarios = funcionarios.filter(
+                Q(perfil_agenda__isnull=True) | Q(pk=self.instance.funcionario_id)
+            )
+        else:
+            funcionarios = funcionarios.filter(perfil_agenda__isnull=True)
+        self.fields['funcionario'].queryset = funcionarios
         self.fields['servicos'].queryset = Produto.objects.for_filial(filial).filter(
             ativo=True, tipo_produto=Produto.TipoProduto.SERVICO, agendavel=True,
         )
         if self.instance.pk:
             self.fields['servicos'].initial = self.instance.servicos_vinculados.filter(ativo=True).values_list('servico_id', flat=True)
+
+    def clean_cor(self):
+        cor = (self.cleaned_data.get('cor') or '').strip().lower()
+        if not re.fullmatch(r'#[0-9a-f]{6}', cor):
+            raise forms.ValidationError('Selecione uma cor válida para o profissional.')
+        return cor
 
 
 class AgendamentoForm(forms.Form):
