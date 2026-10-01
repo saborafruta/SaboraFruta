@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.http import HttpResponse
@@ -21,6 +22,7 @@ from apps.agenda.views import (
     AgendamentoStatusView,
     BloqueioDeleteView,
     ProfissionalConfigView,
+    _dados_grade,
 )
 from apps.cadastros.models import Funcionario
 
@@ -203,6 +205,20 @@ class AgendaViewsTests(DisponibilidadeAgendaTests):
             (contexto_persistido['hora_inicio'], contexto_persistido['hora_fim']),
             (10, 16),
         )
+
+    def test_grade_posiciona_0830_e_1730_nos_horarios_corretos(self):
+        inicio_0830 = self.inicio(8, 30)
+        inicio_1730 = self.inicio(17, 30)
+        itens = [
+            SimpleNamespace(inicio=inicio_0830, fim=inicio_0830 + timedelta(minutes=30)),
+            SimpleNamespace(inicio=inicio_1730, fim=inicio_1730 + timedelta(minutes=30)),
+        ]
+
+        eventos = _dados_grade(itens, [self.data_teste], 8, 19)[0]['eventos']
+
+        self.assertEqual([evento['topo'] for evento in eventos], [32, 608])
+        self.assertEqual([evento['altura'] for evento in eventos], [32, 32])
+        self.assertTrue(all(isinstance(evento['topo'], int) for evento in eventos))
 
     @patch('apps.agenda.views.TenantPublicLinkService.register')
     @patch('apps.agenda.views.messages.success')

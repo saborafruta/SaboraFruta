@@ -114,8 +114,13 @@ def _dados_grade(agendamentos, datas, inicio_hora, fim_hora):
         minutos_visiveis_fim = min(minutos_fim, limite_fim)
         por_data[inicio_local.date()].append({
             'item': item,
-            'topo': round((minutos_visiveis_inicio - limite_inicio) * 64 / 60, 2),
-            'altura': max(30, round((minutos_visiveis_fim - minutos_visiveis_inicio) * 64 / 60, 2)),
+            # Valores inteiros evitam que a localização pt-BR transforme
+            # 608.0 em "608,0px", uma medida inválida para o navegador.
+            'topo': round((minutos_visiveis_inicio - limite_inicio) * 64 / 60),
+            'altura': max(
+                30,
+                round((minutos_visiveis_fim - minutos_visiveis_inicio) * 64 / 60),
+            ),
         })
     return [
         {
