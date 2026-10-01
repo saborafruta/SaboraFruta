@@ -10,6 +10,7 @@ from django.views import View
 
 from apps.cadastros.models import Cliente
 from apps.core.models import EmpresaBanco, Filial
+from apps.core.models.parametros import ParametrosSistema
 from apps.core.tenant_context import get_current_database_alias, tenant_atomic
 from apps.whatsapp_agent.notifications import enviar_notificacao_agendamento
 
@@ -104,6 +105,31 @@ def _catalogo(profissionais):
     ]
 
 
+def _url_arquivo(campo):
+    if not campo:
+        return ''
+    try:
+        return campo.url
+    except (ValueError, AttributeError):
+        return ''
+
+
+def _logo_publica(filial):
+    """Resolve somente a identidade visual da filial dona da agenda."""
+    logo_filial = _url_arquivo(filial.imagem)
+    if logo_filial:
+        return logo_filial
+
+    parametros = ParametrosSistema.objects.filter(filial=filial).first()
+    if parametros:
+        logo_parametros = _url_arquivo(parametros.logo)
+        if logo_parametros:
+            return logo_parametros
+        if parametros.logo_url:
+            return parametros.logo_url
+    return filial.empresa.logo_url or ''
+
+
 def _vinculo(filial, profissional_id, servico_id):
     return get_object_or_404(
         ProfissionalServico.objects.select_related('profissional__filial', 'servico'),
@@ -147,6 +173,7 @@ class AgendaPublicaView(View):
         return {
             'link': link,
             'filial': link.filial,
+            'logo_url': _logo_publica(link.filial),
             'profissionais': profissionais,
             'catalogo': _catalogo(profissionais),
             'data_minima': timezone.localdate().isoformat(),
