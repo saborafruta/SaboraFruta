@@ -198,6 +198,7 @@ class MultitenancyFoundationTests(TestCase):
 
     def test_identifica_todas_as_familias_de_links_publicos(self):
         casos = {
+            '/agendar/token-agenda/horarios/': ('agenda', 'token-agenda'),
             '/comprovante/abc/pdf/': ('pdv', 'abc'),
             '/cardapio/mesa-123/pedido/': ('cardapio', 'mesa-123'),
             '/entregas/rota-secreta/pedido/1/concluir/': ('rota_delivery', 'rota-secreta'),

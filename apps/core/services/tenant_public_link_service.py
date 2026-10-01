@@ -10,6 +10,7 @@ from apps.core.tenant_registry import register_tenant_database
 
 class TenantPublicLinkService:
     ROUTES = (
+        (re.compile(r'^/agendar/([^/]+)(?:/.*)?$'), 'agenda', 'agenda.AgendaLinkPublico', 'token'),
         (re.compile(r'^/comprovante/([^/]+)(?:/pdf/)?$'), 'pdv', 'pdv.VendaPDV', 'comprovante_token'),
         (re.compile(r'^/cardapio/([^/]+)(?:/.*)?$'), 'cardapio', 'food_service.Mesa', 'qr_token'),
         (re.compile(r'^/entregas/([^/]+)(?:/.*)?$'), 'rota_delivery', 'pdv.RotaDelivery', 'token'),
@@ -28,6 +29,15 @@ class TenantPublicLinkService:
             if match:
                 return kind, model_label, field, match.group(1)
         return None
+
+    @classmethod
+    def register(cls, *, kind, token, db_alias):
+        """Atualiza o índice central quando um link público é criado."""
+        TenantPublicLink.objects.using('default').update_or_create(
+            tipo=kind,
+            token_hash=cls.token_hash(token),
+            defaults={'db_alias': db_alias},
+        )
 
     @classmethod
     def resolve_path(cls, path):

@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views import View
 from django.views.decorators.http import require_POST
@@ -14,10 +15,18 @@ from django.utils.decorators import method_decorator
 
 from apps.core.models import LogSistema
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.tenant_public_link_service import TenantPublicLinkService
 from apps.core.tenant_context import get_current_database_alias
 
 from .forms import AgendamentoForm, BloqueioAgendaForm, ProfissionalAgendaForm
-from .models import Agendamento, BloqueioAgenda, JornadaTrabalho, ProfissionalAgenda, ProfissionalServico
+from .models import (
+    AgendaLinkPublico,
+    Agendamento,
+    BloqueioAgenda,
+    JornadaTrabalho,
+    ProfissionalAgenda,
+    ProfissionalServico,
+)
 from .services import criar_agendamento, listar_horarios
 
 
@@ -140,6 +149,9 @@ class AgendaView(PermissaoRequiredMixin, View):
         if profissional_id:
             agendamentos = agendamentos.filter(profissional_id=profissional_id)
         agendamentos = list(agendamentos)
+        link_publico = AgendaLinkPublico.objects.filter(
+            filial=request.filial_ativa, ativo=True,
+        ).first()
 
         contexto_calendario = {}
         if modo == 'mes':
@@ -189,8 +201,30 @@ class AgendaView(PermissaoRequiredMixin, View):
             'hora_fim': hora_fim,
             'opcoes_hora_inicio': range(0, 24),
             'opcoes_hora_fim': range(1, 25),
+            'agenda_link_publico': (
+                request.build_absolute_uri(
+                    reverse('agenda_publica:agendar', args=[link_publico.token])
+                ) if link_publico else ''
+            ),
             **contexto_calendario,
         })
+
+
+@method_decorator(require_POST, name='dispatch')
+class AgendaLinkPublicoView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'cadastros'
+    permissao_acao = 'editar'
+
+    def post(self, request):
+        link, _ = AgendaLinkPublico.objects.get_or_create(filial=request.filial_ativa)
+        if not link.ativo:
+            link.ativo = True
+            link.save(update_fields=['ativo', 'updated_at'])
+        TenantPublicLinkService.register(
+            kind='agenda', token=link.token, db_alias=get_current_database_alias(),
+        )
+        messages.success(request, 'Link público da agenda pronto para compartilhar.')
+        return redirect('agenda:agenda')
 
 
 class AgendamentoCreateView(PermissaoRequiredMixin, View):

@@ -1,7 +1,27 @@
+import secrets
+
 from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.core.models.base import FilialScopedModel, TimestampedModel
+
+
+def gerar_token_agenda():
+    return secrets.token_urlsafe(24)
+
+
+class AgendaLinkPublico(TimestampedModel):
+    filial = models.OneToOneField(
+        'core.Filial', on_delete=models.CASCADE, related_name='link_agenda_publica',
+    )
+    token = models.CharField(max_length=64, unique=True, default=gerar_token_agenda, editable=False)
+    ativo = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        db_table = 'agenda_links_publicos'
+
+    def __str__(self):
+        return f'Agenda pública - {self.filial}'
 
 
 class ProfissionalAgenda(FilialScopedModel):

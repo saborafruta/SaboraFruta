@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0f172a">
+  <title>Agendar — {{ filial.nome_fantasia|default:filial.razao_social }}</title>
+  <style>
+    :root{color-scheme:light;--blue:#2563eb;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--soft:#f8fafc}*{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#eff6ff,#f8fafc 45%,#eef2ff);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}.page{width:min(720px,calc(100% - 28px));margin:32px auto}.brand{text-align:center;margin-bottom:22px}.brand-mark{display:inline-grid;place-items:center;width:48px;height:48px;border-radius:16px;background:var(--blue);color:#fff;font-size:24px;font-weight:900;box-shadow:0 12px 28px #2563eb33}.brand h1{margin:12px 0 4px;font-size:clamp(1.35rem,5vw,2rem)}.brand p{margin:0;color:var(--muted)}.card{background:#fff;border:1px solid var(--line);border-radius:22px;padding:clamp(18px,4vw,30px);box-shadow:0 18px 45px #0f172a12}.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:24px}.step{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:.76rem;font-weight:750}.step b{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#dbeafe;color:#1d4ed8}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.field{display:grid;gap:7px}.field.full{grid-column:1/-1}.field label,.slots-label{font-size:.8rem;font-weight:800}.field input,.field select{width:100%;min-height:48px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;color:var(--ink);padding:0 13px;font:inherit}.field input:focus,.field select:focus{outline:3px solid #bfdbfe;border-color:var(--blue)}.hint{margin:0;color:var(--muted);font-size:.75rem}.slots{display:flex;flex-wrap:wrap;gap:8px;min-height:48px}.slot{position:relative}.slot input{position:absolute;opacity:0;pointer-events:none}.slot span{display:block;padding:10px 14px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;color:#1d4ed8;font-weight:800;cursor:pointer}.slot input:checked+span{background:var(--blue);border-color:var(--blue);color:#fff}.slot input:focus-visible+span{outline:3px solid #bfdbfe}.slots-empty{color:var(--muted);font-size:.84rem;padding:10px 0}.errors{margin:0 0 18px;padding:13px 16px;border-radius:12px;background:#fef2f2;color:#991b1b;font-size:.86rem}.button{width:100%;min-height:50px;margin-top:22px;border:0;border-radius:13px;background:var(--blue);color:#fff;font:inherit;font-weight:850;cursor:pointer;box-shadow:0 10px 22px #2563eb35}.button:disabled{background:#94a3b8;box-shadow:none;cursor:wait}.success{text-align:center}.success-icon{display:grid;place-items:center;width:64px;height:64px;margin:0 auto 14px;border-radius:50%;background:#dcfce7;color:#15803d;font-size:32px;font-weight:900}.success h2{margin:0 0 8px}.summary{margin:22px 0 0;padding:16px;border-radius:14px;background:var(--soft);text-align:left}.summary div+div{margin-top:10px}.summary small{display:block;color:var(--muted)}.summary strong{display:block;margin-top:2px}.privacy{margin:16px 0 0;text-align:center;color:var(--muted);font-size:.72rem}@media(max-width:600px){.page{margin:18px auto}.card{border-radius:18px}.grid{grid-template-columns:1fr}.field.full{grid-column:auto}.steps{grid-template-columns:1fr}.step{justify-content:center}.slot span{padding:11px 15px}.brand{margin-bottom:16px}}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="brand">
+      <div class="brand-mark">{{ filial.nome_fantasia|default:filial.razao_social|slice:':1'|upper }}</div>
+      <h1>{{ filial.nome_fantasia|default:filial.razao_social }}</h1>
+      <p>Escolha o melhor horário para você.</p>
+    </header>
+    <section class="card">
+      {% if agendamento %}
+        <div class="success">
+          <div class="success-icon">✓</div>
+          <h2>Agendamento confirmado!</h2>
+          <p class="hint">Seu horário já está reservado na agenda.</p>
+          <div class="summary">
+            <div><small>Serviço</small><strong>{{ agendamento.itens.first.descricao }}</strong></div>
+            <div><small>Profissional</small><strong>{{ agendamento.profissional }}</strong></div>
+            <div><small>Data e horário</small><strong>{{ agendamento.inicio|date:'d/m/Y' }} às {{ agendamento.inicio|date:'H:i' }}</strong></div>
+            <div><small>Cliente</small><strong>{{ agendamento.pessoa_atendida_nome }}</strong></div>
+          </div>
+        </div>
+      {% else %}
+        <div class="steps" aria-label="Etapas do agendamento">
+          <div class="step"><b>1</b> Serviço</div><div class="step"><b>2</b> Horário</div><div class="step"><b>3</b> Seus dados</div>
+        </div>
+        {% if erros %}<div class="errors" role="alert">{% for erro in erros %}<div>{{ erro }}</div>{% endfor %}</div>{% endif %}
+        {% if profissionais %}
+          <form method="post" id="booking-form">
+            {% csrf_token %}
+            <div class="grid">
+              <div class="field">
+                <label for="profissional">Profissional</label>
+                <select id="profissional" name="profissional" required>
+                  <option value="">Escolha o profissional</option>
+                  {% for profissional in profissionais %}<option value="{{ profissional.pk }}" {% if dados.profissional == profissional.pk|stringformat:'s' %}selected{% endif %}>{{ profissional }}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="field">
+                <label for="servico">Serviço</label>
+                <select id="servico" name="servico" required disabled><option value="">Escolha primeiro o profissional</option></select>
+              </div>
+              <div class="field full">
+                <label for="data">Dia</label>
+                <input id="data" name="data" type="date" min="{{ data_minima }}" max="{{ data_maxima }}" value="{{ dados.data }}" required>
+              </div>
+              <div class="field full">
+                <span class="slots-label">Horários disponíveis</span>
+                <div class="slots" id="slots"><span class="slots-empty">Escolha profissional, serviço e dia para ver os horários.</span></div>
+              </div>
+              <div class="field">
+                <label for="nome">Seu nome</label>
+                <input id="nome" name="nome" value="{{ dados.nome }}" maxlength="150" autocomplete="name" required>
+              </div>
+              <div class="field">
+                <label for="telefone">WhatsApp com DDD</label>
+                <input id="telefone" name="telefone" value="{{ dados.telefone }}" inputmode="tel" autocomplete="tel" placeholder="(84) 99999-0000" required>
+              </div>
+            </div>
+            <button class="button" id="submit-button" type="submit">Confirmar agendamento</button>
+          </form>
+        {% else %}
+          <div class="success"><h2>Agenda indisponível no momento</h2><p class="hint">Ainda não há profissionais com serviços e horários configurados.</p></div>
+        {% endif %}
+      {% endif %}
+    </section>
+    <p class="privacy">Seus dados serão usados somente para identificar e confirmar este atendimento.</p>
+  </main>
+  {% if not agendamento and profissionais %}
+    {{ catalogo|json_script:'agenda-catalogo' }}
+    <script>
+      (function () {
+        const catalogo = JSON.parse(document.getElementById('agenda-catalogo').textContent);
+        const profissional = document.getElementById('profissional');
+        const servico = document.getElementById('servico');
+        const data = document.getElementById('data');
+        const slots = document.getElementById('slots');
+        const form = document.getElementById('booking-form');
+        const submit = document.getElementById('submit-button');
+        const servicoInicial = '{{ dados.servico|escapejs }}';
+        const horarioInicial = '{{ dados.horario|escapejs }}';
+
+        function moeda(valor) { return Number(valor).toLocaleString('pt-BR', {style:'currency', currency:'BRL'}); }
+        function preencherServicos() {
+          const item = catalogo.find(p => String(p.id) === profissional.value);
+          servico.innerHTML = '<option value="">Escolha o serviço</option>';
+          (item?.servicos || []).forEach(s => {
+            const option = document.createElement('option');
+            option.value = s.id;
+            option.textContent = `${s.nome} · ${s.duracao} min · ${moeda(s.preco)}`;
+            option.selected = String(s.id) === servicoInicial;
+            servico.appendChild(option);
+          });
+          servico.disabled = !item;
+          carregarHorarios();
+        }
+        async function carregarHorarios() {
+          if (!profissional.value || !servico.value || !data.value) {
+            slots.innerHTML = '<span class="slots-empty">Escolha profissional, serviço e dia para ver os horários.</span>';
+            return;
+          }
+          slots.innerHTML = '<span class="slots-empty">Buscando horários…</span>';
+          const params = new URLSearchParams({profissional: profissional.value, servico: servico.value, data: data.value});
+          try {
+            const response = await fetch(`horarios/?${params}`, {headers:{Accept:'application/json'}});
+            if (!response.ok) throw new Error();
+            const payload = await response.json();
+            if (!payload.horarios.length) {
+              slots.innerHTML = '<span class="slots-empty">Não há horários disponíveis nesse dia. Escolha outra data.</span>';
+              return;
+            }
+            slots.innerHTML = '';
+            payload.horarios.forEach(h => {
+              const label = document.createElement('label');
+              label.className = 'slot';
+              label.innerHTML = `<input type="radio" name="horario" value="${h.valor}" required><span>${h.rotulo}</span>`;
+              if (h.valor === horarioInicial) label.querySelector('input').checked = true;
+              slots.appendChild(label);
+            });
+          } catch (_) {
+            slots.innerHTML = '<span class="slots-empty">Não foi possível carregar os horários. Tente novamente.</span>';
+          }
+        }
+        profissional.addEventListener('change', preencherServicos);
+        servico.addEventListener('change', carregarHorarios);
+        data.addEventListener('change', carregarHorarios);
+        form.addEventListener('submit', function () { submit.disabled = true; submit.textContent = 'Confirmando…'; });
+        preencherServicos();
+      })();
+    </script>
+  {% endif %}
+</body>
+</html>

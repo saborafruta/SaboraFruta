@@ -3,10 +3,16 @@ from unittest.mock import patch
 
 from django.http import HttpResponse
 from django.template.loader import get_template
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
 from django.utils import timezone
 
-from apps.agenda.models import Agendamento, BloqueioAgenda, JornadaTrabalho, ProfissionalAgenda
+from apps.agenda.models import (
+    AgendaLinkPublico,
+    Agendamento,
+    BloqueioAgenda,
+    JornadaTrabalho,
+    ProfissionalAgenda,
+)
 from apps.agenda.services import criar_agendamento
 from apps.agenda.views import (
     AgendaView,
@@ -168,4 +174,36 @@ class AgendaViewsTests(DisponibilidadeAgendaTests):
         self.assertEqual(
             (contexto_persistido['hora_inicio'], contexto_persistido['hora_fim']),
             (10, 16),
+        )
+
+    @patch('apps.agenda.views.TenantPublicLinkService.register')
+    @patch('apps.agenda.views.messages.success')
+    def test_gera_link_publico_da_filial(self, _success, register):
+        from apps.agenda.views import AgendaLinkPublicoView
+
+        request = self.preparar_request(self.factory.post('/agenda/link-publico/'))
+        request._get_scheme = lambda: 'https'
+        request.META['HTTP_HOST'] = 'ited.app.br'
+
+        response = AgendaLinkPublicoView().post(request)
+
+        self.assertEqual(response.status_code, 302)
+        link = AgendaLinkPublico.objects.get(filial=self.filial)
+        register.assert_called_once_with(kind='agenda', token=link.token, db_alias='default')
+
+    @override_settings(ALLOWED_HOSTS=['ited.app.br'])
+    @patch('apps.agenda.views.render')
+    def test_agenda_exibe_link_publico_ja_gerado(self, render):
+        render.return_value = HttpResponse()
+        link = AgendaLinkPublico.objects.create(filial=self.filial)
+        request = self.preparar_request(self.factory.get('/agenda/'))
+        request._get_scheme = lambda: 'https'
+        request.META['HTTP_HOST'] = 'ited.app.br'
+
+        AgendaView().get(request)
+
+        contexto = render.call_args.args[2]
+        self.assertEqual(
+            contexto['agenda_link_publico'],
+            f'https://ited.app.br/agendar/{link.token}/',
         )

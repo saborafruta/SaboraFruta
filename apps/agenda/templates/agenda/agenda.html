@@ -15,6 +15,26 @@
     </div>
   </div>
 
+  <section class="agenda-card agenda-public-link" aria-labelledby="agenda-public-link-title">
+    <div>
+      <h2 id="agenda-public-link-title">Agendamento online</h2>
+      <p class="agenda-muted">Compartilhe este link para o cliente escolher profissional, serviço, dia e horário.</p>
+    </div>
+    {% if agenda_link_publico %}
+      <div class="agenda-public-link-controls">
+        <input id="agenda-public-link-value" type="text" value="{{ agenda_link_publico }}" readonly aria-label="Link público da agenda">
+        <button class="agenda-btn" id="agenda-copy-link" type="button">Copiar link da agenda</button>
+        <a class="agenda-btn secondary" href="{{ agenda_link_publico }}" target="_blank" rel="noopener">Abrir</a>
+      </div>
+      <p class="agenda-copy-status" id="agenda-copy-status" role="status" aria-live="polite"></p>
+    {% else %}
+      <form method="post" action="{% url 'agenda:link-publico' %}">
+        {% csrf_token %}
+        <button class="agenda-btn" type="submit">Gerar link da agenda</button>
+      </form>
+    {% endif %}
+  </section>
+
   <form method="get" class="agenda-card agenda-filters">
     <input type="hidden" name="visualizacao" value="{{ visualizacao }}">
     <div class="agenda-field">
@@ -108,4 +128,25 @@
     </div>
   {% endif %}
 </div>
+{% if agenda_link_publico %}
+<script>
+  (function () {
+    const button = document.getElementById('agenda-copy-link');
+    const input = document.getElementById('agenda-public-link-value');
+    const status = document.getElementById('agenda-copy-status');
+    if (!button || !input) return;
+    button.addEventListener('click', async function () {
+      try {
+        await navigator.clipboard.writeText(input.value);
+      } catch (_) {
+        input.focus();
+        input.select();
+        document.execCommand('copy');
+      }
+      status.textContent = 'Link copiado. Agora é só enviar ao cliente.';
+      button.textContent = 'Link copiado';
+    });
+  })();
+</script>
+{% endif %}
 {% endblock %}

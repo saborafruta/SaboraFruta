@@ -6,6 +6,7 @@ app_name = 'agenda'
 
 urlpatterns = [
     path('', views.AgendaView.as_view(), name='agenda'),
+    path('link-publico/', views.AgendaLinkPublicoView.as_view(), name='link-publico'),
     path('novo/', views.AgendamentoCreateView.as_view(), name='agendamento-create'),
     path('agendamentos/<int:pk>/', views.AgendamentoDetailView.as_view(), name='agendamento-detail'),
     path('agendamentos/<int:pk>/status/', views.AgendamentoStatusView.as_view(), name='agendamento-status'),
