@@ -174,6 +174,11 @@ RAILWAY_TENANT_DATABASE_VOLUME_PATH = env(
 )
 RAILWAY_MULTI_PROJECT_ENABLED = env.bool('RAILWAY_MULTI_PROJECT_ENABLED', default=False)
 
+# Gateway central do WhatsApp. Estas credenciais pertencem à infraestrutura
+# do iTED e nunca devem ser solicitadas ao cliente final.
+WHATSAPP_EVOLUTION_URL = env('WHATSAPP_EVOLUTION_URL', default='')
+WHATSAPP_EVOLUTION_API_KEY = env('WHATSAPP_EVOLUTION_API_KEY', default='')
+
 TENANT_DATABASE_ALIASES = []
 if TENANT_DATABASES_JSON:
     for alias, raw_config in json.loads(TENANT_DATABASES_JSON).items():

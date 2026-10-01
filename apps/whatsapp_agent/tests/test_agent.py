@@ -10,6 +10,7 @@ from apps.cadastros.models import Cliente, Funcionario
 from apps.core.models import Empresa, Filial
 from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
 from apps.whatsapp_agent.agent import processar_mensagem
+from apps.whatsapp_agent.forms import ConfiguracaoWhatsAppForm
 from apps.whatsapp_agent.gateway import EvolutionClient, qr_data_url
 from apps.whatsapp_agent.models import ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp
 from apps.whatsapp_agent.webhook import receber_evento
@@ -161,3 +162,19 @@ class EvolutionClientTests(SimpleTestCase):
     def test_gera_imagem_do_qr_code(self):
         resultado = qr_data_url({'code': 'conteudo-do-qr'})
         self.assertTrue(resultado.startswith('data:image/png;base64,'))
+
+    @override_settings(
+        WHATSAPP_EVOLUTION_URL='https://gateway-central.example.com/',
+        WHATSAPP_EVOLUTION_API_KEY='chave-central',
+    )
+    def test_credenciais_centrais_substituem_configuracao_do_cliente(self):
+        cliente = EvolutionClient(self.configuracao())
+
+        self.assertEqual(cliente.base_url, 'https://gateway-central.example.com')
+        self.assertEqual(cliente.api_key, 'chave-central')
+
+    def test_formulario_nao_expoe_credenciais_tecnicas(self):
+        self.assertEqual(
+            list(ConfiguracaoWhatsAppForm().fields),
+            ['agente_ativo', 'mensagem_saudacao', 'mensagem_transferencia', 'ativo'],
+        )

@@ -87,11 +87,28 @@ Serviços:
 | Banco Gerencial | `Banco Gerencial` | `5e7f91de-3710-4c88-bb2b-6af43c324490` |
 | Banco operacional da L&R Sports/Eureka | `Banco LR Sports` | `89221c0e-ad62-4e89-82fb-626ccab14a81` |
 | Redis | `Redis` | `f1955f60-1129-497f-8eb5-2e0f9d427761` |
+| Gateway não oficial do WhatsApp | `Evolution-API` | `84e38a7b-9ce0-4637-9517-61851c114d1d` |
+| Banco exclusivo do gateway WhatsApp | `Postgres` | `05b5c172-309a-4625-8f6a-4fc4776bf8c8` |
 
 Em 07/09/2026, o app redundante `iTed Comercial` (service ID
 `5d25db60-f841-4880-b156-457c89bb61de`) foi removido após validação do app
 canônico. Ele não possuía volume. Nenhum banco, volume ou dado operacional foi
 apagado nessa consolidação.
+
+### Gateway central do WhatsApp
+
+Em 01/10/2026 foi implantada a Evolution API `v2.3.7` no serviço
+`Evolution-API`, com domínio público
+`https://evolution-api-production-8e9e9.up.railway.app`. O gateway possui banco
+PostgreSQL exclusivo e reutiliza o Redis do projeto somente com o prefixo
+isolado `ited_evolution`. A chave global está selada nas variáveis Railway; não
+deve ser impressa, copiada para o Git ou solicitada ao cliente final.
+
+Os apps recebem apenas `WHATSAPP_EVOLUTION_URL` e
+`WHATSAPP_EVOLUTION_API_KEY`. A mesma conexão central também atende o app
+separado Sabor a Fruta pela URL pública, sem compartilhar os bancos comerciais.
+Cada estabelecimento ganha uma instância própria e o usuário conecta o número
+somente pela leitura do QR Code.
 
 Empresas ativas no diretório central:
 

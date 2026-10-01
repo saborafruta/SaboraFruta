@@ -3,6 +3,7 @@ from urllib.parse import quote
 
 import qrcode
 import requests
+from django.conf import settings
 
 
 class GatewayWhatsAppError(Exception):
@@ -14,10 +15,14 @@ class EvolutionClient:
 
     def __init__(self, configuracao):
         self.configuracao = configuracao
-        self.base_url = configuracao.gateway_url.rstrip('/')
-        self.api_key = configuracao.obter_api_key()
+        self.base_url = (
+            getattr(settings, 'WHATSAPP_EVOLUTION_URL', '') or configuracao.gateway_url
+        ).rstrip('/')
+        self.api_key = (
+            getattr(settings, 'WHATSAPP_EVOLUTION_API_KEY', '') or configuracao.obter_api_key()
+        )
         if not self.base_url or not self.api_key:
-            raise GatewayWhatsAppError('Informe a URL e a chave da Evolution API.')
+            raise GatewayWhatsAppError('O servidor de conexão do WhatsApp ainda não está configurado.')
 
     @property
     def headers(self):

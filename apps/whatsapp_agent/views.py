@@ -1,5 +1,7 @@
 import json
+import re
 
+from django.conf import settings
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -20,11 +22,24 @@ from .webhook import receber_evento
 
 
 def _configuracao(request):
-    configuracao = ConfiguracaoWhatsApp.objects.for_filial(request.filial_ativa).first()
-    if configuracao:
-        return configuracao
-    base = slugify(request.filial_ativa.nome_fantasia or request.filial_ativa.razao_social)[:55] or 'empresa'
-    return ConfiguracaoWhatsApp(filial=request.filial_ativa, instancia=f'ited-{base}')
+    filial = request.filial_ativa
+    identificador = re.sub(r'\D', '', filial.cnpj or '') or str(filial.pk)
+    base = slugify(filial.nome_fantasia or filial.razao_social)[:40] or 'empresa'
+    configuracao, _ = ConfiguracaoWhatsApp.objects.for_filial(filial).get_or_create(
+        filial=filial,
+        defaults={
+            'instancia': f'ited-{identificador}-{base}',
+            'agente_ativo': True,
+        },
+    )
+    return configuracao
+
+
+def _gateway_configurado():
+    return bool(
+        getattr(settings, 'WHATSAPP_EVOLUTION_URL', '')
+        and getattr(settings, 'WHATSAPP_EVOLUTION_API_KEY', '')
+    )
 
 
 def _webhook_url(request, configuracao):
@@ -41,7 +56,8 @@ class ConfiguracaoView(PermissaoRequiredMixin, View):
         configuracao = _configuracao(request)
         form = ConfiguracaoWhatsAppForm(instance=configuracao)
         return render(request, 'whatsapp_agent/configuracao.html', {
-            'form': form, 'configuracao': configuracao if configuracao.pk else None,
+            'form': form, 'configuracao': configuracao,
+            'gateway_configurado': _gateway_configurado(),
         })
 
     def post(self, request):
@@ -54,7 +70,8 @@ class ConfiguracaoView(PermissaoRequiredMixin, View):
             messages.success(request, 'Configuração do WhatsApp salva.')
             return redirect('whatsapp_agent:configuracao')
         return render(request, 'whatsapp_agent/configuracao.html', {
-            'form': form, 'configuracao': configuracao if configuracao.pk else None,
+            'form': form, 'configuracao': configuracao,
+            'gateway_configurado': _gateway_configurado(),
         })
 
 
