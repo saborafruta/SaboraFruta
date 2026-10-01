@@ -159,6 +159,20 @@ class EvolutionClientTests(SimpleTestCase):
         )
         self.assertEqual(requisicao.call_args.kwargs['json']['number'], '5584999990000')
 
+    @patch('apps.whatsapp_agent.gateway.requests.request')
+    def test_configura_webhook_no_formato_da_evolution_23(self, requisicao):
+        resposta = Mock(status_code=201)
+        resposta.json.return_value = {'webhook': {'enabled': True}}
+        requisicao.return_value = resposta
+
+        EvolutionClient(self.configuracao()).configurar_webhook('https://ited.app.br/webhook/')
+
+        payload = requisicao.call_args.kwargs['json']
+        self.assertEqual(payload['webhook']['url'], 'https://ited.app.br/webhook/')
+        self.assertFalse(payload['webhook']['byEvents'])
+        self.assertIn('MESSAGES_UPSERT', payload['webhook']['events'])
+        self.assertNotIn('url', payload)
+
     def test_gera_imagem_do_qr_code(self):
         resultado = qr_data_url({'code': 'conteudo-do-qr'})
         self.assertTrue(resultado.startswith('data:image/png;base64,'))

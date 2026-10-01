@@ -68,11 +68,13 @@ class EvolutionClient:
 
     def configurar_webhook(self, webhook_url):
         return self._request('POST', f'/webhook/set/{quote(self.configuracao.instancia)}', json={
-            'enabled': True,
-            'url': webhook_url,
-            'webhookByEvents': False,
-            'webhookBase64': False,
-            'events': self.EVENTOS,
+            'webhook': {
+                'enabled': True,
+                'url': webhook_url,
+                'byEvents': False,
+                'base64': False,
+                'events': self.EVENTOS,
+            },
         })
 
     def estado(self):
