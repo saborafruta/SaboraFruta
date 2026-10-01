@@ -11,6 +11,7 @@ class Funcionario(FilialScopedModel):
         PAGAMENTO = "pagamento", "Conta pagamento"
 
     nome = models.CharField(max_length=150)
+    foto = models.ImageField(upload_to="funcionarios/fotos/", blank=True, null=True)
     cpf = models.CharField(max_length=11, blank=True, db_index=True)
     cargo = models.CharField(max_length=100, blank=True)
     data_admissao = models.DateField(null=True, blank=True)

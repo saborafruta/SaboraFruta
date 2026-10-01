@@ -28,6 +28,18 @@ class AgendaPublicaTests(DisponibilidadeAgendaTests):
         self.assertContains(response, 'Escolha o melhor horário')
         self.assertContains(response, self.profissional.funcionario.nome)
         self.assertContains(response, self.corte.descricao)
+        self.assertContains(response, 'class="professional-avatar"')
+
+    def test_foto_do_funcionario_aparece_na_escolha_publica(self):
+        funcionario = self.profissional.funcionario
+        funcionario.foto = 'funcionarios/fotos/carlos.jpg'
+        funcionario.save(update_fields=['foto', 'updated_at'])
+
+        response = self.client.get(reverse('agenda_publica:agendar', args=[self.link.token]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '/media/funcionarios/fotos/carlos.jpg')
+        self.assertContains(response, f'Foto de {funcionario.nome}')
 
     def test_api_retorna_apenas_horarios_disponiveis(self):
         request = self.anonimo(self.factory.get(f'/agendar/{self.link.token}/horarios/', {

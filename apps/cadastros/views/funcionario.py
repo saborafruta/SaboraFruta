@@ -48,7 +48,7 @@ class FuncionarioCreateView(PermissaoRequiredMixin, View):
         return self._render(request, FuncionarioForm(filial=request.filial_ativa))
 
     def post(self, request):
-        form = FuncionarioForm(request.POST, filial=request.filial_ativa)
+        form = FuncionarioForm(request.POST, request.FILES, filial=request.filial_ativa)
         if form.is_valid():
             funcionario = form.save(commit=False)
             funcionario.filial = request.filial_ativa
@@ -77,9 +77,14 @@ class FuncionarioUpdateView(PermissaoRequiredMixin, View):
 
     def post(self, request, pk):
         funcionario = self._get(request, pk)
-        form = FuncionarioForm(request.POST, instance=funcionario, filial=request.filial_ativa)
+        foto_anterior = funcionario.foto.name if funcionario.foto else ""
+        form = FuncionarioForm(
+            request.POST, request.FILES, instance=funcionario, filial=request.filial_ativa,
+        )
         if form.is_valid():
-            form.save()
+            funcionario = form.save()
+            if foto_anterior and foto_anterior != (funcionario.foto.name if funcionario.foto else ""):
+                funcionario.foto.storage.delete(foto_anterior)
             messages.success(request, "Funcionario atualizado.")
             return redirect("cadastros:funcionario-list")
         return self._render(request, funcionario, form)
