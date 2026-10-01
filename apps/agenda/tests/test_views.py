@@ -123,5 +123,7 @@ class AgendaViewsTests(DisponibilidadeAgendaTests):
         contexto_mes = render.call_args.args[2]
 
         self.assertEqual(contexto_mes['visualizacao'], 'mes')
+        self.assertIn(' de ', contexto_mes['titulo_periodo'])
+        self.assertNotIn('October', contexto_mes['titulo_periodo'])
         self.assertTrue(contexto_mes['semanas_mes'])
         self.assertTrue(all(len(semana) == 7 for semana in contexto_mes['semanas_mes']))

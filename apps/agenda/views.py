@@ -22,6 +22,10 @@ from .services import criar_agendamento, listar_horarios
 
 DIAS = list(JornadaTrabalho.DiaSemana.choices)
 MODOS_AGENDA = {'dia', 'semana', 'mes'}
+MESES = (
+    'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+    'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+)
 
 
 def _mover_mes(data_referencia, deslocamento):
@@ -55,7 +59,7 @@ def _titulo_periodo(data_referencia, inicio, fim, modo):
         return data_referencia.strftime('%d/%m/%Y')
     if modo == 'semana':
         return f'{inicio:%d/%m} a {fim:%d/%m/%Y}'
-    return data_referencia.strftime('%B de %Y')
+    return f'{MESES[data_referencia.month - 1]} de {data_referencia.year}'
 
 
 def _limites_grade(agendamentos, jornadas):
