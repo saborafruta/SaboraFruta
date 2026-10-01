@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+
+from apps.core.tenant_context import tenant_atomic
 
 from .models import Agendamento, AgendamentoItem, BloqueioAgenda, JornadaTrabalho
 
@@ -93,7 +94,7 @@ def listar_horarios(profissional, servicos, data, passo_minutos=15):
     return horarios
 
 
-@transaction.atomic
+@tenant_atomic
 def criar_agendamento(*, filial, profissional, servicos, inicio, pessoa_atendida_nome, cliente=None, telefone='', origem=Agendamento.Origem.MANUAL, observacao='', usuario=None):
     if timezone.is_naive(inicio):
         inicio = timezone.make_aware(inicio, timezone.get_current_timezone())

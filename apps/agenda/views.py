@@ -14,6 +14,7 @@ from django.utils.decorators import method_decorator
 
 from apps.core.models import LogSistema
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.tenant_context import get_current_database_alias
 
 from .forms import AgendamentoForm, BloqueioAgendaForm, ProfissionalAgendaForm
 from .models import Agendamento, BloqueioAgenda, JornadaTrabalho, ProfissionalAgenda, ProfissionalServico
@@ -201,6 +202,7 @@ class AgendamentoCreateView(PermissaoRequiredMixin, View):
         return render(request, 'agenda/agendamento_form.html', {'form': form})
 
     def post(self, request):
+        alias = get_current_database_alias()
         form = AgendamentoForm(request.POST, filial=request.filial_ativa)
         if form.is_valid():
             try:
@@ -214,8 +216,8 @@ class AgendamentoCreateView(PermissaoRequiredMixin, View):
             except ValidationError as exc:
                 form.add_error(None, exc)
             else:
-                LogSistema.objects.create(
-                    filial=request.filial_ativa, usuario=request.user, modulo='agenda',
+                LogSistema.objects.using(alias).create(
+                    filial_id=request.filial_ativa.pk, usuario=request.user, modulo='agenda',
                     acao=LogSistema.Acao.CRIAR, tabela_afetada='agenda_agendamentos',
                     registro_id=agendamento.pk, dados_novos={'cliente': agendamento.pessoa_atendida_nome, 'inicio': agendamento.inicio.isoformat()},
                 )
@@ -247,8 +249,9 @@ class AgendamentoStatusView(PermissaoRequiredMixin, View):
     permissao_acao = 'editar'
 
     def post(self, request, pk):
+        alias = get_current_database_alias()
         agendamento = get_object_or_404(
-            Agendamento.objects.for_filial(request.filial_ativa), pk=pk,
+            Agendamento.objects.using(alias).filter(filial_id=request.filial_ativa.pk), pk=pk,
         )
         status = request.POST.get('status')
         if status not in Agendamento.Status.values:
@@ -256,9 +259,9 @@ class AgendamentoStatusView(PermissaoRequiredMixin, View):
         else:
             anterior = agendamento.status
             agendamento.status = status
-            agendamento.save(update_fields=['status', 'updated_at'])
-            LogSistema.objects.create(
-                filial=request.filial_ativa, usuario=request.user, modulo='agenda',
+            agendamento.save(using=alias, update_fields=['status', 'updated_at'])
+            LogSistema.objects.using(alias).create(
+                filial_id=request.filial_ativa.pk, usuario=request.user, modulo='agenda',
                 acao=LogSistema.Acao.EDITAR, tabela_afetada='agenda_agendamentos',
                 registro_id=agendamento.pk,
                 dados_anteriores={'status': anterior}, dados_novos={'status': status},
@@ -280,9 +283,13 @@ class ProfissionalConfigView(PermissaoRequiredMixin, View):
     permissao_acao = 'editar'
 
     def objeto(self, request, pk):
+        alias = get_current_database_alias()
         if not pk:
-            return ProfissionalAgenda(filial=request.filial_ativa)
-        return get_object_or_404(ProfissionalAgenda.objects.for_filial(request.filial_ativa), pk=pk)
+            return ProfissionalAgenda(filial_id=request.filial_ativa.pk)
+        return get_object_or_404(
+            ProfissionalAgenda.objects.using(alias).filter(filial_id=request.filial_ativa.pk),
+            pk=pk,
+        )
 
     def contexto(self, form, profissional, dados=None):
         jornadas = {item.dia_semana: item for item in profissional.jornadas.all()} if profissional.pk else {}
@@ -349,30 +356,31 @@ class ProfissionalConfigView(PermissaoRequiredMixin, View):
         return jornadas
 
     def post(self, request, pk=None):
+        alias = get_current_database_alias()
         profissional = self.objeto(request, pk)
         form = ProfissionalAgendaForm(request.POST, instance=profissional, filial=request.filial_ativa)
         jornadas = self._jornadas_enviadas(request, form)
         if form.is_valid() and not form.non_field_errors():
-            with transaction.atomic():
+            with transaction.atomic(using=alias):
                 profissional = form.save(commit=False)
-                profissional.filial = request.filial_ativa
-                profissional.save()
+                profissional.filial_id = request.filial_ativa.pk
+                profissional.save(using=alias)
                 selecionados = set(form.cleaned_data['servicos'].values_list('pk', flat=True))
-                ProfissionalServico.objects.filter(profissional=profissional).exclude(
+                ProfissionalServico.objects.using(alias).filter(profissional=profissional).exclude(
                     servico_id__in=selecionados,
                 ).update(ativo=False)
                 for servico in form.cleaned_data['servicos']:
-                    ProfissionalServico.objects.update_or_create(
+                    ProfissionalServico.objects.using(alias).update_or_create(
                         profissional=profissional, servico=servico, defaults={'ativo': True},
                     )
                 dias_ativos = {numero for numero, _ in jornadas}
-                JornadaTrabalho.objects.filter(profissional=profissional).exclude(
+                JornadaTrabalho.objects.using(alias).filter(profissional=profissional).exclude(
                     dia_semana__in=dias_ativos,
                 ).delete()
                 for numero, valores in jornadas:
-                    JornadaTrabalho.objects.update_or_create(
+                    JornadaTrabalho.objects.using(alias).update_or_create(
                         profissional=profissional, dia_semana=numero,
-                        defaults={'filial': request.filial_ativa, 'ativo': True, **valores},
+                        defaults={'filial_id': request.filial_ativa.pk, 'ativo': True, **valores},
                     )
             messages.success(request, 'Configuração do profissional salva.')
             return redirect('agenda:profissional-list')
@@ -399,11 +407,12 @@ class BloqueioListCreateView(PermissaoRequiredMixin, View):
         return render(request, 'agenda/bloqueio_list.html', self.contexto(request, form))
 
     def post(self, request):
+        alias = get_current_database_alias()
         form = BloqueioAgendaForm(request.POST, filial=request.filial_ativa)
         if form.is_valid():
             bloqueio = form.save(commit=False)
-            bloqueio.filial = request.filial_ativa
-            bloqueio.save()
+            bloqueio.filial_id = request.filial_ativa.pk
+            bloqueio.save(using=alias)
             messages.success(request, 'Bloqueio criado com sucesso.')
             return redirect('agenda:bloqueio-list')
         return render(request, 'agenda/bloqueio_list.html', self.contexto(request, form))
@@ -415,11 +424,12 @@ class BloqueioDeleteView(PermissaoRequiredMixin, View):
     permissao_acao = 'editar'
 
     def post(self, request, pk):
+        alias = get_current_database_alias()
         bloqueio = get_object_or_404(
-            BloqueioAgenda.objects.for_filial(request.filial_ativa), pk=pk,
+            BloqueioAgenda.objects.using(alias).filter(filial_id=request.filial_ativa.pk), pk=pk,
         )
         bloqueio.ativo = False
-        bloqueio.save(update_fields=['ativo', 'updated_at'])
+        bloqueio.save(using=alias, update_fields=['ativo', 'updated_at'])
         messages.success(request, 'Bloqueio removido.')
         return redirect('agenda:bloqueio-list')
 

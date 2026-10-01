@@ -10,6 +10,7 @@ from django.contrib.sessions.models import Session
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils.functional import SimpleLazyObject
 
+from apps.agenda.models import ProfissionalAgenda
 from apps.core.db_router import TenantDatabaseRouter
 from apps.core.middleware.filial import FilialMiddleware
 from apps.core.middleware.tenant import TenantContextMiddleware
@@ -91,6 +92,8 @@ class MultitenancyFoundationTests(TestCase):
         with tenant_db(self.banco.db_alias):
             self.assertEqual(router.db_for_read(Empresa), self.banco.db_alias)
             self.assertEqual(router.db_for_write(Empresa), self.banco.db_alias)
+            self.assertEqual(router.db_for_read(ProfissionalAgenda), self.banco.db_alias)
+            self.assertEqual(router.db_for_write(ProfissionalAgenda), self.banco.db_alias)
             self.assertEqual(router.db_for_read(EmpresaBanco), 'default')
             self.assertEqual(router.db_for_read(Session), 'default')
         self.assertIsNone(get_current_tenant_db())

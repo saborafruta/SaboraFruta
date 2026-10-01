@@ -190,7 +190,7 @@ if TENANT_DATABASES_JSON:
 # Todos os módulos operacionais atuais precisam acompanhar a empresa. A lista é
 # explícita para que apps de terceiros (beat/results/storage) permaneçam centrais.
 TENANT_ROUTED_APPS = [
-    'admin', 'analytics', 'auth', 'cadastros', 'cashback', 'compras',
+    'admin', 'agenda', 'analytics', 'auth', 'cadastros', 'cashback', 'compras',
     'contenttypes', 'core', 'crm', 'estoque', 'financeiro', 'fiscal',
     'food_service', 'logistica', 'lotes', 'mapas', 'moda', 'pdv', 'polpa',
     'producao', 'produtos', 'qualidade', 'sessions', 'vendas',
