@@ -1,4 +1,5 @@
 import json
+from unittest.mock import patch
 
 from django.contrib.auth.models import AnonymousUser
 from django.test import RequestFactory
@@ -55,7 +56,8 @@ class AgendaPublicaTests(DisponibilidadeAgendaTests):
         self.assertIn('08:00', valores)
         self.assertNotIn('10:00', valores)
 
-    def test_cliente_confirma_e_entra_na_agenda(self):
+    @patch('apps.agenda.views_publico.enviar_notificacao_agendamento')
+    def test_cliente_confirma_entra_na_agenda_e_recebe_whatsapp(self, enviar_notificacao):
         request = self.anonimo(self.factory.post(f'/agendar/{self.link.token}/', {
             'profissional': self.profissional.pk,
             'servico': self.corte.pk,
@@ -73,6 +75,7 @@ class AgendaPublicaTests(DisponibilidadeAgendaTests):
         self.assertEqual(agendamento.origem, Agendamento.Origem.LINK)
         self.assertEqual(agendamento.profissional, self.profissional)
         self.assertContains(response, 'Agendamento confirmado!')
+        enviar_notificacao.assert_called_once_with(agendamento, db_alias='default')
 
     def test_horario_duplicado_e_rejeitado_sem_criar_outro_cliente(self):
         dados = {

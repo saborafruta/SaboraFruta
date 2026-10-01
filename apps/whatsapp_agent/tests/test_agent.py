@@ -1,11 +1,14 @@
-from datetime import time
+from datetime import time, timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.utils import timezone
 
 from apps.agenda.models import (
     AgendaLinkPublico,
+    Agendamento,
+    AgendamentoItem,
     JornadaTrabalho,
     ProfissionalAgenda,
     ProfissionalServico,
@@ -17,6 +20,7 @@ from apps.whatsapp_agent.agent import processar_mensagem
 from apps.whatsapp_agent.forms import ConfiguracaoWhatsAppForm
 from apps.whatsapp_agent.gateway import EvolutionClient, qr_data_url
 from apps.whatsapp_agent.models import ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp
+from apps.whatsapp_agent.notifications import enviar_notificacao_agendamento
 from apps.whatsapp_agent.webhook import receber_evento
 
 
@@ -124,6 +128,69 @@ class AgenteWhatsAppTests(TestCase):
         self.assertIn('*1.* Fazer um agendamento', nova_resposta)
         conversa.refresh_from_db()
         self.assertTrue(conversa.ativa)
+
+    @patch('apps.whatsapp_agent.notifications.EvolutionClient.enviar_texto')
+    def test_confirmacao_do_agendamento_e_enviada_e_registrada(self, enviar_texto):
+        enviar_texto.return_value = {'key': {'id': 'confirmacao-1'}}
+        self.configuracao.status = ConfiguracaoWhatsApp.Status.CONECTADO
+        self.configuracao.save(update_fields=['status'])
+        inicio = timezone.now() + timedelta(days=1)
+        agendamento = Agendamento.objects.create(
+            filial=self.filial,
+            profissional=self.profissional,
+            pessoa_atendida_nome='Ana Cliente',
+            telefone_contato='84999990000',
+            inicio=inicio,
+            fim=inicio + timedelta(minutes=30),
+            fim_com_intervalo=inicio + timedelta(minutes=40),
+            valor_total=Decimal('40.00'),
+        )
+        AgendamentoItem.objects.create(
+            agendamento=agendamento,
+            servico=self.servico,
+            descricao=self.servico.descricao,
+            duracao_minutos=30,
+            intervalo_minutos=10,
+            valor=Decimal('40.00'),
+        )
+
+        enviado, mensagem = enviar_notificacao_agendamento(
+            agendamento,
+            db_alias='default',
+        )
+
+        self.assertTrue(enviado)
+        self.assertIn('Confirmação enviada', mensagem)
+        telefone, texto = enviar_texto.call_args.args
+        self.assertEqual(telefone, '5584999990000')
+        self.assertIn('Seu agendamento foi confirmado', texto)
+        self.assertIn('Corte de cabelo', texto)
+        saida = MensagemWhatsApp.objects.get(tipo='confirmacao_agendamento')
+        self.assertEqual(saida.status, 'enviada')
+        self.assertEqual(saida.identificador_externo, 'confirmacao-1')
+
+        enviar_texto.reset_mock()
+        enviar_texto.return_value = {'key': {'id': 'lembrete-1'}}
+        enviar_notificacao_agendamento(
+            agendamento,
+            db_alias='default',
+            lembrete=True,
+        )
+        self.assertIn('Este é um lembrete do seu agendamento', enviar_texto.call_args.args[1])
+        self.assertTrue(MensagemWhatsApp.objects.filter(tipo='lembrete_agendamento').exists())
+
+    @patch(
+        'apps.whatsapp_agent.notifications._enviar_notificacao_agendamento',
+        side_effect=RuntimeError('indisponível'),
+    )
+    def test_falha_inesperada_do_whatsapp_nao_interrompe_agendamento(self, _enviar):
+        enviado, mensagem = enviar_notificacao_agendamento(
+            Mock(),
+            db_alias='default',
+        )
+
+        self.assertFalse(enviado)
+        self.assertIn('Não foi possível', mensagem)
 
     @patch('apps.whatsapp_agent.webhook.EvolutionClient.enviar_texto')
     def test_webhook_e_idempotente(self, enviar_texto):

@@ -17,6 +17,7 @@ from apps.core.models import LogSistema
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.services.tenant_public_link_service import TenantPublicLinkService
 from apps.core.tenant_context import get_current_database_alias
+from apps.whatsapp_agent.notifications import enviar_notificacao_agendamento
 
 from .forms import AgendamentoForm, BloqueioAgendaForm, ProfissionalAgendaForm
 from .models import (
@@ -271,10 +272,58 @@ class AgendamentoDetailView(PermissaoRequiredMixin, View):
             .prefetch_related('itens'),
             pk=pk,
         )
+        telefone_lembrete = (
+            agendamento.telefone_contato
+            or getattr(agendamento.cliente, 'celular', '')
+            or getattr(agendamento.cliente, 'telefone', '')
+        )
         return render(request, 'agenda/agendamento_detail.html', {
             'agendamento': agendamento,
             'status_opcoes': Agendamento.Status.choices,
+            'pode_lembrar': bool(
+                telefone_lembrete
+                and agendamento.inicio > timezone.now()
+                and agendamento.status not in {
+                    Agendamento.Status.CANCELADO,
+                    Agendamento.Status.CONCLUIDO,
+                    Agendamento.Status.NAO_COMPARECEU,
+                }
+            ),
         })
+
+
+@method_decorator(require_POST, name='dispatch')
+class AgendamentoLembreteView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'cadastros'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        alias = get_current_database_alias()
+        agendamento = get_object_or_404(
+            Agendamento.objects.using(alias)
+            .filter(filial_id=request.filial_ativa.pk)
+            .select_related('cliente', 'profissional__funcionario', 'filial'),
+            pk=pk,
+        )
+        if agendamento.inicio <= timezone.now():
+            messages.error(request, 'Esse horário já passou e não pode receber lembrete.')
+        elif agendamento.status in {
+            Agendamento.Status.CANCELADO,
+            Agendamento.Status.CONCLUIDO,
+            Agendamento.Status.NAO_COMPARECEU,
+        }:
+            messages.error(request, 'O status atual não permite enviar lembrete.')
+        else:
+            enviado, mensagem = enviar_notificacao_agendamento(
+                agendamento,
+                db_alias=alias,
+                lembrete=True,
+            )
+            if enviado:
+                messages.success(request, mensagem)
+            else:
+                messages.error(request, mensagem)
+        return redirect('agenda:agendamento-detail', pk=pk)
 
 
 @method_decorator(require_POST, name='dispatch')

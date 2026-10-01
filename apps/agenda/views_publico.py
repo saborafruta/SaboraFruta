@@ -11,6 +11,7 @@ from django.views import View
 from apps.cadastros.models import Cliente
 from apps.core.models import EmpresaBanco, Filial
 from apps.core.tenant_context import get_current_database_alias, tenant_atomic
+from apps.whatsapp_agent.notifications import enviar_notificacao_agendamento
 
 from .models import AgendaLinkPublico, Agendamento, ProfissionalAgenda, ProfissionalServico
 from .services import criar_agendamento, listar_horarios
@@ -224,6 +225,10 @@ class AgendaPublicaView(View):
             erros.extend(exc.messages)
             return render(request, self.template_name, self._contexto(link, dados=dados, erros=erros), status=409)
 
+        enviar_notificacao_agendamento(
+            agendamento,
+            db_alias=get_current_database_alias(),
+        )
         return render(request, self.template_name, self._contexto(link, agendamento=agendamento))
 
 

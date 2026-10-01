@@ -17,6 +17,7 @@ from apps.agenda.services import criar_agendamento
 from apps.agenda.views import (
     AgendaView,
     AgendamentoCreateView,
+    AgendamentoLembreteView,
     AgendamentoStatusView,
     BloqueioDeleteView,
     ProfissionalConfigView,
@@ -106,6 +107,33 @@ class AgendaViewsTests(DisponibilidadeAgendaTests):
         self.assertEqual(response.status_code, 302)
         agendamento.refresh_from_db()
         self.assertEqual(agendamento.status, Agendamento.Status.CANCELADO)
+
+    @patch('apps.agenda.views.enviar_notificacao_agendamento', return_value=(True, 'Lembrete enviado.'))
+    @patch('apps.agenda.views.messages.success')
+    def test_envia_lembrete_do_agendamento_pelo_whatsapp(self, success, enviar):
+        agendamento = criar_agendamento(
+            filial=self.filial,
+            profissional=self.profissional,
+            servicos=[self.corte],
+            inicio=self.inicio(8),
+            pessoa_atendida_nome='Cliente Lembrete',
+            telefone='84999990000',
+        )
+        request = self.preparar_request(self.factory.post(
+            f'/agenda/agendamentos/{agendamento.pk}/lembrar/',
+        ))
+
+        response = AgendamentoLembreteView().post(request, agendamento.pk)
+
+        self.assertEqual(response.status_code, 302)
+        enviar.assert_called_once_with(agendamento, db_alias='default', lembrete=True)
+        success.assert_called_once_with(request, 'Lembrete enviado.')
+
+    def test_detalhe_possui_botao_de_lembrete_no_whatsapp(self):
+        fonte = get_template('agenda/agendamento_detail.html').template.source
+
+        self.assertIn('Lembrar cliente no WhatsApp', fonte)
+        self.assertIn("agenda:agendamento-lembrete", fonte)
 
     @patch('apps.agenda.views.messages.success')
     def test_remove_bloqueio_sem_confundir_com_profissional(self, _success):
