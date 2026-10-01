@@ -62,9 +62,36 @@
     <div class="agenda-section-head">
       <div>
         <h2>Jornada semanal</h2>
-        <p class="agenda-muted">Informe início e fim. Adicione o intervalo somente nos dias em que houver pausa.</p>
+        <p class="agenda-muted">Defina o horário uma vez, selecione os dias de atendimento e ajuste somente as exceções.</p>
       </div>
     </div>
+
+    <section class="agenda-default-schedule" aria-labelledby="horario-padrao-titulo">
+      <div class="agenda-default-heading">
+        <div>
+          <h3 id="horario-padrao-titulo">Horário padrão</h3>
+          <p>Este horário será aplicado automaticamente a todos os dias selecionados.</p>
+        </div>
+        <button type="button" class="agenda-btn secondary" id="aplicar-horario-padrao">Aplicar a todos</button>
+      </div>
+      <div class="agenda-default-fields">
+        <div class="agenda-period">
+          <label>Início<input type="time" id="horario-padrao-inicio" aria-label="Início do horário padrão"></label>
+          <span>até</span>
+          <label>Fim<input type="time" id="horario-padrao-fim" aria-label="Fim do horário padrão"></label>
+        </div>
+        <label class="agenda-default-break-toggle">
+          <input type="checkbox" id="horario-padrao-tem-intervalo">
+          Adicionar intervalo
+        </label>
+        <div class="agenda-break" id="horario-padrao-intervalo" hidden>
+          <label>Início do intervalo<input type="time" id="horario-padrao-pausa-inicio" aria-label="Início do intervalo padrão"></label>
+          <span>até</span>
+          <label>Fim do intervalo<input type="time" id="horario-padrao-pausa-fim" aria-label="Fim do intervalo padrão"></label>
+        </div>
+      </div>
+      <p class="agenda-default-status" id="horario-padrao-status" aria-live="polite">Selecione os dias abaixo para aplicar este horário.</p>
+    </section>
 
     <div class="agenda-week-config">
       {% for dia in dias %}
@@ -75,19 +102,29 @@
               <span><strong>{{ dia.nome }}</strong><small>{% if dia.ativo %}Atendimento ativo{% else %}Sem atendimento{% endif %}</small></span>
             </label>
           </div>
-          <div class="agenda-day-times" {% if not dia.ativo %}hidden{% endif %}>
-            <div class="agenda-period">
-              <label>Início<input type="time" name="dia_{{ dia.numero }}_inicio" value="{{ dia.inicio }}"></label>
-              <span>até</span>
-              <label>Fim<input type="time" name="dia_{{ dia.numero }}_fim" value="{{ dia.fim }}"></label>
+          <div class="agenda-day-schedule" {% if not dia.ativo %}hidden{% endif %}>
+            <div class="agenda-day-overview">
+              <span class="agenda-day-summary"></span>
+              <span class="agenda-custom-badge" hidden>Personalizado</span>
+              <div class="agenda-day-actions">
+                <button type="button" class="agenda-link-btn edit-day">Ajustar este dia</button>
+                <button type="button" class="agenda-link-btn reset-day" hidden>Usar horário padrão</button>
+              </div>
             </div>
-            <button type="button" class="agenda-link-btn toggle-break" aria-expanded="{% if dia.tem_pausa %}true{% else %}false{% endif %}">
-              {% if dia.tem_pausa %}Remover intervalo{% else %}+ Adicionar intervalo{% endif %}
-            </button>
-            <div class="agenda-break" {% if not dia.tem_pausa %}hidden{% endif %}>
-              <label>Início do intervalo<input type="time" name="dia_{{ dia.numero }}_pausa_inicio" value="{{ dia.pausa_inicio }}"></label>
-              <span>até</span>
-              <label>Fim do intervalo<input type="time" name="dia_{{ dia.numero }}_pausa_fim" value="{{ dia.pausa_fim }}"></label>
+            <div class="agenda-day-times" hidden>
+              <div class="agenda-period">
+                <label>Início<input type="time" name="dia_{{ dia.numero }}_inicio" value="{{ dia.inicio }}"></label>
+                <span>até</span>
+                <label>Fim<input type="time" name="dia_{{ dia.numero }}_fim" value="{{ dia.fim }}"></label>
+              </div>
+              <button type="button" class="agenda-link-btn toggle-break" aria-expanded="{% if dia.tem_pausa %}true{% else %}false{% endif %}">
+                {% if dia.tem_pausa %}Remover intervalo{% else %}+ Adicionar intervalo{% endif %}
+              </button>
+              <div class="agenda-break" {% if not dia.tem_pausa %}hidden{% endif %}>
+                <label>Início do intervalo<input type="time" name="dia_{{ dia.numero }}_pausa_inicio" value="{{ dia.pausa_inicio }}"></label>
+                <span>até</span>
+                <label>Fim do intervalo<input type="time" name="dia_{{ dia.numero }}_pausa_fim" value="{{ dia.pausa_fim }}"></label>
+              </div>
             </div>
           </div>
         </section>
@@ -121,26 +158,200 @@
   colors.forEach(button => button.addEventListener('click', () => selectColor(button.dataset.color)));
   selectColor(colorInput.value || '#2563eb');
 
-  document.querySelectorAll('.agenda-day-config').forEach(day => {
-    const enabled = day.querySelector('.day-enabled');
-    const times = day.querySelector('.agenda-day-times');
-    const status = day.querySelector('.agenda-switch-row small');
+  const days = [...document.querySelectorAll('.agenda-day-config')];
+  const defaultStart = document.getElementById('horario-padrao-inicio');
+  const defaultEnd = document.getElementById('horario-padrao-fim');
+  const defaultHasBreak = document.getElementById('horario-padrao-tem-intervalo');
+  const defaultBreak = document.getElementById('horario-padrao-intervalo');
+  const defaultBreakStart = document.getElementById('horario-padrao-pausa-inicio');
+  const defaultBreakEnd = document.getElementById('horario-padrao-pausa-fim');
+  const defaultStatus = document.getElementById('horario-padrao-status');
+  const applyDefaultButton = document.getElementById('aplicar-horario-padrao');
+
+  function dayFields(day) {
+    const prefix = `dia_${day.dataset.day}_`;
+    return {
+      inicio: day.querySelector(`[name="${prefix}inicio"]`),
+      fim: day.querySelector(`[name="${prefix}fim"]`),
+      pausaInicio: day.querySelector(`[name="${prefix}pausa_inicio"]`),
+      pausaFim: day.querySelector(`[name="${prefix}pausa_fim"]`),
+    };
+  }
+
+  function valuesFromDay(day) {
+    const fields = dayFields(day);
+    return {
+      inicio: fields.inicio.value,
+      fim: fields.fim.value,
+      pausaInicio: fields.pausaInicio.value,
+      pausaFim: fields.pausaFim.value,
+    };
+  }
+
+  function defaultValues() {
+    return {
+      inicio: defaultStart.value,
+      fim: defaultEnd.value,
+      pausaInicio: defaultHasBreak.checked ? defaultBreakStart.value : '',
+      pausaFim: defaultHasBreak.checked ? defaultBreakEnd.value : '',
+    };
+  }
+
+  function signature(values) {
+    return [values.inicio, values.fim, values.pausaInicio, values.pausaFim].join('|');
+  }
+
+  function setBreakVisibility(day, opening) {
     const breakButton = day.querySelector('.toggle-break');
     const breakFields = day.querySelector('.agenda-break');
+    breakFields.hidden = !opening;
+    breakButton.textContent = opening ? 'Remover intervalo' : '+ Adicionar intervalo';
+    breakButton.setAttribute('aria-expanded', opening ? 'true' : 'false');
+  }
+
+  function applyValues(day, values, customized = false) {
+    const fields = dayFields(day);
+    fields.inicio.value = values.inicio;
+    fields.fim.value = values.fim;
+    fields.pausaInicio.value = values.pausaInicio;
+    fields.pausaFim.value = values.pausaFim;
+    day.dataset.customized = customized ? 'true' : 'false';
+    setBreakVisibility(day, Boolean(values.pausaInicio || values.pausaFim));
+  }
+
+  function summarize(values) {
+    if (!values.inicio || !values.fim) return 'Defina o horário padrão acima.';
+    const pause = values.pausaInicio && values.pausaFim
+      ? ` · intervalo ${values.pausaInicio}–${values.pausaFim}`
+      : ' · sem intervalo';
+    return `${values.inicio}–${values.fim}${pause}`;
+  }
+
+  function renderDay(day) {
+    const enabled = day.querySelector('.day-enabled');
+    const schedule = day.querySelector('.agenda-day-schedule');
+    const times = day.querySelector('.agenda-day-times');
+    const status = day.querySelector('.agenda-switch-row small');
+    const summary = day.querySelector('.agenda-day-summary');
+    const customBadge = day.querySelector('.agenda-custom-badge');
+    const editButton = day.querySelector('.edit-day');
+    const resetButton = day.querySelector('.reset-day');
+    const editing = day.dataset.editing === 'true';
+    const customized = day.dataset.customized === 'true';
+
+    schedule.hidden = !enabled.checked;
+    times.hidden = !enabled.checked || !editing;
+    status.textContent = enabled.checked ? 'Atendimento ativo' : 'Sem atendimento';
+    summary.textContent = summarize(valuesFromDay(day));
+    customBadge.hidden = !customized;
+    resetButton.hidden = !customized;
+    editButton.textContent = editing ? 'Concluir ajuste' : 'Ajustar este dia';
+  }
+
+  function selectedDays() {
+    return days.filter(day => day.querySelector('.day-enabled').checked);
+  }
+
+  function updateDefaultStatus(message) {
+    if (message) {
+      defaultStatus.textContent = message;
+      return;
+    }
+    const total = selectedDays().length;
+    if (!total) {
+      defaultStatus.textContent = 'Selecione os dias abaixo para aplicar este horário.';
+      return;
+    }
+    const customized = selectedDays().filter(day => day.dataset.customized === 'true').length;
+    defaultStatus.textContent = customized
+      ? `${total - customized} ${total - customized === 1 ? 'dia usa' : 'dias usam'} o padrão; ${customized} ${customized === 1 ? 'dia está personalizado' : 'dias estão personalizados'}.`
+      : `Horário padrão aplicado em ${total} ${total === 1 ? 'dia selecionado' : 'dias selecionados'}.`;
+  }
+
+  function applyDefault({ includeCustomized = false } = {}) {
+    const values = defaultValues();
+    selectedDays().forEach(day => {
+      if (!includeCustomized && day.dataset.customized === 'true') return;
+      applyValues(day, values);
+      renderDay(day);
+    });
+    updateDefaultStatus();
+  }
+
+  function loadDefaultFromExistingDays() {
+    const activeDays = selectedDays();
+    if (!activeDays.length) return;
+    const base = valuesFromDay(activeDays[0]);
+    defaultStart.value = base.inicio;
+    defaultEnd.value = base.fim;
+    defaultBreakStart.value = base.pausaInicio;
+    defaultBreakEnd.value = base.pausaFim;
+    defaultHasBreak.checked = Boolean(base.pausaInicio || base.pausaFim);
+    defaultBreak.hidden = !defaultHasBreak.checked;
+    activeDays.forEach(day => {
+      day.dataset.customized = signature(valuesFromDay(day)) === signature(base) ? 'false' : 'true';
+    });
+  }
+
+  days.forEach(day => {
+    const enabled = day.querySelector('.day-enabled');
+    const editButton = day.querySelector('.edit-day');
+    const resetButton = day.querySelector('.reset-day');
+    const breakButton = day.querySelector('.toggle-break');
+    const breakFields = day.querySelector('.agenda-break');
+    const fields = dayFields(day);
+
+    day.dataset.editing = 'false';
+    day.dataset.customized = 'false';
 
     enabled.addEventListener('change', () => {
-      times.hidden = !enabled.checked;
-      status.textContent = enabled.checked ? 'Atendimento ativo' : 'Sem atendimento';
+      if (enabled.checked) applyValues(day, defaultValues());
+      day.dataset.editing = 'false';
+      renderDay(day);
+      updateDefaultStatus();
+    });
+    editButton.addEventListener('click', () => {
+      day.dataset.editing = day.dataset.editing === 'true' ? 'false' : 'true';
+      renderDay(day);
+    });
+    resetButton.addEventListener('click', () => {
+      applyValues(day, defaultValues());
+      day.dataset.editing = 'false';
+      renderDay(day);
     });
     breakButton.addEventListener('click', () => {
       const opening = breakFields.hidden;
-      breakFields.hidden = !opening;
-      breakButton.textContent = opening ? 'Remover intervalo' : '+ Adicionar intervalo';
-      breakButton.setAttribute('aria-expanded', opening ? 'true' : 'false');
+      setBreakVisibility(day, opening);
       if (!opening) {
         breakFields.querySelectorAll('input').forEach(input => { input.value = ''; });
       }
+      day.dataset.customized = 'true';
+      renderDay(day);
     });
+    Object.values(fields).forEach(input => input.addEventListener('change', () => {
+      day.dataset.customized = 'true';
+      renderDay(day);
+    }));
+  });
+
+  loadDefaultFromExistingDays();
+  days.forEach(renderDay);
+  updateDefaultStatus();
+
+  [defaultStart, defaultEnd, defaultBreakStart, defaultBreakEnd].forEach(input => {
+    input.addEventListener('change', () => applyDefault());
+  });
+  defaultHasBreak.addEventListener('change', () => {
+    defaultBreak.hidden = !defaultHasBreak.checked;
+    if (!defaultHasBreak.checked) {
+      defaultBreakStart.value = '';
+      defaultBreakEnd.value = '';
+    }
+    applyDefault();
+  });
+  applyDefaultButton.addEventListener('click', () => {
+    applyDefault({ includeCustomized: true });
+    updateDefaultStatus('Horário padrão reaplicado a todos os dias selecionados.');
   });
 })();
 </script>

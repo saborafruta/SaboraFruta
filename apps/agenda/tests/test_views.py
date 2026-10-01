@@ -2,6 +2,7 @@ from datetime import datetime
 from unittest.mock import patch
 
 from django.http import HttpResponse
+from django.template.loader import get_template
 from django.test import RequestFactory
 from django.utils import timezone
 
@@ -54,6 +55,15 @@ class AgendaViewsTests(DisponibilidadeAgendaTests):
         jornada = JornadaTrabalho.objects.get(profissional=profissional, dia_semana=0)
         self.assertEqual(jornada.inicio.strftime('%H:%M'), '08:00')
         self.assertEqual(jornada.pausa_inicio.strftime('%H:%M'), '12:00')
+
+    def test_formulario_exibe_horario_padrao_e_ajuste_por_dia(self):
+        fonte = get_template('agenda/profissional_form.html').template.source
+
+        self.assertIn('id="horario-padrao-inicio"', fonte)
+        self.assertIn('id="horario-padrao-fim"', fonte)
+        self.assertIn('id="horario-padrao-tem-intervalo"', fonte)
+        self.assertIn('Ajustar este dia', fonte)
+        self.assertIn('Usar horário padrão', fonte)
 
     @patch('apps.agenda.views.LogSistema.objects.create')
     @patch('apps.agenda.views.messages.success')
