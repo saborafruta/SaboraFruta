@@ -25,6 +25,7 @@ urlpatterns = [
     path('cadastros/', include('apps.cadastros.urls', namespace='cadastros')),
     path('produtos/', include('apps.produtos.urls', namespace='produtos')),
     path('agenda/', include('apps.agenda.urls', namespace='agenda')),
+    path('whatsapp/', include('apps.whatsapp_agent.urls', namespace='whatsapp_agent')),
     path('estoque/', include('apps.estoque.urls', namespace='estoque')),
     path('producao/', include('apps.producao.urls', namespace='producao')),
     path('vendas/', include('apps.vendas.urls', namespace='vendas')),

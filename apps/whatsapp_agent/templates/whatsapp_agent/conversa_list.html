@@ -1,0 +1,6 @@
+{% extends '_base.html' %}
+{% block title %}Conversas do WhatsApp{% endblock %}
+{% block content %}
+{% include 'whatsapp_agent/_styles.html' %}
+<div class="wa-shell"><div class="wa-head"><div><h1 class="wa-title">Conversas do WhatsApp</h1><p class="wa-muted">Últimos atendimentos recebidos pelo agente.</p></div><a class="wa-btn secondary" href="{% url 'whatsapp_agent:configuracao' %}">Configuração</a></div><div class="wa-card wa-list">{% for conversa in conversas %}<a class="wa-item" href="{% url 'whatsapp_agent:conversa-detail' conversa.pk %}"><div><strong>{{ conversa.nome_contato|default:conversa.telefone }}</strong><div class="wa-muted">{{ conversa.telefone }} · {% if conversa.cliente %}{{ conversa.cliente.nome_display }}{% else %}Cliente ainda não vinculado{% endif %}</div></div><div><span class="wa-status">{% if conversa.atendimento_humano %}Atendimento humano{% else %}{{ conversa.etapa }}{% endif %}</span><div class="wa-muted">{{ conversa.ultima_mensagem_em|date:'d/m H:i' }}</div></div></a>{% empty %}<div class="wa-center wa-muted" style="padding:2rem">Nenhuma conversa recebida.</div>{% endfor %}</div></div>
+{% endblock %}

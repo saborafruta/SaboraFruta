@@ -20,6 +20,7 @@ PASSWORD_HASHERS = [
 
 LOCAL_APP_LABELS = [
     'agenda',
+    'whatsapp_agent',
     'analytics',
     'cashback',
     'cadastros',

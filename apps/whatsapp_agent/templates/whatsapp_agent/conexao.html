@@ -1,0 +1,23 @@
+{% extends '_base.html' %}
+{% block title %}Conectar WhatsApp{% endblock %}
+{% block content %}
+{% include 'whatsapp_agent/_styles.html' %}
+<div class="wa-shell" id="wa-conexao" data-status-url="{% url 'whatsapp_agent:status' %}"><div class="wa-head"><div><h1 class="wa-title">Conectar WhatsApp</h1><p class="wa-muted">No celular, abra WhatsApp › Aparelhos conectados › Conectar aparelho.</p></div><a class="wa-btn secondary" href="{% url 'whatsapp_agent:configuracao' %}">Voltar</a></div><div class="wa-card wa-center"><span class="wa-status" id="wa-status">Consultando conexão...</span><div class="wa-qr" id="wa-qr"><span style="color:#374151">Gerando QR Code...</span></div><p class="wa-muted" id="wa-pairing"></p><p class="wa-errors" id="wa-erro"></p></div></div>
+<script>
+(() => {
+  const raiz=document.getElementById('wa-conexao'), status=document.getElementById('wa-status'), qr=document.getElementById('wa-qr'), erro=document.getElementById('wa-erro'), pairing=document.getElementById('wa-pairing');
+  let timer=null;
+  async function consultar(){
+    try{
+      const resposta=await fetch(raiz.dataset.statusUrl,{headers:{Accept:'application/json'}}), dados=await resposta.json();
+      if(!resposta.ok)throw new Error(dados.erro||'Falha ao consultar conexão.');
+      status.textContent=dados.status;erro.textContent='';
+      if(dados.conectado){qr.innerHTML='<div style="color:#166534;font-size:4rem">✓</div>';pairing.textContent='WhatsApp conectado com sucesso.';if(timer)clearInterval(timer);return;}
+      if(dados.qr_code)qr.innerHTML=`<img src="${dados.qr_code}" alt="QR Code para conectar o WhatsApp">`;
+      pairing.textContent=dados.pairing_code?`Código alternativo: ${dados.pairing_code}`:'';
+    }catch(e){erro.textContent=e.message;}
+  }
+  consultar();timer=setInterval(consultar,5000);
+})();
+</script>
+{% endblock %}

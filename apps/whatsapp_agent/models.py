@@ -1,0 +1,126 @@
+import base64
+import hashlib
+import uuid
+
+from cryptography.fernet import Fernet, InvalidToken
+from django.conf import settings
+from django.db import models
+
+from apps.core.models.base import FilialScopedModel, TimestampedModel
+
+
+def _fernet():
+    segredo = getattr(settings, 'FIELD_ENCRYPTION_KEY', '') or settings.SECRET_KEY
+    chave = base64.urlsafe_b64encode(hashlib.sha256(segredo.encode('utf-8')).digest())
+    return Fernet(chave)
+
+
+class ConfiguracaoWhatsApp(FilialScopedModel):
+    class Status(models.TextChoices):
+        NAO_CONFIGURADO = 'nao_configurado', 'Não configurado'
+        DESCONECTADO = 'desconectado', 'Desconectado'
+        AGUARDANDO_QR = 'aguardando_qr', 'Aguardando QR Code'
+        CONECTADO = 'conectado', 'Conectado'
+        ERRO = 'erro', 'Erro'
+
+    provedor = models.CharField(max_length=30, default='evolution')
+    gateway_url = models.URLField(max_length=300, blank=True)
+    api_key_criptografada = models.TextField(blank=True)
+    instancia = models.SlugField(max_length=80)
+    webhook_secret = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.NAO_CONFIGURADO)
+    numero_conectado = models.CharField(max_length=24, blank=True)
+    nome_conectado = models.CharField(max_length=120, blank=True)
+    agente_ativo = models.BooleanField(default=False)
+    mensagem_saudacao = models.TextField(
+        default='Olá! Sou o assistente virtual. Posso ajudar você a agendar um serviço.',
+    )
+    mensagem_transferencia = models.TextField(
+        default='Certo. Vou pausar o atendimento automático para uma pessoa continuar com você.',
+    )
+    ultima_conexao_em = models.DateTimeField(null=True, blank=True)
+    ultimo_evento_em = models.DateTimeField(null=True, blank=True)
+    ultimo_erro = models.TextField(blank=True)
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'whatsapp_configuracoes'
+        constraints = [
+            models.UniqueConstraint(fields=['filial'], name='whatsapp_configuracao_filial_unica'),
+            models.UniqueConstraint(fields=['instancia'], name='whatsapp_instancia_unica'),
+        ]
+
+    def __str__(self):
+        return f'{self.filial} — {self.instancia}'
+
+    @property
+    def api_key_configurada(self):
+        return bool(self.api_key_criptografada)
+
+    def definir_api_key(self, valor):
+        valor = (valor or '').strip()
+        if valor:
+            self.api_key_criptografada = _fernet().encrypt(valor.encode('utf-8')).decode('ascii')
+
+    def obter_api_key(self):
+        if not self.api_key_criptografada:
+            return ''
+        try:
+            return _fernet().decrypt(self.api_key_criptografada.encode('ascii')).decode('utf-8')
+        except (InvalidToken, ValueError):
+            return ''
+
+
+class ConversaWhatsApp(FilialScopedModel):
+    configuracao = models.ForeignKey(
+        ConfiguracaoWhatsApp, on_delete=models.CASCADE, related_name='conversas',
+    )
+    cliente = models.ForeignKey(
+        'cadastros.Cliente', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='conversas_whatsapp',
+    )
+    remote_jid = models.CharField(max_length=100)
+    telefone = models.CharField(max_length=24, db_index=True)
+    nome_contato = models.CharField(max_length=150, blank=True)
+    etapa = models.CharField(max_length=40, default='inicio')
+    contexto = models.JSONField(default=dict, blank=True)
+    atendimento_humano = models.BooleanField(default=False)
+    ativa = models.BooleanField(default=True)
+    ultima_mensagem_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'whatsapp_conversas'
+        ordering = ['-ultima_mensagem_em', '-updated_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['configuracao', 'remote_jid'], name='whatsapp_conversa_remota_unica',
+            ),
+        ]
+
+    def __str__(self):
+        return self.nome_contato or self.telefone
+
+
+class MensagemWhatsApp(TimestampedModel):
+    class Direcao(models.TextChoices):
+        ENTRADA = 'entrada', 'Recebida'
+        SAIDA = 'saida', 'Enviada'
+
+    conversa = models.ForeignKey(ConversaWhatsApp, on_delete=models.CASCADE, related_name='mensagens')
+    direcao = models.CharField(max_length=10, choices=Direcao.choices)
+    identificador_externo = models.CharField(max_length=160, blank=True)
+    tipo = models.CharField(max_length=30, default='texto')
+    texto = models.TextField(blank=True)
+    status = models.CharField(max_length=30, blank=True)
+    dados_evento = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = 'whatsapp_mensagens'
+        ordering = ['created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['conversa', 'identificador_externo'],
+                condition=~models.Q(identificador_externo=''),
+                name='whatsapp_mensagem_externa_unica',
+            ),
+        ]

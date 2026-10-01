@@ -60,6 +60,7 @@ LOCAL_APPS = [
     'apps.cadastros',
     'apps.produtos',
     'apps.agenda',
+    'apps.whatsapp_agent',
     'apps.estoque',
     'apps.producao',
     'apps.vendas',
