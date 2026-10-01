@@ -38,6 +38,13 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
     mensagem_transferencia = models.TextField(
         default='Certo. Vou pausar o atendimento automático para uma pessoa continuar com você.',
     )
+    mensagem_encerramento = models.TextField(
+        default=(
+            'Conversa encerrada. Obrigado pelo contato! 👋\n'
+            'Quando precisar, envie *oi* para começar novamente.'
+        ),
+    )
+    mensagem_opcao_invalida = models.TextField(default='Não entendi essa opção.')
     ultima_conexao_em = models.DateTimeField(null=True, blank=True)
     ultimo_evento_em = models.DateTimeField(null=True, blank=True)
     ultimo_erro = models.TextField(blank=True)
@@ -69,6 +76,66 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
             return _fernet().decrypt(self.api_key_criptografada.encode('ascii')).decode('utf-8')
         except (InvalidToken, ValueError):
             return ''
+
+
+class MenuWhatsApp(FilialScopedModel):
+    configuracao = models.ForeignKey(
+        ConfiguracaoWhatsApp, on_delete=models.CASCADE, related_name='menus',
+    )
+    codigo = models.SlugField(max_length=60)
+    nome = models.CharField(max_length=80)
+    mensagem = models.TextField(default='Como posso ajudar?')
+    principal = models.BooleanField(default=False)
+    ativo = models.BooleanField(default=True)
+    ordem = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        db_table = 'whatsapp_menus'
+        ordering = ['ordem', 'id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['configuracao', 'codigo'], name='whatsapp_menu_codigo_unico',
+            ),
+        ]
+
+    def __str__(self):
+        return self.nome
+
+
+class OpcaoMenuWhatsApp(TimestampedModel):
+    class Acao(models.TextChoices):
+        AGENDA = 'agenda', 'Enviar link da agenda'
+        ATENDIMENTO_HUMANO = 'atendimento_humano', 'Transferir para atendente'
+        MENSAGEM = 'mensagem', 'Enviar uma mensagem'
+        ABRIR_MENU = 'abrir_menu', 'Abrir outro menu'
+        MENU_PRINCIPAL = 'menu_principal', 'Voltar ao menu principal'
+        ENCERRAR = 'encerrar', 'Encerrar conversa'
+
+    menu = models.ForeignKey(MenuWhatsApp, on_delete=models.CASCADE, related_name='opcoes')
+    chave = models.CharField(max_length=20)
+    titulo = models.CharField(max_length=120)
+    acao = models.CharField(max_length=32, choices=Acao.choices)
+    mensagem = models.TextField(blank=True)
+    palavras_chave = models.TextField(
+        blank=True,
+        help_text='Palavras alternativas separadas por vírgula ou uma por linha.',
+    )
+    menu_destino = models.ForeignKey(
+        MenuWhatsApp, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+    voltar_ao_menu = models.BooleanField(default=False)
+    ativo = models.BooleanField(default=True)
+    ordem = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        db_table = 'whatsapp_menu_opcoes'
+        ordering = ['ordem', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['menu', 'chave'], name='whatsapp_opcao_chave_unica'),
+        ]
+
+    def __str__(self):
+        return f'{self.chave} — {self.titulo}'
 
 
 class ConversaWhatsApp(FilialScopedModel):

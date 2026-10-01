@@ -19,7 +19,13 @@ from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeM
 from apps.whatsapp_agent.agent import processar_mensagem
 from apps.whatsapp_agent.forms import ConfiguracaoWhatsAppForm
 from apps.whatsapp_agent.gateway import EvolutionClient, GatewayWhatsAppError, qr_data_url
-from apps.whatsapp_agent.models import ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp
+from apps.whatsapp_agent.models import (
+    ConfiguracaoWhatsApp,
+    ConversaWhatsApp,
+    MensagemWhatsApp,
+    MenuWhatsApp,
+    OpcaoMenuWhatsApp,
+)
 from apps.whatsapp_agent.notifications import _numero_whatsapp, enviar_notificacao_agendamento
 from apps.whatsapp_agent.webhook import receber_evento
 
@@ -86,6 +92,41 @@ class AgenteWhatsAppTests(TestCase):
         self.assertIn('*3.* Encerrar a conversa', resposta)
         conversa.refresh_from_db()
         self.assertEqual(conversa.etapa, 'aguardando_opcao')
+
+    def test_saudacao_nao_e_repetida_em_todo_oi(self):
+        conversa = self.nova_conversa()
+
+        primeira = processar_mensagem(conversa, 'oi')
+        segunda = processar_mensagem(conversa, 'oi')
+
+        self.assertIn(self.configuracao.mensagem_saudacao, primeira)
+        self.assertNotIn(self.configuracao.mensagem_saudacao, segunda)
+        self.assertIn('*1.* Fazer um agendamento', segunda)
+
+    def test_fluxo_personalizado_aceita_palavra_chave_e_submenu(self):
+        conversa = self.nova_conversa()
+        processar_mensagem(conversa, 'oi')
+        principal = MenuWhatsApp.objects.get(configuracao=self.configuracao, principal=True)
+        submenu = MenuWhatsApp.objects.create(
+            filial=self.filial, configuracao=self.configuracao, codigo='duvidas',
+            nome='Dúvidas', mensagem='Qual é a sua dúvida?',
+        )
+        OpcaoMenuWhatsApp.objects.create(
+            menu=principal, chave='4', titulo='Tirar dúvidas',
+            palavras_chave='ajuda, dúvidas', acao=OpcaoMenuWhatsApp.Acao.ABRIR_MENU,
+            menu_destino=submenu, ordem=3,
+        )
+        OpcaoMenuWhatsApp.objects.create(
+            menu=submenu, chave='1', titulo='Ver endereço',
+            acao=OpcaoMenuWhatsApp.Acao.MENSAGEM, mensagem='Estamos na Rua Central, 10.',
+        )
+
+        resposta_submenu = processar_mensagem(conversa, 'ajuda')
+        resposta_mensagem = processar_mensagem(conversa, '1')
+
+        self.assertIn('Qual é a sua dúvida?', resposta_submenu)
+        self.assertIn('*1.* Ver endereço', resposta_submenu)
+        self.assertEqual(resposta_mensagem, 'Estamos na Rua Central, 10.')
 
     @override_settings(PUBLIC_BASE_URL='https://ited.app.br')
     def test_opcao_um_cria_e_envia_link_publico_da_agenda(self):
@@ -305,5 +346,5 @@ class EvolutionClientTests(SimpleTestCase):
     def test_formulario_nao_expoe_credenciais_tecnicas(self):
         self.assertEqual(
             list(ConfiguracaoWhatsAppForm().fields),
-            ['agente_ativo', 'mensagem_saudacao', 'mensagem_transferencia', 'ativo'],
+            ['agente_ativo', 'ativo'],
         )

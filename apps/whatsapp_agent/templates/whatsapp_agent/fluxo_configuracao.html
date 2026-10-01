@@ -1,0 +1,147 @@
+{% extends '_base.html' %}
+{% block title %}Configuração do fluxo do WhatsApp{% endblock %}
+{% block content %}
+{% include 'whatsapp_agent/_styles.html' %}
+{{ fluxo|json_script:'wa-fluxo-inicial' }}
+{{ acoes|json_script:'wa-acoes' }}
+<div class="wa-shell" x-data="fluxoWhatsApp()">
+  <div class="wa-head">
+    <div>
+      <h1 class="wa-title">Configuração do fluxo</h1>
+      <p class="wa-muted">Monte o menu e escolha o que cada resposta fará no WhatsApp.</p>
+    </div>
+    <div class="wa-actions">
+      <a class="wa-btn secondary" href="{% url 'whatsapp_agent:configuracao' %}">Conexão e agente</a>
+      <a class="wa-btn secondary" href="{% url 'whatsapp_agent:conversa-list' %}">Conversas</a>
+    </div>
+  </div>
+
+  <form method="post" @submit="prepararEnvio" class="wa-flow-form">
+    {% csrf_token %}
+    <input x-ref="fluxo" type="hidden" name="fluxo_json" :value="JSON.stringify(menus)">
+    {% if form.non_field_errors %}<div class="wa-warning wa-danger">{{ form.non_field_errors }}</div>{% endif %}
+
+    <section class="wa-card wa-section">
+      <div class="wa-section-head">
+        <div><h2>Mensagens gerais</h2><p class="wa-muted">São usadas pela primeira interação, transferência, encerramento e respostas inválidas.</p></div>
+      </div>
+      <div class="wa-grid">
+        {% for field in form %}
+          <div class="wa-field full">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+            {% if field.errors %}<div class="wa-errors">{{ field.errors|first }}</div>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <div class="wa-section-head wa-flow-title">
+      <div><h2>Menus e ações</h2><p class="wa-muted">O menu principal abre quando o cliente envia “oi” ou “menu”. Você pode criar submenus.</p></div>
+      <button class="wa-btn secondary" type="button" @click="adicionarMenu">+ Novo menu</button>
+    </div>
+
+    <div class="wa-menu-list">
+      <template x-for="(menu, indiceMenu) in menus" :key="menu.uid">
+        <section class="wa-card wa-menu-card">
+          <div class="wa-menu-top">
+            <div class="wa-menu-number" x-text="indiceMenu + 1"></div>
+            <div class="wa-menu-heading">
+              <strong x-text="menu.nome || 'Novo menu'"></strong>
+              <span class="wa-primary-badge" x-show="menu.principal">Menu principal</span>
+            </div>
+            <div class="wa-row-actions">
+              <button type="button" class="wa-icon-btn" title="Mover para cima" @click="moverMenu(indiceMenu, -1)" :disabled="indiceMenu === 0">↑</button>
+              <button type="button" class="wa-icon-btn" title="Mover para baixo" @click="moverMenu(indiceMenu, 1)" :disabled="indiceMenu === menus.length - 1">↓</button>
+              <button type="button" class="wa-icon-btn danger" title="Excluir menu" @click="removerMenu(indiceMenu)" :disabled="menus.length === 1">×</button>
+            </div>
+          </div>
+
+          <div class="wa-grid">
+            <div class="wa-field"><label>Nome do menu</label><input type="text" x-model="menu.nome" maxlength="80" required></div>
+            <div class="wa-field"><label>Código interno</label><input type="text" x-model="menu.codigo" maxlength="60" required><div class="wa-help">Use letras, números e hífen. Não aparece para o cliente.</div></div>
+            <div class="wa-field full"><label>Texto apresentado antes das opções</label><textarea x-model="menu.mensagem" rows="2" required></textarea></div>
+          </div>
+          <div class="wa-checks">
+            <label><input type="radio" name="menu_principal_visual" :checked="menu.principal" @change="tornarPrincipal(indiceMenu)"> Menu principal</label>
+            <label><input type="checkbox" x-model="menu.ativo"> Menu ativo</label>
+          </div>
+
+          <div class="wa-options-head">
+            <div><strong>Opções deste menu</strong><p class="wa-muted">A chave pode ser 1, 2, A ou qualquer resposta curta.</p></div>
+            <button class="wa-btn secondary compact" type="button" @click="adicionarOpcao(indiceMenu)">+ Adicionar opção</button>
+          </div>
+
+          <div class="wa-option-list">
+            <template x-for="(opcao, indiceOpcao) in menu.opcoes" :key="opcao.uid">
+              <div class="wa-option-card">
+                <div class="wa-option-grid">
+                  <div class="wa-field wa-key-field"><label>Resposta</label><input type="text" x-model="opcao.chave" maxlength="20" required></div>
+                  <div class="wa-field"><label>Texto da opção</label><input type="text" x-model="opcao.titulo" maxlength="120" required></div>
+                  <div class="wa-field"><label>Ação</label><select x-model="opcao.acao" required><template x-for="acao in acoes" :key="acao[0]"><option :value="acao[0]" x-text="acao[1]"></option></template></select></div>
+                </div>
+
+                <div class="wa-field" x-show="opcao.acao === 'abrir_menu'">
+                  <label>Menu de destino</label>
+                  <select x-model="opcao.menu_destino"><option value="">Selecione...</option><template x-for="destino in menus" :key="destino.uid"><option :value="destino.codigo" x-text="destino.nome || destino.codigo"></option></template></select>
+                </div>
+                <div class="wa-field" x-show="['agenda','atendimento_humano','mensagem','abrir_menu','encerrar'].includes(opcao.acao)">
+                  <label>Mensagem personalizada <span class="wa-muted">(opcional nas ações que já possuem mensagem geral)</span></label>
+                  <textarea x-model="opcao.mensagem" rows="2" placeholder="Texto que o cliente receberá ao escolher esta opção"></textarea>
+                </div>
+                <div class="wa-field"><label>Também reconhecer estas palavras</label><input type="text" x-model="opcao.palavras_chave" placeholder="Ex.: agendar, marcar horário, reserva"><div class="wa-help">Separe por vírgulas. A resposta numérica continua funcionando.</div></div>
+
+                <div class="wa-option-footer">
+                  <div class="wa-checks">
+                    <label><input type="checkbox" x-model="opcao.ativo"> Opção ativa</label>
+                    <label x-show="opcao.acao === 'mensagem'"><input type="checkbox" x-model="opcao.voltar_ao_menu"> Mostrar o menu novamente</label>
+                  </div>
+                  <div class="wa-row-actions">
+                    <button type="button" class="wa-icon-btn" @click="moverOpcao(indiceMenu, indiceOpcao, -1)" :disabled="indiceOpcao === 0">↑</button>
+                    <button type="button" class="wa-icon-btn" @click="moverOpcao(indiceMenu, indiceOpcao, 1)" :disabled="indiceOpcao === menu.opcoes.length - 1">↓</button>
+                    <button type="button" class="wa-icon-btn danger" @click="removerOpcao(indiceMenu, indiceOpcao)">Excluir</button>
+                  </div>
+                </div>
+              </div>
+            </template>
+            <div class="wa-empty" x-show="menu.opcoes.length === 0">Este menu ainda não possui opções.</div>
+          </div>
+        </section>
+      </template>
+    </div>
+
+    <div class="wa-save-bar"><button class="wa-btn" type="submit">Salvar fluxo do WhatsApp</button></div>
+  </form>
+</div>
+<script>
+function fluxoWhatsApp() {
+  const gerarUid = () => `${Date.now()}-${Math.random()}`;
+  const inicial = JSON.parse(document.getElementById('wa-fluxo-inicial').textContent).map(menu => ({
+    ...menu, uid: gerarUid(), opcoes: (menu.opcoes || []).map(opcao => ({...opcao, uid: gerarUid()})),
+  }));
+  return {
+    menus: inicial,
+    acoes: JSON.parse(document.getElementById('wa-acoes').textContent),
+    adicionarMenu() {
+      const numero = this.menus.length + 1;
+      this.menus.push({uid: gerarUid(), codigo: `menu-${numero}`, nome: `Menu ${numero}`, mensagem: 'Escolha uma opção:', principal: false, ativo: true, opcoes: []});
+    },
+    removerMenu(indice) {
+      if (this.menus.length === 1) return;
+      const removido = this.menus[indice];
+      this.menus.splice(indice, 1);
+      if (removido.principal) this.tornarPrincipal(0);
+      this.menus.forEach(menu => menu.opcoes.forEach(opcao => { if (opcao.menu_destino === removido.codigo) opcao.menu_destino = ''; }));
+    },
+    tornarPrincipal(indice) { this.menus.forEach((menu, atual) => menu.principal = atual === indice); },
+    moverMenu(indice, direcao) { const destino = indice + direcao; if (destino < 0 || destino >= this.menus.length) return; [this.menus[indice], this.menus[destino]] = [this.menus[destino], this.menus[indice]]; },
+    adicionarOpcao(indiceMenu) {
+      const opcoes = this.menus[indiceMenu].opcoes;
+      opcoes.push({uid: gerarUid(), chave: String(opcoes.length + 1), titulo: 'Nova opção', acao: 'mensagem', mensagem: '', palavras_chave: '', menu_destino: '', voltar_ao_menu: false, ativo: true});
+    },
+    removerOpcao(indiceMenu, indiceOpcao) { this.menus[indiceMenu].opcoes.splice(indiceOpcao, 1); },
+    moverOpcao(indiceMenu, indice, direcao) { const lista = this.menus[indiceMenu].opcoes; const destino = indice + direcao; if (destino < 0 || destino >= lista.length) return; [lista[indice], lista[destino]] = [lista[destino], lista[indice]]; },
+    prepararEnvio() { this.menus.forEach(menu => { menu.codigo = String(menu.codigo || menu.nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }); this.$refs.fluxo.value = JSON.stringify(this.menus); },
+  };
+}
+</script>
+{% endblock %}

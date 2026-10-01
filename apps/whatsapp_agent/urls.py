@@ -6,6 +6,7 @@ app_name = 'whatsapp_agent'
 
 urlpatterns = [
     path('', views.ConfiguracaoView.as_view(), name='configuracao'),
+    path('fluxo/', views.FluxoConfiguracaoView.as_view(), name='fluxo-configuracao'),
     path('conectar/', views.ConectarView.as_view(), name='conectar'),
     path('conexao/', views.ConexaoView.as_view(), name='conexao'),
     path('api/status/', views.StatusConexaoView.as_view(), name='status'),

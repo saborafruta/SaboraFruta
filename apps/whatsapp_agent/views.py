@@ -3,6 +3,7 @@ import re
 
 from django.conf import settings
 from django.contrib import messages
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -15,9 +16,10 @@ from django.views.decorators.http import require_POST
 
 from apps.core.services.permissions import PermissaoRequiredMixin
 
-from .forms import ConfiguracaoWhatsAppForm
+from .flow import garantir_fluxo_padrao
+from .forms import ConfiguracaoWhatsAppForm, FluxoWhatsAppForm
 from .gateway import EvolutionClient, GatewayWhatsAppError, qr_data_url
-from .models import ConfiguracaoWhatsApp, ConversaWhatsApp
+from .models import ConfiguracaoWhatsApp, ConversaWhatsApp, MenuWhatsApp, OpcaoMenuWhatsApp
 from .webhook import receber_evento
 
 
@@ -72,6 +74,150 @@ class ConfiguracaoView(PermissaoRequiredMixin, View):
         return render(request, 'whatsapp_agent/configuracao.html', {
             'form': form, 'configuracao': configuracao,
             'gateway_configurado': _gateway_configurado(),
+        })
+
+
+def _fluxo_serializado(configuracao):
+    garantir_fluxo_padrao(configuracao)
+    return [
+        {
+            'codigo': menu.codigo,
+            'nome': menu.nome,
+            'mensagem': menu.mensagem,
+            'principal': menu.principal,
+            'ativo': menu.ativo,
+            'opcoes': [
+                {
+                    'chave': opcao.chave,
+                    'titulo': opcao.titulo,
+                    'acao': opcao.acao,
+                    'mensagem': opcao.mensagem,
+                    'palavras_chave': opcao.palavras_chave,
+                    'menu_destino': opcao.menu_destino.codigo if opcao.menu_destino else '',
+                    'voltar_ao_menu': opcao.voltar_ao_menu,
+                    'ativo': opcao.ativo,
+                }
+                for opcao in menu.opcoes.all()
+            ],
+        }
+        for menu in configuracao.menus.prefetch_related('opcoes', 'opcoes__menu_destino')
+    ]
+
+
+def _validar_fluxo(valor):
+    try:
+        menus = json.loads(valor or '[]')
+    except json.JSONDecodeError as exc:
+        raise ValueError('Não foi possível ler a configuração do menu.') from exc
+    if not isinstance(menus, list) or not 1 <= len(menus) <= 10:
+        raise ValueError('Crie entre 1 e 10 menus.')
+
+    codigos = set()
+    acoes = {item[0] for item in OpcaoMenuWhatsApp.Acao.choices}
+    for indice, menu in enumerate(menus):
+        if not isinstance(menu, dict):
+            raise ValueError('Há um menu inválido na configuração.')
+        codigo = slugify(menu.get('codigo') or menu.get('nome') or f'menu-{indice + 1}')[:60]
+        if not codigo or codigo in codigos:
+            raise ValueError('Cada menu precisa ter um nome e um código diferentes.')
+        codigos.add(codigo)
+        menu['codigo'] = codigo
+        menu['nome'] = str(menu.get('nome') or '').strip()[:80]
+        menu['mensagem'] = str(menu.get('mensagem') or '').strip()
+        if not menu['nome'] or not menu['mensagem']:
+            raise ValueError('Informe o nome e a mensagem de todos os menus.')
+        opcoes = menu.get('opcoes') or []
+        if not isinstance(opcoes, list) or len(opcoes) > 20:
+            raise ValueError('Cada menu pode ter no máximo 20 opções.')
+        chaves = set()
+        for opcao in opcoes:
+            chave = str(opcao.get('chave') or '').strip()[:20]
+            titulo = str(opcao.get('titulo') or '').strip()[:120]
+            acao = opcao.get('acao')
+            if not chave or not titulo or acao not in acoes or chave in chaves:
+                raise ValueError('Revise as chaves, os títulos e as ações das opções.')
+            chaves.add(chave)
+            opcao['chave'] = chave
+            opcao['titulo'] = titulo
+    principais = [menu for menu in menus if menu.get('principal')]
+    if len(principais) > 1:
+        raise ValueError('Somente um menu pode ser definido como principal.')
+    if not principais:
+        menus[0]['principal'] = True
+    if not next(menu for menu in menus if menu.get('principal')).get('ativo', True):
+        raise ValueError('O menu principal precisa estar ativo.')
+    for menu in menus:
+        for opcao in menu.get('opcoes') or []:
+            destino = opcao.get('menu_destino')
+            if opcao['acao'] == OpcaoMenuWhatsApp.Acao.ABRIR_MENU and destino not in codigos:
+                raise ValueError('Selecione um menu de destino válido nas ações de submenu.')
+    return menus
+
+
+@transaction.atomic
+def _salvar_fluxo(configuracao, menus):
+    existentes = {menu.codigo: menu for menu in configuracao.menus.all()}
+    salvos = {}
+    for ordem, dados in enumerate(menus):
+        menu = existentes.get(dados['codigo']) or MenuWhatsApp(
+            filial=configuracao.filial, configuracao=configuracao, codigo=dados['codigo'],
+        )
+        menu.nome = dados['nome']
+        menu.mensagem = dados['mensagem']
+        menu.principal = bool(dados.get('principal'))
+        menu.ativo = bool(dados.get('ativo', True))
+        menu.ordem = ordem
+        menu.save()
+        salvos[menu.codigo] = menu
+
+    configuracao.menus.exclude(codigo__in=salvos).delete()
+    for dados in menus:
+        menu = salvos[dados['codigo']]
+        menu.opcoes.all().delete()
+        for ordem, dados_opcao in enumerate(dados.get('opcoes') or []):
+            OpcaoMenuWhatsApp.objects.create(
+                menu=menu,
+                chave=dados_opcao['chave'],
+                titulo=dados_opcao['titulo'],
+                acao=dados_opcao['acao'],
+                mensagem=str(dados_opcao.get('mensagem') or '').strip(),
+                palavras_chave=str(dados_opcao.get('palavras_chave') or '').strip(),
+                menu_destino=salvos.get(dados_opcao.get('menu_destino')),
+                voltar_ao_menu=bool(dados_opcao.get('voltar_ao_menu')),
+                ativo=bool(dados_opcao.get('ativo', True)),
+                ordem=ordem,
+            )
+
+
+class FluxoConfiguracaoView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'cadastros'
+    permissao_acao = 'editar'
+
+    def get(self, request):
+        configuracao = _configuracao(request)
+        return render(request, 'whatsapp_agent/fluxo_configuracao.html', {
+            'form': FluxoWhatsAppForm(instance=configuracao),
+            'fluxo': _fluxo_serializado(configuracao),
+            'acoes': list(OpcaoMenuWhatsApp.Acao.choices),
+        })
+
+    def post(self, request):
+        configuracao = _configuracao(request)
+        form = FluxoWhatsAppForm(request.POST, instance=configuracao)
+        try:
+            fluxo = _validar_fluxo(request.POST.get('fluxo_json'))
+        except ValueError as exc:
+            fluxo = _fluxo_serializado(configuracao)
+            form.add_error(None, str(exc))
+        if form.is_valid():
+            with transaction.atomic():
+                form.save()
+                _salvar_fluxo(configuracao, fluxo)
+            messages.success(request, 'Fluxo de atendimento salvo e já disponível no WhatsApp.')
+            return redirect('whatsapp_agent:fluxo-configuracao')
+        return render(request, 'whatsapp_agent/fluxo_configuracao.html', {
+            'form': form, 'fluxo': fluxo,
+            'acoes': list(OpcaoMenuWhatsApp.Acao.choices),
         })
 
 
