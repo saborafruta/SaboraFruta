@@ -18,9 +18,9 @@ from apps.core.models import Empresa, Filial, TenantPublicLink
 from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
 from apps.whatsapp_agent.agent import processar_mensagem
 from apps.whatsapp_agent.forms import ConfiguracaoWhatsAppForm
-from apps.whatsapp_agent.gateway import EvolutionClient, qr_data_url
+from apps.whatsapp_agent.gateway import EvolutionClient, GatewayWhatsAppError, qr_data_url
 from apps.whatsapp_agent.models import ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp
-from apps.whatsapp_agent.notifications import enviar_notificacao_agendamento
+from apps.whatsapp_agent.notifications import _numero_whatsapp, enviar_notificacao_agendamento
 from apps.whatsapp_agent.webhook import receber_evento
 
 
@@ -65,6 +65,12 @@ class AgenteWhatsAppTests(TestCase):
             filial=self.filial, configuracao=self.configuracao,
             remote_jid=f'{telefone}@s.whatsapp.net', telefone=telefone, cliente=cliente,
         )
+
+    def test_normaliza_nono_digito_de_celular_brasileiro(self):
+        self.assertEqual(_numero_whatsapp('(89) 9623-4025'), '5589996234025')
+        self.assertEqual(_numero_whatsapp('55 89 9623-4025'), '5589996234025')
+        self.assertEqual(_numero_whatsapp('(89) 99623-4025'), '5589996234025')
+        self.assertEqual(_numero_whatsapp('(89) 3222-0000'), '558932220000')
 
     def test_api_key_fica_criptografada(self):
         self.assertNotIn('chave-ultrassecreta', self.configuracao.api_key_criptografada)
@@ -249,6 +255,24 @@ class EvolutionClientTests(SimpleTestCase):
             ('POST', 'https://evolution.example.com/message/sendText/ited-teste'),
         )
         self.assertEqual(requisicao.call_args.kwargs['json']['number'], '5584999990000')
+
+    @patch('apps.whatsapp_agent.gateway.requests.request')
+    def test_numero_inexistente_retorna_mensagem_amigavel(self, requisicao):
+        resposta = Mock(status_code=400)
+        resposta.json.return_value = {
+            'response': {
+                'message': [
+                    {'jid': '558996234025@s.whatsapp.net', 'exists': False},
+                ],
+            },
+        }
+        requisicao.return_value = resposta
+
+        with self.assertRaisesRegex(
+            GatewayWhatsAppError,
+            'O número informado não foi encontrado no WhatsApp',
+        ):
+            EvolutionClient(self.configuracao()).enviar_texto('558996234025', 'Olá')
 
     @patch('apps.whatsapp_agent.gateway.requests.request')
     def test_configura_webhook_no_formato_da_evolution_23(self, requisicao):

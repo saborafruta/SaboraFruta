@@ -40,6 +40,12 @@ class EvolutionClient:
                 detalhe = resposta.json().get('response', {}).get('message')
             except (ValueError, AttributeError):
                 detalhe = None
+            itens = detalhe if isinstance(detalhe, list) else [detalhe]
+            if any(
+                isinstance(item, dict) and item.get('exists') is False
+                for item in itens
+            ):
+                detalhe = 'O número informado não foi encontrado no WhatsApp.'
             if isinstance(detalhe, list):
                 detalhe = ' '.join(str(item) for item in detalhe)
             raise GatewayWhatsAppError(str(detalhe or f'Gateway respondeu HTTP {resposta.status_code}.'))

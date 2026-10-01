@@ -18,6 +18,11 @@ def _numero_whatsapp(valor):
     numero = re.sub(r'\D', '', valor or '')
     if len(numero) in {10, 11}:
         numero = f'55{numero}'
+    # Celulares brasileiros antigos podem estar cadastrados com oito dígitos.
+    # Para números móveis (primeiro dígito local entre 6 e 9), inclui o nono
+    # dígito depois do DDD sem alterar telefones fixos.
+    if len(numero) == 12 and numero.startswith('55') and numero[4] in '6789':
+        numero = f'{numero[:4]}9{numero[4:]}'
     return numero if 12 <= len(numero) <= 15 else ''
 
 
