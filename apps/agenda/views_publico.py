@@ -3,25 +3,60 @@ from datetime import date, datetime, timedelta
 
 from django.core.exceptions import ValidationError
 from django.db.models import Prefetch, Q
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views import View
 
 from apps.cadastros.models import Cliente
-from apps.core.tenant_context import tenant_atomic
+from apps.core.models import EmpresaBanco, Filial
+from apps.core.tenant_context import get_current_database_alias, tenant_atomic
 
 from .models import AgendaLinkPublico, Agendamento, ProfissionalAgenda, ProfissionalServico
 from .services import criar_agendamento, listar_horarios
 
 
 def _link_do_token(token):
-    return get_object_or_404(
-        AgendaLinkPublico.objects.select_related('filial', 'filial__empresa'),
+    queryset = AgendaLinkPublico.objects.select_related('filial', 'filial__empresa')
+    link = queryset.filter(
         token=token,
         ativo=True,
         filial__ativo=True,
-    )
+    ).first()
+    if link:
+        return link
+
+    # Compatibilidade com os primeiros links enviados pelo agente: o token
+    # foi salvo no gerencial, mas a agenda vive no banco operacional. Quando
+    # a filial já possui seu link definitivo, o token antigo funciona como um
+    # alias sem alterar ou invalidar o endereço atual.
+    alias = get_current_database_alias()
+    if alias != 'default':
+        legacy = (
+            AgendaLinkPublico.objects.using('default')
+            .select_related('filial')
+            .filter(token=token, ativo=True)
+            .first()
+        )
+        if legacy and EmpresaBanco.objects.using('default').filter(
+            db_alias=alias,
+            empresa_id=legacy.filial.empresa_id,
+            ativo=True,
+            status=EmpresaBanco.Status.ATIVO,
+        ).exists():
+            filial = Filial.objects.using(alias).filter(
+                cnpj=legacy.filial.cnpj,
+                ativo=True,
+            ).first()
+            if filial:
+                link = queryset.filter(
+                    filial_id=filial.pk,
+                    ativo=True,
+                    filial__ativo=True,
+                ).first()
+                if link:
+                    return link
+    raise Http404
 
 
 def _profissionais_publicos(filial):

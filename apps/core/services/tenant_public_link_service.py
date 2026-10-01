@@ -77,8 +77,9 @@ class TenantPublicLinkService:
             filial_id=filial.pk,
             defaults={'token': token, 'ativo': True},
         )
-        if link.token != token:
-            return None
+        # Se a filial já possuía um link legítimo, preservamos o token atual.
+        # O token legado continua no índice e a view pública o trata como um
+        # alias para essa mesma agenda.
         cls.register(kind='agenda', token=token, db_alias=banco.db_alias)
         return banco.db_alias
 
