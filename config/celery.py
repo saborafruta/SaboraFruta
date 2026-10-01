@@ -11,6 +11,10 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 app.autodiscover_tasks()
 
 app.conf.beat_schedule = {
+    'encerrar-conversas-whatsapp-inativas': {
+        'task': 'apps.whatsapp_agent.tasks.encerrar_conversas_inativas',
+        'schedule': crontab(minute='*'),
+    },
     'verificar-vencimentos-diario': {
         'task': 'apps.estoque.tasks.alertas.verificar_vencimentos',
         'schedule': crontab(hour=7, minute=0),

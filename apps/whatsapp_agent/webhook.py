@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .agent import localizar_cliente, processar_mensagem, somente_digitos
+from .conversation_service import encerrar_se_expirada
 from .gateway import EvolutionClient, GatewayWhatsAppError
 from .models import ConversaWhatsApp, MensagemWhatsApp
 
@@ -63,7 +64,13 @@ def receber_evento(configuracao, payload):
         return 'evento_registrado'
 
     dados = _dados_mensagem(payload)
-    if dados['from_me'] or not dados['remote_jid'] or dados['remote_jid'].endswith('@g.us'):
+    if not dados['remote_jid'] or dados['remote_jid'].endswith('@g.us'):
+        return 'ignorado'
+    agora = timezone.now()
+    if dados['from_me']:
+        ConversaWhatsApp.objects.filter(
+            configuracao=configuracao, remote_jid=dados['remote_jid'],
+        ).update(ultima_mensagem_em=agora, updated_at=agora)
         return 'ignorado'
     if not dados['texto']:
         return 'sem_texto'
@@ -79,7 +86,9 @@ def receber_evento(configuracao, payload):
         )
         if not criada and dados['nome'] and not conversa.nome_contato:
             conversa.nome_contato = dados['nome']
-        conversa.ultima_mensagem_em = timezone.now()
+        if not criada:
+            encerrar_se_expirada(conversa, agora=agora)
+        conversa.ultima_mensagem_em = agora
         conversa.save(update_fields=['nome_contato', 'ultima_mensagem_em', 'updated_at'])
         padrao_mensagem = {
                 'direcao': MensagemWhatsApp.Direcao.ENTRADA,

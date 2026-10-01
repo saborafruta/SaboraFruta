@@ -13,5 +13,6 @@ urlpatterns = [
     path('conversas/', views.ConversaListView.as_view(), name='conversa-list'),
     path('conversas/<int:pk>/', views.ConversaDetailView.as_view(), name='conversa-detail'),
     path('conversas/<int:pk>/retomar/', views.RetomarAgenteView.as_view(), name='retomar-agente'),
+    path('conversas/<int:pk>/encerrar/', views.EncerrarConversaView.as_view(), name='encerrar-conversa'),
     path('webhook/<uuid:secret>/', views.webhook, name='webhook'),
 ]

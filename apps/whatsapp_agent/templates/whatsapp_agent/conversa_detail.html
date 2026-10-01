@@ -2,5 +2,18 @@
 {% block title %}Conversa do WhatsApp{% endblock %}
 {% block content %}
 {% include 'whatsapp_agent/_styles.html' %}
-<div class="wa-shell"><div class="wa-head"><div><h1 class="wa-title">{{ conversa.nome_contato|default:conversa.telefone }}</h1><p class="wa-muted">{{ conversa.telefone }}{% if conversa.cliente %} · {{ conversa.cliente.nome_display }}{% endif %}</p></div><div class="wa-actions"><a class="wa-btn secondary" target="_blank" rel="noopener" href="https://wa.me/{{ conversa.telefone }}">Abrir WhatsApp</a><a class="wa-btn secondary" href="{% url 'whatsapp_agent:conversa-list' %}">Voltar</a>{% if conversa.atendimento_humano %}<form method="post" action="{% url 'whatsapp_agent:retomar-agente' conversa.pk %}">{% csrf_token %}<button class="wa-btn" type="submit">Retomar agente</button></form>{% endif %}</div></div><div class="wa-card wa-list">{% for mensagem in conversa.mensagens.all %}<div class="wa-message {% if mensagem.direcao == 'saida' %}saida{% endif %}"><div>{{ mensagem.texto|linebreaksbr }}</div><div class="wa-muted">{{ mensagem.get_direcao_display }} · {{ mensagem.created_at|date:'d/m H:i' }}{% if mensagem.status %} · {{ mensagem.status }}{% endif %}</div></div>{% empty %}<div class="wa-muted">Nenhuma mensagem registrada.</div>{% endfor %}</div></div>
+<div class="wa-shell">
+  <div class="wa-head">
+    <div><h1 class="wa-title">{{ conversa.nome_contato|default:conversa.telefone }}</h1><p class="wa-muted">{{ conversa.telefone }}{% if conversa.cliente %} · {{ conversa.cliente.nome_display }}{% endif %}</p></div>
+    <div class="wa-actions">
+      <a class="wa-btn secondary" target="_blank" rel="noopener" href="https://wa.me/{{ conversa.telefone }}">Abrir WhatsApp</a>
+      <a class="wa-btn secondary" href="{% url 'whatsapp_agent:conversa-list' %}">Voltar</a>
+      {% if conversa.atendimento_humano or not conversa.ativa %}<form method="post" action="{% url 'whatsapp_agent:retomar-agente' conversa.pk %}">{% csrf_token %}<button class="wa-btn" type="submit">{% if conversa.ativa %}Retomar agente{% else %}Reabrir conversa{% endif %}</button></form>{% endif %}
+      {% if conversa.ativa %}<form method="post" action="{% url 'whatsapp_agent:encerrar-conversa' conversa.pk %}" onsubmit="return confirm('Encerrar esta conversa?')">{% csrf_token %}<button class="wa-btn danger" type="submit">Encerrar conversa</button></form>{% endif %}
+    </div>
+  </div>
+  <div class="wa-card wa-list">
+    {% for mensagem in conversa.mensagens.all %}<div class="wa-message {% if mensagem.direcao == 'saida' %}saida{% endif %}"><div>{{ mensagem.texto|linebreaksbr }}</div><div class="wa-muted">{{ mensagem.get_direcao_display }} · {{ mensagem.created_at|date:'d/m H:i' }}{% if mensagem.status %} · {{ mensagem.status }}{% endif %}</div></div>{% empty %}<div class="wa-muted">Nenhuma mensagem registrada.</div>{% endfor %}
+  </div>
+</div>
 {% endblock %}

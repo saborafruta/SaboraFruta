@@ -27,8 +27,15 @@
       </div>
       <div class="wa-grid">
         {% for field in form %}
+          {% if field.name == 'encerramento_automatico_ativo' %}
+            <div class="wa-field full">
+              <strong>Encerramento por inatividade</strong>
+              <div class="wa-muted">Encerra o atendimento sem enviar uma mensagem extra. Se o cliente escrever novamente, uma nova conversa será iniciada.</div>
+            </div>
+          {% endif %}
           <div class="wa-field full">
             <label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+            {% if field.help_text %}<div class="wa-help">{{ field.help_text }}</div>{% endif %}
             {% if field.errors %}<div class="wa-errors">{{ field.errors|first }}</div>{% endif %}
           </div>
         {% endfor %}

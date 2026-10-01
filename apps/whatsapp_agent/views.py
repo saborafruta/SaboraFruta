@@ -16,6 +16,7 @@ from django.views.decorators.http import require_POST
 
 from apps.core.services.permissions import PermissaoRequiredMixin
 
+from .conversation_service import encerrar_conversa, encerrar_conversas_inativas
 from .flow import garantir_fluxo_padrao
 from .forms import ConfiguracaoWhatsAppForm, FluxoWhatsAppForm
 from .gateway import EvolutionClient, GatewayWhatsAppError, qr_data_url
@@ -297,6 +298,7 @@ class ConversaListView(PermissaoRequiredMixin, View):
     permissao_acao = 'ver'
 
     def get(self, request):
+        encerrar_conversas_inativas(filial=request.filial_ativa)
         conversas = (
             ConversaWhatsApp.objects.for_filial(request.filial_ativa)
             .select_related('cliente', 'configuracao')[:100]
@@ -329,8 +331,30 @@ class RetomarAgenteView(PermissaoRequiredMixin, View):
         conversa.atendimento_humano = False
         conversa.etapa = 'inicio'
         conversa.contexto = {}
-        conversa.save(update_fields=['atendimento_humano', 'etapa', 'contexto', 'updated_at'])
+        conversa.ativa = True
+        conversa.ultima_mensagem_em = timezone.now()
+        conversa.save(update_fields=[
+            'atendimento_humano', 'etapa', 'contexto', 'ativa',
+            'ultima_mensagem_em', 'updated_at',
+        ])
         messages.success(request, 'Atendimento automático retomado.')
+        return redirect('whatsapp_agent:conversa-detail', pk=pk)
+
+
+@method_decorator(require_POST, name='dispatch')
+class EncerrarConversaView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'cadastros'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        conversa = get_object_or_404(
+            ConversaWhatsApp.objects.for_filial(request.filial_ativa), pk=pk,
+        )
+        encerrar_conversa(conversa)
+        messages.success(request, 'Conversa encerrada. Uma nova mensagem do cliente iniciará outro atendimento.')
+        destino = request.POST.get('next')
+        if destino == 'lista':
+            return redirect('whatsapp_agent:conversa-list')
         return redirect('whatsapp_agent:conversa-detail', pk=pk)
 
 

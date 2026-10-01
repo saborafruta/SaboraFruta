@@ -4,6 +4,7 @@ import uuid
 
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from apps.core.models.base import FilialScopedModel, TimestampedModel
@@ -45,6 +46,12 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
         ),
     )
     mensagem_opcao_invalida = models.TextField(default='Não entendi essa opção.')
+    encerramento_automatico_ativo = models.BooleanField(default=False)
+    tempo_inatividade_minutos = models.PositiveIntegerField(
+        default=60,
+        validators=[MinValueValidator(1), MaxValueValidator(10080)],
+        help_text='Tempo sem mensagens antes de encerrar a conversa, entre 1 minuto e 7 dias.',
+    )
     ultima_conexao_em = models.DateTimeField(null=True, blank=True)
     ultimo_evento_em = models.DateTimeField(null=True, blank=True)
     ultimo_erro = models.TextField(blank=True)

@@ -17,6 +17,10 @@ from apps.cadastros.models import Funcionario
 from apps.core.models import Empresa, Filial, TenantPublicLink
 from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
 from apps.whatsapp_agent.agent import processar_mensagem
+from apps.whatsapp_agent.conversation_service import (
+    encerrar_conversa,
+    encerrar_conversas_inativas,
+)
 from apps.whatsapp_agent.forms import ConfiguracaoWhatsAppForm
 from apps.whatsapp_agent.gateway import EvolutionClient, GatewayWhatsAppError, qr_data_url
 from apps.whatsapp_agent.models import (
@@ -175,6 +179,94 @@ class AgenteWhatsAppTests(TestCase):
         self.assertIn('*1.* Fazer um agendamento', nova_resposta)
         conversa.refresh_from_db()
         self.assertTrue(conversa.ativa)
+
+    def test_encerramento_manual_marca_conversa_como_encerrada(self):
+        conversa = self.nova_conversa()
+        conversa.atendimento_humano = True
+        conversa.save(update_fields=['atendimento_humano'])
+
+        encerrar_conversa(conversa)
+
+        conversa.refresh_from_db()
+        self.assertFalse(conversa.ativa)
+        self.assertFalse(conversa.atendimento_humano)
+        self.assertEqual(conversa.etapa, 'encerrada')
+
+    def test_encerramento_automatico_respeita_tempo_configurado(self):
+        self.configuracao.encerramento_automatico_ativo = True
+        self.configuracao.tempo_inatividade_minutos = 30
+        self.configuracao.save(update_fields=[
+            'encerramento_automatico_ativo', 'tempo_inatividade_minutos',
+        ])
+        antiga = self.nova_conversa('5584999990011')
+        recente = self.nova_conversa('5584999990022')
+        agora = timezone.now()
+        ConversaWhatsApp.objects.filter(pk=antiga.pk).update(
+            ultima_mensagem_em=agora - timedelta(minutes=31),
+        )
+        ConversaWhatsApp.objects.filter(pk=recente.pk).update(
+            ultima_mensagem_em=agora - timedelta(minutes=29),
+        )
+
+        total = encerrar_conversas_inativas(agora=agora)
+
+        antiga.refresh_from_db()
+        recente.refresh_from_db()
+        self.assertEqual(total, 1)
+        self.assertFalse(antiga.ativa)
+        self.assertEqual(antiga.etapa, 'encerrada')
+        self.assertTrue(recente.ativa)
+
+    @patch('apps.whatsapp_agent.webhook.EvolutionClient.enviar_texto')
+    def test_nova_mensagem_reabre_conversa_expirada_com_saudacao(self, enviar_texto):
+        enviar_texto.return_value = {'key': {'id': 'saida-reaberta'}}
+        self.configuracao.encerramento_automatico_ativo = True
+        self.configuracao.tempo_inatividade_minutos = 10
+        self.configuracao.save(update_fields=[
+            'encerramento_automatico_ativo', 'tempo_inatividade_minutos',
+        ])
+        conversa = self.nova_conversa('5584999990033')
+        ConversaWhatsApp.objects.filter(pk=conversa.pk).update(
+            ultima_mensagem_em=timezone.now() - timedelta(minutes=11),
+        )
+        payload = {
+            'event': 'messages.upsert', 'instance': self.configuracao.instancia,
+            'data': {
+                'key': {
+                    'id': 'entrada-reaberta', 'fromMe': False,
+                    'remoteJid': conversa.remote_jid,
+                },
+                'pushName': 'Cliente', 'message': {'conversation': 'Oi'},
+            },
+        }
+
+        self.assertEqual(receber_evento(self.configuracao, payload), 'enviada')
+
+        conversa.refresh_from_db()
+        self.assertTrue(conversa.ativa)
+        self.assertIn(self.configuracao.mensagem_saudacao, enviar_texto.call_args.args[1])
+
+    def test_mensagem_enviada_pelo_atendente_renova_atividade(self):
+        conversa = self.nova_conversa('5584999990044')
+        momento_antigo = timezone.now() - timedelta(hours=2)
+        ConversaWhatsApp.objects.filter(pk=conversa.pk).update(
+            ultima_mensagem_em=momento_antigo,
+        )
+        payload = {
+            'event': 'messages.upsert', 'instance': self.configuracao.instancia,
+            'data': {
+                'key': {
+                    'id': 'saida-atendente', 'fromMe': True,
+                    'remoteJid': conversa.remote_jid,
+                },
+                'message': {'conversation': 'Olá, estou atendendo você.'},
+            },
+        }
+
+        self.assertEqual(receber_evento(self.configuracao, payload), 'ignorado')
+
+        conversa.refresh_from_db()
+        self.assertGreater(conversa.ultima_mensagem_em, momento_antigo)
 
     @patch('apps.whatsapp_agent.notifications.EvolutionClient.enviar_texto')
     def test_confirmacao_do_agendamento_e_enviada_e_registrada(self, enviar_texto):
