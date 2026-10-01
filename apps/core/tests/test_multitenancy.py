@@ -210,6 +210,18 @@ class MultitenancyFoundationTests(TestCase):
                 rota = TenantPublicLinkService.route_for_path(path)
                 self.assertEqual((rota[0], rota[3]), esperado)
 
+    def test_link_legado_da_agenda_e_reparado_antes_da_varredura(self):
+        token = 'token-legado-whatsapp'
+        with patch.object(
+            TenantPublicLinkService,
+            '_repair_legacy_agenda_link',
+            return_value=self.banco.db_alias,
+        ) as reparar:
+            alias = TenantPublicLinkService.resolve_path(f'/agendar/{token}/')
+
+        self.assertEqual(alias, self.banco.db_alias)
+        reparar.assert_called_once_with(token)
+
     @override_settings(TENANT_DATABASE_ROUTING_ENABLED=False)
     def test_task_preserva_execucao_unica_com_flag_desligada(self):
         callback = lambda: 7

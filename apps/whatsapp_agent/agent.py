@@ -7,8 +7,9 @@ from django.urls import reverse
 
 from apps.agenda.models import AgendaLinkPublico
 from apps.cadastros.models import Cliente
+from apps.core.models import EmpresaBanco, Filial
 from apps.core.services.tenant_public_link_service import TenantPublicLinkService
-from apps.core.tenant_context import get_current_database_alias
+from apps.core.tenant_registry import register_tenant_database
 
 
 HUMANO = {'atendente', 'humano', 'pessoa', 'falar com atendente', 'falar com uma pessoa'}
@@ -55,13 +56,37 @@ def _menu_principal(configuracao):
     )
 
 
+def _destino_agenda(conversa):
+    """Traduz a filial central do WhatsApp para a filial do banco operacional."""
+    if not settings.TENANT_DATABASE_ROUTING_ENABLED:
+        return conversa.filial, 'default'
+
+    banco = EmpresaBanco.objects.using('default').filter(
+        empresa_id=conversa.filial.empresa_id,
+        ativo=True,
+        status=EmpresaBanco.Status.ATIVO,
+    ).first()
+    if not banco or not register_tenant_database(banco):
+        return None, None
+
+    filial = Filial.objects.using(banco.db_alias).filter(
+        cnpj=conversa.filial.cnpj,
+        ativo=True,
+    ).first()
+    return (filial, banco.db_alias) if filial else (None, None)
+
+
 def _link_agendamento(conversa):
-    link, _ = AgendaLinkPublico.objects.get_or_create(filial=conversa.filial)
+    filial, db_alias = _destino_agenda(conversa)
+    if not filial:
+        return ''
+
+    link, _ = AgendaLinkPublico.objects.using(db_alias).get_or_create(filial=filial)
     if not link.ativo:
         link.ativo = True
-        link.save(update_fields=['ativo', 'updated_at'])
+        link.save(using=db_alias, update_fields=['ativo', 'updated_at'])
     TenantPublicLinkService.register(
-        kind='agenda', token=link.token, db_alias=get_current_database_alias(),
+        kind='agenda', token=link.token, db_alias=db_alias,
     )
     caminho = reverse('agenda_publica:agendar', args=[link.token])
     base_url = settings.PUBLIC_BASE_URL.rstrip('/')
@@ -115,10 +140,16 @@ def processar_mensagem(conversa, texto):
         conversa.etapa = 'aguardando_opcao'
         conversa.contexto = {}
         conversa.save(update_fields=['etapa', 'contexto', 'updated_at'])
+        link_agendamento = _link_agendamento(conversa)
+        if not link_agendamento:
+            return (
+                'Não consegui abrir a agenda agora. Por favor, responda *2* '
+                'para falar com um atendente.'
+            )
         return (
             'Perfeito! Para escolher o profissional, o serviço, o dia e o horário, '
             'acesse o link abaixo:\n\n'
-            f'{_link_agendamento(conversa)}\n\n'
+            f'{link_agendamento}\n\n'
             'Quando quiser ver as opções novamente, digite *menu*.'
         )
 

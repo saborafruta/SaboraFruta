@@ -40,6 +40,49 @@ class TenantPublicLinkService:
         )
 
     @classmethod
+    def _repair_legacy_agenda_link(cls, token):
+        """Move um link criado no gerencial para o tenant correspondente.
+
+        A primeira versão do agente de WhatsApp gravava o token no banco
+        central, embora a agenda seja operacional. Este reparo mantém os links
+        já enviados funcionando e deixa o índice apontando para o banco certo.
+        """
+        model = apps.get_model('agenda.AgendaLinkPublico')
+        filial_model = apps.get_model('core.Filial')
+        legacy = (
+            model._base_manager.using('default')
+            .select_related('filial')
+            .filter(token=token, ativo=True)
+            .first()
+        )
+        if not legacy:
+            return None
+
+        banco = EmpresaBanco.objects.using('default').filter(
+            empresa_id=legacy.filial.empresa_id,
+            ativo=True,
+            status=EmpresaBanco.Status.ATIVO,
+        ).first()
+        if not banco or not register_tenant_database(banco):
+            return None
+
+        filial = filial_model._base_manager.using(banco.db_alias).filter(
+            cnpj=legacy.filial.cnpj,
+            ativo=True,
+        ).first()
+        if not filial:
+            return None
+
+        link, _ = model._base_manager.using(banco.db_alias).get_or_create(
+            filial_id=filial.pk,
+            defaults={'token': token, 'ativo': True},
+        )
+        if link.token != token:
+            return None
+        cls.register(kind='agenda', token=token, db_alias=banco.db_alias)
+        return banco.db_alias
+
+    @classmethod
     def resolve_path(cls, path):
         route = cls.route_for_path(path)
         if not route:
@@ -57,6 +100,11 @@ class TenantPublicLinkService:
             ).first()
             if banco and register_tenant_database(banco):
                 return banco.db_alias
+
+        if kind == 'agenda':
+            repaired_alias = cls._repair_legacy_agenda_link(token)
+            if repaired_alias:
+                return repaired_alias
 
         model = apps.get_model(model_label)
         for banco in EmpresaBanco.objects.using('default').filter(

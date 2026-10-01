@@ -100,6 +100,15 @@ class AgenteWhatsAppTests(TestCase):
         self.assertEqual(conversa.etapa, 'atendimento_humano')
         self.assertIsNone(processar_mensagem(conversa, 'oi'))
 
+    @patch('apps.whatsapp_agent.agent._destino_agenda', return_value=(None, None))
+    def test_opcao_um_nao_envia_link_quebrado_se_tenant_estiver_indisponivel(self, _destino):
+        conversa = self.nova_conversa()
+
+        resposta = processar_mensagem(conversa, '1')
+
+        self.assertNotIn('/agendar/', resposta)
+        self.assertIn('responda *2*', resposta)
+
     def test_opcao_tres_encerra_e_novo_oi_reabre_conversa(self):
         conversa = self.nova_conversa()
 
