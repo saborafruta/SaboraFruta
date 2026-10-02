@@ -2364,6 +2364,8 @@ class Op2Tests(TestCase):
         self.assertContains(resposta, "this.draft.item_id=''")
         self.assertContains(resposta, 'Duplicar produto da OP')
         self.assertContains(resposta, 'Adicionar cópia')
+        self.assertContains(resposta, "modoItem==='duplicar'&&draft.grades.length===1")
+        self.assertContains(resposta, 'redistribuirQuantidadeModal(')
         self.assertContains(resposta, 'abrirNovoProduto()')
         self.assertContains(resposta, 'rel="noopener"')
         self.assertContains(resposta, 'op2-order-header')
