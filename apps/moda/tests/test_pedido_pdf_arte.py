@@ -145,7 +145,7 @@ class ArteNoPdfTests(TestCase):
         frame = PedidoPdfService._informacoes_grupo(pedido, grupo, _estilos(), 380, 470, False)
         self.assertEqual(getattr(frame, '_scale', 1), 1)
         self.assertEqual(list(fontes(frame)), [9.5, 9.5])
-        self.assertEqual(_paginas(PedidoPdfService.gerar(pedido)), 1)
+        self.assertEqual(_paginas(PedidoPdfService.gerar(pedido)), 2)
 
     def test_grupo_so_reduz_fonte_quando_lista_cresce(self):
         from apps.moda.services.item_groups import agrupar_itens_op
@@ -169,7 +169,7 @@ class ArteNoPdfTests(TestCase):
                 self.assertIn(f'Pessoa {nome} {n}', texto)
         self.assertEqual(getattr(frame, '_scale', 1), 1)
 
-    def test_mesmo_produto_com_duas_grades_ocupa_uma_folha_da_op(self):
+    def test_mesmo_produto_em_itens_separados_ocupa_duas_folhas_da_op(self):
         pedido = self._pedido()
         produto = ProdutoModa.objects.create(
             filial=self.filial, codigo='CAM-01', nome='Camisa Dry Tech',
@@ -202,7 +202,9 @@ class ArteNoPdfTests(TestCase):
         ))
 
         self.assertTrue(pdf.startswith(b'%PDF'))
-        self.assertEqual(_paginas(pdf), 1)
+        self.assertEqual(_paginas(pdf), 2)
+        # O agrupamento visual da tela continua igual; a separacao e uma regra
+        # especifica do documento de producao.
         self.assertEqual(len(agrupar_itens_op(itens)), 1)
         self.assertIn('DRY', texto)
         self.assertNotIn('Tipo impressao', texto)

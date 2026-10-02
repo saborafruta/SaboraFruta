@@ -338,7 +338,11 @@ class PedidoPdfService:
         e = _estilos()
         elementos = []
         itens = list(pedido.itens.all())
-        grupos = agrupar_itens_op(itens)
+        # Cada linha cadastrada no pedido representa um item de producao
+        # independente e, portanto, precisa de uma folha propria. A tela pode
+        # continuar agrupando itens iguais para facilitar a leitura, mas o PDF
+        # nao deve juntar duas linhas apenas porque produto e ficha coincidem.
+        grupos = [agrupar_itens_op([item])[0] for item in itens]
         # O frame do ReportLab desconta 6 pt em cada borda além das margens.
         altura_util = PAGINA[1] - doc.topMargin - doc.bottomMargin - 14
         medidor = Canvas(BytesIO())
