@@ -21,7 +21,7 @@ from apps.whatsapp_agent.conversation_service import (
     encerrar_conversa,
     encerrar_conversas_inativas,
 )
-from apps.whatsapp_agent.forms import ConfiguracaoWhatsAppForm
+from apps.whatsapp_agent.forms import ConfiguracaoWhatsAppForm, FluxoWhatsAppForm
 from apps.whatsapp_agent.gateway import EvolutionClient, GatewayWhatsAppError, qr_data_url
 from apps.whatsapp_agent.models import (
     ConfiguracaoWhatsApp,
@@ -272,7 +272,17 @@ class AgenteWhatsAppTests(TestCase):
     def test_confirmacao_do_agendamento_e_enviada_e_registrada(self, enviar_texto):
         enviar_texto.return_value = {'key': {'id': 'confirmacao-1'}}
         self.configuracao.status = ConfiguracaoWhatsApp.Status.CONECTADO
-        self.configuracao.save(update_fields=['status'])
+        self.configuracao.mensagem_confirmacao_agendamento = (
+            'Confirmado para {nome}: {servicos} com {profissional} '
+            'em {data} às {horario}.'
+        )
+        self.configuracao.mensagem_lembrete_agendamento = (
+            'Lembrete para {nome}: {servicos}, {data} às {horario}.'
+        )
+        self.configuracao.save(update_fields=[
+            'status', 'mensagem_confirmacao_agendamento',
+            'mensagem_lembrete_agendamento',
+        ])
         inicio = timezone.now() + timedelta(days=1)
         agendamento = Agendamento.objects.create(
             filial=self.filial,
@@ -302,8 +312,10 @@ class AgenteWhatsAppTests(TestCase):
         self.assertIn('Confirmação enviada', mensagem)
         telefone, texto = enviar_texto.call_args.args
         self.assertEqual(telefone, '5584999990000')
-        self.assertIn('Seu agendamento foi confirmado', texto)
+        self.assertIn('Confirmado para Ana Cliente', texto)
         self.assertIn('Corte de cabelo', texto)
+        self.assertIn(str(self.profissional), texto)
+        self.assertNotIn('{data}', texto)
         saida = MensagemWhatsApp.objects.get(tipo='confirmacao_agendamento')
         self.assertEqual(saida.status, 'enviada')
         self.assertEqual(saida.identificador_externo, 'confirmacao-1')
@@ -315,7 +327,8 @@ class AgenteWhatsAppTests(TestCase):
             db_alias='default',
             lembrete=True,
         )
-        self.assertIn('Este é um lembrete do seu agendamento', enviar_texto.call_args.args[1])
+        self.assertIn('Lembrete para Ana Cliente', enviar_texto.call_args.args[1])
+        self.assertNotIn('{horario}', enviar_texto.call_args.args[1])
         self.assertTrue(MensagemWhatsApp.objects.filter(tipo='lembrete_agendamento').exists())
 
     @patch(
@@ -440,3 +453,11 @@ class EvolutionClientTests(SimpleTestCase):
             list(ConfiguracaoWhatsAppForm().fields),
             ['agente_ativo', 'ativo'],
         )
+
+    def test_fluxo_expoe_mensagens_da_agenda_para_personalizacao(self):
+        campos = FluxoWhatsAppForm().fields
+
+        self.assertIn('mensagem_confirmacao_agendamento', campos)
+        self.assertIn('mensagem_lembrete_agendamento', campos)
+        self.assertIn('{nome}', campos['mensagem_confirmacao_agendamento'].initial)
+        self.assertIn('{horario}', campos['mensagem_lembrete_agendamento'].initial)

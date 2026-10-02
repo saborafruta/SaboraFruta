@@ -27,6 +27,7 @@
       </div>
       <div class="wa-grid">
         {% for field in form %}
+          {% if field.name != 'mensagem_confirmacao_agendamento' and field.name != 'mensagem_lembrete_agendamento' %}
           {% if field.name == 'encerramento_automatico_ativo' %}
             <div class="wa-field full">
               <strong>Encerramento por inatividade</strong>
@@ -38,7 +39,31 @@
             {% if field.help_text %}<div class="wa-help">{{ field.help_text }}</div>{% endif %}
             {% if field.errors %}<div class="wa-errors">{{ field.errors|first }}</div>{% endif %}
           </div>
+          {% endif %}
         {% endfor %}
+      </div>
+    </section>
+
+    <section class="wa-card wa-section">
+      <div class="wa-section-head">
+        <div>
+          <h2>Mensagens da agenda</h2>
+          <p class="wa-muted">Edite os textos enviados automaticamente quando o cliente agenda ou recebe um lembrete.</p>
+        </div>
+      </div>
+      <div class="wa-grid">
+        {% for field in form %}
+          {% if field.name == 'mensagem_confirmacao_agendamento' or field.name == 'mensagem_lembrete_agendamento' %}
+            <div class="wa-field full">
+              <label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+              {% if field.help_text %}<div class="wa-help">{{ field.help_text }}</div>{% endif %}
+              {% if field.errors %}<div class="wa-errors">{{ field.errors|first }}</div>{% endif %}
+            </div>
+          {% endif %}
+        {% endfor %}
+        <div class="wa-field full">
+          <div class="wa-help"><strong>Como funciona:</strong> mantenha as variáveis entre chaves no ponto em que os dados devem aparecer. Você também pode usar *asteriscos* para destacar textos no WhatsApp.</div>
+        </div>
       </div>
     </section>
 

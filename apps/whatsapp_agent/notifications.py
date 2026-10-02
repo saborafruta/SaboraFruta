@@ -59,7 +59,15 @@ def _configuracao_conectada(filial, db_alias):
     )
 
 
-def _texto_agendamento(agendamento, db_alias, *, lembrete):
+def _aplicar_variaveis_agendamento(modelo, valores):
+    """Substitui somente as variáveis conhecidas sem quebrar textos personalizados."""
+    texto = modelo or ''
+    for chave, valor in valores.items():
+        texto = texto.replace(f'{{{chave}}}', str(valor))
+    return texto
+
+
+def _texto_agendamento(agendamento, db_alias, *, configuracao, lembrete):
     servicos = ', '.join(
         AgendamentoItem.objects.using(db_alias)
         .filter(agendamento_id=agendamento.pk)
@@ -67,22 +75,17 @@ def _texto_agendamento(agendamento, db_alias, *, lembrete):
         .values_list('descricao', flat=True)
     )
     inicio = timezone.localtime(agendamento.inicio)
-    titulo = (
-        f'Olá, {agendamento.pessoa_atendida_nome}! 👋\n\n'
-        'Este é um lembrete do seu agendamento:'
-        if lembrete else
-        f'Olá, {agendamento.pessoa_atendida_nome}! ✅\n\n'
-        'Seu agendamento foi confirmado:'
+    modelo = (
+        configuracao.mensagem_lembrete_agendamento
+        if lembrete else configuracao.mensagem_confirmacao_agendamento
     )
-    final = '\n\nEsperamos você!' if lembrete else '\n\nSeu horário já está reservado. Até lá!'
-    return (
-        f'{titulo}\n\n'
-        f'*Serviço:* {servicos or "Serviço agendado"}\n'
-        f'*Profissional:* {agendamento.profissional}\n'
-        f'*Data:* {inicio:%d/%m/%Y}\n'
-        f'*Horário:* {inicio:%H:%M}'
-        f'{final}'
-    )
+    return _aplicar_variaveis_agendamento(modelo, {
+        'nome': agendamento.pessoa_atendida_nome,
+        'servicos': servicos or 'Serviço agendado',
+        'profissional': agendamento.profissional,
+        'data': inicio.strftime('%d/%m/%Y'),
+        'horario': inicio.strftime('%H:%M'),
+    })
 
 
 def _enviar_notificacao_agendamento(agendamento, *, db_alias, lembrete=False):
@@ -98,7 +101,12 @@ def _enviar_notificacao_agendamento(agendamento, *, db_alias, lembrete=False):
     if not configuracao:
         return False, 'O WhatsApp desta filial não está conectado.'
 
-    texto = _texto_agendamento(agendamento, db_alias, lembrete=lembrete)
+    texto = _texto_agendamento(
+        agendamento,
+        db_alias,
+        configuracao=configuracao,
+        lembrete=lembrete,
+    )
     remote_jid = f'{telefone}@s.whatsapp.net'
     conversa, _ = ConversaWhatsApp.objects.using('default').get_or_create(
         configuracao_id=configuracao.pk,
