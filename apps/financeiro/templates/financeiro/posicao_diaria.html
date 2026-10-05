@@ -662,6 +662,15 @@
     <button type="submit" class="btn-secondary justify-center">Aplicar</button>
   </form>
 
+  <form method="get" action="{% url 'financeiro:posicao_diaria_resumo' %}" target="_blank" class="card flex flex-wrap items-end justify-between gap-3 p-4" id="relatorio-dia-mes">
+    <div><h3 class="font-semibold">Relatório de entradas e saídas por dia e por mês</h3><p class="text-xs text-gray-500">Escolha os dias, veja os totais e imprima.</p></div>
+    <div class="flex flex-wrap items-end gap-2">
+      <label class="text-xs font-semibold">De<input type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}" class="form-input mt-1 block"></label>
+      <label class="text-xs font-semibold">Até<input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}" class="form-input mt-1 block"></label>
+      <button type="submit" class="btn-primary">Abrir e imprimir relatório</button>
+    </div>
+  </form>
+
   {% if data_inicio != data_fim and posicao.resumo_diario %}
   <section class="card overflow-hidden p-0" id="resumo-periodo">
     <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-4">

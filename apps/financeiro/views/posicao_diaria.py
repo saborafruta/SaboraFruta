@@ -1099,3 +1099,35 @@ class PosicaoDiariaCaixaRelatorioView(PermissaoRequiredMixin, View):
             "gerado_em": timezone.localtime(),
             "retorno_url": retorno,
         })
+
+
+class PosicaoDiariaResumoView(PermissaoRequiredMixin, View):
+    """Relatório imprimível de entradas e saídas por dia e por mês, com dias à escolha."""
+
+    permissao_modulo = "financeiro"
+    permissao_acao = "ver"
+    template_name = "financeiro/posicao_diaria_resumo.html"
+    MAX_DIAS = 366
+
+    def get(self, request):
+        hoje = timezone.localdate()
+        inicio = parse_date(request.GET.get("data_inicio", "")) or hoje.replace(day=1)
+        fim = parse_date(request.GET.get("data_fim", "")) or hoje
+        if inicio > fim:
+            inicio, fim = fim, inicio
+        limitado = (fim - inicio).days + 1 > self.MAX_DIAS
+        if limitado:
+            inicio = fim - timedelta(days=self.MAX_DIAS - 1)
+        posicao = PosicaoDiariaCaixaService(
+            request.filial_ativa, fim, data_inicio=inicio,
+        ).gerar()
+        return render(request, self.template_name, {
+            "title": "Entradas e saídas por dia e por mês",
+            "filial": request.filial_ativa,
+            "posicao": posicao,
+            "data_inicio": inicio,
+            "data_fim": fim,
+            "limitado": limitado,
+            "max_dias": self.MAX_DIAS,
+            "gerado_em": timezone.localtime(),
+        })

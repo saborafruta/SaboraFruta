@@ -1,0 +1,93 @@
+{% extends "_base.html" %}
+
+{% block title %}Entradas e saídas por dia e mês{% endblock %}
+{% block page_title %}Entradas e saídas por dia e mês{% endblock %}
+
+{% block extra_head %}
+<style>
+  #resumo-relatorio { color:#172033; font-family:Inter,Arial,sans-serif; }
+  .rs-sheet { background:#fff; border:1px solid #aebaca; border-radius:2px; padding:16px; }
+  .rs-header { display:flex; justify-content:space-between; gap:18px; padding-bottom:8px; border-bottom:2px solid #1f4d7a; }
+  .rs-kicker { color:#1f4d7a; font-size:10px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+  .rs-title { margin:2px 0 0; font-size:20px; font-weight:800; }
+  .rs-period { text-align:right; font-size:13px; font-weight:700; }
+  .rs-period small { display:block; font-size:10px; font-weight:400; }
+  .rs-section { margin-top:14px; }
+  .rs-section h3 { margin:0 0 4px; color:#1f4d7a; font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+  .rs-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .rs-table th { padding:5px 8px; background:#1f4d7a; color:#fff; font-size:10px; text-align:left; text-transform:uppercase; }
+  .rs-table td { padding:4px 8px; border-bottom:1px solid #cfd7e1; }
+  .rs-table .num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .rs-table th.num { text-align:right; }
+  .rs-in { color:#0f7a43; font-weight:700; }
+  .rs-out { color:#b42333; font-weight:700; }
+  .rs-table tfoot td { border-top:2px solid #1f4d7a; border-bottom:0; font-weight:800; }
+  .rs-table tr { break-inside:avoid; page-break-inside:avoid; }
+  .rs-table thead { display:table-header-group; }
+  .rs-note { margin-top:10px; color:#4b5563; font-size:10px; }
+  #resumo-relatorio table tr:hover { background:#fff !important; color:#172033 !important; }
+  @page { size:A4 portrait; margin:0; }
+  @media print {
+    nav, header, aside, .no-print, .app-back-link { display:none !important; }
+    html, body, body > .flex, .app-shell-content, main, .app-content-frame { background:#fff !important; }
+    html, body, main, .app-content-frame { margin:0 !important; padding:0 !important; }
+    .app-content-frame { max-width:none !important; }
+    #resumo-relatorio { width:100%; padding:10mm; background:#fff; }
+    .rs-sheet { border:0; padding:0; }
+    * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="no-print mb-4 flex flex-wrap items-end justify-between gap-3">
+  <form method="get" class="flex flex-wrap items-end gap-2">
+    <label class="text-sm font-semibold">De<input type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}" class="form-input mt-1 block"></label>
+    <label class="text-sm font-semibold">Até<input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}" class="form-input mt-1 block"></label>
+    <button type="submit" class="btn-primary">Gerar</button>
+  </form>
+  <div class="flex gap-2">
+    <a href="{% url 'financeiro:posicao_diaria' %}" class="btn-secondary">Voltar para posição de caixa</a>
+    <button type="button" onclick="window.print()" class="btn-secondary">Imprimir</button>
+  </div>
+</div>
+{% if limitado %}<p class="no-print mb-3 rounded-lg bg-amber-100 p-3 text-sm text-amber-900">O período foi limitado a {{ max_dias }} dias.</p>{% endif %}
+
+<div id="resumo-relatorio">
+  <article class="rs-sheet">
+    <header class="rs-header">
+      <div><span class="rs-kicker">Posição de caixa</span><h2 class="rs-title">Entradas e saídas por dia e por mês</h2><small>{{ filial.nome_fantasia|default:filial.razao_social }}</small></div>
+      <div class="rs-period">{{ data_inicio|date:"d/m/Y" }} a {{ data_fim|date:"d/m/Y" }}<small>Gerado em {{ gerado_em|date:"d/m/Y H:i" }}</small></div>
+    </header>
+
+    {% if posicao.resumo_diario %}
+    <section class="rs-section">
+      <h3>Por mês</h3>
+      <table class="rs-table" data-columns="off">
+        <thead><tr><th>Mês</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Resultado</th></tr></thead>
+        <tbody>
+          {% for mes in posicao.resumo_mensal %}
+          <tr><td>{{ mes.data|date:"m/Y" }} · {{ mes.dias }} dia{{ mes.dias|pluralize }}</td><td class="num rs-in">R$ {{ mes.entradas|floatformat:2 }}</td><td class="num rs-out">R$ {{ mes.saidas|floatformat:2 }}</td><td class="num"><strong>R$ {{ mes.resultado|floatformat:2 }}</strong></td></tr>
+          {% endfor %}
+        </tbody>
+        <tfoot><tr><td>Total do período</td><td class="num rs-in">R$ {{ posicao.total_entradas|floatformat:2 }}</td><td class="num rs-out">R$ {{ posicao.total_saidas|floatformat:2 }}</td><td class="num">R$ {{ posicao.variacao_dia|floatformat:2 }}</td></tr></tfoot>
+      </table>
+    </section>
+    <section class="rs-section">
+      <h3>Por dia</h3>
+      <table class="rs-table" data-columns="off">
+        <thead><tr><th>Dia</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Resultado</th></tr></thead>
+        <tbody>
+          {% for dia in posicao.resumo_diario %}
+          <tr><td>{{ dia.data|date:"d/m/Y" }} · {{ dia.data|date:"D" }}</td><td class="num rs-in">R$ {{ dia.entradas|floatformat:2 }}</td><td class="num rs-out">R$ {{ dia.saidas|floatformat:2 }}</td><td class="num"><strong>R$ {{ dia.resultado|floatformat:2 }}</strong></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    <p class="rs-note">Saídas incluem as taxas de recebimento e pagamento; o resultado já considera as taxas de recebimento abatidas das entradas.</p>
+    {% else %}
+    <p class="rs-section">Nenhum movimento no período.</p>
+    {% endif %}
+  </article>
+</div>
+{% endblock %}

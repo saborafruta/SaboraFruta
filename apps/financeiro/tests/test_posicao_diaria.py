@@ -288,6 +288,28 @@ class PosicaoDiariaCaixaTests(TestCase):
         unico = self.client.get(url, {"data": "2026-09-01"})
         self.assertNotContains(unico, "Entradas e saídas por dia e por mês")
 
+    def test_relatorio_resumo_imprimivel_aceita_dias_escolhidos(self):
+        self._lancamentos_virada_de_mes()
+
+        response = self.client.get(reverse("financeiro:posicao_diaria_resumo"), {
+            "data_inicio": "2026-08-31", "data_fim": "2026-09-01",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [linha["data"] for linha in response.context["posicao"]["resumo_diario"]],
+            [date(2026, 8, 31), date(2026, 9, 1)],
+        )
+        self.assertContains(response, "window.print()")
+        self.assertContains(response, "31/08/2026 a 01/09/2026")
+        self.assertNotContains(response, "30/08/2026 ·")
+
+    def test_tela_tem_botao_do_relatorio_com_escolha_de_dias(self):
+        response = self.client.get(reverse("financeiro:posicao_diaria"), {"data": "2026-09-01"})
+
+        self.assertContains(response, 'id="relatorio-dia-mes"')
+        self.assertContains(response, reverse("financeiro:posicao_diaria_resumo"))
+
     def test_relatorio_separa_dias_ordena_e_exibe_taxas_como_despesas(self):
         for data_movimento, historico, valor in (
             (date(2026, 8, 20), "Entrada quinta", Decimal("25.00")),

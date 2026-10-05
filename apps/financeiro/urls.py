@@ -10,7 +10,9 @@ from apps.financeiro.views.contas_bancarias import ContaBancariaListView
 from apps.financeiro.views import credito_cliente as cc_views
 from apps.financeiro.views.painel import PainelFinanceiroView
 from apps.financeiro.views.fluxo_caixa import FluxoCaixaView
-from apps.financeiro.views.posicao_diaria import PosicaoDiariaCaixaRelatorioView, PosicaoDiariaCaixaView
+from apps.financeiro.views.posicao_diaria import (
+    PosicaoDiariaCaixaRelatorioView, PosicaoDiariaCaixaView, PosicaoDiariaResumoView,
+)
 from apps.financeiro.views.conciliacao import (
     ExtratoListView, ExtratoLancarView, ExtratoConciliarView, ExtratoDesconciliarView,
 )
@@ -26,6 +28,11 @@ urlpatterns = [
         "posicao-diaria/relatorio/",
         PosicaoDiariaCaixaRelatorioView.as_view(),
         name="posicao_diaria_relatorio",
+    ),
+    path(
+        "posicao-diaria/resumo/",
+        PosicaoDiariaResumoView.as_view(),
+        name="posicao_diaria_resumo",
     ),
     path("contas-bancarias/", ContaBancariaListView.as_view(), name="contas_bancarias"),
 
