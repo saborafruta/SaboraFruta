@@ -327,6 +327,9 @@ class PosicaoDiariaCaixaService:
                 - total_taxas_pagamentos
                 - total_taxas_transferencias
             ),
+            **self._resumos_por_dia_e_mes(
+                entradas, saidas, entradas_com_taxa, taxas_pagamentos,
+            ),
             "totais_forma_entrada": self._agrupar(entradas, "forma_pagamento", "entrada"),
             "totais_forma_saida": self._agrupar(saidas, "forma_pagamento", "saida"),
             "totais_conta_entrada": self._agrupar(entradas, "conta", "entrada"),
@@ -337,6 +340,54 @@ class PosicaoDiariaCaixaService:
             "possui_caixa_dinheiro": any(conta.eh_dinheiro for conta in contas),
             "previsoes": previsoes,
             "total_previsto": sum((item["valor_liquido"] for item in previsoes), ZERO),
+        }
+
+    @staticmethod
+    def _resumos_por_dia_e_mes(entradas, saidas, entradas_com_taxa, taxas_pagamentos):
+        """
+        Totais de entradas e saídas por dia e por mês do período, com a mesma
+        regra dos cards: saídas incluem as taxas, e o resultado desconta só
+        saídas bancárias, taxas de pagamentos e de transferências (a taxa de
+        recebimento comum já está abatida da entrada líquida).
+        """
+        dias = defaultdict(lambda: {
+            "entradas": ZERO, "saidas": ZERO, "resultado": ZERO, "movimentos": 0,
+        })
+        for mov in entradas:
+            linha = dias[mov.data]
+            linha["entradas"] += mov.entrada
+            linha["resultado"] += mov.entrada
+            linha["movimentos"] += 1
+        for mov in saidas:
+            linha = dias[mov.data]
+            linha["saidas"] += mov.saida
+            linha["resultado"] -= mov.saida
+            linha["movimentos"] += 1
+        for mov in entradas_com_taxa:
+            linha = dias[mov.data]
+            linha["saidas"] += mov.valor_taxa
+            if mov.transferencia:
+                linha["resultado"] -= mov.valor_taxa
+        for mov in taxas_pagamentos:
+            linha = dias[mov.data]
+            linha["saidas"] += mov.valor_taxa
+            linha["resultado"] -= mov.valor_taxa
+
+        resumo_diario = [{"data": dia, **dias[dia]} for dia in sorted(dias)]
+        meses = {}
+        for linha in resumo_diario:
+            chave = (linha["data"].year, linha["data"].month)
+            mes = meses.setdefault(chave, {
+                "data": linha["data"].replace(day=1), "entradas": ZERO, "saidas": ZERO,
+                "resultado": ZERO, "dias": 0,
+            })
+            mes["entradas"] += linha["entradas"]
+            mes["saidas"] += linha["saidas"]
+            mes["resultado"] += linha["resultado"]
+            mes["dias"] += 1
+        return {
+            "resumo_diario": resumo_diario,
+            "resumo_mensal": [meses[chave] for chave in sorted(meses)],
         }
 
     @staticmethod

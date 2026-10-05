@@ -237,6 +237,57 @@ class PosicaoDiariaCaixaTests(TestCase):
         self.assertContains(response, "avoid:['.cr-day-table thead','.cr-line','.cr-summary','.cr-accounts']")
         self.assertNotContains(response, 'class="cr-fees"')
 
+    def _lancamentos_virada_de_mes(self):
+        for data_movimento, historico, valor in (
+            (date(2026, 8, 30), "Entrada A", Decimal("100.00")),
+            (date(2026, 8, 31), "Saída B", Decimal("-30.00")),
+            (date(2026, 8, 31), "Entrada C", Decimal("50.00")),
+            (date(2026, 9, 1), "Saída D", Decimal("-20.00")),
+        ):
+            ExtratoBancario.objects.create(
+                filial=self.filial, conta_bancaria=self.banco, data_lancamento=data_movimento,
+                historico=historico, valor=valor, origem="manual",
+            )
+
+    def test_resumo_por_dia_e_por_mes_soma_entradas_e_saidas(self):
+        self._lancamentos_virada_de_mes()
+
+        posicao = PosicaoDiariaCaixaService(
+            self.filial, date(2026, 9, 1), data_inicio=date(2026, 8, 30),
+        ).gerar()
+
+        dias = {linha["data"]: linha for linha in posicao["resumo_diario"]}
+        self.assertEqual(sorted(dias), [date(2026, 8, 30), date(2026, 8, 31), date(2026, 9, 1)])
+        self.assertEqual(dias[date(2026, 8, 31)]["entradas"], Decimal("50.00"))
+        self.assertEqual(dias[date(2026, 8, 31)]["saidas"], Decimal("30.00"))
+        self.assertEqual(dias[date(2026, 8, 31)]["resultado"], Decimal("20.00"))
+        meses = {linha["data"]: linha for linha in posicao["resumo_mensal"]}
+        self.assertEqual(meses[date(2026, 8, 1)]["entradas"], Decimal("150.00"))
+        self.assertEqual(meses[date(2026, 8, 1)]["saidas"], Decimal("30.00"))
+        self.assertEqual(meses[date(2026, 8, 1)]["dias"], 2)
+        self.assertEqual(meses[date(2026, 9, 1)]["saidas"], Decimal("20.00"))
+        self.assertEqual(
+            sum(m["entradas"] for m in posicao["resumo_mensal"]), posicao["total_entradas"],
+        )
+        self.assertEqual(
+            sum(m["saidas"] for m in posicao["resumo_mensal"]), posicao["total_saidas"],
+        )
+
+    def test_tela_mostra_resumo_por_dia_e_mes_so_em_periodo_com_varios_dias(self):
+        self._lancamentos_virada_de_mes()
+        url = reverse("financeiro:posicao_diaria")
+
+        multi = self.client.get(url, {
+            "data": "2026-09-01", "periodo": "personalizado",
+            "data_inicio": "2026-08-30", "data_fim": "2026-09-01",
+        })
+        self.assertContains(multi, "Entradas e saídas por dia e por mês")
+        self.assertContains(multi, "08/2026")
+        self.assertContains(multi, "31/08/2026")
+
+        unico = self.client.get(url, {"data": "2026-09-01"})
+        self.assertNotContains(unico, "Entradas e saídas por dia e por mês")
+
     def test_relatorio_separa_dias_ordena_e_exibe_taxas_como_despesas(self):
         for data_movimento, historico, valor in (
             (date(2026, 8, 20), "Entrada quinta", Decimal("25.00")),

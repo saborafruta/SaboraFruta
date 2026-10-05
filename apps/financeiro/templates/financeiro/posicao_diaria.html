@@ -662,6 +662,39 @@
     <button type="submit" class="btn-secondary justify-center">Aplicar</button>
   </form>
 
+  {% if data_inicio != data_fim and posicao.resumo_diario %}
+  <section class="card overflow-hidden p-0" id="resumo-periodo">
+    <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-4">
+      <div><h3 class="text-lg font-semibold">Entradas e saídas por dia e por mês</h3><p class="mt-0.5 text-xs text-gray-500">Totais do período selecionado, com a mesma regra dos cards acima.</p></div>
+    </div>
+    <div class="grid gap-5 border-t p-4 lg:grid-cols-2">
+      <div class="overflow-x-auto">
+        <h4 class="mb-2 text-xs font-bold uppercase text-gray-500">Por mês</h4>
+        <table class="w-full text-sm" data-columns="off">
+          <thead><tr class="text-left text-xs uppercase text-gray-500"><th class="py-2">Mês</th><th class="py-2 text-right">Entradas</th><th class="py-2 text-right">Saídas</th><th class="py-2 text-right">Resultado</th></tr></thead>
+          <tbody>
+            {% for mes in posicao.resumo_mensal %}
+            <tr class="border-t"><td class="py-2 font-semibold">{{ mes.data|date:"m/Y" }} <span class="text-xs font-normal text-gray-500">· {{ mes.dias }} dia{{ mes.dias|pluralize }}</span></td><td class="py-2 text-right text-emerald-500">R$ {{ mes.entradas|floatformat:2 }}</td><td class="py-2 text-right text-rose-500">R$ {{ mes.saidas|floatformat:2 }}</td><td class="py-2 text-right font-semibold">R$ {{ mes.resultado|floatformat:2 }}</td></tr>
+            {% endfor %}
+          </tbody>
+          <tfoot><tr class="border-t font-bold"><td class="py-2">Total</td><td class="py-2 text-right text-emerald-500">R$ {{ posicao.total_entradas|floatformat:2 }}</td><td class="py-2 text-right text-rose-500">R$ {{ posicao.total_saidas|floatformat:2 }}</td><td class="py-2 text-right">R$ {{ posicao.variacao_dia|floatformat:2 }}</td></tr></tfoot>
+        </table>
+      </div>
+      <div class="max-h-96 overflow-auto">
+        <h4 class="mb-2 text-xs font-bold uppercase text-gray-500">Por dia</h4>
+        <table class="w-full text-sm" data-columns="off">
+          <thead><tr class="text-left text-xs uppercase text-gray-500"><th class="py-2">Dia</th><th class="py-2 text-right">Entradas</th><th class="py-2 text-right">Saídas</th><th class="py-2 text-right">Resultado</th></tr></thead>
+          <tbody>
+            {% for dia in posicao.resumo_diario %}
+            <tr class="border-t"><td class="py-2 font-semibold">{{ dia.data|date:"d/m/Y" }} <span class="text-xs font-normal text-gray-500">{{ dia.data|date:"D" }}</span></td><td class="py-2 text-right text-emerald-500">R$ {{ dia.entradas|floatformat:2 }}</td><td class="py-2 text-right text-rose-500">R$ {{ dia.saidas|floatformat:2 }}</td><td class="py-2 text-right font-semibold">R$ {{ dia.resultado|floatformat:2 }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   <section class="grid items-start gap-5 lg:grid-cols-2">
     <div class="pc-ledger entry overflow-hidden rounded-lg shadow-sm">
       <div class="pc-ledger-head flex items-center justify-between gap-4 px-4 py-4"><div><h3 class="pc-ledger-title text-lg font-semibold">Entradas</h3><p class="mt-0.5 text-xs text-gray-500">Vendas, recebimentos e créditos manuais</p></div><div class="flex flex-col items-end gap-2"><div class="text-right"><span class="block text-[11px] font-semibold uppercase text-gray-500">Total do dia</span><strong class="pc-ledger-total text-xl">R$ {{ posicao.total_entradas|floatformat:2 }}</strong></div><div class="flex flex-wrap justify-end gap-2">{% if pode_receber_op %}<button type="button" class="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-700" @click="opModal=true" aria-label="Receber pagamentos de OPs">+ Receber OP's{% if pedidos_com_saldo %} · {{ pedidos_com_saldo|length }}{% endif %}</button>{% endif %}<button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="contaReceberModal=true" aria-label="Adicionar conta a receber">+ Conta a receber</button><button type="button" class="pc-ledger-action rounded-md px-3 py-1.5 text-xs font-semibold transition" @click="abrirMovimento('credito')" aria-label="Adicionar entrada manual">+ Entrada</button></div></div></div>
