@@ -21,7 +21,7 @@
     <section class="orders-column{% if not pedidos %} is-empty{% endif %}" aria-labelledby="coluna-{{ status }}">
       <div class="orders-column-head"><strong id="coluna-{{ status }}">{{ titulo }}</strong><span class="orders-count">{{ pedidos|length }}</span></div>
       {% for pedido in pedidos %}
-      <article class="order-card">
+      <article class="order-card" id="pedido-{{ pedido.pk }}">
         <div class="order-top"><span class="order-number">{{ pedido.numero }}</span><div class="order-top-actions"><span class="order-price">R$ {{ pedido.total|floatformat:2 }}</span><a class="order-print" href="{% url 'catalogo:pedido-imprimir' pedido.pk %}" target="_blank" rel="noopener" title="Imprimir pedido" aria-label="Imprimir pedido {{ pedido.numero }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/><path d="M18 12h.01"/></svg></a></div></div>
         <div class="order-meta"><strong>{{ pedido.nome_cliente }}</strong><br>{{ pedido.get_modalidade_display }} · {{ pedido.get_forma_pagamento_display }}</div>
         <div class="order-items">{% for item in pedido.itens.all %}<div>{{ item.quantidade }}× {{ item.descricao }}</div>{% endfor %}</div>

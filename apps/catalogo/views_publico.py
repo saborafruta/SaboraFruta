@@ -18,7 +18,10 @@ from .models import (
     CatalogoConfiguracao, CatalogoLinkPublico, CupomCatalogo,
     ItemPedidoCatalogo, PedidoCatalogo,
 )
-from .services import enviar_resumo_whatsapp, localizar_cliente, numero_whatsapp, obter_ou_criar_cliente
+from .services import (
+    enviar_resumo_whatsapp, localizar_cliente, notificar_novo_pedido,
+    numero_whatsapp, obter_ou_criar_cliente,
+)
 
 
 def _arquivo_url(campo):
@@ -459,6 +462,7 @@ class PedidoCatalogoConfirmarView(_CatalogoPublicoBase):
                 pedido.status = PedidoCatalogo.Status.AGUARDANDO_LOJA
                 pedido.confirmado_cliente_em = timezone.now()
                 pedido.save(update_fields=['status', 'confirmado_cliente_em', 'updated_at'])
+                notificar_novo_pedido(pedido)
         aviso = 'Pedido já estava confirmado; o resumo não foi reenviado.'
         if acabou_de_confirmar:
             conversa = None

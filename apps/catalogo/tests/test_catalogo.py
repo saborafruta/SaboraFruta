@@ -9,7 +9,7 @@ from django.template.loader import get_template
 from django.urls import resolve, reverse
 from django.utils import timezone
 
-from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.core.models import Empresa, Filial, Notificacao, PerfilAcesso, Usuario
 from apps.cadastros.models import Cliente
 from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
 from apps.whatsapp_agent.agent import processar_mensagem
@@ -131,6 +131,8 @@ class CatalogoTests(TestCase):
         self.assertIn('data-category-filter=', conteudo)
         self.assertIn('Peça também', conteudo)
         self.assertIn('Cupom de desconto', conteudo)
+        self.assertIn('id="catalog-toast"', conteudo)
+        self.assertIn('adicionado ao carrinho', conteudo)
 
     def test_status_de_funcionamento_indica_aberto_e_fechado(self):
         config = CatalogoConfiguracao.objects.create(
@@ -229,6 +231,29 @@ class CatalogoTests(TestCase):
         self.assertEqual(pedido.status, PedidoCatalogo.Status.AGUARDANDO_LOJA)
         self.assertIsNotNone(pedido.confirmado_cliente_em)
         self.assertContains(response, 'Pedido confirmado!')
+        notificacao = Notificacao.objects.get(
+            filial=self.filial,
+            referencia_tipo='pedido_catalogo',
+            referencia_id=str(pedido.pk),
+        )
+        self.assertEqual(notificacao.titulo, 'Novo pedido CAT-CONFIRMA')
+        self.assertEqual(notificacao.url, f'/catalogo/pedidos/#pedido-{pedido.pk}')
+        enviar.assert_called_once()
+
+        segunda_request = self.factory.post(
+            f'/pedir/{self.link.token}/pedido/{pedido.token}/confirmar/',
+        )
+        segunda_request.user = AnonymousUser()
+        PedidoCatalogoConfirmarView.as_view()(
+            segunda_request, token=self.link.token, pedido_token=pedido.token,
+        )
+
+        self.assertEqual(
+            Notificacao.objects.filter(
+                referencia_tipo='pedido_catalogo', referencia_id=str(pedido.pk),
+            ).count(),
+            1,
+        )
         enviar.assert_called_once()
 
     def test_resumo_do_whatsapp_nao_pede_confirmacao_por_numero(self):

@@ -4,10 +4,11 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db.models import Q
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.cadastros.models import Cliente, ClienteFilial
-from apps.core.models import EmpresaBanco, Filial
+from apps.core.models import EmpresaBanco, Filial, Notificacao
 from apps.whatsapp_agent.gateway import EvolutionClient, GatewayWhatsAppError
 from apps.whatsapp_agent.models import ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp
 
@@ -28,6 +29,24 @@ def numero_whatsapp(valor):
     if len(numero) == 12 and numero.startswith('55') and numero[4] in '6789':
         numero = f'{numero[:4]}9{numero[4:]}'
     return numero if 12 <= len(numero) <= 15 else ''
+
+
+def notificar_novo_pedido(pedido):
+    """Publica um novo pedido no sino da filial sem criar duplicatas."""
+    total = f'R$ {pedido.total:.2f}'.replace('.', ',')
+    modalidade = pedido.get_modalidade_display()
+    return Notificacao.objects.update_or_create(
+        filial=pedido.filial,
+        tipo=Notificacao.Tipo.ALERTA_SISTEMA,
+        referencia_tipo='pedido_catalogo',
+        referencia_id=str(pedido.pk),
+        defaults={
+            'titulo': f'Novo pedido {pedido.numero}',
+            'mensagem': f'{pedido.nome_cliente} · {modalidade} · {total}',
+            'url': f'{reverse("catalogo:pedidos")}#pedido-{pedido.pk}',
+            'ativa': True,
+        },
+    )[0]
 
 
 def localizar_cliente(filial, telefone):
