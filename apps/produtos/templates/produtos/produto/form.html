@@ -692,6 +692,25 @@
               </div>
             </div>
           </div>
+          <div class="produto-field full">
+            <div class="produto-card">
+              <h3 class="produto-card-title"><span>#</span> Catálogo digital e pedidos pelo WhatsApp</h3>
+              <div class="produto-field-grid">
+                <div class="produto-field md">
+                  <label class="produto-toggle-row">{{ form.exibir_catalogo }} <span>Exibir no catálogo digital</span></label>
+                  {% if form.exibir_catalogo.errors %}<p class="produto-error">{{ form.exibir_catalogo.errors|first }}</p>{% endif %}
+                  <p class="produto-help">O cliente poderá adicionar este item ao carrinho pelo link público da filial.</p>
+                </div>
+                <div class="produto-field md">
+                  <label class="produto-toggle-row">{{ form.catalogo_destaque }} <span>Destacar no catálogo</span></label>
+                  {% if form.catalogo_destaque.errors %}<p class="produto-error">{{ form.catalogo_destaque.errors|first }}</p>{% endif %}
+                </div>
+                <div class="produto-field lg">{% include "produtos/produto/partials/_field.html" with field=form.catalogo_descricao %}</div>
+                <div class="produto-field sm">{% include "produtos/produto/partials/_field.html" with field=form.catalogo_ordem %}</div>
+                <div class="produto-field sm">{% include "produtos/produto/partials/_field.html" with field=form.catalogo_quantidade_maxima %}</div>
+              </div>
+            </div>
+          </div>
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.linha_producao %}</div>
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.marca %}</div>
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.fornecedor %}</div>

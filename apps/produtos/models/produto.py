@@ -318,6 +318,32 @@ class Produto(FilialScopedModel):
         help_text='Tempo de limpeza, preparo ou descanso antes do próximo atendimento.',
     )
 
+    # Catálogo público e pedidos pelo WhatsApp.
+    exibir_catalogo = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name='Exibir no catálogo digital',
+        help_text='Disponibiliza o produto no link público de pedidos desta filial.',
+    )
+    catalogo_destaque = models.BooleanField(
+        default=False,
+        verbose_name='Destacar no catálogo',
+    )
+    catalogo_descricao = models.CharField(
+        max_length=240,
+        blank=True,
+        verbose_name='Descrição no catálogo',
+    )
+    catalogo_ordem = models.PositiveSmallIntegerField(
+        default=0,
+        verbose_name='Ordem no catálogo',
+    )
+    catalogo_quantidade_maxima = models.PositiveSmallIntegerField(
+        default=99,
+        validators=[MinValueValidator(1), MaxValueValidator(999)],
+        verbose_name='Quantidade máxima por pedido',
+    )
+
     # Industrial
     condicao_armazenamento = models.CharField(
         max_length=20, choices=CondicaoArmazenamento.choices,

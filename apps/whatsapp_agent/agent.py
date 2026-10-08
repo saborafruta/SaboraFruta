@@ -7,6 +7,7 @@ from django.db.models import Q
 from django.urls import reverse
 
 from apps.agenda.models import AgendaLinkPublico
+from apps.catalogo.models import CatalogoLinkPublico
 from apps.cadastros.models import Cliente
 from apps.core.models import EmpresaBanco, Filial
 from apps.core.services.tenant_public_link_service import TenantPublicLinkService
@@ -131,6 +132,20 @@ def _link_agendamento(conversa):
     return f'{settings.PUBLIC_BASE_URL.rstrip("/")}{caminho}?{urlencode({"wa": rastreamento})}'
 
 
+def _link_catalogo(conversa):
+    filial, db_alias = _destino_agenda(conversa)
+    if not filial:
+        return ''
+    link, _ = CatalogoLinkPublico.objects.using(db_alias).get_or_create(filial=filial)
+    if not link.ativo:
+        link.ativo = True
+        link.save(using=db_alias, update_fields=['ativo', 'updated_at'])
+    TenantPublicLinkService.register(kind='catalogo', token=link.token, db_alias=db_alias)
+    caminho = reverse('catalogo_publico:catalogo', args=[link.token])
+    rastreamento = gerar_token_agendamento(conversa)
+    return f'{settings.PUBLIC_BASE_URL.rstrip("/")}{caminho}?{urlencode({"wa": rastreamento})}'
+
+
 def reiniciar(conversa, incluir_saudacao=True):
     menu = _menu_principal(conversa.configuracao)
     conversa.atendimento_humano = False
@@ -205,6 +220,18 @@ def _executar_opcao(conversa, opcao):
         )
         return f'{introducao}\n\n{link}\n\nQuando quiser ver as opções novamente, digite *menu*.'
 
+    if acao == OpcaoMenuWhatsApp.Acao.CATALOGO:
+        link = _link_catalogo(conversa)
+        if not link:
+            return 'Não consegui abrir o catálogo agora. Por favor, escolha a opção de falar com um atendente.'
+        contexto = dict(conversa.contexto or {})
+        contexto['link_catalogo'] = link
+        conversa.contexto = contexto
+        conversa.etapa_crm = ConversaWhatsApp.EtapaCRM.INTERESSADO
+        conversa.save(update_fields=['contexto', 'etapa_crm', 'updated_at'])
+        introducao = opcao.mensagem.strip() or 'Perfeito! Escolha os produtos e monte seu pedido no catálogo:'
+        return f'{introducao}\n\n{link}\n\nQuando quiser ver as opções novamente, digite *menu*.'
+
     if acao == OpcaoMenuWhatsApp.Acao.ATENDIMENTO_HUMANO:
         conversa.etapa = 'atendimento_humano'
         conversa.atendimento_humano = True
@@ -245,6 +272,12 @@ def processar_mensagem(conversa, texto):
 
     if conversa.atendimento_humano:
         return None
+
+    if conversa.etapa == 'aguardando_confirmacao_pedido':
+        from apps.catalogo.services import processar_resposta_whatsapp
+        resposta_pedido = processar_resposta_whatsapp(conversa, texto)
+        if resposta_pedido is not None:
+            return resposta_pedido
 
     if valor in {normalizar(item) for item in COMANDOS_MENU}:
         return reiniciar(conversa, incluir_saudacao=primeira_interacao or estava_inativa)

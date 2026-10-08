@@ -77,6 +77,40 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
             '{data} e {horario}.'
         ),
     )
+    mensagem_resumo_pedido = models.TextField(
+        default=(
+            '🛒 *Revise seu pedido {numero}*\n\n'
+            '{itens}\n\n'
+            '*Subtotal:* {subtotal}\n'
+            '*Frete:* {frete}\n'
+            '*Total:* {total}\n'
+            '*Recebimento:* {entrega}\n'
+            '*Pagamento:* {pagamento}\n'
+            '*Observação:* {observacao}\n\n'
+            '*1.* Confirmar pedido\n'
+            '*2.* Refazer pedido\n'
+            '*3.* Cancelar'
+        ),
+        help_text=(
+            'Variáveis: {numero}, {nome}, {itens}, {subtotal}, {frete}, {total}, '
+            '{entrega}, {pagamento} e {observacao}.'
+        ),
+    )
+    mensagem_pedido_recebido = models.TextField(
+        default='Pedido {numero} confirmado! Agora a loja fará a aprovação e iniciará a separação.',
+        help_text='Variável disponível: {numero}.',
+    )
+    mensagem_atualizacao_pedido = models.TextField(
+        default=(
+            '📦 *Atualização do pedido {numero}*\n\n'
+            'Novo status: *{status}*\n'
+            'Total: {total}'
+        ),
+        help_text='Variáveis disponíveis: {numero}, {status}, {nome} e {total}.',
+    )
+    pedido_resposta_confirmar = models.CharField(max_length=20, default='1')
+    pedido_resposta_alterar = models.CharField(max_length=20, default='2')
+    pedido_resposta_cancelar = models.CharField(max_length=20, default='3')
     recuperacao_agendamento_ativa = models.BooleanField(default=False)
     recuperacao_atraso_minutos = models.PositiveIntegerField(
         default=60,
@@ -311,6 +345,7 @@ class MenuWhatsApp(FilialScopedModel):
 class OpcaoMenuWhatsApp(TimestampedModel):
     class Acao(models.TextChoices):
         AGENDA = 'agenda', 'Enviar link da agenda'
+        CATALOGO = 'catalogo', 'Enviar link do catálogo'
         ATENDIMENTO_HUMANO = 'atendimento_humano', 'Transferir para atendente'
         MENSAGEM = 'mensagem', 'Enviar uma mensagem'
         ABRIR_MENU = 'abrir_menu', 'Abrir outro menu'

@@ -1213,6 +1213,8 @@ PRODUTO_STEP_FIELDS = {
         'descricao', 'categoria', 'subcategoria', 'marca', 'fornecedor',
         'tipo_produto', 'linha_producao',
         'agendavel', 'duracao_servico_minutos', 'intervalo_apos_servico_minutos',
+        'exibir_catalogo', 'catalogo_destaque', 'catalogo_descricao',
+        'catalogo_ordem', 'catalogo_quantidade_maxima',
         'unidade_medida', 'unidade_medida_compra', 'fator_conversao_compra',
         'codigo', 'codigo_barras', 'codigo_barras_extra_1', 'codigo_barras_extra_2',
         'codigo_barras_extra_3', 'descricao_curta', 'observacao', 'ativo',

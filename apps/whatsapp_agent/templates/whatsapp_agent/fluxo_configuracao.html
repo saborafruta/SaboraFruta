@@ -11,6 +11,7 @@
       <p class="wa-muted">Monte o menu e escolha o que cada resposta fará no WhatsApp.</p>
     </div>
     <div class="wa-actions">
+      <a class="wa-btn secondary" href="{% url 'catalogo:painel' %}">Catálogo e pedidos</a>
       <a class="wa-btn secondary" href="{% url 'whatsapp_agent:configuracao' %}">Conexão e agente</a>
       <a class="wa-btn secondary" href="{% url 'whatsapp_agent:conversa-list' %}">CRM do WhatsApp</a>
     </div>
@@ -27,7 +28,7 @@
       </div>
       <div class="wa-grid">
         {% for field in form %}
-          {% if field.name != 'mensagem_confirmacao_agendamento' and field.name != 'mensagem_lembrete_agendamento' and field.name != 'recuperacao_agendamento_ativa' and field.name != 'recuperacao_atraso_minutos' and field.name != 'recuperacao_horario_inicio' and field.name != 'recuperacao_horario_fim' and field.name != 'mensagem_recuperacao_agendamento' and field.name != 'mensagem_motivo_nao_agendamento' and field.name != 'mensagem_feedback_agendamento' %}
+          {% if field.name != 'mensagem_confirmacao_agendamento' and field.name != 'mensagem_lembrete_agendamento' and field.name != 'mensagem_resumo_pedido' and field.name != 'mensagem_pedido_recebido' and field.name != 'mensagem_atualizacao_pedido' and field.name != 'pedido_resposta_confirmar' and field.name != 'pedido_resposta_alterar' and field.name != 'pedido_resposta_cancelar' and field.name != 'recuperacao_agendamento_ativa' and field.name != 'recuperacao_atraso_minutos' and field.name != 'recuperacao_horario_inicio' and field.name != 'recuperacao_horario_fim' and field.name != 'mensagem_recuperacao_agendamento' and field.name != 'mensagem_motivo_nao_agendamento' and field.name != 'mensagem_feedback_agendamento' %}
           {% if field.name == 'encerramento_automatico_ativo' %}
             <div class="wa-field full">
               <strong>Encerramento por inatividade</strong>
@@ -39,6 +40,19 @@
             {% if field.help_text %}<div class="wa-help">{{ field.help_text }}</div>{% endif %}
             {% if field.errors %}<div class="wa-errors">{{ field.errors|first }}</div>{% endif %}
           </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="wa-card wa-section">
+      <div class="wa-section-head"><div><h2>Mensagens dos pedidos</h2><p class="wa-muted">Personalize o resumo, as respostas de confirmação e a mensagem que informa que o pedido chegou à loja.</p></div></div>
+      <div class="wa-grid">
+        {% for field in form %}
+          {% if field.name == 'mensagem_resumo_pedido' or field.name == 'mensagem_pedido_recebido' or field.name == 'mensagem_atualizacao_pedido' %}
+            <div class="wa-field full"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<div class="wa-help">{{ field.help_text }}</div>{% endif %}{% if field.errors %}<div class="wa-errors">{{ field.errors|first }}</div>{% endif %}</div>
+          {% elif field.name == 'pedido_resposta_confirmar' or field.name == 'pedido_resposta_alterar' or field.name == 'pedido_resposta_cancelar' %}
+            <div class="wa-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.errors %}<div class="wa-errors">{{ field.errors|first }}</div>{% endif %}</div>
           {% endif %}
         {% endfor %}
       </div>
@@ -145,7 +159,7 @@
                   <label>Menu de destino</label>
                   <select x-model="opcao.menu_destino"><option value="">Selecione...</option><template x-for="destino in menus" :key="destino.uid"><option :value="destino.codigo" x-text="destino.nome || destino.codigo"></option></template></select>
                 </div>
-                <div class="wa-field" x-show="['agenda','atendimento_humano','mensagem','abrir_menu','encerrar'].includes(opcao.acao)">
+                <div class="wa-field" x-show="['agenda','catalogo','atendimento_humano','mensagem','abrir_menu','encerrar'].includes(opcao.acao)">
                   <label>Mensagem personalizada <span class="wa-muted">(opcional nas ações que já possuem mensagem geral)</span></label>
                   <textarea x-model="opcao.mensagem" rows="2" placeholder="Texto que o cliente receberá ao escolher esta opção"></textarea>
                 </div>

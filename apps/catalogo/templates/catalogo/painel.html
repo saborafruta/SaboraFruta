@@ -1,0 +1,56 @@
+{% extends '_base.html' %}
+{% block title %}Catálogo e pedidos{% endblock %}
+{% block content %}
+<style>
+  .cat-shell{max-width:1500px;margin:auto;padding:6px}.cat-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px}.cat-head h1{font-size:1.8rem;font-weight:850;margin:0}.cat-muted{color:#94a3b8}.cat-actions{display:flex;gap:8px;flex-wrap:wrap}.cat-btn{border:0;border-radius:12px;padding:11px 16px;background:#2563eb;color:white;font-weight:750;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}.cat-btn.secondary{background:#273244;color:#e2e8f0}.cat-btn.green{background:#16a34a}.cat-btn.orange{background:#ea580c}.cat-btn.danger{background:#b91c1c}.cat-grid{display:grid;grid-template-columns:minmax(320px,430px) 1fr;gap:18px}.cat-card{background:#202124;border:1px solid #35363a;border-radius:18px;padding:20px}.cat-card h2{font-size:1.1rem;font-weight:800;margin:0 0 5px}.cat-form{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.cat-field{display:grid;gap:6px}.cat-field.full{grid-column:1/-1}.cat-field label{font-size:.82rem;font-weight:750}.cat-field input:not([type=checkbox]),.cat-field select,.cat-field textarea{width:100%;border:1px solid #40444b;border-radius:10px;background:#17181a;color:#fff;padding:11px}.cat-check{display:flex;gap:9px;align-items:flex-start;background:#191a1d;border:1px solid #34373c;border-radius:12px;padding:12px}.cat-help{font-size:.78rem;color:#94a3b8}.cat-errors{color:#fca5a5;font-size:.78rem}.cat-share{display:flex;gap:8px;margin:15px 0}.cat-share input{min-width:0;flex:1;border:1px solid #40444b;border-radius:10px;background:#17181a;color:#cbd5e1;padding:11px}.cat-board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(270px,1fr);gap:12px;overflow-x:auto;padding:2px 2px 12px}.cat-column{background:#17181a;border:1px solid #35363a;border-radius:16px;padding:12px;min-height:280px}.cat-column-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.cat-count{background:#334155;color:#e2e8f0;border-radius:999px;padding:3px 8px;font-size:.75rem}.cat-order{background:#24262a;border:1px solid #3c4047;border-radius:13px;padding:13px;margin-bottom:10px}.cat-order strong{display:block}.cat-order-meta{font-size:.78rem;color:#aab4c4;margin:4px 0}.cat-items{font-size:.8rem;margin:9px 0;padding-top:8px;border-top:1px solid #383b40}.cat-order-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.cat-order-actions .cat-btn{font-size:.75rem;padding:8px 10px}.cat-empty{color:#64748b;font-size:.84rem;text-align:center;padding:35px 8px}@media(max-width:980px){.cat-grid{grid-template-columns:1fr}.cat-head{flex-direction:column}.cat-form{grid-template-columns:1fr 1fr}}@media(max-width:600px){.cat-shell{padding:0}.cat-card{padding:15px;border-radius:14px}.cat-form{grid-template-columns:1fr}.cat-field.full{grid-column:auto}.cat-head h1{font-size:1.45rem}.cat-actions,.cat-actions .cat-btn{width:100%}.cat-share{flex-direction:column}.cat-board{grid-auto-columns:88vw}.cat-btn{min-height:44px}}
+</style>
+<div class="cat-shell">
+  <header class="cat-head">
+    <div><h1>Catálogo e pedidos</h1><p class="cat-muted">Configure entrega, compartilhe o catálogo e acompanhe cada pedido até a entrega.</p></div>
+    <div class="cat-actions"><a class="cat-btn secondary" href="{% url 'whatsapp_agent:fluxo-configuracao' %}">Configurar fluxo do WhatsApp</a><a class="cat-btn secondary" href="{% url 'produtos:produto-list' %}">Escolher produtos</a></div>
+  </header>
+  <div class="cat-grid">
+    <aside class="cat-card">
+      <h2>Configuração da filial</h2><p class="cat-muted">As regras abaixo valem somente para {{ request.filial_ativa }}.</p>
+      {% if link_publico %}
+        <div class="cat-share"><input id="catalogo-link" readonly value="{{ link_publico }}"><button class="cat-btn" type="button" onclick="navigator.clipboard.writeText(document.getElementById('catalogo-link').value);this.textContent='Copiado!'">Copiar link</button></div>
+      {% else %}
+        <form method="post" action="{% url 'catalogo:link-publico' %}" class="cat-share">{% csrf_token %}<button class="cat-btn" type="submit">Gerar link do catálogo</button></form>
+      {% endif %}
+      <form method="post" class="cat-form">
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="cat-errors full">{{ form.non_field_errors|first }}</div>{% endif %}
+        {% for field in form %}
+          {% if field.field.widget.input_type == 'checkbox' %}
+            <label class="cat-check full">{{ field }}<span><strong>{{ field.label }}</strong>{% if field.help_text %}<span class="cat-help">{{ field.help_text }}</span>{% endif %}</span></label>
+          {% else %}
+            <div class="cat-field {% if field.name == 'descricao' or field.name == 'titulo' %}full{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.errors %}<span class="cat-errors">{{ field.errors|first }}</span>{% endif %}</div>
+          {% endif %}
+        {% endfor %}
+        <div class="cat-field full"><div class="cat-help">Exemplo: frete grátis a partir de R$ 100. Abaixo disso, escolha “Valor fixo” e informe R$ 8, ou deixe “A combinar”.</div><button class="cat-btn green" type="submit">Salvar configuração</button></div>
+      </form>
+    </aside>
+    <main class="cat-card">
+      <h2>Fluxo dos pedidos</h2><p class="cat-muted">O cliente confirma pelo WhatsApp; a loja aprova; depois o pedido segue para separação e entrega.</p>
+      <div class="cat-board">
+        {% for status,titulo,pedidos in colunas %}
+          <section class="cat-column"><div class="cat-column-head"><strong>{{ titulo }}</strong><span class="cat-count">{{ pedidos|length }}</span></div>
+            {% for pedido in pedidos %}
+              <article class="cat-order"><strong>{{ pedido.numero }}</strong><div class="cat-order-meta">{{ pedido.nome_cliente }} · {{ pedido.telefone }}</div><div class="cat-order-meta">{{ pedido.get_modalidade_display }} · {{ pedido.get_forma_pagamento_display }}</div><div class="cat-items">{% for item in pedido.itens.all %}<div>{{ item.quantidade }}× {{ item.descricao }}</div>{% endfor %}</div><strong>R$ {{ pedido.total|floatformat:2 }}</strong>{% if pedido.frete_a_combinar %}<div class="cat-order-meta">Frete a combinar</div>{% endif %}
+                <div class="cat-order-actions">
+                  {% if pedido.status == 'aguardando_loja' %}<form method="post" action="{% url 'catalogo:pedido-acao' pedido.pk 'aprovar' %}">{% csrf_token %}<button class="cat-btn green">Aprovar</button></form>{% endif %}
+                  {% if pedido.status == 'aprovado' %}<form method="post" action="{% url 'catalogo:pedido-acao' pedido.pk 'separar' %}">{% csrf_token %}<button class="cat-btn orange">Iniciar separação</button></form>{% endif %}
+                  {% if pedido.status == 'em_separacao' %}<form method="post" action="{% url 'catalogo:pedido-acao' pedido.pk 'pronto' %}">{% csrf_token %}<button class="cat-btn green">Marcar pronto</button></form>{% endif %}
+                  {% if pedido.status == 'pronto' and pedido.modalidade == 'entrega' %}<form method="post" action="{% url 'catalogo:pedido-acao' pedido.pk 'saiu' %}">{% csrf_token %}<button class="cat-btn">Saiu para entrega</button></form>{% endif %}
+                  {% if pedido.status == 'pronto' or pedido.status == 'saiu_entrega' %}<form method="post" action="{% url 'catalogo:pedido-acao' pedido.pk 'entregue' %}">{% csrf_token %}<button class="cat-btn green">Concluir</button></form>{% endif %}
+                  {% if pedido.status != 'entregue' %}<form method="post" action="{% url 'catalogo:pedido-acao' pedido.pk 'cancelar' %}">{% csrf_token %}<button class="cat-btn danger">Cancelar</button></form>{% endif %}
+                </div>
+              </article>
+            {% empty %}<div class="cat-empty">Nenhum pedido nesta etapa.</div>{% endfor %}
+          </section>
+        {% endfor %}
+      </div>
+    </main>
+  </div>
+</div>
+{% endblock %}

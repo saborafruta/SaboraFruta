@@ -11,6 +11,7 @@ from apps.core.tenant_registry import register_tenant_database
 class TenantPublicLinkService:
     ROUTES = (
         (re.compile(r'^/agendar/([^/]+)(?:/.*)?$'), 'agenda', 'agenda.AgendaLinkPublico', 'token'),
+        (re.compile(r'^/pedir/([^/]+)(?:/.*)?$'), 'catalogo', 'catalogo.CatalogoLinkPublico', 'token'),
         (re.compile(r'^/comprovante/([^/]+)(?:/pdf/)?$'), 'pdv', 'pdv.VendaPDV', 'comprovante_token'),
         (re.compile(r'^/cardapio/([^/]+)(?:/.*)?$'), 'cardapio', 'food_service.Mesa', 'qr_token'),
         (re.compile(r'^/entregas/([^/]+)(?:/.*)?$'), 'rota_delivery', 'pdv.RotaDelivery', 'token'),

@@ -158,6 +158,11 @@ class ProdutoForm(forms.ModelForm):
             'agendavel': 'Disponível para agendamento',
             'duracao_servico_minutos': 'Duração do serviço (min)',
             'intervalo_apos_servico_minutos': 'Intervalo após o serviço (min)',
+            'exibir_catalogo': 'Exibir no catálogo digital',
+            'catalogo_destaque': 'Destacar no catálogo',
+            'catalogo_descricao': 'Descrição para o cliente',
+            'catalogo_ordem': 'Ordem de exibição',
+            'catalogo_quantidade_maxima': 'Máximo por pedido',
             'ativo': 'Status ativo',
             'rascunho_comercial': 'Rascunho comercial',
             'observacao': 'Observacao interna',
@@ -276,6 +281,13 @@ class ProdutoForm(forms.ModelForm):
                 'placeholder': 'Ex.: 10',
                 'inputmode': 'numeric',
             }),
+            'catalogo_descricao': forms.Textarea(attrs={
+                'rows': 2,
+                'maxlength': '240',
+                'placeholder': 'Descrição curta que aparecerá para o cliente',
+            }),
+            'catalogo_ordem': forms.NumberInput(attrs={'min': '0', 'max': '999'}),
+            'catalogo_quantidade_maxima': forms.NumberInput(attrs={'min': '1', 'max': '999'}),
         }
 
     def __init__(self, *args, empresa=None, filial=None, estoque_atual=None, **kwargs):
@@ -299,6 +311,8 @@ class ProdutoForm(forms.ModelForm):
         self.fields['remover_imagem'].widget.attrs.update({'class': 'produto-image-remove-checkbox'})
         self.fields['tipo_produto'].widget.attrs['x-model'] = 'tipoProduto'
         self.fields['agendavel'].widget.attrs['x-ref'] = 'agendaToggle'
+        self.fields['catalogo_ordem'].required = False
+        self.fields['catalogo_quantidade_maxima'].required = False
 
         for money_field in ('preco_custo', 'preco_venda', 'preco_minimo'):
             value = self.initial.get(money_field)
@@ -620,6 +634,8 @@ class ProdutoForm(forms.ModelForm):
                 self.add_error(field_name, 'Este codigo de barras ja pertence a outro produto.')
 
         tipo = cleaned.get('tipo_produto')
+        cleaned['catalogo_ordem'] = cleaned.get('catalogo_ordem') or 0
+        cleaned['catalogo_quantidade_maxima'] = cleaned.get('catalogo_quantidade_maxima') or 99
         agendavel = bool(cleaned.get('agendavel'))
         duracao_servico = cleaned.get('duracao_servico_minutos')
         intervalo_servico = cleaned.get('intervalo_apos_servico_minutos')

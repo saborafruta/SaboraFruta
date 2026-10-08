@@ -5,6 +5,7 @@
       {% url 'cadastros:funcionario-list' as funcionarios_url %}
       {% url 'produtos:produto-list' as produtos_url %}
       {% url 'agenda:agenda' as agenda_url %}
+      {% url 'catalogo:painel' as catalogo_url %}
       {% url 'whatsapp_agent:configuracao' as whatsapp_agent_url %}
       {% url 'estoque:estoque-list' as estoque_url %}
       {% url 'estoque:ajuste-rapido' as ajuste_estoque_url %}
@@ -224,6 +225,14 @@
          title="Agente de WhatsApp">
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 10h.01M12 10h.01M16 10h.01M21 12a9 9 0 01-13.2 7.9L3 21l1.1-4.1A9 9 0 1121 12z"/></svg>
         <span x-show="!collapsed">WhatsApp IA</span>
+      </a>
+      <a href="{{ catalogo_url }}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="{% if request.resolver_match.namespace == 'catalogo' %}temaClaro ? 'background:#dcfce7; color:#166534; font-weight:600;' : 'background:#173e32; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
+         title="Catálogo e pedidos">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l2 12h10l2-8H6m2 12a1 1 0 100 2 1 1 0 000-2zm8 0a1 1 0 100 2 1 1 0 000-2z"/></svg>
+        <span x-show="!collapsed">Catálogo e pedidos</span>
       </a>
       </div><!-- /cadastros -->
       {% endif %}

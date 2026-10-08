@@ -23,6 +23,7 @@ LOCAL_APP_LABELS = [
     'whatsapp_agent',
     'analytics',
     'cashback',
+    'catalogo',
     'cadastros',
     'compras',
     'core',
