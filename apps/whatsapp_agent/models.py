@@ -89,17 +89,14 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
     )
     mensagem_resumo_pedido = models.TextField(
         default=(
-            '🛒 *Revise seu pedido {numero}*\n\n'
+            '✅ *Pedido confirmado {numero}*\n\n'
             '{itens}\n\n'
             '*Subtotal:* {subtotal}\n'
             '*Frete:* {frete}\n'
             '*Total:* {total}\n'
             '*Recebimento:* {entrega}\n'
             '*Pagamento:* {pagamento}\n'
-            '*Observação:* {observacao}\n\n'
-            '*1.* Confirmar pedido\n'
-            '*2.* Refazer pedido\n'
-            '*3.* Cancelar'
+            '*Observação:* {observacao}'
         ),
         help_text=(
             'Variáveis: {numero}, {nome}, {itens}, {subtotal}, {frete}, {total}, '

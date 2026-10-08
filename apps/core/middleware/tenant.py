@@ -40,11 +40,18 @@ class TenantContextMiddleware:
     def __call__(self, request):
         alias = None
         requested_alias = None
+        public_link_route = None
         if settings.TENANT_DATABASE_ROUTING_ENABLED:
-            requested_alias = request.session.get(self.SESSION_KEY)
             central_path = request.path.startswith(self.CENTRAL_PATHS)
-            if not requested_alias and not central_path:
+            public_link_route = TenantPublicLinkService.route_for_path(request.path)
+            if public_link_route:
+                # O token do link público é a autoridade para escolher o banco.
+                # Priorizar a filial salva na sessão faz o mesmo link retornar
+                # 404 quando aberto por alguém que já esteja logado em outro
+                # tenant no navegador.
                 requested_alias = TenantPublicLinkService.resolve_path(request.path)
+            else:
+                requested_alias = request.session.get(self.SESSION_KEY)
             alias = None if central_path else requested_alias
             if alias:
                 try:
@@ -109,6 +116,7 @@ class TenantContextMiddleware:
         try:
             if (
                 alias
+                and not public_link_route
                 and request.user.is_authenticated
                 and request.session.get(AUTH_DATABASE_SESSION_KEY) == 'default'
                 and not request.path.startswith(self.GLOBAL_IDENTITY_PATHS)
@@ -149,6 +157,7 @@ class TenantContextMiddleware:
                 request._cached_user = request.user
             if (
                 alias
+                and not public_link_route
                 and request.user.is_authenticated
                 and request.session.get(AUTH_DATABASE_SESSION_KEY) != 'default'
             ):

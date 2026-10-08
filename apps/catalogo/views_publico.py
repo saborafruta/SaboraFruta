@@ -203,6 +203,38 @@ def _contexto(link, *, dados=None, erros=None, pedido=None, aviso=''):
     }
 
 
+def _dados_para_edicao(pedido):
+    endereco = pedido.endereco_entrega or {}
+    dados = {
+        'nome': pedido.nome_cliente,
+        'telefone': pedido.telefone,
+        'modalidade': pedido.modalidade,
+        'forma_pagamento': pedido.forma_pagamento,
+        'troco_para': str(pedido.troco_para or '').replace('.', ','),
+        'observacao': pedido.observacao.removeprefix('Pedido feito pelo WhatsApp. ').removeprefix(
+            'Pedido feito pelo WhatsApp.'
+        ),
+        'cupom_codigo': pedido.codigo_cupom,
+        'pedido_token': pedido.token,
+    }
+    dados.update({
+        chave: endereco.get(chave, '')
+        for chave in ('logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'cep')
+    })
+    if pedido.entrega_em:
+        entrega_local = timezone.localtime(pedido.entrega_em)
+        dados['data_entrega'] = entrega_local.strftime('%Y-%m-%d')
+        dados['hora_entrega'] = entrega_local.strftime('%H:%M')
+    return dados
+
+
+def _carrinho_para_edicao(pedido):
+    return [
+        {'id': item.produto_id, 'quantidade': item.quantidade}
+        for item in pedido.itens.all()
+    ]
+
+
 class _CatalogoPublicoBase(View):
     template_name = 'catalogo/publico/catalogo.html'
 
@@ -217,22 +249,38 @@ class _CatalogoPublicoBase(View):
         conversa = conversa_do_token((request.GET.get('wa') or '').strip())
         dados = {}
         ultimos = []
+        carrinho_inicial = []
+        pedido_edicao = None
+        token_edicao = (request.GET.get('editar') or '').strip()
+        if token_edicao:
+            pedido_edicao = get_object_or_404(
+                PedidoCatalogo.objects.prefetch_related('itens'),
+                filial=link.filial,
+                token=token_edicao,
+                status=PedidoCatalogo.Status.AGUARDANDO_CLIENTE,
+            )
+            dados = _dados_para_edicao(pedido_edicao)
+            carrinho_inicial = _carrinho_para_edicao(pedido_edicao)
         if conversa:
-            dados = {'nome': conversa.nome_contato, 'telefone': conversa.telefone}
+            dados.setdefault('nome', conversa.nome_contato)
+            dados.setdefault('telefone', conversa.telefone)
             cliente = localizar_cliente(link.filial, conversa.telefone)
             if cliente:
-                dados['nome'] = cliente.nome_display
-                dados.update({
+                dados.setdefault('nome', cliente.nome_display)
+                for chave, valor in {
                     'logradouro': cliente.endereco, 'numero': cliente.numero,
                     'complemento': cliente.complemento, 'bairro': cliente.bairro,
                     'cidade': cliente.cidade, 'uf': cliente.uf, 'cep': cliente.cep,
-                })
+                }.items():
+                    dados.setdefault(chave, valor)
                 ultimos = _historico_compras(cliente, link.filial)
         contexto = _contexto(link, dados=dados)
         contexto.update({
             'rastreamento_whatsapp': request.GET.get('wa', ''),
             'ultimos_pedidos': ultimos,
             'historico_json': ultimos,
+            'carrinho_inicial': carrinho_inicial,
+            'pedido_edicao': pedido_edicao,
         })
         return render(request, self.template_name, contexto)
 
@@ -331,6 +379,15 @@ class CatalogoPublicoView(_CatalogoPublicoBase):
             return render(request, self.template_name, contexto, status=400)
         rastreamento_whatsapp = (request.POST.get('origem_whatsapp') or '').strip()
         conversa = conversa_do_token(rastreamento_whatsapp)
+        pedido_token = (request.POST.get('pedido_token') or '').strip()
+        pedido = None
+        if pedido_token:
+            pedido = get_object_or_404(
+                PedidoCatalogo,
+                filial=link.filial,
+                token=pedido_token,
+                status=PedidoCatalogo.Status.AGUARDANDO_CLIENTE,
+            )
         observacao = dados['observacao'][:2000]
         if conversa:
             observacao = 'Pedido feito pelo WhatsApp.' + (
@@ -338,17 +395,39 @@ class CatalogoPublicoView(_CatalogoPublicoBase):
             )
         with tenant_atomic():
             cliente = obter_ou_criar_cliente(link.filial, dados['nome'][:150], telefone, endereco)
-            pedido = PedidoCatalogo.objects.create(
-                filial=link.filial, numero=f'CAT-{timezone.now():%y%m%d%H%M%S}', cliente=cliente,
-                nome_cliente=dados['nome'][:150], telefone=telefone,
-                modalidade=dados['modalidade'], forma_pagamento=dados['forma_pagamento'],
-                troco_para=troco, endereco_entrega=endereco if dados['modalidade'] == 'entrega' else {},
-                entrega_em=entrega_em, observacao=observacao,
-                subtotal=subtotal, cupom=cupom,
-                codigo_cupom=cupom.codigo if cupom else '', valor_desconto=valor_desconto,
-                valor_frete=valor_frete, frete_a_combinar=frete_a_combinar,
-                total=max(Decimal('0'), subtotal - valor_desconto) + valor_frete,
-            )
+            valores_pedido = {
+                'cliente': cliente,
+                'nome_cliente': dados['nome'][:150],
+                'telefone': telefone,
+                'modalidade': dados['modalidade'],
+                'forma_pagamento': dados['forma_pagamento'],
+                'troco_para': troco,
+                'endereco_entrega': endereco if dados['modalidade'] == 'entrega' else {},
+                'entrega_em': entrega_em,
+                'observacao': observacao,
+                'subtotal': subtotal,
+                'cupom': cupom,
+                'codigo_cupom': cupom.codigo if cupom else '',
+                'valor_desconto': valor_desconto,
+                'valor_frete': valor_frete,
+                'frete_a_combinar': frete_a_combinar,
+                'total': max(Decimal('0'), subtotal - valor_desconto) + valor_frete,
+                'conversa_id': (
+                    getattr(conversa, 'pk', None)
+                    if conversa else (pedido.conversa_id if pedido else None)
+                ),
+            }
+            if pedido:
+                for campo, valor in valores_pedido.items():
+                    setattr(pedido, campo, valor)
+                pedido.save(update_fields=[*valores_pedido, 'updated_at'])
+                pedido.itens.all().delete()
+            else:
+                pedido = PedidoCatalogo.objects.create(
+                    filial=link.filial,
+                    numero=f'CAT-{timezone.now():%y%m%d%H%M%S}',
+                    **valores_pedido,
+                )
             for produto_id, quantidade in quantidades.items():
                 produto = produtos[produto_id]
                 ItemPedidoCatalogo.objects.create(
@@ -356,11 +435,43 @@ class CatalogoPublicoView(_CatalogoPublicoBase):
                     quantidade=quantidade, valor_unitario=produto.preco_venda,
                     valor_total=Decimal(produto.preco_venda) * quantidade,
                 )
-        _ok, aviso = enviar_resumo_whatsapp(
-            pedido, db_alias=get_current_database_alias(), conversa=conversa,
-        )
-        contexto = _contexto(link, pedido=pedido, aviso=aviso)
+        contexto = _contexto(link, pedido=pedido)
         contexto['rastreamento_whatsapp'] = request.POST.get('origem_whatsapp', '')
+        contexto['pedido_confirmado'] = False
+        return render(request, self.template_name, contexto)
+
+
+class PedidoCatalogoConfirmarView(_CatalogoPublicoBase):
+    def post(self, request, token, pedido_token):
+        link = self._link(token)
+        with tenant_atomic():
+            pedido = get_object_or_404(
+                PedidoCatalogo.objects.select_for_update().prefetch_related('itens'),
+                filial=link.filial,
+                token=pedido_token,
+                status__in=[
+                    PedidoCatalogo.Status.AGUARDANDO_CLIENTE,
+                    PedidoCatalogo.Status.AGUARDANDO_LOJA,
+                ],
+            )
+            acabou_de_confirmar = pedido.status == PedidoCatalogo.Status.AGUARDANDO_CLIENTE
+            if acabou_de_confirmar:
+                pedido.status = PedidoCatalogo.Status.AGUARDANDO_LOJA
+                pedido.confirmado_cliente_em = timezone.now()
+                pedido.save(update_fields=['status', 'confirmado_cliente_em', 'updated_at'])
+        aviso = 'Pedido já estava confirmado; o resumo não foi reenviado.'
+        if acabou_de_confirmar:
+            conversa = None
+            if pedido.conversa_id:
+                from apps.whatsapp_agent.models import ConversaWhatsApp
+                conversa = ConversaWhatsApp.objects.using('default').filter(pk=pedido.conversa_id).first()
+            _ok, aviso = enviar_resumo_whatsapp(
+                pedido,
+                db_alias=get_current_database_alias(),
+                conversa=conversa,
+            )
+        contexto = _contexto(link, pedido=pedido, aviso=aviso)
+        contexto['pedido_confirmado'] = True
         return render(request, self.template_name, contexto)
 
 

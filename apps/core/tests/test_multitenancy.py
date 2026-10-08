@@ -131,6 +131,47 @@ class MultitenancyFoundationTests(TestCase):
         self.assertNotIn('tenant_db_alias', request.session)
         self.assertNotIn('filial_ativa_id', request.session)
 
+    @override_settings(
+        TENANT_DATABASE_ROUTING_ENABLED=True,
+        TENANT_PUBLIC_LINK_ROUTING_READY=True,
+        TENANT_BACKGROUND_TASKS_READY=True,
+    )
+    def test_link_publico_prioriza_token_em_vez_do_tenant_da_sessao(self):
+        request = RequestFactory().get('/pedir/token-do-catalogo/')
+        request.session = {
+            'tenant_db_alias': 'empresa_de_outra_sessao',
+            'filial_ativa_id': 999,
+        }
+        request.user = SimpleNamespace(is_authenticated=False)
+
+        with (
+            patch.object(
+                TenantPublicLinkService,
+                'resolve_path',
+                return_value=self.banco.db_alias,
+            ) as resolver,
+            patch(
+                'apps.core.middleware.tenant.register_tenant_database',
+                return_value=True,
+            ),
+        ):
+            response = TenantContextMiddleware(
+                lambda req: (req.tenant_db_alias, get_current_tenant_db())
+            )(request)
+
+        self.assertEqual(response, (self.banco.db_alias, self.banco.db_alias))
+        self.assertEqual(request.selected_tenant_db_alias, self.banco.db_alias)
+        resolver.assert_called_once_with('/pedir/token-do-catalogo/')
+
+    def test_links_publicos_nao_exigem_filial_da_sessao(self):
+        request = RequestFactory().get('/pedir/token-do-catalogo/')
+        request.session = {'filial_ativa_id': 999}
+        request.user = self.usuario
+
+        response = FilialMiddleware(lambda req: 'catalogo-publico')(request)
+
+        self.assertEqual(response, 'catalogo-publico')
+
     def test_ensure_for_empresa_nao_cria_duplicado(self):
         banco, created = EmpresaBancoService.ensure_for_empresa(self.empresa)
 

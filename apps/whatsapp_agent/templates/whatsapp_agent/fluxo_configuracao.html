@@ -65,13 +65,11 @@
     </section>
 
     <section class="wa-card wa-section">
-      <div class="wa-section-head"><div><h2>Mensagens dos pedidos</h2><p class="wa-muted">Personalize o resumo, as respostas de confirmação e a mensagem que informa que o pedido chegou à loja.</p></div></div>
+      <div class="wa-section-head"><div><h2>Mensagens dos pedidos</h2><p class="wa-muted">Personalize o resumo enviado depois que o cliente confirma no catálogo e as atualizações da loja.</p></div></div>
       <div class="wa-grid">
         {% for field in form %}
           {% if field.name == 'mensagem_resumo_pedido' or field.name == 'mensagem_pedido_recebido' or field.name == 'mensagem_atualizacao_pedido' %}
             <div class="wa-field full"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<div class="wa-help">{{ field.help_text }}</div>{% endif %}{% if field.errors %}<div class="wa-errors">{{ field.errors|first }}</div>{% endif %}</div>
-          {% elif field.name == 'pedido_resposta_confirmar' or field.name == 'pedido_resposta_alterar' or field.name == 'pedido_resposta_cancelar' %}
-            <div class="wa-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.errors %}<div class="wa-errors">{{ field.errors|first }}</div>{% endif %}</div>
           {% endif %}
         {% endfor %}
       </div>

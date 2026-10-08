@@ -19,10 +19,11 @@ from apps.catalogo.models import (
     CatalogoConfiguracao, CatalogoLinkPublico, CupomCatalogo,
     ItemPedidoCatalogo, PedidoCatalogo,
 )
+from apps.catalogo.services import formatar_resumo
 from apps.catalogo.views import CatalogoPainelView, PedidoAcaoView, PedidosCatalogoView
 from apps.catalogo.views_publico import (
     CatalogoPublicoView, ClienteCatalogoView, CupomCatalogoPublicoView,
-    _funcionamento,
+    PedidoCatalogoConfirmarView, _funcionamento,
 )
 from apps.pdv.models import ItemVendaPDV, VendaPDV
 from apps.pdv.views.pdv import _pedido_catalogo_para_checkout
@@ -192,6 +193,94 @@ class CatalogoTests(TestCase):
         self.assertEqual(pedido.subtotal, Decimal('40.00'))
         self.assertEqual(pedido.valor_desconto, Decimal('5.00'))
         self.assertEqual(pedido.total, Decimal('35.00'))
+        self.assertEqual(pedido.status, PedidoCatalogo.Status.AGUARDANDO_CLIENTE)
+        self.assertContains(response, 'Revise seu pedido')
+        self.assertContains(response, 'Confirmar pedido')
+        self.assertContains(response, 'Voltar e editar')
+        _enviar.assert_not_called()
+
+    @patch('apps.catalogo.views_publico.enviar_resumo_whatsapp', return_value=(True, 'Resumo enviado.'))
+    def test_cliente_confirma_no_catalogo_e_so_entao_recebe_resumo(self, enviar):
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='F', razao_social='Cliente Confirmação',
+            celular='5584999997888',
+        )
+        pedido = PedidoCatalogo.objects.create(
+            filial=self.filial, numero='CAT-CONFIRMA', cliente=cliente,
+            nome_cliente=cliente.nome_display, telefone=cliente.celular,
+            modalidade='retirada', forma_pagamento='pix',
+            subtotal=Decimal('20.00'), total=Decimal('20.00'),
+        )
+        ItemPedidoCatalogo.objects.create(
+            pedido=pedido, produto=self.produto, descricao=self.produto.descricao,
+            quantidade=1, valor_unitario=Decimal('20.00'), valor_total=Decimal('20.00'),
+        )
+        request = self.factory.post(
+            f'/pedir/{self.link.token}/pedido/{pedido.token}/confirmar/',
+        )
+        request.user = AnonymousUser()
+
+        response = PedidoCatalogoConfirmarView.as_view()(
+            request, token=self.link.token, pedido_token=pedido.token,
+        )
+
+        pedido.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(pedido.status, PedidoCatalogo.Status.AGUARDANDO_LOJA)
+        self.assertIsNotNone(pedido.confirmado_cliente_em)
+        self.assertContains(response, 'Pedido confirmado!')
+        enviar.assert_called_once()
+
+    def test_resumo_do_whatsapp_nao_pede_confirmacao_por_numero(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='F', razao_social='Cliente Resumo',
+            celular='5584999997666',
+        )
+        pedido = PedidoCatalogo.objects.create(
+            filial=self.filial, numero='CAT-RESUMO', cliente=cliente,
+            nome_cliente=cliente.nome_display, telefone=cliente.celular,
+            modalidade='retirada', forma_pagamento='pix',
+            subtotal=Decimal('20.00'), total=Decimal('20.00'),
+        )
+        ItemPedidoCatalogo.objects.create(
+            pedido=pedido, produto=self.produto, descricao=self.produto.descricao,
+            quantidade=1, valor_unitario=Decimal('20.00'), valor_total=Decimal('20.00'),
+        )
+        configuracao = ConfiguracaoWhatsApp.objects.create(
+            filial=self.filial, instancia='catalogo-resumo-teste',
+        )
+
+        texto = formatar_resumo(pedido, configuracao)
+
+        self.assertIn('Pedido confirmado', texto)
+        self.assertNotIn('Confirmar pedido', texto)
+        self.assertNotIn('Refazer pedido', texto)
+
+    def test_voltar_para_editar_reabre_itens_do_pedido(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='F', razao_social='Cliente Edição',
+            celular='5584999997999',
+        )
+        pedido = PedidoCatalogo.objects.create(
+            filial=self.filial, numero='CAT-EDITA', cliente=cliente,
+            nome_cliente=cliente.nome_display, telefone=cliente.celular,
+            modalidade='retirada', forma_pagamento='pix',
+            subtotal=Decimal('40.00'), total=Decimal('40.00'),
+        )
+        ItemPedidoCatalogo.objects.create(
+            pedido=pedido, produto=self.produto, descricao=self.produto.descricao,
+            quantidade=2, valor_unitario=Decimal('20.00'), valor_total=Decimal('40.00'),
+        )
+        request = self.factory.get(
+            f'/pedir/{self.link.token}/', {'editar': pedido.token},
+        )
+        request.user = AnonymousUser()
+
+        response = CatalogoPublicoView.as_view()(request, token=self.link.token)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'value="{pedido.token}"')
+        self.assertContains(response, '"quantidade": 2')
 
     def test_configuracao_e_pedidos_ficam_em_telas_separadas(self):
         request_config = self.factory.get('/catalogo/')

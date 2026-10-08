@@ -144,10 +144,13 @@ def enviar_resumo_whatsapp(pedido, *, db_alias, conversa=None):
     contexto = dict(conversa.contexto or {})
     contexto.update({'catalogo_pedido_id': pedido.pk, 'catalogo_db_alias': db_alias})
     conversa.contexto = contexto
-    conversa.etapa = 'aguardando_confirmacao_pedido'
+    conversa.etapa = 'pedido_confirmado_cliente'
+    conversa.etapa_crm = ConversaWhatsApp.EtapaCRM.CONCLUIDO
     conversa.ativa = True
     conversa.ultima_mensagem_em = timezone.now()
-    conversa.save(using='default', update_fields=['contexto', 'etapa', 'ativa', 'ultima_mensagem_em', 'updated_at'])
+    conversa.save(using='default', update_fields=[
+        'contexto', 'etapa', 'etapa_crm', 'ativa', 'ultima_mensagem_em', 'updated_at',
+    ])
     PedidoCatalogo.objects.using(db_alias).filter(pk=pedido.pk).update(conversa_id=conversa.pk)
     saida = MensagemWhatsApp.objects.using('default').create(
         conversa_id=conversa.pk, direcao=MensagemWhatsApp.Direcao.SAIDA,
