@@ -8,7 +8,9 @@ from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views import View
 
+from apps.cadastros.services.cep_service import CepService
 from apps.core.models.parametros import ParametrosSistema
+from apps.core.services.exceptions import DadosInvalidosError
 from apps.core.tenant_context import get_current_database_alias, tenant_atomic
 from apps.pdv.models import VendaPDV
 from apps.produtos.models import Produto
@@ -499,6 +501,31 @@ class ClienteCatalogoView(View):
         resposta = JsonResponse(dados)
         resposta['Cache-Control'] = 'no-store'
         return resposta
+
+
+class CepCatalogoView(View):
+    def get(self, request, token):
+        get_object_or_404(
+            CatalogoLinkPublico,
+            token=token, ativo=True, filial__ativo=True,
+        )
+        try:
+            endereco = CepService.consultar(request.GET.get('cep', ''))
+        except DadosInvalidosError as erro:
+            return JsonResponse({'encontrado': False, 'erro': str(erro)}, status=400)
+        if not endereco:
+            return JsonResponse({
+                'encontrado': False,
+                'erro': 'CEP não encontrado. Confira os números ou preencha o endereço manualmente.',
+            }, status=404)
+        return JsonResponse({
+            'encontrado': True,
+            'cep': endereco['cep'],
+            'logradouro': endereco['endereco'],
+            'bairro': endereco['bairro'],
+            'cidade': endereco['cidade'],
+            'uf': endereco['uf'],
+        })
 
 
 class CupomCatalogoPublicoView(View):

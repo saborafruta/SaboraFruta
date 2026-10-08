@@ -22,7 +22,7 @@ from apps.catalogo.models import (
 from apps.catalogo.services import formatar_resumo
 from apps.catalogo.views import CatalogoPainelView, PedidoAcaoView, PedidosCatalogoView
 from apps.catalogo.views_publico import (
-    CatalogoPublicoView, ClienteCatalogoView, CupomCatalogoPublicoView,
+    CatalogoPublicoView, CepCatalogoView, ClienteCatalogoView, CupomCatalogoPublicoView,
     PedidoCatalogoConfirmarView, _funcionamento,
 )
 from apps.pdv.models import ItemVendaPDV, VendaPDV
@@ -133,6 +133,27 @@ class CatalogoTests(TestCase):
         self.assertIn('Cupom de desconto', conteudo)
         self.assertIn('id="catalog-toast"', conteudo)
         self.assertIn('adicionado ao carrinho', conteudo)
+        self.assertIn('id="delivery-cep"', conteudo)
+        self.assertIn('Buscando endereço', conteudo)
+        self.assertLess(conteudo.index('id="delivery-cep"'), conteudo.index('id="delivery-street"'))
+
+    @patch('apps.catalogo.views_publico.CepService.consultar')
+    def test_consulta_cep_publica_preenche_endereco(self, consultar):
+        consultar.return_value = {
+            'cep': '59063-400', 'endereco': 'Avenida Senador Salgado Filho',
+            'bairro': 'Lagoa Nova', 'cidade': 'Natal', 'uf': 'RN',
+        }
+        request = self.factory.get('/pedir/catalogo-teste/cep/', {'cep': '59063400'})
+
+        response = CepCatalogoView.as_view()(request, token=self.link.token)
+        payload = json.loads(response.content)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(payload['encontrado'])
+        self.assertEqual(payload['logradouro'], 'Avenida Senador Salgado Filho')
+        self.assertEqual(payload['bairro'], 'Lagoa Nova')
+        self.assertEqual(payload['cidade'], 'Natal')
+        self.assertEqual(payload['uf'], 'RN')
 
     def test_status_de_funcionamento_indica_aberto_e_fechado(self):
         config = CatalogoConfiguracao.objects.create(
