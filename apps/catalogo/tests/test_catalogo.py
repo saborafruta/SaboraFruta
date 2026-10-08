@@ -6,6 +6,7 @@ from django.test import RequestFactory, TestCase
 from django.contrib.auth.models import AnonymousUser
 from django.template.loader import get_template
 from django.urls import resolve, reverse
+from django.utils import timezone
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.cadastros.models import Cliente
@@ -18,6 +19,7 @@ from apps.catalogo.models import (
 )
 from apps.catalogo.views import CatalogoPainelView, PedidoAcaoView, PedidosCatalogoView
 from apps.catalogo.views_publico import CatalogoPublicoView, ClienteCatalogoView
+from apps.pdv.models import ItemVendaPDV, VendaPDV
 from apps.pdv.views.pdv import _pedido_catalogo_para_checkout
 
 
@@ -217,6 +219,35 @@ class CatalogoTests(TestCase):
         self.assertEqual(payload['nome'], 'Cliente Recorrente')
         self.assertEqual(payload['historico'][0]['numero'], 'CAT-HISTORICO')
         self.assertEqual(payload['historico'][0]['itens'][0]['id'], self.produto.pk)
+
+    def test_historico_do_catalogo_inclui_vendas_finalizadas_no_pdv(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='F', razao_social='Cliente do PDV',
+            celular='5584999993555',
+        )
+        venda = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=27, cliente=cliente,
+            usuario=self.usuario, data_venda=timezone.now(), status='finalizada',
+            valor_subtotal=Decimal('40.00'), valor_total=Decimal('40.00'),
+            valor_pago=Decimal('40.00'),
+        )
+        ItemVendaPDV.objects.create(
+            venda_pdv=venda, produto=self.produto, numero_item=1,
+            unidade_medida='UN', quantidade=Decimal('2'),
+            valor_unitario=Decimal('20.00'), valor_total=Decimal('40.00'),
+        )
+        request = self.factory.get(
+            '/pedir/catalogo-teste/cliente/', {'telefone': '(84) 99999-3555'},
+        )
+
+        response = ClienteCatalogoView.as_view()(request, token=self.link.token)
+        payload = json.loads(response.content)
+
+        self.assertTrue(payload['encontrado'])
+        self.assertEqual(payload['historico'][0]['numero'], 'Venda #000027')
+        self.assertEqual(payload['historico'][0]['itens'], [
+            {'id': self.produto.pk, 'quantidade': 2.0},
+        ])
 
     @patch('apps.catalogo.views_publico.enviar_resumo_whatsapp', return_value=(True, 'Enviado'))
     def test_checkout_recalcula_valores_e_cria_cliente(self, _enviar):

@@ -6,6 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.cadastros.models import Cliente, ClienteFilial
+from apps.catalogo.models import ItemPedidoCatalogo, PedidoCatalogo
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
 from apps.estoque.models import Estoque, MovimentacaoEstoque
@@ -21,6 +22,8 @@ from apps.produtos.models import (
     PromocaoQuantidade, PromocaoQuantidadeFaixa, TipoDesconto, UnidadeMedida,
     UnidadeMedidaFilial, TabelaPreco, TabelaPrecoFilial, ItemTabelaPreco,
 )
+from apps.vendas.models import PedidoVenda
+from apps.vendas.services.venda_service import VendaService
 
 
 class VendaPDVServiceTests(TestCase):
@@ -384,6 +387,86 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(estoque.quantidade_disponivel, Decimal("8.000"))
         self.assertEqual(movimento.documento_tipo, MovimentacaoEstoque.DocumentoTipo.NFCE)
         self.assertEqual(movimento.documento_id, venda.pk)
+
+    def test_finaliza_pedido_do_catalogo_separado_no_pdv(self):
+        produto = self.criar_produto('Produto pedido pelo WhatsApp')
+        self.abastecer(produto, '10')
+        cliente = Cliente.objects.create(
+            filial=self.filial,
+            tipo_pessoa='F',
+            razao_social='Cliente WhatsApp',
+            celular='5584999997777',
+        )
+        ClienteFilial.objects.update_or_create(
+            cliente=cliente, filial=self.filial, defaults={'ativo': True},
+        )
+        pedido_venda = VendaService.criar_pedido(
+            filial=self.filial,
+            usuario=self.usuario,
+            cliente=cliente,
+            observacao='Pedido feito pelo WhatsApp.',
+        )
+        VendaService.adicionar_item(
+            pedido_venda, produto, Decimal('2'), Decimal('10.00'),
+        )
+        VendaService.confirmar_pedido(pedido_venda, self.usuario)
+        VendaService.separar_pedido(pedido_venda, self.usuario)
+        pedido = PedidoCatalogo.objects.create(
+            filial=self.filial,
+            numero='CAT-PDV-TESTE',
+            cliente=cliente,
+            pedido_venda=pedido_venda,
+            status=PedidoCatalogo.Status.PENDENTE_CAIXA,
+            nome_cliente=cliente.nome_display,
+            telefone=cliente.celular,
+            modalidade=PedidoCatalogo.Modalidade.RETIRADA,
+            forma_pagamento=PedidoCatalogo.Pagamento.DINHEIRO,
+            subtotal=Decimal('20.00'),
+            valor_frete=Decimal('0.00'),
+            total=Decimal('20.00'),
+            observacao='Pedido feito pelo WhatsApp.',
+        )
+        ItemPedidoCatalogo.objects.create(
+            pedido=pedido,
+            produto=produto,
+            descricao=produto.descricao,
+            quantidade=2,
+            valor_unitario=Decimal('10.00'),
+            valor_total=Decimal('20.00'),
+        )
+        produto.preco_venda = Decimal('15.00')
+        produto.save(update_fields=['preco_venda', 'updated_at'])
+        self.client.force_login(self.usuario)
+        session = self.client.session
+        session['filial_ativa_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(
+            reverse('pdv:api_venda_finalizar'),
+            data=json.dumps({
+                'pedido_catalogo_id': pedido.pk,
+                'cliente_id': cliente.pk,
+                # O servidor não pode confiar neste carrinho antigo/adulterado:
+                # ele deve reconstruir os itens a partir do pedido confirmado.
+                'itens': [{'produto_id': produto.pk, 'quantidade': 999}],
+                'pagamentos': [{'forma_id': self.forma.pk, 'valor': '20.00'}],
+                'acrescimo': '0.00',
+                'observacao': pedido.observacao,
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        pedido.refresh_from_db()
+        pedido_venda.refresh_from_db()
+        self.assertEqual(pedido.status, PedidoCatalogo.Status.PAGO)
+        self.assertIsNotNone(pedido.venda_pdv_id)
+        self.assertEqual(pedido_venda.status, PedidoVenda.Status.CANCELADO)
+        self.assertEqual(pedido.venda_pdv.observacao, 'Pedido feito pelo WhatsApp.')
+        item_vendido = pedido.venda_pdv.itens.get()
+        self.assertEqual(item_vendido.quantidade, Decimal('2'))
+        self.assertEqual(item_vendido.valor_unitario, Decimal('10.0000'))
+        self.assertEqual(pedido.venda_pdv.valor_total, Decimal('20.00'))
 
     def test_finalizar_venda_respeita_preco_normal_escolhido_no_modal(self):
         produto = self.criar_produto("Produto com escolha")

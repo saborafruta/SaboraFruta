@@ -1975,17 +1975,32 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
     if not sessao:
         return JsonResponse({"erro": "Nenhuma sessão de caixa aberta."}, status=400)
 
-    itens = body.get("itens", [])
+    itens_recebidos = body.get("itens", [])
     pagamentos = body.get("pagamentos", [])
-    if not itens:
+    if not isinstance(itens_recebidos, list) or not itens_recebidos:
         return JsonResponse({"erro": "Carrinho vazio."}, status=400)
+    if not all(isinstance(item, dict) for item in itens_recebidos):
+        return JsonResponse({"erro": "Os itens do carrinho são inválidos."}, status=400)
+    if not isinstance(pagamentos, list) or not all(isinstance(item, dict) for item in pagamentos):
+        return JsonResponse({"erro": "As formas de pagamento são inválidas."}, status=400)
+    # Campos internos de preço nunca são confiados ao navegador. Para um
+    # pedido do catálogo eles serão reconstruídos abaixo, a partir do banco.
+    itens = [
+        {chave: valor for chave, valor in item.items() if not chave.startswith('_preco_confirmado_')}
+        for item in itens_recebidos
+    ]
 
     cliente_id = body.get("cliente_id")
-    desconto = Decimal(str(body.get("desconto", "0")))
-    acrescimo = Decimal(str(body.get("acrescimo", "0")))
+    try:
+        desconto = Decimal(str(body.get("desconto") or "0"))
+        acrescimo = Decimal(str(body.get("acrescimo") or "0"))
+        credito_valor = Decimal(str(body.get("credito_valor") or "0"))
+        if not all(valor.is_finite() for valor in (desconto, acrescimo, credito_valor)):
+            raise InvalidOperation
+    except (InvalidOperation, TypeError, ValueError):
+        return JsonResponse({"erro": "Os valores informados para a venda são inválidos."}, status=400)
     delivery = bool(body.get("delivery", False))
     endereco_entrega = body.get("endereco_entrega", {})
-    credito_valor = Decimal(str(body.get("credito_valor", "0")))
     forcar_estoque_negativo = True
     bonificacao = bool(body.get("bonificacao", False))
     venda_fora_estabelecimento = bool(body.get("venda_fora_estabelecimento", False))
@@ -2019,6 +2034,7 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
                 pedido_catalogo = (
                     PedidoCatalogo.objects.for_filial(request.filial_ativa)
                     .select_for_update().select_related('pedido_venda')
+                    .prefetch_related('itens')
                     .filter(
                         pk=pedido_catalogo_id,
                         status__in=[
@@ -2038,6 +2054,23 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
                     raise DadosInvalidosError(
                         'O valor do frete fixo foi alterado. Reabra o pedido pela tela de Pedidos.'
                     )
+                # O pedido já foi confirmado pelo cliente e separado pela
+                # loja. No caixa, produtos, quantidades, cliente e preços
+                # precisam vir do registro bloqueado no banco, não do estado
+                # que ficou aberto no navegador do operador.
+                itens = [
+                    {
+                        'produto_id': item.produto_id,
+                        'quantidade': str(item.quantidade),
+                        '_preco_confirmado_catalogo': str(item.valor_unitario),
+                    }
+                    for item in pedido_catalogo.itens.all()
+                ]
+                if not itens:
+                    raise DadosInvalidosError('O pedido do catálogo não possui itens.')
+                cliente_id = pedido_catalogo.cliente_id
+                delivery = pedido_catalogo.modalidade == PedidoCatalogo.Modalidade.ENTREGA
+                endereco_entrega = pedido_catalogo.endereco_entrega or {}
                 if pedido_catalogo.pedido_venda and pedido_catalogo.pedido_venda.pode_cancelar:
                     VendaService.cancelar_pedido(
                         pedido_catalogo.pedido_venda,
@@ -2088,8 +2121,14 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
         if existente:
             return existente
         return JsonResponse({"erro": "Conflito ao registrar a venda. Consulte o histórico antes de tentar novamente."}, status=409)
-    except Exception as exc:
-        return JsonResponse({"erro": str(exc)}, status=500)
+    except Exception:
+        logger.exception(
+            'Falha inesperada ao finalizar venda%s.',
+            f' do catálogo #{body.get("pedido_catalogo_id")}' if body.get('pedido_catalogo_id') else '',
+        )
+        return JsonResponse({
+            "erro": "Não foi possível concluir a venda. O erro foi registrado para diagnóstico."
+        }, status=500)
 
     if exigir_autorizacao_desconto and desconto > 0:
         consumir_checkout_desconto(request)

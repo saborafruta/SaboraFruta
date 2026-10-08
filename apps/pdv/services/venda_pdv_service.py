@@ -414,14 +414,30 @@ class VendaPDVService:
             cliente=venda.cliente,
             apresentacao=apresentacao,
         )
-        preco_info = cls.resolver_oferta_selecionada(
-            produto=produto,
-            filial=filial,
-            quantidade=quantidade,
-            cliente=venda.cliente,
-            item_dados=item_dados,
-            preco_automatico=preco_info,
-        )
+        preco_catalogo = item_dados.get("_preco_confirmado_catalogo")
+        if preco_catalogo not in (None, ""):
+            # Esse campo interno nunca é aceito diretamente do navegador: a
+            # view o reconstrói a partir do pedido bloqueado no banco. Assim a
+            # venda respeita o preço que o cliente confirmou, mesmo que uma
+            # promoção tenha terminado ou o cadastro tenha mudado depois.
+            valor_confirmado = cls._decimal(preco_catalogo, cls.UNIT)
+            if valor_confirmado < 0:
+                raise DadosInvalidosError("O preço confirmado no catálogo não pode ser negativo.")
+            preco_info = {
+                "preco": valor_confirmado,
+                "tipo": "catalogo",
+                "origem": "Pedido do catálogo",
+                "detalhe": "Preço confirmado pelo cliente no pedido do WhatsApp.",
+            }
+        else:
+            preco_info = cls.resolver_oferta_selecionada(
+                produto=produto,
+                filial=filial,
+                quantidade=quantidade,
+                cliente=venda.cliente,
+                item_dados=item_dados,
+                preco_automatico=preco_info,
+            )
         valor_unitario = preco_info["preco"]
         preco_origem_tipo = preco_info["tipo"]
         preco_origem_detalhe = preco_info["detalhe"] or preco_info["origem"]
@@ -436,7 +452,7 @@ class VendaPDVService:
                 f"Preco alterado manualmente pelo operador "
                 f"(preco automatico: R$ {preco_info['preco']})."
             )
-        elif valor_unitario <= 0:
+        elif valor_unitario <= 0 and preco_catalogo in (None, ""):
             raise DadosInvalidosError("O preço da condição escolhida deve ser maior que zero.")
 
         valor_bruto_item = cls._decimal(quantidade * valor_unitario, cls.MONEY)

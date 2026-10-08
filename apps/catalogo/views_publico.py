@@ -10,6 +10,7 @@ from django.views import View
 
 from apps.core.models.parametros import ParametrosSistema
 from apps.core.tenant_context import get_current_database_alias, tenant_atomic
+from apps.pdv.models import VendaPDV
 from apps.produtos.models import Produto
 from apps.whatsapp_agent.tracking import conversa_do_token
 
@@ -45,34 +46,60 @@ def _produtos(filial):
     )
 
 
-def _ultimos_pedidos(cliente, filial):
+def _historico_compras(cliente, filial):
     if not cliente:
         return []
-    return list(
+    registros = []
+    vendas_pdv = (
+        VendaPDV.objects.for_filial(filial).filter(
+            cliente=cliente, status='finalizada', bonificacao=False,
+        ).prefetch_related('itens').order_by('-data_venda')[:6]
+    )
+    for venda in vendas_pdv:
+        registros.append({
+            'momento': venda.data_venda,
+            'numero': f'Venda #{venda.numero_venda:06d}',
+            'total': venda.valor_total,
+            'itens': [
+                {'id': item.produto_id, 'quantidade': float(item.quantidade)}
+                for item in venda.itens.all()
+                if item.quantidade > 0
+            ],
+        })
+
+    # Pedidos antigos do catálogo que ainda não possuem uma venda PDV
+    # vinculada também são compras válidas. Os que possuem vínculo já estão
+    # representados por VendaPDV e não podem aparecer duas vezes.
+    pedidos_catalogo = (
         PedidoCatalogo.objects.filter(
-            filial=filial,
-            cliente=cliente,
+            filial=filial, cliente=cliente, venda_pdv__isnull=True,
             status__in=[
                 PedidoCatalogo.Status.PAGO,
                 PedidoCatalogo.Status.SAIU_ENTREGA,
                 PedidoCatalogo.Status.ENTREGUE,
             ],
-        ).prefetch_related('itens').order_by('-created_at')[:3]
+        ).prefetch_related('itens').order_by('-created_at')[:6]
     )
-
-
-def _historico_json(pedidos):
-    return [
-        {
+    for pedido in pedidos_catalogo:
+        registros.append({
+            'momento': pedido.created_at,
             'numero': pedido.numero,
-            'data': timezone.localtime(pedido.created_at).strftime('%d/%m/%Y'),
-            'total': float(pedido.total),
+            'total': pedido.total,
             'itens': [
                 {'id': item.produto_id, 'quantidade': item.quantidade}
                 for item in pedido.itens.all()
             ],
+        })
+
+    registros.sort(key=lambda item: item['momento'], reverse=True)
+    return [
+        {
+            'numero': item['numero'],
+            'data': timezone.localtime(item['momento']).strftime('%d/%m/%Y'),
+            'total': float(item['total']),
+            'itens': item['itens'],
         }
-        for pedido in pedidos
+        for item in registros[:3]
     ]
 
 
@@ -124,12 +151,12 @@ class _CatalogoPublicoBase(View):
                     'complemento': cliente.complemento, 'bairro': cliente.bairro,
                     'cidade': cliente.cidade, 'uf': cliente.uf, 'cep': cliente.cep,
                 })
-                ultimos = _ultimos_pedidos(cliente, link.filial)
+                ultimos = _historico_compras(cliente, link.filial)
         contexto = _contexto(link, dados=dados)
         contexto.update({
             'rastreamento_whatsapp': request.GET.get('wa', ''),
             'ultimos_pedidos': ultimos,
-            'historico_json': _historico_json(ultimos),
+            'historico_json': ultimos,
         })
         return render(request, self.template_name, contexto)
 
@@ -264,13 +291,13 @@ class ClienteCatalogoView(View):
         cliente = localizar_cliente(link.filial, request.GET.get('telefone', ''))
         dados = {'encontrado': bool(cliente)}
         if cliente:
-            ultimos = _ultimos_pedidos(cliente, link.filial)
+            ultimos = _historico_compras(cliente, link.filial)
             dados.update({
                 'nome': cliente.nome_display, 'logradouro': cliente.endereco,
                 'numero': cliente.numero, 'complemento': cliente.complemento,
                 'bairro': cliente.bairro, 'cidade': cliente.cidade,
                 'uf': cliente.uf, 'cep': cliente.cep,
-                'historico': _historico_json(ultimos),
+                'historico': ultimos,
             })
         resposta = JsonResponse(dados)
         resposta['Cache-Control'] = 'no-store'
