@@ -390,6 +390,8 @@ function checkoutVenda() {
       if(this.pedidoCatalogoInicial){
         this.itens=this.pedidoCatalogoInicial.itens||[];
         this.cliente=this.pedidoCatalogoInicial.cliente||null;
+        this.descontoEntrada=this.formatarNumeroInput(Number(this.pedidoCatalogoInicial.desconto||0));
+        this.descontoLiberado=true;
         this.acrescimoInicial=Number(this.pedidoCatalogoInicial.frete||0);
         this.mensagem='Pedido '+this.pedidoCatalogoInicial.numero+' carregado. Confira o pagamento para dar baixa no caixa.';
         this.sincronizarValorPagamento(true);

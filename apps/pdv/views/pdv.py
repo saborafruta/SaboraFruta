@@ -479,6 +479,7 @@ def _pedido_catalogo_para_checkout(request):
         'numero': pedido.numero,
         'cliente': _serializar_cliente(pedido.cliente),
         'itens': itens,
+        'desconto': float(pedido.valor_desconto or 0),
         'frete': float(pedido.valor_frete or 0),
         'frete_a_combinar': pedido.frete_a_combinar,
         'delivery': pedido.modalidade == PedidoCatalogo.Modalidade.ENTREGA,
@@ -2006,8 +2007,9 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
     venda_fora_estabelecimento = bool(body.get("venda_fora_estabelecimento", False))
     viagem_id = body.get("viagem_id")
 
+    pedido_catalogo_id = body.get('pedido_catalogo_id')
     if exigir_autorizacao_desconto:
-        if desconto > 0 and not checkout_desconto_liberado(request):
+        if desconto > 0 and not pedido_catalogo_id and not checkout_desconto_liberado(request):
             return JsonResponse(
                 {"erro": "Autorize o desconto com um usuário que tenha PDV → Aprovar."},
                 status=403,
@@ -2026,7 +2028,6 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
     pedido_catalogo = None
     try:
         with tenant_atomic():
-            pedido_catalogo_id = body.get('pedido_catalogo_id')
             if pedido_catalogo_id:
                 from apps.catalogo.models import PedidoCatalogo
                 from apps.vendas.services.venda_service import VendaService
@@ -2048,6 +2049,7 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
                 )
                 if not pedido_catalogo:
                     raise DadosInvalidosError('Pedido do catálogo não está pendente no caixa.')
+                desconto = Decimal(pedido_catalogo.valor_desconto or 0)
                 if acrescimo < 0:
                     raise DadosInvalidosError('O valor do frete não pode ser negativo.')
                 if (

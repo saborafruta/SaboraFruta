@@ -106,11 +106,23 @@ def formatar_resumo(pedido, configuracao):
     valores = {
         'numero': pedido.numero, 'nome': pedido.nome_cliente, 'itens': itens,
         'subtotal': f'R$ {pedido.subtotal:.2f}'.replace('.', ','), 'frete': frete,
+        'desconto': f'R$ {pedido.valor_desconto:.2f}'.replace('.', ','),
+        'cupom': pedido.codigo_cupom or 'Nenhum',
         'total': f'R$ {pedido.total:.2f}'.replace('.', ','), 'entrega': entrega,
         'pagamento': pedido.get_forma_pagamento_display(),
         'observacao': pedido.observacao or 'Nenhuma',
     }
     texto = configuracao.mensagem_resumo_pedido
+    if pedido.valor_desconto and '{desconto}' not in texto:
+        desconto_formatado = f'{pedido.valor_desconto:.2f}'.replace('.', ',')
+        linha_desconto = (
+            f'*Cupom {pedido.codigo_cupom}:* '
+            f'- R$ {desconto_formatado}\n'
+        )
+        if '*Frete:*' in texto:
+            texto = texto.replace('*Frete:*', linha_desconto + '*Frete:*', 1)
+        else:
+            texto += '\n' + linha_desconto.rstrip()
     for chave, valor in valores.items():
         texto = texto.replace(f'{{{chave}}}', str(valor))
     return texto

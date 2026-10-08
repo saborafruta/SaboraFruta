@@ -4716,6 +4716,7 @@ function pdv() {
       this.venda.pedido_catalogo_id=pedido.id;
       this.venda.delivery=!!pedido.delivery;
       this.venda.endereco_entrega=pedido.endereco_entrega||{};
+      this.venda.desconto=Number(pedido.desconto||0);
       this.venda.acrescimo=Number(pedido.frete||0);
       this.venda.observacao=pedido.observacao||'Pedido feito pelo WhatsApp.';
       if (pedido.frete_a_combinar && !this.venda.observacao.includes('Frete a combinar')) {

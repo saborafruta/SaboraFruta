@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, time
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -15,10 +16,14 @@ from apps.whatsapp_agent.agent import processar_mensagem
 from apps.whatsapp_agent.models import ConfiguracaoWhatsApp, ConversaWhatsApp
 
 from apps.catalogo.models import (
-    CatalogoConfiguracao, CatalogoLinkPublico, ItemPedidoCatalogo, PedidoCatalogo,
+    CatalogoConfiguracao, CatalogoLinkPublico, CupomCatalogo,
+    ItemPedidoCatalogo, PedidoCatalogo,
 )
 from apps.catalogo.views import CatalogoPainelView, PedidoAcaoView, PedidosCatalogoView
-from apps.catalogo.views_publico import CatalogoPublicoView, ClienteCatalogoView
+from apps.catalogo.views_publico import (
+    CatalogoPublicoView, ClienteCatalogoView, CupomCatalogoPublicoView,
+    _funcionamento,
+)
 from apps.pdv.models import ItemVendaPDV, VendaPDV
 from apps.pdv.views.pdv import _pedido_catalogo_para_checkout
 
@@ -103,6 +108,14 @@ class CatalogoTests(TestCase):
         self.assertIn('confirmado', resposta.lower())
 
     def test_catalogo_publico_exibe_produto_habilitado(self):
+        self.filial.endereco = 'Rua do Catálogo'
+        self.filial.numero = '120'
+        self.filial.bairro = 'Centro'
+        self.filial.cidade = 'Fortaleza'
+        self.filial.save(update_fields=['endereco', 'numero', 'bairro', 'cidade', 'updated_at'])
+        self.produto.catalogo_destaque = True
+        self.produto.catalogo_descricao = 'Café torrado e moído.'
+        self.produto.save(update_fields=['catalogo_destaque', 'catalogo_descricao', 'updated_at'])
         request = self.factory.get('/pedir/catalogo-teste/')
         request.user = AnonymousUser()
         response = CatalogoPublicoView.as_view()(request, token=self.link.token)
@@ -111,6 +124,74 @@ class CatalogoTests(TestCase):
         self.assertIn('Café 500g', conteudo)
         self.assertIn('data-remove=', conteudo)
         self.assertIn('data-quantity=', conteudo)
+        self.assertIn('Rua do Catálogo, 120', conteudo)
+        self.assertIn('Destaques', conteudo)
+        self.assertIn('Café torrado e moído.', conteudo)
+        self.assertIn('data-category-filter=', conteudo)
+        self.assertIn('Peça também', conteudo)
+        self.assertIn('Cupom de desconto', conteudo)
+
+    def test_status_de_funcionamento_indica_aberto_e_fechado(self):
+        config = CatalogoConfiguracao.objects.create(
+            filial=self.filial, dias_funcionamento=[3],
+            horario_abertura=time(8), horario_fechamento=time(18),
+        )
+        aberto = _funcionamento(
+            config, timezone.make_aware(datetime(2026, 10, 8, 10, 0)),
+        )
+        fechado = _funcionamento(
+            config, timezone.make_aware(datetime(2026, 10, 8, 20, 0)),
+        )
+
+        self.assertTrue(aberto['aberto'])
+        self.assertEqual(aberto['status'], 'Aberto agora · até 18:00')
+        self.assertFalse(fechado['aberto'])
+        self.assertEqual(fechado['status'], 'Fechado agora')
+
+    def test_cupom_publico_valida_e_calcula_desconto(self):
+        CupomCatalogo.objects.create(
+            filial=self.filial, codigo='BEMVINDO',
+            tipo=CupomCatalogo.Tipo.PERCENTUAL, valor=Decimal('10.00'),
+            pedido_minimo=Decimal('30.00'),
+        )
+        request = self.factory.post(
+            '/pedir/catalogo-teste/cupom/',
+            data=json.dumps({'codigo': 'bemvindo', 'subtotal': 50}),
+            content_type='application/json',
+        )
+
+        response = CupomCatalogoPublicoView.as_view()(request, token=self.link.token)
+        payload = json.loads(response.content)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload['codigo'], 'BEMVINDO')
+        self.assertEqual(payload['desconto'], 5.0)
+
+    @patch('apps.catalogo.views_publico.enviar_resumo_whatsapp', return_value=(True, 'Enviado'))
+    def test_checkout_aplica_cupom_e_grava_total_com_desconto(self, _enviar):
+        CatalogoConfiguracao.objects.create(filial=self.filial)
+        cupom = CupomCatalogo.objects.create(
+            filial=self.filial, codigo='MENOS5', tipo=CupomCatalogo.Tipo.VALOR,
+            valor=Decimal('5.00'),
+        )
+        request = self.factory.post('/pedir/catalogo-teste/', {
+            'nome': 'Cliente com Cupom', 'telefone': '84999997777',
+            'modalidade': 'retirada', 'forma_pagamento': 'pix',
+            'cupom_codigo': 'menos5',
+            'carrinho_json': json.dumps([{'id': self.produto.pk, 'quantidade': 2}]),
+        })
+        request.user = AnonymousUser()
+
+        with patch('apps.catalogo.views_publico.conversa_do_token', return_value=object()):
+            response = CatalogoPublicoView.as_view()(request, token=self.link.token)
+
+        pedido = PedidoCatalogo.objects.get(cliente__razao_social='Cliente com Cupom')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(pedido.cupom, cupom)
+        self.assertEqual(pedido.codigo_cupom, 'MENOS5')
+        self.assertEqual(pedido.subtotal, Decimal('40.00'))
+        self.assertEqual(pedido.valor_desconto, Decimal('5.00'))
+        self.assertEqual(pedido.total, Decimal('35.00'))
 
     def test_configuracao_e_pedidos_ficam_em_telas_separadas(self):
         request_config = self.factory.get('/catalogo/')
@@ -227,6 +308,7 @@ class CatalogoTests(TestCase):
         self.assertEqual(checkout['itens'][0]['quantidade'], 2)
         self.assertEqual(checkout['itens'][0]['produto_id'], self.produto.pk)
         self.assertEqual(checkout['frete'], 8.0)
+        self.assertEqual(checkout['desconto'], 0.0)
         self.assertTrue(checkout['delivery'])
 
     def test_cliente_localizado_recebe_historico_de_compras(self):

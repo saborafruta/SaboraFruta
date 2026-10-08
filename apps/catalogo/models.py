@@ -1,13 +1,20 @@
 import secrets
+from datetime import time
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.utils import timezone
 
 from apps.core.models.base import FilialScopedModel, TimestampedModel
 
 
 def gerar_token():
     return secrets.token_urlsafe(24)
+
+
+def dias_funcionamento_padrao():
+    return [0, 1, 2, 3, 4, 5]
 
 
 class CatalogoConfiguracao(TimestampedModel):
@@ -34,6 +41,9 @@ class CatalogoConfiguracao(TimestampedModel):
     )
     valor_frete = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     prazo_minimo_entrega_horas = models.PositiveSmallIntegerField(default=1)
+    dias_funcionamento = models.JSONField(default=dias_funcionamento_padrao, blank=True)
+    horario_abertura = models.TimeField(default=time(8, 0))
+    horario_fechamento = models.TimeField(default=time(18, 0))
 
     class Meta:
         db_table = 'catalogo_configuracoes'
@@ -51,6 +61,61 @@ class CatalogoConfiguracao(TimestampedModel):
         if self.frete_abaixo_limite == self.FreteAbaixoLimite.GRATIS:
             return 0, False
         return 0, True
+
+
+class CupomCatalogo(TimestampedModel):
+    class Tipo(models.TextChoices):
+        PERCENTUAL = 'percentual', 'Percentual'
+        VALOR = 'valor', 'Valor fixo'
+
+    filial = models.ForeignKey(
+        'core.Filial', on_delete=models.CASCADE, related_name='cupons_catalogo',
+    )
+    codigo = models.CharField(max_length=30)
+    tipo = models.CharField(max_length=12, choices=Tipo.choices, default=Tipo.PERCENTUAL)
+    valor = models.DecimalField(
+        max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    pedido_minimo = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    valido_de = models.DateField(null=True, blank=True)
+    valido_ate = models.DateField(null=True, blank=True)
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'catalogo_cupons'
+        ordering = ['-ativo', 'codigo']
+        constraints = [
+            models.UniqueConstraint(fields=['filial', 'codigo'], name='catalogo_cupom_filial_codigo_uniq'),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.codigo = (self.codigo or '').strip().upper()
+        super().save(*args, **kwargs)
+
+    def motivo_indisponivel(self, subtotal, hoje=None):
+        hoje = hoje or timezone.localdate()
+        subtotal = Decimal(subtotal or 0)
+        if not self.ativo:
+            return 'Este cupom está inativo.'
+        if self.valido_de and hoje < self.valido_de:
+            return 'Este cupom ainda não está válido.'
+        if self.valido_ate and hoje > self.valido_ate:
+            return 'Este cupom expirou.'
+        if subtotal < self.pedido_minimo:
+            valor = f'{self.pedido_minimo:.2f}'.replace('.', ',')
+            return f'Este cupom exige pedido mínimo de R$ {valor}.'
+        return ''
+
+    def calcular_desconto(self, subtotal):
+        subtotal = Decimal(subtotal or 0)
+        if self.tipo == self.Tipo.PERCENTUAL:
+            desconto = subtotal * self.valor / Decimal('100')
+        else:
+            desconto = self.valor
+        return min(subtotal, desconto).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    def __str__(self):
+        return self.codigo
 
 
 class CatalogoLinkPublico(TimestampedModel):
@@ -111,6 +176,12 @@ class PedidoCatalogo(FilialScopedModel):
     entrega_em = models.DateTimeField(null=True, blank=True)
     observacao = models.TextField(blank=True)
     subtotal = models.DecimalField(max_digits=12, decimal_places=2)
+    cupom = models.ForeignKey(
+        CupomCatalogo, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='pedidos',
+    )
+    codigo_cupom = models.CharField(max_length=30, blank=True)
+    valor_desconto = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     valor_frete = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     frete_a_combinar = models.BooleanField(default=False)
     total = models.DecimalField(max_digits=12, decimal_places=2)

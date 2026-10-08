@@ -14,8 +14,8 @@ from apps.core.services.tenant_public_link_service import TenantPublicLinkServic
 from apps.core.tenant_context import get_current_database_alias, tenant_atomic
 from apps.vendas.services.venda_service import VendaService
 
-from .forms import CatalogoConfiguracaoForm
-from .models import CatalogoConfiguracao, CatalogoLinkPublico, PedidoCatalogo
+from .forms import CatalogoConfiguracaoForm, CupomCatalogoForm
+from .models import CatalogoConfiguracao, CatalogoLinkPublico, CupomCatalogo, PedidoCatalogo
 from .services import enviar_atualizacao_whatsapp
 
 
@@ -44,6 +44,8 @@ class CatalogoPainelView(PermissaoRequiredMixin, View):
             'link_publico': request.build_absolute_uri(
                 reverse('catalogo_publico:catalogo', args=[link.token])
             ) if link else '',
+            'cupom_form': CupomCatalogoForm(),
+            'cupons': CupomCatalogo.objects.filter(filial=request.filial_ativa),
         })
 
     def post(self, request):
@@ -58,7 +60,53 @@ class CatalogoPainelView(PermissaoRequiredMixin, View):
         return render(request, 'catalogo/painel.html', {
             'configuracao': config, 'form': form,
             'link_publico': '',
+            'cupom_form': CupomCatalogoForm(),
+            'cupons': CupomCatalogo.objects.filter(filial=request.filial_ativa),
         }, status=400)
+
+
+@method_decorator(require_POST, name='dispatch')
+class CupomCatalogoCriarView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'cadastros'
+    permissao_acao = 'editar'
+
+    def post(self, request):
+        form = CupomCatalogoForm(request.POST)
+        if form.is_valid():
+            cupom = form.save(commit=False)
+            cupom.filial = request.filial_ativa
+            if CupomCatalogo.objects.filter(filial=request.filial_ativa, codigo__iexact=cupom.codigo).exists():
+                form.add_error('codigo', 'Já existe um cupom com este código nesta filial.')
+            else:
+                cupom.save()
+                messages.success(request, f'Cupom {cupom.codigo} criado com sucesso.')
+                return redirect('catalogo:painel')
+        config, _ = CatalogoConfiguracao.objects.get_or_create(filial=request.filial_ativa)
+        link = CatalogoLinkPublico.objects.filter(filial=request.filial_ativa, ativo=True).first()
+        return render(request, 'catalogo/painel.html', {
+            'configuracao': config, 'form': CatalogoConfiguracaoForm(instance=config),
+            'link_publico': request.build_absolute_uri(
+                reverse('catalogo_publico:catalogo', args=[link.token])
+            ) if link else '',
+            'cupom_form': form,
+            'cupons': CupomCatalogo.objects.filter(filial=request.filial_ativa),
+        }, status=400)
+
+
+@method_decorator(require_POST, name='dispatch')
+class CupomCatalogoAlternarView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'cadastros'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        cupom = get_object_or_404(
+            CupomCatalogo, pk=pk, filial=request.filial_ativa,
+        )
+        cupom.ativo = not cupom.ativo
+        cupom.save(update_fields=['ativo', 'updated_at'])
+        estado = 'ativado' if cupom.ativo else 'desativado'
+        messages.success(request, f'Cupom {cupom.codigo} {estado}.')
+        return redirect('catalogo:painel')
 
 
 class PedidosCatalogoView(PermissaoRequiredMixin, View):
@@ -156,6 +204,12 @@ class PedidoAcaoView(PermissaoRequiredMixin, View):
                         )
                     venda.valor_frete = pedido.valor_frete
                     venda.recalcular_totais()
+                    venda.valor_desconto = pedido.valor_desconto
+                    venda.desconto_valor = pedido.valor_desconto
+                    venda.valor_total = max(
+                        Decimal('0'),
+                        venda.valor_produtos + venda.valor_frete - pedido.valor_desconto,
+                    )
                     venda.save()
                     VendaService.confirmar_pedido(venda, request.user)
                     pedido.pedido_venda = venda

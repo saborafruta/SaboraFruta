@@ -14,7 +14,10 @@ from apps.pdv.models import VendaPDV
 from apps.produtos.models import Produto
 from apps.whatsapp_agent.tracking import conversa_do_token
 
-from .models import CatalogoConfiguracao, CatalogoLinkPublico, ItemPedidoCatalogo, PedidoCatalogo
+from .models import (
+    CatalogoConfiguracao, CatalogoLinkPublico, CupomCatalogo,
+    ItemPedidoCatalogo, PedidoCatalogo,
+)
 from .services import enviar_resumo_whatsapp, localizar_cliente, numero_whatsapp, obter_ou_criar_cliente
 
 
@@ -44,6 +47,57 @@ def _produtos(filial):
             'categoria', 'subcategoria',
         ).order_by('-catalogo_destaque', 'catalogo_ordem', 'descricao')
     )
+
+
+def _endereco_loja(filial):
+    primeira_linha = ', '.join(item for item in (filial.endereco, filial.numero) if item)
+    segunda_linha = ' · '.join(item for item in (
+        filial.bairro,
+        f'{filial.cidade}/{filial.uf}' if filial.cidade and filial.uf else filial.cidade or filial.uf,
+    ) if item)
+    return ' — '.join(item for item in (primeira_linha, segunda_linha) if item)
+
+
+def _resumo_dias(dias):
+    nomes = ('Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom')
+    selecionados = sorted({int(dia) for dia in (dias or []) if str(dia).isdigit() and 0 <= int(dia) <= 6})
+    if selecionados == list(range(7)):
+        return 'Todos os dias'
+    if selecionados == list(range(5)):
+        return 'Seg a sex'
+    if selecionados == list(range(6)):
+        return 'Seg a sáb'
+    return ', '.join(nomes[dia] for dia in selecionados) or 'Sem dias configurados'
+
+
+def _funcionamento(config, agora=None):
+    agora = timezone.localtime(agora or timezone.now())
+    dias = {int(dia) for dia in (config.dias_funcionamento or [])}
+    abertura, fechamento = config.horario_abertura, config.horario_fechamento
+    horario = agora.time().replace(tzinfo=None)
+    dia = agora.weekday()
+    if abertura < fechamento:
+        aberto = dia in dias and abertura <= horario < fechamento
+    else:
+        aberto = (dia in dias and horario >= abertura) or (
+            (dia - 1) % 7 in dias and horario < fechamento
+        )
+    return {
+        'aberto': aberto,
+        'status': f'Aberto agora · até {fechamento:%H:%M}' if aberto else 'Fechado agora',
+        'horarios': f'{_resumo_dias(dias)} · {abertura:%H:%M} às {fechamento:%H:%M}',
+    }
+
+
+def _cupom_valido(filial, codigo, subtotal):
+    codigo = (codigo or '').strip().upper()
+    if not codigo:
+        return None, ''
+    cupom = CupomCatalogo.objects.filter(filial=filial, codigo__iexact=codigo).first()
+    if not cupom:
+        return None, 'Cupom não encontrado.'
+    motivo = cupom.motivo_indisponivel(subtotal)
+    return (None, motivo) if motivo else (cupom, '')
 
 
 def _historico_compras(cliente, filial):
@@ -114,19 +168,33 @@ def _historico_compras(cliente, filial):
 def _contexto(link, *, dados=None, erros=None, pedido=None, aviso=''):
     config, _ = CatalogoConfiguracao.objects.get_or_create(filial=link.filial)
     produtos = _produtos(link.filial)
-    grupos = {}
+    grupos_categoria = {}
     catalogo_json = []
     for produto in produtos:
         categoria = produto.categoria.nome if produto.categoria else 'Outros'
-        grupos.setdefault(categoria, []).append(produto)
+        chave_categoria = f'categoria-{produto.categoria_id}' if produto.categoria_id else 'outros'
+        grupos_categoria.setdefault(chave_categoria, {'chave': chave_categoria, 'nome': categoria, 'produtos': []})[
+            'produtos'
+        ].append(produto)
         catalogo_json.append({
             'id': produto.pk, 'nome': produto.descricao,
             'preco': float(produto.preco_venda),
             'maximo': produto.catalogo_quantidade_maxima,
+            'descricao': produto.catalogo_descricao or produto.descricao_curta,
+            'destaque': produto.catalogo_destaque,
+            'categoria': chave_categoria,
         })
+    destaques = [produto for produto in produtos if produto.catalogo_destaque]
+    grupos = []
+    if destaques:
+        grupos.append({'chave': 'destaques', 'nome': 'Destaques', 'produtos': destaques})
+    grupos.extend(grupos_categoria.values())
+    funcionamento = _funcionamento(config)
     return {
         'link': link, 'filial': link.filial, 'configuracao': config,
-        'logo_url': _logo(link.filial), 'grupos': grupos.items(),
+        'logo_url': _logo(link.filial), 'grupos': grupos,
+        'endereco_loja': _endereco_loja(link.filial),
+        'funcionamento': funcionamento,
         'catalogo_json': catalogo_json, 'dados': dados or {}, 'erros': erros or [],
         'pedido': pedido, 'aviso': aviso,
         'historico_json': [],
@@ -176,7 +244,7 @@ class CatalogoPublicoView(_CatalogoPublicoBase):
         dados = {chave: (request.POST.get(chave) or '').strip() for chave in (
             'nome', 'telefone', 'modalidade', 'forma_pagamento', 'troco_para',
             'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'cep',
-            'data_entrega', 'hora_entrega', 'observacao',
+            'data_entrega', 'hora_entrega', 'observacao', 'cupom_codigo',
         )}
         erros = []
         if not config.ativo:
@@ -230,6 +298,10 @@ class CatalogoPublicoView(_CatalogoPublicoBase):
         )
         if subtotal < config.pedido_minimo:
             erros.append(f'O pedido mínimo é R$ {config.pedido_minimo:.2f}.'.replace('.', ','))
+        cupom, erro_cupom = _cupom_valido(link.filial, dados['cupom_codigo'], subtotal)
+        if erro_cupom:
+            erros.append(erro_cupom)
+        valor_desconto = cupom.calcular_desconto(subtotal) if cupom else Decimal('0')
         endereco = {chave: dados[chave] for chave in ('logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'cep')}
         if dados['modalidade'] == PedidoCatalogo.Modalidade.ENTREGA:
             if not dados['logradouro'] or not dados['numero'] or not dados['bairro'] or not dados['cidade'] or len(dados['uf']) != 2:
@@ -272,8 +344,10 @@ class CatalogoPublicoView(_CatalogoPublicoBase):
                 modalidade=dados['modalidade'], forma_pagamento=dados['forma_pagamento'],
                 troco_para=troco, endereco_entrega=endereco if dados['modalidade'] == 'entrega' else {},
                 entrega_em=entrega_em, observacao=observacao,
-                subtotal=subtotal, valor_frete=valor_frete, frete_a_combinar=frete_a_combinar,
-                total=subtotal + valor_frete,
+                subtotal=subtotal, cupom=cupom,
+                codigo_cupom=cupom.codigo if cupom else '', valor_desconto=valor_desconto,
+                valor_frete=valor_frete, frete_a_combinar=frete_a_combinar,
+                total=max(Decimal('0'), subtotal - valor_desconto) + valor_frete,
             )
             for produto_id, quantidade in quantidades.items():
                 produto = produtos[produto_id]
@@ -310,3 +384,28 @@ class ClienteCatalogoView(View):
         resposta = JsonResponse(dados)
         resposta['Cache-Control'] = 'no-store'
         return resposta
+
+
+class CupomCatalogoPublicoView(View):
+    def post(self, request, token):
+        link = get_object_or_404(
+            CatalogoLinkPublico.objects.select_related('filial'),
+            token=token, ativo=True, filial__ativo=True,
+        )
+        try:
+            payload = json.loads(request.body or b'{}')
+            subtotal = Decimal(str(payload.get('subtotal') or '0'))
+        except (json.JSONDecodeError, InvalidOperation, TypeError, ValueError):
+            return JsonResponse({'erro': 'Não foi possível validar o cupom.'}, status=400)
+        cupom, erro = _cupom_valido(link.filial, payload.get('codigo'), subtotal)
+        if erro:
+            return JsonResponse({'erro': erro}, status=400)
+        if not cupom:
+            return JsonResponse({'erro': 'Informe o código do cupom.'}, status=400)
+        return JsonResponse({
+            'codigo': cupom.codigo,
+            'tipo': cupom.tipo,
+            'valor': float(cupom.valor),
+            'pedido_minimo': float(cupom.pedido_minimo),
+            'desconto': float(cupom.calcular_desconto(subtotal)),
+        })

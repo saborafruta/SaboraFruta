@@ -422,8 +422,10 @@ class VendaPDVServiceTests(TestCase):
             modalidade=PedidoCatalogo.Modalidade.RETIRADA,
             forma_pagamento=PedidoCatalogo.Pagamento.DINHEIRO,
             subtotal=Decimal('20.00'),
+            codigo_cupom='MENOS3',
+            valor_desconto=Decimal('3.00'),
             valor_frete=Decimal('0.00'),
-            total=Decimal('20.00'),
+            total=Decimal('17.00'),
             observacao='Pedido feito pelo WhatsApp.',
         )
         ItemPedidoCatalogo.objects.create(
@@ -449,7 +451,9 @@ class VendaPDVServiceTests(TestCase):
                 # O servidor não pode confiar neste carrinho antigo/adulterado:
                 # ele deve reconstruir os itens a partir do pedido confirmado.
                 'itens': [{'produto_id': produto.pk, 'quantidade': 999}],
-                'pagamentos': [{'forma_id': self.forma.pk, 'valor': '20.00'}],
+                'pagamentos': [{'forma_id': self.forma.pk, 'valor': '17.00'}],
+                # O desconto também vem do pedido bloqueado, não do navegador.
+                'desconto': '999.00',
                 'acrescimo': '0.00',
                 'observacao': pedido.observacao,
             }),
@@ -466,7 +470,8 @@ class VendaPDVServiceTests(TestCase):
         item_vendido = pedido.venda_pdv.itens.get()
         self.assertEqual(item_vendido.quantidade, Decimal('2'))
         self.assertEqual(item_vendido.valor_unitario, Decimal('10.0000'))
-        self.assertEqual(pedido.venda_pdv.valor_total, Decimal('20.00'))
+        self.assertEqual(pedido.venda_pdv.valor_desconto, Decimal('3.00'))
+        self.assertEqual(pedido.venda_pdv.valor_total, Decimal('17.00'))
 
     def test_finalizar_venda_respeita_preco_normal_escolhido_no_modal(self):
         produto = self.criar_produto("Produto com escolha")
