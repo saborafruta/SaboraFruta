@@ -118,7 +118,12 @@ def _enviar_notificacao_agendamento(agendamento, *, db_alias, lembrete=False):
         },
     )
     conversa.ultima_mensagem_em = timezone.now()
-    conversa.save(using='default', update_fields=['ultima_mensagem_em', 'updated_at'])
+    if not lembrete:
+        conversa.etapa_crm = ConversaWhatsApp.EtapaCRM.AGENDADO
+        conversa.agendamento_confirmado_em = timezone.now()
+    conversa.save(using='default', update_fields=[
+        'ultima_mensagem_em', 'etapa_crm', 'agendamento_confirmado_em', 'updated_at',
+    ])
     saida = MensagemWhatsApp.objects.using('default').create(
         conversa_id=conversa.pk,
         direcao=MensagemWhatsApp.Direcao.SAIDA,

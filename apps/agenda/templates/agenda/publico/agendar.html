@@ -233,6 +233,7 @@
         {% if profissionais %}
           <form method="post" id="booking-form">
             {% csrf_token %}
+            {% if rastreamento_whatsapp %}<input type="hidden" name="origem_whatsapp" value="{{ rastreamento_whatsapp }}">{% endif %}
             <div class="grid">
               <div class="field full">
                 <label>Escolha o profissional</label>

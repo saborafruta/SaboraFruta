@@ -1,25 +1,66 @@
 {% extends '_base.html' %}
-{% block title %}Conversas do WhatsApp{% endblock %}
+{% block title %}CRM do WhatsApp{% endblock %}
 {% block content %}
 {% include 'whatsapp_agent/_styles.html' %}
-<div class="wa-shell">
+<div class="wa-shell wa-crm-shell">
   <div class="wa-head">
-    <div><h1 class="wa-title">Conversas do WhatsApp</h1><p class="wa-muted">Últimos atendimentos recebidos pelo agente.</p></div>
-    <div class="wa-actions"><a class="wa-btn secondary" href="{% url 'whatsapp_agent:fluxo-configuracao' %}">Configuração do fluxo</a><a class="wa-btn secondary" href="{% url 'whatsapp_agent:configuracao' %}">Conexão e agente</a></div>
+    <div>
+      <h1 class="wa-title">CRM do WhatsApp</h1>
+      <p class="wa-muted">Acompanhe cada cliente desde a primeira mensagem até a conclusão do atendimento.</p>
+    </div>
+    <div class="wa-actions">
+      <a class="wa-btn secondary" href="{% url 'whatsapp_agent:fluxo-configuracao' %}">Configuração do fluxo</a>
+      <a class="wa-btn secondary" href="{% url 'whatsapp_agent:configuracao' %}">Conexão e agente</a>
+    </div>
   </div>
-  <div class="wa-card wa-list">
-    {% for conversa in conversas %}
-      <div class="wa-item">
-        <a class="wa-item-main" href="{% url 'whatsapp_agent:conversa-detail' conversa.pk %}">
-          <div><strong>{{ conversa.nome_contato|default:conversa.telefone }}</strong><div class="wa-muted">{{ conversa.telefone }} · {% if conversa.cliente %}{{ conversa.cliente.nome_display }}{% else %}Cliente ainda não vinculado{% endif %}</div></div>
-        </a>
-        <div class="wa-item-side">
-          <a class="wa-item-status" href="{% url 'whatsapp_agent:conversa-detail' conversa.pk %}"><span class="wa-status">{% if conversa.atendimento_humano %}Atendimento humano{% else %}{{ conversa.etapa }}{% endif %}</span><span class="wa-muted">{{ conversa.ultima_mensagem_em|date:'d/m H:i' }}</span></a>
-          {% if conversa.ativa %}<form method="post" action="{% url 'whatsapp_agent:encerrar-conversa' conversa.pk %}" onsubmit="return confirm('Encerrar esta conversa?')">{% csrf_token %}<input type="hidden" name="next" value="lista"><button class="wa-btn danger compact" type="submit">Encerrar</button></form>{% endif %}
+
+  <div class="wa-crm-summary">
+    <div class="wa-crm-stat"><span>Conversas</span><strong>{{ conversas|length }}</strong></div>
+    <div class="wa-crm-stat pending"><span>Em acompanhamento</span><strong>{{ total_pendentes }}</strong></div>
+    <div class="wa-crm-stat success"><span>Agendados</span><strong>{{ total_agendados }}</strong></div>
+    <div class="wa-crm-tip">Arraste horizontalmente para ver todo o funil. Em cada card, escolha a próxima etapa.</div>
+  </div>
+
+  <div class="wa-kanban" aria-label="Funil de conversas do WhatsApp">
+    {% for coluna in colunas %}
+      <section class="wa-kanban-column" style="--stage-color:{{ coluna.cor }}">
+        <header class="wa-kanban-head">
+          <span class="wa-stage-dot"></span>
+          <h2>{{ coluna.titulo }}</h2>
+          <span class="wa-stage-count">{{ coluna.conversas|length }}</span>
+        </header>
+        <div class="wa-kanban-cards">
+          {% for conversa in coluna.conversas %}
+            <article class="wa-lead-card">
+              <a class="wa-lead-main" href="{% url 'whatsapp_agent:conversa-detail' conversa.pk %}">
+                <div class="wa-lead-top">
+                  <span class="wa-lead-avatar">{{ conversa.nome_contato|default:conversa.telefone|first|upper }}</span>
+                  <span class="wa-lead-name">{{ conversa.nome_contato|default:conversa.telefone }}</span>
+                  {% if conversa.atendimento_humano %}<span class="wa-human-badge">Humano</span>{% endif %}
+                </div>
+                <div class="wa-lead-phone">{{ conversa.telefone }}</div>
+                {% if conversa.ultima_mensagem_texto %}<p class="wa-lead-preview">{{ conversa.ultima_mensagem_texto|truncatechars:95 }}</p>{% endif %}
+                <div class="wa-lead-meta">
+                  <span>{% if conversa.cliente %}Cliente cadastrado{% else %}Não cadastrado{% endif %}</span>
+                  <time>{{ conversa.ultima_mensagem_em|date:'d/m H:i'|default:'Sem data' }}</time>
+                </div>
+                {% if conversa.acompanhamento_enviado_em %}<div class="wa-followup-badge">Acompanhamento enviado</div>{% endif %}
+                {% if conversa.motivo_nao_agendamento %}<div class="wa-loss-reason">{{ conversa.motivo_nao_agendamento }}</div>{% endif %}
+              </a>
+              <form method="post" action="{% url 'whatsapp_agent:alterar-etapa-crm' conversa.pk %}" class="wa-move-form">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="lista">
+                <label for="etapa-{{ conversa.pk }}">Mover para</label>
+                <select id="etapa-{{ conversa.pk }}" name="etapa_crm" onchange="this.form.submit()">
+                  {% for codigo, titulo in etapas_crm %}<option value="{{ codigo }}" {% if conversa.etapa_crm == codigo %}selected{% endif %}>{{ titulo }}</option>{% endfor %}
+                </select>
+              </form>
+            </article>
+          {% empty %}
+            <div class="wa-kanban-empty">Nenhum cliente nesta etapa.</div>
+          {% endfor %}
         </div>
-      </div>
-    {% empty %}
-      <div class="wa-center wa-muted" style="padding:2rem">Nenhuma conversa recebida.</div>
+      </section>
     {% endfor %}
   </div>
 </div>

@@ -10,8 +10,14 @@ def encerrar_conversa(conversa):
     conversa.contexto = {}
     conversa.atendimento_humano = False
     conversa.ativa = False
+    if conversa.etapa_crm not in {
+        ConversaWhatsApp.EtapaCRM.AGENDADO,
+        ConversaWhatsApp.EtapaCRM.CONCLUIDO,
+    }:
+        conversa.etapa_crm = ConversaWhatsApp.EtapaCRM.NAO_CONVERTIDO
     conversa.save(update_fields=[
-        'etapa', 'contexto', 'atendimento_humano', 'ativa', 'updated_at',
+        'etapa', 'contexto', 'atendimento_humano', 'ativa',
+        'etapa_crm', 'updated_at',
     ])
     return conversa
 
@@ -48,11 +54,16 @@ def encerrar_conversas_inativas(*, filial=None, agora=None):
     total = 0
     for configuracao in configuracoes.iterator():
         limite = agora - timedelta(minutes=configuracao.tempo_inatividade_minutos)
-        total += ConversaWhatsApp.objects.filter(
+        candidatas = ConversaWhatsApp.objects.filter(
             configuracao=configuracao,
             ativa=True,
             ultima_mensagem_em__lt=limite,
-        ).update(
+        )
+        candidatas.exclude(etapa_crm__in=[
+            ConversaWhatsApp.EtapaCRM.AGENDADO,
+            ConversaWhatsApp.EtapaCRM.CONCLUIDO,
+        ]).update(etapa_crm=ConversaWhatsApp.EtapaCRM.NAO_CONVERTIDO)
+        total += candidatas.update(
             etapa='encerrada',
             contexto={},
             atendimento_humano=False,

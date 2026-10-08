@@ -4,6 +4,7 @@ import re
 from django.conf import settings
 from django.contrib import messages
 from django.db import transaction
+from django.db.models import OuterRef, Subquery
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -20,7 +21,10 @@ from .conversation_service import encerrar_conversa, encerrar_conversas_inativas
 from .flow import garantir_fluxo_padrao
 from .forms import ConfiguracaoWhatsAppForm, FluxoWhatsAppForm
 from .gateway import EvolutionClient, GatewayWhatsAppError, qr_data_url
-from .models import ConfiguracaoWhatsApp, ConversaWhatsApp, MenuWhatsApp, OpcaoMenuWhatsApp
+from .models import (
+    ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp,
+    MenuWhatsApp, OpcaoMenuWhatsApp,
+)
 from .webhook import receber_evento
 
 
@@ -299,11 +303,52 @@ class ConversaListView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         encerrar_conversas_inativas(filial=request.filial_ativa)
-        conversas = (
+        ultima_mensagem = MensagemWhatsApp.objects.filter(
+            conversa_id=OuterRef('pk'),
+        ).order_by('-created_at')
+        conversas = list(
             ConversaWhatsApp.objects.for_filial(request.filial_ativa)
-            .select_related('cliente', 'configuracao')[:100]
+            .select_related('cliente', 'configuracao')
+            .annotate(
+                ultima_mensagem_texto=Subquery(ultima_mensagem.values('texto')[:1]),
+            )[:200]
         )
-        return render(request, 'whatsapp_agent/conversa_list.html', {'conversas': conversas})
+        cores = {
+            ConversaWhatsApp.EtapaCRM.NOVA: '#3b82f6',
+            ConversaWhatsApp.EtapaCRM.INTERESSADO: '#8b5cf6',
+            ConversaWhatsApp.EtapaCRM.AGENDAMENTO_INICIADO: '#f59e0b',
+            ConversaWhatsApp.EtapaCRM.AGUARDANDO_CLIENTE: '#eab308',
+            ConversaWhatsApp.EtapaCRM.AGENDADO: '#22c55e',
+            ConversaWhatsApp.EtapaCRM.ATENDIMENTO_HUMANO: '#06b6d4',
+            ConversaWhatsApp.EtapaCRM.CONCLUIDO: '#10b981',
+            ConversaWhatsApp.EtapaCRM.NAO_CONVERTIDO: '#64748b',
+        }
+        colunas = [
+            {
+                'codigo': codigo,
+                'titulo': titulo,
+                'cor': cores[codigo],
+                'conversas': [item for item in conversas if item.etapa_crm == codigo],
+            }
+            for codigo, titulo in ConversaWhatsApp.EtapaCRM.choices
+        ]
+        return render(request, 'whatsapp_agent/conversa_list.html', {
+            'conversas': conversas,
+            'colunas': colunas,
+            'etapas_crm': ConversaWhatsApp.EtapaCRM.choices,
+            'total_agendados': sum(
+                item.etapa_crm == ConversaWhatsApp.EtapaCRM.AGENDADO
+                for item in conversas
+            ),
+            'total_pendentes': sum(
+                item.etapa_crm in {
+                    ConversaWhatsApp.EtapaCRM.INTERESSADO,
+                    ConversaWhatsApp.EtapaCRM.AGENDAMENTO_INICIADO,
+                    ConversaWhatsApp.EtapaCRM.AGUARDANDO_CLIENTE,
+                }
+                for item in conversas
+            ),
+        })
 
 
 class ConversaDetailView(PermissaoRequiredMixin, View):
@@ -356,6 +401,38 @@ class EncerrarConversaView(PermissaoRequiredMixin, View):
         if destino == 'lista':
             return redirect('whatsapp_agent:conversa-list')
         return redirect('whatsapp_agent:conversa-detail', pk=pk)
+
+
+@method_decorator(require_POST, name='dispatch')
+class AlterarEtapaCRMView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'cadastros'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        conversa = get_object_or_404(
+            ConversaWhatsApp.objects.for_filial(request.filial_ativa), pk=pk,
+        )
+        etapa = request.POST.get('etapa_crm')
+        etapas_validas = {item[0] for item in ConversaWhatsApp.EtapaCRM.choices}
+        if etapa not in etapas_validas:
+            messages.error(request, 'Etapa comercial inválida.')
+        else:
+            conversa.etapa_crm = etapa
+            if etapa == ConversaWhatsApp.EtapaCRM.ATENDIMENTO_HUMANO:
+                conversa.atendimento_humano = True
+                conversa.etapa = 'atendimento_humano'
+            if etapa == ConversaWhatsApp.EtapaCRM.NAO_CONVERTIDO:
+                conversa.motivo_nao_agendamento = (
+                    request.POST.get('motivo_nao_agendamento') or ''
+                ).strip()[:180]
+            conversa.save(update_fields=[
+                'etapa_crm', 'atendimento_humano', 'etapa',
+                'motivo_nao_agendamento', 'updated_at',
+            ])
+            messages.success(request, 'Etapa comercial atualizada.')
+        if request.POST.get('next') == 'detalhe':
+            return redirect('whatsapp_agent:conversa-detail', pk=pk)
+        return redirect('whatsapp_agent:conversa-list')
 
 
 @csrf_exempt

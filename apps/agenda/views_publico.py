@@ -13,6 +13,10 @@ from apps.core.models import EmpresaBanco, Filial
 from apps.core.models.parametros import ParametrosSistema
 from apps.core.tenant_context import get_current_database_alias, tenant_atomic
 from apps.whatsapp_agent.notifications import enviar_notificacao_agendamento
+from apps.whatsapp_agent.tracking import (
+    marcar_agendamento_confirmado,
+    marcar_agendamento_iniciado,
+)
 
 from .models import AgendaLinkPublico, Agendamento, ProfissionalAgenda, ProfissionalServico
 from .services import criar_agendamento, listar_horarios
@@ -177,7 +181,10 @@ def _localizar_cliente(filial, telefone):
 class AgendaPublicaView(View):
     template_name = 'agenda/publico/agendar.html'
 
-    def _contexto(self, link, *, dados=None, erros=None, agendamento=None):
+    def _contexto(
+        self, link, *, dados=None, erros=None, agendamento=None,
+        rastreamento_whatsapp='',
+    ):
         profissionais = _profissionais_publicos(link.filial)
         hoje = timezone.localdate()
         dados_contexto = dados or {}
@@ -203,14 +210,22 @@ class AgendaPublicaView(View):
             'dados': dados_contexto,
             'erros': erros or [],
             'agendamento': agendamento,
+            'rastreamento_whatsapp': rastreamento_whatsapp,
         }
 
     def get(self, request, token):
         link = _link_do_token(token)
-        return render(request, self.template_name, self._contexto(link))
+        rastreamento = (request.GET.get('wa') or '').strip()
+        marcar_agendamento_iniciado(rastreamento)
+        return render(request, self.template_name, self._contexto(
+            link, rastreamento_whatsapp=rastreamento,
+        ))
 
     def post(self, request, token):
         link = _link_do_token(token)
+        rastreamento = (
+            request.POST.get('origem_whatsapp') or request.GET.get('wa') or ''
+        ).strip()
         dados = {
             chave: (request.POST.get(chave) or '').strip()
             for chave in ('profissional', 'servico', 'data', 'horario', 'nome', 'telefone')
@@ -243,7 +258,10 @@ class AgendaPublicaView(View):
             erros.append('Escolha uma data e um horário disponíveis.')
 
         if erros:
-            return render(request, self.template_name, self._contexto(link, dados=dados, erros=erros), status=400)
+            return render(request, self.template_name, self._contexto(
+                link, dados=dados, erros=erros,
+                rastreamento_whatsapp=rastreamento,
+            ), status=400)
 
         try:
             with tenant_atomic():
@@ -272,13 +290,20 @@ class AgendaPublicaView(View):
                 )
         except ValidationError as exc:
             erros.extend(exc.messages)
-            return render(request, self.template_name, self._contexto(link, dados=dados, erros=erros), status=409)
+            return render(request, self.template_name, self._contexto(
+                link, dados=dados, erros=erros,
+                rastreamento_whatsapp=rastreamento,
+            ), status=409)
 
         enviar_notificacao_agendamento(
             agendamento,
             db_alias=get_current_database_alias(),
         )
-        return render(request, self.template_name, self._contexto(link, agendamento=agendamento))
+        marcar_agendamento_confirmado(rastreamento)
+        return render(request, self.template_name, self._contexto(
+            link, agendamento=agendamento,
+            rastreamento_whatsapp=rastreamento,
+        ))
 
 
 class HorariosPublicosView(View):

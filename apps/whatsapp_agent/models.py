@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import uuid
+from datetime import time
 
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
@@ -75,6 +76,39 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
             'Variáveis disponíveis: {nome}, {servicos}, {profissional}, '
             '{data} e {horario}.'
         ),
+    )
+    recuperacao_agendamento_ativa = models.BooleanField(default=False)
+    recuperacao_atraso_minutos = models.PositiveIntegerField(
+        default=60,
+        validators=[MinValueValidator(5), MaxValueValidator(10080)],
+        help_text='Tempo após o início do agendamento antes de enviar o acompanhamento.',
+    )
+    recuperacao_horario_inicio = models.TimeField(default=time(8, 0))
+    recuperacao_horario_fim = models.TimeField(default=time(19, 0))
+    mensagem_recuperacao_agendamento = models.TextField(
+        default=(
+            'Oi, {nome}! Você conseguiu escolher seu horário? 😊\n\n'
+            'Se precisar, posso ajudar por aqui.\n\n'
+            '*1.* Continuar o agendamento\n'
+            '*2.* Tenho uma dúvida\n'
+            '*3.* Não quero agendar agora\n\n'
+            '{link}'
+        ),
+        help_text='Variáveis disponíveis: {nome} e {link}.',
+    )
+    mensagem_motivo_nao_agendamento = models.TextField(
+        default=(
+            'Tudo bem! Se puder, conte o principal motivo. Isso nos ajuda a melhorar:\n\n'
+            '*1.* Não encontrei um horário\n'
+            '*2.* O valor não serviu para mim\n'
+            '*3.* Não encontrei o serviço\n'
+            '*4.* Tive dificuldade para agendar\n'
+            '*5.* Vou agendar depois\n\n'
+            'Você também pode escrever outro motivo ou digitar *pular*.'
+        ),
+    )
+    mensagem_feedback_agendamento = models.TextField(
+        default='Obrigado pela resposta! Quando precisar, é só enviar *oi*. 👋',
     )
     encerramento_automatico_ativo = models.BooleanField(default=False)
     tempo_inatividade_minutos = models.PositiveIntegerField(
@@ -176,6 +210,16 @@ class OpcaoMenuWhatsApp(TimestampedModel):
 
 
 class ConversaWhatsApp(FilialScopedModel):
+    class EtapaCRM(models.TextChoices):
+        NOVA = 'nova', 'Novas conversas'
+        INTERESSADO = 'interessado', 'Interessados'
+        AGENDAMENTO_INICIADO = 'agendamento_iniciado', 'Agendamento iniciado'
+        AGUARDANDO_CLIENTE = 'aguardando_cliente', 'Aguardando cliente'
+        AGENDADO = 'agendado', 'Agendados'
+        ATENDIMENTO_HUMANO = 'atendimento_humano', 'Atendimento humano'
+        CONCLUIDO = 'concluido', 'Concluídos'
+        NAO_CONVERTIDO = 'nao_convertido', 'Não convertidos'
+
     configuracao = models.ForeignKey(
         ConfiguracaoWhatsApp, on_delete=models.CASCADE, related_name='conversas',
     )
@@ -187,10 +231,20 @@ class ConversaWhatsApp(FilialScopedModel):
     telefone = models.CharField(max_length=24, db_index=True)
     nome_contato = models.CharField(max_length=150, blank=True)
     etapa = models.CharField(max_length=40, default='inicio')
+    etapa_crm = models.CharField(
+        max_length=32,
+        choices=EtapaCRM.choices,
+        default=EtapaCRM.NOVA,
+        db_index=True,
+    )
     contexto = models.JSONField(default=dict, blank=True)
     atendimento_humano = models.BooleanField(default=False)
     ativa = models.BooleanField(default=True)
     ultima_mensagem_em = models.DateTimeField(null=True, blank=True)
+    agendamento_iniciado_em = models.DateTimeField(null=True, blank=True)
+    acompanhamento_enviado_em = models.DateTimeField(null=True, blank=True)
+    agendamento_confirmado_em = models.DateTimeField(null=True, blank=True)
+    motivo_nao_agendamento = models.CharField(max_length=180, blank=True)
 
     class Meta:
         db_table = 'whatsapp_conversas'

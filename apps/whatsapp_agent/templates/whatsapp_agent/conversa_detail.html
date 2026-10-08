@@ -12,6 +12,20 @@
       {% if conversa.ativa %}<form method="post" action="{% url 'whatsapp_agent:encerrar-conversa' conversa.pk %}" onsubmit="return confirm('Encerrar esta conversa?')">{% csrf_token %}<button class="wa-btn danger" type="submit">Encerrar conversa</button></form>{% endif %}
     </div>
   </div>
+  <div class="wa-card wa-crm-detail">
+    <div>
+      <strong>Etapa comercial</strong>
+      <div class="wa-muted">Organiza este cliente no Kanban sem alterar o histórico das mensagens.</div>
+    </div>
+    <form method="post" action="{% url 'whatsapp_agent:alterar-etapa-crm' conversa.pk %}" class="wa-detail-stage-form">
+      {% csrf_token %}<input type="hidden" name="next" value="detalhe">
+      <select name="etapa_crm">
+        {% for codigo, titulo in conversa.EtapaCRM.choices %}<option value="{{ codigo }}" {% if conversa.etapa_crm == codigo %}selected{% endif %}>{{ titulo }}</option>{% endfor %}
+      </select>
+      <input name="motivo_nao_agendamento" value="{{ conversa.motivo_nao_agendamento }}" placeholder="Motivo da desistência (opcional)">
+      <button class="wa-btn compact" type="submit">Atualizar etapa</button>
+    </form>
+  </div>
   <div class="wa-card wa-list">
     {% for mensagem in conversa.mensagens.all %}<div class="wa-message {% if mensagem.direcao == 'saida' %}saida{% endif %}"><div>{{ mensagem.texto|linebreaksbr }}</div><div class="wa-muted">{{ mensagem.get_direcao_display }} · {{ mensagem.created_at|date:'d/m H:i' }}{% if mensagem.status %} · {{ mensagem.status }}{% endif %}</div></div>{% empty %}<div class="wa-muted">Nenhuma mensagem registrada.</div>{% endfor %}
   </div>

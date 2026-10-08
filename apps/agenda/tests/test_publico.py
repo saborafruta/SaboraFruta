@@ -10,6 +10,8 @@ from django.utils import timezone
 from apps.agenda.models import AgendaLinkPublico, Agendamento
 from apps.agenda.views_publico import AgendaPublicaView, HorariosPublicosView
 from apps.cadastros.models import Cliente
+from apps.whatsapp_agent.models import ConfiguracaoWhatsApp, ConversaWhatsApp
+from apps.whatsapp_agent.tracking import gerar_token_agendamento
 
 from .test_disponibilidade import DisponibilidadeAgendaTests
 
@@ -48,6 +50,35 @@ class AgendaPublicaTests(DisponibilidadeAgendaTests):
         self.assertEqual(dias[0]['valor'], hoje.isoformat())
         self.assertEqual(dias[-1]['valor'], (hoje + timedelta(days=6)).isoformat())
         self.assertEqual(response.context['data_selecionada'], hoje.isoformat())
+
+    def test_abertura_por_link_do_whatsapp_marca_agendamento_iniciado(self):
+        configuracao = ConfiguracaoWhatsApp.objects.create(
+            filial=self.filial,
+            instancia='ited-rastreamento-publico',
+            agente_ativo=True,
+        )
+        conversa = ConversaWhatsApp.objects.create(
+            filial=self.filial,
+            configuracao=configuracao,
+            remote_jid='5584999997777@s.whatsapp.net',
+            telefone='5584999997777',
+            etapa_crm=ConversaWhatsApp.EtapaCRM.INTERESSADO,
+        )
+        rastreamento = gerar_token_agendamento(conversa)
+
+        response = self.client.get(
+            reverse('agenda_publica:agendar', args=[self.link.token]),
+            {'wa': rastreamento},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        conversa.refresh_from_db()
+        self.assertEqual(
+            conversa.etapa_crm,
+            ConversaWhatsApp.EtapaCRM.AGENDAMENTO_INICIADO,
+        )
+        self.assertIsNotNone(conversa.agendamento_iniciado_em)
+        self.assertContains(response, 'name="origem_whatsapp"')
 
     def test_consulta_cliente_pelo_celular_preenche_nome(self):
         Cliente.objects.create(

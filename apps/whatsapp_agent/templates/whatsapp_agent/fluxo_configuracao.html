@@ -12,7 +12,7 @@
     </div>
     <div class="wa-actions">
       <a class="wa-btn secondary" href="{% url 'whatsapp_agent:configuracao' %}">Conexão e agente</a>
-      <a class="wa-btn secondary" href="{% url 'whatsapp_agent:conversa-list' %}">Conversas</a>
+      <a class="wa-btn secondary" href="{% url 'whatsapp_agent:conversa-list' %}">CRM do WhatsApp</a>
     </div>
   </div>
 
@@ -27,7 +27,7 @@
       </div>
       <div class="wa-grid">
         {% for field in form %}
-          {% if field.name != 'mensagem_confirmacao_agendamento' and field.name != 'mensagem_lembrete_agendamento' %}
+          {% if field.name != 'mensagem_confirmacao_agendamento' and field.name != 'mensagem_lembrete_agendamento' and field.name != 'recuperacao_agendamento_ativa' and field.name != 'recuperacao_atraso_minutos' and field.name != 'recuperacao_horario_inicio' and field.name != 'recuperacao_horario_fim' and field.name != 'mensagem_recuperacao_agendamento' and field.name != 'mensagem_motivo_nao_agendamento' and field.name != 'mensagem_feedback_agendamento' %}
           {% if field.name == 'encerramento_automatico_ativo' %}
             <div class="wa-field full">
               <strong>Encerramento por inatividade</strong>
@@ -41,6 +41,35 @@
           </div>
           {% endif %}
         {% endfor %}
+      </div>
+    </section>
+
+    <section class="wa-card wa-section">
+      <div class="wa-section-head">
+        <div>
+          <h2>Recuperação de agendamentos</h2>
+          <p class="wa-muted">Acompanhe uma única vez quem abriu o link, mas não confirmou o horário.</p>
+        </div>
+      </div>
+      <div class="wa-grid">
+        {% for field in form %}
+          {% if field.name == 'recuperacao_agendamento_ativa' %}
+            <div class="wa-field full wa-checks"><label for="{{ field.id_for_label }}">{{ field }} {{ field.label }}</label></div>
+          {% elif field.name == 'recuperacao_atraso_minutos' or field.name == 'recuperacao_horario_inicio' or field.name == 'recuperacao_horario_fim' %}
+            <div class="wa-field">
+              <label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+              {% if field.help_text %}<div class="wa-help">{{ field.help_text }}</div>{% endif %}
+              {% if field.errors %}<div class="wa-errors">{{ field.errors|first }}</div>{% endif %}
+            </div>
+          {% elif field.name == 'mensagem_recuperacao_agendamento' or field.name == 'mensagem_motivo_nao_agendamento' or field.name == 'mensagem_feedback_agendamento' %}
+            <div class="wa-field full">
+              <label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+              {% if field.help_text %}<div class="wa-help">{{ field.help_text }}</div>{% endif %}
+              {% if field.errors %}<div class="wa-errors">{{ field.errors|first }}</div>{% endif %}
+            </div>
+          {% endif %}
+        {% endfor %}
+        <div class="wa-field full"><div class="wa-help">A mensagem não é enviada fora da faixa configurada, após o agendamento ser concluído, durante atendimento humano ou mais de uma vez para a mesma tentativa.</div></div>
       </div>
     </section>
 

@@ -14,5 +14,6 @@ urlpatterns = [
     path('conversas/<int:pk>/', views.ConversaDetailView.as_view(), name='conversa-detail'),
     path('conversas/<int:pk>/retomar/', views.RetomarAgenteView.as_view(), name='retomar-agente'),
     path('conversas/<int:pk>/encerrar/', views.EncerrarConversaView.as_view(), name='encerrar-conversa'),
+    path('conversas/<int:pk>/etapa/', views.AlterarEtapaCRMView.as_view(), name='alterar-etapa-crm'),
     path('webhook/<uuid:secret>/', views.webhook, name='webhook'),
 ]

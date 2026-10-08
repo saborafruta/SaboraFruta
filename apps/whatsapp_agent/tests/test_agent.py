@@ -21,6 +21,7 @@ from apps.whatsapp_agent.conversation_service import (
     encerrar_conversa,
     encerrar_conversas_inativas,
 )
+from apps.whatsapp_agent.crm_service import recuperar_agendamentos_abandonados
 from apps.whatsapp_agent.forms import ConfiguracaoWhatsAppForm, FluxoWhatsAppForm
 from apps.whatsapp_agent.gateway import EvolutionClient, GatewayWhatsAppError, qr_data_url
 from apps.whatsapp_agent.models import (
@@ -142,7 +143,11 @@ class AgenteWhatsAppTests(TestCase):
 
         link = AgendaLinkPublico.objects.get(filial=self.filial)
         self.assertIn(f'https://ited.app.br/agendar/{link.token}/', resposta)
+        self.assertIn('?wa=', resposta)
         self.assertTrue(TenantPublicLink.objects.filter(tipo='agenda').exists())
+        conversa.refresh_from_db()
+        self.assertEqual(conversa.etapa_crm, ConversaWhatsApp.EtapaCRM.INTERESSADO)
+        self.assertIn('link_agendamento', conversa.contexto)
 
     def test_opcao_dois_transfere_e_silencia_automacao(self):
         conversa = self.nova_conversa()
@@ -153,6 +158,10 @@ class AgenteWhatsAppTests(TestCase):
         conversa.refresh_from_db()
         self.assertTrue(conversa.atendimento_humano)
         self.assertEqual(conversa.etapa, 'atendimento_humano')
+        self.assertEqual(
+            conversa.etapa_crm,
+            ConversaWhatsApp.EtapaCRM.ATENDIMENTO_HUMANO,
+        )
         self.assertIsNone(processar_mensagem(conversa, 'oi'))
 
     @patch('apps.whatsapp_agent.agent._destino_agenda', return_value=(None, None))
@@ -173,6 +182,7 @@ class AgenteWhatsAppTests(TestCase):
         conversa.refresh_from_db()
         self.assertFalse(conversa.ativa)
         self.assertEqual(conversa.etapa, 'encerrada')
+        self.assertEqual(conversa.etapa_crm, ConversaWhatsApp.EtapaCRM.NAO_CONVERTIDO)
 
         nova_resposta = processar_mensagem(conversa, 'oi')
 
@@ -330,6 +340,90 @@ class AgenteWhatsAppTests(TestCase):
         self.assertIn('Lembrete para Ana Cliente', enviar_texto.call_args.args[1])
         self.assertNotIn('{horario}', enviar_texto.call_args.args[1])
         self.assertTrue(MensagemWhatsApp.objects.filter(tipo='lembrete_agendamento').exists())
+        conversa = ConversaWhatsApp.objects.get(telefone='5584999990000')
+        self.assertEqual(conversa.etapa_crm, ConversaWhatsApp.EtapaCRM.AGENDADO)
+
+    @patch('apps.whatsapp_agent.crm_service.EvolutionClient.enviar_texto')
+    def test_recupera_uma_unica_vez_agendamento_iniciado_e_abandonado(self, enviar_texto):
+        enviar_texto.return_value = {'key': {'id': 'recuperacao-1'}}
+        self.configuracao.status = ConfiguracaoWhatsApp.Status.CONECTADO
+        self.configuracao.recuperacao_agendamento_ativa = True
+        self.configuracao.recuperacao_atraso_minutos = 30
+        self.configuracao.recuperacao_horario_inicio = time(0, 0)
+        self.configuracao.recuperacao_horario_fim = time(23, 59)
+        self.configuracao.save(update_fields=[
+            'status', 'recuperacao_agendamento_ativa',
+            'recuperacao_atraso_minutos', 'recuperacao_horario_inicio',
+            'recuperacao_horario_fim',
+        ])
+        conversa = self.nova_conversa('5584999990088')
+        agora = timezone.now()
+        conversa.nome_contato = 'Ana'
+        conversa.etapa_crm = ConversaWhatsApp.EtapaCRM.AGENDAMENTO_INICIADO
+        conversa.agendamento_iniciado_em = agora - timedelta(minutes=31)
+        conversa.contexto = {'link_agendamento': 'https://ited.app.br/agendar/link-rastreado/'}
+        conversa.save(update_fields=[
+            'nome_contato', 'etapa_crm', 'agendamento_iniciado_em', 'contexto',
+        ])
+
+        primeiro_total = recuperar_agendamentos_abandonados(agora=agora)
+        segundo_total = recuperar_agendamentos_abandonados(agora=agora + timedelta(minutes=1))
+
+        self.assertEqual((primeiro_total, segundo_total), (1, 0))
+        conversa.refresh_from_db()
+        self.assertEqual(
+            conversa.etapa_crm,
+            ConversaWhatsApp.EtapaCRM.AGUARDANDO_CLIENTE,
+        )
+        self.assertIsNotNone(conversa.acompanhamento_enviado_em)
+        texto = enviar_texto.call_args.args[1]
+        self.assertIn('Ana', texto)
+        self.assertIn('link-rastreado', texto)
+        self.assertEqual(enviar_texto.call_count, 1)
+        self.assertTrue(
+            conversa.mensagens.filter(tipo='recuperacao_agendamento', status='enviada').exists()
+        )
+
+        pergunta = processar_mensagem(conversa, '3')
+        self.assertIn('principal motivo', pergunta)
+        conversa.refresh_from_db()
+        self.assertEqual(conversa.etapa, 'aguardando_motivo_nao_agendamento')
+
+        agradecimento = processar_mensagem(conversa, '1')
+        self.assertIn('Obrigado', agradecimento)
+        conversa.refresh_from_db()
+        self.assertEqual(conversa.motivo_nao_agendamento, 'Não encontrou um horário')
+        self.assertFalse(conversa.ativa)
+
+    @patch('apps.whatsapp_agent.crm_service.EvolutionClient.enviar_texto')
+    def test_recuperacao_nao_envia_para_agendado_ou_atendimento_humano(self, enviar_texto):
+        self.configuracao.status = ConfiguracaoWhatsApp.Status.CONECTADO
+        self.configuracao.recuperacao_agendamento_ativa = True
+        self.configuracao.recuperacao_atraso_minutos = 5
+        self.configuracao.recuperacao_horario_inicio = time(0, 0)
+        self.configuracao.recuperacao_horario_fim = time(23, 59)
+        self.configuracao.save(update_fields=[
+            'status', 'recuperacao_agendamento_ativa',
+            'recuperacao_atraso_minutos', 'recuperacao_horario_inicio',
+            'recuperacao_horario_fim',
+        ])
+        agora = timezone.now()
+        agendado = self.nova_conversa('5584999990066')
+        humano = self.nova_conversa('5584999990077')
+        ConversaWhatsApp.objects.filter(pk=agendado.pk).update(
+            etapa_crm=ConversaWhatsApp.EtapaCRM.AGENDADO,
+            agendamento_iniciado_em=agora - timedelta(minutes=10),
+        )
+        ConversaWhatsApp.objects.filter(pk=humano.pk).update(
+            etapa_crm=ConversaWhatsApp.EtapaCRM.AGENDAMENTO_INICIADO,
+            agendamento_iniciado_em=agora - timedelta(minutes=10),
+            atendimento_humano=True,
+        )
+
+        total = recuperar_agendamentos_abandonados(agora=agora)
+
+        self.assertEqual(total, 0)
+        enviar_texto.assert_not_called()
 
     @patch(
         'apps.whatsapp_agent.notifications._enviar_notificacao_agendamento',
@@ -459,5 +553,9 @@ class EvolutionClientTests(SimpleTestCase):
 
         self.assertIn('mensagem_confirmacao_agendamento', campos)
         self.assertIn('mensagem_lembrete_agendamento', campos)
+        self.assertIn('mensagem_recuperacao_agendamento', campos)
+        self.assertIn('mensagem_motivo_nao_agendamento', campos)
+        self.assertIn('mensagem_feedback_agendamento', campos)
+        self.assertIn('recuperacao_agendamento_ativa', campos)
         self.assertIn('{nome}', campos['mensagem_confirmacao_agendamento'].initial)
         self.assertIn('{horario}', campos['mensagem_lembrete_agendamento'].initial)

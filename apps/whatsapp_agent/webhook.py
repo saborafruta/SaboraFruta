@@ -89,7 +89,9 @@ def receber_evento(configuracao, payload):
         if not criada:
             encerrar_se_expirada(conversa, agora=agora)
         conversa.ultima_mensagem_em = agora
-        conversa.save(update_fields=['nome_contato', 'ultima_mensagem_em', 'updated_at'])
+        conversa.save(update_fields=[
+            'nome_contato', 'etapa_crm', 'ultima_mensagem_em', 'updated_at',
+        ])
         padrao_mensagem = {
                 'direcao': MensagemWhatsApp.Direcao.ENTRADA,
                 'texto': dados['texto'], 'tipo': 'texto',
