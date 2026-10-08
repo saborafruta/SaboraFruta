@@ -7,7 +7,9 @@ from django.db import transaction
 from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 
-from apps.core.models import EmpresaBanco, Filial, ParametrosSistema
+from apps.core.models import (
+    DestinatarioResumoWhatsApp, EmpresaBanco, Filial, ParametrosSistema,
+)
 from apps.core.services.tenant_task_service import TenantTaskService
 from apps.core.tenant_context import get_current_database_alias
 
@@ -317,7 +319,6 @@ def preparar_resumos_diarios(
                 exigir_habilitacao=exigir_habilitacao,
             )
             .select_related('filial__empresa')
-            .prefetch_related('destinatarios_resumo_whatsapp')
             .order_by('filial__empresa_id', 'filial_id')
         )
         for parametros in parametros_qs:
@@ -331,10 +332,12 @@ def preparar_resumos_diarios(
             )
             if filial_operacional is None:
                 continue
-            destinatarios = [
-                item for item in parametros.destinatarios_resumo_whatsapp.all()
-                if item.ativo and item.telefone
-            ]
+            destinatarios = list(
+                DestinatarioResumoWhatsApp.objects.using('default')
+                .filter(parametros_id=parametros.pk, ativo=True)
+                .exclude(telefone='')
+                .order_by('posicao', 'id')
+            )
             if not destinatarios:
                 continue
             metricas = _metricas_filial(
