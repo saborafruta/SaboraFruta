@@ -105,7 +105,10 @@ class CatalogoTests(TestCase):
         request.user = AnonymousUser()
         response = CatalogoPublicoView.as_view()(request, token=self.link.token)
         self.assertEqual(response.status_code, 200)
-        self.assertIn('Café 500g', response.content.decode())
+        conteudo = response.content.decode()
+        self.assertIn('Café 500g', conteudo)
+        self.assertIn('data-remove=', conteudo)
+        self.assertIn('data-quantity=', conteudo)
 
     def test_configuracao_e_pedidos_ficam_em_telas_separadas(self):
         request_config = self.factory.get('/catalogo/')
