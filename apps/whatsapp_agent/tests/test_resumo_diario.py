@@ -14,7 +14,8 @@ from apps.core.models import (
 from apps.whatsapp_agent.models import ConfiguracaoWhatsAppCentral, EnvioResumoWhatsApp
 from apps.whatsapp_agent.central_views import central_instancias
 from apps.whatsapp_agent.resumo_service import (
-    _metricas_filial, preparar_resumos_diarios, processar_proximo_resumo,
+    _metricas_filial, diagnosticar_resumos_diarios, preparar_resumos_diarios,
+    processar_proximo_resumo,
 )
 
 
@@ -166,6 +167,14 @@ class ResumoDiarioWhatsAppTests(TestCase):
         })
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data['telefone'], '5584999990000')
+
+    def test_diagnostico_conta_filial_e_destinatarios_habilitados(self):
+        diagnostico = diagnosticar_resumos_diarios()
+
+        self.assertEqual(diagnostico['filiais_ativas'], 1)
+        self.assertEqual(diagnostico['filiais_com_destinatario'], 1)
+        self.assertEqual(diagnostico['destinatarios_ativos'], 2)
+        self.assertEqual(diagnostico['fila'], {})
 
     def test_metricas_vazias_sao_geradas_sem_exigir_agenda(self):
         metricas = _metricas_filial(

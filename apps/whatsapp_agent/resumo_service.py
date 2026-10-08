@@ -192,6 +192,50 @@ def _inicio_janela(configuracao, data):
     )
 
 
+def diagnosticar_resumos_diarios(data_referencia=None):
+    """Resume por que uma preparação manual não criou novos envios."""
+    hoje = timezone.localdate()
+    data_referencia = data_referencia or (hoje - datetime.timedelta(days=1))
+    estado = {
+        'filiais_ativas': 0,
+        'destinatarios_ativos': 0,
+        'filiais_com_destinatario': 0,
+    }
+
+    def _contar_banco():
+        parametros = ParametrosSistema.objects.filter(
+            resumo_whatsapp_ativo=True,
+            filial__ativo=True,
+            filial__empresa__ativo=True,
+        ).annotate(
+            destinatarios_ativos=Count(
+                'destinatarios_resumo_whatsapp',
+                filter=Q(
+                    destinatarios_resumo_whatsapp__ativo=True,
+                    destinatarios_resumo_whatsapp__telefone__gt='',
+                ),
+            ),
+        )
+        linhas = list(parametros.values_list('destinatarios_ativos', flat=True))
+        estado['filiais_ativas'] += len(linhas)
+        estado['destinatarios_ativos'] += sum(linhas)
+        estado['filiais_com_destinatario'] += sum(1 for total in linhas if total)
+        return 0
+
+    TenantTaskService.executar_em_todos(_contar_banco)
+    estado['fila'] = {
+        item['status']: item['total']
+        for item in (
+            EnvioResumoWhatsApp.objects.using('default')
+            .filter(data_referencia=data_referencia)
+            .values('status')
+            .annotate(total=Count('id'))
+        )
+    }
+    estado['data_referencia'] = data_referencia
+    return estado
+
+
 def preparar_resumos_diarios(data_referencia=None, disparo_manual=False):
     """Cria a fila idempotente, sem fazer qualquer disparo em massa."""
     configuracao = ConfiguracaoWhatsAppCentral.carregar()

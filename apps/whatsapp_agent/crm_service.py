@@ -67,7 +67,7 @@ def recuperar_agendamentos_abandonados(*, configuracao=None, agora=None):
             with transaction.atomic(using='default'):
                 conversa = (
                     ConversaWhatsApp.objects.using('default')
-                    .select_for_update()
+                    .select_for_update(of=('self',))
                     .select_related('cliente')
                     .filter(
                         pk=conversa_id,

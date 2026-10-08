@@ -16,7 +16,7 @@ from apps.core.views._admin import superuser_required
 from .forms import ConfiguracaoWhatsAppCentralForm
 from .gateway import EvolutionClient, GatewayWhatsAppError, identidade_instancia, qr_data_url
 from .models import ConfiguracaoWhatsApp, ConfiguracaoWhatsAppCentral, EnvioResumoWhatsApp
-from .resumo_service import preparar_resumos_diarios
+from .resumo_service import diagnosticar_resumos_diarios, preparar_resumos_diarios
 from .tasks import processar_proximo_resumo_task
 
 
@@ -250,10 +250,26 @@ def preparar_fila(request):
             f'{criados} resumo(s) liberado(s) para envio manual e sequencial.',
         )
     else:
-        messages.info(
-            request,
-            'Nenhum novo resumo foi liberado. Verifique os destinatários ou os envios de hoje.',
-        )
+        diagnostico = diagnosticar_resumos_diarios()
+        if not diagnostico['filiais_ativas']:
+            detalhe = (
+                'Nenhuma filial está habilitada. Selecione a filial, abra Parâmetros do Sistema '
+                'e ative “Receber resumo diário pelo WhatsApp”.'
+            )
+        elif not diagnostico['destinatarios_ativos']:
+            detalhe = (
+                'As filiais habilitadas não possuem destinatários ativos. Cadastre ao menos um '
+                'nome e WhatsApp nos Parâmetros do Sistema da filial.'
+            )
+        elif diagnostico['fila']:
+            total = sum(diagnostico['fila'].values())
+            detalhe = (
+                f'O resumo de {diagnostico["data_referencia"]:%d/%m/%Y} já possui '
+                f'{total} envio(s) preparado(s) ou concluído(s).'
+            )
+        else:
+            detalhe = 'Não foi encontrada filial elegível nos bancos ativos.'
+        messages.info(request, detalhe)
     return redirect('core:admin_whatsapp_central')
 
 
