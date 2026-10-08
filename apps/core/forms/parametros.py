@@ -2,10 +2,11 @@
 from django import forms
 from django.conf import settings
 from django.core.files.uploadedfile import UploadedFile
+from django.forms import BaseInlineFormSet, inlineformset_factory
 
 from apps.core.constants.choices import UF
 from apps.core.models import Empresa, Filial
-from apps.core.models.parametros import ParametrosSistema
+from apps.core.models.parametros import DestinatarioResumoWhatsApp, ParametrosSistema
 
 
 REGIME_CODIGO_CHOICES = [
@@ -99,6 +100,7 @@ class ParametrosSistemaForm(forms.ModelForm):
             'comunicador_offline_instalador', 'comunicador_offline_versao',
             'email_envio_automatico', 'email_resposta',
             'texto_padrao_email', 'informacoes_complementares_padrao',
+            'resumo_whatsapp_ativo', 'resumo_whatsapp_incluir_agenda',
         ]
         widgets = {
             'email_secundario': forms.EmailInput(attrs={'placeholder': 'contato@empresa.com.br'}),
@@ -175,3 +177,70 @@ class ParametrosSistemaForm(forms.ModelForm):
         if arquivo.size > limite:
             raise forms.ValidationError('O instalador excede o limite de 250 MB.')
         return arquivo
+
+
+class DestinatarioResumoWhatsAppForm(forms.ModelForm):
+    telefone = forms.CharField(
+        max_length=20,
+        widget=forms.TextInput(attrs={
+            'placeholder': '(84) 99999-0000',
+            'inputmode': 'tel',
+            'autocomplete': 'tel',
+        }),
+    )
+
+    class Meta:
+        model = DestinatarioResumoWhatsApp
+        fields = ['posicao', 'nome', 'telefone', 'ativo']
+        widgets = {
+            'posicao': forms.HiddenInput(),
+            'nome': forms.TextInput(attrs={'placeholder': 'Nome do responsável'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _aplicar_estilo(self)
+
+    def clean_telefone(self):
+        telefone = ''.join(filter(str.isdigit, self.cleaned_data.get('telefone', '')))
+        if len(telefone) in {10, 11}:
+            telefone = f'55{telefone}'
+        if len(telefone) not in {12, 13} or not telefone.startswith('55'):
+            raise forms.ValidationError('Informe um celular brasileiro válido com DDD.')
+        return telefone
+
+
+class BaseDestinatarioResumoWhatsAppFormSet(BaseInlineFormSet):
+    def add_fields(self, form, index):
+        super().add_fields(form, index)
+        if not form.instance.pk:
+            usadas = set(self.get_queryset().values_list('posicao', flat=True))
+            livres = [posicao for posicao in range(1, 5) if posicao not in usadas]
+            deslocamento = index - self.get_queryset().count()
+            if 0 <= deslocamento < len(livres):
+                form.fields['posicao'].initial = livres[deslocamento]
+
+    def clean(self):
+        super().clean()
+        telefones = set()
+        for form in self.forms:
+            if not hasattr(form, 'cleaned_data') or form.cleaned_data.get('DELETE'):
+                continue
+            telefone = form.cleaned_data.get('telefone')
+            if not telefone:
+                continue
+            if telefone in telefones:
+                raise forms.ValidationError('Não repita o mesmo WhatsApp nesta filial.')
+            telefones.add(telefone)
+
+
+DestinatarioResumoWhatsAppFormSet = inlineformset_factory(
+    ParametrosSistema,
+    DestinatarioResumoWhatsApp,
+    form=DestinatarioResumoWhatsAppForm,
+    formset=BaseDestinatarioResumoWhatsAppFormSet,
+    extra=4,
+    max_num=4,
+    validate_max=True,
+    can_delete=True,
+)

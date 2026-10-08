@@ -19,6 +19,14 @@ app.conf.beat_schedule = {
         'task': 'apps.whatsapp_agent.tasks.recuperar_agendamentos_abandonados',
         'schedule': crontab(minute='*'),
     },
+    'preparar-resumos-diarios-whatsapp': {
+        'task': 'apps.whatsapp_agent.tasks.preparar_resumos_diarios',
+        'schedule': crontab(minute='*/15'),
+    },
+    'processar-fila-resumos-whatsapp': {
+        'task': 'apps.whatsapp_agent.tasks.processar_proximo_resumo',
+        'schedule': crontab(minute='*'),
+    },
     'verificar-vencimentos-diario': {
         'task': 'apps.estoque.tasks.alertas.verificar_vencimentos',
         'schedule': crontab(hour=7, minute=0),

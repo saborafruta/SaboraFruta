@@ -1,0 +1,148 @@
+{% extends '_base.html' %}
+{% block title %}Central de Instâncias do WhatsApp{% endblock %}
+{% block page_title %}Central de Instâncias do WhatsApp{% endblock %}
+{% block content %}
+{% include 'whatsapp_agent/_styles.html' %}
+<style>
+  .wi-shell{max-width:1480px;margin:0 auto}.wi-hero{padding:1.4rem;border:1px solid #343438;border-radius:1rem;background:linear-gradient(135deg,#242426,rgba(37,99,235,.12));display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}.wi-title{font-size:1.55rem;font-weight:850}.wi-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(340px,.85fr);gap:1rem}.wi-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.7rem}.wi-kpi{padding:.8rem;border:1px solid #343438;border-radius:.75rem;background:#242426;min-width:0}.wi-kpi span{display:block;color:#a1a1aa;font-size:.72rem}.wi-kpi strong{display:block;margin-top:.3rem;font-size:1.25rem;overflow-wrap:anywhere}.wi-table-wrap{overflow:auto}.wi-table{width:100%;border-collapse:collapse;min-width:1050px}.wi-table th,.wi-table td{padding:.72rem;border-bottom:1px solid #343438;text-align:left;vertical-align:middle;font-size:.78rem}.wi-table th{color:#a1a1aa;font-size:.68rem;text-transform:uppercase;letter-spacing:.05em}.wi-pill{display:inline-flex;padding:.25rem .55rem;border-radius:999px;background:#3f3f46;font-size:.68rem;font-weight:800}.wi-pill.ok{background:#14532d;color:#bbf7d0}.wi-pill.warn{background:#713f12;color:#fde68a}.wi-pill.error{background:#7f1d1d;color:#fecaca}.wi-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.7rem;overflow-wrap:anywhere}.wi-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem}.wi-field label{display:block;margin-bottom:.3rem;color:#a1a1aa;font-size:.72rem;font-weight:750}.wi-field input:not([type=checkbox]),.wi-field textarea,.wi-field select{width:100%;padding:.62rem;border:1px solid #3f3f46;border-radius:.55rem;background:#18181b;color:#f4f4f5}.wi-field.full{grid-column:1/-1}.wi-scroll{max-height:480px;overflow:auto}.wi-help{color:#a1a1aa;font-size:.72rem;line-height:1.45}.wi-empty{padding:1.4rem;text-align:center;color:#71717a}.wi-actions{display:flex;gap:.55rem;flex-wrap:wrap}.wi-search{display:flex;gap:.55rem}.wi-search input{min-width:260px;padding:.6rem .75rem;border:1px solid #3f3f46;border-radius:.6rem;background:#18181b;color:#f4f4f5}.wi-mobile-list{display:none}.wi-mobile-card{padding:1rem;border:1px solid #343438;border-radius:.8rem;background:#242426}.wi-mobile-row{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;padding:.42rem 0;border-bottom:1px solid #343438}.wi-mobile-row:last-child{border-bottom:0}.wi-mobile-label{color:#a1a1aa;font-size:.7rem}.wi-mobile-value{text-align:right;font-size:.78rem;max-width:68%;overflow-wrap:anywhere}body.tema-claro .wi-hero{background:linear-gradient(135deg,#fff,#eff6ff);border-color:#dbeafe}body.tema-claro .wi-kpi,body.tema-claro .wi-mobile-card{background:#fff;border-color:#e5e7eb}body.tema-claro .wi-table th,body.tema-claro .wi-table td,body.tema-claro .wi-mobile-row{border-color:#e5e7eb}body.tema-claro .wi-field input:not([type=checkbox]),body.tema-claro .wi-field textarea,body.tema-claro .wi-field select,body.tema-claro .wi-search input{background:#fff;color:#111827;border-color:#d1d5db}@media(max-width:980px){.wi-grid{grid-template-columns:1fr}.wi-kpis{grid-template-columns:repeat(2,1fr)}}@media(max-width:720px){.wi-desktop-table{display:none}.wi-mobile-list{display:grid;gap:.75rem}.wi-hero,.wa-card{padding:1rem}.wi-title{font-size:1.25rem}.wa-head{align-items:stretch;flex-direction:column}.wi-search{display:grid;width:100%}.wi-search input{min-width:0;width:100%}}@media(max-width:600px){.wi-kpis,.wi-form-grid{grid-template-columns:1fr}.wi-field.full{grid-column:auto}.wi-actions{display:grid;width:100%}.wi-actions>*,.wi-actions form button{width:100%}.wi-mobile-value{max-width:62%}}
+</style>
+<div class="wi-shell space-y-5">
+  <section class="wi-hero">
+    <div>
+      <div class="wi-title">Central de Instâncias do WhatsApp</div>
+      <p class="wa-muted mt-1">Relação segura entre banco, empresa, filial, instância e número conectado.</p>
+    </div>
+    <div class="wi-actions">
+      <a href="{% url 'core:admin_central' %}" class="wa-btn secondary">Voltar à Central</a>
+      <a href="{% url 'core:admin_filial_list' %}" class="wa-btn secondary">Parâmetros das filiais</a>
+    </div>
+  </section>
+
+  <section class="wi-kpis">
+    <div class="wi-kpi"><span>Instâncias configuradas</span><strong>{{ total_configuradas }}/{{ total_filiais }}</strong></div>
+    <div class="wi-kpi"><span>Enviados hoje</span><strong>{{ contagens.enviado|default:0 }}</strong></div>
+    <div class="wi-kpi"><span>Pendentes na fila</span><strong>{{ contagens.pendente|default:0 }}</strong></div>
+    <div class="wi-kpi"><span>Capacidade da janela</span><strong>{{ capacidade_janela }}</strong><span>mensagens no intervalo atual</span></div>
+  </section>
+
+  <section class="wi-grid">
+    <div class="wa-card">
+      <div class="wa-head">
+        <div>
+          <h2 class="wa-title" style="font-size:1.1rem">WhatsApp central do iTED</h2>
+          <p class="wa-muted">Exclusivo para resumos gerenciais; não atende clientes e não participa do CRM.</p>
+        </div>
+        <span class="wi-pill {% if configuracao_central.status == 'conectado' %}ok{% elif configuracao_central.status == 'erro' %}error{% else %}warn{% endif %}">{{ configuracao_central.get_status_display }}</span>
+      </div>
+      <div class="wi-kpis" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:1rem">
+        <div class="wi-kpi"><span>Instância</span><strong class="wi-code" style="font-size:.8rem">{{ configuracao_central.instancia }}</strong></div>
+        <div class="wi-kpi"><span>Número conectado</span><strong style="font-size:.9rem">{{ configuracao_central.numero_conectado|default:'—' }}</strong></div>
+        <div class="wi-kpi"><span>Último envio</span><strong style="font-size:.8rem">{{ configuracao_central.ultimo_envio_em|date:'d/m/Y H:i'|default:'—' }}</strong></div>
+      </div>
+      {% if configuracao_central.ultimo_erro %}<div class="wa-warning wa-danger">{{ configuracao_central.ultimo_erro }}</div>{% endif %}
+      <div class="wi-actions">
+        <form method="post" action="{% url 'core:admin_whatsapp_central_conectar' %}">{% csrf_token %}<button class="wa-btn" type="submit">Conectar por QR Code</button></form>
+        <form method="post" action="{% url 'core:admin_whatsapp_preparar_fila' %}">{% csrf_token %}<button class="wa-btn secondary" type="submit">Enviar dashboard agora</button></form>
+      </div>
+      <p class="wi-help mt-3">A rotina automática envia uma mensagem por vez entre {{ configuracao_central.horario_inicio|time:'H:i' }} e {{ configuracao_central.horario_fim|time:'H:i' }}. O botão manual inicia a fila imediatamente, inclusive fora dessa janela. Em ambos os casos são respeitados pelo menos {{ configuracao_central.intervalo_entre_envios_minutos }} minuto(s) entre mensagens e o limite diário de {{ configuracao_central.limite_diario }}.</p>
+    </div>
+
+    <form method="post" class="wa-card">
+      {% csrf_token %}
+      <h2 class="wa-title" style="font-size:1.1rem">Proteção e sequência dos disparos</h2>
+      <p class="wa-muted mb-4">O recurso nasce desligado. Ative somente depois de conectar o número central.</p>
+      {% if form.non_field_errors %}<div class="wa-errors">{{ form.non_field_errors }}</div>{% endif %}
+      <div class="wi-form-grid">
+        {% for field in form %}
+          <div class="wi-field {% if field.name == 'mensagem_resumo' %}full{% endif %}">
+            {% if field.name == 'resumos_ativos' %}
+              <label style="display:flex;align-items:center;gap:.55rem">{{ field }} {{ field.label }}</label>
+            {% else %}
+              <label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+            {% endif %}
+            {% if field.help_text %}<div class="wi-help mt-1">{{ field.help_text }}</div>{% endif %}
+            {% for erro in field.errors %}<div class="wa-errors">{{ erro }}</div>{% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+      <button class="wa-btn mt-4" type="submit">Salvar configuração central</button>
+    </form>
+  </section>
+
+  <section class="wa-card">
+    <div class="wa-head">
+      <div><h2 class="wa-title" style="font-size:1.1rem">Instâncias individuais das filiais</h2><p class="wa-muted">Cada linha representa um WhatsApp exclusivo da respectiva filial.</p></div>
+      <form method="get" class="wi-search"><input type="search" name="q" value="{{ busca }}" placeholder="Empresa, filial, número ou instância"><button class="wa-btn secondary" type="submit">Filtrar</button></form>
+    </div>
+    <div class="wi-table-wrap wi-desktop-table">
+      <table class="wi-table">
+        <thead><tr><th>Banco</th><th>Empresa</th><th>Filial</th><th>Instância</th><th>Número</th><th>Status</th><th>Último evento</th><th>Último erro</th><th>Ação</th></tr></thead>
+        <tbody>
+          {% for linha in linhas %}
+            {% with item=linha.configuracao %}
+            <tr>
+              <td><span class="wi-code">{% if linha.banco %}{{ linha.banco.db_alias }}{% else %}default{% endif %}</span></td>
+              <td>{{ linha.filial.empresa.nome_fantasia|default:linha.filial.empresa.razao_social }}</td>
+              <td><strong>{{ linha.filial.nome_fantasia|default:linha.filial.razao_social }}</strong><div class="wi-help">{{ linha.filial.cnpj }}</div></td>
+              {% if item %}
+                <td><span class="wi-code">{{ item.instancia }}</span></td>
+                <td>{{ item.numero_conectado|default:'—' }}</td>
+                <td><span class="wi-pill {% if item.status == 'conectado' %}ok{% elif item.status == 'erro' %}error{% else %}warn{% endif %}">{{ item.get_status_display }}</span></td>
+                <td>{{ item.ultimo_evento_em|date:'d/m/Y H:i'|default:'—' }}</td>
+                <td><span title="{{ item.ultimo_erro }}">{{ item.ultimo_erro|truncatechars:45|default:'—' }}</span></td>
+                <td><form method="post" action="{% url 'core:admin_whatsapp_instancia_status' item.pk %}">{% csrf_token %}<button class="wa-btn secondary compact" type="submit">Atualizar</button></form></td>
+              {% else %}
+                <td>—</td><td>—</td><td><span class="wi-pill">Não configurada</span></td><td>—</td><td>—</td><td>—</td>
+              {% endif %}
+            </tr>
+            {% endwith %}
+          {% empty %}<tr><td colspan="9" class="wi-empty">Nenhuma instância de filial encontrada.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="wi-mobile-list">
+      {% for linha in linhas %}
+        {% with item=linha.configuracao %}
+        <article class="wi-mobile-card">
+          <div class="flex items-start justify-between gap-3 mb-2"><div><strong>{{ linha.filial.nome_fantasia|default:linha.filial.razao_social }}</strong><div class="wi-help">{{ linha.filial.empresa.nome_fantasia|default:linha.filial.empresa.razao_social }}</div></div><span class="wi-pill {% if item.status == 'conectado' %}ok{% elif item.status == 'erro' %}error{% else %}warn{% endif %}">{% if item %}{{ item.get_status_display }}{% else %}Não configurada{% endif %}</span></div>
+          <div class="wi-mobile-row"><span class="wi-mobile-label">Banco</span><span class="wi-mobile-value wi-code">{% if linha.banco %}{{ linha.banco.db_alias }}{% else %}default{% endif %}</span></div>
+          <div class="wi-mobile-row"><span class="wi-mobile-label">CNPJ</span><span class="wi-mobile-value">{{ linha.filial.cnpj }}</span></div>
+          <div class="wi-mobile-row"><span class="wi-mobile-label">Instância</span><span class="wi-mobile-value wi-code">{% if item %}{{ item.instancia }}{% else %}—{% endif %}</span></div>
+          <div class="wi-mobile-row"><span class="wi-mobile-label">Número</span><span class="wi-mobile-value">{% if item %}{{ item.numero_conectado|default:'—' }}{% else %}—{% endif %}</span></div>
+          {% if item %}<form class="mt-3" method="post" action="{% url 'core:admin_whatsapp_instancia_status' item.pk %}">{% csrf_token %}<button class="wa-btn secondary" style="width:100%" type="submit">Atualizar status</button></form>{% endif %}
+        </article>
+        {% endwith %}
+      {% empty %}<div class="wi-empty">Nenhuma instância de filial encontrada.</div>{% endfor %}
+    </div>
+  </section>
+
+  <section class="wa-card">
+    <div class="wa-head"><div><h2 class="wa-title" style="font-size:1.1rem">Histórico da fila gerencial</h2><p class="wa-muted">Auditoria dos últimos envios, sem misturar com conversas do CRM.</p></div></div>
+    <div class="wi-table-wrap wi-scroll wi-desktop-table">
+      <table class="wi-table">
+        <thead><tr><th>Referência</th><th>Origem</th><th>Banco</th><th>Filial</th><th>Destinatário</th><th>Agendado</th><th>Status</th><th>Tentativas</th><th>Detalhe</th><th>Ação</th></tr></thead>
+        <tbody>
+          {% for envio in envios_recentes %}
+          <tr>
+            <td>{{ envio.data_referencia|date:'d/m/Y' }}</td><td>{% if envio.disparo_manual %}Manual{% else %}Automático{% endif %}</td><td><span class="wi-code">{{ envio.tenant_alias }}</span></td><td>{{ envio.filial_nome }}</td><td>{{ envio.destinatario_nome }}<div class="wi-help">{{ envio.telefone }}</div></td><td>{{ envio.agendado_para|date:'d/m H:i' }}</td><td><span class="wi-pill {% if envio.status == 'enviado' %}ok{% elif envio.status == 'erro' %}error{% else %}warn{% endif %}">{{ envio.get_status_display }}</span></td><td>{{ envio.tentativas }}</td><td title="{{ envio.ultimo_erro }}">{{ envio.ultimo_erro|truncatechars:55|default:'—' }}</td><td>{% if envio.status == 'erro' %}<form method="post" action="{% url 'core:admin_whatsapp_reenviar_resumo' envio.pk %}">{% csrf_token %}<button class="wa-btn secondary compact" type="submit">Reenviar</button></form>{% else %}—{% endif %}</td>
+          </tr>
+          {% empty %}<tr><td colspan="10" class="wi-empty">A fila ainda não possui registros.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="wi-mobile-list">
+      {% for envio in envios_recentes %}
+      <article class="wi-mobile-card">
+        <div class="flex items-start justify-between gap-3 mb-2"><div><strong>{{ envio.filial_nome }}</strong><div class="wi-help">{{ envio.destinatario_nome }} · {{ envio.telefone }}</div></div><span class="wi-pill {% if envio.status == 'enviado' %}ok{% elif envio.status == 'erro' %}error{% else %}warn{% endif %}">{{ envio.get_status_display }}</span></div>
+        <div class="wi-mobile-row"><span class="wi-mobile-label">Referência</span><span class="wi-mobile-value">{{ envio.data_referencia|date:'d/m/Y' }}</span></div>
+        <div class="wi-mobile-row"><span class="wi-mobile-label">Origem</span><span class="wi-mobile-value">{% if envio.disparo_manual %}Manual{% else %}Automático{% endif %}</span></div>
+        <div class="wi-mobile-row"><span class="wi-mobile-label">Banco</span><span class="wi-mobile-value wi-code">{{ envio.tenant_alias }}</span></div>
+        <div class="wi-mobile-row"><span class="wi-mobile-label">Agendado</span><span class="wi-mobile-value">{{ envio.agendado_para|date:'d/m H:i' }}</span></div>
+        {% if envio.ultimo_erro %}<div class="wi-help mt-2">{{ envio.ultimo_erro }}</div>{% endif %}
+        {% if envio.status == 'erro' %}<form class="mt-3" method="post" action="{% url 'core:admin_whatsapp_reenviar_resumo' envio.pk %}">{% csrf_token %}<button class="wa-btn secondary" style="width:100%" type="submit">Reenviar</button></form>{% endif %}
+      </article>
+      {% empty %}<div class="wi-empty">A fila ainda não possui registros.</div>{% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

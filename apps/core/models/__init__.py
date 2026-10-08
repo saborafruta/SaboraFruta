@@ -7,7 +7,10 @@ from .usuario import (
     UsuarioFilialAcesso,
 )
 from .log import LogSistema, LogAcesso, RegistroAuditoria
-from .parametros import ConfiguracaoEtiquetaVenda, ParametrosSistema, ParametroDocumentoFiscal
+from .parametros import (
+    ConfiguracaoEtiquetaVenda, DestinatarioResumoWhatsApp, ParametrosSistema,
+    ParametroDocumentoFiscal,
+)
 from .notificacao import Notificacao, NotificacaoLeitura
 from .tenant import EmpresaBanco, RailwayProjectPool, TenantPublicLink
 from .separacao import SeparacaoFilial
@@ -20,6 +23,7 @@ __all__ = [
     'FilialFavorita',
     'LogSistema', 'LogAcesso', 'RegistroAuditoria',
     'ParametrosSistema', 'ParametroDocumentoFiscal', 'ConfiguracaoEtiquetaVenda',
+    'DestinatarioResumoWhatsApp',
     'Notificacao', 'NotificacaoLeitura',
     'EmpresaBanco', 'RailwayProjectPool', 'TenantPublicLink', 'SeparacaoFilial',
 ]

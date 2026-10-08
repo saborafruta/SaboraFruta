@@ -10,7 +10,9 @@ from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET, require_POST
 
-from apps.core.forms.parametros import FilialIdentidadeForm, ParametrosSistemaForm
+from apps.core.forms.parametros import (
+    DestinatarioResumoWhatsAppFormSet, FilialIdentidadeForm, ParametrosSistemaForm,
+)
 from apps.core.models import Filial
 from apps.core.models.parametros import ParametroDocumentoFiscal, ParametrosSistema
 from apps.core.services.imagem_filial import preparar_imagem_filial
@@ -218,7 +220,12 @@ def parametros_sistema(request):
     if request.method == 'POST':
         form_filial = FilialIdentidadeForm(request.POST, request.FILES, instance=filial)
         form_params = ParametrosSistemaForm(request.POST, request.FILES, instance=params)
-        if form_filial.is_valid() and form_params.is_valid():
+        form_destinatarios = DestinatarioResumoWhatsAppFormSet(request.POST, instance=params)
+        if (
+            form_filial.is_valid()
+            and form_params.is_valid()
+            and form_destinatarios.is_valid()
+        ):
             filial_salva = form_filial.save(commit=False)
             remover_logo = bool(request.POST.get('remover_logo'))
             if remover_logo and filial_salva.imagem:
@@ -252,6 +259,8 @@ def parametros_sistema(request):
             elif request.POST.get('comunicador_offline_instalador-clear'):
                 params_salvos.comunicador_offline_sha256 = ''
             params_salvos.save()
+            form_destinatarios.instance = params_salvos
+            form_destinatarios.save()
             _salvar_documentos(request, documentos)
             if request.POST.get('acao') == 'salvar_sincronizar_focus':
                 try:
@@ -282,11 +291,13 @@ def parametros_sistema(request):
     else:
         form_filial = FilialIdentidadeForm(instance=filial)
         form_params = ParametrosSistemaForm(instance=params)
+        form_destinatarios = DestinatarioResumoWhatsAppFormSet(instance=params)
 
     return render(request, 'core/admin/parametros_form.html', {
         'title': 'Parametros do Sistema',
         'form_filial': form_filial,
         'form_params': form_params,
+        'form_destinatarios': form_destinatarios,
         'parametros': params,
         'documentos': documentos,
         'docs_com_cfop': DOCS_COM_CFOP,

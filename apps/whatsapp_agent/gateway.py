@@ -90,6 +90,12 @@ class EvolutionClient:
     def conectar(self):
         return self._request('GET', f'/instance/connect/{quote(self.configuracao.instancia)}')
 
+    def detalhes(self):
+        return self._request(
+            'GET',
+            f'/instance/fetchInstances?instanceName={quote(self.configuracao.instancia)}',
+        )
+
     def enviar_texto(self, telefone, texto):
         return self._request('POST', f'/message/sendText/{quote(self.configuracao.instancia)}', json={
             'number': telefone,
@@ -111,3 +117,27 @@ def qr_data_url(dados):
     imagem.save(arquivo, format='PNG')
     import base64
     return f'data:image/png;base64,{base64.b64encode(arquivo.getvalue()).decode("ascii")}'
+
+
+def identidade_instancia(dados):
+    """Extrai número e nome sem depender de uma única versão da Evolution API."""
+    if isinstance(dados, list):
+        dados = dados[0] if dados else {}
+    if not isinstance(dados, dict):
+        return '', ''
+    instancia = dados.get('instance') if isinstance(dados.get('instance'), dict) else dados
+    numero = (
+        instancia.get('ownerJid')
+        or instancia.get('wuid')
+        or instancia.get('number')
+        or dados.get('ownerJid')
+        or ''
+    )
+    numero = ''.join(filter(str.isdigit, str(numero).split('@')[0]))[:24]
+    nome = (
+        instancia.get('profileName')
+        or instancia.get('name')
+        or dados.get('profileName')
+        or ''
+    )
+    return numero, str(nome)[:120]

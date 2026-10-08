@@ -14,6 +14,7 @@ from apps.core.views.notificacoes import (
 )
 from apps.core.views.menu_favoritos import MenuFavoritosView
 from apps.core.views.preferencias_tabelas import TabelaPreferenciasView
+from apps.whatsapp_agent import central_views as whatsapp_central_views
 
 app_name = 'core'
 
@@ -41,6 +42,41 @@ urlpatterns = [
     path('auth/preferencias-tabelas/', TabelaPreferenciasView.as_view(), name='preferencias-tabelas'),
 
     path('gestao/central/', admin_area.central_administrativa, name='admin_central'),
+    path(
+        'gestao/central/whatsapp/',
+        whatsapp_central_views.central_instancias,
+        name='admin_whatsapp_central',
+    ),
+    path(
+        'gestao/central/whatsapp/conectar/',
+        whatsapp_central_views.central_conectar,
+        name='admin_whatsapp_central_conectar',
+    ),
+    path(
+        'gestao/central/whatsapp/conexao/',
+        whatsapp_central_views.central_conexao,
+        name='admin_whatsapp_central_conexao',
+    ),
+    path(
+        'gestao/central/whatsapp/status/',
+        whatsapp_central_views.central_status,
+        name='admin_whatsapp_central_status',
+    ),
+    path(
+        'gestao/central/whatsapp/instancias/<int:pk>/status/',
+        whatsapp_central_views.atualizar_status_instancia,
+        name='admin_whatsapp_instancia_status',
+    ),
+    path(
+        'gestao/central/whatsapp/fila/preparar/',
+        whatsapp_central_views.preparar_fila,
+        name='admin_whatsapp_preparar_fila',
+    ),
+    path(
+        'gestao/central/whatsapp/envios/<int:pk>/reenviar/',
+        whatsapp_central_views.reenviar_resumo,
+        name='admin_whatsapp_reenviar_resumo',
+    ),
     path('gestao/central/pdv-offline/', admin_area.instalacoes_pdv_offline, name='admin_instalacoes_pdv_offline'),
     path('gestao/central/pdv-offline/<int:pk>/acao/', admin_area.instalacao_pdv_offline_acao, name='admin_instalacao_pdv_offline_acao'),
     path('gestao/central/pdv-offline/<int:pk>/teste/', admin_area.instalacao_pdv_offline_registrar_teste, name='admin_instalacao_pdv_offline_teste'),

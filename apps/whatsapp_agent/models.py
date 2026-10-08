@@ -149,6 +149,141 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
             return ''
 
 
+class ConfiguracaoWhatsAppCentral(TimestampedModel):
+    """Número institucional do iTED, usado somente para mensagens gerenciais."""
+
+    class Status(models.TextChoices):
+        NAO_CONFIGURADO = 'nao_configurado', 'Não configurado'
+        DESCONECTADO = 'desconectado', 'Desconectado'
+        AGUARDANDO_QR = 'aguardando_qr', 'Aguardando QR Code'
+        CONECTADO = 'conectado', 'Conectado'
+        ERRO = 'erro', 'Erro'
+
+    instancia = models.SlugField(max_length=80, unique=True, default='ited-central-dashboard')
+    webhook_secret = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    status = models.CharField(
+        max_length=24, choices=Status.choices, default=Status.NAO_CONFIGURADO,
+    )
+    numero_conectado = models.CharField(max_length=24, blank=True)
+    nome_conectado = models.CharField(max_length=120, blank=True)
+    resumos_ativos = models.BooleanField(
+        default=False,
+        help_text='Ativa a preparação automática dos resumos diários.',
+    )
+    horario_inicio = models.TimeField(default=time(8, 0))
+    horario_fim = models.TimeField(default=time(18, 0))
+    intervalo_entre_envios_minutos = models.PositiveSmallIntegerField(
+        default=3,
+        validators=[MinValueValidator(1), MaxValueValidator(120)],
+        help_text='Uma mensagem por vez, respeitando este intervalo mínimo.',
+    )
+    limite_diario = models.PositiveIntegerField(
+        default=200,
+        validators=[MinValueValidator(1), MaxValueValidator(5000)],
+    )
+    max_tentativas = models.PositiveSmallIntegerField(
+        default=2,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+    )
+    mensagem_resumo = models.TextField(
+        default=(
+            '📊 *Resumo diário — {filial}*\n'
+            '🗓️ {data}\n\n'
+            '💰 *Vendas:* {vendas}\n'
+            '💵 *Recebido:* {recebido}\n'
+            '🧾 *Quantidade de vendas:* {quantidade_vendas}\n'
+            '🎯 *Ticket médio:* {ticket_medio}\n'
+            '🏷️ *Descontos:* {descontos}\n'
+            '↩️ *Cancelamentos:* {cancelamentos}\n\n'
+            '⚠️ *Estoque crítico:* {estoque_critico}\n'
+            '⏳ *Produtos próximos do vencimento:* {vencimentos}\n'
+            '📌 *Contas a receber vencidas:* {contas_vencidas}\n'
+            '📈 *Comparação com o dia anterior:* {comparacao}'
+            '{agenda}'
+        ),
+        help_text=(
+            'Variáveis: {empresa}, {filial}, {data}, {vendas}, {recebido}, '
+            '{quantidade_vendas}, {ticket_medio}, {descontos}, {cancelamentos}, '
+            '{estoque_critico}, {vencimentos}, {contas_vencidas}, {comparacao} e {agenda}.'
+        ),
+    )
+    ultima_conexao_em = models.DateTimeField(null=True, blank=True)
+    ultimo_envio_em = models.DateTimeField(null=True, blank=True)
+    ultimo_evento_em = models.DateTimeField(null=True, blank=True)
+    ultimo_erro = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'whatsapp_configuracao_central'
+
+    def __str__(self):
+        return f'WhatsApp central iTED — {self.instancia}'
+
+    @property
+    def gateway_url(self):
+        return ''
+
+    def obter_api_key(self):
+        return ''
+
+    @classmethod
+    def carregar(cls):
+        configuracao, _ = cls.objects.using('default').get_or_create(pk=1)
+        return configuracao
+
+
+class EnvioResumoWhatsApp(TimestampedModel):
+    class Status(models.TextChoices):
+        PENDENTE = 'pendente', 'Pendente'
+        ENVIANDO = 'enviando', 'Enviando'
+        ENVIADO = 'enviado', 'Enviado'
+        ERRO = 'erro', 'Erro'
+        CANCELADO = 'cancelado', 'Cancelado'
+
+    configuracao = models.ForeignKey(
+        ConfiguracaoWhatsAppCentral,
+        on_delete=models.PROTECT,
+        related_name='envios',
+    )
+    tenant_alias = models.SlugField(max_length=80, blank=True, default='default')
+    empresa_nome = models.CharField(max_length=150)
+    filial_nome = models.CharField(max_length=150)
+    filial_cnpj = models.CharField(max_length=14)
+    destinatario_nome = models.CharField(max_length=120)
+    telefone = models.CharField(max_length=13)
+    data_referencia = models.DateField(db_index=True)
+    metricas = models.JSONField(default=dict)
+    mensagem = models.TextField()
+    agendado_para = models.DateTimeField(db_index=True)
+    disparo_manual = models.BooleanField(
+        default=False,
+        help_text='Permite iniciar este envio fora da janela da rotina automática.',
+    )
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDENTE, db_index=True,
+    )
+    tentativas = models.PositiveSmallIntegerField(default=0)
+    enviado_em = models.DateTimeField(null=True, blank=True)
+    identificador_externo = models.CharField(max_length=160, blank=True)
+    ultimo_erro = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'whatsapp_envios_resumo'
+        ordering = ['-data_referencia', 'agendado_para', 'id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant_alias', 'filial_cnpj', 'telefone', 'data_referencia'],
+                name='whatsapp_resumo_filial_destino_dia_unico',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['status', 'agendado_para']),
+            models.Index(fields=['tenant_alias', 'filial_cnpj', 'data_referencia']),
+        ]
+
+    def __str__(self):
+        return f'{self.filial_nome} → {self.telefone} ({self.data_referencia:%d/%m/%Y})'
+
+
 class MenuWhatsApp(FilialScopedModel):
     configuracao = models.ForeignKey(
         ConfiguracaoWhatsApp, on_delete=models.CASCADE, related_name='menus',

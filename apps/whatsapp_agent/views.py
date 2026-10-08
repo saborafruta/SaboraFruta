@@ -20,7 +20,7 @@ from apps.core.services.permissions import PermissaoRequiredMixin
 from .conversation_service import encerrar_conversa, encerrar_conversas_inativas
 from .flow import garantir_fluxo_padrao
 from .forms import ConfiguracaoWhatsAppForm, FluxoWhatsAppForm
-from .gateway import EvolutionClient, GatewayWhatsAppError, qr_data_url
+from .gateway import EvolutionClient, GatewayWhatsAppError, identidade_instancia, qr_data_url
 from .models import (
     ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp,
     MenuWhatsApp, OpcaoMenuWhatsApp,
@@ -281,7 +281,16 @@ class StatusConexaoView(PermissaoRequiredMixin, View):
                 configuracao.status = ConfiguracaoWhatsApp.Status.CONECTADO
                 configuracao.ultima_conexao_em = timezone.now()
                 configuracao.ultimo_erro = ''
-                configuracao.save(update_fields=['status', 'ultima_conexao_em', 'ultimo_erro', 'updated_at'])
+                try:
+                    numero, nome = identidade_instancia(cliente.detalhes())
+                    configuracao.numero_conectado = numero or configuracao.numero_conectado
+                    configuracao.nome_conectado = nome or configuracao.nome_conectado
+                except GatewayWhatsAppError:
+                    pass
+                configuracao.save(update_fields=[
+                    'status', 'ultima_conexao_em', 'ultimo_erro',
+                    'numero_conectado', 'nome_conectado', 'updated_at',
+                ])
                 return JsonResponse({'conectado': True, 'status': configuracao.get_status_display()})
             dados_qr = cliente.conectar()
             configuracao.status = ConfiguracaoWhatsApp.Status.AGUARDANDO_QR

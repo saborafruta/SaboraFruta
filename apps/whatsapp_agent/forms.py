@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import ConfiguracaoWhatsApp
+from .models import ConfiguracaoWhatsApp, ConfiguracaoWhatsAppCentral
 
 
 class ConfiguracaoWhatsAppForm(forms.ModelForm):
@@ -58,3 +58,39 @@ class FluxoWhatsAppForm(forms.ModelForm):
             'recuperacao_horario_fim': forms.TimeInput(attrs={'type': 'time'}),
             'tempo_inatividade_minutos': forms.NumberInput(attrs={'min': 1, 'max': 10080}),
         }
+
+
+class ConfiguracaoWhatsAppCentralForm(forms.ModelForm):
+    class Meta:
+        model = ConfiguracaoWhatsAppCentral
+        fields = [
+            'instancia', 'resumos_ativos', 'horario_inicio', 'horario_fim',
+            'intervalo_entre_envios_minutos', 'limite_diario', 'max_tentativas',
+            'mensagem_resumo',
+        ]
+        labels = {
+            'instancia': 'Nome da instância central',
+            'resumos_ativos': 'Ativar envios automáticos',
+            'horario_inicio': 'Iniciar os envios às',
+            'horario_fim': 'Encerrar os envios às',
+            'intervalo_entre_envios_minutos': 'Intervalo mínimo entre mensagens (minutos)',
+            'limite_diario': 'Limite máximo de mensagens por dia',
+            'max_tentativas': 'Máximo de tentativas por mensagem',
+            'mensagem_resumo': 'Modelo da mensagem diária',
+        }
+        widgets = {
+            'horario_inicio': forms.TimeInput(attrs={'type': 'time'}),
+            'horario_fim': forms.TimeInput(attrs={'type': 'time'}),
+            'intervalo_entre_envios_minutos': forms.NumberInput(attrs={'min': 1, 'max': 120}),
+            'limite_diario': forms.NumberInput(attrs={'min': 1, 'max': 5000}),
+            'max_tentativas': forms.NumberInput(attrs={'min': 1, 'max': 5}),
+            'mensagem_resumo': forms.Textarea(attrs={'rows': 16}),
+        }
+
+    def clean(self):
+        dados = super().clean()
+        inicio = dados.get('horario_inicio')
+        fim = dados.get('horario_fim')
+        if inicio and fim and inicio >= fim:
+            raise forms.ValidationError('O fim da janela deve ser posterior ao início.')
+        return dados

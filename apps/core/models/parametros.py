@@ -9,7 +9,9 @@ o e-mail secundário e a configuração de emissão por documento fiscal.
 from decimal import Decimal
 from math import isfinite
 
-from django.core.validators import FileExtensionValidator, MaxValueValidator, MinValueValidator
+from django.core.validators import (
+    FileExtensionValidator, MaxValueValidator, MinValueValidator, RegexValidator,
+)
 from django.db import models
 
 from .base import TimestampedModel
@@ -175,6 +177,19 @@ class ParametrosSistema(TimestampedModel):
     email_resposta = models.EmailField(max_length=120, blank=True)
     texto_padrao_email = models.TextField(blank=True)
     informacoes_complementares_padrao = models.TextField(blank=True)
+    resumo_whatsapp_ativo = models.BooleanField(
+        default=False,
+        verbose_name='Receber resumo diário pelo WhatsApp',
+        help_text=(
+            'Autoriza o iTED a enviar o desempenho do dia anterior aos destinatários '
+            'cadastrados nesta filial.'
+        ),
+    )
+    resumo_whatsapp_incluir_agenda = models.BooleanField(
+        default=False,
+        verbose_name='Incluir indicadores da agenda',
+        help_text='Ative apenas para filiais que trabalham com agendamentos.',
+    )
 
     class Meta:
         db_table = 'parametros_sistema'
@@ -183,6 +198,44 @@ class ParametrosSistema(TimestampedModel):
 
     def __str__(self):
         return f'Parâmetros — {self.filial}'
+
+
+class DestinatarioResumoWhatsApp(TimestampedModel):
+    """Um dos responsáveis que recebe o fechamento diário de uma filial."""
+
+    parametros = models.ForeignKey(
+        ParametrosSistema,
+        on_delete=models.CASCADE,
+        related_name='destinatarios_resumo_whatsapp',
+    )
+    posicao = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(4)],
+    )
+    nome = models.CharField(max_length=120)
+    telefone = models.CharField(
+        max_length=13,
+        validators=[
+            RegexValidator(
+                r'^\d{10,13}$',
+                'Informe somente números, com DDD e, de preferência, o código 55.',
+            ),
+        ],
+        help_text='Somente números. Exemplo: 5584999990000.',
+    )
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'parametros_resumo_whatsapp_destinatarios'
+        ordering = ['posicao', 'id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['parametros', 'posicao'],
+                name='resumo_whatsapp_destinatario_posicao_unica',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.nome} — {self.telefone}'
 
 
 class ConfiguracaoEtiquetaVenda(TimestampedModel):

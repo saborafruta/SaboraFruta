@@ -346,6 +346,69 @@
     </div>
 
     <div class="param-card">
+      <div class="param-card-title">Resumo diário pelo WhatsApp</div>
+      <p class="param-card-sub">
+        O número central do iTED envia, de forma escalonada, o resultado do dia anterior.
+        Cadastre até quatro responsáveis desta filial.
+      </p>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+        <label class="param-subpanel flex items-start gap-3">
+          {{ form_params.resumo_whatsapp_ativo }}
+          <span>
+            <strong class="block text-sm">{{ form_params.resumo_whatsapp_ativo.label }}</strong>
+            <span class="param-card-sub">{{ form_params.resumo_whatsapp_ativo.help_text }}</span>
+          </span>
+        </label>
+        <label class="param-subpanel flex items-start gap-3">
+          {{ form_params.resumo_whatsapp_incluir_agenda }}
+          <span>
+            <strong class="block text-sm">{{ form_params.resumo_whatsapp_incluir_agenda.label }}</strong>
+            <span class="param-card-sub">{{ form_params.resumo_whatsapp_incluir_agenda.help_text }}</span>
+          </span>
+        </label>
+      </div>
+      {{ form_destinatarios.management_form }}
+      {% if form_destinatarios.non_form_errors %}
+        <div class="param-erro mt-3">{{ form_destinatarios.non_form_errors }}</div>
+      {% endif %}
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-4">
+        {% for destinatario in form_destinatarios %}
+          <div class="param-subpanel">
+            {{ destinatario.id }}{{ destinatario.posicao }}
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <strong class="text-sm">Destinatário {{ forloop.counter }}</strong>
+              <label class="flex items-center gap-2 text-xs font-semibold">
+                {{ destinatario.ativo }} Ativo
+              </label>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="param-label">Nome</label>
+                {{ destinatario.nome }}
+                {% for erro in destinatario.nome.errors %}<p class="param-erro">{{ erro }}</p>{% endfor %}
+              </div>
+              <div>
+                <label class="param-label">WhatsApp com DDD</label>
+                {{ destinatario.telefone }}
+                {% for erro in destinatario.telefone.errors %}<p class="param-erro">{{ erro }}</p>{% endfor %}
+              </div>
+            </div>
+            {% if destinatario.instance.pk %}
+              <label class="flex items-center gap-2 text-xs mt-3" style="color:#ef4444;">
+                {{ destinatario.DELETE }} Remover destinatário
+              </label>
+            {% endif %}
+            {% for erro in destinatario.non_field_errors %}<p class="param-erro mt-2">{{ erro }}</p>{% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="param-help mt-4">
+        Os indicadores da agenda são opcionais. Vendas, recebimentos, estoque e vencimentos
+        continuam disponíveis mesmo quando a agenda estiver desativada.
+      </div>
+    </div>
+
+    <div class="param-card">
       <div class="param-card-title">Checkout de venda</div>
       <p class="param-card-sub">Tela rápida para leitura de produtos, recebimento e finalização da venda.</p>
       <label class="mt-4 flex items-start gap-3">

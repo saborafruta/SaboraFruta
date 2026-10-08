@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views
+from . import central_views
 
 app_name = 'whatsapp_agent'
 
@@ -16,4 +17,9 @@ urlpatterns = [
     path('conversas/<int:pk>/encerrar/', views.EncerrarConversaView.as_view(), name='encerrar-conversa'),
     path('conversas/<int:pk>/etapa/', views.AlterarEtapaCRMView.as_view(), name='alterar-etapa-crm'),
     path('webhook/<uuid:secret>/', views.webhook, name='webhook'),
+    path(
+        'webhook-central/<uuid:secret>/',
+        central_views.webhook_central,
+        name='webhook-central',
+    ),
 ]
