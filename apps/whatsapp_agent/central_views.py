@@ -275,6 +275,63 @@ def preparar_fila(request):
 
 @require_POST
 @superuser_required
+def preparar_fila_filial(request, filial_id):
+    filial = get_object_or_404(
+        Filial.objects.using('default').select_related('empresa'),
+        pk=filial_id,
+        ativo=True,
+        empresa__ativo=True,
+    )
+    banco = EmpresaBanco.objects.using('default').filter(
+        empresa_id=filial.empresa_id,
+        ativo=True,
+        status=EmpresaBanco.Status.ATIVO,
+    ).first()
+    tenant_alias = banco.db_alias if banco else 'default'
+    criados = preparar_resumos_diarios(
+        disparo_manual=True,
+        tenant_alias=tenant_alias,
+        filial_cnpj=filial.cnpj,
+    )
+    nome_filial = filial.nome_fantasia or filial.razao_social
+    if criados:
+        try:
+            processar_proximo_resumo_task.delay()
+        except Exception:
+            logger.exception('Não foi possível antecipar o resumo manual da filial.')
+        messages.success(
+            request,
+            f'{criados} resumo(s) de {nome_filial} liberado(s) para envio sequencial.',
+        )
+    else:
+        diagnostico = diagnosticar_resumos_diarios(
+            tenant_alias=tenant_alias,
+            filial_cnpj=filial.cnpj,
+        )
+        if not banco and tenant_alias == 'default':
+            detalhe = f'{nome_filial} ainda não possui um banco ativo associado.'
+        elif not diagnostico['filiais_ativas']:
+            detalhe = (
+                f'{nome_filial} não está habilitada para o resumo diário. Ative a opção '
+                'nos Parâmetros do Sistema dessa filial.'
+            )
+        elif not diagnostico['destinatarios_ativos']:
+            detalhe = f'{nome_filial} não possui destinatários ativos cadastrados.'
+        elif diagnostico['fila']:
+            total = sum(diagnostico['fila'].values())
+            detalhe = (
+                f'O resumo de {nome_filial} referente a '
+                f'{diagnostico["data_referencia"]:%d/%m/%Y} já possui {total} '
+                'envio(s) preparado(s) ou concluído(s).'
+            )
+        else:
+            detalhe = f'Não foi possível localizar {nome_filial} no banco operacional.'
+        messages.info(request, detalhe)
+    return redirect('core:admin_whatsapp_central')
+
+
+@require_POST
+@superuser_required
 def reenviar_resumo(request, pk):
     envio = get_object_or_404(EnvioResumoWhatsApp.objects.using('default'), pk=pk)
     envio.status = envio.Status.PENDENTE

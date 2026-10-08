@@ -73,6 +73,11 @@ urlpatterns = [
         name='admin_whatsapp_preparar_fila',
     ),
     path(
+        'gestao/central/whatsapp/filiais/<int:filial_id>/enviar-dashboard/',
+        whatsapp_central_views.preparar_fila_filial,
+        name='admin_whatsapp_preparar_fila_filial',
+    ),
+    path(
         'gestao/central/whatsapp/envios/<int:pk>/reenviar/',
         whatsapp_central_views.reenviar_resumo,
         name='admin_whatsapp_reenviar_resumo',

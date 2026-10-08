@@ -107,6 +107,45 @@ class ResumoDiarioWhatsAppTests(TestCase):
         self.assertIn('Loja Centro', envios[0].mensagem)
         self.assertEqual(envios[0].tenant_alias, 'default')
 
+    @patch('apps.whatsapp_agent.resumo_service._metricas_filial')
+    def test_prepara_fila_manual_de_uma_unica_filial(self, metricas_mock):
+        outra_filial = Filial.objects.create(
+            empresa=self.filial.empresa,
+            razao_social='Outra Filial',
+            nome_fantasia='Loja Bairro',
+            cnpj='81345678000193',
+            uf='CE',
+        )
+        outros_parametros = ParametrosSistema.objects.create(
+            filial=outra_filial,
+            resumo_whatsapp_ativo=True,
+        )
+        DestinatarioResumoWhatsApp.objects.create(
+            parametros=outros_parametros,
+            posicao=1,
+            nome='Sócio Bairro',
+            telefone='5584999990003',
+        )
+        metricas_mock.return_value = self._metricas()
+
+        criados = preparar_resumos_diarios(
+            disparo_manual=True,
+            tenant_alias='default',
+            filial_cnpj=self.filial.cnpj,
+        )
+
+        self.assertEqual(criados, 2)
+        self.assertEqual(
+            set(EnvioResumoWhatsApp.objects.values_list('filial_cnpj', flat=True)),
+            {self.filial.cnpj},
+        )
+        diagnostico = diagnosticar_resumos_diarios(
+            tenant_alias='default',
+            filial_cnpj=self.filial.cnpj,
+        )
+        self.assertEqual(diagnostico['filiais_ativas'], 1)
+        self.assertEqual(diagnostico['destinatarios_ativos'], 2)
+
     @patch('apps.whatsapp_agent.resumo_service.EvolutionClient.enviar_texto')
     def test_processador_envia_uma_por_intervalo(self, enviar_mock):
         enviar_mock.return_value = {'key': {'id': 'mensagem-1'}}

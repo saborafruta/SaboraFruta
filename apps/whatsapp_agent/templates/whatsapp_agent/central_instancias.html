@@ -90,9 +90,9 @@
                 <td><span class="wi-pill {% if item.status == 'conectado' %}ok{% elif item.status == 'erro' %}error{% else %}warn{% endif %}">{{ item.get_status_display }}</span></td>
                 <td>{{ item.ultimo_evento_em|date:'d/m/Y H:i'|default:'—' }}</td>
                 <td><span title="{{ item.ultimo_erro }}">{{ item.ultimo_erro|truncatechars:45|default:'—' }}</span></td>
-                <td><form method="post" action="{% url 'core:admin_whatsapp_instancia_status' item.pk %}">{% csrf_token %}<button class="wa-btn secondary compact" type="submit">Atualizar</button></form></td>
+                <td><div class="wi-actions"><form method="post" action="{% url 'core:admin_whatsapp_instancia_status' item.pk %}">{% csrf_token %}<button class="wa-btn secondary compact" type="submit">Atualizar</button></form><form method="post" action="{% url 'core:admin_whatsapp_preparar_fila_filial' linha.filial.pk %}">{% csrf_token %}<button class="wa-btn secondary compact" type="submit">Enviar dashboard</button></form></div></td>
               {% else %}
-                <td>—</td><td>—</td><td><span class="wi-pill">Não configurada</span></td><td>—</td><td>—</td><td>—</td>
+                <td>—</td><td>—</td><td><span class="wi-pill">Não configurada</span></td><td>—</td><td>—</td><td><form method="post" action="{% url 'core:admin_whatsapp_preparar_fila_filial' linha.filial.pk %}">{% csrf_token %}<button class="wa-btn secondary compact" type="submit">Enviar dashboard</button></form></td>
               {% endif %}
             </tr>
             {% endwith %}
@@ -109,7 +109,7 @@
           <div class="wi-mobile-row"><span class="wi-mobile-label">CNPJ</span><span class="wi-mobile-value">{{ linha.filial.cnpj }}</span></div>
           <div class="wi-mobile-row"><span class="wi-mobile-label">Instância</span><span class="wi-mobile-value wi-code">{% if item %}{{ item.instancia }}{% else %}—{% endif %}</span></div>
           <div class="wi-mobile-row"><span class="wi-mobile-label">Número</span><span class="wi-mobile-value">{% if item %}{{ item.numero_conectado|default:'—' }}{% else %}—{% endif %}</span></div>
-          {% if item %}<form class="mt-3" method="post" action="{% url 'core:admin_whatsapp_instancia_status' item.pk %}">{% csrf_token %}<button class="wa-btn secondary" style="width:100%" type="submit">Atualizar status</button></form>{% endif %}
+          <div class="wi-actions mt-3">{% if item %}<form method="post" action="{% url 'core:admin_whatsapp_instancia_status' item.pk %}">{% csrf_token %}<button class="wa-btn secondary" type="submit">Atualizar status</button></form>{% endif %}<form method="post" action="{% url 'core:admin_whatsapp_preparar_fila_filial' linha.filial.pk %}">{% csrf_token %}<button class="wa-btn secondary" type="submit">Enviar dashboard desta filial</button></form></div>
         </article>
         {% endwith %}
       {% empty %}<div class="wi-empty">Nenhuma instância de filial encontrada.</div>{% endfor %}

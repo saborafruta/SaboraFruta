@@ -192,7 +192,9 @@ def _inicio_janela(configuracao, data):
     )
 
 
-def diagnosticar_resumos_diarios(data_referencia=None):
+def diagnosticar_resumos_diarios(
+    data_referencia=None, *, tenant_alias=None, filial_cnpj=None,
+):
     """Resume por que uma preparação manual não criou novos envios."""
     hoje = timezone.localdate()
     data_referencia = data_referencia or (hoje - datetime.timedelta(days=1))
@@ -203,11 +205,17 @@ def diagnosticar_resumos_diarios(data_referencia=None):
     }
 
     def _contar_banco():
+        alias = get_current_database_alias()
+        if tenant_alias and alias != tenant_alias:
+            return 0
         parametros = ParametrosSistema.objects.filter(
             resumo_whatsapp_ativo=True,
             filial__ativo=True,
             filial__empresa__ativo=True,
-        ).annotate(
+        )
+        if filial_cnpj:
+            parametros = parametros.filter(filial__cnpj=filial_cnpj)
+        parametros = parametros.annotate(
             destinatarios_ativos=Count(
                 'destinatarios_resumo_whatsapp',
                 filter=Q(
@@ -228,6 +236,8 @@ def diagnosticar_resumos_diarios(data_referencia=None):
         for item in (
             EnvioResumoWhatsApp.objects.using('default')
             .filter(data_referencia=data_referencia)
+            .filter(**({'tenant_alias': tenant_alias} if tenant_alias else {}))
+            .filter(**({'filial_cnpj': filial_cnpj} if filial_cnpj else {}))
             .values('status')
             .annotate(total=Count('id'))
         )
@@ -236,7 +246,9 @@ def diagnosticar_resumos_diarios(data_referencia=None):
     return estado
 
 
-def preparar_resumos_diarios(data_referencia=None, disparo_manual=False):
+def preparar_resumos_diarios(
+    data_referencia=None, disparo_manual=False, *, tenant_alias=None, filial_cnpj=None,
+):
     """Cria a fila idempotente, sem fazer qualquer disparo em massa."""
     configuracao = ConfiguracaoWhatsAppCentral.carregar()
     if not configuracao.resumos_ativos and not disparo_manual:
@@ -255,6 +267,8 @@ def preparar_resumos_diarios(data_referencia=None, disparo_manual=False):
         if estado['total'] >= configuracao.limite_diario:
             return 0
         alias = get_current_database_alias()
+        if tenant_alias and alias != tenant_alias:
+            return 0
         criados = 0
         parametros_qs = (
             ParametrosSistema.objects.filter(
@@ -266,6 +280,8 @@ def preparar_resumos_diarios(data_referencia=None, disparo_manual=False):
             .prefetch_related('destinatarios_resumo_whatsapp')
             .order_by('filial__empresa_id', 'filial_id')
         )
+        if filial_cnpj:
+            parametros_qs = parametros_qs.filter(filial__cnpj=filial_cnpj)
         for parametros in parametros_qs:
             destinatarios = [
                 item for item in parametros.destinatarios_resumo_whatsapp.all()
