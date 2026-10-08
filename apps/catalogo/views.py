@@ -91,6 +91,22 @@ class PedidosCatalogoView(PermissaoRequiredMixin, View):
         })
 
 
+class PedidoImpressaoView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'cadastros'
+    permissao_acao = 'ver'
+
+    def get(self, request, pk):
+        pedido = get_object_or_404(
+            PedidoCatalogo.objects.for_filial(request.filial_ativa)
+            .select_related('cliente', 'filial', 'filial__empresa')
+            .prefetch_related('itens'),
+            pk=pk,
+        )
+        resposta = render(request, 'catalogo/pedido_impressao.html', {'pedido': pedido})
+        resposta['Cache-Control'] = 'private, no-store'
+        return resposta
+
+
 @method_decorator(require_POST, name='dispatch')
 class CatalogoLinkView(PermissaoRequiredMixin, View):
     permissao_modulo = 'cadastros'

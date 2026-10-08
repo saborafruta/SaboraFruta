@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Separação {{ pedido.numero }}</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#eef2f7;color:#111827;font-family:Arial,sans-serif}.sheet{width:min(820px,calc(100% - 24px));margin:18px auto;background:#fff;padding:28px;border:1px solid #cbd5e1;border-radius:12px}.screen-actions{display:flex;justify-content:flex-end;gap:8px;margin-bottom:18px}.button{border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#111827;padding:9px 13px;font-weight:700;text-decoration:none;cursor:pointer}.button.primary{border-color:#2563eb;background:#2563eb;color:#fff}.header{display:flex;justify-content:space-between;gap:20px;padding-bottom:18px;border-bottom:2px solid #111827}.header h1{margin:0 0 5px;font-size:24px}.muted{color:#475569}.order-number{text-align:right;font-size:20px;font-weight:800}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:18px 0}.box{border:1px solid #cbd5e1;border-radius:8px;padding:12px}.box h2{margin:0 0 7px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#475569}.box p{margin:3px 0}.items{width:100%;border-collapse:collapse;margin-top:18px}.items th,.items td{padding:11px 8px;border-bottom:1px solid #cbd5e1;text-align:left}.items th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#475569}.check{width:34px}.check span{display:block;width:18px;height:18px;border:2px solid #111827}.qty{width:72px;font-size:18px;font-weight:800}.total{text-align:right;margin-top:15px;font-size:18px;font-weight:800}.notes{margin-top:18px;padding:13px;border:1px solid #94a3b8;border-radius:8px;white-space:pre-wrap}.footer{margin-top:30px;display:grid;grid-template-columns:1fr 1fr;gap:34px}.signature{padding-top:25px;border-top:1px solid #111827;text-align:center;font-size:12px}.generated{margin-top:22px;text-align:center;color:#64748b;font-size:11px}
+    @media(max-width:620px){.sheet{width:100%;margin:0;padding:16px;border:0;border-radius:0}.header{display:block}.order-number{text-align:left;margin-top:12px}.grid{grid-template-columns:1fr}.screen-actions{position:sticky;top:0;padding:8px 0;background:#fff}.items th,.items td{padding:9px 5px}}
+    @media print{@page{size:A4;margin:12mm}body{background:#fff}.sheet{width:100%;margin:0;padding:0;border:0;border-radius:0}.screen-actions{display:none}.items tr{break-inside:avoid}.box,.notes{break-inside:avoid}.generated{color:#333}}
+  </style>
+</head>
+<body>
+  <main class="sheet">
+    <div class="screen-actions"><button class="button primary" type="button" onclick="window.print()">Imprimir</button><button class="button" type="button" onclick="window.close()">Fechar</button></div>
+    <header class="header"><div><h1>Folha de separação</h1><div class="muted">{{ pedido.filial.nome_fantasia|default:pedido.filial.razao_social }}</div></div><div class="order-number">{{ pedido.numero }}<div class="muted" style="font-size:12px;font-weight:400">{{ pedido.created_at|date:"d/m/Y H:i" }}</div></div></header>
+    <section class="grid">
+      <div class="box"><h2>Cliente</h2><p><strong>{{ pedido.nome_cliente }}</strong></p><p>{{ pedido.telefone }}</p></div>
+      <div class="box"><h2>Pedido</h2><p>{{ pedido.get_modalidade_display }} · {{ pedido.get_forma_pagamento_display }}</p>{% if pedido.entrega_em %}<p>Entrega: {{ pedido.entrega_em|date:"d/m/Y H:i" }}</p>{% endif %}<p>Status: {{ pedido.get_status_display }}</p></div>
+      {% if pedido.modalidade == 'entrega' %}<div class="box" style="grid-column:1/-1"><h2>Endereço de entrega</h2><p>{{ pedido.endereco_entrega.logradouro|default:"Endereço não informado" }}{% if pedido.endereco_entrega.numero %}, {{ pedido.endereco_entrega.numero }}{% endif %}{% if pedido.endereco_entrega.complemento %} · {{ pedido.endereco_entrega.complemento }}{% endif %}</p><p>{{ pedido.endereco_entrega.bairro }}{% if pedido.endereco_entrega.cidade %} · {{ pedido.endereco_entrega.cidade }}/{{ pedido.endereco_entrega.uf }}{% endif %}{% if pedido.endereco_entrega.cep %} · CEP {{ pedido.endereco_entrega.cep }}{% endif %}</p></div>{% endif %}
+    </section>
+    <table class="items"><thead><tr><th class="check">OK</th><th class="qty">Qtd.</th><th>Produto</th><th style="text-align:right">Total</th></tr></thead><tbody>{% for item in pedido.itens.all %}<tr><td class="check"><span></span></td><td class="qty">{{ item.quantidade }}×</td><td>{{ item.descricao }}</td><td style="text-align:right">R$ {{ item.valor_total|floatformat:2 }}</td></tr>{% endfor %}</tbody></table>
+    <div class="total">Total do pedido: R$ {{ pedido.total|floatformat:2 }}</div>
+    {% if pedido.observacao %}<section class="notes"><strong>Observações</strong><br>{{ pedido.observacao }}</section>{% endif %}
+    {% if pedido.frete_a_combinar %}<section class="notes"><strong>Atenção:</strong> frete a combinar antes da cobrança.</section>{% endif %}
+    <footer class="footer"><div class="signature">Separado por</div><div class="signature">Conferido por</div></footer>
+    <div class="generated">Impresso em {% now "d/m/Y H:i" %}</div>
+  </main>
+  <script>window.addEventListener('load',()=>window.print())</script>
+</body>
+</html>

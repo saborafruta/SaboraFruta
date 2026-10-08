@@ -163,6 +163,43 @@ class CatalogoTests(TestCase):
         trecho_pedidos = conteudo[conteudo.find('<div class="orders-page">'):]
         self.assertIn(f'pedido_catalogo={pedido.pk}', trecho_pedidos)
         self.assertIn('Abrir no PDV', trecho_pedidos)
+        self.assertIn(reverse('catalogo:pedido-imprimir', args=[pedido.pk]), trecho_pedidos)
+
+    def test_folha_de_separacao_abre_pronta_para_imprimir(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='F', razao_social='Cliente Impressão',
+            celular='5584999998111',
+        )
+        pedido = PedidoCatalogo.objects.create(
+            filial=self.filial, numero='CAT-IMPRESSAO', cliente=cliente,
+            nome_cliente=cliente.nome_display, telefone=cliente.celular,
+            modalidade='entrega', forma_pagamento='pix',
+            endereco_entrega={
+                'logradouro': 'Rua da Separação', 'numero': '42',
+                'bairro': 'Centro', 'cidade': 'Fortaleza', 'uf': 'CE',
+            },
+            subtotal=Decimal('40.00'), total=Decimal('40.00'),
+            status=PedidoCatalogo.Status.APROVADO,
+            observacao='Embalar separado.',
+        )
+        ItemPedidoCatalogo.objects.create(
+            pedido=pedido, produto=self.produto, descricao=self.produto.descricao,
+            quantidade=2, valor_unitario=Decimal('20.00'), valor_total=Decimal('40.00'),
+        )
+        self.client.force_login(self.usuario)
+        session = self.client.session
+        session['filial_ativa_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.get(reverse('catalogo:pedido-imprimir', args=[pedido.pk]))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Folha de separação')
+        self.assertContains(resposta, 'CAT-IMPRESSAO')
+        self.assertContains(resposta, 'Rua da Separação')
+        self.assertContains(resposta, 'Embalar separado.')
+        self.assertContains(resposta, 'window.print()')
+        self.assertEqual(resposta['Cache-Control'], 'private, no-store')
 
     def test_checkout_do_catalogo_carrega_cliente_itens_e_frete(self):
         cliente = Cliente.objects.create(
