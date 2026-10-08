@@ -109,6 +109,8 @@ class ResumoDiarioWhatsAppTests(TestCase):
 
     @patch('apps.whatsapp_agent.resumo_service._metricas_filial')
     def test_prepara_fila_manual_de_uma_unica_filial(self, metricas_mock):
+        self.parametros.resumo_whatsapp_ativo = False
+        self.parametros.save(update_fields=['resumo_whatsapp_ativo'])
         outra_filial = Filial.objects.create(
             empresa=self.filial.empresa,
             razao_social='Outra Filial',
@@ -132,6 +134,7 @@ class ResumoDiarioWhatsAppTests(TestCase):
             disparo_manual=True,
             tenant_alias='default',
             filial_cnpj=self.filial.cnpj,
+            exigir_habilitacao=False,
         )
 
         self.assertEqual(criados, 2)
@@ -142,6 +145,7 @@ class ResumoDiarioWhatsAppTests(TestCase):
         diagnostico = diagnosticar_resumos_diarios(
             tenant_alias='default',
             filial_cnpj=self.filial.cnpj,
+            exigir_habilitacao=False,
         )
         self.assertEqual(diagnostico['filiais_ativas'], 1)
         self.assertEqual(diagnostico['destinatarios_ativos'], 2)

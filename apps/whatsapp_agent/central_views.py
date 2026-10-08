@@ -292,6 +292,7 @@ def preparar_fila_filial(request, filial_id):
         disparo_manual=True,
         tenant_alias=tenant_alias,
         filial_cnpj=filial.cnpj,
+        exigir_habilitacao=False,
     )
     nome_filial = filial.nome_fantasia or filial.razao_social
     if criados:
@@ -307,13 +308,13 @@ def preparar_fila_filial(request, filial_id):
         diagnostico = diagnosticar_resumos_diarios(
             tenant_alias=tenant_alias,
             filial_cnpj=filial.cnpj,
+            exigir_habilitacao=False,
         )
         if not banco and tenant_alias == 'default':
             detalhe = f'{nome_filial} ainda não possui um banco ativo associado.'
         elif not diagnostico['filiais_ativas']:
             detalhe = (
-                f'{nome_filial} não está habilitada para o resumo diário. Ative a opção '
-                'nos Parâmetros do Sistema dessa filial.'
+                f'Não foi possível localizar {nome_filial} no banco operacional.'
             )
         elif not diagnostico['destinatarios_ativos']:
             detalhe = f'{nome_filial} não possui destinatários ativos cadastrados.'

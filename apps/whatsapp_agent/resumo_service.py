@@ -194,6 +194,7 @@ def _inicio_janela(configuracao, data):
 
 def diagnosticar_resumos_diarios(
     data_referencia=None, *, tenant_alias=None, filial_cnpj=None,
+    exigir_habilitacao=True,
 ):
     """Resume por que uma preparação manual não criou novos envios."""
     hoje = timezone.localdate()
@@ -209,10 +210,11 @@ def diagnosticar_resumos_diarios(
         if tenant_alias and alias != tenant_alias:
             return 0
         parametros = ParametrosSistema.objects.filter(
-            resumo_whatsapp_ativo=True,
             filial__ativo=True,
             filial__empresa__ativo=True,
         )
+        if exigir_habilitacao:
+            parametros = parametros.filter(resumo_whatsapp_ativo=True)
         if filial_cnpj:
             parametros = parametros.filter(filial__cnpj=filial_cnpj)
         parametros = parametros.annotate(
@@ -248,6 +250,7 @@ def diagnosticar_resumos_diarios(
 
 def preparar_resumos_diarios(
     data_referencia=None, disparo_manual=False, *, tenant_alias=None, filial_cnpj=None,
+    exigir_habilitacao=True,
 ):
     """Cria a fila idempotente, sem fazer qualquer disparo em massa."""
     configuracao = ConfiguracaoWhatsAppCentral.carregar()
@@ -272,7 +275,6 @@ def preparar_resumos_diarios(
         criados = 0
         parametros_qs = (
             ParametrosSistema.objects.filter(
-                resumo_whatsapp_ativo=True,
                 filial__ativo=True,
                 filial__empresa__ativo=True,
             )
@@ -280,6 +282,8 @@ def preparar_resumos_diarios(
             .prefetch_related('destinatarios_resumo_whatsapp')
             .order_by('filial__empresa_id', 'filial_id')
         )
+        if exigir_habilitacao:
+            parametros_qs = parametros_qs.filter(resumo_whatsapp_ativo=True)
         if filial_cnpj:
             parametros_qs = parametros_qs.filter(filial__cnpj=filial_cnpj)
         for parametros in parametros_qs:

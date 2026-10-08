@@ -179,10 +179,10 @@ class ParametrosSistema(TimestampedModel):
     informacoes_complementares_padrao = models.TextField(blank=True)
     resumo_whatsapp_ativo = models.BooleanField(
         default=False,
-        verbose_name='Receber resumo diário pelo WhatsApp',
+        verbose_name='Ativar envio automático do resumo diário',
         help_text=(
-            'Autoriza o iTED a enviar o desempenho do dia anterior aos destinatários '
-            'cadastrados nesta filial.'
+            'Inclui esta filial na rotina programada. O envio manual continua disponível '
+            'na Central de Instâncias mesmo com esta opção desativada.'
         ),
     )
     resumo_whatsapp_incluir_agenda = models.BooleanField(
