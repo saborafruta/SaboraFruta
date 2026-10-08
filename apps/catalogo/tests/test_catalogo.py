@@ -256,6 +256,7 @@ class CatalogoTests(TestCase):
         self.assertEqual(payload['nome'], 'Cliente Recorrente')
         self.assertEqual(payload['historico'][0]['numero'], 'CAT-HISTORICO')
         self.assertEqual(payload['historico'][0]['itens'][0]['id'], self.produto.pk)
+        self.assertEqual(payload['historico'][0]['itens'][0]['nome'], 'Café 500g')
 
     def test_historico_do_catalogo_inclui_vendas_finalizadas_no_pdv(self):
         cliente = Cliente.objects.create(
@@ -283,8 +284,45 @@ class CatalogoTests(TestCase):
         self.assertTrue(payload['encontrado'])
         self.assertEqual(payload['historico'][0]['numero'], 'Venda #000027')
         self.assertEqual(payload['historico'][0]['itens'], [
-            {'id': self.produto.pk, 'quantidade': 2.0},
+            {'id': self.produto.pk, 'nome': 'Café 500g', 'quantidade': 2.0},
         ])
+
+    @patch('apps.catalogo.views_publico.enviar_resumo_whatsapp', return_value=(True, 'Enviado'))
+    def test_repetir_compra_cria_novo_pedido_com_preco_atual(self, _enviar):
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='F', razao_social='Cliente Recorrente',
+            celular='5584999993666',
+        )
+        venda = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=28, cliente=cliente,
+            usuario=self.usuario, data_venda=timezone.now(), status='finalizada',
+            valor_subtotal=Decimal('20.00'), valor_total=Decimal('20.00'),
+            valor_pago=Decimal('20.00'),
+        )
+        ItemVendaPDV.objects.create(
+            venda_pdv=venda, produto=self.produto, numero_item=1,
+            unidade_medida='UN', quantidade=Decimal('1'),
+            valor_unitario=Decimal('20.00'), valor_total=Decimal('20.00'),
+        )
+        self.produto.preco_venda = Decimal('25.00')
+        self.produto.save(update_fields=['preco_venda'])
+        request = self.factory.post('/pedir/catalogo-teste/', {
+            'nome': cliente.nome_display, 'telefone': cliente.celular,
+            'modalidade': 'retirada', 'forma_pagamento': 'pix',
+            'carrinho_json': json.dumps([{'id': self.produto.pk, 'quantidade': 2}]),
+        })
+        request.user = AnonymousUser()
+
+        with patch('apps.catalogo.views_publico.conversa_do_token', return_value=object()):
+            response = CatalogoPublicoView.as_view()(request, token=self.link.token)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(VendaPDV.objects.filter(cliente=cliente).count(), 1)
+        pedido = PedidoCatalogo.objects.get(cliente=cliente)
+        self.assertIsNone(pedido.venda_pdv_id)
+        self.assertEqual(pedido.subtotal, Decimal('50.00'))
+        self.assertEqual(pedido.total, Decimal('50.00'))
+        self.assertEqual(pedido.itens.get().valor_unitario, Decimal('25.00'))
 
     @patch('apps.catalogo.views_publico.enviar_resumo_whatsapp', return_value=(True, 'Enviado'))
     def test_checkout_recalcula_valores_e_cria_cliente(self, _enviar):

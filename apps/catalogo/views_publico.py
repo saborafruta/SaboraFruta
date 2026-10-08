@@ -53,7 +53,7 @@ def _historico_compras(cliente, filial):
     vendas_pdv = (
         VendaPDV.objects.for_filial(filial).filter(
             cliente=cliente, status='finalizada', bonificacao=False,
-        ).prefetch_related('itens').order_by('-data_venda')[:6]
+        ).prefetch_related('itens__produto').order_by('-data_venda')[:6]
     )
     for venda in vendas_pdv:
         registros.append({
@@ -61,7 +61,11 @@ def _historico_compras(cliente, filial):
             'numero': f'Venda #{venda.numero_venda:06d}',
             'total': venda.valor_total,
             'itens': [
-                {'id': item.produto_id, 'quantidade': float(item.quantidade)}
+                {
+                    'id': item.produto_id,
+                    'nome': item.produto.descricao,
+                    'quantidade': float(item.quantidade),
+                }
                 for item in venda.itens.all()
                 if item.quantidade > 0
             ],
@@ -86,7 +90,11 @@ def _historico_compras(cliente, filial):
             'numero': pedido.numero,
             'total': pedido.total,
             'itens': [
-                {'id': item.produto_id, 'quantidade': item.quantidade}
+                {
+                    'id': item.produto_id,
+                    'nome': item.descricao,
+                    'quantidade': item.quantidade,
+                }
                 for item in pedido.itens.all()
             ],
         })
