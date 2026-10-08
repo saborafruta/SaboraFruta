@@ -3953,6 +3953,7 @@
 {{ request.user.menu_favoritos|default_if_none:''|json_script:"sidebar-favorites-data" }}
 {% favoritos_menu_completo as favoritos_completos %}
 {{ favoritos_completos|json_script:"sidebar-favorites-records" }}
+{{ pedido_catalogo_inicial|json_script:"pdv-pedido-catalogo-inicial" }}
 <script src="{% static 'core/js/sidebar_favorites.js' %}?v=20260917-4"></script>
 <script src="{% static 'core/js/sidebar_search.js' %}?v=20260917-3"></script>
 <script src="{% static 'js/pdv_local_store.js' %}?v=20260918-5"></script>
@@ -3964,6 +3965,7 @@ function pdv() {
     caixasDisponiveis: {{ caixas_json|safe }},
     linhas: {{ linhas_json|safe }},
     usuarioEhAdmin: {{ usuario_e_admin|yesno:"true,false" }},
+    pedidoCatalogoInicial: null,
     dataVendaRetroativa: '',
     vendaEdicaoOrigemId: null, vendaEdicaoOrigemNumero: null,
     get hojeISO() { return new Date().toISOString().slice(0,10); },
@@ -3990,7 +3992,7 @@ function pdv() {
       total: 0, valor_pago: 0, restante: 0,
       delivery: false, endereco_entrega: {}, fora_estabelecimento: false,
       viagem_id: null, viagem_numero: null,
-      observacao: '', comanda_id_origem: null,
+      observacao: '', comanda_id_origem: null, pedido_catalogo_id: null,
     },
 
     produtos: [], topProdutos: [], buscaQuery: '', buscandoProdutos: false, carregandoMaisProdutos: false, produtoFoco: -1,
@@ -4248,8 +4250,11 @@ function pdv() {
       await this.renovarProtecaoOffline();
       const restaurado = await this.restaurarRascunhoLocal();
       await this.atualizarListasTopo();
+      const pedidoCatalogoCarregado = await this.aplicarPedidoCatalogoInicial();
       const rotaDelivery = new URLSearchParams(window.location.search).get('route_delivery') === '1';
-      if (rotaDelivery) {
+      if (pedidoCatalogoCarregado) {
+        // O pedido separado tem prioridade sobre um rascunho local antigo.
+      } else if (rotaDelivery) {
         this.novaVenda();
         await this.aplicarClienteInicial();
         this.modo='venda';
@@ -4674,6 +4679,53 @@ function pdv() {
       } catch (e) {
         this.toast_('Erro ao carregar itens da comanda.', 'erro');
       }
+    },
+
+    async aplicarPedidoCatalogoInicial() {
+      const pedidoNode = typeof document !== 'undefined'
+        ? document.getElementById('pdv-pedido-catalogo-inicial')
+        : null;
+      const pedido = this.pedidoCatalogoInicial || (pedidoNode ? JSON.parse(pedidoNode.textContent) : null);
+      if (!pedido) return false;
+      this.novaVenda();
+      if (pedido.cliente) await this.selecionarCliente(pedido.cliente);
+      for (const item of pedido.itens || []) {
+        this.venda.itens.push({
+          _id: Date.now()+Math.random(), produto_id:item.produto_id||item.id,
+          descricao:item.descricao, codigo_barras:item.codigo_barras||'',
+          icone:item.icone||'📦', cor:item.cor||null, linha:item.linha||null,
+          tem_foto:!!item.tem_foto, foto_thumb_url:item.foto_thumb_url||'',
+          foto_url:item.foto_url||'', foto_update_url:item.foto_update_url||'',
+          estoque_disponivel:Number(item.estoque_disponivel||0),
+          custo_atual:Number(item.custo_atual||0), tipo_produto:item.tipo_produto||'',
+          fracionavel:!!item.fracionavel, quantidade_step:item.quantidade_step||1,
+          quantidade_decimais:item.quantidade_decimais||0,
+          quantidade:Number(item.quantidade||1),
+          valor_unitario:Number(item.valor_unitario??item.preco??0),
+          _precoOriginal:Number(item.valor_unitario??item.preco??0), _precoManual:false,
+          _precoTabela:Number(item.valor_unitario??item.preco??0),
+          preco_origem:item.preco_origem||'Preço do catálogo',
+          preco_origem_tipo:item.preco_origem_tipo||'normal',
+          preco_origem_detalhe:item.preco_origem_detalhe||'Pedido do catálogo',
+          oferta_tipo:item.preco_origem_tipo||'normal', tipo_venda:'unitario',
+          desconto_percentual:0, desconto_valor:0,
+          valor_total:Number(item.valor_total??(Number(item.quantidade||1)*Number(item.preco||0))),
+          obs:'', _showObs:false,
+        });
+      }
+      this.venda.pedido_catalogo_id=pedido.id;
+      this.venda.delivery=!!pedido.delivery;
+      this.venda.endereco_entrega=pedido.endereco_entrega||{};
+      this.venda.acrescimo=Number(pedido.frete||0);
+      this.venda.observacao=pedido.observacao||'Pedido feito pelo WhatsApp.';
+      if (pedido.frete_a_combinar && !this.venda.observacao.includes('Frete a combinar')) {
+        this.venda.observacao=(this.venda.observacao+' Frete a combinar no caixa.').trim();
+      }
+      this.mobilePane='carrinho';
+      this.recalcularTotais();
+      window.history.replaceState({},'',window.location.pathname);
+      this.toast_('Pedido '+pedido.numero+' carregado no PDV. Confira o pagamento e finalize.','ok');
+      return true;
     },
 
     // Cliente vindo de ?cliente=<id> (ex.: botao "Nova Venda" do mapa).
@@ -5733,6 +5785,7 @@ function pdv() {
           credito_valor: this.creditoAplicado || 0,
           data_venda: (this.usuarioEhAdmin && this.dataVendaRetroativa) ? this.dataVendaRetroativa : null,
           observacao: this.venda.observacao || '',
+          pedido_catalogo_id: this.venda.pedido_catalogo_id || null,
           venda_edicao_origem_id: this.vendaEdicaoOrigemId || null,
           comanda_id: this.venda.comanda_id_origem || null,
         };
@@ -5794,15 +5847,16 @@ function pdv() {
           credito_valor: this.creditoAplicado || 0,
           data_venda: (this.usuarioEhAdmin && this.dataVendaRetroativa) ? this.dataVendaRetroativa : null,
           observacao: this.venda.observacao || '',
+          pedido_catalogo_id: this.venda.pedido_catalogo_id || null,
           venda_edicao_origem_id: this.vendaEdicaoOrigemId || null,
           comanda_id: this.venda.comanda_id_origem || null,
         };
         if (!navigator.onLine) {
-          await this.enfileirarVendaOffline(payload, '/pdv/api/venda/finalizar/forcado/');
+          await this.enfileirarVendaOffline(payload, this.venda.pedido_catalogo_id ? '/pdv/api/venda/finalizar/' : '/pdv/api/venda/finalizar/forcado/');
           return;
         }
         // Endpoint dedicado que sempre ignora verificação de estoque
-        const r = await fetch('/pdv/api/venda/finalizar/forcado/', {
+        const r = await fetch(this.venda.pedido_catalogo_id ? '/pdv/api/venda/finalizar/' : '/pdv/api/venda/finalizar/forcado/', {
           method: 'POST',
           headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf(), 'Idempotency-Key':this.venda.local_id},
           body: JSON.stringify(payload),
@@ -6852,7 +6906,7 @@ ${pgtoHtml ? `<hr class="sep">${pgtoHtml}` : ''}
     novaVenda() {
       this._persistenciaSuspensa=true;
       this.venda={id:null,numero:null,local_id:(this._localStore?.newSaleId?.() || window.PDVLocalStore?.generateId?.('pdv') || ('pdv'+Date.now()+Math.random().toString(16).slice(2))),cliente:{id:null,nome:'Consumidor Final',cpf_cnpj:''},
-        itens:[],pagamentos:[],subtotal:0,desconto:0,acrescimo:0,total:0,valor_pago:0,restante:0,delivery:false,endereco_entrega:{},fora_estabelecimento:false,viagem_id:null,viagem_numero:null,observacao:''};
+        itens:[],pagamentos:[],subtotal:0,desconto:0,acrescimo:0,total:0,valor_pago:0,restante:0,delivery:false,endereco_entrega:{},fora_estabelecimento:false,viagem_id:null,viagem_numero:null,observacao:'',comanda_id_origem:null,pedido_catalogo_id:null};
       this.creditoDisponivel=0; this.creditoAplicado=0; this.cashbackDisponivel=0;
       this.buscaQuery=''; this.produtos=[]; this.formaPgtoSelecionada=null;
       this.dataVendaRetroativa='';

@@ -347,12 +347,14 @@ def pdv_home(request):
         .values('id', 'nome', 'icone', 'cor_identificacao')
     )
     config_etiqueta, _ = configuracao_etiqueta_filial(request.filial_ativa)
+    pedido_catalogo_inicial = _pedido_catalogo_para_checkout(request)
     return render(request, "pdv/home.html", {
         "title": "PDV",
         "caixas_json": json.dumps(caixas),
         "linhas_json": json.dumps(linhas),
         "usuario_e_admin": _usuario_e_admin(request),
         "cliente_inicial_json": json.dumps(_cliente_inicial(request)),
+        "pedido_catalogo_inicial": pedido_catalogo_inicial,
         "etiqueta_venda_disponivel": bool(config_etiqueta and config_etiqueta.ativa),
     })
 
@@ -462,8 +464,11 @@ def _pedido_catalogo_para_checkout(request):
             quantidade=Decimal(item_pedido.quantidade),
         )
         item.update({
+            'produto_id': item_pedido.produto_id,
             'preco': float(item_pedido.valor_unitario),
+            'valor_unitario': float(item_pedido.valor_unitario),
             'quantidade': item_pedido.quantidade,
+            'valor_total': float(item_pedido.valor_total),
             'pode_vender': True,
             'bloqueios': [],
         })

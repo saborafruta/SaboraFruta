@@ -5,8 +5,9 @@ from unittest.mock import patch
 from django.test import RequestFactory, TestCase
 from django.contrib.auth.models import AnonymousUser
 from django.template.loader import get_template
+from django.urls import resolve, reverse
 
-from apps.core.models import Empresa, Filial
+from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.cadastros.models import Cliente
 from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
 from apps.whatsapp_agent.agent import processar_mensagem
@@ -16,7 +17,7 @@ from apps.catalogo.models import (
     CatalogoConfiguracao, CatalogoLinkPublico, ItemPedidoCatalogo, PedidoCatalogo,
 )
 from apps.catalogo.views import CatalogoPainelView, PedidoAcaoView, PedidosCatalogoView
-from apps.catalogo.views_publico import CatalogoPublicoView
+from apps.catalogo.views_publico import CatalogoPublicoView, ClienteCatalogoView
 from apps.pdv.views.pdv import _pedido_catalogo_para_checkout
 
 
@@ -31,6 +32,13 @@ class CatalogoTests(TestCase):
         cls.filial = Filial.objects.create(
             empresa=cls.empresa, razao_social='Mercado Catálogo', nome_fantasia='Mercado',
             cnpj='42345678000192', uf='CE',
+        )
+        cls.perfil = PerfilAcesso.objects.create(
+            empresa=cls.empresa, nome='Administrador catálogo', is_admin=True,
+        )
+        cls.usuario = Usuario.objects.create_user(
+            email='catalogo@teste.local', nome='Usuário Catálogo', password='teste1234',
+            empresa=cls.empresa, filial=cls.filial, perfil=cls.perfil,
         )
         cls.unidade = UnidadeMedida.objects.create(
             empresa=cls.empresa, sigla='UN', descricao='Unidade',
@@ -141,6 +149,16 @@ class CatalogoTests(TestCase):
         self.assertEqual(pedido.status, PedidoCatalogo.Status.PENDENTE_CAIXA)
         self.assertEqual(response.url, '/catalogo/pedidos/')
 
+        painel_request = self.factory.get('/catalogo/pedidos/')
+        painel_request.filial_ativa = self.filial
+        painel_request.user = self.usuario
+        painel_request.resolver_match = resolve('/catalogo/pedidos/')
+        painel = PedidosCatalogoView().get(painel_request)
+        conteudo = painel.content.decode()
+        trecho_pedidos = conteudo[conteudo.find('<div class="orders-page">'):]
+        self.assertIn(f'pedido_catalogo={pedido.pk}', trecho_pedidos)
+        self.assertIn('Abrir no PDV', trecho_pedidos)
+
     def test_checkout_do_catalogo_carrega_cliente_itens_e_frete(self):
         cliente = Cliente.objects.create(
             filial=self.filial, tipo_pessoa='F', razao_social='Cliente Checkout',
@@ -165,8 +183,37 @@ class CatalogoTests(TestCase):
         self.assertEqual(checkout['id'], pedido.pk)
         self.assertEqual(checkout['cliente']['id'], cliente.pk)
         self.assertEqual(checkout['itens'][0]['quantidade'], 2)
+        self.assertEqual(checkout['itens'][0]['produto_id'], self.produto.pk)
         self.assertEqual(checkout['frete'], 8.0)
         self.assertTrue(checkout['delivery'])
+
+    def test_cliente_localizado_recebe_historico_de_compras(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='F', razao_social='Cliente Recorrente',
+            celular='5584999993333',
+        )
+        pedido = PedidoCatalogo.objects.create(
+            filial=self.filial, numero='CAT-HISTORICO', cliente=cliente,
+            nome_cliente=cliente.nome_display, telefone=cliente.celular,
+            modalidade='retirada', forma_pagamento='pix',
+            subtotal=Decimal('20.00'), total=Decimal('20.00'),
+            status=PedidoCatalogo.Status.PAGO,
+        )
+        ItemPedidoCatalogo.objects.create(
+            pedido=pedido, produto=self.produto, descricao=self.produto.descricao,
+            quantidade=1, valor_unitario=Decimal('20.00'), valor_total=Decimal('20.00'),
+        )
+        request = self.factory.get(
+            '/pedir/catalogo-teste/cliente/', {'telefone': '84999993333'},
+        )
+
+        response = ClienteCatalogoView.as_view()(request, token=self.link.token)
+        payload = json.loads(response.content)
+
+        self.assertTrue(payload['encontrado'])
+        self.assertEqual(payload['nome'], 'Cliente Recorrente')
+        self.assertEqual(payload['historico'][0]['numero'], 'CAT-HISTORICO')
+        self.assertEqual(payload['historico'][0]['itens'][0]['id'], self.produto.pk)
 
     @patch('apps.catalogo.views_publico.enviar_resumo_whatsapp', return_value=(True, 'Enviado'))
     def test_checkout_recalcula_valores_e_cria_cliente(self, _enviar):
@@ -183,10 +230,34 @@ class CatalogoTests(TestCase):
             'carrinho_json': json.dumps([{'id': self.produto.pk, 'quantidade': 2}]),
         })
         request.user = AnonymousUser()
-        response = CatalogoPublicoView.as_view()(request, token=self.link.token)
+        with patch('apps.catalogo.views_publico.conversa_do_token', return_value=object()):
+            response = CatalogoPublicoView.as_view()(request, token=self.link.token)
         self.assertEqual(response.status_code, 200)
         pedido = PedidoCatalogo.objects.get()
         self.assertEqual(pedido.subtotal, Decimal('40.00'))
         self.assertEqual(pedido.valor_frete, Decimal('7.00'))
         self.assertEqual(pedido.total, Decimal('47.00'))
         self.assertEqual(pedido.itens.get().quantidade, 2)
+
+    @patch('apps.catalogo.views_publico.enviar_resumo_whatsapp', return_value=(True, 'Enviado'))
+    def test_pix_ignora_troco_e_origem_whatsapp_fica_na_observacao(self, _enviar):
+        CatalogoConfiguracao.objects.create(filial=self.filial)
+        request = self.factory.post('/pedir/catalogo-teste/', {
+            'nome': 'Cliente Pix', 'telefone': '84999994444',
+            'modalidade': 'retirada', 'forma_pagamento': 'pix',
+            'troco_para': '100,00', 'origem_whatsapp': 'token-valido',
+            'observacao': 'Entregar bem embalado.',
+            'carrinho_json': json.dumps([{'id': self.produto.pk, 'quantidade': 1}]),
+        })
+        request.user = AnonymousUser()
+
+        with patch('apps.catalogo.views_publico.conversa_do_token', return_value=object()):
+            response = CatalogoPublicoView.as_view()(request, token=self.link.token)
+
+        pedido = PedidoCatalogo.objects.get(nome_cliente='Cliente Pix')
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(pedido.troco_para)
+        self.assertEqual(
+            pedido.observacao,
+            'Pedido feito pelo WhatsApp. Entregar bem embalado.',
+        )

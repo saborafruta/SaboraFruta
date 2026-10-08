@@ -45,6 +45,37 @@ def _produtos(filial):
     )
 
 
+def _ultimos_pedidos(cliente, filial):
+    if not cliente:
+        return []
+    return list(
+        PedidoCatalogo.objects.filter(
+            filial=filial,
+            cliente=cliente,
+            status__in=[
+                PedidoCatalogo.Status.PAGO,
+                PedidoCatalogo.Status.SAIU_ENTREGA,
+                PedidoCatalogo.Status.ENTREGUE,
+            ],
+        ).prefetch_related('itens').order_by('-created_at')[:3]
+    )
+
+
+def _historico_json(pedidos):
+    return [
+        {
+            'numero': pedido.numero,
+            'data': timezone.localtime(pedido.created_at).strftime('%d/%m/%Y'),
+            'total': float(pedido.total),
+            'itens': [
+                {'id': item.produto_id, 'quantidade': item.quantidade}
+                for item in pedido.itens.all()
+            ],
+        }
+        for pedido in pedidos
+    ]
+
+
 def _contexto(link, *, dados=None, erros=None, pedido=None, aviso=''):
     config, _ = CatalogoConfiguracao.objects.get_or_create(filial=link.filial)
     produtos = _produtos(link.filial)
@@ -93,26 +124,12 @@ class _CatalogoPublicoBase(View):
                     'complemento': cliente.complemento, 'bairro': cliente.bairro,
                     'cidade': cliente.cidade, 'uf': cliente.uf, 'cep': cliente.cep,
                 })
-                ultimos = list(
-                    PedidoCatalogo.objects.filter(
-                        filial=link.filial, cliente=cliente,
-                        status__in=[PedidoCatalogo.Status.ENTREGUE, PedidoCatalogo.Status.APROVADO, PedidoCatalogo.Status.EM_SEPARACAO],
-                    ).prefetch_related('itens').order_by('-created_at')[:3]
-                )
+                ultimos = _ultimos_pedidos(cliente, link.filial)
         contexto = _contexto(link, dados=dados)
         contexto.update({
             'rastreamento_whatsapp': request.GET.get('wa', ''),
             'ultimos_pedidos': ultimos,
-            'historico_json': [
-                {
-                    'numero': anterior.numero,
-                    'itens': [
-                        {'id': item.produto_id, 'quantidade': item.quantidade}
-                        for item in anterior.itens.all()
-                    ],
-                }
-                for anterior in ultimos
-            ],
+            'historico_json': _historico_json(ultimos),
         })
         return render(request, self.template_name, contexto)
 
@@ -193,17 +210,25 @@ class CatalogoPublicoView(_CatalogoPublicoBase):
                     raise ValueError
             except ValueError:
                 erros.append('Escolha uma data e um horário de entrega válidos.')
-        try:
-            troco = Decimal(dados['troco_para'].replace(',', '.')) if dados['troco_para'] else None
-        except InvalidOperation:
-            troco = None
-            erros.append('Informe um valor válido para o troco.')
+        troco = None
+        if dados['forma_pagamento'] == PedidoCatalogo.Pagamento.DINHEIRO:
+            try:
+                troco = Decimal(dados['troco_para'].replace(',', '.')) if dados['troco_para'] else None
+            except InvalidOperation:
+                erros.append('Informe um valor válido para o troco.')
         valor_frete, frete_a_combinar = config.calcular_frete(subtotal, dados['modalidade'])
         valor_frete = Decimal(valor_frete)
         if erros:
             contexto = _contexto(link, dados=dados, erros=erros)
             contexto['rastreamento_whatsapp'] = request.POST.get('origem_whatsapp', '')
             return render(request, self.template_name, contexto, status=400)
+        rastreamento_whatsapp = (request.POST.get('origem_whatsapp') or '').strip()
+        conversa = conversa_do_token(rastreamento_whatsapp)
+        observacao = dados['observacao'][:2000]
+        if conversa:
+            observacao = 'Pedido feito pelo WhatsApp.' + (
+                f' {observacao}' if observacao else ''
+            )
         with tenant_atomic():
             cliente = obter_ou_criar_cliente(link.filial, dados['nome'][:150], telefone, endereco)
             pedido = PedidoCatalogo.objects.create(
@@ -211,7 +236,7 @@ class CatalogoPublicoView(_CatalogoPublicoBase):
                 nome_cliente=dados['nome'][:150], telefone=telefone,
                 modalidade=dados['modalidade'], forma_pagamento=dados['forma_pagamento'],
                 troco_para=troco, endereco_entrega=endereco if dados['modalidade'] == 'entrega' else {},
-                entrega_em=entrega_em, observacao=dados['observacao'][:2000],
+                entrega_em=entrega_em, observacao=observacao,
                 subtotal=subtotal, valor_frete=valor_frete, frete_a_combinar=frete_a_combinar,
                 total=subtotal + valor_frete,
             )
@@ -222,7 +247,6 @@ class CatalogoPublicoView(_CatalogoPublicoBase):
                     quantidade=quantidade, valor_unitario=produto.preco_venda,
                     valor_total=Decimal(produto.preco_venda) * quantidade,
                 )
-        conversa = conversa_do_token((request.POST.get('origem_whatsapp') or '').strip())
         _ok, aviso = enviar_resumo_whatsapp(
             pedido, db_alias=get_current_database_alias(), conversa=conversa,
         )
@@ -240,11 +264,13 @@ class ClienteCatalogoView(View):
         cliente = localizar_cliente(link.filial, request.GET.get('telefone', ''))
         dados = {'encontrado': bool(cliente)}
         if cliente:
+            ultimos = _ultimos_pedidos(cliente, link.filial)
             dados.update({
                 'nome': cliente.nome_display, 'logradouro': cliente.endereco,
                 'numero': cliente.numero, 'complemento': cliente.complemento,
                 'bairro': cliente.bairro, 'cidade': cliente.cidade,
                 'uf': cliente.uf, 'cep': cliente.cep,
+                'historico': _historico_json(ultimos),
             })
         resposta = JsonResponse(dados)
         resposta['Cache-Control'] = 'no-store'
