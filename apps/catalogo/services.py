@@ -196,6 +196,8 @@ def enviar_atualizacao_whatsapp(pedido, *, db_alias):
     config = conversa.configuracao if conversa else _configuracao_whatsapp(pedido.filial, db_alias)
     if not config:
         return False
+    if pedido.status not in (config.pedido_status_notificados or []):
+        return False
     texto = config.mensagem_atualizacao_pedido
     valores = {
         'numero': pedido.numero,

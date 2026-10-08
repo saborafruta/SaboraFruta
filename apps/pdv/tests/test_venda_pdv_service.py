@@ -416,7 +416,7 @@ class VendaPDVServiceTests(TestCase):
             numero='CAT-PDV-TESTE',
             cliente=cliente,
             pedido_venda=pedido_venda,
-            status=PedidoCatalogo.Status.PENDENTE_CAIXA,
+            status=PedidoCatalogo.Status.PRONTO,
             nome_cliente=cliente.nome_display,
             telefone=cliente.celular,
             modalidade=PedidoCatalogo.Modalidade.RETIRADA,
@@ -463,7 +463,7 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(resposta.status_code, 200, resposta.content)
         pedido.refresh_from_db()
         pedido_venda.refresh_from_db()
-        self.assertEqual(pedido.status, PedidoCatalogo.Status.PAGO)
+        self.assertEqual(pedido.status, PedidoCatalogo.Status.PRONTO)
         self.assertIsNotNone(pedido.venda_pdv_id)
         self.assertEqual(pedido_venda.status, PedidoVenda.Status.CANCELADO)
         self.assertEqual(pedido.venda_pdv.observacao, 'Pedido feito pelo WhatsApp.')
@@ -472,6 +472,49 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(item_vendido.valor_unitario, Decimal('10.0000'))
         self.assertEqual(pedido.venda_pdv.valor_desconto, Decimal('3.00'))
         self.assertEqual(pedido.venda_pdv.valor_total, Decimal('17.00'))
+
+    def test_pagamento_antes_da_separacao_vai_para_fila_de_preparo(self):
+        produto = self.criar_produto('Produto pré-pago pelo WhatsApp')
+        self.abastecer(produto, '5')
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='F', razao_social='Cliente Pré-pago',
+            celular='5584999997888',
+        )
+        ClienteFilial.objects.update_or_create(
+            cliente=cliente, filial=self.filial, defaults={'ativo': True},
+        )
+        pedido = PedidoCatalogo.objects.create(
+            filial=self.filial, numero='CAT-PRE-PAGO-PDV', cliente=cliente,
+            status=PedidoCatalogo.Status.PENDENTE_CAIXA,
+            nome_cliente=cliente.nome_display, telefone=cliente.celular,
+            modalidade=PedidoCatalogo.Modalidade.RETIRADA,
+            forma_pagamento=PedidoCatalogo.Pagamento.PIX,
+            subtotal=Decimal('10.00'), total=Decimal('10.00'),
+        )
+        ItemPedidoCatalogo.objects.create(
+            pedido=pedido, produto=produto, descricao=produto.descricao,
+            quantidade=1, valor_unitario=Decimal('10.00'), valor_total=Decimal('10.00'),
+        )
+        self.client.force_login(self.usuario)
+        session = self.client.session
+        session['filial_ativa_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(
+            reverse('pdv:api_venda_finalizar'),
+            data=json.dumps({
+                'pedido_catalogo_id': pedido.pk,
+                'itens': [{'produto_id': produto.pk, 'quantidade': 1}],
+                'pagamentos': [{'forma_id': self.forma.pk, 'valor': '10.00'}],
+                'desconto': '0.00', 'acrescimo': '0.00',
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.status, PedidoCatalogo.Status.PAGO)
+        self.assertIsNotNone(pedido.venda_pdv_id)
 
     def test_finalizar_venda_respeita_preco_normal_escolhido_no_modal(self):
         produto = self.criar_produto("Produto com escolha")

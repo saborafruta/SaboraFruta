@@ -3,6 +3,18 @@ from django import forms
 from .models import ConfiguracaoWhatsApp, ConfiguracaoWhatsAppCentral
 
 
+STATUS_PEDIDO_NOTIFICACAO_CHOICES = (
+    ('aprovado', 'Pedido aprovado'),
+    ('em_separacao', 'Separação iniciada'),
+    ('pendente_caixa', 'Pendente no caixa'),
+    ('pago', 'Pagamento confirmado'),
+    ('pronto', 'Separação concluída / pronto'),
+    ('saiu_entrega', 'Saiu para entrega'),
+    ('entregue', 'Pedido entregue'),
+    ('cancelado', 'Pedido cancelado'),
+)
+
+
 class ConfiguracaoWhatsAppForm(forms.ModelForm):
     class Meta:
         model = ConfiguracaoWhatsApp
@@ -14,6 +26,14 @@ class ConfiguracaoWhatsAppForm(forms.ModelForm):
 
 
 class FluxoWhatsAppForm(forms.ModelForm):
+    pedido_status_notificados = forms.MultipleChoiceField(
+        label='Enviar atualização nestas etapas',
+        choices=STATUS_PEDIDO_NOTIFICACAO_CHOICES,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        help_text='Desmarque as etapas internas que não devem gerar mensagem no WhatsApp.',
+    )
+
     class Meta:
         model = ConfiguracaoWhatsApp
         fields = [
@@ -22,6 +42,7 @@ class FluxoWhatsAppForm(forms.ModelForm):
             'mensagem_encerramento', 'mensagem_opcao_invalida',
             'mensagem_confirmacao_agendamento', 'mensagem_lembrete_agendamento',
             'mensagem_resumo_pedido', 'mensagem_pedido_recebido', 'mensagem_atualizacao_pedido',
+            'pedido_status_notificados',
             'recuperacao_agendamento_ativa', 'recuperacao_atraso_minutos',
             'recuperacao_horario_inicio', 'recuperacao_horario_fim',
             'mensagem_recuperacao_agendamento',
@@ -67,6 +88,16 @@ class FluxoWhatsAppForm(forms.ModelForm):
             'recuperacao_horario_fim': forms.TimeInput(attrs={'type': 'time'}),
             'tempo_inatividade_minutos': forms.NumberInput(attrs={'min': 1, 'max': 10080}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and not self.is_bound:
+            self.initial['pedido_status_notificados'] = list(
+                self.instance.pedido_status_notificados or [],
+            )
+
+    def clean_pedido_status_notificados(self):
+        return list(self.cleaned_data.get('pedido_status_notificados') or [])
 
 
 class ConfiguracaoWhatsAppCentralForm(forms.ModelForm):

@@ -2059,8 +2059,9 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
                     raise DadosInvalidosError(
                         'O valor do frete fixo foi alterado. Reabra o pedido pela tela de Pedidos.'
                     )
-                # O pedido já foi confirmado pelo cliente e separado pela
-                # loja. No caixa, produtos, quantidades, cliente e preços
+                status_pedido_catalogo_antes_pagamento = pedido_catalogo.status
+                # O pedido já foi confirmado pelo cliente. No caixa,
+                # produtos, quantidades, cliente e preços
                 # precisam vir do registro bloqueado no banco, não do estado
                 # que ficou aberto no navegador do operador.
                 itens = [
@@ -2108,7 +2109,11 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
             if comanda_id:
                 _fechar_comanda_origem(comanda_id, request, venda)
             if pedido_catalogo:
-                pedido_catalogo.status = PedidoCatalogo.Status.PAGO
+                pedido_catalogo.status = (
+                    PedidoCatalogo.Status.PRONTO
+                    if status_pedido_catalogo_antes_pagamento == PedidoCatalogo.Status.PRONTO
+                    else PedidoCatalogo.Status.PAGO
+                )
                 pedido_catalogo.venda_pdv = venda
                 pedido_catalogo.valor_frete = acrescimo
                 pedido_catalogo.frete_a_combinar = False

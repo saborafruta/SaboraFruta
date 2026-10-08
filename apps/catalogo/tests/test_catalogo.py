@@ -19,8 +19,10 @@ from apps.catalogo.models import (
     CatalogoConfiguracao, CatalogoLinkPublico, CupomCatalogo,
     ItemPedidoCatalogo, PedidoCatalogo,
 )
-from apps.catalogo.services import formatar_resumo
-from apps.catalogo.views import CatalogoPainelView, PedidoAcaoView, PedidosCatalogoView
+from apps.catalogo.services import enviar_atualizacao_whatsapp, formatar_resumo
+from apps.catalogo.views import (
+    CatalogoPainelView, PedidoAcaoView, PedidoMoverView, PedidosCatalogoView,
+)
 from apps.catalogo.views_publico import (
     CatalogoPublicoView, CepCatalogoView, ClienteCatalogoView, CupomCatalogoPublicoView,
     PedidoCatalogoConfirmarView, _funcionamento,
@@ -345,7 +347,7 @@ class CatalogoTests(TestCase):
         self.assertIsNotNone(get_template('catalogo/painel.html'))
         self.assertIsNotNone(get_template('catalogo/pedidos.html'))
 
-    def test_pedido_separado_vai_para_pendencia_do_caixa(self):
+    def test_pedido_separado_fica_pronto_e_pode_ser_recebido_no_pdv(self):
         cliente = Cliente.objects.create(
             filial=self.filial, tipo_pessoa='F', razao_social='Cliente Caixa',
             celular='5584999991111',
@@ -368,7 +370,7 @@ class CatalogoTests(TestCase):
 
         pedido.refresh_from_db()
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(pedido.status, PedidoCatalogo.Status.PENDENTE_CAIXA)
+        self.assertEqual(pedido.status, PedidoCatalogo.Status.PRONTO)
         self.assertEqual(response.url, '/catalogo/pedidos/')
 
         painel_request = self.factory.get('/catalogo/pedidos/')
@@ -379,8 +381,91 @@ class CatalogoTests(TestCase):
         conteudo = painel.content.decode()
         trecho_pedidos = conteudo[conteudo.find('<div class="orders-page">'):]
         self.assertIn(f'pedido_catalogo={pedido.pk}', trecho_pedidos)
-        self.assertIn('Abrir no PDV', trecho_pedidos)
+        self.assertIn('Receber no PDV', trecho_pedidos)
         self.assertIn(reverse('catalogo:pedido-imprimir', args=[pedido.pk]), trecho_pedidos)
+
+    def test_pedido_pode_ir_ao_caixa_antes_da_separacao(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='F', razao_social='Cliente Pré-pago',
+            celular='5584999991222',
+        )
+        pedido = PedidoCatalogo.objects.create(
+            filial=self.filial, numero='CAT-PRE-PAGO', cliente=cliente,
+            nome_cliente=cliente.nome_display, telefone=cliente.celular,
+            modalidade='retirada', forma_pagamento='pix',
+            subtotal=Decimal('20.00'), total=Decimal('20.00'),
+            status=PedidoCatalogo.Status.APROVADO,
+        )
+        request = self.factory.post(
+            f'/catalogo/pedidos/{pedido.pk}/mover/', {'status': 'pendente_caixa'},
+        )
+        request.filial_ativa = self.filial
+        request.user = self.usuario
+
+        with patch('apps.catalogo.views._garantir_aprovacao'), patch(
+            'apps.catalogo.views.messages.success',
+        ), patch('apps.catalogo.views.enviar_atualizacao_whatsapp', return_value=False):
+            response = PedidoMoverView().post(request, pedido.pk)
+
+        pedido.refresh_from_db()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(pedido.status, PedidoCatalogo.Status.PENDENTE_CAIXA)
+
+    def test_pedido_pago_pode_voltar_para_preparo(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='F', razao_social='Cliente Pago',
+            celular='5584999991333',
+        )
+        venda = VendaPDV.objects.create(
+            filial=self.filial, numero_venda=99101, cliente=cliente,
+            usuario=self.usuario, data_venda=timezone.now(), status='finalizada',
+            valor_total=Decimal('20.00'), valor_pago=Decimal('20.00'),
+        )
+        pedido = PedidoCatalogo.objects.create(
+            filial=self.filial, numero='CAT-PAGO', cliente=cliente, venda_pdv=venda,
+            nome_cliente=cliente.nome_display, telefone=cliente.celular,
+            modalidade='retirada', forma_pagamento='pix',
+            subtotal=Decimal('20.00'), total=Decimal('20.00'),
+            status=PedidoCatalogo.Status.PAGO,
+        )
+        request = self.factory.post(
+            f'/catalogo/pedidos/{pedido.pk}/mover/', {'status': 'em_separacao'},
+        )
+        request.filial_ativa = self.filial
+        request.user = self.usuario
+
+        with patch('apps.catalogo.views._garantir_aprovacao'), patch(
+            'apps.catalogo.views.messages.success',
+        ), patch('apps.catalogo.views.enviar_atualizacao_whatsapp', return_value=False):
+            response = PedidoMoverView().post(request, pedido.pk)
+
+        pedido.refresh_from_db()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(pedido.status, PedidoCatalogo.Status.EM_SEPARACAO)
+
+    def test_etapa_desmarcada_nao_envia_atualizacao_whatsapp(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='F', razao_social='Cliente Silencioso',
+            celular='5584999991444',
+        )
+        pedido = PedidoCatalogo.objects.create(
+            filial=self.filial, numero='CAT-SILENCIO', cliente=cliente,
+            nome_cliente=cliente.nome_display, telefone=cliente.celular,
+            modalidade='retirada', forma_pagamento='pix',
+            subtotal=Decimal('20.00'), total=Decimal('20.00'),
+            status=PedidoCatalogo.Status.PRONTO,
+        )
+        ConfiguracaoWhatsApp.objects.create(
+            filial=self.filial, instancia='catalogo-sem-pronto', ativo=True,
+            status=ConfiguracaoWhatsApp.Status.CONECTADO,
+            pedido_status_notificados=['aprovado', 'entregue'],
+        )
+
+        with patch('apps.catalogo.services.EvolutionClient') as gateway:
+            enviado = enviar_atualizacao_whatsapp(pedido, db_alias='default')
+
+        self.assertFalse(enviado)
+        gateway.assert_not_called()
 
     def test_folha_de_separacao_abre_pronta_para_imprimir(self):
         cliente = Cliente.objects.create(

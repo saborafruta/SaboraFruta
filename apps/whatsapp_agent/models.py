@@ -17,6 +17,13 @@ def _fernet():
     return Fernet(chave)
 
 
+def status_pedido_notificados_padrao():
+    return [
+        'aprovado', 'em_separacao', 'pendente_caixa', 'pago',
+        'pronto', 'saiu_entrega', 'entregue', 'cancelado',
+    ]
+
+
 class ConfiguracaoWhatsApp(FilialScopedModel):
     class Status(models.TextChoices):
         NAO_CONFIGURADO = 'nao_configurado', 'Não configurado'
@@ -114,6 +121,11 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
             'Total: {total}'
         ),
         help_text='Variáveis disponíveis: {numero}, {status}, {nome} e {total}.',
+    )
+    pedido_status_notificados = models.JSONField(
+        default=status_pedido_notificados_padrao,
+        blank=True,
+        help_text='Etapas do pedido que enviam uma atualização automática ao cliente.',
     )
     pedido_resposta_confirmar = models.CharField(max_length=20, default='1')
     pedido_resposta_alterar = models.CharField(max_length=20, default='2')
