@@ -7,7 +7,7 @@ from django.db import transaction
 from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 
-from apps.core.models import ParametrosSistema
+from apps.core.models import EmpresaBanco, Filial, ParametrosSistema
 from apps.core.services.tenant_task_service import TenantTaskService
 from apps.core.tenant_context import get_current_database_alias
 
@@ -192,6 +192,41 @@ def _inicio_janela(configuracao, data):
     )
 
 
+def _parametros_centrais_resumo(
+    alias, *, filial_cnpj=None, exigir_habilitacao=True,
+):
+    """Lê no diretório central a configuração gravada em /gestao/parametros/.
+
+    As rotas ``/gestao/`` são deliberadamente atendidas pelo banco gerencial,
+    enquanto vendas, estoque e agenda vivem no banco operacional da empresa.
+    Portanto, destinatários e habilitação vêm do ``default``; o ``alias`` é
+    usado somente para limitar a consulta à empresa dona daquele tenant.
+    """
+    parametros = ParametrosSistema.objects.using('default').filter(
+        filial__ativo=True,
+        filial__empresa__ativo=True,
+    )
+    if alias != 'default':
+        empresa_id = (
+            EmpresaBanco.objects.using('default')
+            .filter(
+                db_alias=alias,
+                ativo=True,
+                status=EmpresaBanco.Status.ATIVO,
+            )
+            .values_list('empresa_id', flat=True)
+            .first()
+        )
+        if not empresa_id:
+            return parametros.none()
+        parametros = parametros.filter(filial__empresa_id=empresa_id)
+    if exigir_habilitacao:
+        parametros = parametros.filter(resumo_whatsapp_ativo=True)
+    if filial_cnpj:
+        parametros = parametros.filter(filial__cnpj=filial_cnpj)
+    return parametros
+
+
 def diagnosticar_resumos_diarios(
     data_referencia=None, *, tenant_alias=None, filial_cnpj=None,
     exigir_habilitacao=True,
@@ -209,15 +244,17 @@ def diagnosticar_resumos_diarios(
         alias = get_current_database_alias()
         if tenant_alias and alias != tenant_alias:
             return 0
-        parametros = ParametrosSistema.objects.filter(
-            filial__ativo=True,
-            filial__empresa__ativo=True,
+        cnpjs_operacionais = set(
+            Filial.objects.filter(
+                ativo=True,
+                empresa__ativo=True,
+            ).values_list('cnpj', flat=True)
         )
-        if exigir_habilitacao:
-            parametros = parametros.filter(resumo_whatsapp_ativo=True)
-        if filial_cnpj:
-            parametros = parametros.filter(filial__cnpj=filial_cnpj)
-        parametros = parametros.annotate(
+        parametros = _parametros_centrais_resumo(
+            alias,
+            filial_cnpj=filial_cnpj,
+            exigir_habilitacao=exigir_habilitacao,
+        ).filter(filial__cnpj__in=cnpjs_operacionais).annotate(
             destinatarios_ativos=Count(
                 'destinatarios_resumo_whatsapp',
                 filter=Q(
@@ -274,19 +311,26 @@ def preparar_resumos_diarios(
             return 0
         criados = 0
         parametros_qs = (
-            ParametrosSistema.objects.filter(
-                filial__ativo=True,
-                filial__empresa__ativo=True,
+            _parametros_centrais_resumo(
+                alias,
+                filial_cnpj=filial_cnpj,
+                exigir_habilitacao=exigir_habilitacao,
             )
             .select_related('filial__empresa')
             .prefetch_related('destinatarios_resumo_whatsapp')
             .order_by('filial__empresa_id', 'filial_id')
         )
-        if exigir_habilitacao:
-            parametros_qs = parametros_qs.filter(resumo_whatsapp_ativo=True)
-        if filial_cnpj:
-            parametros_qs = parametros_qs.filter(filial__cnpj=filial_cnpj)
         for parametros in parametros_qs:
+            filial_operacional = (
+                Filial.objects.filter(
+                    cnpj=parametros.filial.cnpj,
+                    ativo=True,
+                    empresa__ativo=True,
+                )
+                .first()
+            )
+            if filial_operacional is None:
+                continue
             destinatarios = [
                 item for item in parametros.destinatarios_resumo_whatsapp.all()
                 if item.ativo and item.telefone
@@ -294,7 +338,7 @@ def preparar_resumos_diarios(
             if not destinatarios:
                 continue
             metricas = _metricas_filial(
-                parametros.filial,
+                filial_operacional,
                 data_referencia,
                 parametros.resumo_whatsapp_incluir_agenda,
             )
