@@ -373,12 +373,14 @@ def checkout_venda(request):
     )
     config_etiqueta, _ = configuracao_etiqueta_filial(request.filial_ativa)
     agendamento_checkout = _agendamento_para_checkout(request)
+    pedido_catalogo_checkout = _pedido_catalogo_para_checkout(request)
     return render(request, 'pdv/checkout.html', {
         'title': 'Checkout de venda',
         'caixas': caixas,
         'usuarios_autorizadores': usuarios_autorizadores_checkout(request),
         'etiqueta_venda_disponivel': bool(config_etiqueta and config_etiqueta.ativa),
         'agendamento_checkout': agendamento_checkout,
+        'pedido_catalogo_checkout': pedido_catalogo_checkout,
     })
 
 
@@ -425,6 +427,58 @@ def _agendamento_para_checkout(request):
         'cliente': _serializar_cliente(agendamento.cliente) if agendamento.cliente else None,
         'itens': itens,
         'aviso': ' '.join(avisos),
+    }
+
+
+def _pedido_catalogo_para_checkout(request):
+    """Carrega no checkout um pedido já separado, sem baixar estoque antes do pagamento."""
+    bruto = request.GET.get('pedido_catalogo')
+    if not bruto:
+        return None
+    try:
+        pedido_id = int(bruto)
+    except (TypeError, ValueError):
+        return None
+
+    from apps.catalogo.models import PedidoCatalogo
+
+    pedido = (
+        PedidoCatalogo.objects.for_filial(request.filial_ativa)
+        .select_related('cliente')
+        .prefetch_related('itens__produto__linha_producao')
+        .filter(
+            pk=pedido_id,
+            status__in=[PedidoCatalogo.Status.PENDENTE_CAIXA, PedidoCatalogo.Status.PRONTO],
+        )
+        .first()
+    )
+    if not pedido:
+        return None
+
+    itens = []
+    for item_pedido in pedido.itens.all():
+        item = _serializa_produto(
+            item_pedido.produto, request.filial_ativa, cliente=pedido.cliente,
+            quantidade=Decimal(item_pedido.quantidade),
+        )
+        item.update({
+            'preco': float(item_pedido.valor_unitario),
+            'quantidade': item_pedido.quantidade,
+            'pode_vender': True,
+            'bloqueios': [],
+        })
+        itens.append(item)
+
+    return {
+        'id': pedido.pk,
+        'numero': pedido.numero,
+        'cliente': _serializar_cliente(pedido.cliente),
+        'itens': itens,
+        'frete': float(pedido.valor_frete or 0),
+        'frete_a_combinar': pedido.frete_a_combinar,
+        'delivery': pedido.modalidade == PedidoCatalogo.Modalidade.ENTREGA,
+        'endereco_entrega': pedido.endereco_entrega or {},
+        'observacao': pedido.observacao or '',
     }
 
 
@@ -1949,8 +2003,42 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
 
     comanda_id = body.get("comanda_id")
 
+    pedido_catalogo = None
     try:
         with tenant_atomic():
+            pedido_catalogo_id = body.get('pedido_catalogo_id')
+            if pedido_catalogo_id:
+                from apps.catalogo.models import PedidoCatalogo
+                from apps.vendas.services.venda_service import VendaService
+
+                pedido_catalogo = (
+                    PedidoCatalogo.objects.for_filial(request.filial_ativa)
+                    .select_for_update().select_related('pedido_venda')
+                    .filter(
+                        pk=pedido_catalogo_id,
+                        status__in=[
+                            PedidoCatalogo.Status.PENDENTE_CAIXA,
+                            PedidoCatalogo.Status.PRONTO,
+                        ],
+                    ).first()
+                )
+                if not pedido_catalogo:
+                    raise DadosInvalidosError('Pedido do catálogo não está pendente no caixa.')
+                if acrescimo < 0:
+                    raise DadosInvalidosError('O valor do frete não pode ser negativo.')
+                if (
+                    not pedido_catalogo.frete_a_combinar
+                    and acrescimo != pedido_catalogo.valor_frete
+                ):
+                    raise DadosInvalidosError(
+                        'O valor do frete fixo foi alterado. Reabra o pedido pela tela de Pedidos.'
+                    )
+                if pedido_catalogo.pedido_venda and pedido_catalogo.pedido_venda.pode_cancelar:
+                    VendaService.cancelar_pedido(
+                        pedido_catalogo.pedido_venda,
+                        request.user,
+                        'Convertido em venda recebida pelo caixa.',
+                    )
             if venda_edicao_origem:
                 estornar_venda_para_edicao(venda_edicao_origem, request.user)
             venda = VendaPDVService.finalizar_venda(
@@ -1976,6 +2064,16 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
             )
             if comanda_id:
                 _fechar_comanda_origem(comanda_id, request, venda)
+            if pedido_catalogo:
+                pedido_catalogo.status = PedidoCatalogo.Status.PAGO
+                pedido_catalogo.venda_pdv = venda
+                pedido_catalogo.valor_frete = acrescimo
+                pedido_catalogo.frete_a_combinar = False
+                pedido_catalogo.total = venda.valor_total
+                pedido_catalogo.save(update_fields=[
+                    'status', 'venda_pdv', 'valor_frete', 'frete_a_combinar',
+                    'total', 'updated_at',
+                ])
     except EstoqueInsuficienteError as exc:
         return JsonResponse({"erro": str(exc), "tipo": "estoque_insuficiente"}, status=400)
     except DadosInvalidosError as exc:
@@ -1990,6 +2088,18 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
 
     if exigir_autorizacao_desconto and desconto > 0:
         consumir_checkout_desconto(request)
+    if pedido_catalogo:
+        try:
+            from apps.catalogo.services import enviar_atualizacao_whatsapp
+            enviar_atualizacao_whatsapp(
+                pedido_catalogo, db_alias=get_current_database_alias() or 'default',
+            )
+        except Exception:
+            logger.warning(
+                'Venda do catálogo %s recebida, mas a atualização do WhatsApp falhou.',
+                pedido_catalogo.pk,
+                exc_info=True,
+            )
     return JsonResponse({"ok": True, "numero_venda": venda.numero_venda, "venda_id": venda.id})
 
 

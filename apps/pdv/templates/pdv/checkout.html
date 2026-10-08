@@ -92,6 +92,7 @@
 {{ caixas|json_script:"checkout-caixas" }}
 {{ usuarios_autorizadores|json_script:"checkout-autorizadores" }}
 {{ agendamento_checkout|json_script:"checkout-agendamento" }}
+{{ pedido_catalogo_checkout|json_script:"checkout-pedido-catalogo" }}
 <div class="checkout-page" x-data="checkoutVenda()" x-init="init()" @keydown.window="atalhoTeclado($event)">
   <div class="co-head">
     <div>
@@ -222,6 +223,10 @@
         </div>
         <div class="co-summary">
           <div class="co-summary-row"><span>Subtotal</span><strong x-text="moeda(subtotal)"></strong></div>
+          <div class="co-field" x-show="pedidoCatalogoInicial" x-cloak>
+            <label for="checkout-frete" x-text="pedidoCatalogoInicial?.frete_a_combinar ? 'Frete a combinar' : 'Frete do pedido'"></label>
+            <input id="checkout-frete" class="co-input" type="number" min="0" step="0.01" x-model.number="acrescimoInicial" :readonly="!pedidoCatalogoInicial?.frete_a_combinar" @input="sincronizarValorPagamento()">
+          </div>
           <div class="co-grid" style="margin-top:0">
             <div class="co-field">
               <label for="checkout-desconto">Desconto (F6)</label>
@@ -364,6 +369,7 @@ function checkoutVenda() {
     caixas: JSON.parse(document.getElementById('checkout-caixas').textContent), sessao:null, carregando:true,
     usuariosAutorizadores:JSON.parse(document.getElementById('checkout-autorizadores').textContent),
     agendamentoInicial:JSON.parse(document.getElementById('checkout-agendamento').textContent),
+    pedidoCatalogoInicial:JSON.parse(document.getElementById('checkout-pedido-catalogo').textContent), acrescimoInicial:0,
     busca:'', quantidadeEntrada:'1', buscarPorNome:false, buscando:false, resultados:[], indiceProduto:-1, erroBusca:'', itens:[],
     buscaNomeLiberada:false, modalSenhaBuscaNome:false, usuarioAutorizadorId:'', senhaBuscaNome:'', erroSenhaBuscaNome:'', liberandoBuscaNome:false,
     descontoLiberado:false, modalSenhaDesconto:false, usuarioDescontoId:'', senhaDesconto:'', erroSenhaDesconto:'', liberandoDesconto:false,
@@ -381,6 +387,13 @@ function checkoutVenda() {
         this.mensagem=this.agendamentoInicial.aviso||('Agendamento #'+this.agendamentoInicial.id+' carregado no caixa.');
         this.sincronizarValorPagamento(true);
       }
+      if(this.pedidoCatalogoInicial){
+        this.itens=this.pedidoCatalogoInicial.itens||[];
+        this.cliente=this.pedidoCatalogoInicial.cliente||null;
+        this.acrescimoInicial=Number(this.pedidoCatalogoInicial.frete||0);
+        this.mensagem='Pedido '+this.pedidoCatalogoInicial.numero+' carregado. Confira o pagamento para dar baixa no caixa.';
+        this.sincronizarValorPagamento(true);
+      }
       this.focarProduto();
     },
     csrf(){ return document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || this.cookie('csrftoken'); },
@@ -389,7 +402,7 @@ function checkoutVenda() {
     moeda(valor){ return Number(valor||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); },
     get subtotal(){ return this.itens.reduce((s,i)=>s+(Number(i.preco)*Number(i.quantidade)),0); },
     get desconto(){ return Math.min(this.subtotal,Math.max(0,this.numero(this.descontoEntrada))); },
-    get total(){ return Math.max(0,this.subtotal-this.desconto); },
+    get total(){ return Math.max(0,this.subtotal-this.desconto+Math.max(0,Number(this.acrescimoInicial)||0)); },
     get quantidadeItens(){ return this.itens.reduce((s,i)=>s+Number(i.quantidade),0); },
     get formaSelecionada(){ return this.formasPagamento.find(f=>String(f.id)===String(this.formaPagamentoId))||null; },
     get formaCartao(){ return ['cartao_credito','cartao_debito'].includes(this.formaSelecionada?.tipo); },
@@ -579,7 +592,7 @@ function checkoutVenda() {
     async finalizar(){
       if(!this.podeFinalizar)return;this.finalizando=true;this.mensagem='';this.sucesso=false;
       const pagamentos=this.total>0?[{forma_id:this.formaPagamentoId,valor:this.valorPagamento,parcelas:this.parcelasPagamento,bandeira:this.formaCartao?this.bandeiraPagamento:''}]:[];
-      const payload={cliente_id:this.cliente?.id||null,desconto:this.desconto,acrescimo:0,itens:this.itens.map(i=>({produto_id:i.id,quantidade:i.quantidade,valor_unitario:i.preco,preco_origem_tipo:i.preco_origem_tipo,preco_origem_detalhe:i.preco_origem_detalhe,desconto_valor:0})),pagamentos};
+      const payload={cliente_id:this.cliente?.id||null,desconto:this.desconto,acrescimo:Math.max(0,Number(this.acrescimoInicial)||0),delivery:!!this.pedidoCatalogoInicial?.delivery,endereco_entrega:this.pedidoCatalogoInicial?.endereco_entrega||{},observacao:this.pedidoCatalogoInicial?.observacao||'',pedido_catalogo_id:this.pedidoCatalogoInicial?.id||null,itens:this.itens.map(i=>({produto_id:i.id,quantidade:i.quantidade,valor_unitario:i.preco,preco_origem_tipo:i.preco_origem_tipo,preco_origem_detalhe:i.preco_origem_detalhe,desconto_valor:0})),pagamentos};
       try{
         const r=await fetch('{% url "pdv:api_checkout_venda_finalizar" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify(payload)});
         const d=await r.json();

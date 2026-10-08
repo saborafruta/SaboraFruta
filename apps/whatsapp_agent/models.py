@@ -25,6 +25,11 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
         CONECTADO = 'conectado', 'Conectado'
         ERRO = 'erro', 'Erro'
 
+    class ModoAtendimento(models.TextChoices):
+        AGENDA = 'agenda', 'Somente agendamento'
+        CATALOGO = 'catalogo', 'Somente catálogo e pedidos'
+        AMBOS = 'ambos', 'Agendamento e catálogo'
+
     provedor = models.CharField(max_length=30, default='evolution')
     gateway_url = models.URLField(max_length=300, blank=True)
     api_key_criptografada = models.TextField(blank=True)
@@ -34,6 +39,11 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
     numero_conectado = models.CharField(max_length=24, blank=True)
     nome_conectado = models.CharField(max_length=120, blank=True)
     agente_ativo = models.BooleanField(default=False)
+    modo_atendimento = models.CharField(
+        max_length=16,
+        choices=ModoAtendimento.choices,
+        default=ModoAtendimento.AGENDA,
+    )
     mensagem_saudacao = models.TextField(
         default='Olá! Sou o assistente virtual. Posso ajudar você a agendar um serviço.',
     )

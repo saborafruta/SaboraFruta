@@ -17,6 +17,7 @@ class FluxoWhatsAppForm(forms.ModelForm):
     class Meta:
         model = ConfiguracaoWhatsApp
         fields = [
+            'modo_atendimento',
             'mensagem_saudacao', 'mensagem_transferencia',
             'mensagem_encerramento', 'mensagem_opcao_invalida',
             'mensagem_confirmacao_agendamento', 'mensagem_lembrete_agendamento',
@@ -29,6 +30,7 @@ class FluxoWhatsAppForm(forms.ModelForm):
             'encerramento_automatico_ativo', 'tempo_inatividade_minutos',
         ]
         labels = {
+            'modo_atendimento': 'Serviços oferecidos pelo agente',
             'mensagem_saudacao': 'Mensagem de saudação',
             'mensagem_transferencia': 'Mensagem de transferência',
             'mensagem_encerramento': 'Mensagem de encerramento',

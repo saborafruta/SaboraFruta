@@ -24,7 +24,8 @@ COLUNAS = (
     (PedidoCatalogo.Status.AGUARDANDO_LOJA, 'Novos pedidos'),
     (PedidoCatalogo.Status.APROVADO, 'Aprovados'),
     (PedidoCatalogo.Status.EM_SEPARACAO, 'Em separação'),
-    (PedidoCatalogo.Status.PRONTO, 'Prontos'),
+    (PedidoCatalogo.Status.PENDENTE_CAIXA, 'Pendente no caixa'),
+    (PedidoCatalogo.Status.PAGO, 'Pagos e prontos'),
     (PedidoCatalogo.Status.SAIU_ENTREGA, 'Em entrega'),
     (PedidoCatalogo.Status.ENTREGUE, 'Entregues'),
 )
@@ -37,17 +38,9 @@ class CatalogoPainelView(PermissaoRequiredMixin, View):
     def get(self, request):
         config, _ = CatalogoConfiguracao.objects.get_or_create(filial=request.filial_ativa)
         link = CatalogoLinkPublico.objects.filter(filial=request.filial_ativa, ativo=True).first()
-        pedidos = PedidoCatalogo.objects.for_filial(request.filial_ativa).select_related(
-            'cliente', 'pedido_venda',
-        ).prefetch_related('itens')[:150]
-        por_status = {status: [] for status, _ in COLUNAS}
-        for pedido in pedidos:
-            if pedido.status in por_status:
-                por_status[pedido.status].append(pedido)
         return render(request, 'catalogo/painel.html', {
             'configuracao': config,
             'form': CatalogoConfiguracaoForm(instance=config),
-            'colunas': [(status, titulo, por_status[status]) for status, titulo in COLUNAS],
             'link_publico': request.build_absolute_uri(
                 reverse('catalogo_publico:catalogo', args=[link.token])
             ) if link else '',
@@ -62,16 +55,40 @@ class CatalogoPainelView(PermissaoRequiredMixin, View):
             item.save()
             messages.success(request, 'Configurações do catálogo e da entrega salvas.')
             return redirect('catalogo:painel')
-        pedidos = PedidoCatalogo.objects.for_filial(request.filial_ativa).prefetch_related('itens')[:150]
-        por_status = {status: [] for status, _ in COLUNAS}
-        for pedido in pedidos:
-            if pedido.status in por_status:
-                por_status[pedido.status].append(pedido)
         return render(request, 'catalogo/painel.html', {
             'configuracao': config, 'form': form,
-            'colunas': [(status, titulo, por_status[status]) for status, titulo in COLUNAS],
             'link_publico': '',
         }, status=400)
+
+
+class PedidosCatalogoView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'cadastros'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        pedidos = list(
+            PedidoCatalogo.objects.for_filial(request.filial_ativa)
+            .select_related('cliente', 'pedido_venda', 'venda_pdv')
+            .prefetch_related('itens')[:200]
+        )
+        por_status = {status: [] for status, _ in COLUNAS}
+        for pedido in pedidos:
+            # Pedidos antigos que estavam "prontos" passam a aparecer na
+            # etapa de cobrança, sem esconder trabalho já existente.
+            status_visual = (
+                PedidoCatalogo.Status.PENDENTE_CAIXA
+                if pedido.status == PedidoCatalogo.Status.PRONTO
+                else pedido.status
+            )
+            if status_visual in por_status:
+                por_status[status_visual].append(pedido)
+        return render(request, 'catalogo/pedidos.html', {
+            'colunas': [(status, titulo, por_status[status]) for status, titulo in COLUNAS],
+            'total_abertos': sum(
+                len(por_status[status]) for status, _ in COLUNAS
+                if status != PedidoCatalogo.Status.ENTREGUE
+            ),
+        })
 
 
 @method_decorator(require_POST, name='dispatch')
@@ -137,15 +154,16 @@ class PedidoAcaoView(PermissaoRequiredMixin, View):
                 pedido.save(update_fields=['status', 'updated_at'])
                 messages.success(request, f'Separação do {pedido.numero} iniciada.')
                 alterado = True
-            elif acao == 'pronto' and pedido.status == PedidoCatalogo.Status.EM_SEPARACAO:
-                pedido.status = PedidoCatalogo.Status.PRONTO
+            elif acao in {'pendencia', 'pronto'} and pedido.status == PedidoCatalogo.Status.EM_SEPARACAO:
+                pedido.status = PedidoCatalogo.Status.PENDENTE_CAIXA
                 pedido.save(update_fields=['status', 'updated_at'])
+                messages.success(request, f'{pedido.numero} separado e enviado para as pendências do caixa.')
                 alterado = True
-            elif acao == 'saiu' and pedido.status == PedidoCatalogo.Status.PRONTO:
+            elif acao == 'saiu' and pedido.status == PedidoCatalogo.Status.PAGO:
                 pedido.status = PedidoCatalogo.Status.SAIU_ENTREGA
                 pedido.save(update_fields=['status', 'updated_at'])
                 alterado = True
-            elif acao == 'entregue' and pedido.status in {PedidoCatalogo.Status.PRONTO, PedidoCatalogo.Status.SAIU_ENTREGA}:
+            elif acao == 'entregue' and pedido.status in {PedidoCatalogo.Status.PAGO, PedidoCatalogo.Status.SAIU_ENTREGA}:
                 pedido.status = PedidoCatalogo.Status.ENTREGUE
                 pedido.save(update_fields=['status', 'updated_at'])
                 alterado = True
@@ -166,4 +184,4 @@ class PedidoAcaoView(PermissaoRequiredMixin, View):
             except Exception:
                 # A mudança operacional permanece válida mesmo se o canal estiver indisponível.
                 messages.warning(request, 'Status atualizado, mas não foi possível avisar pelo WhatsApp agora.')
-        return redirect('catalogo:painel')
+        return redirect('catalogo:pedidos')

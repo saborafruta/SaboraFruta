@@ -70,6 +70,8 @@ class PedidoCatalogo(FilialScopedModel):
         AGUARDANDO_LOJA = 'aguardando_loja', 'Aguardando aprovação da loja'
         APROVADO = 'aprovado', 'Aprovado'
         EM_SEPARACAO = 'em_separacao', 'Em separação'
+        PENDENTE_CAIXA = 'pendente_caixa', 'Pendente no caixa'
+        PAGO = 'pago', 'Pagamento confirmado'
         PRONTO = 'pronto', 'Pronto para entrega'
         SAIU_ENTREGA = 'saiu_entrega', 'Saiu para entrega'
         ENTREGUE = 'entregue', 'Entregue'
@@ -93,6 +95,10 @@ class PedidoCatalogo(FilialScopedModel):
     conversa_id = models.PositiveBigIntegerField(null=True, blank=True)
     pedido_venda = models.OneToOneField(
         'vendas.PedidoVenda', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='origem_catalogo',
+    )
+    venda_pdv = models.OneToOneField(
+        'pdv.VendaPDV', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='origem_catalogo',
     )
     status = models.CharField(max_length=28, choices=Status.choices, default=Status.AGUARDANDO_CLIENTE)

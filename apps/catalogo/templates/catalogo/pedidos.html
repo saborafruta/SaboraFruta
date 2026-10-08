@@ -1,0 +1,45 @@
+{% extends '_base.html' %}
+{% block title %}Pedidos do catálogo{% endblock %}
+{% block largura_conteudo %}max-w-none{% endblock %}
+{% block content %}
+<style>
+  .orders-page{width:100%;padding:6px 4px 24px;--ord-card:#202124;--ord-soft:#17181a;--ord-border:#35383e;--ord-text:#f8fafc;--ord-muted:#9aa8bb}.tema-claro .orders-page{--ord-card:#fff;--ord-soft:#f8fafc;--ord-border:#dbe3ee;--ord-text:#0f172a;--ord-muted:#64748b}
+  .orders-head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:18px}.orders-head h1{margin:0;color:var(--ord-text);font-size:1.9rem;font-weight:900}.orders-head p{margin:6px 0 0;color:var(--ord-muted)}.orders-actions{display:flex;gap:8px;flex-wrap:wrap}.orders-btn{min-height:42px;padding:9px 14px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-weight:800;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}.orders-btn.secondary{border:1px solid var(--ord-border);background:var(--ord-card);color:var(--ord-text)}.orders-btn.green{background:#16a34a}.orders-btn.orange{background:#ea580c}.orders-btn.danger{background:#b91c1c}.orders-btn.small{min-height:36px;padding:7px 10px;font-size:.76rem}
+  .orders-summary{display:flex;align-items:center;gap:10px;margin-bottom:14px;color:var(--ord-muted);font-size:.86rem}.orders-badge{padding:5px 10px;border-radius:999px;background:#1d4ed8;color:#fff;font-weight:800}
+  .orders-board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(290px,320px);gap:13px;overflow-x:auto;overscroll-behavior-inline:contain;padding:2px 2px 16px;scroll-snap-type:x proximity}.orders-column{min-height:520px;padding:13px;border:1px solid var(--ord-border);border-radius:16px;background:var(--ord-soft);scroll-snap-align:start}.orders-column-head{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;background:var(--ord-soft);color:var(--ord-text)}.orders-count{min-width:25px;padding:3px 8px;border-radius:999px;background:#334155;color:#fff;font-size:.74rem;text-align:center}
+  .order-card{margin-bottom:10px;padding:14px;border:1px solid var(--ord-border);border-radius:13px;background:var(--ord-card);color:var(--ord-text);box-shadow:0 6px 18px rgba(0,0,0,.06)}.order-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.order-number{font-weight:900}.order-price{white-space:nowrap;font-weight:900;color:#60a5fa}.order-meta{margin-top:5px;color:var(--ord-muted);font-size:.77rem;line-height:1.4}.order-items{margin:10px 0;padding:9px 0;border-block:1px solid var(--ord-border);font-size:.8rem}.order-actions{display:flex;gap:6px;flex-wrap:wrap}.order-actions form{display:inline-flex}.orders-empty{padding:46px 8px;text-align:center;color:var(--ord-muted);font-size:.84rem}
+  @media(max-width:720px){.orders-page{padding:0 0 88px}.orders-head{display:block}.orders-head h1{font-size:1.5rem}.orders-head p{font-size:.86rem}.orders-actions{display:grid;grid-template-columns:1fr 1fr;margin-top:14px}.orders-actions .orders-btn{width:100%}.orders-board{display:block;overflow:visible;padding:0}.orders-column{min-height:0;margin-bottom:13px;padding:12px;border-radius:14px}.orders-column-head{position:static}.orders-column.is-empty{display:none}.order-card{padding:13px}.order-actions,.order-actions form,.order-actions .orders-btn{width:100%}.order-actions .orders-btn{min-height:42px}.orders-summary{justify-content:space-between}}
+</style>
+<div class="orders-page">
+  <header class="orders-head">
+    <div><h1>Pedidos</h1><p>Acompanhe a confirmação, separação, recebimento no caixa e entrega.</p></div>
+    <nav class="orders-actions"><a class="orders-btn secondary" href="{% url 'catalogo:painel' %}">Configurar catálogo</a><a class="orders-btn secondary" href="{% url 'pdv:home' %}">Abrir PDV</a></nav>
+  </header>
+  <div class="orders-summary"><span class="orders-badge">{{ total_abertos }}</span><span>pedido{{ total_abertos|pluralize }} em andamento nesta filial</span></div>
+  <main class="orders-board" aria-label="Fluxo dos pedidos">
+    {% for status,titulo,pedidos in colunas %}
+    <section class="orders-column{% if not pedidos %} is-empty{% endif %}" aria-labelledby="coluna-{{ status }}">
+      <div class="orders-column-head"><strong id="coluna-{{ status }}">{{ titulo }}</strong><span class="orders-count">{{ pedidos|length }}</span></div>
+      {% for pedido in pedidos %}
+      <article class="order-card">
+        <div class="order-top"><span class="order-number">{{ pedido.numero }}</span><span class="order-price">R$ {{ pedido.total|floatformat:2 }}</span></div>
+        <div class="order-meta"><strong>{{ pedido.nome_cliente }}</strong><br>{{ pedido.get_modalidade_display }} · {{ pedido.get_forma_pagamento_display }}</div>
+        <div class="order-items">{% for item in pedido.itens.all %}<div>{{ item.quantidade }}× {{ item.descricao }}</div>{% endfor %}</div>
+        {% if pedido.frete_a_combinar %}<div class="order-meta">Frete a combinar antes da cobrança</div>{% endif %}
+        <div class="order-actions">
+          {% if pedido.status == 'aguardando_loja' %}<form method="post" action="{% url 'catalogo:pedido-acao' pedido.pk 'aprovar' %}">{% csrf_token %}<button class="orders-btn green small">Aprovar pedido</button></form>{% endif %}
+          {% if pedido.status == 'aprovado' %}<form method="post" action="{% url 'catalogo:pedido-acao' pedido.pk 'separar' %}">{% csrf_token %}<button class="orders-btn orange small">Iniciar separação</button></form>{% endif %}
+          {% if pedido.status == 'em_separacao' %}<form method="post" action="{% url 'catalogo:pedido-acao' pedido.pk 'pendencia' %}">{% csrf_token %}<button class="orders-btn green small">Concluir separação</button></form>{% endif %}
+          {% if pedido.status == 'pendente_caixa' or pedido.status == 'pronto' %}<a class="orders-btn green small" href="{% url 'pdv:checkout' %}?pedido_catalogo={{ pedido.pk }}">Receber no caixa</a>{% endif %}
+          {% if pedido.status == 'pago' and pedido.modalidade == 'entrega' %}<form method="post" action="{% url 'catalogo:pedido-acao' pedido.pk 'saiu' %}">{% csrf_token %}<button class="orders-btn small">Saiu para entrega</button></form>{% endif %}
+          {% if pedido.status == 'pago' and pedido.modalidade == 'retirada' %}<form method="post" action="{% url 'catalogo:pedido-acao' pedido.pk 'entregue' %}">{% csrf_token %}<button class="orders-btn green small">Concluir pedido</button></form>{% endif %}
+          {% if pedido.status == 'saiu_entrega' %}<form method="post" action="{% url 'catalogo:pedido-acao' pedido.pk 'entregue' %}">{% csrf_token %}<button class="orders-btn green small">Concluir pedido</button></form>{% endif %}
+          {% if pedido.status != 'entregue' %}<form method="post" action="{% url 'catalogo:pedido-acao' pedido.pk 'cancelar' %}">{% csrf_token %}<button class="orders-btn danger small">Cancelar</button></form>{% endif %}
+        </div>
+      </article>
+      {% empty %}<div class="orders-empty">Nenhum pedido nesta etapa.</div>{% endfor %}
+    </section>
+    {% endfor %}
+  </main>
+</div>
+{% endblock %}

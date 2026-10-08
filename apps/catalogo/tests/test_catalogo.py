@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from django.test import RequestFactory, TestCase
 from django.contrib.auth.models import AnonymousUser
+from django.template.loader import get_template
 
 from apps.core.models import Empresa, Filial
 from apps.cadastros.models import Cliente
@@ -11,8 +12,12 @@ from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeM
 from apps.whatsapp_agent.agent import processar_mensagem
 from apps.whatsapp_agent.models import ConfiguracaoWhatsApp, ConversaWhatsApp
 
-from apps.catalogo.models import CatalogoConfiguracao, CatalogoLinkPublico, PedidoCatalogo
+from apps.catalogo.models import (
+    CatalogoConfiguracao, CatalogoLinkPublico, ItemPedidoCatalogo, PedidoCatalogo,
+)
+from apps.catalogo.views import CatalogoPainelView, PedidoAcaoView, PedidosCatalogoView
 from apps.catalogo.views_publico import CatalogoPublicoView
+from apps.pdv.views.pdv import _pedido_catalogo_para_checkout
 
 
 class CatalogoTests(TestCase):
@@ -93,6 +98,75 @@ class CatalogoTests(TestCase):
         response = CatalogoPublicoView.as_view()(request, token=self.link.token)
         self.assertEqual(response.status_code, 200)
         self.assertIn('Café 500g', response.content.decode())
+
+    def test_configuracao_e_pedidos_ficam_em_telas_separadas(self):
+        request_config = self.factory.get('/catalogo/')
+        request_config.filial_ativa = self.filial
+        request_config.user = AnonymousUser()
+        request_pedidos = self.factory.get('/catalogo/pedidos/')
+        request_pedidos.filial_ativa = self.filial
+        request_pedidos.user = AnonymousUser()
+
+        config_response = CatalogoPainelView().get(request_config)
+        pedidos_response = PedidosCatalogoView().get(request_pedidos)
+
+        self.assertEqual(config_response.status_code, 200)
+        self.assertEqual(pedidos_response.status_code, 200)
+        self.assertIsNotNone(get_template('catalogo/painel.html'))
+        self.assertIsNotNone(get_template('catalogo/pedidos.html'))
+
+    def test_pedido_separado_vai_para_pendencia_do_caixa(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='F', razao_social='Cliente Caixa',
+            celular='5584999991111',
+        )
+        pedido = PedidoCatalogo.objects.create(
+            filial=self.filial, numero='CAT-CAIXA', cliente=cliente,
+            nome_cliente=cliente.nome_display, telefone=cliente.celular,
+            modalidade='retirada', forma_pagamento='pix',
+            subtotal=Decimal('20.00'), total=Decimal('20.00'),
+            status=PedidoCatalogo.Status.EM_SEPARACAO,
+        )
+        request = self.factory.post(f'/catalogo/pedidos/{pedido.pk}/pendencia/')
+        request.filial_ativa = self.filial
+        request.user = AnonymousUser()
+
+        with patch('apps.catalogo.views.messages.success'), patch(
+            'apps.catalogo.views.enviar_atualizacao_whatsapp', return_value=True,
+        ):
+            response = PedidoAcaoView().post(request, pedido.pk, 'pendencia')
+
+        pedido.refresh_from_db()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(pedido.status, PedidoCatalogo.Status.PENDENTE_CAIXA)
+        self.assertEqual(response.url, '/catalogo/pedidos/')
+
+    def test_checkout_do_catalogo_carrega_cliente_itens_e_frete(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='F', razao_social='Cliente Checkout',
+            celular='5584999992222',
+        )
+        pedido = PedidoCatalogo.objects.create(
+            filial=self.filial, numero='CAT-CHECKOUT', cliente=cliente,
+            nome_cliente=cliente.nome_display, telefone=cliente.celular,
+            modalidade='entrega', forma_pagamento='pix', endereco_entrega={'rua': 'Rua A'},
+            subtotal=Decimal('40.00'), valor_frete=Decimal('8.00'), total=Decimal('48.00'),
+            status=PedidoCatalogo.Status.PENDENTE_CAIXA,
+        )
+        ItemPedidoCatalogo.objects.create(
+            pedido=pedido, produto=self.produto, descricao=self.produto.descricao,
+            quantidade=2, valor_unitario=Decimal('20.00'), valor_total=Decimal('40.00'),
+        )
+        request = self.factory.get('/pdv/checkout/', {'pedido_catalogo': pedido.pk})
+        request.filial_ativa = self.filial
+
+        checkout = _pedido_catalogo_para_checkout(request)
+
+        self.assertEqual(checkout['id'], pedido.pk)
+        self.assertEqual(checkout['cliente']['id'], cliente.pk)
+        self.assertEqual(checkout['itens'][0]['quantidade'], 2)
+        self.assertEqual(checkout['frete'], 8.0)
+        self.assertTrue(checkout['delivery'])
 
     @patch('apps.catalogo.views_publico.enviar_resumo_whatsapp', return_value=(True, 'Enviado'))
     def test_checkout_recalcula_valores_e_cria_cliente(self, _enviar):

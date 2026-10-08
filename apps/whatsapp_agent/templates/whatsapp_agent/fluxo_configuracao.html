@@ -11,7 +11,8 @@
       <p class="wa-muted">Monte o menu e escolha o que cada resposta fará no WhatsApp.</p>
     </div>
     <div class="wa-actions">
-      <a class="wa-btn secondary" href="{% url 'catalogo:painel' %}">Catálogo e pedidos</a>
+      <a class="wa-btn secondary" href="{% url 'catalogo:painel' %}">Catálogo</a>
+      <a class="wa-btn secondary" href="{% url 'catalogo:pedidos' %}">Pedidos</a>
       <a class="wa-btn secondary" href="{% url 'whatsapp_agent:configuracao' %}">Conexão e agente</a>
       <a class="wa-btn secondary" href="{% url 'whatsapp_agent:conversa-list' %}">CRM do WhatsApp</a>
     </div>
@@ -24,11 +25,28 @@
 
     <section class="wa-card wa-section">
       <div class="wa-section-head">
+        <div><h2>Tipo de atendimento</h2><p class="wa-muted">Escolha quais jornadas esta filial oferece. Se usar as duas, o cliente escolhe logo no primeiro menu.</p></div>
+      </div>
+      <div class="wa-grid">
+        <div class="wa-field full">
+          <label for="{{ form.modo_atendimento.id_for_label }}">{{ form.modo_atendimento.label }}</label>
+          {{ form.modo_atendimento }}
+          {% if form.modo_atendimento.errors %}<div class="wa-errors">{{ form.modo_atendimento.errors|first }}</div>{% endif %}
+        </div>
+        <div class="wa-field full">
+          <div class="wa-help"><strong>Agenda:</strong> envia o link para escolher profissional, serviço e horário. <strong>Catálogo:</strong> envia o link para produtos, carrinho e entrega. <strong>Ambos:</strong> mantém as duas opções no menu principal.</div>
+        </div>
+        <div class="wa-field full"><button class="wa-btn secondary" type="button" @click="aplicarModelo(document.getElementById('id_modo_atendimento').value)">Aplicar menu recomendado</button><div class="wa-help">Este botão reorganiza o menu principal. As mensagens específicas continuam editáveis nas seções abaixo.</div></div>
+      </div>
+    </section>
+
+    <section class="wa-card wa-section">
+      <div class="wa-section-head">
         <div><h2>Mensagens gerais</h2><p class="wa-muted">São usadas pela primeira interação, transferência, encerramento e respostas inválidas.</p></div>
       </div>
       <div class="wa-grid">
         {% for field in form %}
-          {% if field.name != 'mensagem_confirmacao_agendamento' and field.name != 'mensagem_lembrete_agendamento' and field.name != 'mensagem_resumo_pedido' and field.name != 'mensagem_pedido_recebido' and field.name != 'mensagem_atualizacao_pedido' and field.name != 'pedido_resposta_confirmar' and field.name != 'pedido_resposta_alterar' and field.name != 'pedido_resposta_cancelar' and field.name != 'recuperacao_agendamento_ativa' and field.name != 'recuperacao_atraso_minutos' and field.name != 'recuperacao_horario_inicio' and field.name != 'recuperacao_horario_fim' and field.name != 'mensagem_recuperacao_agendamento' and field.name != 'mensagem_motivo_nao_agendamento' and field.name != 'mensagem_feedback_agendamento' %}
+          {% if field.name != 'modo_atendimento' and field.name != 'mensagem_confirmacao_agendamento' and field.name != 'mensagem_lembrete_agendamento' and field.name != 'mensagem_resumo_pedido' and field.name != 'mensagem_pedido_recebido' and field.name != 'mensagem_atualizacao_pedido' and field.name != 'pedido_resposta_confirmar' and field.name != 'pedido_resposta_alterar' and field.name != 'pedido_resposta_cancelar' and field.name != 'recuperacao_agendamento_ativa' and field.name != 'recuperacao_atraso_minutos' and field.name != 'recuperacao_horario_inicio' and field.name != 'recuperacao_horario_fim' and field.name != 'mensagem_recuperacao_agendamento' and field.name != 'mensagem_motivo_nao_agendamento' and field.name != 'mensagem_feedback_agendamento' %}
           {% if field.name == 'encerramento_automatico_ativo' %}
             <div class="wa-field full">
               <strong>Encerramento por inatividade</strong>
@@ -196,6 +214,16 @@ function fluxoWhatsApp() {
   return {
     menus: inicial,
     acoes: JSON.parse(document.getElementById('wa-acoes').textContent),
+    aplicarModelo(modo) {
+      const opcoes = [];
+      if (modo === 'agenda' || modo === 'ambos') opcoes.push({uid:gerarUid(),chave:String(opcoes.length+1),titulo:'Fazer um agendamento',acao:'agenda',mensagem:'',palavras_chave:'agendar, agenda, marcar horário',menu_destino:'',voltar_ao_menu:false,ativo:true});
+      if (modo === 'catalogo' || modo === 'ambos') opcoes.push({uid:gerarUid(),chave:String(opcoes.length+1),titulo:'Fazer um pedido',acao:'catalogo',mensagem:'',palavras_chave:'comprar, catálogo, catalogo, pedido',menu_destino:'',voltar_ao_menu:false,ativo:true});
+      opcoes.push({uid:gerarUid(),chave:String(opcoes.length+1),titulo:'Falar com um atendente',acao:'atendimento_humano',mensagem:'',palavras_chave:'atendente, humano, pessoa',menu_destino:'',voltar_ao_menu:false,ativo:true});
+      opcoes.push({uid:gerarUid(),chave:String(opcoes.length+1),titulo:'Encerrar a conversa',acao:'encerrar',mensagem:'',palavras_chave:'encerrar, finalizar, sair',menu_destino:'',voltar_ao_menu:false,ativo:true});
+      const principal = this.menus.find(menu => menu.principal) || this.menus[0];
+      principal.nome='Menu principal'; principal.codigo='principal'; principal.mensagem='Como posso ajudar?'; principal.principal=true; principal.ativo=true; principal.opcoes=opcoes;
+      this.menus.forEach(menu => { if (menu !== principal) menu.principal=false; });
+    },
     adicionarMenu() {
       const numero = this.menus.length + 1;
       this.menus.push({uid: gerarUid(), codigo: `menu-${numero}`, nome: `Menu ${numero}`, mensagem: 'Escolha uma opção:', principal: false, ativo: true, opcoes: []});

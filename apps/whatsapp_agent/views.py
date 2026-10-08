@@ -109,7 +109,7 @@ def _fluxo_serializado(configuracao):
     ]
 
 
-def _validar_fluxo(valor):
+def _validar_fluxo(valor, modo_atendimento=ConfiguracaoWhatsApp.ModoAtendimento.AGENDA):
     try:
         menus = json.loads(valor or '[]')
     except json.JSONDecodeError as exc:
@@ -156,6 +156,21 @@ def _validar_fluxo(valor):
             destino = opcao.get('menu_destino')
             if opcao['acao'] == OpcaoMenuWhatsApp.Acao.ABRIR_MENU and destino not in codigos:
                 raise ValueError('Selecione um menu de destino válido nas ações de submenu.')
+    acoes_ativas = {
+        opcao['acao']
+        for menu in menus if menu.get('ativo', True)
+        for opcao in (menu.get('opcoes') or []) if opcao.get('ativo', True)
+    }
+    if modo_atendimento in {
+        ConfiguracaoWhatsApp.ModoAtendimento.AGENDA,
+        ConfiguracaoWhatsApp.ModoAtendimento.AMBOS,
+    } and OpcaoMenuWhatsApp.Acao.AGENDA not in acoes_ativas:
+        raise ValueError('Inclua ao menos uma opção ativa para enviar o link da agenda.')
+    if modo_atendimento in {
+        ConfiguracaoWhatsApp.ModoAtendimento.CATALOGO,
+        ConfiguracaoWhatsApp.ModoAtendimento.AMBOS,
+    } and OpcaoMenuWhatsApp.Acao.CATALOGO not in acoes_ativas:
+        raise ValueError('Inclua ao menos uma opção ativa para enviar o link do catálogo.')
     return menus
 
 
@@ -209,12 +224,18 @@ class FluxoConfiguracaoView(PermissaoRequiredMixin, View):
     def post(self, request):
         configuracao = _configuracao(request)
         form = FluxoWhatsAppForm(request.POST, instance=configuracao)
+        formulario_valido = form.is_valid()
         try:
-            fluxo = _validar_fluxo(request.POST.get('fluxo_json'))
+            fluxo = _validar_fluxo(
+                request.POST.get('fluxo_json'),
+                form.cleaned_data.get('modo_atendimento', configuracao.modo_atendimento)
+                if formulario_valido else configuracao.modo_atendimento,
+            )
         except ValueError as exc:
             fluxo = _fluxo_serializado(configuracao)
             form.add_error(None, str(exc))
-        if form.is_valid():
+            formulario_valido = False
+        if formulario_valido:
             with transaction.atomic():
                 form.save()
                 _salvar_fluxo(configuracao, fluxo)

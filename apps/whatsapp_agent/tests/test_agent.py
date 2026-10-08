@@ -108,6 +108,29 @@ class AgenteWhatsAppTests(TestCase):
         self.assertNotIn(self.configuracao.mensagem_saudacao, segunda)
         self.assertIn('*1.* Fazer um agendamento', segunda)
 
+    def test_modo_ambos_cria_menu_com_agenda_e_catalogo(self):
+        self.configuracao.modo_atendimento = ConfiguracaoWhatsApp.ModoAtendimento.AMBOS
+        self.configuracao.save(update_fields=['modo_atendimento'])
+        self.configuracao.menus.all().delete()
+        conversa = self.nova_conversa()
+
+        resposta = processar_mensagem(conversa, 'oi')
+
+        self.assertIn('Fazer um agendamento', resposta)
+        self.assertIn('Fazer um pedido', resposta)
+        self.assertIn('Falar com um atendente', resposta)
+
+    def test_modo_catalogo_cria_menu_sem_agendamento(self):
+        self.configuracao.modo_atendimento = ConfiguracaoWhatsApp.ModoAtendimento.CATALOGO
+        self.configuracao.save(update_fields=['modo_atendimento'])
+        self.configuracao.menus.all().delete()
+        conversa = self.nova_conversa()
+
+        resposta = processar_mensagem(conversa, 'oi')
+
+        self.assertIn('Fazer um pedido', resposta)
+        self.assertNotIn('Fazer um agendamento', resposta)
+
     def test_fluxo_personalizado_aceita_palavra_chave_e_submenu(self):
         conversa = self.nova_conversa()
         processar_mensagem(conversa, 'oi')
