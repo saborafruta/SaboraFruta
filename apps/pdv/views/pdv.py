@@ -2033,7 +2033,10 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
 
                 pedido_catalogo = (
                     PedidoCatalogo.objects.for_filial(request.filial_ativa)
-                    .select_for_update().select_related('pedido_venda')
+                    # Bloqueia somente o pedido. Um select_related aqui gera
+                    # LEFT JOIN com pedido_venda (relação opcional) e o
+                    # PostgreSQL rejeita FOR UPDATE no lado anulável do join.
+                    .select_for_update()
                     .prefetch_related('itens')
                     .filter(
                         pk=pedido_catalogo_id,
