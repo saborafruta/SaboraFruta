@@ -36,7 +36,7 @@ class FluxoWhatsAppForm(forms.ModelForm):
             'mensagem_opcao_invalida': 'Mensagem para opção não reconhecida',
             'mensagem_confirmacao_agendamento': 'Confirmação do agendamento',
             'mensagem_lembrete_agendamento': 'Lembrete do agendamento',
-            'mensagem_resumo_pedido': 'Resumo enviado após a confirmação',
+            'mensagem_resumo_pedido': 'Resumo final do pedido',
             'mensagem_pedido_recebido': 'Pedido confirmado pelo cliente',
             'mensagem_atualizacao_pedido': 'Atualização enviada pela loja',
             'recuperacao_agendamento_ativa': 'Acompanhar agendamentos não concluídos',

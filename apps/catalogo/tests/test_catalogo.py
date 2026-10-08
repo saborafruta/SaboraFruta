@@ -298,7 +298,8 @@ class CatalogoTests(TestCase):
 
         texto = formatar_resumo(pedido, configuracao)
 
-        self.assertIn('Pedido confirmado', texto)
+        self.assertIn('Resumo do pedido', texto)
+        self.assertNotIn('Pedido confirmado', texto)
         self.assertNotIn('Confirmar pedido', texto)
         self.assertNotIn('Refazer pedido', texto)
 

@@ -89,7 +89,7 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
     )
     mensagem_resumo_pedido = models.TextField(
         default=(
-            '✅ *Pedido confirmado {numero}*\n\n'
+            '🧾 *Resumo do pedido {numero}*\n\n'
             '{itens}\n\n'
             '*Subtotal:* {subtotal}\n'
             '*Frete:* {frete}\n'
