@@ -395,6 +395,12 @@ class CatalogoTests(TestCase):
         self.assertIn('.order-print{grid-column:2;grid-row:2}', conteudo)
         self.assertIn('data-tooltip="Receber no caixa"', trecho_pedidos)
         self.assertIn('data-tooltip="Cancelar pedido"', trecho_pedidos)
+        fonte_template = get_template('catalogo/pedidos.html').template.source
+        for acao in (
+            'Aprovar pedido', 'Concluir separação', 'Saiu para entrega', 'Concluir pedido',
+        ):
+            self.assertIn(f'data-tooltip="{acao}"', fonte_template)
+        self.assertIn('.order-actions{display:flex;align-items:center;gap:9px', fonte_template)
 
     def test_pedido_pode_ir_ao_caixa_antes_da_separacao(self):
         cliente = Cliente.objects.create(
