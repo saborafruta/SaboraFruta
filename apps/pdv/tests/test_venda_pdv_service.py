@@ -473,7 +473,7 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(pedido.venda_pdv.valor_desconto, Decimal('3.00'))
         self.assertEqual(pedido.venda_pdv.valor_total, Decimal('17.00'))
 
-    def test_pagamento_antes_da_separacao_vai_para_fila_de_preparo(self):
+    def test_pagamento_do_aprovado_antes_da_separacao_vai_para_fila_de_preparo(self):
         produto = self.criar_produto('Produto pré-pago pelo WhatsApp')
         self.abastecer(produto, '5')
         cliente = Cliente.objects.create(
@@ -485,7 +485,7 @@ class VendaPDVServiceTests(TestCase):
         )
         pedido = PedidoCatalogo.objects.create(
             filial=self.filial, numero='CAT-PRE-PAGO-PDV', cliente=cliente,
-            status=PedidoCatalogo.Status.PENDENTE_CAIXA,
+            status=PedidoCatalogo.Status.APROVADO,
             nome_cliente=cliente.nome_display, telefone=cliente.celular,
             modalidade=PedidoCatalogo.Modalidade.RETIRADA,
             forma_pagamento=PedidoCatalogo.Pagamento.PIX,

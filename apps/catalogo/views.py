@@ -269,7 +269,10 @@ class PedidoAcaoView(PermissaoRequiredMixin, View):
                     _garantir_aprovacao(pedido, request.user)
                     pedido.status = PedidoCatalogo.Status.APROVADO
                     pedido.save(update_fields=['pedido_venda', 'status', 'aprovado_loja_em', 'updated_at'])
-                messages.success(request, f'{pedido.numero} aprovado e enviado para a fila de separação.')
+                messages.success(
+                    request,
+                    f'{pedido.numero} aprovado. Agora você pode receber no PDV ou iniciar a separação.',
+                )
                 alterado = True
             elif acao == 'separar' and pedido.status == PedidoCatalogo.Status.APROVADO:
                 VendaService.separar_pedido(pedido.pedido_venda, request.user)

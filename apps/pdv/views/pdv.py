@@ -451,6 +451,7 @@ def _pedido_catalogo_para_checkout(request):
         .filter(
             pk=pedido_id,
             status__in=[
+                PedidoCatalogo.Status.APROVADO,
                 PedidoCatalogo.Status.PENDENTE_CAIXA,
                 PedidoCatalogo.Status.EM_SEPARACAO,
                 PedidoCatalogo.Status.PRONTO,
@@ -2046,6 +2047,7 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
                     .filter(
                         pk=pedido_catalogo_id,
                         status__in=[
+                            PedidoCatalogo.Status.APROVADO,
                             PedidoCatalogo.Status.PENDENTE_CAIXA,
                             PedidoCatalogo.Status.EM_SEPARACAO,
                             PedidoCatalogo.Status.PRONTO,

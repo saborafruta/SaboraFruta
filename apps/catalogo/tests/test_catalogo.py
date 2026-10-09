@@ -406,6 +406,27 @@ class CatalogoTests(TestCase):
             subtotal=Decimal('20.00'), total=Decimal('20.00'),
             status=PedidoCatalogo.Status.APROVADO,
         )
+        ItemPedidoCatalogo.objects.create(
+            pedido=pedido, produto=self.produto, descricao=self.produto.descricao,
+            quantidade=1, valor_unitario=Decimal('20.00'), valor_total=Decimal('20.00'),
+        )
+
+        painel_request = self.factory.get('/catalogo/pedidos/')
+        painel_request.filial_ativa = self.filial
+        painel_request.user = self.usuario
+        painel_request.resolver_match = resolve('/catalogo/pedidos/')
+        painel = PedidosCatalogoView().get(painel_request)
+        trecho = painel.content.decode().split(f'id="pedido-{pedido.pk}"', 1)[1]
+        trecho = trecho.split('</article>', 1)[0]
+        self.assertIn('Receber no PDV', trecho)
+        self.assertIn('Iniciar separação', trecho)
+        self.assertLess(trecho.find('Receber no PDV'), trecho.find('Iniciar separação'))
+
+        checkout_request = self.factory.get('/pdv/', {'pedido_catalogo': pedido.pk})
+        checkout_request.filial_ativa = self.filial
+        checkout = _pedido_catalogo_para_checkout(checkout_request)
+        self.assertEqual(checkout['id'], pedido.pk)
+
         request = self.factory.post(
             f'/catalogo/pedidos/{pedido.pk}/mover/', {'status': 'pendente_caixa'},
         )
