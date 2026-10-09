@@ -520,7 +520,7 @@ class CatalogoTests(TestCase):
             nome_cliente=cliente.nome_display, telefone=cliente.celular,
             modalidade='entrega', forma_pagamento='pix', endereco_entrega={'rua': 'Rua A'},
             subtotal=Decimal('40.00'), valor_frete=Decimal('8.00'), total=Decimal('48.00'),
-            status=PedidoCatalogo.Status.PENDENTE_CAIXA,
+            status=PedidoCatalogo.Status.EM_SEPARACAO,
         )
         ItemPedidoCatalogo.objects.create(
             pedido=pedido, produto=self.produto, descricao=self.produto.descricao,
@@ -538,6 +538,16 @@ class CatalogoTests(TestCase):
         self.assertEqual(checkout['frete'], 8.0)
         self.assertEqual(checkout['desconto'], 0.0)
         self.assertTrue(checkout['delivery'])
+
+        painel_request = self.factory.get('/catalogo/pedidos/')
+        painel_request.filial_ativa = self.filial
+        painel_request.user = self.usuario
+        painel_request.resolver_match = resolve('/catalogo/pedidos/')
+        painel = PedidosCatalogoView().get(painel_request)
+        trecho = painel.content.decode().split(f'id="pedido-{pedido.pk}"', 1)[1]
+        trecho = trecho.split('</article>', 1)[0]
+        self.assertIn(f'pedido_catalogo={pedido.pk}', trecho)
+        self.assertIn('Receber no PDV', trecho)
 
     def test_cliente_localizado_recebe_historico_de_compras(self):
         cliente = Cliente.objects.create(

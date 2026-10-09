@@ -433,7 +433,7 @@ def _agendamento_para_checkout(request):
 
 
 def _pedido_catalogo_para_checkout(request):
-    """Carrega no checkout um pedido já separado, sem baixar estoque antes do pagamento."""
+    """Carrega no checkout um pedido confirmado, sem baixar estoque antes do pagamento."""
     bruto = request.GET.get('pedido_catalogo')
     if not bruto:
         return None
@@ -450,7 +450,11 @@ def _pedido_catalogo_para_checkout(request):
         .prefetch_related('itens__produto__linha_producao')
         .filter(
             pk=pedido_id,
-            status__in=[PedidoCatalogo.Status.PENDENTE_CAIXA, PedidoCatalogo.Status.PRONTO],
+            status__in=[
+                PedidoCatalogo.Status.PENDENTE_CAIXA,
+                PedidoCatalogo.Status.EM_SEPARACAO,
+                PedidoCatalogo.Status.PRONTO,
+            ],
         )
         .first()
     )
@@ -2043,6 +2047,7 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
                         pk=pedido_catalogo_id,
                         status__in=[
                             PedidoCatalogo.Status.PENDENTE_CAIXA,
+                            PedidoCatalogo.Status.EM_SEPARACAO,
                             PedidoCatalogo.Status.PRONTO,
                         ],
                     ).first()
@@ -2110,8 +2115,11 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
                 _fechar_comanda_origem(comanda_id, request, venda)
             if pedido_catalogo:
                 pedido_catalogo.status = (
-                    PedidoCatalogo.Status.PRONTO
-                    if status_pedido_catalogo_antes_pagamento == PedidoCatalogo.Status.PRONTO
+                    status_pedido_catalogo_antes_pagamento
+                    if status_pedido_catalogo_antes_pagamento in {
+                        PedidoCatalogo.Status.EM_SEPARACAO,
+                        PedidoCatalogo.Status.PRONTO,
+                    }
                     else PedidoCatalogo.Status.PAGO
                 )
                 pedido_catalogo.venda_pdv = venda

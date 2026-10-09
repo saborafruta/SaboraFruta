@@ -516,6 +516,49 @@ class VendaPDVServiceTests(TestCase):
         self.assertEqual(pedido.status, PedidoCatalogo.Status.PAGO)
         self.assertIsNotNone(pedido.venda_pdv_id)
 
+    def test_pagamento_durante_separacao_preserva_etapa(self):
+        produto = self.criar_produto('Produto em separação pelo WhatsApp')
+        self.abastecer(produto, '5')
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='F', razao_social='Cliente em Separação',
+            celular='5584999997998',
+        )
+        ClienteFilial.objects.update_or_create(
+            cliente=cliente, filial=self.filial, defaults={'ativo': True},
+        )
+        pedido = PedidoCatalogo.objects.create(
+            filial=self.filial, numero='CAT-SEPARACAO-PDV', cliente=cliente,
+            status=PedidoCatalogo.Status.EM_SEPARACAO,
+            nome_cliente=cliente.nome_display, telefone=cliente.celular,
+            modalidade=PedidoCatalogo.Modalidade.RETIRADA,
+            forma_pagamento=PedidoCatalogo.Pagamento.PIX,
+            subtotal=Decimal('10.00'), total=Decimal('10.00'),
+        )
+        ItemPedidoCatalogo.objects.create(
+            pedido=pedido, produto=produto, descricao=produto.descricao,
+            quantidade=1, valor_unitario=Decimal('10.00'), valor_total=Decimal('10.00'),
+        )
+        self.client.force_login(self.usuario)
+        session = self.client.session
+        session['filial_ativa_id'] = self.filial.pk
+        session.save()
+
+        resposta = self.client.post(
+            reverse('pdv:api_venda_finalizar'),
+            data=json.dumps({
+                'pedido_catalogo_id': pedido.pk,
+                'itens': [{'produto_id': produto.pk, 'quantidade': 1}],
+                'pagamentos': [{'forma_id': self.forma.pk, 'valor': '10.00'}],
+                'desconto': '0.00', 'acrescimo': '0.00',
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.status, PedidoCatalogo.Status.EM_SEPARACAO)
+        self.assertIsNotNone(pedido.venda_pdv_id)
+
     def test_finalizar_venda_respeita_preco_normal_escolhido_no_modal(self):
         produto = self.criar_produto("Produto com escolha")
         self.abastecer(produto, "5")
