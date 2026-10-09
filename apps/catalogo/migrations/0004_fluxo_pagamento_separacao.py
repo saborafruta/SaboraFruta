@@ -8,7 +8,7 @@ def pedidos_pagos_anteriores_estavam_prontos(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('catalogo', '0003_catalogoconfiguracao_frete_gratis_acima_and_more'),
+        ('catalogo', '0003_catalogo_horarios_cupons'),
     ]
 
     operations = [
