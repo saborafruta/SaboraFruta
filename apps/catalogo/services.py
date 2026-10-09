@@ -198,7 +198,14 @@ def enviar_atualizacao_whatsapp(pedido, *, db_alias):
         return False
     if pedido.status not in (config.pedido_status_notificados or []):
         return False
-    texto = config.mensagem_atualizacao_pedido
+    texto = (
+        config.mensagem_pedido_pronto_retirada
+        if (
+            pedido.status == PedidoCatalogo.Status.PRONTO
+            and pedido.modalidade == PedidoCatalogo.Modalidade.RETIRADA
+        )
+        else config.mensagem_atualizacao_pedido
+    )
     valores = {
         'numero': pedido.numero,
         'status': pedido.get_status_display(),

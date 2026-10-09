@@ -384,6 +384,8 @@ class CatalogoTests(TestCase):
         self.assertIn('Receber no PDV', trecho_pedidos)
         self.assertIn('Mudar status do pedido', trecho_pedidos)
         self.assertIn('data-status-menu', trecho_pedidos)
+        self.assertIn('order-flag pickup', trecho_pedidos)
+        self.assertIn('Retirada', trecho_pedidos)
         self.assertNotIn('class="order-move"', trecho_pedidos)
         self.assertIn(reverse('catalogo:pedido-imprimir', args=[pedido.pk]), trecho_pedidos)
         self.assertGreater(
@@ -474,6 +476,37 @@ class CatalogoTests(TestCase):
         self.assertFalse(enviado)
         gateway.assert_not_called()
 
+    def test_pedido_pronto_para_retirada_envia_mensagem_especifica(self):
+        cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='F', razao_social='Cliente Retirada',
+            celular='5584999991555',
+        )
+        pedido = PedidoCatalogo.objects.create(
+            filial=self.filial, numero='CAT-RETIRADA', cliente=cliente,
+            nome_cliente=cliente.nome_display, telefone=cliente.celular,
+            modalidade=PedidoCatalogo.Modalidade.RETIRADA, forma_pagamento='pix',
+            subtotal=Decimal('20.00'), total=Decimal('20.00'),
+            status=PedidoCatalogo.Status.PRONTO,
+        )
+        ConfiguracaoWhatsApp.objects.create(
+            filial=self.filial, instancia='catalogo-pronto-retirada', ativo=True,
+            status=ConfiguracaoWhatsApp.Status.CONECTADO,
+            pedido_status_notificados=['pronto'],
+            mensagem_pedido_pronto_retirada=(
+                'Pedido {numero} de {nome} já pode ser retirado. Total {total}.'
+            ),
+        )
+
+        with patch('apps.catalogo.services.EvolutionClient') as gateway:
+            gateway.return_value.enviar_texto.return_value = {'key': {'id': 'msg-1'}}
+            enviado = enviar_atualizacao_whatsapp(pedido, db_alias='default')
+
+        self.assertTrue(enviado)
+        texto = gateway.return_value.enviar_texto.call_args.args[1]
+        self.assertIn('CAT-RETIRADA', texto)
+        self.assertIn('já pode ser retirado', texto)
+        self.assertIn('R$ 20,00', texto)
+
     def test_folha_de_separacao_abre_pronta_para_imprimir(self):
         cliente = Cliente.objects.create(
             filial=self.filial, tipo_pessoa='F', razao_social='Cliente Impressão',
@@ -548,6 +581,8 @@ class CatalogoTests(TestCase):
         trecho = trecho.split('</article>', 1)[0]
         self.assertIn(f'pedido_catalogo={pedido.pk}', trecho)
         self.assertIn('Receber no PDV', trecho)
+        self.assertIn('order-flag delivery', trecho)
+        self.assertIn('Entrega', trecho)
 
     def test_cliente_localizado_recebe_historico_de_compras(self):
         cliente = Cliente.objects.create(

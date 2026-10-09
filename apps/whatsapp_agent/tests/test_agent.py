@@ -581,6 +581,7 @@ class EvolutionClientTests(SimpleTestCase):
         self.assertIn('mensagem_feedback_agendamento', campos)
         self.assertIn('recuperacao_agendamento_ativa', campos)
         self.assertIn('pedido_status_notificados', campos)
+        self.assertIn('mensagem_pedido_pronto_retirada', campos)
         self.assertEqual(
             campos['pedido_status_notificados'].label,
             'Enviar atualização nestas etapas',

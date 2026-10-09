@@ -122,6 +122,14 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
         ),
         help_text='Variáveis disponíveis: {numero}, {status}, {nome} e {total}.',
     )
+    mensagem_pedido_pronto_retirada = models.TextField(
+        default=(
+            '✅ *Pedido {numero} pronto para retirada!*\n\n'
+            'Olá, {nome}! Seu pedido já foi separado e pode ser retirado na loja.\n'
+            'Total: {total}'
+        ),
+        help_text='Variáveis disponíveis: {numero}, {nome} e {total}.',
+    )
     pedido_status_notificados = models.JSONField(
         default=status_pedido_notificados_padrao,
         blank=True,
