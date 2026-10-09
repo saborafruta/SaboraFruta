@@ -388,10 +388,11 @@ class CatalogoTests(TestCase):
         self.assertIn('Retirada', trecho_pedidos)
         self.assertNotIn('class="order-move"', trecho_pedidos)
         self.assertIn(reverse('catalogo:pedido-imprimir', args=[pedido.pk]), trecho_pedidos)
-        self.assertGreater(
+        self.assertLess(
             trecho_pedidos.find(reverse('catalogo:pedido-imprimir', args=[pedido.pk])),
             trecho_pedidos.find('<div class="order-actions">'),
         )
+        self.assertIn('.order-print{grid-column:2;grid-row:2}', conteudo)
 
     def test_pedido_pode_ir_ao_caixa_antes_da_separacao(self):
         cliente = Cliente.objects.create(
