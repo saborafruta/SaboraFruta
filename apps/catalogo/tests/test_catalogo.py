@@ -381,7 +381,7 @@ class CatalogoTests(TestCase):
         conteudo = painel.content.decode()
         trecho_pedidos = conteudo[conteudo.find('<div class="orders-page">'):]
         self.assertIn(f'pedido_catalogo={pedido.pk}', trecho_pedidos)
-        self.assertIn('Receber no PDV', trecho_pedidos)
+        self.assertIn('aria-label="Receber no caixa', trecho_pedidos)
         self.assertIn('Mudar status do pedido', trecho_pedidos)
         self.assertIn('data-status-menu', trecho_pedidos)
         self.assertIn('order-flag pickup', trecho_pedidos)
@@ -393,6 +393,8 @@ class CatalogoTests(TestCase):
             trecho_pedidos.find('<div class="order-actions">'),
         )
         self.assertIn('.order-print{grid-column:2;grid-row:2}', conteudo)
+        self.assertIn('data-tooltip="Receber no caixa"', trecho_pedidos)
+        self.assertIn('data-tooltip="Cancelar pedido"', trecho_pedidos)
 
     def test_pedido_pode_ir_ao_caixa_antes_da_separacao(self):
         cliente = Cliente.objects.create(
@@ -418,9 +420,12 @@ class CatalogoTests(TestCase):
         painel = PedidosCatalogoView().get(painel_request)
         trecho = painel.content.decode().split(f'id="pedido-{pedido.pk}"', 1)[1]
         trecho = trecho.split('</article>', 1)[0]
-        self.assertIn('Receber no PDV', trecho)
-        self.assertIn('Iniciar separação', trecho)
-        self.assertLess(trecho.find('Receber no PDV'), trecho.find('Iniciar separação'))
+        self.assertIn('data-tooltip="Receber no caixa"', trecho)
+        self.assertIn('data-tooltip="Iniciar separação"', trecho)
+        self.assertLess(
+            trecho.find('data-tooltip="Receber no caixa"'),
+            trecho.find('data-tooltip="Iniciar separação"'),
+        )
 
         checkout_request = self.factory.get('/pdv/', {'pedido_catalogo': pedido.pk})
         checkout_request.filial_ativa = self.filial
@@ -602,7 +607,7 @@ class CatalogoTests(TestCase):
         trecho = painel.content.decode().split(f'id="pedido-{pedido.pk}"', 1)[1]
         trecho = trecho.split('</article>', 1)[0]
         self.assertIn(f'pedido_catalogo={pedido.pk}', trecho)
-        self.assertIn('Receber no PDV', trecho)
+        self.assertIn('aria-label="Receber no caixa', trecho)
         self.assertIn('order-flag delivery', trecho)
         self.assertIn('Entrega', trecho)
 
