@@ -382,6 +382,9 @@ class CatalogoTests(TestCase):
         trecho_pedidos = conteudo[conteudo.find('<div class="orders-page">'):]
         self.assertIn(f'pedido_catalogo={pedido.pk}', trecho_pedidos)
         self.assertIn('Receber no PDV', trecho_pedidos)
+        self.assertIn('Mudar status do pedido', trecho_pedidos)
+        self.assertIn('data-status-menu', trecho_pedidos)
+        self.assertNotIn('class="order-move"', trecho_pedidos)
         self.assertIn(reverse('catalogo:pedido-imprimir', args=[pedido.pk]), trecho_pedidos)
 
     def test_pedido_pode_ir_ao_caixa_antes_da_separacao(self):
