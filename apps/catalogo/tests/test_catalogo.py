@@ -386,6 +386,10 @@ class CatalogoTests(TestCase):
         self.assertIn('data-status-menu', trecho_pedidos)
         self.assertNotIn('class="order-move"', trecho_pedidos)
         self.assertIn(reverse('catalogo:pedido-imprimir', args=[pedido.pk]), trecho_pedidos)
+        self.assertGreater(
+            trecho_pedidos.find(reverse('catalogo:pedido-imprimir', args=[pedido.pk])),
+            trecho_pedidos.find('<div class="order-actions">'),
+        )
 
     def test_pedido_pode_ir_ao_caixa_antes_da_separacao(self):
         cliente = Cliente.objects.create(
