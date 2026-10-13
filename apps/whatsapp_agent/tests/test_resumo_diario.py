@@ -107,6 +107,9 @@ class ResumoDiarioWhatsAppTests(TestCase):
         )
         metricas_mock.assert_called_with(self.filial, referencia, True)
         self.assertIn('Loja Centro', envios[0].mensagem)
+        self.assertIn('💰 *Vendas:* R$ 1.000,00', envios[0].mensagem)
+        self.assertIn('💵 *Recebido:* R$ 900,00', envios[0].mensagem)
+        self.assertNotIn('Entradas financeiras', envios[0].mensagem)
         self.assertEqual(envios[0].tenant_alias, 'default')
 
     @patch('apps.whatsapp_agent.resumo_service._metricas_filial')

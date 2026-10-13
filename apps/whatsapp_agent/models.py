@@ -250,7 +250,8 @@ class ConfiguracaoWhatsAppCentral(TimestampedModel):
         default=(
             '📊 *Resumo diário — {filial}*\n'
             '🗓️ {data}\n\n'
-            '💰 *Entradas financeiras:* {entradas_financeiras}\n'
+            '💰 *Vendas:* {vendas}\n'
+            '💵 *Recebido:* {recebido}\n'
             '🧾 *Quantidade de vendas:* {quantidade_vendas}\n'
             '🎯 *Ticket médio:* {ticket_medio}\n'
             '🏷️ *Descontos:* {descontos}\n'
