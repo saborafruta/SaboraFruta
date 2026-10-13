@@ -1,9 +1,12 @@
 import datetime
+import importlib
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.http import HttpResponse
+from django.apps import apps as django_apps
+from django.db import connection
 from django.test import RequestFactory
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -215,6 +218,34 @@ class ResumoDiarioWhatsAppTests(TestCase):
         })
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data['telefone'], '5584999990000')
+
+    def test_migracao_corrige_apenas_resumo_pendente_com_rotulo_antigo(self):
+        envio = EnvioResumoWhatsApp.objects.create(
+            configuracao=self.configuracao,
+            empresa_nome='Empresa Resumo',
+            filial_nome='Loja Centro',
+            filial_cnpj=self.filial.cnpj,
+            destinatario_nome='Sócio',
+            telefone='5584999990001',
+            data_referencia=timezone.localdate() - datetime.timedelta(days=1),
+            metricas=self._metricas(),
+            mensagem='💰 *Entradas financeiras:* R$ 900,00',
+            agendado_para=timezone.now(),
+        )
+        migracao = importlib.import_module(
+            'apps.whatsapp_agent.migrations.0016_corrigir_resumos_pendentes',
+        )
+
+        migracao.corrigir_resumos_pendentes(
+            django_apps,
+            SimpleNamespace(connection=connection),
+        )
+
+        envio.refresh_from_db()
+        self.assertEqual(
+            envio.mensagem,
+            '💰 *Vendas:* R$ 1.000,00\n💵 *Recebido:* R$ 900,00',
+        )
 
     def test_diagnostico_conta_filial_e_destinatarios_habilitados(self):
         diagnostico = diagnosticar_resumos_diarios()
