@@ -1,4 +1,5 @@
 import datetime
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -74,6 +75,7 @@ class ResumoDiarioWhatsAppTests(TestCase):
             'filial': 'Loja Centro',
             'data': '07/10/2026',
             'vendas': 'R$ 1.000,00',
+            'entradas_financeiras': 'R$ 900,00',
             'recebido': 'R$ 900,00',
             'quantidade_vendas': 10,
             'ticket_medio': 'R$ 100,00',
@@ -219,13 +221,26 @@ class ResumoDiarioWhatsAppTests(TestCase):
         self.assertEqual(diagnostico['destinatarios_ativos'], 2)
         self.assertEqual(diagnostico['fila'], {})
 
-    def test_metricas_vazias_sao_geradas_sem_exigir_agenda(self):
+    @patch(
+        'apps.financeiro.services.posicao_diaria_service.'
+        'PosicaoDiariaCaixaService.gerar',
+    )
+    def test_metricas_usam_entradas_da_movimentacao_bancaria(
+        self, gerar_posicao_mock,
+    ):
+        gerar_posicao_mock.side_effect = [
+            {'total_entradas': Decimal('1234.56')},
+            {'total_entradas': Decimal('1000.00')},
+        ]
         metricas = _metricas_filial(
             self.filial,
             timezone.localdate() - datetime.timedelta(days=1),
             incluir_agenda=False,
         )
         self.assertEqual(metricas['quantidade_vendas'], 0)
+        self.assertEqual(metricas['entradas_financeiras'], 'R$ 1.234,56')
+        self.assertEqual(metricas['recebido'], 'R$ 1.234,56')
+        self.assertTrue(metricas['comparacao'].startswith('+23,5%'))
         self.assertEqual(metricas['agenda'], '')
         self.assertEqual(metricas['filial'], 'Loja Centro')
 

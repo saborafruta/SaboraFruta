@@ -30,8 +30,9 @@ def _moeda(valor):
 def _metricas_filial(filial, data_referencia, incluir_agenda=False):
     from apps.estoque.models import AlertaVencimento, Estoque
     from apps.financeiro.constants.enums import StatusContaReceber
-    from apps.financeiro.models import ContaReceber, PagamentoContaReceber
-    from apps.pdv.models import PagamentoVendaPDV, VendaPDV
+    from apps.financeiro.models import ContaReceber
+    from apps.financeiro.services.posicao_diaria_service import PosicaoDiariaCaixaService
+    from apps.pdv.models import VendaPDV
     from apps.vendas.models import PedidoVenda
 
     status_pedidos = [
@@ -62,22 +63,9 @@ def _metricas_filial(filial, data_referencia, incluir_agenda=False):
     quantidade_vendas = (pedidos_agg['quantidade'] or 0) + (pdv_agg['quantidade'] or 0)
     descontos = (pedidos_agg['descontos'] or ZERO) + (pdv_agg['descontos'] or ZERO)
 
-    recebimento_pdv = PagamentoVendaPDV.objects.filter(
-        venda_pdv__filial=filial,
-        venda_pdv__data_venda__date=data_referencia,
-        venda_pdv__status='finalizada',
-        forma_pagamento__movimenta_caixa=True,
-        status='aprovado',
-    ).aggregate(valor=Sum('valor'), troco=Sum('troco'))
-    recebimento_contas = PagamentoContaReceber.objects.filter(
-        filial=filial,
-        data_pagamento=data_referencia,
-    ).aggregate(total=Sum('valor_pago'))['total'] or ZERO
-    recebido = (
-        (recebimento_pdv['valor'] or ZERO)
-        - (recebimento_pdv['troco'] or ZERO)
-        + recebimento_contas
-    )
+    entradas_financeiras = PosicaoDiariaCaixaService(
+        filial, data_referencia,
+    ).gerar()['total_entradas']
 
     cancelamentos = (
         VendaPDV.objects.filter(filial=filial, cancelado_em__date=data_referencia).count()
@@ -114,33 +102,32 @@ def _metricas_filial(filial, data_referencia, incluir_agenda=False):
     )
 
     data_anterior = data_referencia - datetime.timedelta(days=1)
-    anterior_pedidos = pedidos.model.objects.filter(
-        filial=filial,
-        status__in=status_pedidos,
-        data_emissao__date=data_anterior,
-    ).aggregate(total=Sum('valor_total'))['total'] or ZERO
-    anterior_pdv = VendaPDV.objects.filter(
-        filial=filial,
-        status='finalizada',
-        data_venda__date=data_anterior,
-    ).aggregate(total=Sum('valor_total'))['total'] or ZERO
-    total_anterior = anterior_pedidos + anterior_pdv
-    if total_anterior:
-        variacao = ((total_vendas - total_anterior) / total_anterior * Decimal('100')).quantize(
+    entradas_anteriores = PosicaoDiariaCaixaService(
+        filial, data_anterior,
+    ).gerar()['total_entradas']
+    if entradas_anteriores:
+        variacao = (
+            (entradas_financeiras - entradas_anteriores)
+            / entradas_anteriores
+            * Decimal('100')
+        ).quantize(
             Decimal('0.1'),
         )
         comparacao = f'{variacao:+}% em relação a {data_anterior:%d/%m}'.replace('.', ',')
-    elif total_vendas:
-        comparacao = 'houve vendas; o dia anterior ficou sem movimento'
+    elif entradas_financeiras:
+        comparacao = 'houve entradas; o dia anterior ficou sem movimento financeiro'
     else:
-        comparacao = 'sem vendas nos dois dias comparados'
+        comparacao = 'sem entradas financeiras nos dois dias comparados'
 
     metricas = {
         'empresa': filial.empresa.nome_fantasia or filial.empresa.razao_social,
         'filial': filial.nome_fantasia or filial.razao_social,
         'data': data_referencia.strftime('%d/%m/%Y'),
         'vendas': _moeda(total_vendas),
-        'recebido': _moeda(recebido),
+        # ``recebido`` permanece como alias para modelos personalizados antigos.
+        # A fonte oficial é o mesmo livro-caixa da Movimentação Bancária.
+        'entradas_financeiras': _moeda(entradas_financeiras),
+        'recebido': _moeda(entradas_financeiras),
         'quantidade_vendas': quantidade_vendas,
         'ticket_medio': _moeda(total_vendas / quantidade_vendas if quantidade_vendas else ZERO),
         'descontos': _moeda(descontos),

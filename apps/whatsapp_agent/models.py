@@ -228,7 +228,7 @@ class ConfiguracaoWhatsAppCentral(TimestampedModel):
     numero_conectado = models.CharField(max_length=24, blank=True)
     nome_conectado = models.CharField(max_length=120, blank=True)
     resumos_ativos = models.BooleanField(
-        default=False,
+        default=True,
         help_text='Ativa a preparação automática dos resumos diários.',
     )
     horario_inicio = models.TimeField(default=time(8, 0))
@@ -250,8 +250,7 @@ class ConfiguracaoWhatsAppCentral(TimestampedModel):
         default=(
             '📊 *Resumo diário — {filial}*\n'
             '🗓️ {data}\n\n'
-            '💰 *Vendas:* {vendas}\n'
-            '💵 *Recebido:* {recebido}\n'
+            '💰 *Entradas financeiras:* {entradas_financeiras}\n'
             '🧾 *Quantidade de vendas:* {quantidade_vendas}\n'
             '🎯 *Ticket médio:* {ticket_medio}\n'
             '🏷️ *Descontos:* {descontos}\n'
@@ -263,8 +262,9 @@ class ConfiguracaoWhatsAppCentral(TimestampedModel):
             '{agenda}'
         ),
         help_text=(
-            'Variáveis: {empresa}, {filial}, {data}, {vendas}, {recebido}, '
-            '{quantidade_vendas}, {ticket_medio}, {descontos}, {cancelamentos}, '
+            'Variáveis: {empresa}, {filial}, {data}, {entradas_financeiras}, '
+            '{vendas}, {recebido}, {quantidade_vendas}, {ticket_medio}, '
+            '{descontos}, {cancelamentos}, '
             '{estoque_critico}, {vencimentos}, {contas_vencidas}, {comparacao} e {agenda}.'
         ),
     )
