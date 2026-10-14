@@ -1,6 +1,6 @@
 {% extends "_base.html" %}
-{% block title %}DRE Consolidado{% endblock %}
-{% block page_title %}DRE Consolidado{% endblock %}
+{% block title %}DRE Gerencial{% endblock %}
+{% block page_title %}DRE Gerencial{% endblock %}
 
 {% block content %}
 <style>
@@ -45,10 +45,10 @@
   {# ── Cabeçalho e navegação de mês ──────────────────────────────────── #}
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
-      <h2 class="text-2xl font-semibold dre-forte">DRE Consolidado</h2>
+      <h2 class="text-2xl font-semibold dre-forte">DRE Gerencial</h2>
       <p class="text-sm mt-1 dre-rotulo">
         Resultado de <strong>{{ competencia|date:"F/Y" }}</strong> — calculado
-        agora, a partir dos títulos.
+        agora, a partir dos títulos e das baixas financeiras.
       </p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
@@ -85,6 +85,13 @@
         está em branco). É o que responde "este mês deu lucro?".
       {% endif %}
     </p>
+    <p class="text-xs dre-rotulo mt-2">
+      As linhas usam as mesmas categorias financeiras escolhidas ao registrar
+      entradas e despesas na Posição Diária. Há
+      <strong>{{ categorias_disponiveis.R }} categorias de receita</strong> e
+      <strong>{{ categorias_disponiveis.D }} categorias de despesa</strong>
+      ativas para lançamento.
+    </p>
   </div>
 
   {# ── Os quatro números ─────────────────────────────────────────────── #}
@@ -92,12 +99,12 @@
     <div class="dre-card p-4">
       <p class="text-xs uppercase tracking-wide dre-rotulo">Receitas</p>
       <p class="text-2xl font-semibold mt-1 dre-forte">R$ {{ resumo.receita|floatformat:2 }}</p>
-      <p class="text-xs mt-1 dre-rotulo">no mês, no regime escolhido</p>
+      <p class="text-xs mt-1 dre-rotulo">{{ resumo.movimentos_receita }} recebimento{{ resumo.movimentos_receita|pluralize }} no resultado</p>
     </div>
     <div class="dre-card p-4">
       <p class="text-xs uppercase tracking-wide dre-rotulo">Despesas</p>
       <p class="text-2xl font-semibold mt-1 dre-forte">R$ {{ resumo.despesa|floatformat:2 }}</p>
-      <p class="text-xs mt-1 dre-rotulo">no mês, no regime escolhido</p>
+      <p class="text-xs mt-1 dre-rotulo">{{ resumo.movimentos_despesa }} pagamento{{ resumo.movimentos_despesa|pluralize }} no resultado</p>
     </div>
     <div class="dre-card p-4">
       <p class="text-xs uppercase tracking-wide dre-rotulo">Resultado</p>
@@ -146,8 +153,9 @@
     <table class="dre-tabela">
       <thead>
         <tr>
-          <th class="nome">Conta</th>
+          <th class="nome">Grupo e categoria</th>
           <th class="valor">{{ competencia|date:"M/y" }}</th>
+          <th class="valor">Participação</th>
           <th class="valor">Mês anterior</th>
           <th class="valor">Variação</th>
           <th class="valor">Acumulado no ano</th>
@@ -156,7 +164,7 @@
       <tbody>
         {% if vazio %}
           <tr>
-            <td class="nome" colspan="5" style="padding:40px; text-align:center;">
+            <td class="nome" colspan="6" style="padding:40px; text-align:center;">
               <p class="text-sm dre-forte">Nenhum título no período.</p>
               <p class="text-sm mt-2 dre-rotulo">
                 {% if regime == 'caixa' %}
@@ -171,8 +179,9 @@
         {% endif %}
         {% for bloco in linhas %}{% if not vazio %}
           <tr class="dre-linha">
-            <td class="nome" colspan="5" style="padding-top:16px;">
+            <td class="nome" colspan="6" style="padding-top:16px;">
               <span class="text-xs uppercase tracking-wider dre-rotulo">{{ bloco.rotulo }}</span>
+              <span class="ml-2 text-xs dre-rotulo">{{ bloco.quantidade_mes }} lançamento{{ bloco.quantidade_mes|pluralize }}</span>
             </td>
           </tr>
 
@@ -181,8 +190,10 @@
               <td class="nome dre-forte">
                 {% if l.codigo %}<span class="dre-rotulo" style="font-size:12px;">{{ l.codigo }}</span> {% endif %}
                 {{ l.descricao }}
+                <span class="dre-rotulo" style="font-size:11px;">· {{ l.quantidade }} lançamento{{ l.quantidade|pluralize }}</span>
               </td>
               <td class="valor dre-forte">{{ l.mes|floatformat:2 }}</td>
+              <td class="valor dre-rotulo">{% if l.participacao_pct is not None %}{{ l.participacao_pct }}%{% else %}—{% endif %}</td>
               <td class="valor dre-rotulo">{{ l.anterior|floatformat:2 }}</td>
               {% comment %}
                 A variação é pintada pelo que ela SIGNIFICA, e não pelo
@@ -208,9 +219,11 @@
             {% for f in l.filhas %}
               <tr class="dre-filha">
                 <td class="nome">
-                  {% if f.codigo %}{{ f.codigo }} · {% endif %}{{ f.descricao }}
+                  {% if f.codigo %}{{ f.codigo }} · {% endif %}{{ f.caminho|default:f.descricao }}
+                  <span class="dre-rotulo">· {{ f.quantidade }} lançamento{{ f.quantidade|pluralize }}</span>
                 </td>
                 <td class="valor">{{ f.total|floatformat:2 }}</td>
+                <td class="valor">{% if f.participacao_pct is not None %}{{ f.participacao_pct }}%{% else %}—{% endif %}</td>
                 <td class="valor"></td>
                 <td class="valor"></td>
                 <td class="valor"></td>
@@ -220,8 +233,9 @@
 
           {% if bloco.sem_categoria.tem %}
             <tr class="dre-linha dre-grupo">
-              <td class="nome" style="color:#d97706;">Sem categoria</td>
+              <td class="nome" style="color:#d97706;">Sem categoria · {{ bloco.sem_categoria.quantidade }} lançamento{{ bloco.sem_categoria.quantidade|pluralize }}</td>
               <td class="valor" style="color:#d97706;">{{ bloco.sem_categoria.mes|floatformat:2 }}</td>
+              <td class="valor dre-rotulo">{% if bloco.sem_categoria.participacao_pct is not None %}{{ bloco.sem_categoria.participacao_pct }}%{% else %}—{% endif %}</td>
               <td class="valor dre-rotulo">{{ bloco.sem_categoria.anterior|floatformat:2 }}</td>
               <td class="valor dre-rotulo">—</td>
               <td class="valor dre-rotulo">{{ bloco.sem_categoria.ano|floatformat:2 }}</td>
@@ -231,13 +245,14 @@
           <tr class="dre-total">
             <td class="nome dre-forte">Total de {{ bloco.rotulo|lower }}</td>
             <td class="valor dre-forte">{{ bloco.total_mes|floatformat:2 }}</td>
+            <td class="valor dre-forte">{% if bloco.total_mes %}100,0%{% else %}—{% endif %}</td>
             <td class="valor dre-rotulo">{{ bloco.total_anterior|floatformat:2 }}</td>
             <td class="valor dre-rotulo">—</td>
             <td class="valor dre-forte">{{ bloco.total_ano|floatformat:2 }}</td>
           </tr>
         {% endif %}{% empty %}
           <tr>
-            <td class="nome" colspan="5" style="padding:40px; text-align:center;">
+            <td class="nome" colspan="6" style="padding:40px; text-align:center;">
               <p class="text-sm dre-forte">Nenhum título no período.</p>
               <p class="text-sm mt-2 dre-rotulo">
                 {% if regime == 'caixa' %}
@@ -256,6 +271,7 @@
             <td class="nome dre-forte" style="font-size:15px;">Resultado do período</td>
             <td class="valor {% if resumo.resultado < 0 %}dre-negativo{% else %}dre-positivo{% endif %}"
                 style="font-size:15px;">{{ resumo.resultado|floatformat:2 }}</td>
+            <td class="valor dre-rotulo">{% if resumo.margem is not None %}{{ resumo.margem }}%{% else %}—{% endif %}</td>
             <td class="valor {% if resumo.resultado_anterior < 0 %}dre-negativo{% else %}dre-positivo{% endif %}">
               {{ resumo.resultado_anterior|floatformat:2 }}
             </td>
@@ -273,10 +289,11 @@
   <div class="dre-card p-4">
     <p class="text-xs uppercase tracking-wide mb-2 dre-rotulo">Como o número é feito</p>
     <ul class="text-sm space-y-1 dre-rotulo">
-      <li><strong>Calculado agora</strong>, a partir dos títulos — não de um consolidado gravado, que ficaria
+      <li><strong>Calculado agora</strong>, a partir dos títulos e das baixas — não de um consolidado gravado, que ficaria
         velho assim que alguém corrigisse uma baixa.</li>
       <li><strong>As contas vêm da categoria financeira</strong> do título, agrupadas pela conta raiz. As linhas
         recuadas são as subcategorias.</li>
+      <li><strong>No caixa, cada baixa entra no seu próprio dia</strong>, inclusive quando o título foi pago ou recebido em partes.</li>
       <li><strong>Título cancelado fica de fora</strong> — nunca foi receita nem despesa. Recebimento devolvido
         e conta a pagar excluída também.</li>
       <li><strong>A variação é pintada pelo que significa:</strong> receita subindo é verde, despesa subindo é

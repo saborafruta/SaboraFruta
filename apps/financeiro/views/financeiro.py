@@ -20,7 +20,6 @@ from apps.financeiro.forms import (
 )
 from apps.financeiro.models import (
     CentroCusto, CondicaoPagamento, ContaReceber, ContaPagar, DocumentoFiscal,
-    DREConsolidado,
     FormaPagamento, PlanoContas, TaxaParcelamento,
 )
 
@@ -399,7 +398,7 @@ def dre_view(request):
         regime=(request.GET.get("regime") or "").strip(),
     )
     return render(request, "financeiro/dre.html", {
-        "title": "DRE Consolidado",
+        "title": "DRE Gerencial",
         "mes_texto": competencia.strftime("%Y-%m"),
         "mes_anterior_texto": (
             dre_mes_anterior(competencia).strftime("%Y-%m")

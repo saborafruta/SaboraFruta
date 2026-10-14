@@ -27,7 +27,13 @@ from django.urls import reverse
 
 from apps.cadastros.models import Cliente, Fornecedor
 from apps.core.models import Empresa, Filial
-from apps.financeiro.models import ContaPagar, ContaReceber, PlanoContas
+from apps.financeiro.models import (
+    ContaPagar,
+    ContaReceber,
+    PagamentoContaPagar,
+    PagamentoContaReceber,
+    PlanoContas,
+)
 from apps.financeiro.services.dre import CAIXA, COMPETENCIA, DREService
 
 
@@ -71,7 +77,7 @@ class DREBase(TestCase):
                  vencimento=None, status='pago'):
         self._n += 1
         valor = Decimal(valor)
-        return ContaReceber.objects.create(
+        conta = ContaReceber.objects.create(
             filial=self.filial, cliente=self.cliente,
             documento_numero=f'R{self._n:04d}',
             data_emissao=vencimento or pago_em or self.mes,
@@ -82,12 +88,18 @@ class DREBase(TestCase):
             valor_saldo=Decimal('0') if status == 'pago' else valor,
             status=status, plano_contas=categoria,
         )
+        if pago_em:
+            PagamentoContaReceber.objects.create(
+                filial=self.filial, conta_receber=conta,
+                data_pagamento=pago_em, valor_pago=valor,
+            )
+        return conta
 
     def _pagar(self, valor, categoria=None, pago_em=None, competencia=None,
                vencimento=None, status='pago', excluido=None):
         self._n += 1
         valor = Decimal(valor)
-        return ContaPagar.objects.create(
+        conta = ContaPagar.objects.create(
             filial=self.filial, fornecedor=self.fornecedor,
             documento_numero=f'P{self._n:04d}',
             data_emissao=vencimento or pago_em or self.mes,
@@ -98,6 +110,12 @@ class DREBase(TestCase):
             valor_saldo=Decimal('0') if status == 'pago' else valor,
             status=status, plano_contas=categoria, excluido_em=excluido,
         )
+        if pago_em:
+            PagamentoContaPagar.objects.create(
+                filial=self.filial, conta_pagar=conta,
+                data_pagamento=pago_em, valor_pago=valor,
+            )
+        return conta
 
     def _painel(self, regime=CAIXA, mes=None):
         return DREService.painel(self.filial, mes or self.mes, regime)
@@ -167,6 +185,49 @@ class RegimeTests(DREBase):
         self.assertEqual(caixa['resultado'], Decimal('11000'))
         self.assertEqual(comp['receita'], Decimal('0'))
         self.assertEqual(comp['resultado'], Decimal('-9000'))
+
+    def test_caixa_distribui_baixas_parciais_entre_os_meses(self):
+        receita = self._categoria('1', 'Vendas', 'R')
+        conta = self._receber(
+            '1000', receita, vencimento=date(2026, 5, 10),
+            competencia=date(2026, 5, 1), status='pago_parcial',
+        )
+        conta.valor_pago = Decimal('1000')
+        conta.valor_saldo = Decimal('0')
+        conta.data_pagamento = date(2026, 6, 10)
+        conta.status = 'pago'
+        conta.save(update_fields=['valor_pago', 'valor_saldo', 'data_pagamento', 'status'])
+        PagamentoContaReceber.objects.create(
+            filial=self.filial, conta_receber=conta,
+            data_pagamento=date(2026, 5, 10), valor_pago=Decimal('400'),
+        )
+        PagamentoContaReceber.objects.create(
+            filial=self.filial, conta_receber=conta,
+            data_pagamento=date(2026, 6, 10), valor_pago=Decimal('600'),
+        )
+
+        maio = self._painel(CAIXA, self.mes_anterior)['resumo']
+        junho = self._painel(CAIXA, self.mes)['resumo']
+
+        self.assertEqual(maio['receita'], Decimal('400'))
+        self.assertEqual(junho['receita'], Decimal('600'))
+
+    def test_caixa_inclui_pagamento_parcial_de_despesa(self):
+        despesa = self._categoria('2', 'Fornecedores', 'D')
+        conta = self._pagar(
+            '1000', despesa, vencimento=date(2026, 6, 10),
+            competencia=date(2026, 6, 1), status='pago_parcial',
+        )
+        conta.valor_pago = Decimal('250')
+        conta.valor_saldo = Decimal('750')
+        conta.data_pagamento = date(2026, 6, 10)
+        conta.save(update_fields=['valor_pago', 'valor_saldo', 'data_pagamento'])
+        PagamentoContaPagar.objects.create(
+            filial=self.filial, conta_pagar=conta,
+            data_pagamento=date(2026, 6, 10), valor_pago=Decimal('250'),
+        )
+
+        self.assertEqual(self._painel(CAIXA)['resumo']['despesa'], Decimal('250'))
 
     def test_regime_invalido_cai_no_caixa(self):
         painel = DREService.painel(self.filial, self.mes, regime='qualquer')
@@ -418,13 +479,19 @@ class TelaDRETests(TestCase):
         categoria = PlanoContas.objects.create(
             empresa=self.empresa, codigo='1', descricao='Vendas', tipo='R',
         )
-        ContaReceber.objects.create(
+        conta = ContaReceber.objects.create(
             filial=self.filial, cliente=cliente, documento_numero='R1',
             data_emissao=date(2026, 6, 1), data_vencimento=date(2026, 6, 10),
             data_pagamento=date(2026, 6, 10),
             valor_original=Decimal('10000'), valor_final=Decimal('10000'),
             valor_pago=Decimal('10000'), valor_saldo=Decimal('0'),
             status='pago', plano_contas=categoria,
+        )
+        PagamentoContaReceber.objects.create(
+            filial=self.filial,
+            conta_receber=conta,
+            data_pagamento=date(2026, 6, 10),
+            valor_pago=Decimal('10000'),
         )
 
         resposta = self.client.get(reverse('financeiro:dre'), {'mes': '2026-06'})
@@ -437,13 +504,19 @@ class TelaDRETests(TestCase):
         cliente = Cliente.objects.create(
             filial=self.filial, razao_social='Time', cpf_cnpj='12345678901',
         )
-        ContaReceber.objects.create(
+        conta = ContaReceber.objects.create(
             filial=self.filial, cliente=cliente, documento_numero='R1',
             data_emissao=date(2026, 6, 1), data_vencimento=date(2026, 6, 10),
             data_pagamento=date(2026, 6, 10),
             valor_original=Decimal('4000'), valor_final=Decimal('4000'),
             valor_pago=Decimal('4000'), valor_saldo=Decimal('0'),
             status='pago', plano_contas=None,
+        )
+        PagamentoContaReceber.objects.create(
+            filial=self.filial,
+            conta_receber=conta,
+            data_pagamento=date(2026, 6, 10),
+            valor_pago=Decimal('4000'),
         )
 
         resposta = self.client.get(reverse('financeiro:dre'), {'mes': '2026-06'})

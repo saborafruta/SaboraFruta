@@ -37,11 +37,17 @@ from __future__ import annotations
 from datetime import date, timedelta
 from decimal import Decimal
 
-from django.db.models import Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django.db.models.functions import Coalesce
 
 from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber
-from apps.financeiro.models import ContaPagar, ContaReceber, PlanoContas
+from apps.financeiro.models import (
+    ContaPagar,
+    ContaReceber,
+    PagamentoContaPagar,
+    PagamentoContaReceber,
+    PlanoContas,
+)
 
 ZERO = Decimal('0')
 CEM = Decimal('100')
@@ -116,6 +122,13 @@ class DREService:
             'ano': ano,
             'linhas': linhas,
             'resumo': cls._resumo(mes, anterior, ano),
+            'categorias_disponiveis': {
+                tipo: sum(
+                    1 for conta in arvore['contas'].values()
+                    if conta.tipo == tipo and conta.ativo and conta.aceita_lancamento
+                )
+                for tipo in (RECEITA, DESPESA)
+            },
             # `linhas` NUNCA e' vazia -- ela sempre traz os dois blocos, de
             # receita e de despesa, mesmo sem um titulo sequer. Sem esta
             # bandeira o template caia no caminho normal e desenhava dois
@@ -144,9 +157,11 @@ class DREService:
         }
 
         raizes = {}
+        caminhos = {}
         for pk, conta in contas.items():
             atual = conta
             visitados = set()
+            caminho = [conta]
             # O `visitados` não é zelo excessivo: `conta_pai` aponta para a
             # própria tabela, e um ciclo no cadastro (A filha de B, B filha
             # de A) travaria a tela inteira num laço infinito.
@@ -155,25 +170,46 @@ class DREService:
                     break
                 visitados.add(atual.pk)
                 atual = contas[atual.conta_pai_id]
+                caminho.append(atual)
             raizes[pk] = atual
-        return {'contas': contas, 'raizes': raizes}
+            caminhos[pk] = list(reversed(caminho))
+        return {'contas': contas, 'raizes': raizes, 'caminhos': caminhos}
 
     # ── Um período ───────────────────────────────────────────────────────
 
     @classmethod
     def _periodo(cls, filial, inicio, fim, regime, arvore) -> dict:
-        receitas = cls._somar(
-            ContaReceber.objects.for_filial(filial).exclude(status__in=RECEBER_MORTOS),
-            regime, inicio, fim, campo_competencia='competencia',
-        )
-        despesas = cls._somar(
-            # `excluido_em` é exclusão lógica: o título apagado continua na
-            # tabela, e somá-lo cobraria do resultado uma despesa que alguém
-            # já disse que não existe.
-            ContaPagar.objects.for_filial(filial)
-            .exclude(status__in=PAGAR_MORTOS).filter(excluido_em__isnull=True),
-            regime, inicio, fim, campo_competencia='data_competencia',
-        )
+        if regime == CAIXA:
+            # Caixa nasce das BAIXAS, não do resumo acumulado do título. Assim
+            # uma conta recebida em maio e junho aparece parcialmente em cada
+            # mês, em vez de ter todo o valor jogado na data da última baixa.
+            receitas = cls._somar_pagamentos(
+                PagamentoContaReceber.objects.filter(
+                    filial=filial,
+                    conta_receber__excluido_em__isnull=True,
+                ).exclude(conta_receber__status__in=RECEBER_MORTOS),
+                inicio, fim, 'conta_receber__plano_contas_id',
+            )
+            despesas = cls._somar_pagamentos(
+                PagamentoContaPagar.objects.filter(
+                    filial=filial,
+                    conta_pagar__excluido_em__isnull=True,
+                ).exclude(conta_pagar__status__in=PAGAR_MORTOS),
+                inicio, fim, 'conta_pagar__plano_contas_id',
+            )
+        else:
+            receitas = cls._somar_titulos(
+                ContaReceber.objects.for_filial(filial).exclude(status__in=RECEBER_MORTOS),
+                inicio, fim, campo_competencia='competencia',
+            )
+            despesas = cls._somar_titulos(
+                # `excluido_em` é exclusão lógica: o título apagado continua
+                # na tabela, e somá-lo cobraria do resultado uma despesa que
+                # alguém já disse que não existe.
+                ContaPagar.objects.for_filial(filial)
+                .exclude(status__in=PAGAR_MORTOS).filter(excluido_em__isnull=True),
+                inicio, fim, campo_competencia='data_competencia',
+            )
 
         return {
             'receita': cls._agrupar(receitas, arvore, RECEITA),
@@ -181,31 +217,36 @@ class DREService:
         }
 
     @staticmethod
-    def _somar(consulta, regime, inicio, fim, campo_competencia):
+    def _somar_pagamentos(consulta, inicio, fim, campo_categoria):
         """
-        Soma por categoria, no regime pedido.
+        Soma cada baixa no dia em que ela ocorreu.
 
-        No caixa vale a data e o valor do PAGAMENTO; na competência, a data
-        de competência (ou o vencimento, quando ela está em branco) e o
-        valor de face. Misturar os dois daria um número que não é nem um nem
-        outro.
+        O vínculo da categoria vive no título pai, mas o valor e a data que
+        pertencem ao caixa vivem no pagamento individual.
         """
-        if regime == CAIXA:
-            consulta = consulta.filter(
-                status='pago', data_pagamento__gte=inicio, data_pagamento__lt=fim,
-            )
-            valor = 'valor_pago'
-        else:
-            # Competência em branco cai no vencimento: é o que a casa usa
-            # como aproximação, e deixar o título de fora seria pior --
-            # sumiria dinheiro do relatório por falta de cadastro.
-            consulta = consulta.annotate(
-                _quando=Coalesce(campo_competencia, 'data_vencimento'),
-            ).filter(_quando__gte=inicio, _quando__lt=fim)
-            valor = 'valor_final'
-
         return list(
-            consulta.values('plano_contas_id').annotate(total=Sum(valor)),
+            consulta.filter(
+                data_pagamento__gte=inicio, data_pagamento__lt=fim,
+            ).values(
+                plano_contas_id=F(campo_categoria),
+            ).annotate(
+                total=Sum('valor_pago'), quantidade=Count('id'),
+            )
+        )
+
+    @staticmethod
+    def _somar_titulos(consulta, inicio, fim, campo_competencia):
+        """Soma os títulos pela competência (ou vencimento como fallback)."""
+        # Competência em branco cai no vencimento: é o que a casa usa como
+        # aproximação, e deixar o título de fora seria pior -- sumiria
+        # dinheiro do relatório por falta de cadastro.
+        consulta = consulta.annotate(
+            _quando=Coalesce(campo_competencia, 'data_vencimento'),
+        ).filter(_quando__gte=inicio, _quando__lt=fim)
+        return list(
+            consulta.values('plano_contas_id').annotate(
+                total=Sum('valor_final'), quantidade=Count('id'),
+            ),
         )
 
     @staticmethod
@@ -219,33 +260,47 @@ class DREService:
         """
         grupos: dict = {}
         sem_categoria = ZERO
+        sem_categoria_qtd = 0
 
         for linha in somas:
             total = linha['total'] or ZERO
+            quantidade = linha.get('quantidade') or 0
             conta = arvore['contas'].get(linha['plano_contas_id'])
             if conta is None:
                 sem_categoria += total
+                sem_categoria_qtd += quantidade
                 continue
             raiz = arvore['raizes'][conta.pk]
             grupo = grupos.setdefault(raiz.pk, {
+                'id': raiz.pk,
                 'codigo': raiz.codigo,
                 'descricao': raiz.descricao,
                 'tipo': raiz.tipo or tipo,
                 'total': ZERO,
+                'quantidade': 0,
                 'filhas': {},
             })
             grupo['total'] += total
+            grupo['quantidade'] += quantidade
             if conta.pk != raiz.pk:
+                caminho = arvore['caminhos'].get(conta.pk, [conta])
                 filha = grupo['filhas'].setdefault(conta.pk, {
-                    'codigo': conta.codigo, 'descricao': conta.descricao,
+                    'id': conta.pk,
+                    'codigo': conta.codigo,
+                    'descricao': conta.descricao,
+                    'caminho': ' > '.join(item.descricao for item in caminho[1:]),
                     'total': ZERO,
+                    'quantidade': 0,
                 })
                 filha['total'] += total
+                filha['quantidade'] += quantidade
 
         return {
             'grupos': grupos,
             'sem_categoria': sem_categoria,
+            'sem_categoria_qtd': sem_categoria_qtd,
             'total': sum((g['total'] for g in grupos.values()), ZERO) + sem_categoria,
+            'quantidade': sum((g['quantidade'] for g in grupos.values()), 0) + sem_categoria_qtd,
         }
 
     # ── Comparação entre os três períodos ────────────────────────────────
@@ -271,7 +326,9 @@ class DREService:
                 velho = anterior[chave]['grupos'].get(pk)
                 acumulado = ano[chave]['grupos'].get(pk)
                 referencia = atual or acumulado or velho
-                linhas.append(cls._linha(referencia, atual, velho, acumulado))
+                linhas.append(cls._linha(
+                    referencia, atual, velho, acumulado, mes[chave]['total'],
+                ))
             linhas.sort(key=lambda l: (l['codigo'] or '', l['descricao']))
 
             sem = (
@@ -280,32 +337,40 @@ class DREService:
             )
             blocos.append({
                 'chave': chave,
-                'rotulo': rotulo,
+                'rotulo': f'{rotulo} por categoria',
                 'linhas': linhas,
                 'sem_categoria': {
                     'mes': sem[0], 'anterior': sem[1], 'ano': sem[2],
                     'tem': any(v for v in sem),
+                    'quantidade': mes[chave]['sem_categoria_qtd'],
+                    'participacao_pct': _pct(sem[0], mes[chave]['total']),
                 },
                 'total_mes': mes[chave]['total'],
                 'total_anterior': anterior[chave]['total'],
                 'total_ano': ano[chave]['total'],
+                'quantidade_mes': mes[chave]['quantidade'],
             })
         return blocos
 
     @staticmethod
-    def _linha(referencia, atual, velho, acumulado) -> dict:
+    def _linha(referencia, atual, velho, acumulado, total_bloco) -> dict:
         valor = (atual or {}).get('total', ZERO)
         antes = (velho or {}).get('total', ZERO)
         filhas = sorted(
             (atual or {}).get('filhas', {}).values(),
             key=lambda f: (f['codigo'] or '', f['descricao']),
         )
+        for filha in filhas:
+            filha['participacao_pct'] = _pct(filha['total'], total_bloco)
         return {
+            'id': referencia['id'],
             'codigo': referencia['codigo'],
             'descricao': referencia['descricao'],
             'mes': valor,
             'anterior': antes,
             'ano': (acumulado or {}).get('total', ZERO),
+            'quantidade': (atual or {}).get('quantidade', 0),
+            'participacao_pct': _pct(valor, total_bloco),
             'variacao': valor - antes,
             'variacao_pct': _pct(valor - antes, antes),
             'filhas': filhas,
@@ -329,6 +394,9 @@ class DREService:
             'receita': receita,
             'despesa': despesa,
             'resultado': resultado,
+            'movimentos_receita': mes['receita']['quantidade'],
+            'movimentos_despesa': mes['despesa']['quantidade'],
+            'movimentos': mes['receita']['quantidade'] + mes['despesa']['quantidade'],
             'margem': _pct(resultado, receita),
             'receita_anterior': receita_ant,
             'resultado_anterior': resultado_ant,
