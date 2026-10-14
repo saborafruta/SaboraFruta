@@ -38,16 +38,28 @@
   .dre-pill { border:1px solid #cbd5e1; border-radius:8px; padding:6px 12px; font-size:13px; color:#334155; }
   .tema-escuro .dre-pill { border-color:#3f3f46; color:#d4d4d8; }
   .dre-pill.ativo { border-color:#2563eb; background:#2563eb; color:#fff; }
+  .dre-filtro { display:flex; flex-wrap:wrap; gap:10px; align-items:end; padding:14px; }
+  .dre-filtro label { display:grid; gap:5px; font-size:12px; color:#64748b; }
+  .dre-filtro input { min-height:38px; border:1px solid #cbd5e1; border-radius:8px; padding:7px 10px; background:#fff; color:#0f172a; }
+  .tema-escuro .dre-filtro input { border-color:#3f3f46; background:#27272a; color:#f8fafc; }
+  .dre-expansor { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; margin-right:5px; border-radius:6px; color:#2563eb; vertical-align:middle; }
+  .dre-expansor:hover { background:#dbeafe; }
+  .tema-escuro .dre-expansor:hover { background:#1e3a5f; }
+  .dre-filha[hidden] { display:none; }
   .dre-grafico-grade { display:grid; grid-template-columns:minmax(220px,320px) minmax(0,1fr); gap:28px; align-items:center; }
   .dre-pizza { width:min(280px,72vw); aspect-ratio:1; margin:auto; border-radius:50%; box-shadow:inset 0 0 0 1px rgba(15,23,42,.08),0 12px 28px rgba(15,23,42,.08); }
   .dre-legenda-item { display:grid; grid-template-columns:12px minmax(0,1fr) auto; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid #e2e8f0; }
   .tema-escuro .dre-legenda-item { border-color:#303036; }
-  @media (max-width:700px) { .dre-grafico-grade { grid-template-columns:1fr; } }
+  @media (max-width:700px) {
+    .dre-grafico-grade { grid-template-columns:1fr; }
+    .dre-filtro { align-items:stretch; }
+    .dre-filtro > * { flex:1 1 auto; }
+  }
 </style>
 
 <div class="space-y-5">
 
-  {# ── Cabeçalho e navegação de mês ──────────────────────────────────── #}
+  {# ── Cabeçalho e filtros ───────────────────────────────────────────── #}
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <h2 class="text-2xl font-semibold dre-forte">DRE Gerencial</h2>
@@ -57,16 +69,28 @@
       </p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      {% comment %}
-        Os dois regimes lado a lado, e não um escondido num menu: a
-        diferença entre eles é material, e quem não souber que existe vai
-        ler um dos dois achando que é "o resultado".
-      {% endcomment %}
+      <a href="?mes={{ mes_texto }}&regime={{ regime }}&export=pdf" class="dre-pill">Exportar PDF</a>
+      <a href="?mes={{ mes_texto }}&regime={{ regime }}&export=xlsx" class="dre-pill">Exportar Excel</a>
+    </div>
+  </div>
+
+  <div class="dre-card dre-filtro">
+    <form method="get" class="flex flex-wrap items-end gap-2" style="flex:1 1 260px;">
+      <label>
+        Mês e ano
+        <input type="month" name="mes" value="{{ mes_texto }}" max="{{ mes_maximo }}" aria-label="Mês e ano">
+      </label>
+      <input type="hidden" name="regime" value="{{ regime }}">
+      <button type="submit" class="dre-pill ativo">Aplicar período</button>
+    </form>
+    <div class="flex flex-wrap items-center gap-2" aria-label="Critério de data">
+      <span class="text-xs dre-rotulo">Filtrar por:</span>
       {% for chave, rotulo in regimes %}
         <a href="?mes={{ mes_texto }}&regime={{ chave }}"
            class="dre-pill {% if regime == chave %}ativo{% endif %}">{{ rotulo }}</a>
       {% endfor %}
-      <span class="mx-1 dre-rotulo">|</span>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
       <a href="?mes={{ mes_anterior_texto }}&regime={{ regime }}" class="dre-pill">‹ Mês anterior</a>
       {% if tem_seguinte %}
         <a href="?mes={{ mes_seguinte_texto }}&regime={{ regime }}" class="dre-pill">Mês seguinte ›</a>
@@ -84,10 +108,14 @@
       {% if regime == 'caixa' %}
         <strong>Caixa:</strong> o que entrou e saiu de dinheiro no mês — só título
         pago, pela data do pagamento. É o que bate com o extrato bancário.
-      {% else %}
+      {% elif regime == 'competencia' %}
         <strong>Competência:</strong> o que foi do mês, tenha sido pago ou não —
         todo título vivo, pela data de competência (ou o vencimento, quando ela
         está em branco). É o que responde "este mês deu lucro?".
+      {% else %}
+        <strong>Vencimento:</strong> o que vence no mês, pago ou não — todo título
+        vivo pela data de vencimento. É a visão de compromissos e recebimentos
+        previstos para o período.
       {% endif %}
     </p>
     <p class="text-xs dre-rotulo mt-2">
@@ -121,12 +149,15 @@
       </p>
     </div>
     <div class="dre-card p-4">
-      <p class="text-xs uppercase tracking-wide dre-rotulo">Acumulado no ano</p>
+      <p class="text-xs uppercase tracking-wide dre-rotulo">Acumulado no ano · jan–{{ competencia|date:"M" }}</p>
       <p class="text-2xl font-semibold mt-1 {% if resumo.resultado_ano < 0 %}dre-negativo{% else %}dre-positivo{% endif %}">
         R$ {{ resumo.resultado_ano|floatformat:2 }}
       </p>
       <p class="text-xs mt-1 dre-rotulo">
         {% if resumo.margem_ano is not None %}margem de {{ resumo.margem_ano }}%{% else %}sem receita no ano{% endif %}
+      </p>
+      <p class="text-xs mt-1 dre-rotulo" title="Soma de janeiro até o mês selecionado, usando o mesmo critério de data do filtro.">
+        receitas R$ {{ resumo.receita_ano|floatformat:2 }} − despesas R$ {{ resumo.despesa_ano|floatformat:2 }}
       </p>
     </div>
   </div>
@@ -154,6 +185,15 @@
   {% endif %}
 
   {# ── A tabela ──────────────────────────────────────────────────────── #}
+  {% if not vazio %}
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <p class="text-sm dre-rotulo">Clique na seta de um grupo para abrir suas subcategorias.</p>
+      <div class="flex gap-2">
+        <button type="button" class="dre-pill" data-dre-expandir-tudo>Expandir tudo</button>
+        <button type="button" class="dre-pill" data-dre-recolher-tudo>Recolher tudo</button>
+      </div>
+    </div>
+  {% endif %}
   <div class="dre-card" style="overflow-x:auto;">
     <table class="dre-tabela">
       <thead>
@@ -175,8 +215,10 @@
                 {% if regime == 'caixa' %}
                   No regime de caixa só entra título <strong>pago</strong>. Se houver
                   contas em aberto neste mês, veja em Competência.
-                {% else %}
+                {% elif regime == 'competencia' %}
                   Nenhum título com competência ou vencimento neste mês.
+                {% else %}
+                  Nenhum título com vencimento neste mês.
                 {% endif %}
               </p>
             </td>
@@ -191,8 +233,14 @@
           </tr>
 
           {% for l in bloco.linhas %}
-            <tr class="dre-linha dre-grupo">
+            <tr class="dre-linha dre-grupo" data-dre-node="{{ bloco.chave }}-{{ l.id }}">
               <td class="nome dre-forte">
+                {% if l.filhas %}
+                  <button type="button" class="dre-expansor" data-dre-toggle="{{ bloco.chave }}-{{ l.id }}"
+                          aria-expanded="false" aria-label="Expandir {{ l.descricao }}">▶</button>
+                {% else %}
+                  <span style="display:inline-block;width:29px;"></span>
+                {% endif %}
                 {% if l.codigo %}<span class="dre-rotulo" style="font-size:12px;">{{ l.codigo }}</span> {% endif %}
                 {{ l.descricao }}
                 <span class="dre-rotulo" style="font-size:11px;">· {{ l.quantidade }} lançamento{{ l.quantidade|pluralize }}</span>
@@ -222,9 +270,17 @@
             </tr>
 
             {% for f in l.filhas %}
-              <tr class="dre-filha">
-                <td class="nome">
-                  {% if f.codigo %}{{ f.codigo }} · {% endif %}{{ f.caminho|default:f.descricao }}
+              <tr class="dre-filha" hidden
+                  data-dre-node="{{ bloco.chave }}-{{ f.id }}"
+                  data-dre-parent="{{ bloco.chave }}-{{ f.parent_id }}">
+                <td class="nome" style="padding-left:calc(18px + {{ f.nivel }} * 22px);">
+                  {% if f.tem_filhos %}
+                    <button type="button" class="dre-expansor" data-dre-toggle="{{ bloco.chave }}-{{ f.id }}"
+                            aria-expanded="false" aria-label="Expandir {{ f.descricao }}">▶</button>
+                  {% else %}
+                    <span style="display:inline-block;width:29px;"></span>
+                  {% endif %}
+                  {% if f.codigo %}{{ f.codigo }} · {% endif %}{{ f.descricao }}
                   <span class="dre-rotulo">· {{ f.quantidade }} lançamento{{ f.quantidade|pluralize }}</span>
                 </td>
                 <td class="valor">{{ f.total|floatformat:2 }}</td>
@@ -263,8 +319,10 @@
                 {% if regime == 'caixa' %}
                   No regime de caixa só entra título <strong>pago</strong>. Se houver
                   contas em aberto no mês, veja em Competência.
-                {% else %}
+                {% elif regime == 'competencia' %}
                   Nenhum título com competência ou vencimento neste mês.
+                {% else %}
+                  Nenhum título com vencimento neste mês.
                 {% endif %}
               </p>
             </td>
@@ -333,6 +391,8 @@
       <li><strong>As contas vêm da categoria financeira</strong> do título, agrupadas pela conta raiz. As linhas
         recuadas são as subcategorias.</li>
       <li><strong>No caixa, cada baixa entra no seu próprio dia</strong>, inclusive quando o título foi pago ou recebido em partes.</li>
+      <li><strong>No vencimento, o título entra na data em que deveria ser pago ou recebido</strong>, mesmo que ainda esteja em aberto.</li>
+      <li><strong>Acumulado no ano</strong> é o resultado de janeiro até o mês selecionado, sempre usando o mesmo critério do filtro.</li>
       <li><strong>Transferências entre contas ficam de fora</strong>, pois não são receita nem despesa da empresa.</li>
       <li><strong>Título cancelado fica de fora</strong> — nunca foi receita nem despesa. Recebimento devolvido
         e conta a pagar excluída também.</li>
@@ -344,4 +404,50 @@
   </div>
 
 </div>
+<script>
+  (() => {
+    const linhas = [...document.querySelectorAll('[data-dre-parent]')];
+    const botoes = [...document.querySelectorAll('[data-dre-toggle]')];
+
+    const botaoDo = (no) => botoes.find((botao) => botao.dataset.dreToggle === no);
+    const filhosDe = (no) => linhas.filter((linha) => linha.dataset.dreParent === no);
+
+    function marcarBotao(no, aberto) {
+      const botao = botaoDo(no);
+      if (!botao) return;
+      botao.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+      botao.textContent = aberto ? '▼' : '▶';
+    }
+
+    function recolher(no) {
+      filhosDe(no).forEach((linha) => {
+        linha.hidden = true;
+        recolher(linha.dataset.dreNode);
+      });
+      marcarBotao(no, false);
+    }
+
+    botoes.forEach((botao) => {
+      botao.addEventListener('click', () => {
+        const no = botao.dataset.dreToggle;
+        const abrir = botao.getAttribute('aria-expanded') !== 'true';
+        if (abrir) {
+          filhosDe(no).forEach((linha) => { linha.hidden = false; });
+          marcarBotao(no, true);
+        } else {
+          recolher(no);
+        }
+      });
+    });
+
+    document.querySelector('[data-dre-expandir-tudo]')?.addEventListener('click', () => {
+      linhas.forEach((linha) => { linha.hidden = false; });
+      botoes.forEach((botao) => marcarBotao(botao.dataset.dreToggle, true));
+    });
+    document.querySelector('[data-dre-recolher-tudo]')?.addEventListener('click', () => {
+      linhas.forEach((linha) => { linha.hidden = true; });
+      botoes.forEach((botao) => marcarBotao(botao.dataset.dreToggle, false));
+    });
+  })();
+</script>
 {% endblock %}

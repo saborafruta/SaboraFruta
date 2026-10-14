@@ -393,13 +393,24 @@ def dre_view(request):
     except (ValueError, TypeError):
         competencia = primeiro_dia(hoje)
 
+    filial = _filial_ativa(request)
     dados = DREService.painel(
-        _filial_ativa(request), competencia,
+        filial, competencia,
         regime=(request.GET.get("regime") or "").strip(),
     )
+    formato = (request.GET.get("export") or "").strip().lower()
+    if formato in {'pdf', 'xlsx'}:
+        from apps.financeiro.services.dre_exports import (
+            exportar_excel, exportar_pdf,
+        )
+        if formato == 'pdf':
+            return exportar_pdf(dados, filial)
+        return exportar_excel(dados, filial)
+
     return render(request, "financeiro/dre.html", {
         "title": "DRE Gerencial",
         "mes_texto": competencia.strftime("%Y-%m"),
+        "mes_maximo": hoje.strftime("%Y-%m"),
         "mes_anterior_texto": (
             dre_mes_anterior(competencia).strftime("%Y-%m")
         ),

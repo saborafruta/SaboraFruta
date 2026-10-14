@@ -16,6 +16,9 @@ REGIME É ESCOLHA DE QUEM OLHA, e a diferença é material:
   COMPETÊNCIA  o que foi do mês, tenha sido pago ou não. Todo título vivo,
                pela data de competência e pelo `valor_final`. É o que
                responde "este mês deu lucro?".
+  VENCIMENTO   o que vence no mês, pago ou não. Todo título vivo, pela
+               `data_vencimento` e pelo `valor_final`. É a visão de agenda
+               financeira e pressão de caixa futura.
 
 Um mês pode ter caixa excelente e competência no vermelho — basta receber
 em janeiro o que se vendeu em dezembro. Mostrar um só dos dois e chamá-lo
@@ -55,9 +58,11 @@ CEM = Decimal('100')
 
 CAIXA = 'caixa'
 COMPETENCIA = 'competencia'
+VENCIMENTO = 'vencimento'
 REGIMES = (
     (CAIXA, 'Caixa'),
     (COMPETENCIA, 'Competência'),
+    (VENCIMENTO, 'Vencimento'),
 )
 
 # Título morto não é resultado: cancelado nunca foi receita nem despesa, e
@@ -204,10 +209,10 @@ class DREService:
                 ).exclude(conta_pagar__status__in=PAGAR_MORTOS),
                 inicio, fim, 'conta_pagar__plano_contas_id',
             )
-        else:
+        elif regime == COMPETENCIA:
             receitas = cls._somar_titulos(
                 ContaReceber.objects.for_filial(filial).exclude(status__in=RECEBER_MORTOS),
-                inicio, fim, campo_competencia='competencia',
+                inicio, fim, campo_data='competencia', fallback_vencimento=True,
             )
             despesas = cls._somar_titulos(
                 # `excluido_em` é exclusão lógica: o título apagado continua
@@ -215,15 +220,25 @@ class DREService:
                 # alguém já disse que não existe.
                 ContaPagar.objects.for_filial(filial)
                 .exclude(status__in=PAGAR_MORTOS).filter(excluido_em__isnull=True),
-                inicio, fim, campo_competencia='data_competencia',
+                inicio, fim, campo_data='data_competencia', fallback_vencimento=True,
+            )
+        else:
+            receitas = cls._somar_titulos(
+                ContaReceber.objects.for_filial(filial).exclude(status__in=RECEBER_MORTOS),
+                inicio, fim, campo_data='data_vencimento',
+            )
+            despesas = cls._somar_titulos(
+                ContaPagar.objects.for_filial(filial)
+                .exclude(status__in=PAGAR_MORTOS).filter(excluido_em__isnull=True),
+                inicio, fim, campo_data='data_vencimento',
             )
 
         # A Posição Diária também permite entradas e saídas manuais. Elas
         # vivem no extrato bancário (não geram um título) e precisam entrar
         # na DRE; transferências são ignoradas porque apenas movem dinheiro
         # entre contas da própria empresa. Sem competência própria, o
-        # movimento manual permanece na sua data de lançamento nos dois
-        # regimes.
+        # movimento manual permanece na sua data de lançamento em todos os
+        # critérios.
         extratos = ExtratoBancario.objects.filter(
             filial=filial,
             origem='manual',
@@ -261,14 +276,24 @@ class DREService:
         )
 
     @staticmethod
-    def _somar_titulos(consulta, inicio, fim, campo_competencia):
-        """Soma os títulos pela competência (ou vencimento como fallback)."""
+    def _somar_titulos(
+        consulta, inicio, fim, campo_data, fallback_vencimento=False,
+    ):
+        """Soma os títulos pela data escolhida para a leitura da DRE."""
         # Competência em branco cai no vencimento: é o que a casa usa como
         # aproximação, e deixar o título de fora seria pior -- sumiria
         # dinheiro do relatório por falta de cadastro.
-        consulta = consulta.annotate(
-            _quando=Coalesce(campo_competencia, 'data_vencimento'),
-        ).filter(_quando__gte=inicio, _quando__lt=fim)
+        if fallback_vencimento:
+            consulta = consulta.annotate(
+                _quando=Coalesce(campo_data, 'data_vencimento'),
+            )
+            campo_filtro = '_quando'
+        else:
+            campo_filtro = campo_data
+        consulta = consulta.filter(**{
+            f'{campo_filtro}__gte': inicio,
+            f'{campo_filtro}__lt': fim,
+        })
         return list(
             consulta.values('plano_contas_id').annotate(
                 total=Sum('valor_final'), quantidade=Count('id'),
@@ -347,16 +372,24 @@ class DREService:
             grupo['quantidade'] += quantidade
             if conta.pk != raiz.pk:
                 caminho = arvore['caminhos'].get(conta.pk, [conta])
-                filha = grupo['filhas'].setdefault(conta.pk, {
-                    'id': conta.pk,
-                    'codigo': conta.codigo,
-                    'descricao': conta.descricao,
-                    'caminho': ' > '.join(item.descricao for item in caminho[1:]),
-                    'total': ZERO,
-                    'quantidade': 0,
-                })
-                filha['total'] += total
-                filha['quantidade'] += quantidade
+                # Cada nível recebe o valor dos seus descendentes. Assim a
+                # tela consegue abrir Grupo > Subcategoria > Categoria sem
+                # perder a reconciliação com o total da raiz.
+                for nivel, item in enumerate(caminho[1:], start=1):
+                    filha = grupo['filhas'].setdefault(item.pk, {
+                        'id': item.pk,
+                        'parent_id': caminho[nivel - 1].pk,
+                        'nivel': nivel,
+                        'codigo': item.codigo,
+                        'descricao': item.descricao,
+                        'caminho': ' > '.join(
+                            parte.descricao for parte in caminho[1:nivel + 1]
+                        ),
+                        'total': ZERO,
+                        'quantidade': 0,
+                    })
+                    filha['total'] += total
+                    filha['quantidade'] += quantidade
 
         return {
             'grupos': grupos,
@@ -423,8 +456,10 @@ class DREService:
             (atual or {}).get('filhas', {}).values(),
             key=lambda f: (f['codigo'] or '', f['descricao']),
         )
+        pais = {filha['parent_id'] for filha in filhas}
         for filha in filhas:
             filha['participacao_pct'] = _pct(filha['total'], total_bloco)
+            filha['tem_filhos'] = filha['id'] in pais
         return {
             'id': referencia['id'],
             'codigo': referencia['codigo'],

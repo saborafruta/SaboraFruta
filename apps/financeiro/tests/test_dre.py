@@ -7,8 +7,8 @@ retirada saem daqui.
 
 O que os testes cercam:
 
-  · REGIME. Caixa e competência dão números diferentes para o mesmo mês, e
-    misturá-los daria um número que não é nem um nem outro. Um mês pode ter
+  · CRITÉRIO. Caixa, competência e vencimento respondem perguntas diferentes,
+    e misturá-los daria um número que não é nenhum deles. Um mês pode ter
     caixa excelente e competência no vermelho;
   · MOVIMENTO SEM CATEGORIA. Um DRE que descarta em silêncio o que não foi
     classificado fecha bonito e está errado — e o erro cresce com o descuido
@@ -37,7 +37,9 @@ from apps.financeiro.models import (
     PlanoContas,
 )
 from apps.financeiro.forms.plano_contas import PlanoContasForm
-from apps.financeiro.services.dre import CAIXA, COMPETENCIA, DREService
+from apps.financeiro.services.dre import (
+    CAIXA, COMPETENCIA, VENCIMENTO, DREService,
+)
 
 
 class DREBase(TestCase):
@@ -157,7 +159,7 @@ class CategoriaGerencialFormTests(DREBase):
 
 
 class RegimeTests(DREBase):
-    """Caixa e competência respondem perguntas diferentes."""
+    """Caixa, competência e vencimento respondem perguntas diferentes."""
 
     def test_caixa_conta_o_que_foi_pago_no_mes(self):
         receita = self._categoria('1', 'Vendas', 'R')
@@ -198,6 +200,20 @@ class RegimeTests(DREBase):
 
         self.assertEqual(
             self._painel(COMPETENCIA)['resumo']['receita'], Decimal('7000'),
+        )
+
+    def test_vencimento_usa_a_data_em_que_o_titulo_vence(self):
+        receita = self._categoria('1', 'Vendas', 'R')
+        self._receber(
+            '7000', receita, competencia=date(2026, 5, 1),
+            vencimento=date(2026, 6, 20), status='aberto',
+        )
+
+        self.assertEqual(
+            self._painel(VENCIMENTO)['resumo']['receita'], Decimal('7000'),
+        )
+        self.assertEqual(
+            self._painel(COMPETENCIA)['resumo']['receita'], Decimal('0'),
         )
 
     def test_os_dois_regimes_podem_discordar_no_mesmo_mes(self):
@@ -411,6 +427,22 @@ class ArvoreTests(DREBase):
         self.assertEqual(bloco['linhas'][0]['descricao'], 'Despesas')
         self.assertEqual(bloco['linhas'][0]['mes'], Decimal('900'))
 
+    def test_arvore_preserva_subcategoria_e_categoria_final(self):
+        raiz = self._categoria('332', 'Administrativas', 'D')
+        meio = self._categoria('33202', 'Estrutura', 'D', pai=raiz)
+        neta = self._categoria('332020001', 'Energia', 'D', pai=meio)
+        self._pagar('900', neta, pago_em=date(2026, 6, 5))
+
+        bloco = next(b for b in self._painel()['linhas'] if b['chave'] == 'despesa')
+        filhas = bloco['linhas'][0]['filhas']
+
+        self.assertEqual(
+            [(f['descricao'], f['nivel'], f['total']) for f in filhas],
+            [('Estrutura', 1, Decimal('900')), ('Energia', 2, Decimal('900'))],
+        )
+        self.assertTrue(filhas[0]['tem_filhos'])
+        self.assertFalse(filhas[1]['tem_filhos'])
+
     def test_ciclo_no_cadastro_nao_trava_a_tela(self):
         """
         `conta_pai` aponta para a própria tabela. Um ciclo (A filha de B, B
@@ -565,6 +597,8 @@ class TelaDRETests(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'Vendas')
         self.assertContains(resposta, '10000,00')
+        self.assertContains(resposta, 'Expandir tudo')
+        self.assertContains(resposta, 'Recolher tudo')
 
     def test_a_tela_avisa_o_sem_categoria(self):
         cliente = Cliente.objects.create(
@@ -604,6 +638,37 @@ class TelaDRETests(TestCase):
 
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'tenha sido pago ou não')
+
+    def test_a_tela_oferece_periodo_criterios_e_arvore_expansivel(self):
+        resposta = self.client.get(reverse('financeiro:dre'), {'mes': '2026-06'})
+
+        self.assertContains(resposta, 'type="month"')
+        self.assertContains(resposta, 'Vencimento')
+        self.assertContains(resposta, 'Exportar PDF')
+        self.assertContains(resposta, 'Exportar Excel')
+
+    def test_exporta_pdf_com_os_filtros_da_dre(self):
+        resposta = self.client.get(reverse('financeiro:dre'), {
+            'mes': '2026-06', 'regime': 'vencimento', 'export': 'pdf',
+        })
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta['Content-Type'], 'application/pdf')
+        self.assertTrue(resposta.content.startswith(b'%PDF'))
+        self.assertIn('dre-2026-06-vencimento.pdf', resposta['Content-Disposition'])
+
+    def test_exporta_excel_com_os_filtros_da_dre(self):
+        resposta = self.client.get(reverse('financeiro:dre'), {
+            'mes': '2026-06', 'regime': 'competencia', 'export': 'xlsx',
+        })
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(
+            resposta['Content-Type'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        self.assertTrue(resposta.content.startswith(b'PK'))
+        self.assertIn('dre-2026-06-competencia.xlsx', resposta['Content-Disposition'])
 
     def test_nao_oferece_navegar_para_o_futuro(self):
         """Mês que ainda não aconteceu não tem resultado a mostrar."""
