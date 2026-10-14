@@ -107,7 +107,8 @@
       {% if cfg.aceita_lancamento %}
         <div>
           <label class="block text-sm font-medium mb-1" :style="temaClaro ? 'color:#374151;' : 'color:#d1d5db;'">
-            {{ form.conta_contabil.label }} <span class="text-red-500">*</span>
+            {{ form.conta_contabil.label }}
+            {% if form.conta_contabil.field.required %}<span class="text-red-500">*</span>{% else %}<span class="font-normal opacity-60">(opcional)</span>{% endif %}
           </label>
           {{ form.conta_contabil|add_class:"form-input w-full" }}
           {% if form.conta_contabil.help_text %}

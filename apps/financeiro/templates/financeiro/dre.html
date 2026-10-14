@@ -38,6 +38,11 @@
   .dre-pill { border:1px solid #cbd5e1; border-radius:8px; padding:6px 12px; font-size:13px; color:#334155; }
   .tema-escuro .dre-pill { border-color:#3f3f46; color:#d4d4d8; }
   .dre-pill.ativo { border-color:#2563eb; background:#2563eb; color:#fff; }
+  .dre-grafico-grade { display:grid; grid-template-columns:minmax(220px,320px) minmax(0,1fr); gap:28px; align-items:center; }
+  .dre-pizza { width:min(280px,72vw); aspect-ratio:1; margin:auto; border-radius:50%; box-shadow:inset 0 0 0 1px rgba(15,23,42,.08),0 12px 28px rgba(15,23,42,.08); }
+  .dre-legenda-item { display:grid; grid-template-columns:12px minmax(0,1fr) auto; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid #e2e8f0; }
+  .tema-escuro .dre-legenda-item { border-color:#303036; }
+  @media (max-width:700px) { .dre-grafico-grade { grid-template-columns:1fr; } }
 </style>
 
 <div class="space-y-5">
@@ -286,14 +291,49 @@
     </table>
   </div>
 
+  <section class="dre-card p-5" aria-labelledby="dre-grafico-titulo">
+    <div class="mb-5">
+      <p class="text-xs uppercase tracking-wide dre-rotulo">Distribuição das despesas</p>
+      <h3 id="dre-grafico-titulo" class="mt-1 text-lg font-semibold dre-forte">Despesas por grupo de categoria</h3>
+      <p class="mt-1 text-sm dre-rotulo">Quanto cada grupo representa do total gasto em {{ competencia|date:"F/Y" }}.</p>
+    </div>
+    {% if grafico_despesas.tem_dados %}
+      <div class="dre-grafico-grade">
+        <div class="dre-pizza" role="img" aria-label="Gráfico de despesas por grupo" style="background:conic-gradient({{ grafico_despesas.gradiente }});"></div>
+        <div>
+          {% for item in grafico_despesas.itens %}
+            <div class="dre-legenda-item">
+              <span class="h-3 w-3 rounded-full" style="background:{{ item.cor }};"></span>
+              <div class="min-w-0">
+                <p class="font-medium dre-forte">{% if item.codigo %}<span class="dre-rotulo">{{ item.codigo }}</span> · {% endif %}{{ item.descricao }}</p>
+                <p class="text-xs dre-rotulo">{{ item.participacao_pct }}% do total</p>
+              </div>
+              <strong class="dre-forte" style="font-variant-numeric:tabular-nums;">R$ {{ item.total|floatformat:2 }}</strong>
+            </div>
+          {% endfor %}
+          <div class="mt-4 flex items-center justify-between gap-3">
+            <span class="text-sm dre-rotulo">Total de despesas no mês</span>
+            <strong class="text-lg dre-forte">R$ {{ grafico_despesas.total|floatformat:2 }}</strong>
+          </div>
+        </div>
+      </div>
+    {% else %}
+      <div class="flex flex-col items-center justify-center py-8 text-center">
+        <div class="dre-pizza" style="width:150px;background:#e2e8f0;"></div>
+        <p class="mt-4 text-sm dre-rotulo">Ainda não há despesas neste mês para montar o gráfico.</p>
+      </div>
+    {% endif %}
+  </section>
+
   <div class="dre-card p-4">
     <p class="text-xs uppercase tracking-wide mb-2 dre-rotulo">Como o número é feito</p>
     <ul class="text-sm space-y-1 dre-rotulo">
-      <li><strong>Calculado agora</strong>, a partir dos títulos e das baixas — não de um consolidado gravado, que ficaria
+      <li><strong>Calculado agora</strong>, a partir dos títulos, das baixas e dos movimentos manuais da Posição Diária — não de um consolidado gravado, que ficaria
         velho assim que alguém corrigisse uma baixa.</li>
       <li><strong>As contas vêm da categoria financeira</strong> do título, agrupadas pela conta raiz. As linhas
         recuadas são as subcategorias.</li>
       <li><strong>No caixa, cada baixa entra no seu próprio dia</strong>, inclusive quando o título foi pago ou recebido em partes.</li>
+      <li><strong>Transferências entre contas ficam de fora</strong>, pois não são receita nem despesa da empresa.</li>
       <li><strong>Título cancelado fica de fora</strong> — nunca foi receita nem despesa. Recebimento devolvido
         e conta a pagar excluída também.</li>
       <li><strong>A variação é pintada pelo que significa:</strong> receita subindo é verde, despesa subindo é

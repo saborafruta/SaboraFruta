@@ -44,6 +44,7 @@ from apps.financeiro.constants.enums import StatusContaPagar, StatusContaReceber
 from apps.financeiro.models import (
     ContaPagar,
     ContaReceber,
+    ExtratoBancario,
     PagamentoContaPagar,
     PagamentoContaReceber,
     PlanoContas,
@@ -66,6 +67,11 @@ PAGAR_MORTOS = (StatusContaPagar.CANCELADO,)
 
 RECEITA = 'R'
 DESPESA = 'D'
+
+CORES_GRAFICO = (
+    '#2563eb', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899',
+    '#06b6d4', '#84cc16', '#f97316', '#6366f1', '#14b8a6', '#a855f7',
+)
 
 
 def primeiro_dia(referencia: date) -> date:
@@ -122,6 +128,7 @@ class DREService:
             'ano': ano,
             'linhas': linhas,
             'resumo': cls._resumo(mes, anterior, ano),
+            'grafico_despesas': cls._grafico_despesas(mes['despesa']),
             'categorias_disponiveis': {
                 tipo: sum(
                     1 for conta in arvore['contas'].values()
@@ -211,6 +218,25 @@ class DREService:
                 inicio, fim, campo_competencia='data_competencia',
             )
 
+        # A Posição Diária também permite entradas e saídas manuais. Elas
+        # vivem no extrato bancário (não geram um título) e precisam entrar
+        # na DRE; transferências são ignoradas porque apenas movem dinheiro
+        # entre contas da própria empresa. Sem competência própria, o
+        # movimento manual permanece na sua data de lançamento nos dois
+        # regimes.
+        extratos = ExtratoBancario.objects.filter(
+            filial=filial,
+            origem='manual',
+        ).exclude(status='excluido').exclude(tipo_lancamento='transferencia')
+        receitas = cls._combinar_somas(
+            receitas,
+            cls._somar_extratos(extratos, inicio, fim, RECEITA),
+        )
+        despesas = cls._combinar_somas(
+            despesas,
+            cls._somar_extratos(extratos, inicio, fim, DESPESA),
+        )
+
         return {
             'receita': cls._agrupar(receitas, arvore, RECEITA),
             'despesa': cls._agrupar(despesas, arvore, DESPESA),
@@ -248,6 +274,43 @@ class DREService:
                 total=Sum('valor_final'), quantidade=Count('id'),
             ),
         )
+
+    @staticmethod
+    def _somar_extratos(consulta, inicio, fim, tipo):
+        """Soma lançamentos manuais classificados da Posição Diária."""
+        consulta = consulta.annotate(
+            _quando=Coalesce('data_credito', 'data_lancamento'),
+        ).filter(_quando__gte=inicio, _quando__lt=fim)
+        if tipo == RECEITA:
+            consulta = consulta.filter(valor__gt=0)
+        else:
+            consulta = consulta.filter(valor__lt=0)
+
+        somas = list(
+            consulta.values('plano_contas_id').annotate(
+                total=Sum('valor'), quantidade=Count('id'),
+            ),
+        )
+        if tipo == DESPESA:
+            for soma in somas:
+                soma['total'] = abs(soma['total'] or ZERO)
+        return somas
+
+    @staticmethod
+    def _combinar_somas(*listas):
+        """Combina origens financeiras sem perder categoria ou quantidade."""
+        combinadas = {}
+        for lista in listas:
+            for linha in lista:
+                categoria_id = linha['plano_contas_id']
+                acumulada = combinadas.setdefault(categoria_id, {
+                    'plano_contas_id': categoria_id,
+                    'total': ZERO,
+                    'quantidade': 0,
+                })
+                acumulada['total'] += linha.get('total') or ZERO
+                acumulada['quantidade'] += linha.get('quantidade') or 0
+        return list(combinadas.values())
 
     @staticmethod
     def _agrupar(somas, arvore, tipo) -> dict:
@@ -412,4 +475,42 @@ class DREService:
             # quanto deste relatório dá para levar a sério.
             'sem_categoria': sem_categoria,
             'sem_categoria_pct': _pct(sem_categoria, receita + despesa),
+        }
+
+    @staticmethod
+    def _grafico_despesas(despesas) -> dict:
+        """Fatias do gráfico por grupo raiz, reconciliadas com o total."""
+        itens = [
+            {
+                'codigo': grupo['codigo'],
+                'descricao': grupo['descricao'],
+                'total': grupo['total'],
+            }
+            for grupo in despesas['grupos'].values()
+            if grupo['total'] > 0
+        ]
+        if despesas['sem_categoria'] > 0:
+            itens.append({
+                'codigo': '',
+                'descricao': 'Sem categoria',
+                'total': despesas['sem_categoria'],
+            })
+        itens.sort(key=lambda item: item['total'], reverse=True)
+
+        total = sum((item['total'] for item in itens), ZERO)
+        inicio = ZERO
+        partes = []
+        for indice, item in enumerate(itens):
+            cor = CORES_GRAFICO[indice % len(CORES_GRAFICO)]
+            fim = (inicio + (item['total'] / total * CEM)) if total else inicio
+            item['cor'] = cor
+            item['participacao_pct'] = _pct(item['total'], total)
+            partes.append(f'{cor} {inicio:.2f}% {fim:.2f}%')
+            inicio = fim
+
+        return {
+            'itens': itens,
+            'total': total,
+            'tem_dados': bool(itens),
+            'gradiente': ', '.join(partes) if partes else '#e2e8f0 0% 100%',
         }

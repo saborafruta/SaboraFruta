@@ -28,12 +28,15 @@ from django.urls import reverse
 from apps.cadastros.models import Cliente, Fornecedor
 from apps.core.models import Empresa, Filial
 from apps.financeiro.models import (
+    ContaBancaria,
     ContaPagar,
     ContaReceber,
+    ExtratoBancario,
     PagamentoContaPagar,
     PagamentoContaReceber,
     PlanoContas,
 )
+from apps.financeiro.forms.plano_contas import PlanoContasForm
 from apps.financeiro.services.dre import CAIXA, COMPETENCIA, DREService
 
 
@@ -58,6 +61,12 @@ class DREBase(TestCase):
         cls.fornecedor = Fornecedor.objects.create(
             filial=cls.filial, razao_social='Malharia Sul',
             cpf_cnpj='53345678000353',
+        )
+        cls.conta_bancaria = ContaBancaria.objects.create(
+            filial=cls.filial,
+            banco_codigo='001',
+            banco_nome='Banco Teste',
+            descricao='Conta DRE',
         )
         cls.mes = date(2026, 6, 1)
         cls.mes_anterior = date(2026, 5, 1)
@@ -119,6 +128,32 @@ class DREBase(TestCase):
 
     def _painel(self, regime=CAIXA, mes=None):
         return DREService.painel(self.filial, mes or self.mes, regime)
+
+    def _movimento_manual(self, valor, categoria, data_movimento=None, **kwargs):
+        self._n += 1
+        return ExtratoBancario.objects.create(
+            filial=self.filial,
+            conta_bancaria=self.conta_bancaria,
+            plano_contas=categoria,
+            data_lancamento=data_movimento or date(2026, 6, 12),
+            valor=Decimal(valor),
+            historico=f'Movimento manual {self._n}',
+            documento=f'M{self._n:04d}',
+            origem='manual',
+            status=kwargs.get('status', 'importado'),
+            tipo_lancamento=kwargs.get('tipo_lancamento', ''),
+        )
+
+
+class CategoriaGerencialFormTests(DREBase):
+
+    def test_categoria_analitica_pode_aguardar_vinculo_contabil(self):
+        form = PlanoContasForm(
+            empresa=self.empresa,
+            tipo_key='outras_receitas',
+        )
+
+        self.assertFalse(form.fields['conta_contabil'].required)
 
 
 class RegimeTests(DREBase):
@@ -228,6 +263,37 @@ class RegimeTests(DREBase):
         )
 
         self.assertEqual(self._painel(CAIXA)['resumo']['despesa'], Decimal('250'))
+
+    def test_posicao_diaria_manual_alimenta_dre_e_ignora_transferencias(self):
+        receitas = self._categoria('310', 'Receitas operacionais', 'R')
+        vendas = self._categoria('31001', 'Vendas', 'R', receitas)
+        venda = self._categoria('3100100001', 'Vendas de produtos', 'R', vendas)
+        cmv = self._categoria('324', 'CMV', 'D')
+        compra = self._categoria('32401', 'Mercadorias', 'D', cmv)
+        administrativo = self._categoria('332', 'Administrativo', 'D')
+        diaria = self._categoria('33201', 'Diárias', 'D', administrativo)
+
+        self._movimento_manual('1850', venda)
+        self._movimento_manual('-480', compra)
+        self._movimento_manual('-120', diaria)
+        self._movimento_manual(
+            '-999', compra, tipo_lancamento='transferencia',
+        )
+        self._movimento_manual('-777', compra, status='excluido')
+
+        caixa = self._painel(CAIXA)
+        competencia = self._painel(COMPETENCIA)
+
+        self.assertEqual(caixa['resumo']['receita'], Decimal('1850'))
+        self.assertEqual(caixa['resumo']['despesa'], Decimal('600'))
+        self.assertEqual(competencia['resumo']['receita'], Decimal('1850'))
+        self.assertEqual(competencia['resumo']['despesa'], Decimal('600'))
+        self.assertEqual(caixa['grafico_despesas']['total'], Decimal('600'))
+        self.assertEqual(
+            [item['descricao'] for item in caixa['grafico_despesas']['itens']],
+            ['CMV', 'Administrativo'],
+        )
+        self.assertIn('#2563eb', caixa['grafico_despesas']['gradiente'])
 
     def test_regime_invalido_cai_no_caixa(self):
         painel = DREService.painel(self.filial, self.mes, regime='qualquer')

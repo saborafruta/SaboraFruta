@@ -48,9 +48,13 @@ class PlanoContasForm(forms.ModelForm):
                 )
                 .order_by('ordem')
             )
-            self.fields['conta_contabil'].required = True
+            # A categoria financeira alimenta a DRE gerencial mesmo antes de
+            # existir o de-para contábil. O vínculo passa a ser recomendado,
+            # não bloqueante; ele poderá ser completado quando a DRE contábil
+            # for implantada.
+            self.fields['conta_contabil'].required = False
             self.fields['conta_contabil'].help_text = (
-                'A classificação contábil será preenchida automaticamente nos lançamentos.'
+                'Opcional nesta etapa gerencial. Vincule para preparar a futura DRE contábil.'
             )
         else:
             self.fields['conta_contabil'].queryset = PlanoContabil.objects.none()
