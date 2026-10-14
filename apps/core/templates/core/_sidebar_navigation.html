@@ -497,6 +497,7 @@
       {% url 'financeiro:painel' as financeiro_painel_url %}
       {% url 'financeiro:fluxo_caixa' as fluxo_caixa_url %}
       {% url 'financeiro:posicao_diaria' as posicao_diaria_url %}
+      {% url 'financeiro:dre' as dre_url %}
       {% url 'financeiro:contas_bancarias' as contas_bancarias_url %}
       {% url 'financeiro:conciliacao_list' as conciliacao_url %}
       {% url 'produtos:tabela-list' as tabela_preco_url %}
@@ -552,6 +553,19 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5h16v14H4zM4 9h16M8 13h3m-3 3h5"/>
         </svg>
         <span x-show="!collapsed">Posição Diária</span>
+      </a>
+
+      <!-- DRE Gerencial -->
+      <a href="{{ dre_url }}"
+         class="finance-order-2 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="{% if request.path == dre_url %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
+         {% if request.path != dre_url %}@mouseenter="$el.style.background=temaClaro?'#eff6ff':'#242426'; $el.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" @mouseleave="$el.style.background='transparent'; $el.style.color=temaClaro?'#1f2937':'#f8fafc'; $el.style.fontWeight='';"{% endif %}
+         title="DRE Gerencial">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 19V9m5 10V5m5 14v-7m5 7V3M3 21h18"/>
+        </svg>
+        <span x-show="!collapsed">DRE</span>
       </a>
 
       <!-- Contas Bancarias -->
