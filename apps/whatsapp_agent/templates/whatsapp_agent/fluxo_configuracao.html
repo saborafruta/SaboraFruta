@@ -26,6 +26,34 @@
 
     <section class="wa-card wa-section">
       <div class="wa-section-head">
+        <div>
+          <h2>Agente com IA</h2>
+          <p class="wa-muted">Entende texto livre e áudio. Agenda pelo WhatsApp e direciona pedidos ao catálogo seguro.</p>
+        </div>
+        <span class="wa-status {% if not form.instance.ia_ativa %}inactive{% endif %}">{% if form.instance.ia_ativa %}IA ativa{% else %}IA desativada{% endif %}</span>
+      </div>
+      <div class="wa-usage-grid">
+        <div class="wa-metric"><span>Chamadas no mês</span><strong>{{ uso_ia.chamadas|default:0 }}</strong></div>
+        <div class="wa-metric"><span>Tokens de entrada</span><strong>{{ uso_ia.tokens_entrada|default:0 }}</strong></div>
+        <div class="wa-metric"><span>Tokens de saída</span><strong>{{ uso_ia.tokens_saida|default:0 }}</strong></div>
+        <div class="wa-metric"><span>Tokens totais</span><strong>{{ uso_ia.tokens_total|default:0 }}</strong></div>
+        <div class="wa-metric"><span>Áudio transcrito</span><strong>{{ uso_ia.segundos_audio|default:0|floatformat:0 }} s</strong></div>
+        <div class="wa-metric cost"><span>Custo estimado</span><strong>R$ {{ uso_ia.custo_brl|default:0|floatformat:4 }}</strong></div>
+      </div>
+      <div class="wa-grid" style="margin-top:1rem">
+        <div class="wa-field full wa-checks"><label for="{{ form.ia_ativa.id_for_label }}">{{ form.ia_ativa }} {{ form.ia_ativa.label }}</label></div>
+        <div class="wa-field full wa-checks"><label for="{{ form.ia_audio_ativo.id_for_label }}">{{ form.ia_audio_ativo }} {{ form.ia_audio_ativo.label }}</label></div>
+        <div class="wa-field"><label for="{{ form.ia_modelo.id_for_label }}">{{ form.ia_modelo.label }}</label>{{ form.ia_modelo }}{% if form.ia_modelo.errors %}<div class="wa-errors">{{ form.ia_modelo.errors|first }}</div>{% endif %}</div>
+        <div class="wa-field"><label for="{{ form.ia_modelo_transcricao.id_for_label }}">{{ form.ia_modelo_transcricao.label }}</label>{{ form.ia_modelo_transcricao }}{% if form.ia_modelo_transcricao.errors %}<div class="wa-errors">{{ form.ia_modelo_transcricao.errors|first }}</div>{% endif %}</div>
+        <div class="wa-field"><label for="{{ form.ia_cotacao_dolar.id_for_label }}">{{ form.ia_cotacao_dolar.label }}</label>{{ form.ia_cotacao_dolar }}<div class="wa-help">{{ form.ia_cotacao_dolar.help_text }}</div></div>
+        <div class="wa-field"><label for="{{ form.ia_api_key.id_for_label }}">{{ form.ia_api_key.label }}</label>{{ form.ia_api_key }}<div class="wa-help">{% if ia_api_key_configurada %}<strong>Chave configurada.</strong> Preencha somente para substituir. {% endif %}{{ form.ia_api_key.help_text }}</div>{% if form.ia_api_key.errors %}<div class="wa-errors">{{ form.ia_api_key.errors|first }}</div>{% endif %}</div>
+        <div class="wa-field full"><label for="{{ form.ia_instrucoes.id_for_label }}">{{ form.ia_instrucoes.label }}</label>{{ form.ia_instrucoes }}<div class="wa-help">Ex.: tom de voz, regras da empresa e quando transferir para uma pessoa.</div></div>
+      </div>
+      <div class="wa-help" style="margin-top:.8rem">Os valores são estimativas, calculadas pela quantidade de tokens e pela cotação configurada. A cobrança real é feita pela provedora da IA, não por agendamento concluído.</div>
+    </section>
+
+    <section class="wa-card wa-section">
+      <div class="wa-section-head">
         <div><h2>Tipo de atendimento</h2><p class="wa-muted">Escolha quais jornadas esta filial oferece. Se usar as duas, o cliente escolhe logo no primeiro menu.</p></div>
       </div>
       <div class="wa-grid">
@@ -47,7 +75,7 @@
       </div>
       <div class="wa-grid">
         {% for field in form %}
-          {% if field.name != 'modo_atendimento' and field.name != 'mensagem_confirmacao_agendamento' and field.name != 'mensagem_lembrete_agendamento' and field.name != 'mensagem_resumo_pedido' and field.name != 'mensagem_pedido_recebido' and field.name != 'mensagem_atualizacao_pedido' and field.name != 'mensagem_pedido_pronto_retirada' and field.name != 'pedido_status_notificados' and field.name != 'pedido_resposta_confirmar' and field.name != 'pedido_resposta_alterar' and field.name != 'pedido_resposta_cancelar' and field.name != 'recuperacao_agendamento_ativa' and field.name != 'recuperacao_atraso_minutos' and field.name != 'recuperacao_horario_inicio' and field.name != 'recuperacao_horario_fim' and field.name != 'mensagem_recuperacao_agendamento' and field.name != 'mensagem_motivo_nao_agendamento' and field.name != 'mensagem_feedback_agendamento' %}
+          {% if field.name != 'ia_ativa' and field.name != 'ia_audio_ativo' and field.name != 'ia_modelo' and field.name != 'ia_modelo_transcricao' and field.name != 'ia_cotacao_dolar' and field.name != 'ia_instrucoes' and field.name != 'ia_api_key' and field.name != 'modo_atendimento' and field.name != 'mensagem_confirmacao_agendamento' and field.name != 'mensagem_lembrete_agendamento' and field.name != 'mensagem_resumo_pedido' and field.name != 'mensagem_pedido_recebido' and field.name != 'mensagem_atualizacao_pedido' and field.name != 'mensagem_pedido_pronto_retirada' and field.name != 'pedido_status_notificados' and field.name != 'pedido_resposta_confirmar' and field.name != 'pedido_resposta_alterar' and field.name != 'pedido_resposta_cancelar' and field.name != 'recuperacao_agendamento_ativa' and field.name != 'recuperacao_atraso_minutos' and field.name != 'recuperacao_horario_inicio' and field.name != 'recuperacao_horario_fim' and field.name != 'mensagem_recuperacao_agendamento' and field.name != 'mensagem_motivo_nao_agendamento' and field.name != 'mensagem_feedback_agendamento' %}
           {% if field.name == 'encerramento_automatico_ativo' %}
             <div class="wa-field full">
               <strong>Encerramento por inatividade</strong>

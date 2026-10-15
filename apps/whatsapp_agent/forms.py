@@ -26,6 +26,15 @@ class ConfiguracaoWhatsAppForm(forms.ModelForm):
 
 
 class FluxoWhatsAppForm(forms.ModelForm):
+    ia_api_key = forms.CharField(
+        label='Chave da API da OpenAI',
+        required=False,
+        widget=forms.PasswordInput(
+            attrs={'autocomplete': 'new-password', 'placeholder': 'Deixe em branco para manter a chave atual'},
+            render_value=False,
+        ),
+        help_text='A chave é criptografada e nunca volta a aparecer na tela.',
+    )
     pedido_status_notificados = forms.MultipleChoiceField(
         label='Enviar atualização nestas etapas',
         choices=STATUS_PEDIDO_NOTIFICACAO_CHOICES,
@@ -37,6 +46,8 @@ class FluxoWhatsAppForm(forms.ModelForm):
     class Meta:
         model = ConfiguracaoWhatsApp
         fields = [
+            'ia_ativa', 'ia_audio_ativo', 'ia_modelo', 'ia_modelo_transcricao',
+            'ia_cotacao_dolar', 'ia_instrucoes',
             'modo_atendimento',
             'mensagem_saudacao', 'mensagem_transferencia',
             'mensagem_encerramento', 'mensagem_opcao_invalida',
@@ -51,6 +62,12 @@ class FluxoWhatsAppForm(forms.ModelForm):
             'encerramento_automatico_ativo', 'tempo_inatividade_minutos',
         ]
         labels = {
+            'ia_ativa': 'Ativar agente com IA',
+            'ia_audio_ativo': 'Entender mensagens de áudio',
+            'ia_modelo': 'Modelo para respostas',
+            'ia_modelo_transcricao': 'Modelo para transcrição',
+            'ia_cotacao_dolar': 'Cotação do dólar para estimativa em reais',
+            'ia_instrucoes': 'Orientações adicionais para a IA',
             'modo_atendimento': 'Serviços oferecidos pelo agente',
             'mensagem_saudacao': 'Mensagem de saudação',
             'mensagem_transferencia': 'Mensagem de transferência',
@@ -73,6 +90,12 @@ class FluxoWhatsAppForm(forms.ModelForm):
             'tempo_inatividade_minutos': 'Tempo de inatividade (minutos)',
         }
         widgets = {
+            'ia_modelo': forms.TextInput(attrs={'placeholder': 'gpt-4o-mini'}),
+            'ia_modelo_transcricao': forms.TextInput(
+                attrs={'placeholder': 'gpt-4o-mini-transcribe'},
+            ),
+            'ia_cotacao_dolar': forms.NumberInput(attrs={'min': '0.01', 'step': '0.0001'}),
+            'ia_instrucoes': forms.Textarea(attrs={'rows': 4}),
             'mensagem_saudacao': forms.Textarea(attrs={'rows': 3}),
             'mensagem_transferencia': forms.Textarea(attrs={'rows': 3}),
             'mensagem_encerramento': forms.Textarea(attrs={'rows': 3}),
@@ -101,6 +124,26 @@ class FluxoWhatsAppForm(forms.ModelForm):
 
     def clean_pedido_status_notificados(self):
         return list(self.cleaned_data.get('pedido_status_notificados') or [])
+
+    def clean(self):
+        dados = super().clean()
+        if (
+            dados.get('ia_ativa')
+            and not (dados.get('ia_api_key') or self.instance.ia_api_key_configurada)
+        ):
+            self.add_error(
+                'ia_api_key',
+                'Informe a chave da OpenAI antes de ativar o agente com IA.',
+            )
+        return dados
+
+    def save(self, commit=True):
+        instancia = super().save(commit=False)
+        instancia.definir_ia_api_key(self.cleaned_data.get('ia_api_key'))
+        if commit:
+            instancia.save()
+            self.save_m2m()
+        return instancia
 
 
 class ConfiguracaoWhatsAppCentralForm(forms.ModelForm):

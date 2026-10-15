@@ -2,6 +2,7 @@ import base64
 import hashlib
 import uuid
 from datetime import time
+from decimal import Decimal
 
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
@@ -46,6 +47,31 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
     numero_conectado = models.CharField(max_length=24, blank=True)
     nome_conectado = models.CharField(max_length=120, blank=True)
     agente_ativo = models.BooleanField(default=False)
+    ia_ativa = models.BooleanField(
+        default=False,
+        help_text='Usa IA para compreender texto livre antes de recorrer ao menu tradicional.',
+    )
+    ia_audio_ativo = models.BooleanField(
+        default=True,
+        help_text='Transcreve áudios recebidos e processa a transcrição como uma mensagem normal.',
+    )
+    ia_modelo = models.CharField(max_length=80, default='gpt-4o-mini')
+    ia_modelo_transcricao = models.CharField(
+        max_length=80,
+        default='gpt-4o-mini-transcribe',
+    )
+    ia_api_key_criptografada = models.TextField(blank=True)
+    ia_cotacao_dolar = models.DecimalField(
+        max_digits=8,
+        decimal_places=4,
+        default=Decimal('5.50'),
+        validators=[MinValueValidator(0.01), MaxValueValidator(100)],
+        help_text='Cotação usada apenas para estimar o custo em reais.',
+    )
+    ia_instrucoes = models.TextField(
+        blank=True,
+        help_text='Orientações adicionais de atendimento para esta filial.',
+    )
     modo_atendimento = models.CharField(
         max_length=16,
         choices=ModoAtendimento.choices,
@@ -208,6 +234,27 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
             return _fernet().decrypt(self.api_key_criptografada.encode('ascii')).decode('utf-8')
         except (InvalidToken, ValueError):
             return ''
+
+    @property
+    def ia_api_key_configurada(self):
+        return bool(self.ia_api_key_criptografada or getattr(settings, 'OPENAI_API_KEY', ''))
+
+    def definir_ia_api_key(self, valor):
+        valor = (valor or '').strip()
+        if valor:
+            self.ia_api_key_criptografada = _fernet().encrypt(
+                valor.encode('utf-8'),
+            ).decode('ascii')
+
+    def obter_ia_api_key(self):
+        if self.ia_api_key_criptografada:
+            try:
+                return _fernet().decrypt(
+                    self.ia_api_key_criptografada.encode('ascii'),
+                ).decode('utf-8')
+            except (InvalidToken, ValueError):
+                return ''
+        return getattr(settings, 'OPENAI_API_KEY', '')
 
 
 class ConfiguracaoWhatsAppCentral(TimestampedModel):
@@ -479,4 +526,47 @@ class MensagemWhatsApp(TimestampedModel):
                 condition=~models.Q(identificador_externo=''),
                 name='whatsapp_mensagem_externa_unica',
             ),
+        ]
+
+
+class UsoIAWhatsApp(FilialScopedModel):
+    class Tipo(models.TextChoices):
+        RESPOSTA = 'resposta', 'Resposta do agente'
+        TRANSCRICAO = 'transcricao', 'Transcrição de áudio'
+
+    configuracao = models.ForeignKey(
+        ConfiguracaoWhatsApp,
+        on_delete=models.CASCADE,
+        related_name='usos_ia',
+    )
+    conversa = models.ForeignKey(
+        ConversaWhatsApp,
+        on_delete=models.CASCADE,
+        related_name='usos_ia',
+    )
+    mensagem = models.ForeignKey(
+        MensagemWhatsApp,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='usos_ia',
+    )
+    tipo = models.CharField(max_length=20, choices=Tipo.choices)
+    modelo = models.CharField(max_length=80)
+    tokens_entrada = models.PositiveIntegerField(default=0)
+    tokens_entrada_cache = models.PositiveIntegerField(default=0)
+    tokens_saida = models.PositiveIntegerField(default=0)
+    tokens_total = models.PositiveIntegerField(default=0)
+    segundos_audio = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    custo_usd = models.DecimalField(max_digits=14, decimal_places=8, default=0)
+    cotacao_dolar = models.DecimalField(max_digits=8, decimal_places=4, default=0)
+    custo_brl = models.DecimalField(max_digits=14, decimal_places=8, default=0)
+    metadados = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = 'whatsapp_usos_ia'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['filial', '-created_at']),
+            models.Index(fields=['conversa', '-created_at']),
         ]

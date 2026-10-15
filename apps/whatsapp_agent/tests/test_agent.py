@@ -1,5 +1,6 @@
 from datetime import time, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase, TestCase, override_settings
@@ -17,6 +18,7 @@ from apps.cadastros.models import Funcionario
 from apps.core.models import Empresa, Filial, TenantPublicLink
 from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
 from apps.whatsapp_agent.agent import processar_mensagem
+from apps.whatsapp_agent.ai_service import OpenAIWhatsAppClient
 from apps.whatsapp_agent.conversation_service import (
     encerrar_conversa,
     encerrar_conversas_inativas,
@@ -24,12 +26,14 @@ from apps.whatsapp_agent.conversation_service import (
 from apps.whatsapp_agent.crm_service import recuperar_agendamentos_abandonados
 from apps.whatsapp_agent.forms import ConfiguracaoWhatsAppForm, FluxoWhatsAppForm
 from apps.whatsapp_agent.gateway import EvolutionClient, GatewayWhatsAppError, qr_data_url
+from apps.whatsapp_agent.intelligent_agent import processar_com_ia
 from apps.whatsapp_agent.models import (
     ConfiguracaoWhatsApp,
     ConversaWhatsApp,
     MensagemWhatsApp,
     MenuWhatsApp,
     OpcaoMenuWhatsApp,
+    UsoIAWhatsApp,
 )
 from apps.whatsapp_agent.notifications import _numero_whatsapp, enviar_notificacao_agendamento
 from apps.whatsapp_agent.webhook import receber_evento
@@ -86,6 +90,171 @@ class AgenteWhatsAppTests(TestCase):
     def test_api_key_fica_criptografada(self):
         self.assertNotIn('chave-ultrassecreta', self.configuracao.api_key_criptografada)
         self.assertEqual(self.configuracao.obter_api_key(), 'chave-ultrassecreta')
+
+    @override_settings(OPENAI_API_KEY='')
+    def test_chave_da_ia_fica_criptografada_por_filial(self):
+        self.configuracao.definir_ia_api_key('sk-chave-da-filial')
+        self.configuracao.save(update_fields=['ia_api_key_criptografada'])
+
+        self.assertNotIn('sk-chave-da-filial', self.configuracao.ia_api_key_criptografada)
+        self.assertEqual(self.configuracao.obter_ia_api_key(), 'sk-chave-da-filial')
+        self.assertTrue(self.configuracao.ia_api_key_configurada)
+
+    @patch('apps.whatsapp_agent.ai_service.requests.post')
+    def test_registra_tokens_e_custo_estimado_da_resposta(self, requisicao):
+        self.configuracao.definir_ia_api_key('sk-teste')
+        self.configuracao.ia_cotacao_dolar = Decimal('5.00')
+        self.configuracao.save(update_fields=['ia_api_key_criptografada', 'ia_cotacao_dolar'])
+        conversa = self.nova_conversa()
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Quero fazer um pedido',
+        )
+        resposta = Mock(status_code=200)
+        resposta.json.return_value = {
+            'id': 'resp_1',
+            'output': [{
+                'type': 'message',
+                'content': [{'type': 'output_text', 'text': '{"acao":"abrir_catalogo"}'}],
+            }],
+            'usage': {
+                'input_tokens': 1000,
+                'input_tokens_details': {'cached_tokens': 200},
+                'output_tokens': 100,
+                'total_tokens': 1100,
+            },
+        }
+        requisicao.return_value = resposta
+
+        resultado = OpenAIWhatsAppClient(self.configuracao).responder_estruturado(
+            conversa=conversa,
+            mensagem=mensagem,
+            instrucoes='Responda em JSON.',
+            entrada='Pedido',
+            schema={'type': 'object'},
+        )
+
+        self.assertEqual(resultado.conteudo, {'acao': 'abrir_catalogo'})
+        uso = UsoIAWhatsApp.objects.get(conversa=conversa)
+        self.assertEqual(uso.tokens_total, 1100)
+        self.assertEqual(uso.tokens_entrada_cache, 200)
+        self.assertEqual(uso.custo_brl, Decimal('0.00097500'))
+
+    @patch('apps.whatsapp_agent.webhook.processar_com_ia', return_value='Entendi o áudio.')
+    @patch('apps.whatsapp_agent.webhook.OpenAIWhatsAppClient.transcrever')
+    @patch('apps.whatsapp_agent.webhook.EvolutionClient.obter_midia_base64')
+    @patch('apps.whatsapp_agent.webhook.EvolutionClient.enviar_texto')
+    def test_audio_e_transcrito_e_respondido_pelo_mesmo_agente(
+        self, enviar_texto, obter_midia, transcrever, processar_ia,
+    ):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_audio_ativo = True
+        self.configuracao.definir_ia_api_key('sk-teste')
+        self.configuracao.save(update_fields=[
+            'ia_ativa', 'ia_audio_ativo', 'ia_api_key_criptografada',
+        ])
+        enviar_texto.return_value = {'key': {'id': 'saida-audio'}}
+        obter_midia.return_value = {'base64': 'YXVkaW8=', 'mimetype': 'audio/ogg'}
+        transcrever.return_value = SimpleNamespace(conteudo='Quero um corte amanhã à tarde')
+        payload = {
+            'event': 'messages.upsert',
+            'instance': self.configuracao.instancia,
+            'data': {
+                'key': {
+                    'id': 'entrada-audio', 'fromMe': False,
+                    'remoteJid': '5584999994444@s.whatsapp.net',
+                },
+                'pushName': 'Ana',
+                'message': {
+                    'ephemeralMessage': {
+                        'message': {
+                            'audioMessage': {
+                                'mimetype': 'audio/ogg; codecs=opus', 'ptt': True,
+                            },
+                        },
+                    },
+                },
+            },
+        }
+
+        self.assertEqual(receber_evento(self.configuracao, payload), 'enviada')
+
+        entrada = MensagemWhatsApp.objects.get(identificador_externo='entrada-audio')
+        self.assertEqual(entrada.tipo, 'audio')
+        self.assertEqual(entrada.status, 'transcrita')
+        self.assertEqual(entrada.texto, 'Quero um corte amanhã à tarde')
+        processar_ia.assert_called_once_with(
+            entrada.conversa, 'Quero um corte amanhã à tarde', entrada,
+        )
+        enviar_texto.assert_called_once_with('5584999994444', 'Entendi o áudio.')
+
+    @patch('apps.whatsapp_agent.ai_service.requests.post')
+    def test_ia_consulta_disponibilidade_e_confirma_agendamento(self, requisicao):
+        self.configuracao.ia_ativa = True
+        self.configuracao.definir_ia_api_key('sk-teste')
+        self.configuracao.save(update_fields=['ia_ativa', 'ia_api_key_criptografada'])
+        conversa = self.nova_conversa('5584999995555')
+        proxima_segunda = timezone.localdate() + timedelta(
+            days=(7 - timezone.localdate().weekday()) % 7 or 7,
+        )
+        decisoes = [
+            {
+                'acao': 'consultar_agenda', 'mensagem': '',
+                'servico_id': self.servico.pk,
+                'profissional_id': self.profissional.pk,
+                'data': proxima_segunda.isoformat(), 'periodo': '',
+                'horario': '', 'nome_cliente': '',
+            },
+            {
+                'acao': 'agendar', 'mensagem': '',
+                'servico_id': self.servico.pk,
+                'profissional_id': self.profissional.pk,
+                'data': proxima_segunda.isoformat(), 'periodo': 'manha',
+                'horario': '08:00', 'nome_cliente': 'Ana Cliente',
+            },
+        ]
+
+        def resposta_openai(*_args, **_kwargs):
+            decisao = decisoes.pop(0)
+            resposta = Mock(status_code=200)
+            resposta.json.return_value = {
+                'id': 'resp-agenda',
+                'output': [{
+                    'type': 'message',
+                    'content': [{'type': 'output_text', 'text': __import__('json').dumps(decisao)}],
+                }],
+                'usage': {'input_tokens': 100, 'output_tokens': 30, 'total_tokens': 130},
+            }
+            return resposta
+
+        requisicao.side_effect = resposta_openai
+        mensagem_consulta = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Quero cortar o cabelo na próxima segunda',
+        )
+
+        disponibilidade = processar_com_ia(
+            conversa, mensagem_consulta.texto, mensagem_consulta,
+        )
+
+        self.assertIn('manhã', disponibilidade)
+        mensagem_horario = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Pode ser às 08:00, meu nome é Ana Cliente',
+        )
+
+        confirmacao = processar_com_ia(conversa, mensagem_horario.texto, mensagem_horario)
+
+        self.assertIn('Seu agendamento foi confirmado', confirmacao)
+        agendamento = Agendamento.objects.get(telefone_contato='5584999995555')
+        self.assertEqual(agendamento.pessoa_atendida_nome, 'Ana Cliente')
+        self.assertEqual(agendamento.origem, Agendamento.Origem.WHATSAPP_NAO_OFICIAL)
+        conversa.refresh_from_db()
+        self.assertEqual(conversa.etapa_crm, ConversaWhatsApp.EtapaCRM.AGENDADO)
+        self.assertEqual(UsoIAWhatsApp.objects.filter(conversa=conversa).count(), 2)
 
     def test_saudacao_exibe_menu_principal(self):
         conversa = self.nova_conversa()
@@ -520,6 +689,27 @@ class EvolutionClientTests(SimpleTestCase):
         self.assertEqual(requisicao.call_args.kwargs['json']['number'], '5584999990000')
 
     @patch('apps.whatsapp_agent.gateway.requests.request')
+    def test_baixa_audio_em_base64_pela_evolution(self, requisicao):
+        resposta = Mock(status_code=200)
+        resposta.json.return_value = {
+            'base64': 'data:audio/ogg;base64,YXVkaW8=',
+            'mimetype': 'audio/ogg',
+        }
+        requisicao.return_value = resposta
+
+        retorno = EvolutionClient(self.configuracao()).obter_midia_base64({
+            'key': {'id': 'audio-1'},
+            'message': {'audioMessage': {'ptt': True}},
+        })
+
+        self.assertEqual(retorno['base64'], 'YXVkaW8=')
+        self.assertEqual(retorno['mimetype'], 'audio/ogg')
+        self.assertEqual(
+            requisicao.call_args.args,
+            ('POST', 'https://evolution.example.com/chat/getBase64FromMediaMessage/ited-teste'),
+        )
+
+    @patch('apps.whatsapp_agent.gateway.requests.request')
     def test_numero_inexistente_retorna_mensagem_amigavel(self, requisicao):
         resposta = Mock(status_code=400)
         resposta.json.return_value = {
@@ -588,3 +778,6 @@ class EvolutionClientTests(SimpleTestCase):
         )
         self.assertIn('{nome}', campos['mensagem_confirmacao_agendamento'].initial)
         self.assertIn('{horario}', campos['mensagem_lembrete_agendamento'].initial)
+        self.assertIn('ia_ativa', campos)
+        self.assertIn('ia_audio_ativo', campos)
+        self.assertIn('ia_api_key', campos)

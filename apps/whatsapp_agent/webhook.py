@@ -6,6 +6,8 @@ from django.utils import timezone
 from .agent import localizar_cliente, processar_mensagem, somente_digitos
 from .conversation_service import encerrar_se_expirada
 from .gateway import EvolutionClient, GatewayWhatsAppError
+from .ai_service import IAWhatsAppError, OpenAIWhatsAppClient
+from .intelligent_agent import processar_com_ia
 from .models import ConversaWhatsApp, MensagemWhatsApp
 
 
@@ -23,10 +25,29 @@ def _instancia(payload):
     return str(instancia)
 
 
+def _conteudo_mensagem(mensagem):
+    """Remove invólucros comuns usados pelo WhatsApp para texto e áudio."""
+    atual = mensagem if isinstance(mensagem, dict) else {}
+    for _ in range(4):
+        proximo = None
+        for chave in (
+            'ephemeralMessage', 'viewOnceMessage', 'viewOnceMessageV2',
+            'viewOnceMessageV2Extension', 'documentWithCaptionMessage',
+        ):
+            item = atual.get(chave)
+            if isinstance(item, dict) and isinstance(item.get('message'), dict):
+                proximo = item['message']
+                break
+        if proximo is None:
+            break
+        atual = proximo
+    return atual
+
+
 def _dados_mensagem(payload):
     dados = payload.get('data') or {}
     chave = dados.get('key') or {}
-    mensagem = dados.get('message') or {}
+    mensagem = _conteudo_mensagem(dados.get('message') or {})
     texto = (
         mensagem.get('conversation')
         or (mensagem.get('extendedTextMessage') or {}).get('text')
@@ -34,12 +55,20 @@ def _dados_mensagem(payload):
         or (mensagem.get('videoMessage') or {}).get('caption')
         or ''
     )
+    audio = mensagem.get('audioMessage') or {}
     return {
         'id': str(chave.get('id') or dados.get('id') or ''),
         'from_me': bool(chave.get('fromMe')),
         'remote_jid': str(chave.get('remoteJid') or dados.get('remoteJid') or ''),
         'nome': str(dados.get('pushName') or payload.get('sender') or '')[:150],
         'texto': str(texto).strip(),
+        'tipo': 'audio' if audio else 'texto',
+        'mimetype': str(audio.get('mimetype') or 'audio/ogg'),
+        'dados_gateway': {
+            'key': chave,
+            'message': mensagem,
+            'messageTimestamp': dados.get('messageTimestamp'),
+        },
     }
 
 
@@ -72,7 +101,7 @@ def receber_evento(configuracao, payload):
             configuracao=configuracao, remote_jid=dados['remote_jid'],
         ).update(ultima_mensagem_em=agora, updated_at=agora)
         return 'ignorado'
-    if not dados['texto']:
+    if not dados['texto'] and dados['tipo'] != 'audio':
         return 'sem_texto'
 
     telefone = somente_digitos(dados['remote_jid'].split('@')[0])
@@ -94,7 +123,8 @@ def receber_evento(configuracao, payload):
         ])
         padrao_mensagem = {
                 'direcao': MensagemWhatsApp.Direcao.ENTRADA,
-                'texto': dados['texto'], 'tipo': 'texto',
+                'texto': dados['texto'], 'tipo': dados['tipo'],
+                'status': 'processando' if dados['tipo'] == 'audio' else 'recebida',
                 'dados_evento': {'evento': evento},
         }
         if dados['id']:
@@ -106,7 +136,52 @@ def receber_evento(configuracao, payload):
             criada = True
         if not criada:
             return 'duplicado'
-        resposta = processar_mensagem(conversa, dados['texto']) if configuracao.agente_ativo else None
+
+    texto_processado = dados['texto']
+    if dados['tipo'] == 'audio':
+        if not configuracao.ia_ativa or not configuracao.ia_audio_ativo:
+            mensagem.status = 'nao_suportado'
+            mensagem.save(update_fields=['status', 'updated_at'])
+            resposta = (
+                'Ainda não estou configurado para entender áudios. '
+                'Pode enviar a mensagem por texto, por favor?'
+            ) if configuracao.agente_ativo else None
+        else:
+            try:
+                midia = EvolutionClient(configuracao).obter_midia_base64(
+                    dados['dados_gateway'],
+                )
+                transcricao = OpenAIWhatsAppClient(configuracao).transcrever(
+                    conversa=conversa,
+                    mensagem=mensagem,
+                    base64_audio=midia['base64'],
+                    mimetype=midia.get('mimetype') or dados['mimetype'],
+                )
+                texto_processado = str(transcricao.conteudo)
+                mensagem.texto = texto_processado
+                mensagem.status = 'transcrita'
+                mensagem.dados_evento = {
+                    'evento': evento,
+                    'mimetype': midia.get('mimetype') or dados['mimetype'],
+                }
+                mensagem.save(update_fields=['texto', 'status', 'dados_evento', 'updated_at'])
+                resposta = None
+            except (GatewayWhatsAppError, IAWhatsAppError) as exc:
+                mensagem.status = 'erro_transcricao'
+                mensagem.dados_evento = {'evento': evento, 'erro': str(exc)}
+                mensagem.save(update_fields=['status', 'dados_evento', 'updated_at'])
+                logger.warning('Falha ao transcrever áudio do WhatsApp: %s', exc)
+                resposta = (
+                    'Não consegui entender esse áudio agora. '
+                    'Pode enviar por texto, por favor?'
+                ) if configuracao.agente_ativo else None
+    else:
+        resposta = None
+
+    if configuracao.agente_ativo and texto_processado and resposta is None:
+        resposta = processar_com_ia(conversa, texto_processado, mensagem)
+        if resposta is None:
+            resposta = processar_mensagem(conversa, texto_processado)
 
     if not resposta:
         return 'recebido'

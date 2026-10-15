@@ -4,7 +4,7 @@ import re
 from django.conf import settings
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import OuterRef, Subquery
+from django.db.models import Count, OuterRef, Subquery, Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -24,6 +24,7 @@ from .gateway import EvolutionClient, GatewayWhatsAppError, identidade_instancia
 from .models import (
     ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp,
     MenuWhatsApp, OpcaoMenuWhatsApp,
+    UsoIAWhatsApp,
 )
 from .webhook import receber_evento
 
@@ -213,13 +214,35 @@ class FluxoConfiguracaoView(PermissaoRequiredMixin, View):
     permissao_modulo = 'cadastros'
     permissao_acao = 'editar'
 
+    def _contexto(self, configuracao, form, fluxo=None):
+        inicio_mes = timezone.localdate().replace(day=1)
+        uso = UsoIAWhatsApp.objects.filter(
+            configuracao=configuracao,
+            created_at__date__gte=inicio_mes,
+        ).aggregate(
+            chamadas=Count('id'),
+            tokens_entrada=Sum('tokens_entrada'),
+            tokens_saida=Sum('tokens_saida'),
+            tokens_total=Sum('tokens_total'),
+            segundos_audio=Sum('segundos_audio'),
+            custo_brl=Sum('custo_brl'),
+        )
+        return {
+            'form': form,
+            'fluxo': fluxo if fluxo is not None else _fluxo_serializado(configuracao),
+            'acoes': list(OpcaoMenuWhatsApp.Acao.choices),
+            'ia_api_key_configurada': configuracao.ia_api_key_configurada,
+            'uso_ia': uso,
+            'inicio_mes': inicio_mes,
+        }
+
     def get(self, request):
         configuracao = _configuracao(request)
-        return render(request, 'whatsapp_agent/fluxo_configuracao.html', {
-            'form': FluxoWhatsAppForm(instance=configuracao),
-            'fluxo': _fluxo_serializado(configuracao),
-            'acoes': list(OpcaoMenuWhatsApp.Acao.choices),
-        })
+        return render(
+            request,
+            'whatsapp_agent/fluxo_configuracao.html',
+            self._contexto(configuracao, FluxoWhatsAppForm(instance=configuracao)),
+        )
 
     def post(self, request):
         configuracao = _configuracao(request)
@@ -241,10 +264,11 @@ class FluxoConfiguracaoView(PermissaoRequiredMixin, View):
                 _salvar_fluxo(configuracao, fluxo)
             messages.success(request, 'Fluxo de atendimento salvo e já disponível no WhatsApp.')
             return redirect('whatsapp_agent:fluxo-configuracao')
-        return render(request, 'whatsapp_agent/fluxo_configuracao.html', {
-            'form': form, 'fluxo': fluxo,
-            'acoes': list(OpcaoMenuWhatsApp.Acao.choices),
-        })
+        return render(
+            request,
+            'whatsapp_agent/fluxo_configuracao.html',
+            self._contexto(configuracao, form, fluxo),
+        )
 
 
 @method_decorator(require_POST, name='dispatch')
@@ -391,7 +415,18 @@ class ConversaDetailView(PermissaoRequiredMixin, View):
             .select_related('cliente', 'configuracao').prefetch_related('mensagens'),
             pk=pk,
         )
-        return render(request, 'whatsapp_agent/conversa_detail.html', {'conversa': conversa})
+        uso = conversa.usos_ia.aggregate(
+            chamadas=Count('id'),
+            tokens_entrada=Sum('tokens_entrada'),
+            tokens_saida=Sum('tokens_saida'),
+            tokens_total=Sum('tokens_total'),
+            segundos_audio=Sum('segundos_audio'),
+            custo_brl=Sum('custo_brl'),
+        )
+        return render(request, 'whatsapp_agent/conversa_detail.html', {
+            'conversa': conversa,
+            'uso_ia': uso,
+        })
 
 
 @method_decorator(require_POST, name='dispatch')

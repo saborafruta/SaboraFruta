@@ -104,6 +104,28 @@ class EvolutionClient:
             'linkPreview': False,
         })
 
+    def obter_midia_base64(self, dados_mensagem):
+        dados = self._request(
+            'POST',
+            f'/chat/getBase64FromMediaMessage/{quote(self.configuracao.instancia)}',
+            json={'message': dados_mensagem, 'convertToMp4': False},
+        )
+        if not isinstance(dados, dict):
+            raise GatewayWhatsAppError('O gateway não retornou o conteúdo do áudio.')
+        base64_midia = (
+            dados.get('base64')
+            or dados.get('data')
+            or (dados.get('media') or {}).get('base64')
+        )
+        if isinstance(base64_midia, str) and ',' in base64_midia[:100]:
+            base64_midia = base64_midia.split(',', 1)[1]
+        if not base64_midia:
+            raise GatewayWhatsAppError('Não foi possível baixar o áudio recebido.')
+        return {
+            'base64': base64_midia,
+            'mimetype': dados.get('mimetype') or dados.get('mimeType') or 'audio/ogg',
+        }
+
 
 def qr_data_url(dados):
     base64_pronto = dados.get('base64') or (dados.get('qrcode') or {}).get('base64')

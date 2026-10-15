@@ -12,6 +12,13 @@
       {% if conversa.ativa %}<form method="post" action="{% url 'whatsapp_agent:encerrar-conversa' conversa.pk %}" onsubmit="return confirm('Encerrar esta conversa?')">{% csrf_token %}<button class="wa-btn danger" type="submit">Encerrar conversa</button></form>{% endif %}
     </div>
   </div>
+  {% if uso_ia.chamadas %}
+  <div class="wa-usage-grid" style="margin-bottom:.8rem">
+    <div class="wa-metric"><span>Chamadas da IA</span><strong>{{ uso_ia.chamadas }}</strong></div>
+    <div class="wa-metric"><span>Tokens totais</span><strong>{{ uso_ia.tokens_total|default:0 }}</strong></div>
+    <div class="wa-metric cost"><span>Custo estimado da conversa</span><strong>R$ {{ uso_ia.custo_brl|default:0|floatformat:4 }}</strong></div>
+  </div>
+  {% endif %}
   <div class="wa-card wa-crm-detail">
     <div>
       <strong>Etapa comercial</strong>
@@ -27,7 +34,7 @@
     </form>
   </div>
   <div class="wa-card wa-list">
-    {% for mensagem in conversa.mensagens.all %}<div class="wa-message {% if mensagem.direcao == 'saida' %}saida{% endif %}"><div>{{ mensagem.texto|linebreaksbr }}</div><div class="wa-muted">{{ mensagem.get_direcao_display }} · {{ mensagem.created_at|date:'d/m H:i' }}{% if mensagem.status %} · {{ mensagem.status }}{% endif %}</div></div>{% empty %}<div class="wa-muted">Nenhuma mensagem registrada.</div>{% endfor %}
+    {% for mensagem in conversa.mensagens.all %}<div class="wa-message {% if mensagem.direcao == 'saida' %}saida{% endif %}">{% if mensagem.tipo == 'audio' %}<div class="wa-muted">🎙️ Áudio transcrito</div>{% endif %}<div>{{ mensagem.texto|linebreaksbr }}</div><div class="wa-muted">{{ mensagem.get_direcao_display }} · {{ mensagem.created_at|date:'d/m H:i' }}{% if mensagem.status %} · {{ mensagem.status }}{% endif %}</div></div>{% empty %}<div class="wa-muted">Nenhuma mensagem registrada.</div>{% endfor %}
   </div>
 </div>
 {% endblock %}
