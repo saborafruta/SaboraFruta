@@ -46,7 +46,7 @@
         <div class="wa-field"><label for="{{ form.ia_modelo.id_for_label }}">{{ form.ia_modelo.label }}</label>{{ form.ia_modelo }}{% if form.ia_modelo.errors %}<div class="wa-errors">{{ form.ia_modelo.errors|first }}</div>{% endif %}</div>
         <div class="wa-field"><label for="{{ form.ia_modelo_transcricao.id_for_label }}">{{ form.ia_modelo_transcricao.label }}</label>{{ form.ia_modelo_transcricao }}{% if form.ia_modelo_transcricao.errors %}<div class="wa-errors">{{ form.ia_modelo_transcricao.errors|first }}</div>{% endif %}</div>
         <div class="wa-field"><label for="{{ form.ia_cotacao_dolar.id_for_label }}">{{ form.ia_cotacao_dolar.label }}</label>{{ form.ia_cotacao_dolar }}<div class="wa-help">{{ form.ia_cotacao_dolar.help_text }}</div></div>
-        <div class="wa-field"><label for="{{ form.ia_api_key.id_for_label }}">{{ form.ia_api_key.label }}</label>{{ form.ia_api_key }}<div class="wa-help">{% if ia_api_key_configurada %}<strong>Chave configurada.</strong> Preencha somente para substituir. {% endif %}{{ form.ia_api_key.help_text }}</div>{% if form.ia_api_key.errors %}<div class="wa-errors">{{ form.ia_api_key.errors|first }}</div>{% endif %}</div>
+        {% include 'whatsapp_agent/_ia_api_key_field.html' %}
         <div class="wa-field full"><label for="{{ form.ia_instrucoes.id_for_label }}">{{ form.ia_instrucoes.label }}</label>{{ form.ia_instrucoes }}<div class="wa-help">Ex.: tom de voz, regras da empresa e quando transferir para uma pessoa.</div></div>
       </div>
       <div class="wa-help" style="margin-top:.8rem">Os valores são estimativas, calculadas pela quantidade de tokens e pela cotação configurada. A cobrança real é feita pela provedora da IA, não por agendamento concluído.</div>

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.template.loader import render_to_string
 from django.utils import timezone
 
 from apps.agenda.models import (
@@ -781,3 +782,21 @@ class EvolutionClientTests(SimpleTestCase):
         self.assertIn('ia_ativa', campos)
         self.assertIn('ia_audio_ativo', campos)
         self.assertIn('ia_api_key', campos)
+        self.assertEqual(
+            campos['ia_api_key'].widget.attrs['placeholder'],
+            'Cole a nova chave da OpenAI',
+        )
+
+    def test_fluxo_mostra_estado_e_botao_quando_chave_ia_esta_configurada(self):
+        html = render_to_string(
+            'whatsapp_agent/_ia_api_key_field.html',
+            {
+                'form': FluxoWhatsAppForm(instance=ConfiguracaoWhatsApp()),
+                'ia_api_key_configurada': True,
+            },
+        )
+
+        self.assertIn('Chave configurada', html)
+        self.assertIn('valor protegido', html)
+        self.assertIn('Trocar chave', html)
+        self.assertIn('Cancelar troca', html)

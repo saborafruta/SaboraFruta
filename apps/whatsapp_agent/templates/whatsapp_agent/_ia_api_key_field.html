@@ -1,0 +1,30 @@
+<div class="wa-field wa-secret-field" x-data="{ editandoChave: {% if form.ia_api_key.errors or not ia_api_key_configurada %}true{% else %}false{% endif %} }">
+  <label for="{{ form.ia_api_key.id_for_label }}">{{ form.ia_api_key.label }}</label>
+  {% if ia_api_key_configurada %}
+    <div class="wa-secret-configured" x-show="!editandoChave">
+      <div class="wa-secret-summary">
+        <span class="wa-secret-check" aria-hidden="true">✓</span>
+        <span><strong>Chave configurada</strong><small>•••••••••••••••• · valor protegido</small></span>
+      </div>
+      <button
+        class="wa-btn secondary compact"
+        type="button"
+        @click="editandoChave = true; $nextTick(() => document.getElementById('{{ form.ia_api_key.id_for_label }}').focus())"
+      >Trocar chave</button>
+    </div>
+  {% endif %}
+  <div x-show="editandoChave"{% if ia_api_key_configurada and not form.ia_api_key.errors %} x-cloak{% endif %}>
+    {{ form.ia_api_key }}
+    <div class="wa-secret-edit-actions">
+      <div class="wa-help">{{ form.ia_api_key.help_text }}</div>
+      {% if ia_api_key_configurada %}
+        <button
+          class="wa-secret-cancel"
+          type="button"
+          @click="document.getElementById('{{ form.ia_api_key.id_for_label }}').value = ''; editandoChave = false"
+        >Cancelar troca</button>
+      {% endif %}
+    </div>
+  </div>
+  {% if form.ia_api_key.errors %}<div class="wa-errors">{{ form.ia_api_key.errors|first }}</div>{% endif %}
+</div>

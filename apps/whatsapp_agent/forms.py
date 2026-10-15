@@ -30,10 +30,13 @@ class FluxoWhatsAppForm(forms.ModelForm):
         label='Chave da API da OpenAI',
         required=False,
         widget=forms.PasswordInput(
-            attrs={'autocomplete': 'new-password', 'placeholder': 'Deixe em branco para manter a chave atual'},
+            attrs={
+                'autocomplete': 'new-password',
+                'placeholder': 'Cole a nova chave da OpenAI',
+            },
             render_value=False,
         ),
-        help_text='A chave é criptografada e nunca volta a aparecer na tela.',
+        help_text='A chave será criptografada e nunca voltará a aparecer na tela.',
     )
     pedido_status_notificados = forms.MultipleChoiceField(
         label='Enviar atualização nestas etapas',
