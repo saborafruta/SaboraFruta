@@ -16,7 +16,8 @@ from apps.agenda.models import (
     ProfissionalServico,
 )
 from apps.cadastros.models import Funcionario
-from apps.core.models import Empresa, Filial, TenantPublicLink
+from apps.catalogo.models import CatalogoConfiguracao, PedidoCatalogo
+from apps.core.models import Empresa, Filial, Notificacao, TenantPublicLink
 from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
 from apps.whatsapp_agent.agent import processar_mensagem
 from apps.whatsapp_agent.ai_service import IAWhatsAppError, OpenAIWhatsAppClient
@@ -218,6 +219,7 @@ class AgenteWhatsAppTests(TestCase):
                 'profissional_id': self.profissional.pk,
                 'data': proxima_segunda.isoformat(), 'periodo': 'manha',
                 'horario': '08:00', 'nome_cliente': 'Ana Cliente',
+                'confirmou_nome': True,
             },
         ]
 
@@ -357,6 +359,7 @@ class AgenteWhatsAppTests(TestCase):
                 'profissional_id': self.profissional.pk,
                 'data': proxima_segunda.isoformat(), 'periodo': 'manha',
                 'horario': '08:00', 'nome_cliente': 'Ana Cliente',
+                'confirmou_nome': True,
             },
         ]
         responder.side_effect = [
@@ -446,6 +449,230 @@ class AgenteWhatsAppTests(TestCase):
         self.assertIn('sexta-feira, 16/10/2026', resposta)
         self.assertNotIn('12:00', resposta)
         responder.assert_not_called()
+
+    @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
+    def test_cliente_pode_pedir_datas_disponiveis_sem_tentar_dia_por_dia(self, responder):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
+        self.configuracao.save(update_fields=['ia_ativa', 'ia_restringir_horario'])
+        conversa = self.nova_conversa('5584999996611')
+        conversa.contexto = {
+            'ia_agenda': {
+                'fluxo_ativo': True,
+                'servico_id': self.servico.pk,
+                'servico_ids': [self.servico.pk],
+                'complementos_confirmados': True,
+                'profissional_id': self.profissional.pk,
+                'data': '2026-10-18',
+            },
+        }
+        conversa.save(update_fields=['contexto'])
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Quais datas têm disponível?',
+        )
+        proxima_segunda = timezone.localdate() + timedelta(
+            days=(7 - timezone.localdate().weekday()) % 7 or 7,
+        )
+
+        resposta = processar_com_ia(conversa, mensagem.texto, mensagem)
+
+        self.assertIn('encontrei estas próximas datas', resposta)
+        self.assertIn(proxima_segunda.strftime('%d/%m'), resposta)
+        self.assertIn('manhã', resposta)
+        self.assertNotIn('Quer tentar outra data?', resposta)
+        responder.assert_not_called()
+        conversa.refresh_from_db()
+        estado = conversa.contexto['ia_agenda']
+        self.assertNotIn('data', estado)
+        self.assertIn(proxima_segunda.isoformat(), estado['datas_oferecidas'])
+
+    @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
+    def test_consulta_de_datas_explica_quando_ainda_falta_servico(self, responder):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
+        self.configuracao.save(update_fields=['ia_ativa', 'ia_restringir_horario'])
+        conversa = self.nova_conversa('5584999996622')
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Quando tem vaga?',
+        )
+
+        resposta = processar_com_ia(conversa, mensagem.texto, mensagem)
+
+        self.assertIn('Consigo consultar as próximas datas', resposta)
+        self.assertIn('qual serviço você deseja', resposta)
+        self.assertIn('Corte de cabelo', resposta)
+        responder.assert_not_called()
+
+    @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
+    def test_ia_pode_identificar_outra_forma_de_pedir_agenda_livre(self, responder):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
+        self.configuracao.definir_ia_api_key('sk-teste')
+        self.configuracao.save(update_fields=[
+            'ia_ativa', 'ia_restringir_horario', 'ia_api_key_criptografada',
+        ])
+        conversa = self.nova_conversa('5584999996633')
+        conversa.contexto = {
+            'ia_agenda': {
+                'fluxo_ativo': True,
+                'servico_id': self.servico.pk,
+                'servico_ids': [self.servico.pk],
+                'complementos_confirmados': True,
+                'profissional_id': self.profissional.pk,
+            },
+        }
+        conversa.save(update_fields=['contexto'])
+        responder.return_value = SimpleNamespace(conteudo={
+            'acao': 'consultar_datas', 'mensagem': '',
+            'servico_id': self.servico.pk,
+            'servico_ids': [self.servico.pk],
+            'confirmou_servicos': True,
+            'profissional_id': self.profissional.pk,
+            'aceita_qualquer_profissional': False,
+            'aceita_qualquer_periodo': False,
+            'data': '', 'periodo': '', 'horario': '', 'nome_cliente': '',
+        })
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Pode olhar quando a agenda está livre para mim?',
+        )
+
+        resposta = processar_com_ia(conversa, mensagem.texto, mensagem)
+
+        self.assertIn('encontrei estas próximas datas', resposta)
+        responder.assert_called_once()
+
+    @patch('apps.whatsapp_agent.intelligent_agent.CepService.consultar')
+    @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
+    def test_ia_conclui_pedido_inteiro_no_whatsapp_sem_enviar_link(self, responder, consultar_cep):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
+        self.configuracao.definir_ia_api_key('sk-teste')
+        self.configuracao.save(update_fields=[
+            'ia_ativa', 'ia_restringir_horario', 'ia_api_key_criptografada',
+        ])
+        produto = Produto.objects.create(
+            filial=self.filial, unidade_medida=self.servico.unidade_medida,
+            descricao='Polpa de manga', ncm='00000000',
+            tipo_produto=Produto.TipoProduto.UNITARIO,
+            exibir_catalogo=True, catalogo_quantidade_maxima=10,
+            preco_venda=Decimal('8.50'),
+        )
+        ProdutoFilial.objects.create(produto=produto, filial=self.filial)
+        CatalogoConfiguracao.objects.create(
+            filial=self.filial, ativo=True, entrega_ativa=True,
+            retirada_ativa=True, frete_abaixo_limite='fixo',
+            valor_frete=Decimal('6.00'),
+        )
+        consultar_cep.return_value = {
+            'cep': '59000000', 'endereco': 'Rua das Flores',
+            'complemento': '', 'bairro': 'Centro', 'cidade': 'Natal', 'uf': 'RN',
+        }
+
+        def decisao(acao='gerenciar_pedido', **extras):
+            base = {
+                'acao': acao, 'mensagem': '', 'servico_id': None,
+                'servico_ids': [], 'confirmou_servicos': False,
+                'profissional_id': None, 'aceita_qualquer_profissional': False,
+                'aceita_qualquer_periodo': False, 'dias_semana': [],
+                'data': '', 'periodo': '', 'horario': '', 'nome_cliente': '',
+                'confirmou_nome': False, 'itens_pedido': [],
+                'avancar_pedido': False, 'modalidade': '', 'cep': '',
+                'logradouro': '', 'numero_endereco': '', 'complemento': '',
+                'bairro': '', 'cidade': '', 'uf': '', 'forma_pagamento': '',
+                'troco_para': '', 'observacao': '', 'sem_observacao': False,
+                'cupom_codigo': '', 'data_entrega': '', 'hora_entrega': '',
+                'confirmou_pedido': False,
+            }
+            base.update(extras)
+            return SimpleNamespace(conteudo=base)
+
+        responder.side_effect = [
+            decisao('abrir_catalogo'),
+            decisao(nome_cliente='Diego Cliente'),
+            decisao(confirmou_nome=True),
+            decisao(itens_pedido=[{
+                'produto_id': produto.pk, 'quantidade': 2, 'operacao': 'adicionar',
+            }]),
+            decisao(avancar_pedido=True),
+            decisao(modalidade='entrega'),
+            decisao(cep='59000000'),
+            decisao(numero_endereco='100'),
+            decisao(forma_pagamento='pix'),
+            decisao(sem_observacao=True),
+            decisao('confirmar_pedido', confirmou_pedido=True),
+        ]
+        conversa = self.nova_conversa('5584999991212')
+
+        respostas = []
+        for texto in (
+            'Quero fazer um pedido', 'Diego Cliente', 'Sim, está correto',
+            'Quero duas polpas de manga',
+            'Continuar', 'Entrega', '59000-000', 'Número 100', 'Pix',
+            'Sem observação', 'Sim, confirmar',
+        ):
+            mensagem = MensagemWhatsApp.objects.create(
+                conversa=conversa, direcao=MensagemWhatsApp.Direcao.ENTRADA, texto=texto,
+            )
+            respostas.append(processar_com_ia(conversa, texto, mensagem))
+            conversa.refresh_from_db()
+
+        self.assertIn('qual é o seu nome', respostas[0])
+        self.assertIn('usando este WhatsApp', respostas[1])
+        self.assertIn('Polpa de manga', respostas[2])
+        self.assertNotIn('/catalogo/', '\n'.join(respostas))
+        self.assertIn('Qual é o CEP', respostas[5])
+        self.assertIn('Rua das Flores', respostas[6])
+        self.assertIn('Confira seu pedido', respostas[9])
+        self.assertIn('Polpa de manga', respostas[10])
+        pedido = PedidoCatalogo.objects.get()
+        self.assertEqual(pedido.status, PedidoCatalogo.Status.AGUARDANDO_LOJA)
+        self.assertEqual(pedido.subtotal, Decimal('17.00'))
+        self.assertEqual(pedido.valor_frete, Decimal('6.00'))
+        self.assertEqual(pedido.total, Decimal('23.00'))
+        self.assertEqual(pedido.endereco_entrega['numero'], '100')
+        self.assertEqual(pedido.itens.get().quantidade, 2)
+        self.assertTrue(Notificacao.objects.filter(referencia_id=str(pedido.pk)).exists())
+        conversa.refresh_from_db()
+        self.assertFalse(conversa.ativa)
+        self.assertEqual(conversa.etapa, 'encerrada')
+
+    @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
+    def test_ia_inicia_agendamento_sem_enviar_link(self, responder):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
+        self.configuracao.definir_ia_api_key('sk-teste')
+        self.configuracao.save(update_fields=[
+            'ia_ativa', 'ia_restringir_horario', 'ia_api_key_criptografada',
+        ])
+        responder.return_value = SimpleNamespace(conteudo={
+            'acao': 'abrir_agenda', 'mensagem': '', 'servico_id': None,
+            'servico_ids': [], 'confirmou_servicos': False,
+            'profissional_id': None, 'aceita_qualquer_profissional': False,
+            'aceita_qualquer_periodo': False, 'dias_semana': [],
+            'data': '', 'periodo': '', 'horario': '', 'nome_cliente': '',
+            'confirmou_nome': False, 'itens_pedido': [], 'avancar_pedido': False,
+            'modalidade': '', 'cep': '', 'logradouro': '', 'numero_endereco': '',
+            'complemento': '', 'bairro': '', 'cidade': '', 'uf': '',
+            'forma_pagamento': '', 'troco_para': '', 'observacao': '',
+            'sem_observacao': False, 'cupom_codigo': '', 'data_entrega': '',
+            'hora_entrega': '', 'confirmou_pedido': False,
+        })
+        conversa = self.nova_conversa('5584999993434')
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa, direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Quero ver a agenda',
+        )
+
+        resposta = processar_com_ia(conversa, mensagem.texto, mensagem)
+
+        self.assertEqual(resposta, 'Qual período você prefere: manhã, tarde ou noite?')
+        self.assertNotIn('/agendar/', resposta)
 
     def test_saudacao_retoma_ia_apos_falha_tecnica(self):
         self.configuracao.ia_ativa = True
