@@ -175,6 +175,19 @@ class ForcaVendasTests(TestCase):
             Decimal('6.5'),
         )
 
+    def test_busca_cliente_por_primeiro_nome_e_prazos_rapidos(self):
+        busca = self.client.get(reverse('vendas:api-clientes'), {'q': 'Mercadinho'})
+
+        self.assertEqual(busca.status_code, 200)
+        self.assertEqual(busca.json()['clientes'][0]['id'], self.cliente.pk)
+
+        tela = self.client.get(reverse('vendas:pedido-externo-novo'))
+        self.assertContains(tela, 'fv-card--client')
+        self.assertContains(tela, 'Buscando clientes…')
+        self.assertContains(tela, 'Abrir calendário')
+        self.assertContains(tela, '[7,10,15,30]')
+        self.assertContains(tela, 'prazoSelecionado:10')
+
     def test_pedido_externo_usa_preco_do_servidor_e_nao_cai_no_pdv(self):
         resposta = self.criar_pedido_pela_tela()
 
