@@ -65,6 +65,16 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
         ),
         help_text='Variáveis disponíveis: {inicio} e {fim}.',
     )
+    ia_mensagem_erro = models.TextField(
+        default=(
+            'Estou com uma instabilidade no atendimento automático agora. '
+            'Recebi sua mensagem e vou encaminhá-la para nossa equipe continuar com você.'
+        ),
+        help_text=(
+            'Enviada somente quando a IA não consegue responder. A conversa é '
+            'encaminhada automaticamente para atendimento humano.'
+        ),
+    )
     ia_audio_ativo = models.BooleanField(
         default=True,
         help_text='Transcreve áudios recebidos e processa a transcrição como uma mensagem normal.',

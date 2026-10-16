@@ -15,7 +15,6 @@ from .agent import (
     _destino_agenda,
     _link_agendamento,
     _link_catalogo,
-    normalizar,
 )
 from .ai_service import IAWhatsAppError, OpenAIWhatsAppClient
 from .models import ConversaWhatsApp
@@ -129,7 +128,8 @@ dia, use consultar_agenda. Quando ele escolher um horário oferecido, use agenda
 um profissional e ele não escolher, deixe profissional_id nulo. Se faltar o nome, ainda use agendar:
 o sistema fará a pergunta. Para pedidos, dúvidas de produtos ou intenção de compra, use
 abrir_catalogo; o pedido e o pagamento continuam no link seguro. Use atendente quando a pessoa pedir
-um humano, encerrar quando pedir para finalizar e mostrar_menu quando pedir as opções.
+um humano e encerrar quando pedir para finalizar. Se a pessoa pedir menu ou opções, use
+mostrar_menu e explique naturalmente o que você consegue fazer, sem criar um menu numerado.
 Datas devem sair em AAAA-MM-DD e horários em HH:MM. Hoje é {timezone.localdate().isoformat()}.
 {config.ia_instrucoes}
 '''.strip()
@@ -181,6 +181,33 @@ def _marcar_atendimento_ia(conversa):
         campos.append('etapa')
     if campos:
         conversa.save(update_fields=[*campos, 'updated_at'])
+
+
+def _mensagem_capacidades(config):
+    if config.modo_atendimento == config.ModoAtendimento.AGENDA:
+        recursos = 'fazer um agendamento, consultar horários ou falar com um atendente'
+    elif config.modo_atendimento == config.ModoAtendimento.CATALOGO:
+        recursos = 'comprar produtos, acompanhar seu pedido ou falar com um atendente'
+    else:
+        recursos = (
+            'fazer um agendamento, comprar produtos ou falar com um atendente'
+        )
+    return f'Posso ajudar você a {recursos}. O que você precisa?'
+
+
+def _encaminhar_erro_ia(conversa):
+    config = conversa.configuracao
+    conversa.ativa = True
+    conversa.atendimento_humano = True
+    conversa.etapa = 'aguardando_atendimento_humano'
+    conversa.etapa_crm = ConversaWhatsApp.EtapaCRM.ATENDIMENTO_HUMANO
+    conversa.save(update_fields=[
+        'ativa', 'atendimento_humano', 'etapa', 'etapa_crm', 'updated_at',
+    ])
+    return config.ia_mensagem_erro.strip() or (
+        'Estou com uma instabilidade no atendimento automático agora. '
+        'Recebi sua mensagem e vou encaminhá-la para nossa equipe continuar com você.'
+    )
 
 
 def resposta_fora_horario(conversa):
@@ -375,13 +402,9 @@ def processar_com_ia(conversa, texto, mensagem):
     config = conversa.configuracao
     if not config.ia_ativa or conversa.atendimento_humano:
         return None
-    valor = normalizar(texto)
-    # O menu continua disponível quando for solicitado explicitamente. Depois
-    # disso, respostas às opções permanecem determinísticas até a jornada sair
-    # da etapa de menu. Confirmações transacionais também não passam pela IA.
-    if valor == 'menu' or conversa.etapa in ETAPAS_DETERMINISTICAS:
-        return None
-    if conversa.etapa == 'aguardando_opcao' and valor.isdigit():
+    # Confirmações transacionais continuam determinísticas: a IA não decide
+    # nem inventa dados em etapas que alteram agenda ou pedido.
+    if conversa.etapa in ETAPAS_DETERMINISTICAS:
         return None
     aviso_fora_horario = resposta_fora_horario(conversa)
     if aviso_fora_horario:
@@ -405,7 +428,7 @@ def processar_com_ia(conversa, texto, mensagem):
         )
     except IAWhatsAppError as exc:
         logger.warning('Agente de IA indisponível na conversa %s: %s', conversa.pk, exc)
-        return None
+        return _encaminhar_erro_ia(conversa)
     decisao = resultado.conteudo
     acao = decisao['acao']
     if acao == 'consultar_agenda' and filial:
@@ -414,10 +437,18 @@ def processar_com_ia(conversa, texto, mensagem):
         return _agendar(conversa, decisao, negocio, filial, alias)
     if acao == 'abrir_catalogo':
         link = _link_catalogo(conversa)
-        return f'{decisao["mensagem"].strip()}\n\n{link}'.strip() if link else decisao['mensagem']
+        mensagem_decisao = decisao['mensagem'].strip()
+        return (
+            f'{mensagem_decisao}\n\n{link}'.strip()
+            if link else mensagem_decisao or _mensagem_capacidades(config)
+        )
     if acao == 'abrir_agenda':
         link = _link_agendamento(conversa)
-        return f'{decisao["mensagem"].strip()}\n\n{link}'.strip() if link else decisao['mensagem']
+        mensagem_decisao = decisao['mensagem'].strip()
+        return (
+            f'{mensagem_decisao}\n\n{link}'.strip()
+            if link else mensagem_decisao or _mensagem_capacidades(config)
+        )
     if acao == 'atendente':
         conversa.atendimento_humano = True
         conversa.etapa = 'atendimento_humano'
@@ -430,5 +461,5 @@ def processar_com_ia(conversa, texto, mensagem):
         conversa.save(update_fields=['ativa', 'etapa', 'updated_at'])
         return decisao['mensagem'].strip() or config.mensagem_encerramento
     if acao == 'mostrar_menu':
-        return None
-    return decisao['mensagem'].strip() or None
+        return decisao['mensagem'].strip() or _mensagem_capacidades(config)
+    return decisao['mensagem'].strip() or _mensagem_capacidades(config)

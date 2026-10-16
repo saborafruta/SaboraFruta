@@ -50,7 +50,7 @@ class FluxoWhatsAppForm(forms.ModelForm):
         model = ConfiguracaoWhatsApp
         fields = [
             'ia_ativa', 'ia_restringir_horario', 'ia_horario_inicio', 'ia_horario_fim',
-            'ia_mensagem_fora_horario',
+            'ia_mensagem_fora_horario', 'ia_mensagem_erro',
             'ia_audio_ativo', 'ia_modelo', 'ia_modelo_transcricao',
             'ia_cotacao_dolar', 'ia_instrucoes',
             'modo_atendimento',
@@ -72,6 +72,7 @@ class FluxoWhatsAppForm(forms.ModelForm):
             'ia_horario_inicio': 'IA inicia o atendimento às',
             'ia_horario_fim': 'IA encerra o atendimento às',
             'ia_mensagem_fora_horario': 'Mensagem fora do horário',
+            'ia_mensagem_erro': 'Mensagem quando a IA estiver indisponível',
             'ia_audio_ativo': 'Entender mensagens de áudio',
             'ia_modelo': 'Modelo para respostas',
             'ia_modelo_transcricao': 'Modelo para transcrição',
@@ -108,6 +109,7 @@ class FluxoWhatsAppForm(forms.ModelForm):
             'ia_horario_inicio': forms.TimeInput(attrs={'type': 'time'}),
             'ia_horario_fim': forms.TimeInput(attrs={'type': 'time'}),
             'ia_mensagem_fora_horario': forms.Textarea(attrs={'rows': 4}),
+            'ia_mensagem_erro': forms.Textarea(attrs={'rows': 3}),
             'mensagem_saudacao': forms.Textarea(attrs={'rows': 3}),
             'mensagem_transferencia': forms.Textarea(attrs={'rows': 3}),
             'mensagem_encerramento': forms.Textarea(attrs={'rows': 3}),

@@ -19,7 +19,7 @@ from apps.cadastros.models import Funcionario
 from apps.core.models import Empresa, Filial, TenantPublicLink
 from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
 from apps.whatsapp_agent.agent import processar_mensagem
-from apps.whatsapp_agent.ai_service import OpenAIWhatsAppClient
+from apps.whatsapp_agent.ai_service import IAWhatsAppError, OpenAIWhatsAppClient
 from apps.whatsapp_agent.conversation_service import (
     encerrar_conversa,
     encerrar_conversas_inativas,
@@ -323,6 +323,72 @@ class AgenteWhatsAppTests(TestCase):
 
         self.assertEqual(processar_com_ia(conversa, '2', mensagem), 'Entendi.')
         responder.assert_called_once()
+
+    @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
+    def test_ia_interpreta_pedido_de_menu_sem_abrir_menu_classico(self, responder):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
+        self.configuracao.definir_ia_api_key('sk-teste')
+        self.configuracao.save(update_fields=[
+            'ia_ativa', 'ia_restringir_horario', 'ia_api_key_criptografada',
+        ])
+        responder.return_value = SimpleNamespace(conteudo={
+            'acao': 'mostrar_menu',
+            'mensagem': 'Posso ajudar com agendamento ou chamar um atendente. O que você precisa?',
+            'servico_id': None,
+            'profissional_id': None,
+            'data': '',
+            'periodo': '',
+            'horario': '',
+            'nome_cliente': '',
+        })
+        conversa = self.nova_conversa('5584999997788')
+        conversa.etapa = 'aguardando_opcao'
+        conversa.save(update_fields=['etapa'])
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='menu',
+        )
+
+        resposta = processar_com_ia(conversa, mensagem.texto, mensagem)
+
+        self.assertNotIn('*1.*', resposta)
+        self.assertIn('Posso ajudar', resposta)
+        responder.assert_called_once()
+        conversa.refresh_from_db()
+        self.assertEqual(conversa.etapa, 'ia_atendimento')
+
+    @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
+    def test_falha_da_ia_avisa_e_encaminha_para_humano(self, responder):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
+        self.configuracao.ia_mensagem_erro = 'Tive uma instabilidade. Nossa equipe vai continuar com você.'
+        self.configuracao.definir_ia_api_key('sk-teste')
+        self.configuracao.save(update_fields=[
+            'ia_ativa', 'ia_restringir_horario', 'ia_mensagem_erro',
+            'ia_api_key_criptografada',
+        ])
+        responder.side_effect = IAWhatsAppError('Falha simulada')
+        conversa = self.nova_conversa('5584999997799')
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Quero agendar',
+        )
+
+        resposta = processar_com_ia(conversa, mensagem.texto, mensagem)
+
+        self.assertEqual(
+            resposta,
+            'Tive uma instabilidade. Nossa equipe vai continuar com você.',
+        )
+        conversa.refresh_from_db()
+        self.assertTrue(conversa.atendimento_humano)
+        self.assertEqual(
+            conversa.etapa_crm,
+            ConversaWhatsApp.EtapaCRM.ATENDIMENTO_HUMANO,
+        )
 
     @patch('apps.whatsapp_agent.intelligent_agent._dentro_horario_ia', return_value=False)
     @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
@@ -921,6 +987,7 @@ class EvolutionClientTests(SimpleTestCase):
         self.assertIn('ia_horario_inicio', campos)
         self.assertIn('ia_horario_fim', campos)
         self.assertIn('ia_mensagem_fora_horario', campos)
+        self.assertIn('ia_mensagem_erro', campos)
         self.assertIn('ia_audio_ativo', campos)
         self.assertIn('ia_api_key', campos)
         self.assertEqual(

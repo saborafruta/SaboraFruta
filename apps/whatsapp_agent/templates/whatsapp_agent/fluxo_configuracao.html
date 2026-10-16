@@ -4,11 +4,12 @@
 {% include 'whatsapp_agent/_styles.html' %}
 {{ fluxo|json_script:'wa-fluxo-inicial' }}
 {{ acoes|json_script:'wa-acoes' }}
-<div class="wa-shell" x-data="fluxoWhatsApp()">
-  <div class="wa-head">
+<div class="wa-shell" x-data="fluxoWhatsApp()" x-init="iaAtiva = document.getElementById('id_ia_ativa').checked">
+  <div class="wa-head wa-flow-hero">
     <div>
-      <h1 class="wa-title">Configuração do fluxo</h1>
-      <p class="wa-muted">Monte o menu e escolha o que cada resposta fará no WhatsApp.</p>
+      <div class="wa-kicker">WhatsApp da filial</div>
+      <h1 class="wa-title">Atendimento automático</h1>
+      <p class="wa-muted" x-text="iaAtiva ? 'A IA conversa com o cliente; o sistema confirma agenda, pedidos e status com dados reais.' : 'O cliente escolhe uma opção do menu e segue um fluxo configurado pela loja.'"></p>
     </div>
     <div class="wa-actions">
       <a class="wa-btn secondary" href="{% url 'catalogo:painel' %}">Catálogo</a>
@@ -19,36 +20,31 @@
     </div>
   </div>
 
-  <form method="post" @submit="prepararEnvio" class="wa-flow-form">
+  <form method="post" @submit="prepararEnvio" @change="if ($event.target.id === 'id_ia_ativa') iaAtiva = $event.target.checked" class="wa-flow-form">
     {% csrf_token %}
     <input x-ref="fluxo" type="hidden" name="fluxo_json" :value="JSON.stringify(menus)">
     {% if form.non_field_errors %}<div class="wa-warning wa-danger">{{ form.non_field_errors }}</div>{% endif %}
 
-    <section class="wa-card wa-section">
-      <div class="wa-section-head">
-        <div>
-          <h2>Agente com IA</h2>
-          <p class="wa-muted">Entende texto livre e áudio. Agenda pelo WhatsApp e direciona pedidos ao catálogo seguro.</p>
+    <section class="wa-card wa-section wa-mode-card" :class="iaAtiva ? 'is-ai' : 'is-classic'">
+      <div class="wa-mode-main">
+        <div class="wa-mode-icon" aria-hidden="true" x-text="iaAtiva ? '✦' : '☷'"></div>
+        <div class="wa-mode-copy">
+          <div class="wa-kicker">Modo de atendimento</div>
+          <h2 x-text="iaAtiva ? 'Atendente com IA' : 'Menu clássico'"></h2>
+          <p class="wa-muted" x-text="iaAtiva ? 'Qualquer mensagem recebida é interpretada pela IA. O menu numérico fica desativado.' : 'A IA não responde. O cliente recebe o menu e escolhe uma das opções configuradas.'"></p>
         </div>
-        <span class="wa-status {% if not form.instance.ia_ativa %}inactive{% endif %}">{% if form.instance.ia_ativa %}IA ativa{% else %}IA desativada{% endif %}</span>
+        <span class="wa-status" :class="iaAtiva ? '' : 'inactive'" x-text="iaAtiva ? 'IA ativa' : 'IA desativada'"></span>
       </div>
-      <div class="wa-usage-grid">
-        <div class="wa-metric"><span>Chamadas no mês</span><strong>{{ uso_ia.chamadas|default:0 }}</strong></div>
-        <div class="wa-metric"><span>Tokens de entrada</span><strong>{{ uso_ia.tokens_entrada|default:0 }}</strong></div>
-        <div class="wa-metric"><span>Tokens de saída</span><strong>{{ uso_ia.tokens_saida|default:0 }}</strong></div>
-        <div class="wa-metric"><span>Tokens totais</span><strong>{{ uso_ia.tokens_total|default:0 }}</strong></div>
-        <div class="wa-metric"><span>Áudio transcrito</span><strong>{{ uso_ia.segundos_audio|default:0|floatformat:0 }} s</strong></div>
-        <div class="wa-metric cost"><span>Custo estimado</span><strong>R$ {{ uso_ia.custo_brl|default:0|floatformat:4 }}</strong></div>
-      </div>
-      <div class="wa-grid" style="margin-top:1rem">
-        <div class="wa-field full wa-checks"><label for="{{ form.ia_ativa.id_for_label }}">{{ form.ia_ativa }} {{ form.ia_ativa.label }}</label></div>
-        <div class="wa-field full">
-          <div class="wa-help"><strong>Atendente principal:</strong> com a IA ativa, qualquer mensagem do cliente é interpretada pela IA. O menu só aparece quando o cliente escrever <strong>menu</strong> ou se a IA estiver indisponível.</div>
-        </div>
+      <div class="wa-mode-toggle wa-checks"><label for="{{ form.ia_ativa.id_for_label }}">{{ form.ia_ativa }} <span><strong>{{ form.ia_ativa.label }}</strong><small>Ao ativar, o menu e suas respostas numéricas deixam de ser enviados.</small></span></label></div>
+
+      <div x-show="iaAtiva" x-cloak class="wa-ai-settings">
+      <div class="wa-system-note"><strong>Decisões protegidas pelo sistema</strong><span>A IA entende a intenção, mas não inventa disponibilidade, preço ou status. Confirmações usam sempre os dados reais do iTED.</span></div>
+      <div class="wa-grid">
         <div class="wa-field full wa-checks"><label for="{{ form.ia_restringir_horario.id_for_label }}">{{ form.ia_restringir_horario }} {{ form.ia_restringir_horario.label }}</label><div class="wa-help">Desmarcado: a IA atende 24 horas. Marcado: fora da janela abaixo, o cliente recebe o aviso e a conversa vai para atendimento humano no CRM.</div></div>
         <div class="wa-field"><label for="{{ form.ia_horario_inicio.id_for_label }}">{{ form.ia_horario_inicio.label }}</label>{{ form.ia_horario_inicio }}{% if form.ia_horario_inicio.errors %}<div class="wa-errors">{{ form.ia_horario_inicio.errors|first }}</div>{% endif %}</div>
         <div class="wa-field"><label for="{{ form.ia_horario_fim.id_for_label }}">{{ form.ia_horario_fim.label }}</label>{{ form.ia_horario_fim }}{% if form.ia_horario_fim.errors %}<div class="wa-errors">{{ form.ia_horario_fim.errors|first }}</div>{% endif %}</div>
         <div class="wa-field full"><label for="{{ form.ia_mensagem_fora_horario.id_for_label }}">{{ form.ia_mensagem_fora_horario.label }}</label>{{ form.ia_mensagem_fora_horario }}<div class="wa-help">{{ form.ia_mensagem_fora_horario.help_text }}</div>{% if form.ia_mensagem_fora_horario.errors %}<div class="wa-errors">{{ form.ia_mensagem_fora_horario.errors|first }}</div>{% endif %}</div>
+        <div class="wa-field full"><label for="{{ form.ia_mensagem_erro.id_for_label }}">{{ form.ia_mensagem_erro.label }}</label>{{ form.ia_mensagem_erro }}<div class="wa-help">{{ form.ia_mensagem_erro.help_text }}</div>{% if form.ia_mensagem_erro.errors %}<div class="wa-errors">{{ form.ia_mensagem_erro.errors|first }}</div>{% endif %}</div>
         <div class="wa-field full wa-checks"><label for="{{ form.ia_audio_ativo.id_for_label }}">{{ form.ia_audio_ativo }} {{ form.ia_audio_ativo.label }}</label></div>
         <div class="wa-field"><label for="{{ form.ia_modelo.id_for_label }}">{{ form.ia_modelo.label }}</label>{{ form.ia_modelo }}{% if form.ia_modelo.errors %}<div class="wa-errors">{{ form.ia_modelo.errors|first }}</div>{% endif %}</div>
         <div class="wa-field"><label for="{{ form.ia_modelo_transcricao.id_for_label }}">{{ form.ia_modelo_transcricao.label }}</label>{{ form.ia_modelo_transcricao }}{% if form.ia_modelo_transcricao.errors %}<div class="wa-errors">{{ form.ia_modelo_transcricao.errors|first }}</div>{% endif %}</div>
@@ -56,12 +52,24 @@
         {% include 'whatsapp_agent/_ia_api_key_field.html' %}
         <div class="wa-field full"><label for="{{ form.ia_instrucoes.id_for_label }}">{{ form.ia_instrucoes.label }}</label>{{ form.ia_instrucoes }}<div class="wa-help">Ex.: tom de voz, regras da empresa e quando transferir para uma pessoa.</div></div>
       </div>
-      <div class="wa-help" style="margin-top:.8rem">Os valores são estimativas, calculadas pela quantidade de tokens e pela cotação configurada. A cobrança real é feita pela provedora da IA, não por agendamento concluído.</div>
+      <details class="wa-disclosure">
+        <summary>Uso e custo estimado da IA <span>Ver detalhes</span></summary>
+        <div class="wa-usage-grid">
+          <div class="wa-metric"><span>Chamadas no mês</span><strong>{{ uso_ia.chamadas|default:0 }}</strong></div>
+          <div class="wa-metric"><span>Tokens de entrada</span><strong>{{ uso_ia.tokens_entrada|default:0 }}</strong></div>
+          <div class="wa-metric"><span>Tokens de saída</span><strong>{{ uso_ia.tokens_saida|default:0 }}</strong></div>
+          <div class="wa-metric"><span>Tokens totais</span><strong>{{ uso_ia.tokens_total|default:0 }}</strong></div>
+          <div class="wa-metric"><span>Áudio transcrito</span><strong>{{ uso_ia.segundos_audio|default:0|floatformat:0 }} s</strong></div>
+          <div class="wa-metric cost"><span>Custo estimado</span><strong>R$ {{ uso_ia.custo_brl|default:0|floatformat:4 }}</strong></div>
+        </div>
+        <div class="wa-help">Valores estimados por tokens e pela cotação configurada. A provedora cobra pelo uso da IA, não por agendamento concluído.</div>
+      </details>
+      </div>
     </section>
 
     <section class="wa-card wa-section">
       <div class="wa-section-head">
-        <div><h2>Tipo de atendimento</h2><p class="wa-muted">Escolha quais jornadas esta filial oferece. A IA entende a intenção do cliente; o menu continua disponível quando ele solicitar.</p></div>
+        <div><div class="wa-kicker">Capacidades</div><h2>O que o atendimento oferece</h2><p class="wa-muted" x-text="iaAtiva ? 'A IA identifica a intenção e conduz a conversa sem listar opções numeradas.' : 'O menu apresenta somente as jornadas habilitadas nesta filial.'"></p></div>
       </div>
       <div class="wa-grid">
         <div class="wa-field full">
@@ -72,30 +80,22 @@
         <div class="wa-field full">
           <div class="wa-help"><strong>Agenda:</strong> envia o link para escolher profissional, serviço e horário. <strong>Catálogo:</strong> envia o link para produtos, carrinho e entrega. <strong>Ambos:</strong> mantém as duas opções no menu principal.</div>
         </div>
-        <div class="wa-field full"><button class="wa-btn secondary" type="button" @click="aplicarModelo(document.getElementById('id_modo_atendimento').value)">Aplicar menu recomendado</button><div class="wa-help">Este botão reorganiza o menu principal. As mensagens específicas continuam editáveis nas seções abaixo.</div></div>
+        <div class="wa-field full" x-show="!iaAtiva" x-cloak><button class="wa-btn secondary" type="button" @click="aplicarModelo(document.getElementById('id_modo_atendimento').value)">Aplicar menu recomendado</button><div class="wa-help">Este botão reorganiza o menu principal. As mensagens específicas continuam editáveis nas seções abaixo.</div></div>
       </div>
     </section>
 
     <section class="wa-card wa-section">
       <div class="wa-section-head">
-        <div><h2>Mensagens gerais</h2><p class="wa-muted">São usadas pelo menu de apoio, transferência, encerramento e respostas inválidas.</p></div>
+        <div><div class="wa-kicker">Automações seguras</div><h2>Mensagens gerais</h2><p class="wa-muted">Textos controlados pela loja para transferir, encerrar e proteger a experiência do cliente.</p></div>
       </div>
       <div class="wa-grid">
-        {% for field in form %}
-          {% if field.name != 'ia_ativa' and field.name != 'ia_restringir_horario' and field.name != 'ia_horario_inicio' and field.name != 'ia_horario_fim' and field.name != 'ia_mensagem_fora_horario' and field.name != 'ia_audio_ativo' and field.name != 'ia_modelo' and field.name != 'ia_modelo_transcricao' and field.name != 'ia_cotacao_dolar' and field.name != 'ia_instrucoes' and field.name != 'ia_api_key' and field.name != 'modo_atendimento' and field.name != 'mensagem_confirmacao_agendamento' and field.name != 'mensagem_lembrete_agendamento' and field.name != 'mensagem_resumo_pedido' and field.name != 'mensagem_pedido_recebido' and field.name != 'mensagem_atualizacao_pedido' and field.name != 'mensagem_pedido_pronto_retirada' and field.name != 'pedido_status_notificados' and field.name != 'pedido_resposta_confirmar' and field.name != 'pedido_resposta_alterar' and field.name != 'pedido_resposta_cancelar' and field.name != 'recuperacao_agendamento_ativa' and field.name != 'recuperacao_atraso_minutos' and field.name != 'recuperacao_horario_inicio' and field.name != 'recuperacao_horario_fim' and field.name != 'mensagem_recuperacao_agendamento' and field.name != 'mensagem_motivo_nao_agendamento' and field.name != 'mensagem_feedback_agendamento' %}
-          {% if field.name == 'encerramento_automatico_ativo' %}
-            <div class="wa-field full">
-              <strong>Encerramento por inatividade</strong>
-              <div class="wa-muted">Encerra o atendimento sem enviar uma mensagem extra. Se o cliente escrever novamente, uma nova conversa será iniciada.</div>
-            </div>
-          {% endif %}
-          <div class="wa-field full">
-            <label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
-            {% if field.help_text %}<div class="wa-help">{{ field.help_text }}</div>{% endif %}
-            {% if field.errors %}<div class="wa-errors">{{ field.errors|first }}</div>{% endif %}
-          </div>
-          {% endif %}
-        {% endfor %}
+        <div class="wa-field full" x-show="!iaAtiva" x-cloak><label for="{{ form.mensagem_saudacao.id_for_label }}">{{ form.mensagem_saudacao.label }}</label>{{ form.mensagem_saudacao }}<div class="wa-help">Usada apenas no menu clássico. Com IA ativa, a saudação é criada naturalmente conforme a mensagem recebida.</div></div>
+        <div class="wa-field full"><label for="{{ form.mensagem_transferencia.id_for_label }}">{{ form.mensagem_transferencia.label }}</label>{{ form.mensagem_transferencia }}</div>
+        <div class="wa-field full"><label for="{{ form.mensagem_encerramento.id_for_label }}">{{ form.mensagem_encerramento.label }}</label>{{ form.mensagem_encerramento }}</div>
+        <div class="wa-field full" x-show="!iaAtiva" x-cloak><label for="{{ form.mensagem_opcao_invalida.id_for_label }}">{{ form.mensagem_opcao_invalida.label }}</label>{{ form.mensagem_opcao_invalida }}<div class="wa-help">Usada apenas quando o menu clássico não reconhece a resposta.</div></div>
+        <div class="wa-field full"><strong>Encerramento por inatividade</strong><div class="wa-muted">Encerra o atendimento sem enviar uma mensagem extra. Se o cliente escrever novamente, uma nova conversa será iniciada.</div></div>
+        <div class="wa-field full wa-checks"><label for="{{ form.encerramento_automatico_ativo.id_for_label }}">{{ form.encerramento_automatico_ativo }} {{ form.encerramento_automatico_ativo.label }}</label></div>
+        <div class="wa-field full"><label for="{{ form.tempo_inatividade_minutos.id_for_label }}">{{ form.tempo_inatividade_minutos.label }}</label>{{ form.tempo_inatividade_minutos }}{% if form.tempo_inatividade_minutos.help_text %}<div class="wa-help">{{ form.tempo_inatividade_minutos.help_text }}</div>{% endif %}</div>
       </div>
     </section>
 
@@ -162,8 +162,9 @@
       </div>
     </section>
 
+    <div class="wa-classic-editor" x-show="!iaAtiva" x-cloak>
     <div class="wa-section-head wa-flow-title">
-      <div><h2>Menus e ações</h2><p class="wa-muted">Com a IA ativa, o menu principal abre somente quando o cliente envia “menu” ou quando a IA estiver indisponível. Você pode criar submenus.</p></div>
+      <div><div class="wa-kicker">Somente no modo clássico</div><h2>Menus e ações</h2><p class="wa-muted">Crie as opções numéricas, palavras alternativas e submenus apresentados ao cliente.</p></div>
       <button class="wa-btn secondary" type="button" @click="adicionarMenu">+ Novo menu</button>
     </div>
 
@@ -235,8 +236,9 @@
         </section>
       </template>
     </div>
+    </div>
 
-    <div class="wa-save-bar"><button class="wa-btn" type="submit">Salvar fluxo do WhatsApp</button></div>
+    <div class="wa-save-bar"><div><strong x-text="iaAtiva ? 'Atendente com IA' : 'Menu clássico'"></strong><span>As alterações entram em vigor após salvar.</span></div><button class="wa-btn" type="submit" x-text="iaAtiva ? 'Salvar configuração da IA' : 'Salvar menu clássico'"></button></div>
   </form>
 </div>
 <script>
@@ -246,6 +248,7 @@ function fluxoWhatsApp() {
     ...menu, uid: gerarUid(), opcoes: (menu.opcoes || []).map(opcao => ({...opcao, uid: gerarUid()})),
   }));
   return {
+    iaAtiva: false,
     menus: inicial,
     acoes: JSON.parse(document.getElementById('wa-acoes').textContent),
     aplicarModelo(modo) {
