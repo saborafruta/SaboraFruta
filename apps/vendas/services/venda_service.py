@@ -137,6 +137,22 @@ class VendaService:
 
     @classmethod
     @tenant_atomic
+    def aprovar_e_confirmar_pedido(cls, pedido: PedidoVenda, usuario) -> PedidoVenda:
+        """Aprova um pedido externo e executa crédito + reserva na mesma transação."""
+        if pedido.status != PedidoVenda.Status.AGUARDANDO_APROVACAO:
+            raise DadosInvalidosError(
+                f'Pedido não pode ser aprovado no status "{pedido.get_status_display()}".'
+            )
+        pedido.status = PedidoVenda.Status.APROVADO
+        pedido.aprovado_por = usuario
+        pedido.data_aprovacao = timezone.now()
+        pedido.save(update_fields=[
+            'status', 'aprovado_por', 'data_aprovacao', 'updated_at',
+        ])
+        return cls.confirmar_pedido(pedido, usuario)
+
+    @classmethod
+    @tenant_atomic
     def confirmar_pedido(cls, pedido: PedidoVenda, usuario) -> PedidoVenda:
         """
         Confirma pedido:

@@ -214,6 +214,8 @@ class SepararPedidoView(PermissaoRequiredMixin, View):
             messages.success(request, f'Separação {separacao.numero} concluída.')
         except DomainError as e:
             messages.error(request, str(e))
+        if request.POST.get('origem') == 'fila-separacao':
+            return redirect('vendas:pedido-separacao')
         return redirect('vendas:pedido-detail', pk=pk)
 
 

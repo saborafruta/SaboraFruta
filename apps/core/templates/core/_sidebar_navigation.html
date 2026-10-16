@@ -469,7 +469,33 @@
       </div><!-- /operacoes -->
       {% endif %}
 
-      <!-- â”€â”€ SEÃ‡ÃƒO AVANÃ‡ADO â”€â”€ -->
+      <!-- FORÇA DE VENDAS -->
+      {% if 'forca_vendas' in modulos_ativos %}
+      {% url 'vendas:pedido-externo-novo' as pedido_externo_url %}
+      {% url 'vendas:pedido-kanban' as pedido_kanban_url %}
+      {% url 'vendas:pedido-separacao' as pedido_separacao_url %}
+      <button type="button" @click="!collapsed && (window.expandirSecaoAtualSidebar($root, 'forca_vendas') || toggleSecao('forca_vendas'))" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
+        <span class="sidebar-module-label" :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">{% include "core/_sidebar_module_icon.html" with nome="forca_vendas" %}<span>Força de Vendas</span></span>
+        <svg class="w-3 h-3 flex-shrink-0 transition-transform duration-200" :class="secoes.forca_vendas ? '' : '-rotate-90'" :style="temaClaro ? 'color:#9ca3af;' : 'color:#555570;'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div class="my-2 mx-3" x-show="collapsed" :style="temaClaro ? 'border-top:1px solid #e5e5e5;' : 'border-top:1px solid #2a2a2e;'"></div>
+      <div x-show="collapsed || secoes.forca_vendas" data-sidebar-page-group="forca_vendas">
+        <a href="{{ pedido_externo_url }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150" :class="collapsed ? 'justify-center' : ''" :style="{% if request.path == pedido_externo_url %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}" title="Novo pedido externo">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"/></svg>
+          <span x-show="!collapsed">Novo pedido</span>
+        </a>
+        <a href="{{ pedido_kanban_url }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150" :class="collapsed ? 'justify-center' : ''" :style="{% if request.path == pedido_kanban_url %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}" title="Acompanhamento dos pedidos">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5h4v14H4V5zm6 0h4v9h-4V5zm6 0h4v5h-4V5z"/></svg>
+          <span x-show="!collapsed">Acompanhamento</span>
+        </a>
+        <a href="{{ pedido_separacao_url }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150" :class="collapsed ? 'justify-center' : ''" :style="{% if request.path == pedido_separacao_url %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}" title="Separação de pedidos">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+          <span x-show="!collapsed">Separação</span>
+        </a>
+      </div>
+      {% endif %}
+
+      <!-- FINANCEIRO -->
       {% if 'financeiro' in modulos_ativos %}
       <button type="button" @click="!collapsed && (window.expandirSecaoAtualSidebar($root, 'financeiro') || toggleSecao('financeiro'))" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
         <span class="sidebar-module-label" :class="temaClaro ? 'sidebar-section-label' : 'text-xs font-medium uppercase tracking-widest'" :style="temaClaro ? '' : 'color:#f8fafc; letter-spacing:0.1em;'">{% include "core/_sidebar_module_icon.html" with nome="financeiro" %}<span>Financeiro</span></span>
@@ -511,7 +537,6 @@
       {% url 'pdv:home' as pdv_url %}
       {% url 'pdv:checkout' as checkout_url %}
       {% url 'pdv:delivery' as delivery_url %}
-      {% url 'pdv:pre_venda_nova' as pre_venda_url %}
       {% url 'fiscal:consultas-cnpj' as fiscal_consultas_url %}
       {% url 'qualidade:analise_list' as qualidade_url %}
       {% url 'analytics:operacional' as analytics_url %}
@@ -886,23 +911,6 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 17h8M5 17h.01M19 17h.01M3 7h11v10H3V7zm11 3h3l4 4v3h-7v-7z"/>
         </svg>
         <span x-show="!collapsed">Delivery</span>
-      </a>
-
-      {% comment %}
-        PRÉ-VENDA: para quem está batendo porta, sem caixa nenhum atrás.
-        Mesmo padrão visual de PDV/Delivery, um item a mais no menu -- não
-        um submenu, porque é a ÚNICA tela desse fluxo.
-      {% endcomment %}
-      <a href="{{ pre_venda_url }}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
-         :class="collapsed ? 'justify-center' : ''"
-         :style="{% if '/pdv/pre-venda/' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
-         {% if '/pdv/pre-venda/' not in request.path %}@mouseenter="$el.style.background=temaClaro?'#eff6ff':'#242426'; $el.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" @mouseleave="$el.style.background='transparent'; $el.style.color=temaClaro?'#1f2937':'#f8fafc'; $el.style.fontWeight='';"{% endif %}
-         title="Pré-venda — vendedor externo">
-        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a4 4 0 10-4-4"/>
-        </svg>
-        <span x-show="!collapsed">Pré-venda</span>
       </a>
 
       <!-- Qualidade -->

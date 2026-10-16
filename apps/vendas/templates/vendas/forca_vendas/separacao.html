@@ -1,0 +1,47 @@
+{% extends "_base.html" %}
+{% load erp_extras %}
+
+{% block title %}Separação de pedidos{% endblock %}
+{% block page_title %}Separação de pedidos{% endblock %}
+
+{% block extra_head %}
+<style>
+  .fs-shell{max-width:1350px;margin:0 auto}.fs-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:16px}.fs-kicker{font-size:11px;font-weight:850;letter-spacing:.14em;text-transform:uppercase;color:#8b5cf6}.fs-head h2{font-size:25px;font-weight:850}.fs-sub{font-size:12px;color:#94a3b8;margin-top:3px}.fs-tabs{display:flex;gap:7px}.fs-tab{padding:9px 13px;border:1px solid rgba(148,163,184,.25);border-radius:10px;font-size:12px;font-weight:800}.fs-tab.is-active{background:#7c3aed;border-color:#7c3aed;color:#fff}
+  .fs-list{display:grid;gap:12px}.fs-card{border:1px solid rgba(148,163,184,.22);border-radius:17px;background:var(--erp-card-bg,#fff);overflow:hidden}.fs-card-head{display:grid;grid-template-columns:1fr auto;gap:12px;padding:15px 17px;border-bottom:1px solid rgba(148,163,184,.16)}.fs-order{font-size:15px;font-weight:850}.fs-client{font-size:12px;color:#94a3b8;margin-top:3px}.fs-badge{align-self:start;padding:5px 8px;border-radius:999px;background:rgba(124,58,237,.12);color:#a78bfa;font-size:10px;font-weight:850}.fs-items{padding:5px 17px}.fs-item{display:grid;grid-template-columns:minmax(0,1fr) 110px 125px;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid rgba(148,163,184,.12)}.fs-item:last-child{border-bottom:0}.fs-name{font-size:12px;font-weight:750}.fs-item small{color:#94a3b8;font-size:10px}.fs-qty{text-align:right}.fs-qty strong{display:block;font-size:13px}.fs-ok{color:#22c55e}.fs-low{color:#f59e0b}.fs-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 17px;background:rgba(148,163,184,.045)}.fs-foot p{font-size:10px;color:#94a3b8}.fs-confirm{padding:10px 14px;border-radius:10px;background:#7c3aed;color:#fff;font-size:12px;font-weight:850}.fs-empty{text-align:center;padding:54px 18px;border:1px dashed rgba(148,163,184,.3);border-radius:16px;color:#94a3b8}
+  @media(max-width:720px){.fs-head{align-items:stretch;flex-direction:column}.fs-tabs{width:100%}.fs-tab{flex:1}.fs-item{grid-template-columns:1fr 90px}.fs-item .fs-stock{grid-column:1/-1;text-align:left}.fs-foot{align-items:stretch;flex-direction:column}.fs-confirm{width:100%}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fs-shell" x-data="{aba:'fila'}">
+  <header class="fs-head">
+    <div><div class="fs-kicker">Força de vendas</div><h2>Separação de pedidos</h2><p class="fs-sub">Fila exclusiva do estoque. Aqui não aparecem vendas pendentes do caixa.</p></div>
+    <div class="flex gap-2"><a class="btn-secondary" href="{% url 'vendas:pedido-kanban' %}">Acompanhamento</a><a class="btn-primary" href="{% url 'vendas:pedido-externo-novo' %}">Novo pedido</a></div>
+  </header>
+
+  <div class="fs-tabs mb-4">
+    <button type="button" class="fs-tab" :class="aba==='fila'&&'is-active'" @click="aba='fila'">A separar · {{ pedidos_a_separar|length }}</button>
+    <button type="button" class="fs-tab" :class="aba==='prontos'&&'is-active'" @click="aba='prontos'">Separados · {{ pedidos_separados|length }}</button>
+  </div>
+
+  <div class="fs-list" x-show="aba==='fila'">
+    {% for pedido in pedidos_a_separar %}
+      <article class="fs-card">
+        <div class="fs-card-head"><div><div class="fs-order">{{ pedido.numero_pedido }}</div><div class="fs-client">{{ pedido.cliente.nome_display }} · enviado por {{ pedido.usuario.nome }}</div></div><span class="fs-badge">{{ pedido.get_prioridade_display }}</span></div>
+        <div class="fs-items">
+          {% for item in pedido.itens.all %}
+            <div class="fs-item"><div><div class="fs-name">{{ item.produto.descricao }}</div><small>Item {{ item.numero_item|stringformat:"02d" }}</small></div><div class="fs-qty"><small>Separar</small><strong>{{ item.quantidade|quantidade:3 }} {{ item.produto.unidade_medida.sigla }}</strong></div><div class="fs-qty fs-stock"><small>Disponível</small><strong class="{% if item.saldo_disponivel_tela >= item.quantidade %}fs-ok{% else %}fs-low{% endif %}">{{ item.saldo_disponivel_tela|quantidade:3 }}</strong></div></div>
+          {% endfor %}
+        </div>
+        <div class="fs-foot"><p>A confirmação seleciona automaticamente os lotes por validade/FEFO e deixa o pedido pronto para faturamento.</p><form method="post" action="{% url 'vendas:pedido-separar' pedido.pk %}">{% csrf_token %}<input type="hidden" name="origem" value="fila-separacao"><button class="fs-confirm" type="submit">Confirmar separação</button></form></div>
+      </article>
+    {% empty %}<div class="fs-empty">Nenhum pedido liberado aguardando separação.</div>{% endfor %}
+  </div>
+
+  <div class="fs-list" x-show="aba==='prontos'" x-cloak>
+    {% for pedido in pedidos_separados %}
+      <article class="fs-card"><div class="fs-card-head"><div><div class="fs-order">{{ pedido.numero_pedido }}</div><div class="fs-client">{{ pedido.cliente.nome_display }} · {{ pedido.itens.count }} produto{{ pedido.itens.count|pluralize }}</div></div><span class="fs-badge" style="background:rgba(34,197,94,.12);color:#22c55e">Aguardando faturamento</span></div><div class="fs-foot"><p>Separação concluída e lotes registrados.</p><a class="btn-secondary" href="{% url 'vendas:pedido-detail' pedido.pk %}">Ver pedido</a></div></article>
+    {% empty %}<div class="fs-empty">Nenhum pedido separado aguardando faturamento.</div>{% endfor %}
+  </div>
+</div>
+{% endblock %}

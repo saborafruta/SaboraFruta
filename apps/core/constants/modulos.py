@@ -54,6 +54,11 @@ MODULOS = [
         prefixos=('/estoque/', '/compras/', '/producao/', '/lotes/'),
     ),
     Modulo(
+        'forca_vendas', 'Força de Vendas',
+        'Pedidos externos, acompanhamento comercial e separação.',
+        prefixos=('/vendas/',),
+    ),
+    Modulo(
         'financeiro', 'Financeiro',
         'Contas a pagar/receber, fluxo de caixa, conciliação e DRE.',
         prefixos=('/financeiro/',),

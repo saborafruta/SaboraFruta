@@ -4,10 +4,21 @@ from .pedido import (
     ConfirmarPedidoView, SepararPedidoView, FaturarPedidoView,
     CancelarPedidoView, DevolverPedidoView,
 )
+from .forca_vendas import (
+    AprovarPedidoExternoView,
+    ClienteForcaVendasBuscaView,
+    PedidoExternoNovoView,
+    PedidoKanbanView,
+    PedidoSeparacaoFilaView,
+    ProdutoForcaVendasBuscaView,
+)
 
 __all__ = [
     'PedidoListView', 'PedidoCreateView', 'PedidoDetailView', 'PedidoEditarView',
     'AdicionarItemView', 'RemoverItemView',
     'ConfirmarPedidoView', 'SepararPedidoView', 'FaturarPedidoView',
     'CancelarPedidoView', 'DevolverPedidoView',
+    'AprovarPedidoExternoView', 'ClienteForcaVendasBuscaView',
+    'PedidoExternoNovoView', 'PedidoKanbanView', 'PedidoSeparacaoFilaView',
+    'ProdutoForcaVendasBuscaView',
 ]
