@@ -2003,6 +2003,13 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
         credito_valor = Decimal(str(body.get("credito_valor") or "0"))
         if not all(valor.is_finite() for valor in (desconto, acrescimo, credito_valor)):
             raise InvalidOperation
+        descontos_itens = [
+            Decimal(str(item.get(campo) or "0"))
+            for item in itens
+            for campo in ("desconto_valor", "desconto_percentual")
+        ]
+        if not all(valor.is_finite() for valor in descontos_itens):
+            raise InvalidOperation
     except (InvalidOperation, TypeError, ValueError):
         return JsonResponse({"erro": "Os valores informados para a venda são inválidos."}, status=400)
     delivery = bool(body.get("delivery", False))
@@ -2013,13 +2020,18 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
     viagem_id = body.get("viagem_id")
 
     pedido_catalogo_id = body.get('pedido_catalogo_id')
+    desconto_checkout_requer_autorizacao = bool(
+        exigir_autorizacao_desconto
+        and not pedido_catalogo_id
+        and (desconto > 0 or any(valor > 0 for valor in descontos_itens))
+    )
     if exigir_autorizacao_desconto:
-        if desconto > 0 and not pedido_catalogo_id and not checkout_desconto_liberado(request):
+        if desconto_checkout_requer_autorizacao and not checkout_desconto_liberado(request):
             return JsonResponse(
-                {"erro": "Autorize o desconto com um usuário que tenha PDV → Aprovar."},
+                {"erro": "Autorize o desconto da venda ou dos itens com um usuário que tenha PDV → Aprovar."},
                 status=403,
             )
-        if desconto <= 0:
+        if not desconto_checkout_requer_autorizacao:
             encerrar_checkout_desconto(request)
 
     try:
@@ -2150,7 +2162,7 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
             "erro": "Não foi possível concluir a venda. O erro foi registrado para diagnóstico."
         }, status=500)
 
-    if exigir_autorizacao_desconto and desconto > 0:
+    if desconto_checkout_requer_autorizacao:
         consumir_checkout_desconto(request)
     if pedido_catalogo:
         try:

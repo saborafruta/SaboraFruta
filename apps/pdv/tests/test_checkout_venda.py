@@ -211,6 +211,12 @@ class CheckoutVendaTests(TestCase):
         self.assertContains(resposta, '/pdv/venda/0/comprovante/')
         self.assertContains(resposta, 'class="co-table" data-columns="off"')
         self.assertContains(resposta, "scrollIntoView({block:'nearest'})")
+        self.assertContains(resposta, 'Tela cheia')
+        self.assertContains(resposta, 'alternarTelaCheia()')
+        self.assertContains(resposta, 'checkout-focus-mode')
+        self.assertContains(resposta, 'Desconto no item')
+        self.assertContains(resposta, 'descontoItemValor(item)')
+        self.assertContains(resposta, "formatarQuantidade(quantidadeItens)")
 
     def test_desconto_exige_aprovacao_e_escape_nao_fecha_modal_pos_venda(self):
         self.habilitar_checkout()
@@ -272,6 +278,63 @@ class CheckoutVendaTests(TestCase):
         finalizada = self.client.post(endpoint, data=payload, content_type='application/json')
         self.assertEqual(finalizada.status_code, 200, finalizada.content)
         self.assertEqual(VendaPDV.objects.count(), 1)
+
+        repetida = self.client.post(endpoint, data=payload, content_type='application/json')
+        self.assertEqual(repetida.status_code, 403, repetida.content)
+
+    def test_endpoint_do_checkout_exige_aprovacao_para_desconto_no_item(self):
+        self.habilitar_checkout()
+        caixa = Caixa.objects.create(filial=self.filial, numero=42, descricao='Checkout 42')
+        SessaoPDV.objects.create(
+            filial=self.filial,
+            caixa=caixa,
+            usuario=self.usuario,
+            valor_abertura=Decimal('0'),
+            status='aberto',
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            descricao='Dinheiro item Checkout',
+            tipo=TipoFormaPagamento.DINHEIRO,
+        )
+        payload = {
+            'cliente_id': None,
+            'desconto': '0',
+            'acrescimo': 0,
+            'itens': [{
+                'produto_id': self.produto.pk,
+                'quantidade': 1,
+                'valor_unitario': '18.90',
+                'preco_origem_tipo': 'normal',
+                'preco_origem_detalhe': 'Preço normal',
+                'desconto_valor': '2.00',
+            }],
+            'pagamentos': [{'forma_id': forma.pk, 'valor': '16.90'}],
+        }
+        endpoint = reverse('pdv:api_checkout_venda_finalizar')
+
+        bloqueada = self.client.post(endpoint, data=payload, content_type='application/json')
+        self.assertEqual(bloqueada.status_code, 403, bloqueada.content)
+        self.assertEqual(VendaPDV.objects.count(), 0)
+
+        liberacao = self.client.post(
+            reverse('pdv:api_checkout_liberar_desconto'),
+            data={
+                'usuario_id': f'usuario:{self.supervisor.pk}',
+                'senha': 'Senha-Supervisor-42',
+            },
+            content_type='application/json',
+        )
+        self.assertEqual(liberacao.status_code, 200, liberacao.content)
+
+        finalizada = self.client.post(endpoint, data=payload, content_type='application/json')
+        self.assertEqual(finalizada.status_code, 200, finalizada.content)
+        venda = VendaPDV.objects.get()
+        item = venda.itens.get(produto=self.produto)
+        self.assertEqual(item.desconto_valor, Decimal('2.00'))
+        self.assertEqual(item.valor_total, Decimal('16.90'))
+        self.assertEqual(venda.valor_subtotal, Decimal('16.90'))
+        self.assertEqual(venda.valor_total, Decimal('16.90'))
 
         repetida = self.client.post(endpoint, data=payload, content_type='application/json')
         self.assertEqual(repetida.status_code, 403, repetida.content)
@@ -354,6 +417,44 @@ assert.equal(checkout.quantidadeEntrada, '1');
             encoding='utf-8',
             capture_output=True,
             timeout=20,
+        )
+
+        self.assertEqual(resultado.returncode, 0, resultado.stdout + resultado.stderr)
+
+    @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do checkout')
+    def test_desconto_por_item_recalcula_totais_e_preserva_quantidade(self):
+        self.habilitar_checkout()
+        resposta = self.client.get(reverse('pdv:checkout'))
+        html = resposta.content.decode('utf-8')
+        script = 'function checkoutVenda()' + html.split(
+            'function checkoutVenda()', 1,
+        )[1].split('</script>', 1)[0]
+        script += r'''
+const assert = require('node:assert/strict');
+global.document = {getElementById: () => ({textContent: '[]'})};
+const checkout = checkoutVenda();
+checkout.$refs = {};
+checkout.$nextTick = (callback) => callback();
+checkout.quantidadeEntrada = '3';
+checkout.adicionarProduto({
+  id: 17, descricao: 'Produto', preco: 10, pode_vender: true,
+  quantidade_step: 1, quantidade_decimais: 0
+});
+checkout.itens[0].descontoEntrada = '4,50';
+checkout.descontoEntrada = '2,50';
+assert.equal(checkout.quantidadeItens, 3);
+assert.equal(checkout.subtotalBruto, 30);
+assert.equal(checkout.descontoItens, 4.5);
+assert.equal(checkout.subtotal, 25.5);
+assert.equal(checkout.desconto, 2.5);
+assert.equal(checkout.total, 23);
+assert.equal(checkout.totalLiquidoItem(checkout.itens[0]), 25.5);
+assert.equal(checkout.descontoSolicitado, true);
+'''
+
+        resultado = subprocess.run(
+            [shutil.which('node')], input=script, text=True, encoding='utf-8',
+            capture_output=True, timeout=20,
         )
 
         self.assertEqual(resultado.returncode, 0, resultado.stdout + resultado.stderr)

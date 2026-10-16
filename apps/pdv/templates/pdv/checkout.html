@@ -5,15 +5,15 @@
 
 {% block content %}
 <style>
-  .checkout-page { width:100%; height:calc(100dvh - 7.5rem); min-height:560px; margin:0 auto; overflow:hidden; display:flex; flex-direction:column; --co-card:#18181b; --co-border:#2d2d32; --co-muted:#92929c; --co-text:#f4f4f5; --co-input:#111113; --co-blue:#2563eb; }
-  body.tema-claro .checkout-page { --co-card:#fff; --co-border:#e5e7eb; --co-muted:#64748b; --co-text:#111827; --co-input:#f8fafc; --co-blue:#f15a24; }
+  .checkout-page { width:100%; height:calc(100dvh - 7.5rem); min-height:560px; margin:0 auto; overflow:hidden; display:flex; flex-direction:column; --co-card:#18181b; --co-panel:#111318; --co-border:#2d323d; --co-muted:#9299a8; --co-text:#f7f8fb; --co-input:#101217; --co-blue:#3a7afe; --co-accent:#ff692e; --co-green:#38d493; }
+  body.tema-claro .checkout-page { --co-card:#fff; --co-panel:#f8fafc; --co-border:#e2e8f0; --co-muted:#64748b; --co-text:#111827; --co-input:#f8fafc; --co-blue:#2563eb; --co-accent:#f15a24; --co-green:#059669; }
   .co-head { flex:0 0 auto; display:flex; justify-content:space-between; align-items:center; gap:14px; margin-bottom:8px; }
   .co-title { font-size:21px; line-height:1.1; font-weight:900; color:var(--co-text); }
   .co-sub { margin-top:3px; font-size:12px; color:var(--co-muted); }
   .co-shortcuts { flex:1; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px; }
   .co-shortcut { padding:4px 7px; border:1px solid var(--co-border); border-radius:7px; color:var(--co-muted); font-size:10px; white-space:nowrap; }
   .co-shortcut kbd { margin-right:3px; color:var(--co-text); font-weight:900; }
-  .co-layout { flex:1 1 auto; min-height:0; display:grid; grid-template-columns:minmax(0,1.55fr) minmax(390px,.7fr); gap:10px; align-items:stretch; }
+  .co-layout { flex:1 1 auto; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) minmax(390px,430px); gap:12px; align-items:stretch; }
   .co-main { min-height:0; display:flex; flex-direction:column; gap:10px; }
   .co-card { border:1px solid var(--co-border); background:var(--co-card); border-radius:13px; box-shadow:0 8px 24px rgba(0,0,0,.07); }
   .co-search { flex:0 0 auto; position:relative; padding:10px; }
@@ -23,7 +23,7 @@
   .co-input:focus { border-color:var(--co-blue); box-shadow:0 0 0 3px color-mix(in srgb, var(--co-blue) 18%, transparent); }
   .co-search-input { font-size:16px; font-weight:750; }
   .co-btn { min-height:38px; padding:7px 12px; border-radius:9px; border:1px solid var(--co-border); background:transparent; color:var(--co-text); font-weight:800; cursor:pointer; }
-  .co-btn:hover { border-color:var(--co-blue); }
+  .co-btn:focus-visible { border-color:var(--co-blue); outline:2px solid color-mix(in srgb,var(--co-blue) 45%,transparent); outline-offset:2px; }
   .co-btn:disabled { opacity:.5; cursor:not-allowed; }
   .co-btn-primary { color:#fff; background:var(--co-blue); border-color:var(--co-blue); }
   .co-btn-danger { color:#ef4444; padding:5px 9px; min-height:32px; }
@@ -32,10 +32,10 @@
   .co-mode input { accent-color:var(--co-blue); }
   .co-results { position:absolute; z-index:40; left:10px; right:10px; top:61px; max-height:280px; overflow:auto; padding:6px; border:1px solid var(--co-border); background:var(--co-card); border-radius:10px; box-shadow:0 20px 50px rgba(0,0,0,.3); }
   .co-result { width:100%; display:flex; justify-content:space-between; align-items:center; gap:14px; padding:11px; color:var(--co-text); background:transparent; border:0; border-radius:9px; text-align:left; cursor:pointer; }
-  .co-result:hover, .co-result.active { background:color-mix(in srgb,var(--co-blue) 15%,transparent); outline:1px solid color-mix(in srgb,var(--co-blue) 55%,transparent); }
+  .co-result.active { background:color-mix(in srgb,var(--co-blue) 15%,transparent); outline:1px solid color-mix(in srgb,var(--co-blue) 55%,transparent); }
   .co-result-code { color:var(--co-muted); font-size:12px; }
   .co-cart-card { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
-  .co-cart-scroll { flex:1 1 auto; min-height:0; overflow:auto; }
+  .co-cart-scroll { flex:1 1 auto; min-height:0; overflow:auto; overscroll-behavior:contain; }
   .co-section-head { flex:0 0 auto; min-height:43px; padding:9px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px; border-bottom:1px solid var(--co-border); }
   .co-section-head strong { color:var(--co-text); }
   .co-count { color:var(--co-muted); font-size:12px; }
@@ -55,16 +55,16 @@
   .co-client-search { position:relative; margin-top:7px; }
   .co-client-results { position:absolute; z-index:30; left:0; right:0; max-height:180px; overflow:auto; margin-top:4px; padding:4px; border:1px solid var(--co-border); background:var(--co-card); border-radius:9px; box-shadow:0 16px 35px rgba(0,0,0,.3); }
   .co-summary-card { min-height:0; display:flex; flex-direction:column; overflow:hidden; }
-  .co-payment-body { flex:1 1 auto; min-height:0; overflow:auto; }
+  .co-payment-body { flex:1 1 auto; min-height:0; overflow:auto; overscroll-behavior:contain; }
   .co-summary { flex:0 0 auto; display:grid; gap:6px; padding:9px 10px 10px; border-top:1px solid var(--co-border); }
   .co-summary-row { display:flex; justify-content:space-between; gap:12px; color:var(--co-muted); font-size:13px; }
   .co-summary-row strong { color:var(--co-text); }
   .co-total { font-size:20px; font-weight:950; color:var(--co-text); }
-  .co-finish { width:100%; min-height:43px; font-size:14px; }
+  .co-finish { width:100%; min-height:54px; font-size:15px; background:var(--co-accent); border-color:var(--co-accent); box-shadow:0 12px 28px color-mix(in srgb,var(--co-accent) 24%,transparent); }
   .co-alert { padding:8px 10px; border-radius:9px; font-size:12px; background:rgba(239,68,68,.11); color:#f87171; border:1px solid rgba(239,68,68,.28); }
   .co-success { background:rgba(16,185,129,.11); color:#34d399; border-color:rgba(16,185,129,.28); }
   .co-backdrop { position:fixed; inset:0; z-index:9000; display:flex; align-items:center; justify-content:center; padding:18px; background:rgba(0,0,0,.65); backdrop-filter:blur(3px); }
-  .co-modal { width:min(520px,100%); max-height:calc(100vh - 36px); overflow:auto; padding:20px; border:1px solid var(--co-border); border-radius:16px; background:var(--co-card); color:var(--co-text); box-shadow:0 30px 90px rgba(0,0,0,.45); }
+  .co-modal { width:min(520px,100%); max-height:calc(100dvh - 36px); overflow:auto; padding:20px; border:1px solid var(--co-border); border-radius:16px; background:var(--co-card); color:var(--co-text); box-shadow:0 30px 90px rgba(0,0,0,.45); }
   .co-modal h3 { font-size:19px; font-weight:900; }
   .co-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:8px; }
   .co-field label { display:block; margin-bottom:5px; color:var(--co-muted); font-size:11px; font-weight:800; }
@@ -74,7 +74,7 @@
   .co-doc-check { width:46px; height:46px; margin:0 auto 10px; display:grid; place-items:center; border-radius:50%; background:#059669; color:#fff; font-size:25px; font-weight:900; }
   .co-doc-list { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:12px; }
   .co-doc-option { position:relative; min-height:70px; padding:11px 48px 11px 12px; display:flex; align-items:center; gap:10px; border:1px solid var(--co-border); border-radius:11px; background:transparent; color:var(--co-text); text-align:left; cursor:pointer; }
-  .co-doc-option:hover, .co-doc-option:focus { border-color:var(--co-blue); background:color-mix(in srgb,var(--co-blue) 11%,transparent); outline:none; }
+  .co-doc-option:focus-visible { border-color:var(--co-blue); background:color-mix(in srgb,var(--co-blue) 11%,transparent); outline:none; }
   .co-doc-option:disabled { opacity:.55; cursor:wait; }
   .co-doc-icon { width:38px; height:38px; flex:0 0 auto; display:grid; place-items:center; border-radius:10px; background:color-mix(in srgb,var(--co-blue) 18%,transparent); color:var(--co-blue); font-size:19px; }
   .co-doc-option strong { display:block; font-size:13px; }
@@ -83,10 +83,80 @@
   .co-doc-footer { padding:11px 14px 14px; display:flex; justify-content:center; border-top:1px solid var(--co-border); }
   .co-doc-footer .co-btn { display:flex; align-items:center; gap:8px; }
   .co-doc-footer kbd { padding:2px 5px; border:1px solid var(--co-border); border-bottom-width:2px; border-radius:6px; color:var(--co-muted); background:var(--co-input); font-size:9px; }
+  .co-head-actions { display:flex; align-items:center; gap:7px; }
+  .co-fullscreen { display:inline-flex; align-items:center; gap:7px; white-space:nowrap; }
+  .co-fullscreen svg { width:15px; height:15px; }
+  .co-client-card { flex:0 0 auto; }
+  .co-client-card .co-side-body { display:grid; grid-template-columns:minmax(220px,.65fr) minmax(260px,1fr); gap:9px; align-items:center; }
+  .co-client-card .co-client-search { margin-top:0; }
+  .co-item-discount-wrap { display:flex; align-items:center; justify-content:flex-end; gap:5px; }
+  .co-item-discount-input { width:82px; min-height:34px; padding:5px 8px; text-align:right; font-size:13px; }
+  .co-item-discount-prefix { color:var(--co-muted); font-size:11px; }
+  .co-item-discount-value { margin-top:3px; color:#fb9b76; font-size:10px; text-align:right; }
+  .co-item-old-total { display:block; color:var(--co-muted); font-size:10px; font-weight:500; text-decoration:line-through; }
+  .co-payment-hero { padding:17px 16px 15px; border-bottom:1px solid var(--co-border); background:linear-gradient(145deg,color-mix(in srgb,var(--co-card) 82%,#2a3040),var(--co-card)); }
+  .co-payment-label { color:var(--co-muted); font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+  .co-payment-total { margin-top:3px; color:var(--co-text); font-size:48px; line-height:1; font-weight:950; letter-spacing:-2px; font-variant-numeric:tabular-nums; }
+  .co-payment-total small { margin-right:5px; color:var(--co-accent); font-size:21px; letter-spacing:0; vertical-align:9px; }
+  .co-payment-metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:13px; }
+  .co-payment-metric { padding:8px 9px; border:1px solid var(--co-border); border-radius:8px; background:var(--co-panel); }
+  .co-payment-metric span { display:block; color:var(--co-muted); font-size:9px; }
+  .co-payment-metric strong { display:block; margin-top:2px; color:var(--co-text); font-size:12px; }
+  .co-payment-methods { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:6px; }
+  .co-payment-method { min-height:52px; padding:8px 11px; display:flex; align-items:center; gap:9px; border:1px solid var(--co-border); border-radius:10px; background:var(--co-panel); color:var(--co-text); font-weight:850; text-align:left; cursor:pointer; }
+  .co-payment-method.active { border-color:var(--co-blue); background:color-mix(in srgb,var(--co-blue) 18%,var(--co-card)); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--co-blue) 45%,transparent); }
+  .co-payment-icon { width:29px; height:29px; flex:0 0 auto; display:grid; place-items:center; border-radius:8px; background:color-mix(in srgb,var(--co-border) 75%,transparent); color:var(--co-text); font-size:12px; }
+  .co-payment-method.active .co-payment-icon { background:var(--co-blue); color:#fff; }
+  .co-payment-value { padding:11px 12px; border:1px solid var(--co-border); border-radius:10px; background:var(--co-panel); }
+  .co-payment-value .co-input { min-height:45px; padding:0; border:0; background:transparent; box-shadow:none; font-size:29px; font-weight:950; letter-spacing:-.5px; }
+  .co-payment-value label { display:flex; justify-content:space-between; }
+  .co-change-card { padding:10px 12px; display:flex; justify-content:space-between; align-items:center; border:1px solid color-mix(in srgb,var(--co-green) 38%,var(--co-border)); border-radius:10px; background:color-mix(in srgb,var(--co-green) 11%,transparent); }
+  .co-change-card span { color:color-mix(in srgb,var(--co-green) 72%,var(--co-text)); font-size:10px; font-weight:850; }
+  .co-change-card strong { color:var(--co-green); font-size:21px; }
+  .co-sale-discount { padding-top:2px; }
+  .co-summary { gap:8px; padding:11px 12px 12px; }
+  .co-summary-breakdown { display:grid; gap:4px; padding-bottom:7px; border-bottom:1px solid var(--co-border); }
+  .co-summary-row.discount strong { color:#fb9b76; }
+  .co-finish small { display:block; margin-top:2px; font-size:9px; opacity:.78; }
+  .co-mobile-total { display:none; }
+  .checkout-page * { -webkit-tap-highlight-color:transparent; }
+  .checkout-page button, .checkout-page a, .checkout-page [role="button"] { touch-action:manipulation; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; transition:transform 100ms ease-out,border-color 100ms ease-out,background-color 100ms ease-out; }
+  .checkout-page button:active, .checkout-page [role="button"]:active { transform:scale(.98); }
+  html.checkout-focus-mode body { overflow:hidden; }
+  html.checkout-focus-mode .app-sidebar,
+  html.checkout-focus-mode .app-topbar { display:none!important; }
+  html.checkout-focus-mode .app-shell-content { margin-left:0!important; }
+  html.checkout-focus-mode .app-content-frame { max-width:none!important; height:100dvh; padding:10px!important; }
+  html.checkout-focus-mode .checkout-page { height:calc(100dvh - 20px); }
   [x-cloak] { display:none!important; }
-  @media(max-height:760px) and (min-width:1001px){ .co-shortcut{padding:2px 5px}.co-sub{display:none}.co-side-body{padding:7px}.co-summary{padding:7px}.co-input{min-height:36px}.co-btn{min-height:35px} }
-  @media(max-width:1000px){ .checkout-page{height:auto;min-height:0;overflow:visible}.co-layout{grid-template-columns:1fr}.co-side{grid-template-columns:1fr 1fr}.co-summary-card{grid-column:1/-1}.co-cart-card{min-height:340px}.co-shortcuts{justify-content:flex-start} }
-  @media(max-width:680px){ .co-head{align-items:flex-start;flex-direction:column}.co-side{grid-template-columns:1fr}.co-grid,.co-doc-list{grid-template-columns:1fr}.co-table th:nth-child(2),.co-table td:nth-child(2){display:none}.co-search-row{grid-template-columns:90px minmax(0,1fr)}.co-search-row .co-btn-primary{grid-column:1/-1}.co-results{top:105px}.co-shortcuts{display:none} }
+  @media (hover:hover) and (pointer:fine) {
+    .co-btn:hover { border-color:var(--co-blue); }
+    .co-result:hover { background:color-mix(in srgb,var(--co-blue) 15%,transparent); outline:1px solid color-mix(in srgb,var(--co-blue) 55%,transparent); }
+    .co-doc-option:hover { border-color:var(--co-blue); background:color-mix(in srgb,var(--co-blue) 11%,transparent); }
+    .co-payment-method:hover { border-color:color-mix(in srgb,var(--co-blue) 65%,var(--co-border)); }
+  }
+  @media(pointer:coarse){ .co-input,select.co-input,textarea.co-input{font-size:16px}.co-btn{min-height:44px}.co-btn-danger{min-width:44px}.co-qty{grid-template-columns:42px 52px 42px}.co-qty button,.co-qty input{height:42px}.co-qty input{width:52px} }
+  @media(max-height:760px) and (min-width:1181px){ .co-shortcut{padding:2px 5px}.co-sub{display:none}.co-side-body{padding:7px}.co-summary{padding:7px}.co-input{min-height:36px}.co-btn{min-height:35px}.co-payment-total{font-size:40px}.co-payment-hero{padding:12px}.co-payment-method{min-height:44px}.co-payment-value .co-input{font-size:24px} }
+  @media(max-width:1180px){
+    .checkout-page{height:auto;min-height:0;overflow:visible}
+    .co-layout{grid-template-columns:1fr}
+    .co-side{display:block}
+    .co-summary-card{min-height:690px}
+    .co-cart-card{min-height:340px}
+    .co-shortcuts{justify-content:flex-start}
+    html.checkout-focus-mode .checkout-page{height:calc(100dvh - 16px);overflow:auto;overscroll-behavior:contain;padding-bottom:env(safe-area-inset-bottom,0)}
+  }
+  @media(max-width:680px){
+    .co-head{align-items:flex-start;gap:10px}.co-head>div:first-child{min-width:0}.co-title{font-size:19px}.co-sub{font-size:11px}
+    .co-head-actions{margin-left:auto}.co-fullscreen span{display:none}.co-fullscreen{width:44px;padding:0;justify-content:center}
+    .co-grid,.co-doc-list{grid-template-columns:1fr}.co-search-row{grid-template-columns:78px minmax(0,1fr)}.co-search-row .co-btn-primary{grid-column:1/-1}.co-results{top:105px}.co-shortcuts{display:none}
+    .co-client-card .co-side-body{grid-template-columns:1fr}.co-client-current{padding:9px}.co-client-card .co-section-head small{display:none}
+    .co-table thead{display:none}.co-table,.co-table tbody{display:block}.co-table tr{display:grid;grid-template-columns:1fr auto;grid-template-areas:'product remove' 'unit total' 'qty discount';gap:9px 12px;padding:13px;border-bottom:1px solid var(--co-border)}.co-table td{padding:0;border:0}.co-item-product{grid-area:product}.co-item-unit{grid-area:unit;color:var(--co-muted);font-size:12px}.co-item-qty{grid-area:qty}.co-item-discount{grid-area:discount}.co-item-total{grid-area:total;text-align:right}.co-item-remove{grid-area:remove}.co-item-discount-input{width:92px}.co-cart-scroll{overflow:visible}
+    .co-payment-total{font-size:44px}.co-payment-metrics{grid-template-columns:1fr 1fr}.co-payment-metric:first-child{grid-column:1/-1}.co-payment-method{min-height:56px}.co-payment-value .co-input{font-size:30px}
+    .co-summary-card{min-height:0;overflow:visible}.co-payment-body{overflow:visible}.co-finish{min-height:58px}.co-modal{padding:17px}.co-modal-actions{flex-direction:column-reverse}.co-modal-actions .co-btn{width:100%;justify-content:center;min-height:46px}
+    .co-input,select.co-input,textarea.co-input{font-size:16px}
+  }
+  @media(max-width:390px){ .co-payment-methods{grid-template-columns:1fr}.co-payment-total{font-size:39px}.co-payment-metrics{grid-template-columns:1fr}.co-payment-metric:first-child{grid-column:auto} }
 </style>
 
 {{ caixas|json_script:"checkout-caixas" }}
@@ -109,11 +179,36 @@
       <span class="co-shortcut"><kbd>F8</kbd>Valor</span>
       <span class="co-shortcut"><kbd>F10</kbd>Finalizar</span>
     </div>
-    <div class="co-count" x-text="sessao ? 'Caixa aberto' : 'Caixa fechado'" style="white-space:nowrap"></div>
+    <div class="co-head-actions">
+      <span class="co-count" x-text="sessao ? 'Caixa aberto' : 'Caixa fechado'" style="white-space:nowrap"></span>
+      <button type="button" class="co-btn co-fullscreen" @click="alternarTelaCheia()" :aria-pressed="telaCheia" :title="telaCheia ? 'Sair da tela cheia' : 'Usar checkout em tela cheia'">
+        <svg x-show="!telaCheia" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3m8 0h3a2 2 0 002-2v-3"/></svg>
+        <svg x-show="telaCheia" x-cloak aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3M3 16h3a2 2 0 012 2v3m8 0v-3a2 2 0 012-2h3"/></svg>
+        <span x-text="telaCheia ? 'Sair da tela cheia' : 'Tela cheia'"></span>
+      </button>
+    </div>
   </div>
 
   <div class="co-layout">
     <div class="co-main">
+      <div class="co-card co-client-card">
+        <div class="co-section-head"><strong>Cliente (F4)</strong><button class="co-btn" type="button" @click="abrirCadastroCliente()">Cadastro rápido <small>Shift+F4</small></button></div>
+        <div class="co-side-body">
+          <div class="co-client-current">
+            <div><strong x-text="cliente ? cliente.razao_social : 'Consumidor Final'"></strong><div class="co-product-code" x-text="cliente ? (cliente.cpf_cnpj || 'Cliente identificado') : 'Venda de balcão · sem cliente cadastrado'"></div></div>
+            <button type="button" class="co-btn" x-show="cliente" @click="selecionarCliente(null)">Usar balcão</button>
+          </div>
+          <div class="co-client-search">
+            <input x-ref="buscaCliente" class="co-input" x-model="buscaCliente" @input.debounce.300ms="buscarClientes()" @keydown.enter.prevent="selecionarPrimeiroCliente()" @keydown.arrow-down.prevent="moverResultadoCliente(1)" @keydown.arrow-up.prevent="moverResultadoCliente(-1)" placeholder="Buscar nome, CPF/CNPJ ou telefone">
+            <div class="co-client-results" x-show="clientes.length" x-cloak>
+              <template x-for="pessoa in clientes" :key="pessoa.id">
+                <button type="button" class="co-result" :class="{'active':clientes[indiceCliente]?.id===pessoa.id}" @click="selecionarCliente(pessoa)"><span><strong x-text="pessoa.razao_social"></strong><span class="co-result-code" x-text="pessoa.cpf_cnpj || pessoa.celular"></span></span></button>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="co-card co-search">
         <div class="co-search-row">
           <div class="co-field-inline">
@@ -148,26 +243,30 @@
       <div class="co-card co-cart-card">
         <div class="co-section-head">
           <strong>Produtos da venda</strong>
-          <span class="co-count" x-text="quantidadeItens+' item(ns)'"></span>
+          <span class="co-count" x-text="formatarQuantidade(quantidadeItens)+' item(ns) · '+itens.length+' produto(s)'"></span>
         </div>
         <div class="co-empty" x-show="!itens.length">Bipe o primeiro produto para começar.</div>
         <div class="co-cart-scroll" x-show="itens.length" x-cloak>
           <table class="co-table" data-columns="off">
-            <thead><tr><th>Produto</th><th>Valor unitário</th><th>Quantidade</th><th>Total</th><th></th></tr></thead>
+            <thead><tr><th>Produto</th><th>Valor unitário</th><th>Quantidade</th><th>Desconto no item</th><th style="text-align:right">Total</th><th></th></tr></thead>
             <tbody>
               <template x-for="item in itens" :key="item.id">
                 <tr>
-                  <td><div class="co-product-name" x-text="item.descricao"></div><div class="co-product-code" x-text="item.codigo_barras || 'ID '+item.id"></div></td>
-                  <td x-text="moeda(item.preco)"></td>
-                  <td>
+                  <td class="co-item-product"><div class="co-product-name" x-text="item.descricao"></div><div class="co-product-code" x-text="item.codigo_barras || 'ID '+item.id"></div></td>
+                  <td class="co-item-unit" x-text="moeda(item.preco)"></td>
+                  <td class="co-item-qty">
                     <div class="co-qty">
                       <button type="button" @click="alterarQuantidade(item,-item.quantidade_step)">−</button>
                       <input type="number" :step="item.quantidade_step" :value="item.quantidade" @change="definirQuantidade(item,$event.target.value)">
                       <button type="button" @click="alterarQuantidade(item,item.quantidade_step)">+</button>
                     </div>
                   </td>
-                  <td><strong x-text="moeda(item.preco*item.quantidade)"></strong></td>
-                  <td><button type="button" class="co-btn co-btn-danger" @click="removerItem(item.id)">×</button></td>
+                  <td class="co-item-discount">
+                    <div class="co-item-discount-wrap"><span class="co-item-discount-prefix">R$</span><input class="co-input co-item-discount-input" type="text" inputmode="decimal" :data-item-discount="item.id" x-model="item.descontoEntrada" :readonly="!descontoLiberado || !!pedidoCatalogoInicial" @focus="solicitarDescontoItem(item,$event)" @input="normalizarDescontoItem(item)" placeholder="0,00" aria-label="Desconto deste item"></div>
+                    <div class="co-item-discount-value" x-show="descontoItemValor(item)>0" x-text="'- '+moeda(descontoItemValor(item))" x-cloak></div>
+                  </td>
+                  <td class="co-item-total" style="text-align:right"><span class="co-item-old-total" x-show="descontoItemValor(item)>0" x-text="moeda(totalBrutoItem(item))" x-cloak></span><strong x-text="moeda(totalLiquidoItem(item))"></strong></td>
+                  <td class="co-item-remove"><button type="button" class="co-btn co-btn-danger" @click="removerItem(item.id)" aria-label="Remover item">×</button></td>
                 </tr>
               </template>
             </tbody>
@@ -177,33 +276,27 @@
     </div>
 
     <aside class="co-side">
-      <div class="co-card">
-        <div class="co-section-head"><strong>Cliente (F4)</strong><button class="co-btn" type="button" @click="abrirCadastroCliente()">Cadastro rápido <small>Shift+F4</small></button></div>
-        <div class="co-side-body">
-          <div class="co-client-current">
-            <div><strong x-text="cliente ? cliente.razao_social : 'Consumidor Final'"></strong><div class="co-product-code" x-text="cliente ? (cliente.cpf_cnpj || 'Cliente identificado') : 'Sem cliente cadastrado'"></div></div>
-            <button type="button" class="co-btn" x-show="cliente" @click="selecionarCliente(null)">Usar balcão</button>
-          </div>
-          <div class="co-client-search">
-            <input x-ref="buscaCliente" class="co-input" x-model="buscaCliente" @input.debounce.300ms="buscarClientes()" @keydown.enter.prevent="selecionarPrimeiroCliente()" @keydown.arrow-down.prevent="moverResultadoCliente(1)" @keydown.arrow-up.prevent="moverResultadoCliente(-1)" placeholder="Buscar nome, CPF/CNPJ ou telefone">
-            <div class="co-client-results" x-show="clientes.length" x-cloak>
-              <template x-for="pessoa in clientes" :key="pessoa.id">
-                <button type="button" class="co-result" :class="{'active':clientes[indiceCliente]?.id===pessoa.id}" @click="selecionarCliente(pessoa)"><span><strong x-text="pessoa.razao_social"></strong><span class="co-result-code" x-text="pessoa.cpf_cnpj || pessoa.celular"></span></span></button>
-              </template>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div class="co-card co-summary-card">
         <div class="co-section-head"><strong>Pagamento (F7)</strong><span class="co-count" x-text="formaSelecionada ? formaSelecionada.descricao : 'Selecione uma forma'"></span></div>
+        <div class="co-payment-hero">
+          <div class="co-payment-label">Total a pagar</div>
+          <div class="co-payment-total"><small>R$</small><span x-text="formatarValorSemCifrao(total)"></span></div>
+          <div class="co-payment-metrics">
+            <div class="co-payment-metric"><span>Quantidade</span><strong x-text="formatarQuantidade(quantidadeItens)+' item(ns)'"></strong></div>
+            <div class="co-payment-metric"><span>Subtotal bruto</span><strong x-text="moeda(subtotalBruto)"></strong></div>
+            <div class="co-payment-metric"><span>Descontos</span><strong x-text="'- '+moeda(descontoItens+desconto)"></strong></div>
+          </div>
+        </div>
         <div class="co-side-body co-payment-body">
-          <div class="co-field">
-            <label for="checkout-forma-pagamento">Forma de pagamento</label>
-            <select id="checkout-forma-pagamento" x-ref="formaPagamento" class="co-input" x-model.number="formaPagamentoId" @change="selecionarFormaPorId()">
-              <option :value="null">Selecione</option>
-              <template x-for="forma in formasPagamento" :key="'select-'+forma.id"><option :value="forma.id" x-text="forma.descricao"></option></template>
-            </select>
+          <div class="co-field" x-ref="formaPagamento" tabindex="-1">
+            <label>Forma de pagamento</label>
+            <div class="co-payment-methods">
+              <template x-for="forma in formasPagamento" :key="'forma-'+forma.id">
+                <button type="button" class="co-payment-method" :class="{'active':String(forma.id)===String(formaPagamentoId)}" @click="selecionarForma(forma)" :aria-pressed="String(forma.id)===String(formaPagamentoId)">
+                  <span class="co-payment-icon" x-text="iconeFormaPagamento(forma)"></span><span x-text="forma.descricao"></span>
+                </button>
+              </template>
+            </div>
           </div>
           <p class="co-empty" x-show="!formasPagamento.length" style="padding:20px 0">Nenhuma forma disponível no PDV.</p>
           <div class="co-grid" x-show="formaCartao" x-cloak>
@@ -220,29 +313,31 @@
               </select>
             </div>
           </div>
+          <div class="co-field co-sale-discount">
+            <label for="checkout-desconto">Desconto sobre a venda (F6)</label>
+            <input id="checkout-desconto" x-ref="desconto" class="co-input" type="text" inputmode="decimal" x-model="descontoEntrada" :readonly="!descontoLiberado" @focus="solicitarAutorizacaoDesconto()" @input="normalizarDesconto()" @keydown.enter.prevent="focarValorPagamento()" placeholder="Autorização necessária">
+            <small x-text="descontoLiberado ? 'Descontos autorizados para esta venda' : 'Exige PDV → Aprovar'" :style="descontoLiberado ? 'color:var(--co-green)' : ''"></small>
+          </div>
+          <div class="co-field co-payment-value">
+            <label for="checkout-valor-pagamento"><span>Valor recebido (F8)</span><span x-show="formaSelecionada" x-text="formaSelecionada?.descricao"></span></label>
+            <input id="checkout-valor-pagamento" x-ref="valorPagamento" class="co-input" type="text" inputmode="decimal" x-model="valorPagamentoEntrada" @input="valorPagamentoManual=true; mensagem=''" @keydown.enter.prevent="solicitarFinalizacao()" placeholder="0,00">
+          </div>
+          <div class="co-change-card" x-show="troco > 0" x-cloak><span>Troco para o cliente</span><strong x-text="moeda(troco)"></strong></div>
+          <div class="co-change-card" x-show="faltaPagamento > 0" x-cloak style="border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.09)"><span style="color:#fca5a5">Falta receber</span><strong style="color:#f87171" x-text="moeda(faltaPagamento)"></strong></div>
         </div>
         <div class="co-summary">
-          <div class="co-summary-row"><span>Subtotal</span><strong x-text="moeda(subtotal)"></strong></div>
           <div class="co-field" x-show="pedidoCatalogoInicial" x-cloak>
             <label for="checkout-frete" x-text="pedidoCatalogoInicial?.frete_a_combinar ? 'Frete a combinar' : 'Frete do pedido'"></label>
             <input id="checkout-frete" class="co-input" type="number" min="0" step="0.01" x-model.number="acrescimoInicial" :readonly="!pedidoCatalogoInicial?.frete_a_combinar" @input="sincronizarValorPagamento()">
           </div>
-          <div class="co-grid" style="margin-top:0">
-            <div class="co-field">
-              <label for="checkout-desconto">Desconto (F6)</label>
-              <input id="checkout-desconto" x-ref="desconto" class="co-input" type="text" inputmode="decimal" x-model="descontoEntrada" :readonly="!descontoLiberado" @focus="solicitarAutorizacaoDesconto()" @input="normalizarDesconto()" @keydown.enter.prevent="focarValorPagamento()" placeholder="Autorização necessária">
-              <small x-text="descontoLiberado ? 'Desconto autorizado para esta venda' : 'Exige PDV → Aprovar'" :style="descontoLiberado ? 'color:#34d399' : ''"></small>
-            </div>
-            <div class="co-field">
-              <label for="checkout-valor-pagamento">Valor recebido (F8)</label>
-              <input id="checkout-valor-pagamento" x-ref="valorPagamento" class="co-input" type="text" inputmode="decimal" x-model="valorPagamentoEntrada" @input="valorPagamentoManual=true; mensagem=''" @keydown.enter.prevent="solicitarFinalizacao()" placeholder="0,00">
-            </div>
+          <div class="co-summary-breakdown">
+            <div class="co-summary-row"><span>Subtotal dos produtos</span><strong x-text="moeda(subtotalBruto)"></strong></div>
+            <div class="co-summary-row discount" x-show="descontoItens > 0" x-cloak><span>Desconto nos itens</span><strong x-text="'- '+moeda(descontoItens)"></strong></div>
+            <div class="co-summary-row discount" x-show="desconto > 0" x-cloak><span>Desconto sobre a venda</span><strong x-text="'- '+moeda(desconto)"></strong></div>
+            <div class="co-summary-row" x-show="Number(acrescimoInicial)>0" x-cloak><span>Frete / acréscimo</span><strong x-text="'+ '+moeda(acrescimoInicial)"></strong></div>
           </div>
-          <div class="co-summary-row"><span>Total</span><span class="co-total" x-text="moeda(total)"></span></div>
-          <div class="co-summary-row" x-show="troco > 0" x-cloak><span>Troco</span><strong style="color:#34d399" x-text="moeda(troco)"></strong></div>
-          <div class="co-summary-row" x-show="faltaPagamento > 0" x-cloak><span>Falta receber</span><strong style="color:#f87171" x-text="moeda(faltaPagamento)"></strong></div>
           <div class="co-alert" x-show="mensagem" :class="{'co-success':sucesso}" x-text="mensagem" x-cloak></div>
-          <button type="button" class="co-btn co-btn-primary co-finish" @click="solicitarFinalizacao()" :disabled="finalizando" x-text="finalizando ? 'Finalizando...' : 'Finalizar venda · F10'"></button>
+          <button type="button" class="co-btn co-btn-primary co-finish" @click="solicitarFinalizacao()" :disabled="finalizando"><span x-text="finalizando ? 'Finalizando...' : 'Finalizar venda'"></span><small x-show="!finalizando">F10 · emitir comprovante depois</small></button>
         </div>
       </div>
     </aside>
@@ -372,23 +467,24 @@ function checkoutVenda() {
     pedidoCatalogoInicial:JSON.parse(document.getElementById('checkout-pedido-catalogo').textContent), acrescimoInicial:0,
     busca:'', quantidadeEntrada:'1', buscarPorNome:false, buscando:false, resultados:[], indiceProduto:-1, erroBusca:'', itens:[],
     buscaNomeLiberada:false, modalSenhaBuscaNome:false, usuarioAutorizadorId:'', senhaBuscaNome:'', erroSenhaBuscaNome:'', liberandoBuscaNome:false,
-    descontoLiberado:false, modalSenhaDesconto:false, usuarioDescontoId:'', senhaDesconto:'', erroSenhaDesconto:'', liberandoDesconto:false,
+    descontoLiberado:false, modalSenhaDesconto:false, usuarioDescontoId:'', senhaDesconto:'', erroSenhaDesconto:'', liberandoDesconto:false, itemDescontoPendenteId:null,
     formasPagamento:[], formaPagamentoId:null, bandeiraPagamento:'', parcelasPagamento:1, cliente:null, buscaCliente:'', clientes:[], indiceCliente:-1,
     descontoEntrada:'', valorPagamentoEntrada:'', valorPagamentoManual:false, mensagem:'', sucesso:false, finalizando:false,
     modalCliente:false, novoCliente:{razao_social:'',cpf_cnpj:'',celular:'',email:'',tipo_pessoa:'F'}, erroCliente:'', salvandoCliente:false,
     modalDocumento:false, vendaFinalizada:{id:null,numero:null}, processandoDocumento:false, mensagemDocumento:'',
     etiquetaVendaDisponivel:{% if etiqueta_venda_disponivel %}true{% else %}false{% endif %},
-    abertura:{caixa_id:'',valor:'0,00'}, abrindoCaixa:false, erroCaixa:'',
+    abertura:{caixa_id:'',valor:'0,00'}, abrindoCaixa:false, erroCaixa:'', telaCheia:false,
     async init(){
+      document.addEventListener('fullscreenchange',()=>this.aplicarModoTelaCheia(!!document.fullscreenElement));
       await this.carregarEstado();
       if(this.agendamentoInicial){
-        this.itens=this.agendamentoInicial.itens||[];
+        this.itens=(this.agendamentoInicial.itens||[]).map(item=>this.prepararItem(item));
         this.cliente=this.agendamentoInicial.cliente||null;
         this.mensagem=this.agendamentoInicial.aviso||('Agendamento #'+this.agendamentoInicial.id+' carregado no caixa.');
         this.sincronizarValorPagamento(true);
       }
       if(this.pedidoCatalogoInicial){
-        this.itens=this.pedidoCatalogoInicial.itens||[];
+        this.itens=(this.pedidoCatalogoInicial.itens||[]).map(item=>this.prepararItem(item));
         this.cliente=this.pedidoCatalogoInicial.cliente||null;
         this.descontoEntrada=this.formatarNumeroInput(Number(this.pedidoCatalogoInicial.desconto||0));
         this.descontoLiberado=true;
@@ -402,9 +498,19 @@ function checkoutVenda() {
     cookie(nome){ return document.cookie.split('; ').find(v=>v.startsWith(nome+'='))?.split('=').slice(1).join('=') || ''; },
     numero(valor){ const texto=String(valor??0).trim(); const normalizado=texto.includes(',')?texto.replace(/\./g,'').replace(',','.'):texto; const n=Number(normalizado); return Number.isFinite(n)?n:0; },
     moeda(valor){ return Number(valor||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); },
-    get subtotal(){ return this.itens.reduce((s,i)=>s+(Number(i.preco)*Number(i.quantidade)),0); },
-    get desconto(){ return Math.min(this.subtotal,Math.max(0,this.numero(this.descontoEntrada))); },
-    get total(){ return Math.max(0,this.subtotal-this.desconto+Math.max(0,Number(this.acrescimoInicial)||0)); },
+    formatarValorSemCifrao(valor){ return Number(valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); },
+    formatarQuantidade(valor){ return Number(valor||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:3}); },
+    arredondarMoeda(valor){ return Math.round((Number(valor||0)+Number.EPSILON)*100)/100; },
+    prepararItem(item){ return {...item,descontoEntrada:this.formatarNumeroInput(Number(item.desconto_valor||0))}; },
+    totalBrutoItem(item){ return this.arredondarMoeda(Number(item.preco||0)*Number(item.quantidade||0)); },
+    descontoItemValor(item){ return Math.min(this.totalBrutoItem(item),Math.max(0,this.arredondarMoeda(this.numero(item.descontoEntrada)))); },
+    totalLiquidoItem(item){ return this.arredondarMoeda(this.totalBrutoItem(item)-this.descontoItemValor(item)); },
+    get subtotalBruto(){ return this.arredondarMoeda(this.itens.reduce((s,i)=>s+this.totalBrutoItem(i),0)); },
+    get descontoItens(){ return this.arredondarMoeda(this.itens.reduce((s,i)=>s+this.descontoItemValor(i),0)); },
+    get subtotal(){ return this.arredondarMoeda(this.subtotalBruto-this.descontoItens); },
+    get desconto(){ return this.arredondarMoeda(Math.min(this.subtotal,Math.max(0,this.numero(this.descontoEntrada)))); },
+    get descontoSolicitado(){ return this.desconto>0 || this.descontoItens>0; },
+    get total(){ return Math.max(0,this.arredondarMoeda(this.subtotal-this.desconto+Math.max(0,Number(this.acrescimoInicial)||0))); },
     get quantidadeItens(){ return this.itens.reduce((s,i)=>s+Number(i.quantidade),0); },
     get formaSelecionada(){ return this.formasPagamento.find(f=>String(f.id)===String(this.formaPagamentoId))||null; },
     get formaCartao(){ return ['cartao_credito','cartao_debito'].includes(this.formaSelecionada?.tipo); },
@@ -421,7 +527,18 @@ function checkoutVenda() {
     focarPagamento(){ this.focar('formaPagamento'); },
     focarValorPagamento(){ this.focar('valorPagamento'); },
     normalizarDesconto(){ this.mensagem=''; this.sincronizarValorPagamento(); },
+    normalizarDescontoItem(item){ this.mensagem=''; if(this.numero(item.descontoEntrada)>this.totalBrutoItem(item))item.descontoEntrada=this.formatarNumeroInput(this.totalBrutoItem(item)); this.sincronizarValorPagamento(); },
+    iconeFormaPagamento(forma){ const tipo=String(forma?.tipo||'').toLowerCase(); if(tipo.includes('pix'))return 'PIX'; if(tipo.includes('dinheiro'))return '$'; if(tipo.includes('debito'))return 'D'; if(tipo.includes('credito'))return 'C'; return 'R$'; },
     sincronizarValorPagamento(forcar=false){ if(forcar || !this.valorPagamentoManual)this.valorPagamentoEntrada=this.formatarNumeroInput(this.total); },
+    aplicarModoTelaCheia(ativo){ this.telaCheia=!!ativo; document.documentElement.classList.toggle('checkout-focus-mode',this.telaCheia); },
+    async alternarTelaCheia(){
+      if(this.telaCheia){
+        if(document.fullscreenElement && document.exitFullscreen){ try{await document.exitFullscreen();}catch(e){} }
+        this.aplicarModoTelaCheia(false); return;
+      }
+      this.aplicarModoTelaCheia(true);
+      if(document.documentElement.requestFullscreen){ try{await document.documentElement.requestFullscreen();}catch(e){} }
+    },
     atalhoTeclado(evento){
       const tecla=evento.key;
       if(tecla==='Escape'){
@@ -509,9 +626,16 @@ function checkoutVenda() {
     },
     solicitarAutorizacaoDesconto(){
       if(this.descontoLiberado){this.focar('desconto');return;}
+      this.itemDescontoPendenteId=null;
       this.modalSenhaDesconto=true;this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto='';this.focar('usuarioDesconto');
     },
-    fecharSenhaDesconto(){this.modalSenhaDesconto=false;this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto='';this.focarProduto();},
+    solicitarDescontoItem(item,evento){
+      if(this.pedidoCatalogoInicial){evento?.target?.blur();this.mensagem='O desconto dos itens de um pedido do catálogo deve ser alterado no próprio pedido.';return;}
+      if(this.descontoLiberado){evento?.target?.select();return;}
+      evento?.target?.blur();this.itemDescontoPendenteId=item.id;this.modalSenhaDesconto=true;this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto='';this.focar('usuarioDesconto');
+    },
+    focarDescontoItem(id){this.$nextTick(()=>{const campo=document.querySelector('[data-item-discount="'+id+'"]');if(campo){campo.focus();campo.select();}});},
+    fecharSenhaDesconto(){this.modalSenhaDesconto=false;this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto='';this.itemDescontoPendenteId=null;this.focarProduto();},
     async liberarDesconto(){
       if(!this.usuarioDescontoId){this.erroSenhaDesconto='Selecione o usuário autorizador.';this.focar('usuarioDesconto');return;}
       if(!this.senhaDesconto){this.erroSenhaDesconto='Informe a senha do usuário autorizador.';this.focar('senhaDesconto');return;}
@@ -519,7 +643,7 @@ function checkoutVenda() {
       try{
         const r=await fetch('{% url "pdv:api_checkout_liberar_desconto" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({usuario_id:this.usuarioDescontoId,senha:this.senhaDesconto})});
         const d=await r.json();if(!r.ok)throw new Error(d.erro||'Não foi possível autorizar o desconto.');
-        this.descontoLiberado=true;this.modalSenhaDesconto=false;this.usuarioDescontoId='';this.senhaDesconto='';this.focar('desconto');
+        const itemPendente=this.itemDescontoPendenteId;this.descontoLiberado=true;this.modalSenhaDesconto=false;this.usuarioDescontoId='';this.senhaDesconto='';this.itemDescontoPendenteId=null;if(itemPendente!==null)this.focarDescontoItem(itemPendente);else this.focar('desconto');
       }catch(e){this.erroSenhaDesconto=e.message;this.senhaDesconto='';this.focar('senhaDesconto');}
       finally{this.liberandoDesconto=false;}
     },
@@ -551,13 +675,13 @@ function checkoutVenda() {
       const quantidade=this.quantidadeParaProduto(produto);
       const atual=this.itens.find(i=>i.id===produto.id);
       if(atual) atual.quantidade=Number((Number(atual.quantidade)+quantidade).toFixed(atual.quantidade_decimais||0));
-      else this.itens.push({...produto,quantidade});
+      else this.itens.push(this.prepararItem({...produto,quantidade}));
       this.quantidadeEntrada='1'; this.busca=''; this.resultados=[]; this.indiceProduto=-1; this.erroBusca=''; this.mensagem=''; this.sincronizarValorPagamento(); this.focarProduto();
     },
     selecionarForma(forma){ this.formaPagamentoId=forma.id; this.bandeiraPagamento=''; this.parcelasPagamento=Math.max(1,Number(forma.minimo_parcelas||1)); this.sincronizarValorPagamento(true); },
     selecionarFormaPorId(){ const forma=this.formaSelecionada; if(forma)this.selecionarForma(forma); },
     alterarQuantidade(item,delta){ this.definirQuantidade(item,Number(item.quantidade)+Number(delta)); },
-    definirQuantidade(item,valor){ const min=Number(item.quantidade_step||1); const n=Math.max(min,Number(valor)||min); item.quantidade=Number(n.toFixed(item.quantidade_decimais||0)); this.sincronizarValorPagamento(); },
+    definirQuantidade(item,valor){ const min=Number(item.quantidade_step||1); const n=Math.max(min,Number(valor)||min); item.quantidade=Number(n.toFixed(item.quantidade_decimais||0)); if(this.numero(item.descontoEntrada)>this.totalBrutoItem(item))item.descontoEntrada=this.formatarNumeroInput(this.totalBrutoItem(item)); this.sincronizarValorPagamento(); },
     removerItem(id){ this.itens=this.itens.filter(i=>i.id!==id); this.sincronizarValorPagamento(); },
     async buscarClientes(){
       const q=this.buscaCliente.trim(); if(q.length<2){this.clientes=[];this.indiceCliente=-1;return;}
@@ -594,11 +718,11 @@ function checkoutVenda() {
     async finalizar(){
       if(!this.podeFinalizar)return;this.finalizando=true;this.mensagem='';this.sucesso=false;
       const pagamentos=this.total>0?[{forma_id:this.formaPagamentoId,valor:this.valorPagamento,parcelas:this.parcelasPagamento,bandeira:this.formaCartao?this.bandeiraPagamento:''}]:[];
-      const payload={cliente_id:this.cliente?.id||null,desconto:this.desconto,acrescimo:Math.max(0,Number(this.acrescimoInicial)||0),delivery:!!this.pedidoCatalogoInicial?.delivery,endereco_entrega:this.pedidoCatalogoInicial?.endereco_entrega||{},observacao:this.pedidoCatalogoInicial?.observacao||'',pedido_catalogo_id:this.pedidoCatalogoInicial?.id||null,itens:this.itens.map(i=>({produto_id:i.id,quantidade:i.quantidade,valor_unitario:i.preco,preco_origem_tipo:i.preco_origem_tipo,preco_origem_detalhe:i.preco_origem_detalhe,desconto_valor:0})),pagamentos};
+      const payload={cliente_id:this.cliente?.id||null,desconto:this.desconto,acrescimo:Math.max(0,Number(this.acrescimoInicial)||0),delivery:!!this.pedidoCatalogoInicial?.delivery,endereco_entrega:this.pedidoCatalogoInicial?.endereco_entrega||{},observacao:this.pedidoCatalogoInicial?.observacao||'',pedido_catalogo_id:this.pedidoCatalogoInicial?.id||null,itens:this.itens.map(i=>({produto_id:i.id,quantidade:i.quantidade,valor_unitario:i.preco,preco_origem_tipo:i.preco_origem_tipo,preco_origem_detalhe:i.preco_origem_detalhe,desconto_valor:this.descontoItemValor(i)})),pagamentos};
       try{
         const r=await fetch('{% url "pdv:api_checkout_venda_finalizar" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify(payload)});
         const d=await r.json();
-        if(!r.ok){if(r.status===403 && this.desconto>0){this.descontoLiberado=false;this.modalSenhaDesconto=true;this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto=d.erro||'Autorize o desconto novamente.';this.focar('usuarioDesconto');}throw new Error(d.erro||'Não foi possível finalizar a venda.');}
+        if(!r.ok){if(r.status===403 && this.descontoSolicitado){this.descontoLiberado=false;this.modalSenhaDesconto=true;this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto=d.erro||'Autorize o desconto novamente.';this.focar('usuarioDesconto');}throw new Error(d.erro||'Não foi possível finalizar a venda.');}
         this.sucesso=true; this.mensagem='Venda #'+String(d.numero_venda).padStart(6,'0')+' finalizada com sucesso.';
         this.vendaFinalizada={id:d.venda_id||d.id||null,numero:d.numero_venda};
         this.itens=[]; this.quantidadeEntrada='1'; this.descontoEntrada=''; this.descontoLiberado=false; this.valorPagamentoEntrada=''; this.valorPagamentoManual=false;
