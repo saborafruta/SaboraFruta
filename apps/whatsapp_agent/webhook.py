@@ -7,7 +7,7 @@ from .agent import localizar_cliente, processar_mensagem, somente_digitos
 from .conversation_service import encerrar_se_expirada
 from .gateway import EvolutionClient, GatewayWhatsAppError
 from .ai_service import IAWhatsAppError, OpenAIWhatsAppClient
-from .intelligent_agent import processar_com_ia
+from .intelligent_agent import processar_com_ia, resposta_fora_horario
 from .models import ConversaWhatsApp, MensagemWhatsApp
 
 
@@ -138,8 +138,18 @@ def receber_evento(configuracao, payload):
             return 'duplicado'
 
     texto_processado = dados['texto']
+    resposta = (
+        resposta_fora_horario(conversa)
+        if configuracao.agente_ativo
+        else None
+    )
     if dados['tipo'] == 'audio':
-        if not configuracao.ia_ativa or not configuracao.ia_audio_ativo:
+        if conversa.atendimento_humano and resposta is None:
+            resposta = None
+        elif resposta is not None:
+            mensagem.status = 'recebida_fora_horario'
+            mensagem.save(update_fields=['status', 'updated_at'])
+        elif not configuracao.ia_ativa or not configuracao.ia_audio_ativo:
             mensagem.status = 'nao_suportado'
             mensagem.save(update_fields=['status', 'updated_at'])
             resposta = (
@@ -175,9 +185,6 @@ def receber_evento(configuracao, payload):
                     'Não consegui entender esse áudio agora. '
                     'Pode enviar por texto, por favor?'
                 ) if configuracao.agente_ativo else None
-    else:
-        resposta = None
-
     if configuracao.agente_ativo and texto_processado and resposta is None:
         resposta = processar_com_ia(conversa, texto_processado, mensagem)
         if resposta is None:

@@ -150,10 +150,12 @@ class AgenteWhatsAppTests(TestCase):
         self, enviar_texto, obter_midia, transcrever, processar_ia,
     ):
         self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
         self.configuracao.ia_audio_ativo = True
         self.configuracao.definir_ia_api_key('sk-teste')
         self.configuracao.save(update_fields=[
-            'ia_ativa', 'ia_audio_ativo', 'ia_api_key_criptografada',
+            'ia_ativa', 'ia_restringir_horario', 'ia_audio_ativo',
+            'ia_api_key_criptografada',
         ])
         enviar_texto.return_value = {'key': {'id': 'saida-audio'}}
         obter_midia.return_value = {'base64': 'YXVkaW8=', 'mimetype': 'audio/ogg'}
@@ -193,8 +195,11 @@ class AgenteWhatsAppTests(TestCase):
     @patch('apps.whatsapp_agent.ai_service.requests.post')
     def test_ia_consulta_disponibilidade_e_confirma_agendamento(self, requisicao):
         self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
         self.configuracao.definir_ia_api_key('sk-teste')
-        self.configuracao.save(update_fields=['ia_ativa', 'ia_api_key_criptografada'])
+        self.configuracao.save(update_fields=[
+            'ia_ativa', 'ia_restringir_horario', 'ia_api_key_criptografada',
+        ])
         conversa = self.nova_conversa('5584999995555')
         proxima_segunda = timezone.localdate() + timedelta(
             days=(7 - timezone.localdate().weekday()) % 7 or 7,
@@ -256,6 +261,100 @@ class AgenteWhatsAppTests(TestCase):
         conversa.refresh_from_db()
         self.assertEqual(conversa.etapa_crm, ConversaWhatsApp.EtapaCRM.AGENDADO)
         self.assertEqual(UsoIAWhatsApp.objects.filter(conversa=conversa).count(), 2)
+
+    @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
+    def test_ia_atende_qualquer_primeira_mensagem_sem_exigir_menu(self, responder):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
+        self.configuracao.definir_ia_api_key('sk-teste')
+        self.configuracao.save(update_fields=[
+            'ia_ativa', 'ia_restringir_horario', 'ia_api_key_criptografada',
+        ])
+        responder.return_value = SimpleNamespace(conteudo={
+            'acao': 'responder',
+            'mensagem': 'Olá! Como posso ajudar?',
+            'servico_id': None,
+            'profissional_id': None,
+            'data': '',
+            'periodo': '',
+            'horario': '',
+            'nome_cliente': '',
+        })
+        conversa = self.nova_conversa('5584999996666')
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Oi',
+        )
+
+        resposta = processar_com_ia(conversa, mensagem.texto, mensagem)
+
+        self.assertEqual(resposta, 'Olá! Como posso ajudar?')
+        responder.assert_called_once()
+        conversa.refresh_from_db()
+        self.assertEqual(conversa.etapa, 'ia_atendimento')
+
+    @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
+    def test_ia_interpreta_resposta_numerica_fora_do_menu(self, responder):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
+        self.configuracao.definir_ia_api_key('sk-teste')
+        self.configuracao.save(update_fields=[
+            'ia_ativa', 'ia_restringir_horario', 'ia_api_key_criptografada',
+        ])
+        responder.return_value = SimpleNamespace(conteudo={
+            'acao': 'responder',
+            'mensagem': 'Entendi.',
+            'servico_id': None,
+            'profissional_id': None,
+            'data': '',
+            'periodo': '',
+            'horario': '',
+            'nome_cliente': '',
+        })
+        conversa = self.nova_conversa('5584999997777')
+        conversa.etapa = 'ia_atendimento'
+        conversa.save(update_fields=['etapa'])
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='2',
+        )
+
+        self.assertEqual(processar_com_ia(conversa, '2', mensagem), 'Entendi.')
+        responder.assert_called_once()
+
+    @patch('apps.whatsapp_agent.intelligent_agent._dentro_horario_ia', return_value=False)
+    @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
+    def test_fora_do_horario_avisa_e_encaminha_para_humano(
+        self, responder, _dentro_horario,
+    ):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = True
+        self.configuracao.ia_horario_inicio = time(8)
+        self.configuracao.ia_horario_fim = time(20)
+        self.configuracao.save(update_fields=[
+            'ia_ativa', 'ia_restringir_horario',
+            'ia_horario_inicio', 'ia_horario_fim',
+        ])
+        conversa = self.nova_conversa('5584999998888')
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Quero comprar um produto',
+        )
+
+        resposta = processar_com_ia(conversa, mensagem.texto, mensagem)
+
+        self.assertIn('das 08:00 às 20:00', resposta)
+        responder.assert_not_called()
+        conversa.refresh_from_db()
+        self.assertTrue(conversa.atendimento_humano)
+        self.assertEqual(conversa.etapa, 'aguardando_atendimento_humano')
+        self.assertEqual(
+            conversa.etapa_crm,
+            ConversaWhatsApp.EtapaCRM.ATENDIMENTO_HUMANO,
+        )
 
     def test_saudacao_exibe_menu_principal(self):
         conversa = self.nova_conversa()
@@ -650,6 +749,44 @@ class AgenteWhatsAppTests(TestCase):
         self.assertEqual(conversa.mensagens.filter(direcao=MensagemWhatsApp.Direcao.SAIDA).count(), 1)
         enviar_texto.assert_called_once()
 
+    @patch('apps.whatsapp_agent.webhook.processar_mensagem')
+    @patch('apps.whatsapp_agent.webhook.processar_com_ia', return_value='Olá! Como posso ajudar?')
+    @patch('apps.whatsapp_agent.webhook.EvolutionClient.enviar_texto')
+    def test_webhook_aciona_ia_na_primeira_mensagem_de_texto(
+        self, enviar_texto, processar_ia, processar_menu,
+    ):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
+        self.configuracao.save(update_fields=['ia_ativa', 'ia_restringir_horario'])
+        enviar_texto.return_value = {'key': {'id': 'saida-ia'}}
+        payload = {
+            'event': 'messages.upsert',
+            'instance': self.configuracao.instancia,
+            'data': {
+                'key': {
+                    'id': 'entrada-ia',
+                    'fromMe': False,
+                    'remoteJid': '5584999993333@s.whatsapp.net',
+                },
+                'pushName': 'Ana',
+                'message': {'conversation': 'Qual é o próximo horário disponível?'},
+            },
+        }
+
+        self.assertEqual(receber_evento(self.configuracao, payload), 'enviada')
+
+        entrada = MensagemWhatsApp.objects.get(identificador_externo='entrada-ia')
+        processar_ia.assert_called_once_with(
+            entrada.conversa,
+            'Qual é o próximo horário disponível?',
+            entrada,
+        )
+        processar_menu.assert_not_called()
+        enviar_texto.assert_called_once_with(
+            '5584999993333',
+            'Olá! Como posso ajudar?',
+        )
+
 
 class EvolutionClientTests(SimpleTestCase):
     def configuracao(self):
@@ -780,6 +917,10 @@ class EvolutionClientTests(SimpleTestCase):
         self.assertIn('{nome}', campos['mensagem_confirmacao_agendamento'].initial)
         self.assertIn('{horario}', campos['mensagem_lembrete_agendamento'].initial)
         self.assertIn('ia_ativa', campos)
+        self.assertIn('ia_restringir_horario', campos)
+        self.assertIn('ia_horario_inicio', campos)
+        self.assertIn('ia_horario_fim', campos)
+        self.assertIn('ia_mensagem_fora_horario', campos)
         self.assertIn('ia_audio_ativo', campos)
         self.assertIn('ia_api_key', campos)
         self.assertEqual(

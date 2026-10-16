@@ -49,7 +49,21 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
     agente_ativo = models.BooleanField(default=False)
     ia_ativa = models.BooleanField(
         default=False,
-        help_text='Usa IA para compreender texto livre antes de recorrer ao menu tradicional.',
+        help_text='Usa IA como atendente principal em qualquer mensagem recebida.',
+    )
+    ia_restringir_horario = models.BooleanField(
+        default=True,
+        help_text='Fora desta janela, envia o aviso automático e encaminha para atendimento humano.',
+    )
+    ia_horario_inicio = models.TimeField(default=time(8, 0))
+    ia_horario_fim = models.TimeField(default=time(20, 0))
+    ia_mensagem_fora_horario = models.TextField(
+        default=(
+            'Olá! Recebemos sua mensagem, mas nosso time não está disponível agora. '
+            'Nosso atendimento funciona das {inicio} às {fim}. '
+            'Assim que um atendente estiver disponível, entraremos em contato com você.'
+        ),
+        help_text='Variáveis disponíveis: {inicio} e {fim}.',
     )
     ia_audio_ativo = models.BooleanField(
         default=True,

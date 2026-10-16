@@ -49,7 +49,9 @@ class FluxoWhatsAppForm(forms.ModelForm):
     class Meta:
         model = ConfiguracaoWhatsApp
         fields = [
-            'ia_ativa', 'ia_audio_ativo', 'ia_modelo', 'ia_modelo_transcricao',
+            'ia_ativa', 'ia_restringir_horario', 'ia_horario_inicio', 'ia_horario_fim',
+            'ia_mensagem_fora_horario',
+            'ia_audio_ativo', 'ia_modelo', 'ia_modelo_transcricao',
             'ia_cotacao_dolar', 'ia_instrucoes',
             'modo_atendimento',
             'mensagem_saudacao', 'mensagem_transferencia',
@@ -66,6 +68,10 @@ class FluxoWhatsAppForm(forms.ModelForm):
         ]
         labels = {
             'ia_ativa': 'Ativar agente com IA',
+            'ia_restringir_horario': 'Atender com IA somente neste horário',
+            'ia_horario_inicio': 'IA inicia o atendimento às',
+            'ia_horario_fim': 'IA encerra o atendimento às',
+            'ia_mensagem_fora_horario': 'Mensagem fora do horário',
             'ia_audio_ativo': 'Entender mensagens de áudio',
             'ia_modelo': 'Modelo para respostas',
             'ia_modelo_transcricao': 'Modelo para transcrição',
@@ -99,6 +105,9 @@ class FluxoWhatsAppForm(forms.ModelForm):
             ),
             'ia_cotacao_dolar': forms.NumberInput(attrs={'min': '0.01', 'step': '0.0001'}),
             'ia_instrucoes': forms.Textarea(attrs={'rows': 4}),
+            'ia_horario_inicio': forms.TimeInput(attrs={'type': 'time'}),
+            'ia_horario_fim': forms.TimeInput(attrs={'type': 'time'}),
+            'ia_mensagem_fora_horario': forms.Textarea(attrs={'rows': 4}),
             'mensagem_saudacao': forms.Textarea(attrs={'rows': 3}),
             'mensagem_transferencia': forms.Textarea(attrs={'rows': 3}),
             'mensagem_encerramento': forms.Textarea(attrs={'rows': 3}),
@@ -137,6 +146,14 @@ class FluxoWhatsAppForm(forms.ModelForm):
             self.add_error(
                 'ia_api_key',
                 'Informe a chave da OpenAI antes de ativar o agente com IA.',
+            )
+        if (
+            dados.get('ia_restringir_horario')
+            and dados.get('ia_horario_inicio') == dados.get('ia_horario_fim')
+        ):
+            self.add_error(
+                'ia_horario_fim',
+                'O início e o fim devem ser diferentes. Desative a restrição para atendimento 24 horas.',
             )
         return dados
 

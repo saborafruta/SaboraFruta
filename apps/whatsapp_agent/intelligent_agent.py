@@ -12,8 +12,6 @@ from apps.core.tenant_context import tenant_db
 from apps.produtos.models import Produto
 
 from .agent import (
-    COMANDOS_MENU,
-    SAUDACOES,
     _destino_agenda,
     _link_agendamento,
     _link_catalogo,
@@ -24,6 +22,12 @@ from .models import ConversaWhatsApp
 
 
 logger = logging.getLogger(__name__)
+
+
+ETAPAS_DETERMINISTICAS = {
+    'aguardando_confirmacao_pedido',
+    'aguardando_motivo_nao_agendamento',
+}
 
 SCHEMA_DECISAO = {
     'type': 'object',
@@ -115,6 +119,9 @@ def _instrucoes(conversa):
     return f'''
 Você é o atendente virtual da filial {conversa.filial.nome_fantasia or conversa.filial.razao_social}.
 Responda sempre em português do Brasil, de forma curta, cordial e natural para WhatsApp.
+Você é a porta de entrada do atendimento: responda toda mensagem recebida, inclusive saudações,
+perguntas abertas e respostas curtas ou numéricas. Se a pessoa apenas cumprimentar, cumprimente-a
+e pergunte naturalmente como pode ajudar, sem exibir um menu numerado.
 Você atende agenda e/ou catálogo conforme o modo: {config.modo_atendimento}.
 Nunca invente serviço, produto, preço, profissional, data ou horário. A disponibilidade real será
 consultada pelo sistema depois da sua decisão. Se o cliente quiser agendar e já informou serviço e
@@ -126,6 +133,65 @@ um humano, encerrar quando pedir para finalizar e mostrar_menu quando pedir as o
 Datas devem sair em AAAA-MM-DD e horários em HH:MM. Hoje é {timezone.localdate().isoformat()}.
 {config.ia_instrucoes}
 '''.strip()
+
+
+def _dentro_horario_ia(config, agora=None):
+    if not config.ia_restringir_horario:
+        return True
+    hora = timezone.localtime(agora or timezone.now()).time().replace(tzinfo=None)
+    inicio = config.ia_horario_inicio
+    fim = config.ia_horario_fim
+    if inicio < fim:
+        return inicio <= hora < fim
+    return hora >= inicio or hora < fim
+
+
+def _mensagem_fora_horario(conversa):
+    config = conversa.configuracao
+    conversa.ativa = True
+    conversa.atendimento_humano = True
+    conversa.etapa = 'aguardando_atendimento_humano'
+    conversa.etapa_crm = ConversaWhatsApp.EtapaCRM.ATENDIMENTO_HUMANO
+    conversa.save(update_fields=[
+        'ativa', 'atendimento_humano', 'etapa', 'etapa_crm', 'updated_at',
+    ])
+    try:
+        return config.ia_mensagem_fora_horario.format(
+            inicio=config.ia_horario_inicio.strftime('%H:%M'),
+            fim=config.ia_horario_fim.strftime('%H:%M'),
+        )
+    except (KeyError, ValueError):
+        logger.warning(
+            'Mensagem fora do horário inválida na configuração %s.',
+            config.pk,
+        )
+        return (
+            'Olá! Recebemos sua mensagem, mas nosso time não está disponível agora. '
+            'Um atendente entrará em contato assim que possível.'
+        )
+
+
+def _marcar_atendimento_ia(conversa):
+    campos = []
+    if not conversa.ativa:
+        conversa.ativa = True
+        campos.append('ativa')
+    if conversa.etapa != 'ia_atendimento':
+        conversa.etapa = 'ia_atendimento'
+        campos.append('etapa')
+    if campos:
+        conversa.save(update_fields=[*campos, 'updated_at'])
+
+
+def resposta_fora_horario(conversa):
+    config = conversa.configuracao
+    if (
+        not config.ia_ativa
+        or conversa.atendimento_humano
+        or _dentro_horario_ia(config)
+    ):
+        return None
+    return _mensagem_fora_horario(conversa)
 
 
 def _periodo(hora):
@@ -310,11 +376,17 @@ def processar_com_ia(conversa, texto, mensagem):
     if not config.ia_ativa or conversa.atendimento_humano:
         return None
     valor = normalizar(texto)
-    # Saudações, comandos do menu e respostas numéricas permanecem
-    # determinísticos. Assim, ativar a IA não quebra menus já configurados e
-    # também evita uma chamada paga apenas para interpretar "oi" ou "1".
-    if valor in {normalizar(item) for item in SAUDACOES | COMANDOS_MENU} or valor.isdigit():
+    # O menu continua disponível quando for solicitado explicitamente. Depois
+    # disso, respostas às opções permanecem determinísticas até a jornada sair
+    # da etapa de menu. Confirmações transacionais também não passam pela IA.
+    if valor == 'menu' or conversa.etapa in ETAPAS_DETERMINISTICAS:
         return None
+    if conversa.etapa == 'aguardando_opcao' and valor.isdigit():
+        return None
+    aviso_fora_horario = resposta_fora_horario(conversa)
+    if aviso_fora_horario:
+        return aviso_fora_horario
+    _marcar_atendimento_ia(conversa)
     filial, alias, negocio = _catalogo_negocio(conversa)
     entrada = json.dumps({
         'mensagem_atual': texto,
