@@ -1,6 +1,7 @@
 """Resolução segura da configuração do checkout entre Central e banco operacional."""
 
 import hashlib
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
 from django.db import DEFAULT_DB_ALIAS
@@ -51,6 +52,8 @@ def _parametros_checkout(request):
             .only(
                 'checkout_venda_ativo', 'balanca_ean_prefixo',
                 'balanca_ean_plu_digitos', 'balanca_ean_conteudo',
+                'checkout_desconto_percentual_1', 'checkout_desconto_percentual_2',
+                'checkout_desconto_percentual_3', 'checkout_arredondamento_maximo',
             )
             .first()
         )
@@ -62,6 +65,8 @@ def _parametros_checkout(request):
         .only(
             'checkout_venda_ativo', 'balanca_ean_prefixo',
             'balanca_ean_plu_digitos', 'balanca_ean_conteudo',
+            'checkout_desconto_percentual_1', 'checkout_desconto_percentual_2',
+            'checkout_desconto_percentual_3', 'checkout_arredondamento_maximo',
         )
         .first()
     )
@@ -81,6 +86,62 @@ def configuracao_ean_balanca(request) -> dict:
         'plu_digitos': getattr(parametros, 'balanca_ean_plu_digitos', None) or 5,
         'conteudo': getattr(parametros, 'balanca_ean_conteudo', None) or 'preco_total',
     }
+
+
+def configuracao_descontos_checkout(request) -> dict:
+    """Política de descontos livres configurada para a filial do Checkout."""
+    parametros = _parametros_checkout(request)
+    percentuais = sorted({
+        float(valor)
+        for valor in (
+            getattr(parametros, 'checkout_desconto_percentual_1', 0) or 0,
+            getattr(parametros, 'checkout_desconto_percentual_2', 0) or 0,
+            getattr(parametros, 'checkout_desconto_percentual_3', 0) or 0,
+        )
+        if Decimal(str(valor)) > 0
+    })
+    arredondamento = max(
+        Decimal('0.00'),
+        Decimal(str(getattr(parametros, 'checkout_arredondamento_maximo', 0) or 0)),
+    )
+    return {
+        'percentuais': percentuais,
+        'percentual_maximo': max(percentuais, default=0),
+        'arredondamento_maximo': float(arredondamento),
+    }
+
+
+def desconto_checkout_requer_autorizacao(request, venda) -> bool:
+    """Valida a política contra os valores finais recalculados no servidor."""
+    desconto_itens = sum(
+        (Decimal(item.desconto_valor or 0) for item in venda.itens.all()),
+        Decimal('0.00'),
+    )
+    desconto_geral = Decimal(venda.valor_desconto or 0)
+    desconto_total = desconto_itens + desconto_geral
+    if desconto_total <= 0:
+        return False
+
+    configuracao = configuracao_descontos_checkout(request)
+    percentual_maximo = Decimal(str(configuracao['percentual_maximo'] or 0))
+    bruto = Decimal(venda.valor_subtotal or 0) + desconto_itens
+    limite_percentual = (bruto * percentual_maximo / Decimal('100')).quantize(
+        Decimal('0.01'),
+        rounding=ROUND_HALF_UP,
+    )
+    if percentual_maximo > 0 and desconto_total <= limite_percentual:
+        return False
+
+    limite_arredondamento = Decimal(str(configuracao['arredondamento_maximo'] or 0))
+    excesso = max(Decimal('0.00'), desconto_total - limite_percentual)
+    total = Decimal(venda.valor_total or 0)
+    arredondamento_valido = bool(
+        limite_arredondamento > 0
+        and desconto_geral > 0
+        and total == total.quantize(Decimal('1'))
+        and excesso <= limite_arredondamento
+    )
+    return not arredondamento_valido
 
 
 def _escopo_busca_nome(request) -> str:

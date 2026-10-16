@@ -79,6 +79,22 @@ class ParametrosSistemaAccessTests(TestCase):
         self.assertIn('balanca_ean_conteudo', form.fields)
         self.assertEqual(form.fields['balanca_ean_prefixo'].initial, '20')
 
+    def test_formulario_expoe_politica_de_descontos_do_checkout(self):
+        form = ParametrosSistemaForm(instance=ParametrosSistema(filial=self.filial))
+
+        self.assertIn('checkout_desconto_percentual_1', form.fields)
+        self.assertIn('checkout_desconto_percentual_2', form.fields)
+        self.assertIn('checkout_desconto_percentual_3', form.fields)
+        self.assertIn('checkout_arredondamento_maximo', form.fields)
+        self.assertEqual(
+            form.fields['checkout_desconto_percentual_1'].widget.attrs['max'],
+            '100',
+        )
+        self.assertEqual(
+            form.fields['checkout_arredondamento_maximo'].widget.attrs['min'],
+            '0',
+        )
+
     def test_operador_nao_acessa_parametros(self):
         request = RequestFactory().get('/gestao/parametros/')
         request.user = self.operador

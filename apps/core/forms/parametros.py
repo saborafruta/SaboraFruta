@@ -92,6 +92,8 @@ class ParametrosSistemaForm(forms.ModelForm):
             'email_secundario',
             'controlar_entrega_contas_receber',
             'checkout_venda_ativo',
+            'checkout_desconto_percentual_1', 'checkout_desconto_percentual_2',
+            'checkout_desconto_percentual_3', 'checkout_arredondamento_maximo',
             'balanca_ean_prefixo', 'balanca_ean_plu_digitos', 'balanca_ean_conteudo',
             'logo_url',
             'certificado_digital', 'senha_certificado',
@@ -104,6 +106,18 @@ class ParametrosSistemaForm(forms.ModelForm):
         ]
         widgets = {
             'email_secundario': forms.EmailInput(attrs={'placeholder': 'contato@empresa.com.br'}),
+            'checkout_desconto_percentual_1': forms.NumberInput(attrs={
+                'min': '0', 'max': '100', 'step': '0.01', 'placeholder': '2,00',
+            }),
+            'checkout_desconto_percentual_2': forms.NumberInput(attrs={
+                'min': '0', 'max': '100', 'step': '0.01', 'placeholder': '3,00',
+            }),
+            'checkout_desconto_percentual_3': forms.NumberInput(attrs={
+                'min': '0', 'max': '100', 'step': '0.01', 'placeholder': '5,00',
+            }),
+            'checkout_arredondamento_maximo': forms.NumberInput(attrs={
+                'min': '0', 'step': '0.01', 'placeholder': '1,00',
+            }),
             'balanca_ean_prefixo': forms.TextInput(attrs={
                 'inputmode': 'numeric', 'maxlength': '2', 'placeholder': '20',
             }),

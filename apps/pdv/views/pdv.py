@@ -29,6 +29,7 @@ from apps.core.services.checkout import (
     checkout_busca_nome_liberada,
     checkout_desconto_liberado,
     checkout_venda_ativo,
+    configuracao_descontos_checkout,
     consumir_checkout_desconto,
     consumir_checkout_busca_nome,
     encerrar_checkout_desconto,
@@ -36,6 +37,7 @@ from apps.core.services.checkout import (
     usuarios_autorizadores_checkout,
     validar_autorizador_checkout_busca_nome,
     configuracao_ean_balanca,
+    desconto_checkout_requer_autorizacao,
 )
 from apps.core.services.exceptions import DadosInvalidosError, EstoqueInsuficienteError
 from apps.core.tenant_context import tenant_atomic
@@ -87,6 +89,10 @@ from apps.produtos.services.codigo_balanca_service import (
     calcular_leitura_etiqueta,
     decodificar_ean_balanca,
 )
+
+
+class DescontoCheckoutNaoAutorizado(Exception):
+    """Interrompe e reverte uma venda acima da política livre da filial."""
 
 
 logger = logging.getLogger(__name__)
@@ -380,6 +386,7 @@ def checkout_venda(request):
         'title': 'Checkout de venda',
         'caixas': caixas,
         'usuarios_autorizadores': usuarios_autorizadores_checkout(request),
+        'configuracao_descontos': configuracao_descontos_checkout(request),
         'etiqueta_venda_disponivel': bool(config_etiqueta and config_etiqueta.ativa),
         'agendamento_checkout': agendamento_checkout,
         'pedido_catalogo_checkout': pedido_catalogo_checkout,
@@ -2020,19 +2027,16 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
     viagem_id = body.get("viagem_id")
 
     pedido_catalogo_id = body.get('pedido_catalogo_id')
-    desconto_checkout_requer_autorizacao = bool(
+    desconto_checkout_tem_desconto = bool(
         exigir_autorizacao_desconto
         and not pedido_catalogo_id
         and (desconto > 0 or any(valor > 0 for valor in descontos_itens))
     )
-    if exigir_autorizacao_desconto:
-        if desconto_checkout_requer_autorizacao and not checkout_desconto_liberado(request):
-            return JsonResponse(
-                {"erro": "Autorize o desconto da venda ou dos itens com um usuário que tenha PDV → Aprovar."},
-                status=403,
-            )
-        if not desconto_checkout_requer_autorizacao:
-            encerrar_checkout_desconto(request)
+    desconto_checkout_autorizado = bool(
+        desconto_checkout_tem_desconto and checkout_desconto_liberado(request)
+    )
+    if exigir_autorizacao_desconto and not desconto_checkout_tem_desconto:
+        encerrar_checkout_desconto(request)
 
     try:
         data_venda = _data_venda_retroativa(request, body)
@@ -2125,6 +2129,12 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
                 viagem_id=viagem_id,
                 idempotency_key=chave_idempotencia,
             )
+            if (
+                desconto_checkout_tem_desconto
+                and desconto_checkout_requer_autorizacao(request, venda)
+                and not desconto_checkout_autorizado
+            ):
+                raise DescontoCheckoutNaoAutorizado
             if comanda_id:
                 _fechar_comanda_origem(comanda_id, request, venda)
             if pedido_catalogo:
@@ -2146,6 +2156,16 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
                 ])
     except EstoqueInsuficienteError as exc:
         return JsonResponse({"erro": str(exc), "tipo": "estoque_insuficiente"}, status=400)
+    except DescontoCheckoutNaoAutorizado:
+        return JsonResponse(
+            {
+                "erro": (
+                    "O desconto ultrapassa a política da loja. Autorize com um usuário "
+                    "que tenha PDV → Aprovar."
+                ),
+            },
+            status=403,
+        )
     except DadosInvalidosError as exc:
         return JsonResponse({"erro": str(exc)}, status=400)
     except IntegrityError:
@@ -2162,7 +2182,7 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
             "erro": "Não foi possível concluir a venda. O erro foi registrado para diagnóstico."
         }, status=500)
 
-    if desconto_checkout_requer_autorizacao:
+    if desconto_checkout_autorizado:
         consumir_checkout_desconto(request)
     if pedido_catalogo:
         try:

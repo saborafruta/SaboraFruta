@@ -95,6 +95,41 @@ class ParametrosSistema(TimestampedModel):
         verbose_name='Utilizar checkout de venda',
         help_text='Exibe o Checkout no menu desta filial. Quando desativado, a tela fica indisponível.',
     )
+    checkout_desconto_percentual_1 = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+        verbose_name='Desconto rápido 1',
+        help_text='Percentual disponível no Checkout sem solicitar autorização.',
+    )
+    checkout_desconto_percentual_2 = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+        verbose_name='Desconto rápido 2',
+        help_text='Percentual disponível no Checkout sem solicitar autorização.',
+    )
+    checkout_desconto_percentual_3 = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+        verbose_name='Desconto rápido 3',
+        help_text='Percentual disponível no Checkout sem solicitar autorização.',
+    )
+    checkout_arredondamento_maximo = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0'))],
+        verbose_name='Arredondamento máximo',
+        help_text=(
+            'Valor máximo que o operador pode descontar para arredondar o total '
+            'para baixo, sem solicitar autorização.'
+        ),
+    )
     balanca_ean_prefixo = models.CharField(
         max_length=2,
         default='20',

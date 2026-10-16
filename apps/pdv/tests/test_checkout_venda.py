@@ -226,8 +226,11 @@ class CheckoutVendaTests(TestCase):
         self.assertContains(resposta, 'Autorizar desconto')
         self.assertContains(resposta, 'Exige PDV → Aprovar')
         self.assertContains(resposta, 'id="checkout-valor-desconto"')
+        self.assertContains(resposta, 'id="checkout-percentual-desconto"')
+        self.assertContains(resposta, 'checkout-configuracao-descontos')
+        self.assertContains(resposta, 'Arredondar total')
         self.assertContains(resposta, '@click="solicitarAutorizacaoDesconto()"')
-        self.assertContains(resposta, "x-show=\"!descontoLiberado\"")
+        self.assertContains(resposta, 'descontoModalRequerAutorizacao')
         self.assertContains(resposta, reverse('pdv:api_checkout_venda_finalizar'))
         self.assertContains(resposta, "else if(this.modalDocumento)return;")
         self.assertContains(resposta, "this.mensagemDocumento=label+' emitida com sucesso.';")
@@ -340,6 +343,112 @@ class CheckoutVendaTests(TestCase):
 
         repetida = self.client.post(endpoint, data=payload, content_type='application/json')
         self.assertEqual(repetida.status_code, 403, repetida.content)
+
+    def test_politica_percentual_libera_ate_o_maior_desconto_configurado(self):
+        self.habilitar_checkout()
+        self.parametros.checkout_desconto_percentual_1 = Decimal('2.00')
+        self.parametros.checkout_desconto_percentual_2 = Decimal('3.00')
+        self.parametros.checkout_desconto_percentual_3 = Decimal('5.00')
+        self.parametros.save(update_fields=[
+            'checkout_desconto_percentual_1',
+            'checkout_desconto_percentual_2',
+            'checkout_desconto_percentual_3',
+        ])
+        caixa = Caixa.objects.create(filial=self.filial, numero=43, descricao='Checkout 43')
+        SessaoPDV.objects.create(
+            filial=self.filial,
+            caixa=caixa,
+            usuario=self.usuario,
+            valor_abertura=Decimal('0'),
+            status='aberto',
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            descricao='Pix política Checkout',
+            tipo=TipoFormaPagamento.PIX,
+        )
+        endpoint = reverse('pdv:api_checkout_venda_finalizar')
+
+        def payload(desconto, total):
+            return {
+                'cliente_id': None,
+                'desconto': str(desconto),
+                'acrescimo': 0,
+                'itens': [{
+                    'produto_id': self.produto.pk,
+                    'quantidade': 1,
+                    'valor_unitario': '18.90',
+                    'preco_origem_tipo': 'normal',
+                    'preco_origem_detalhe': 'Preço normal',
+                    'desconto_valor': 0,
+                }],
+                'pagamentos': [{'forma_id': forma.pk, 'valor': str(total)}],
+            }
+
+        liberada = self.client.post(
+            endpoint,
+            data=payload('0.94', '17.96'),
+            content_type='application/json',
+        )
+        self.assertEqual(liberada.status_code, 200, liberada.content)
+
+        acima_do_limite = self.client.post(
+            endpoint,
+            data=payload('0.96', '17.94'),
+            content_type='application/json',
+        )
+        self.assertEqual(acima_do_limite.status_code, 403, acima_do_limite.content)
+        self.assertEqual(VendaPDV.objects.count(), 1)
+
+    def test_arredondamento_configurado_libera_apenas_total_inteiro_no_limite(self):
+        self.habilitar_checkout()
+        self.parametros.checkout_arredondamento_maximo = Decimal('1.00')
+        self.parametros.save(update_fields=['checkout_arredondamento_maximo'])
+        caixa = Caixa.objects.create(filial=self.filial, numero=44, descricao='Checkout 44')
+        SessaoPDV.objects.create(
+            filial=self.filial,
+            caixa=caixa,
+            usuario=self.usuario,
+            valor_abertura=Decimal('0'),
+            status='aberto',
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            descricao='Dinheiro arredondamento Checkout',
+            tipo=TipoFormaPagamento.DINHEIRO,
+        )
+        endpoint = reverse('pdv:api_checkout_venda_finalizar')
+
+        def payload(desconto, total):
+            return {
+                'cliente_id': None,
+                'desconto': str(desconto),
+                'acrescimo': 0,
+                'itens': [{
+                    'produto_id': self.produto.pk,
+                    'quantidade': 1,
+                    'valor_unitario': '18.90',
+                    'preco_origem_tipo': 'normal',
+                    'preco_origem_detalhe': 'Preço normal',
+                    'desconto_valor': 0,
+                }],
+                'pagamentos': [{'forma_id': forma.pk, 'valor': str(total)}],
+            }
+
+        arredondada = self.client.post(
+            endpoint,
+            data=payload('0.90', '18.00'),
+            content_type='application/json',
+        )
+        self.assertEqual(arredondada.status_code, 200, arredondada.content)
+
+        nao_arredondada = self.client.post(
+            endpoint,
+            data=payload('1.00', '17.90'),
+            content_type='application/json',
+        )
+        self.assertEqual(nao_arredondada.status_code, 403, nao_arredondada.content)
+        self.assertEqual(VendaPDV.objects.count(), 1)
 
     @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do checkout')
     def test_javascript_renderizado_tem_sintaxe_valida(self):
@@ -484,6 +593,59 @@ assert.equal(checkout.total, 23);
 assert.equal(checkout.totalLiquidoItem(checkout.itens[0]), 25.5);
 assert.equal(checkout.descontoSolicitado, true);
 })().catch((erro) => { console.error(erro); process.exitCode = 1; });
+'''
+
+        resultado = subprocess.run(
+            [shutil.which('node')], input=script, text=True, encoding='utf-8',
+            capture_output=True, timeout=20,
+        )
+
+        self.assertEqual(resultado.returncode, 0, resultado.stdout + resultado.stderr)
+
+    @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do checkout')
+    def test_modal_sincroniza_percentual_valor_e_arredondamento(self):
+        self.habilitar_checkout()
+        resposta = self.client.get(reverse('pdv:checkout'))
+        html = resposta.content.decode('utf-8')
+        script = 'function checkoutVenda()' + html.split(
+            'function checkoutVenda()', 1,
+        )[1].split('</script>', 1)[0]
+        script += r'''
+const assert = require('node:assert/strict');
+global.document = {getElementById: () => ({textContent: '[]'})};
+const checkout = checkoutVenda();
+checkout.$refs = {};
+checkout.$nextTick = (callback) => callback();
+checkout.pedidoCatalogoInicial = null;
+checkout.itens = [checkout.prepararItem({
+  id: 31, descricao: 'Produto', preco: 18.9, quantidade: 1,
+  quantidade_step: 1, quantidade_decimais: 0
+})];
+checkout.configuracaoDescontos = {
+  percentuais: [2, 3, 5], percentual_maximo: 5, arredondamento_maximo: 0
+};
+checkout.solicitarAutorizacaoDesconto();
+checkout.selecionarDescontoRapido(3);
+assert.equal(checkout.descontoModalPercentual, '3,00');
+assert.equal(checkout.descontoModalEntrada, '0,57');
+assert.equal(checkout.descontoModalRequerAutorizacao, false);
+checkout.descontoModalEntrada = '0,50';
+checkout.sincronizarDescontoModalPorValor();
+assert.equal(checkout.descontoModalPercentual, '2,65');
+assert.equal(checkout.descontoModalRequerAutorizacao, false);
+checkout.descontoModalPercentual = '6,00';
+checkout.sincronizarDescontoModalPorPercentual();
+assert.equal(checkout.descontoModalEntrada, '1,13');
+assert.equal(checkout.descontoModalRequerAutorizacao, true);
+checkout.configuracaoDescontos = {
+  percentuais: [], percentual_maximo: 0, arredondamento_maximo: 1
+};
+checkout.descontoModalEntrada = '0,00';
+checkout.sincronizarDescontoModalPorValor();
+checkout.aplicarArredondamentoDesconto();
+assert.equal(checkout.descontoModalEntrada, '0,90');
+assert.equal(checkout.totalComDescontoRascunho, 18);
+assert.equal(checkout.descontoModalRequerAutorizacao, false);
 '''
 
         resultado = subprocess.run(

@@ -422,6 +422,35 @@
       <div class="param-help mt-4">
         No Checkout, a busca por nome aparece para todos. Para cada produto, o operador seleciona um usuário desta filial com a permissão <strong>Aprovar</strong> no módulo PDV e informa a senha dele. A busca por códigos continua livre.
       </div>
+      <div class="mt-5 pt-5" style="border-top:1px solid;" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#2a2a2e;'">
+        <div class="param-card-title">Política de descontos</div>
+        <p class="param-card-sub">Configure até três percentuais rápidos que qualquer operador poderá aplicar sem senha.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+          <div>
+            <label class="param-label">{{ form_params.checkout_desconto_percentual_1.label }} (%)</label>
+            {{ form_params.checkout_desconto_percentual_1 }}
+            {% for e in form_params.checkout_desconto_percentual_1.errors %}<p class="param-erro">{{ e }}</p>{% endfor %}
+          </div>
+          <div>
+            <label class="param-label">{{ form_params.checkout_desconto_percentual_2.label }} (%)</label>
+            {{ form_params.checkout_desconto_percentual_2 }}
+            {% for e in form_params.checkout_desconto_percentual_2.errors %}<p class="param-erro">{{ e }}</p>{% endfor %}
+          </div>
+          <div>
+            <label class="param-label">{{ form_params.checkout_desconto_percentual_3.label }} (%)</label>
+            {{ form_params.checkout_desconto_percentual_3 }}
+            {% for e in form_params.checkout_desconto_percentual_3.errors %}<p class="param-erro">{{ e }}</p>{% endfor %}
+          </div>
+          <div>
+            <label class="param-label">{{ form_params.checkout_arredondamento_maximo.label }} (R$)</label>
+            {{ form_params.checkout_arredondamento_maximo }}
+            {% for e in form_params.checkout_arredondamento_maximo.errors %}<p class="param-erro">{{ e }}</p>{% endfor %}
+          </div>
+        </div>
+        <div class="param-help mt-4">
+          O maior percentual preenchido será o limite sem autorização, inclusive quando o operador digitar um valor em reais. O arredondamento só é liberado sem senha quando reduz o total para um valor inteiro e não ultrapassa o limite em reais. Deixe todos os campos em zero para exigir autorização em qualquer desconto.
+        </div>
+      </div>
     </div>
 
     <div class="param-card">
