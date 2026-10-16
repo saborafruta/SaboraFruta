@@ -97,26 +97,52 @@ def receber_evento(configuracao, payload):
         return 'ignorado'
     agora = timezone.now()
     if dados['from_me']:
-        ConversaWhatsApp.objects.filter(
-            configuracao=configuracao, remote_jid=dados['remote_jid'],
-        ).update(ultima_mensagem_em=agora, updated_at=agora)
+        conversa = (
+            ConversaWhatsApp.objects.filter(
+                configuracao=configuracao,
+                remote_jid=dados['remote_jid'],
+            )
+            .order_by('-ativa', '-ultima_mensagem_em', '-created_at')
+            .first()
+        )
+        if conversa:
+            conversa.ultima_mensagem_em = agora
+            conversa.save(update_fields=['ultima_mensagem_em', 'updated_at'])
         return 'ignorado'
     if not dados['texto'] and dados['tipo'] != 'audio':
         return 'sem_texto'
 
     telefone = somente_digitos(dados['remote_jid'].split('@')[0])
     with transaction.atomic():
-        conversa, criada = ConversaWhatsApp.objects.select_for_update().get_or_create(
-            configuracao=configuracao, remote_jid=dados['remote_jid'],
-            defaults={
-                'filial': configuracao.filial, 'telefone': telefone,
-                'nome_contato': dados['nome'], 'cliente': localizar_cliente(configuracao.filial, telefone),
-            },
+        if dados['id'] and MensagemWhatsApp.objects.filter(
+            conversa__configuracao=configuracao,
+            identificador_externo=dados['id'],
+        ).exists():
+            return 'duplicado'
+        conversa = (
+            ConversaWhatsApp.objects.select_for_update()
+            .filter(
+                configuracao=configuracao,
+                remote_jid=dados['remote_jid'],
+                ativa=True,
+            )
+            .order_by('-ultima_mensagem_em', '-created_at')
+            .first()
         )
-        if not criada and dados['nome'] and not conversa.nome_contato:
+        if conversa and encerrar_se_expirada(conversa, agora=agora):
+            conversa = None
+        criada = conversa is None
+        if criada:
+            conversa = ConversaWhatsApp.objects.create(
+                configuracao=configuracao,
+                filial=configuracao.filial,
+                remote_jid=dados['remote_jid'],
+                telefone=telefone,
+                nome_contato=dados['nome'],
+                cliente=localizar_cliente(configuracao.filial, telefone),
+            )
+        elif dados['nome'] and not conversa.nome_contato:
             conversa.nome_contato = dados['nome']
-        if not criada:
-            encerrar_se_expirada(conversa, agora=agora)
         conversa.ultima_mensagem_em = agora
         conversa.save(update_fields=[
             'nome_contato', 'etapa_crm', 'ultima_mensagem_em', 'updated_at',

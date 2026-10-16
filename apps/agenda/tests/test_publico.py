@@ -167,6 +167,40 @@ class AgendaPublicaTests(DisponibilidadeAgendaTests):
         self.assertContains(response, 'Agendamento confirmado!')
         enviar_notificacao.assert_called_once_with(agendamento, db_alias='default')
 
+    @patch('apps.agenda.views_publico.enviar_notificacao_agendamento')
+    def test_agendamento_concluido_encerra_sessao_do_whatsapp(self, _enviar_notificacao):
+        configuracao = ConfiguracaoWhatsApp.objects.create(
+            filial=self.filial,
+            instancia='ited-sessao-concluida',
+            agente_ativo=True,
+        )
+        conversa = ConversaWhatsApp.objects.create(
+            filial=self.filial,
+            configuracao=configuracao,
+            remote_jid='5584999997788@s.whatsapp.net',
+            telefone='5584999997788',
+            etapa_crm=ConversaWhatsApp.EtapaCRM.AGENDAMENTO_INICIADO,
+        )
+        rastreamento = gerar_token_agendamento(conversa)
+        request = self.anonimo(self.factory.post(f'/agendar/{self.link.token}/', {
+            'profissional': self.profissional.pk,
+            'servico': self.corte.pk,
+            'data': self.data_teste.isoformat(),
+            'horario': '08:00',
+            'nome': 'Cliente WhatsApp',
+            'telefone': '(84) 99999-7788',
+            'origem_whatsapp': rastreamento,
+        }))
+
+        response = AgendaPublicaView().post(request, self.link.token)
+
+        self.assertEqual(response.status_code, 200)
+        conversa.refresh_from_db()
+        self.assertFalse(conversa.ativa)
+        self.assertFalse(conversa.atendimento_humano)
+        self.assertEqual(conversa.etapa, 'encerrada')
+        self.assertEqual(conversa.etapa_crm, ConversaWhatsApp.EtapaCRM.AGENDADO)
+
     def test_horario_duplicado_e_rejeitado_sem_criar_outro_cliente(self):
         dados = {
             'profissional': self.profissional.pk,

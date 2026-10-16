@@ -108,15 +108,23 @@ def _enviar_notificacao_agendamento(agendamento, *, db_alias, lembrete=False):
         lembrete=lembrete,
     )
     remote_jid = f'{telefone}@s.whatsapp.net'
-    conversa, _ = ConversaWhatsApp.objects.using('default').get_or_create(
-        configuracao_id=configuracao.pk,
-        remote_jid=remote_jid,
-        defaults={
-            'filial_id': configuracao.filial_id,
-            'telefone': telefone,
-            'nome_contato': agendamento.pessoa_atendida_nome,
-        },
+    conversa = (
+        ConversaWhatsApp.objects.using('default')
+        .filter(configuracao_id=configuracao.pk, remote_jid=remote_jid)
+        .order_by('-ativa', '-ultima_mensagem_em', '-created_at')
+        .first()
     )
+    if not conversa:
+        conversa = ConversaWhatsApp.objects.using('default').create(
+            configuracao_id=configuracao.pk,
+            filial_id=configuracao.filial_id,
+            remote_jid=remote_jid,
+            telefone=telefone,
+            nome_contato=agendamento.pessoa_atendida_nome,
+            ativa=False,
+            etapa='encerrada',
+            etapa_crm=ConversaWhatsApp.EtapaCRM.AGENDADO,
+        )
     conversa.ultima_mensagem_em = timezone.now()
     if not lembrete:
         conversa.etapa_crm = ConversaWhatsApp.EtapaCRM.AGENDADO

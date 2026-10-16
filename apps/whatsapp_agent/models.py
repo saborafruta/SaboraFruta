@@ -520,7 +520,9 @@ class ConversaWhatsApp(FilialScopedModel):
         ordering = ['-ultima_mensagem_em', '-updated_at']
         constraints = [
             models.UniqueConstraint(
-                fields=['configuracao', 'remote_jid'], name='whatsapp_conversa_remota_unica',
+                fields=['configuracao', 'remote_jid'],
+                condition=models.Q(ativa=True),
+                name='whatsapp_conversa_remota_ativa_unica',
             ),
         ]
 

@@ -58,8 +58,11 @@ def marcar_agendamento_confirmado(token):
     agora = timezone.now()
     conversa.etapa_crm = ConversaWhatsApp.EtapaCRM.AGENDADO
     conversa.agendamento_confirmado_em = agora
-    conversa.ativa = True
+    conversa.ativa = False
+    conversa.atendimento_humano = False
+    conversa.etapa = 'encerrada'
     conversa.save(using='default', update_fields=[
-        'etapa_crm', 'agendamento_confirmado_em', 'ativa', 'updated_at',
+        'etapa_crm', 'agendamento_confirmado_em', 'ativa',
+        'atendimento_humano', 'etapa', 'updated_at',
     ])
     return conversa

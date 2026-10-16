@@ -8,8 +8,9 @@
     <div class="wa-actions">
       <a class="wa-btn secondary" target="_blank" rel="noopener" href="https://wa.me/{{ conversa.telefone }}">Abrir WhatsApp</a>
       <a class="wa-btn secondary" href="{% url 'whatsapp_agent:conversa-list' %}">Voltar</a>
-      {% if conversa.atendimento_humano or not conversa.ativa %}<form method="post" action="{% url 'whatsapp_agent:retomar-agente' conversa.pk %}">{% csrf_token %}<button class="wa-btn" type="submit">{% if conversa.ativa %}Retomar agente{% else %}Reabrir conversa{% endif %}</button></form>{% endif %}
+      {% if conversa.ativa and conversa.atendimento_humano %}<form method="post" action="{% url 'whatsapp_agent:retomar-agente' conversa.pk %}">{% csrf_token %}<button class="wa-btn" type="submit">Retomar agente</button></form>{% endif %}
       {% if conversa.ativa %}<form method="post" action="{% url 'whatsapp_agent:encerrar-conversa' conversa.pk %}" onsubmit="return confirm('Encerrar esta conversa?')">{% csrf_token %}<button class="wa-btn danger" type="submit">Encerrar conversa</button></form>{% endif %}
+      {% if not conversa.ativa %}<span class="wa-status inactive">Sessão encerrada · histórico preservado</span>{% endif %}
     </div>
   </div>
   {% if uso_ia.chamadas %}

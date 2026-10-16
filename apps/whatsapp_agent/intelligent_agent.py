@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from datetime import date, datetime, timedelta
 
 from django.core.exceptions import ValidationError
@@ -133,6 +134,10 @@ consultada pelo sistema depois da sua decisão. Assim que identificar intenção
 consultar_agenda, mesmo que ainda faltem dados. Extraia serviço, dia e período em qualquer ordem e
 preserve os dados que já constam em estado_agenda. Use servico_ids com todos os serviços escolhidos;
 servico_id deve repetir o primeiro por compatibilidade. O sistema oferecerá serviços complementares.
+Preencha serviço, profissional, data, período ou horário somente quando o cliente tiver informado
+esse dado explicitamente na conversa. “Quero agendar” não informa nenhum desses dados. Se o cliente
+perguntar qual data está sendo consultada, responda à pergunta com base em estado_agenda em vez de
+repetir os horários.
 Quando o cliente disser que não quer adicionais ou terminar de escolhê-los, marque
 confirmou_servicos=true. Nunca escreva horários por conta própria: o sistema fará a consulta. Quando
 o cliente escolher um horário oferecido, use agendar. Se houver mais de um profissional e ele não
@@ -319,6 +324,56 @@ def _complementares(negocio, selecionados):
     ][:4]
 
 
+def _intencao_generica_agendamento(texto, negocio):
+    valor = normalizar(texto)
+    intencao = (
+        'agendar' in valor
+        or 'agendamento' in valor
+        or 'marcar horario' in valor
+        or 'marcar um horario' in valor
+    )
+    if not intencao:
+        return False
+    palavras_especificas = {
+        palavra
+        for item in negocio.get('servicos', [])
+        for palavra in normalizar(item['nome']).split()
+        if len(palavra) >= 4
+    }
+    informou_servico = bool(palavras_especificas & set(valor.split()))
+    informou_periodo = any(item in valor.split() for item in ('manha', 'tarde', 'noite'))
+    informou_data_ou_hora = bool(re.search(
+        r'\b(hoje|amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo|\d{1,2}[:h/]\d{0,2})\b',
+        valor,
+    ))
+    return not (informou_servico or informou_periodo or informou_data_ou_hora)
+
+
+def _resposta_pergunta_data(conversa, texto):
+    valor = normalizar(texto)
+    if not any(expressao in valor for expressao in (
+        'que dia', 'qual dia', 'para que dia', 'pra que dia', 'qual data', 'para quando',
+    )):
+        return ''
+    estado = dict((conversa.contexto or {}).get('ia_agenda') or {})
+    if not estado.get('fluxo_ativo'):
+        return ''
+    try:
+        dia = date.fromisoformat(estado.get('data') or '')
+    except (TypeError, ValueError):
+        return 'Ainda não definimos o dia. Para qual data você quer o atendimento?'
+    semana = ('segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado', 'domingo')
+    return f'Estou consultando {semana[dia.weekday()]}, {dia.strftime("%d/%m/%Y")}. Quer manter essa data?'
+
+
+def _rotulo_periodo(periodo):
+    return {
+        'manha': 'pela manhã',
+        'tarde': 'à tarde',
+        'noite': 'à noite',
+    }.get(periodo, '')
+
+
 def _consultar_agenda(conversa, decisao, negocio, filial, alias):
     estado_anterior = dict((conversa.contexto or {}).get('ia_agenda') or {})
     servico_ids = _ids_servicos(decisao, estado_anterior)
@@ -403,7 +458,14 @@ def _consultar_agenda(conversa, decisao, negocio, filial, alias):
         'profissional_id': profissional.pk,
         'horarios_oferecidos': filtrados,
     })
-    return 'Os horários disponíveis são: ' + ', '.join(filtrados[:12]) + '. Qual você prefere?'
+    semana = ('segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado', 'domingo')
+    nomes_servicos = ', '.join(item.descricao for item in servicos)
+    return (
+        f'Para {semana[dia.weekday()]}, {dia.strftime("%d/%m")}, '
+        f'{_rotulo_periodo(periodo)}, os horários disponíveis para {nomes_servicos} são: '
+        + ', '.join(filtrados[:12])
+        + '. Qual você prefere?'
+    )
 
 
 def _formatar_confirmacao(config, agendamento):
@@ -485,13 +547,15 @@ def _agendar(conversa, decisao, negocio, filial, alias):
     contexto['agendamento_id'] = agendamento.pk
     contexto['agendamento_db_alias'] = alias
     conversa.contexto = contexto
-    conversa.etapa = 'agendado_ia'
+    conversa.etapa = 'encerrada'
     conversa.etapa_crm = ConversaWhatsApp.EtapaCRM.AGENDADO
+    conversa.ativa = False
+    conversa.atendimento_humano = False
     conversa.agendamento_confirmado_em = timezone.now()
     conversa.cliente_id = getattr(cliente, 'pk', None) if alias == 'default' else conversa.cliente_id
     conversa.save(update_fields=[
-        'contexto', 'etapa', 'etapa_crm', 'agendamento_confirmado_em',
-        'cliente_id', 'updated_at',
+        'contexto', 'etapa', 'etapa_crm', 'ativa', 'atendimento_humano',
+        'agendamento_confirmado_em', 'cliente_id', 'updated_at',
     ])
     return texto_confirmacao
 
@@ -535,6 +599,18 @@ def processar_com_ia(conversa, texto, mensagem):
         return 'Olá! Como posso ajudar você hoje?'
     _marcar_atendimento_ia(conversa)
     filial, alias, negocio = _catalogo_negocio(conversa)
+    resposta_data = _resposta_pergunta_data(conversa, texto)
+    if resposta_data:
+        return resposta_data
+    if filial and _intencao_generica_agendamento(texto, negocio):
+        return _consultar_agenda(conversa, {
+            'servico_id': None,
+            'servico_ids': [],
+            'confirmou_servicos': False,
+            'profissional_id': None,
+            'data': '',
+            'periodo': '',
+        }, negocio, filial, alias)
     entrada = json.dumps({
         'mensagem_atual': texto,
         'cliente_conhecido': conversa.cliente.nome_display if conversa.cliente_id else '',

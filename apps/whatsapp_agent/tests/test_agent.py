@@ -379,6 +379,7 @@ class AgenteWhatsAppTests(TestCase):
         )
         horarios = processar_com_ia(conversa, segunda.texto, segunda)
         self.assertIn('08:00', horarios)
+        self.assertIn(proxima_segunda.strftime('%d/%m'), horarios)
 
         terceira = MensagemWhatsApp.objects.create(
             conversa=conversa,
@@ -393,6 +394,58 @@ class AgenteWhatsAppTests(TestCase):
             agendamento.fim - agendamento.inicio,
             timedelta(minutes=45),
         )
+        conversa.refresh_from_db()
+        self.assertFalse(conversa.ativa)
+        self.assertEqual(conversa.etapa, 'encerrada')
+        self.assertEqual(conversa.etapa_crm, ConversaWhatsApp.EtapaCRM.AGENDADO)
+
+    @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
+    def test_pedido_generico_de_agendamento_pergunta_periodo_sem_inventar_dados(self, responder):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
+        self.configuracao.save(update_fields=['ia_ativa', 'ia_restringir_horario'])
+        conversa = self.nova_conversa('5584999996699')
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Quero agendar',
+        )
+
+        resposta = processar_com_ia(conversa, mensagem.texto, mensagem)
+
+        self.assertEqual(resposta, 'Qual período você prefere: manhã, tarde ou noite?')
+        responder.assert_not_called()
+        conversa.refresh_from_db()
+        estado = conversa.contexto['ia_agenda']
+        self.assertTrue(estado['fluxo_ativo'])
+        self.assertNotIn('data', estado)
+        self.assertNotIn('servico_id', estado)
+
+    @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
+    def test_pergunta_sobre_data_responde_contexto_sem_repetir_horarios(self, responder):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
+        self.configuracao.save(update_fields=['ia_ativa', 'ia_restringir_horario'])
+        conversa = self.nova_conversa('5584999996600')
+        conversa.contexto = {
+            'ia_agenda': {
+                'fluxo_ativo': True,
+                'data': '2026-10-16',
+                'horarios_oferecidos': ['12:00', '12:15'],
+            },
+        }
+        conversa.save(update_fields=['contexto'])
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Pra que dia é?',
+        )
+
+        resposta = processar_com_ia(conversa, mensagem.texto, mensagem)
+
+        self.assertIn('sexta-feira, 16/10/2026', resposta)
+        self.assertNotIn('12:00', resposta)
+        responder.assert_not_called()
 
     def test_saudacao_retoma_ia_apos_falha_tecnica(self):
         self.configuracao.ia_ativa = True
@@ -496,7 +549,7 @@ class AgenteWhatsAppTests(TestCase):
         mensagem = MensagemWhatsApp.objects.create(
             conversa=conversa,
             direcao=MensagemWhatsApp.Direcao.ENTRADA,
-            texto='Quero agendar',
+            texto='Vocês atendem crianças?',
         )
 
         resposta = processar_com_ia(conversa, mensagem.texto, mensagem)
@@ -653,7 +706,7 @@ class AgenteWhatsAppTests(TestCase):
         self.assertNotIn('/agendar/', resposta)
         self.assertIn('responda *2*', resposta)
 
-    def test_opcao_tres_encerra_e_novo_oi_reabre_conversa(self):
+    def test_opcao_tres_encerra_conversa(self):
         conversa = self.nova_conversa()
 
         resposta = processar_mensagem(conversa, '3')
@@ -663,12 +716,6 @@ class AgenteWhatsAppTests(TestCase):
         self.assertFalse(conversa.ativa)
         self.assertEqual(conversa.etapa, 'encerrada')
         self.assertEqual(conversa.etapa_crm, ConversaWhatsApp.EtapaCRM.NAO_CONVERTIDO)
-
-        nova_resposta = processar_mensagem(conversa, 'oi')
-
-        self.assertIn('*1.* Fazer um agendamento', nova_resposta)
-        conversa.refresh_from_db()
-        self.assertTrue(conversa.ativa)
 
     def test_encerramento_manual_marca_conversa_como_encerrada(self):
         conversa = self.nova_conversa()
@@ -708,7 +755,7 @@ class AgenteWhatsAppTests(TestCase):
         self.assertTrue(recente.ativa)
 
     @patch('apps.whatsapp_agent.webhook.EvolutionClient.enviar_texto')
-    def test_nova_mensagem_reabre_conversa_expirada_com_saudacao(self, enviar_texto):
+    def test_nova_mensagem_cria_nova_sessao_apos_expiracao(self, enviar_texto):
         enviar_texto.return_value = {'key': {'id': 'saida-reaberta'}}
         self.configuracao.encerramento_automatico_ativo = True
         self.configuracao.tempo_inatividade_minutos = 10
@@ -733,8 +780,50 @@ class AgenteWhatsAppTests(TestCase):
         self.assertEqual(receber_evento(self.configuracao, payload), 'enviada')
 
         conversa.refresh_from_db()
-        self.assertTrue(conversa.ativa)
+        nova = ConversaWhatsApp.objects.exclude(pk=conversa.pk).get(
+            telefone='5584999990033',
+        )
+        self.assertFalse(conversa.ativa)
+        self.assertEqual(conversa.etapa, 'encerrada')
+        self.assertTrue(nova.ativa)
+        self.assertEqual(nova.mensagens.filter(direcao='entrada').count(), 1)
+        self.assertEqual(conversa.mensagens.count(), 0)
         self.assertIn(self.configuracao.mensagem_saudacao, enviar_texto.call_args.args[1])
+
+    @patch('apps.whatsapp_agent.webhook.EvolutionClient.enviar_texto')
+    def test_nova_mensagem_cria_nova_sessao_apos_encerramento_manual(self, enviar_texto):
+        enviar_texto.return_value = {'key': {'id': 'saida-nova-sessao'}}
+        antiga = self.nova_conversa('5584999990043')
+        MensagemWhatsApp.objects.create(
+            conversa=antiga,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Mensagem da sessão anterior',
+        )
+        encerrar_conversa(antiga)
+        payload = {
+            'event': 'messages.upsert', 'instance': self.configuracao.instancia,
+            'data': {
+                'key': {
+                    'id': 'entrada-nova-sessao', 'fromMe': False,
+                    'remoteJid': antiga.remote_jid,
+                },
+                'pushName': 'Cliente', 'message': {'conversation': 'Oi'},
+            },
+        }
+
+        self.assertEqual(receber_evento(self.configuracao, payload), 'enviada')
+
+        nova = ConversaWhatsApp.objects.exclude(pk=antiga.pk).get(
+            telefone='5584999990043',
+        )
+        antiga.refresh_from_db()
+        self.assertFalse(antiga.ativa)
+        self.assertEqual(
+            list(antiga.mensagens.values_list('texto', flat=True)),
+            ['Mensagem da sessão anterior'],
+        )
+        self.assertTrue(nova.ativa)
+        self.assertEqual(nova.etapa_crm, ConversaWhatsApp.EtapaCRM.NOVA)
 
     def test_mensagem_enviada_pelo_atendente_renova_atividade(self):
         conversa = self.nova_conversa('5584999990044')
@@ -935,6 +1024,31 @@ class AgenteWhatsAppTests(TestCase):
         conversa = ConversaWhatsApp.objects.get(telefone='5584999992222')
         self.assertEqual(conversa.mensagens.filter(direcao=MensagemWhatsApp.Direcao.ENTRADA).count(), 1)
         self.assertEqual(conversa.mensagens.filter(direcao=MensagemWhatsApp.Direcao.SAIDA).count(), 1)
+        enviar_texto.assert_called_once()
+
+    @patch('apps.whatsapp_agent.webhook.EvolutionClient.enviar_texto')
+    def test_evento_repetido_nao_abre_nova_sessao_apos_encerramento(self, enviar_texto):
+        enviar_texto.return_value = {'key': {'id': 'saida-evento-antigo'}}
+        payload = {
+            'event': 'messages.upsert', 'instance': self.configuracao.instancia,
+            'data': {
+                'key': {
+                    'id': 'entrada-evento-antigo', 'fromMe': False,
+                    'remoteJid': '5584999992233@s.whatsapp.net',
+                },
+                'pushName': 'Ana', 'message': {'conversation': 'Oi'},
+            },
+        }
+        self.assertEqual(receber_evento(self.configuracao, payload), 'enviada')
+        conversa = ConversaWhatsApp.objects.get(telefone='5584999992233')
+        encerrar_conversa(conversa)
+
+        self.assertEqual(receber_evento(self.configuracao, payload), 'duplicado')
+
+        self.assertEqual(
+            ConversaWhatsApp.objects.filter(telefone='5584999992233').count(),
+            1,
+        )
         enviar_texto.assert_called_once()
 
     @patch('apps.whatsapp_agent.webhook.processar_mensagem')

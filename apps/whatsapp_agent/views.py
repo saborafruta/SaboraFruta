@@ -438,6 +438,12 @@ class RetomarAgenteView(PermissaoRequiredMixin, View):
         conversa = get_object_or_404(
             ConversaWhatsApp.objects.for_filial(request.filial_ativa), pk=pk,
         )
+        if not conversa.ativa:
+            messages.info(
+                request,
+                'Esta sessão já foi encerrada. A próxima mensagem do cliente iniciará uma nova conversa.',
+            )
+            return redirect('whatsapp_agent:conversa-detail', pk=pk)
         conversa.atendimento_humano = False
         conversa.etapa = 'inicio'
         conversa.contexto = {}
