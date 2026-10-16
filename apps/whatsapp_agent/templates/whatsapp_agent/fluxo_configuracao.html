@@ -61,7 +61,7 @@
 
     <section class="wa-card wa-section">
       <div class="wa-section-head">
-        <div><h2>Tipo de atendimento</h2><p class="wa-muted">Escolha quais jornadas esta filial oferece. Se usar as duas, o cliente escolhe logo no primeiro menu.</p></div>
+        <div><h2>Tipo de atendimento</h2><p class="wa-muted">Escolha quais jornadas esta filial oferece. A IA entende a intenção do cliente; o menu continua disponível quando ele solicitar.</p></div>
       </div>
       <div class="wa-grid">
         <div class="wa-field full">
@@ -78,7 +78,7 @@
 
     <section class="wa-card wa-section">
       <div class="wa-section-head">
-        <div><h2>Mensagens gerais</h2><p class="wa-muted">São usadas pela primeira interação, transferência, encerramento e respostas inválidas.</p></div>
+        <div><h2>Mensagens gerais</h2><p class="wa-muted">São usadas pelo menu de apoio, transferência, encerramento e respostas inválidas.</p></div>
       </div>
       <div class="wa-grid">
         {% for field in form %}
@@ -163,7 +163,7 @@
     </section>
 
     <div class="wa-section-head wa-flow-title">
-      <div><h2>Menus e ações</h2><p class="wa-muted">O menu principal abre quando o cliente envia “oi” ou “menu”. Você pode criar submenus.</p></div>
+      <div><h2>Menus e ações</h2><p class="wa-muted">Com a IA ativa, o menu principal abre somente quando o cliente envia “menu” ou quando a IA estiver indisponível. Você pode criar submenus.</p></div>
       <button class="wa-btn secondary" type="button" @click="adicionarMenu">+ Novo menu</button>
     </div>
 
