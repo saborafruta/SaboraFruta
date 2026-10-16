@@ -225,7 +225,9 @@ class CheckoutVendaTests(TestCase):
 
         self.assertContains(resposta, 'Autorizar desconto')
         self.assertContains(resposta, 'Exige PDV → Aprovar')
-        self.assertContains(resposta, ':readonly="!descontoLiberado"')
+        self.assertContains(resposta, 'id="checkout-valor-desconto"')
+        self.assertContains(resposta, '@click="solicitarAutorizacaoDesconto()"')
+        self.assertContains(resposta, "x-show=\"!descontoLiberado\"")
         self.assertContains(resposta, reverse('pdv:api_checkout_venda_finalizar'))
         self.assertContains(resposta, "else if(this.modalDocumento)return;")
         self.assertContains(resposta, "this.mensagemDocumento=label+' emitida com sucesso.';")
@@ -388,8 +390,24 @@ checkout.adicionarProduto({
 });
 assert.equal(checkout.itens[0].quantidade, 5);
 checkout.sessao = {id: 1};
-checkout.formasPagamento = [{id: 3, descricao: 'Dinheiro', tipo: 'dinheiro'}];
-checkout.selecionarForma(checkout.formasPagamento[0]);
+checkout.formasPagamento = [
+  {id: 3, descricao: 'Dinheiro', tipo: 'dinheiro'},
+  {id: 4, descricao: 'Pix', tipo: 'pix'},
+  {id: 5, descricao: 'Crédito', tipo: 'cartao_credito', minimo_parcelas: 1}
+];
+checkout.alternarFormaPagamento();
+assert.equal(checkout.formaPagamentoId, 3);
+checkout.alternarFormaPagamento();
+assert.equal(checkout.formaPagamentoId, 4);
+checkout.alternarFormaPagamento();
+assert.equal(checkout.formaPagamentoId, 5);
+checkout.alternarFormaPagamento();
+assert.equal(checkout.formaPagamentoId, 3);
+checkout.carregando = false;
+checkout.atalhoTeclado({key: 'F7', repeat: false, preventDefault: () => {}});
+assert.equal(checkout.formaPagamentoId, 4);
+checkout.atalhoTeclado({key: 'F7', repeat: true, preventDefault: () => {}});
+assert.equal(checkout.formaPagamentoId, 4);
 assert.equal(checkout.valorPagamentoEntrada, '50,00');
 checkout.valorPagamentoEntrada = '60,00';
 checkout.valorPagamentoManual = true;
@@ -432,16 +450,31 @@ assert.equal(checkout.quantidadeEntrada, '1');
         script += r'''
 const assert = require('node:assert/strict');
 global.document = {getElementById: () => ({textContent: '[]'})};
+(async () => {
 const checkout = checkoutVenda();
 checkout.$refs = {};
 checkout.$nextTick = (callback) => callback();
+checkout.pedidoCatalogoInicial = null;
 checkout.quantidadeEntrada = '3';
 checkout.adicionarProduto({
   id: 17, descricao: 'Produto', preco: 10, pode_vender: true,
   quantidade_step: 1, quantidade_decimais: 0
 });
-checkout.itens[0].descontoEntrada = '4,50';
-checkout.descontoEntrada = '2,50';
+checkout.descontoLiberado = true;
+checkout.solicitarDescontoItem(checkout.itens[0], {target: {blur: () => {}}});
+assert.equal(checkout.modalSenhaDesconto, true);
+assert.equal(checkout.itemDescontoPendente.descricao, 'Produto');
+assert.equal(checkout.descontoModalMaximo, 30);
+checkout.descontoModalEntrada = '4,50';
+await checkout.liberarDesconto();
+assert.equal(checkout.modalSenhaDesconto, false);
+assert.equal(checkout.itens[0].descontoEntrada, '4,50');
+checkout.solicitarAutorizacaoDesconto();
+assert.equal(checkout.itemDescontoPendente, null);
+assert.equal(checkout.descontoModalMaximo, 25.5);
+checkout.descontoModalEntrada = '2,50';
+await checkout.liberarDesconto();
+assert.equal(checkout.descontoEntrada, '2,50');
 assert.equal(checkout.quantidadeItens, 3);
 assert.equal(checkout.subtotalBruto, 30);
 assert.equal(checkout.descontoItens, 4.5);
@@ -450,6 +483,7 @@ assert.equal(checkout.desconto, 2.5);
 assert.equal(checkout.total, 23);
 assert.equal(checkout.totalLiquidoItem(checkout.itens[0]), 25.5);
 assert.equal(checkout.descontoSolicitado, true);
+})().catch((erro) => { console.error(erro); process.exitCode = 1; });
 '''
 
         resultado = subprocess.run(

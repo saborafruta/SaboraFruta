@@ -91,6 +91,7 @@
   .co-client-card .co-client-search { margin-top:0; }
   .co-item-discount-wrap { display:flex; align-items:center; justify-content:flex-end; gap:5px; }
   .co-item-discount-input { width:82px; min-height:34px; padding:5px 8px; text-align:right; font-size:13px; }
+  .co-discount-trigger { cursor:pointer; }
   .co-item-discount-prefix { color:var(--co-muted); font-size:11px; }
   .co-item-discount-value { margin-top:3px; color:#fb9b76; font-size:10px; text-align:right; }
   .co-item-old-total { display:block; color:var(--co-muted); font-size:10px; font-weight:500; text-decoration:line-through; }
@@ -114,6 +115,10 @@
   .co-change-card span { color:color-mix(in srgb,var(--co-green) 72%,var(--co-text)); font-size:10px; font-weight:850; }
   .co-change-card strong { color:var(--co-green); font-size:21px; }
   .co-sale-discount { padding-top:2px; }
+  .co-discount-modal-value { margin-top:7px; padding:12px 14px; display:flex; align-items:center; gap:9px; border:1px solid var(--co-border); border-radius:11px; background:var(--co-panel); }
+  .co-discount-modal-value span { color:var(--co-accent); font-size:18px; font-weight:900; }
+  .co-discount-modal-value .co-input { min-height:42px; padding:0; border:0; background:transparent; box-shadow:none; font-size:30px; font-weight:950; }
+  .co-discount-limit { display:block; margin-top:5px; color:var(--co-muted); font-size:10px; }
   .co-summary { gap:8px; padding:11px 12px 12px; }
   .co-summary-breakdown { display:grid; gap:4px; padding-bottom:7px; border-bottom:1px solid var(--co-border); }
   .co-summary-row.discount strong { color:#fb9b76; }
@@ -262,7 +267,7 @@
                     </div>
                   </td>
                   <td class="co-item-discount">
-                    <div class="co-item-discount-wrap"><span class="co-item-discount-prefix">R$</span><input class="co-input co-item-discount-input" type="text" inputmode="decimal" :data-item-discount="item.id" x-model="item.descontoEntrada" :readonly="!descontoLiberado || !!pedidoCatalogoInicial" @focus="solicitarDescontoItem(item,$event)" @input="normalizarDescontoItem(item)" placeholder="0,00" aria-label="Desconto deste item"></div>
+                    <div class="co-item-discount-wrap"><span class="co-item-discount-prefix">R$</span><input class="co-input co-item-discount-input co-discount-trigger" type="text" inputmode="decimal" :data-item-discount="item.id" x-model="item.descontoEntrada" readonly :aria-disabled="!!pedidoCatalogoInicial" @click="solicitarDescontoItem(item,$event)" @keydown.enter.prevent="solicitarDescontoItem(item,$event)" placeholder="0,00" aria-label="Abrir desconto deste item" aria-haspopup="dialog"></div>
                     <div class="co-item-discount-value" x-show="descontoItemValor(item)>0" x-text="'- '+moeda(descontoItemValor(item))" x-cloak></div>
                   </td>
                   <td class="co-item-total" style="text-align:right"><span class="co-item-old-total" x-show="descontoItemValor(item)>0" x-text="moeda(totalBrutoItem(item))" x-cloak></span><strong x-text="moeda(totalLiquidoItem(item))"></strong></td>
@@ -277,7 +282,7 @@
 
     <aside class="co-side">
       <div class="co-card co-summary-card">
-        <div class="co-section-head"><strong>Pagamento (F7)</strong><span class="co-count" x-text="formaSelecionada ? formaSelecionada.descricao : 'Selecione uma forma'"></span></div>
+        <div class="co-section-head"><strong>Pagamento (F7)</strong><span class="co-count" aria-live="polite" x-text="formaSelecionada ? formaSelecionada.descricao : 'Selecione uma forma'"></span></div>
         <div class="co-payment-hero">
           <div class="co-payment-label">Total a pagar</div>
           <div class="co-payment-total"><small>R$</small><span x-text="formatarValorSemCifrao(total)"></span></div>
@@ -315,7 +320,7 @@
           </div>
           <div class="co-field co-sale-discount">
             <label for="checkout-desconto">Desconto sobre a venda (F6)</label>
-            <input id="checkout-desconto" x-ref="desconto" class="co-input" type="text" inputmode="decimal" x-model="descontoEntrada" :readonly="!descontoLiberado" @focus="solicitarAutorizacaoDesconto()" @input="normalizarDesconto()" @keydown.enter.prevent="focarValorPagamento()" placeholder="Autorização necessária">
+            <input id="checkout-desconto" x-ref="desconto" class="co-input co-discount-trigger" type="text" inputmode="decimal" x-model="descontoEntrada" readonly @click="solicitarAutorizacaoDesconto()" @keydown.enter.prevent="solicitarAutorizacaoDesconto()" placeholder="Clique ou pressione F6" aria-haspopup="dialog">
             <small x-text="descontoLiberado ? 'Descontos autorizados para esta venda' : 'Exige PDV → Aprovar'" :style="descontoLiberado ? 'color:var(--co-green)' : ''"></small>
           </div>
           <div class="co-field co-payment-value">
@@ -386,10 +391,15 @@
 
   <div class="co-backdrop" x-show="modalSenhaDesconto" x-cloak @click.self="fecharSenhaDesconto()">
     <form class="co-modal" @submit.prevent="liberarDesconto()" role="dialog" aria-modal="true" aria-labelledby="checkout-senha-desconto-titulo">
-      <h3 id="checkout-senha-desconto-titulo">Autorizar desconto</h3>
-      <p class="co-sub">Selecione um usuário desta filial com a permissão PDV → Aprovar. A liberação vale somente para a venda atual.</p>
+      <h3 id="checkout-senha-desconto-titulo" x-text="itemDescontoPendente ? 'Desconto no produto' : 'Desconto na venda'"></h3>
+      <p class="co-sub" x-text="itemDescontoPendente ? itemDescontoPendente.descricao : 'Aplique um desconto sobre o total da venda.'"></p>
       <div class="co-grid">
         <div class="co-field" style="grid-column:1/-1">
+          <label for="checkout-valor-desconto">Valor do desconto</label>
+          <div class="co-discount-modal-value"><span>R$</span><input id="checkout-valor-desconto" x-ref="valorDescontoModal" class="co-input" type="text" inputmode="decimal" x-model="descontoModalEntrada" autocomplete="off" placeholder="0,00"></div>
+          <small class="co-discount-limit" x-text="'Máximo permitido: '+moeda(descontoModalMaximo)"></small>
+        </div>
+        <div class="co-field" style="grid-column:1/-1" x-show="!descontoLiberado" x-cloak>
           <label for="checkout-usuario-desconto">Usuário autorizador</label>
           <select id="checkout-usuario-desconto" x-ref="usuarioDesconto" class="co-input" x-model="usuarioDescontoId" autocomplete="username">
             <option value="">Selecione o usuário</option>
@@ -398,14 +408,15 @@
             </template>
           </select>
         </div>
-        <div class="co-field" style="grid-column:1/-1">
+        <div class="co-field" style="grid-column:1/-1" x-show="!descontoLiberado" x-cloak>
           <label for="checkout-senha-desconto">Senha</label>
           <input id="checkout-senha-desconto" x-ref="senhaDesconto" class="co-input" type="password" x-model="senhaDesconto" autocomplete="current-password">
         </div>
       </div>
-      <div class="co-alert" x-show="!usuariosAutorizadores.length" x-cloak style="margin-top:12px">Nenhum usuário desta filial possui a permissão PDV → Aprovar.</div>
+      <div class="co-alert co-success" x-show="descontoLiberado" x-cloak style="margin-top:12px">Descontos já autorizados para esta venda.</div>
+      <div class="co-alert" x-show="!descontoLiberado && !usuariosAutorizadores.length" x-cloak style="margin-top:12px">Nenhum usuário desta filial possui a permissão PDV → Aprovar.</div>
       <div class="co-alert" x-show="erroSenhaDesconto" x-text="erroSenhaDesconto" x-cloak style="margin-top:12px"></div>
-      <div class="co-modal-actions"><button type="button" class="co-btn" @click="fecharSenhaDesconto()">Cancelar</button><button type="submit" class="co-btn co-btn-primary" :disabled="liberandoDesconto || !usuariosAutorizadores.length" x-text="liberandoDesconto ? 'Autorizando...' : 'Autorizar desconto'"></button></div>
+      <div class="co-modal-actions"><button type="button" class="co-btn" @click="fecharSenhaDesconto()">Cancelar</button><button type="submit" class="co-btn co-btn-primary" :disabled="liberandoDesconto || (!descontoLiberado && !usuariosAutorizadores.length)" x-text="liberandoDesconto ? 'Autorizando e aplicando...' : (descontoLiberado ? 'Aplicar desconto' : 'Autorizar desconto')"></button></div>
     </form>
   </div>
 
@@ -467,7 +478,7 @@ function checkoutVenda() {
     pedidoCatalogoInicial:JSON.parse(document.getElementById('checkout-pedido-catalogo').textContent), acrescimoInicial:0,
     busca:'', quantidadeEntrada:'1', buscarPorNome:false, buscando:false, resultados:[], indiceProduto:-1, erroBusca:'', itens:[],
     buscaNomeLiberada:false, modalSenhaBuscaNome:false, usuarioAutorizadorId:'', senhaBuscaNome:'', erroSenhaBuscaNome:'', liberandoBuscaNome:false,
-    descontoLiberado:false, modalSenhaDesconto:false, usuarioDescontoId:'', senhaDesconto:'', erroSenhaDesconto:'', liberandoDesconto:false, itemDescontoPendenteId:null,
+    descontoLiberado:false, modalSenhaDesconto:false, descontoModalEntrada:'', usuarioDescontoId:'', senhaDesconto:'', erroSenhaDesconto:'', liberandoDesconto:false, itemDescontoPendenteId:null,
     formasPagamento:[], formaPagamentoId:null, bandeiraPagamento:'', parcelasPagamento:1, cliente:null, buscaCliente:'', clientes:[], indiceCliente:-1,
     descontoEntrada:'', valorPagamentoEntrada:'', valorPagamentoManual:false, mensagem:'', sucesso:false, finalizando:false,
     modalCliente:false, novoCliente:{razao_social:'',cpf_cnpj:'',celular:'',email:'',tipo_pessoa:'F'}, erroCliente:'', salvandoCliente:false,
@@ -509,6 +520,8 @@ function checkoutVenda() {
     get descontoItens(){ return this.arredondarMoeda(this.itens.reduce((s,i)=>s+this.descontoItemValor(i),0)); },
     get subtotal(){ return this.arredondarMoeda(this.subtotalBruto-this.descontoItens); },
     get desconto(){ return this.arredondarMoeda(Math.min(this.subtotal,Math.max(0,this.numero(this.descontoEntrada)))); },
+    get itemDescontoPendente(){ return this.itemDescontoPendenteId===null ? null : this.itens.find(item=>String(item.id)===String(this.itemDescontoPendenteId))||null; },
+    get descontoModalMaximo(){ return this.itemDescontoPendente ? this.totalBrutoItem(this.itemDescontoPendente) : this.subtotal; },
     get descontoSolicitado(){ return this.desconto>0 || this.descontoItens>0; },
     get total(){ return Math.max(0,this.arredondarMoeda(this.subtotal-this.desconto+Math.max(0,Number(this.acrescimoInicial)||0))); },
     get quantidadeItens(){ return this.itens.reduce((s,i)=>s+Number(i.quantidade),0); },
@@ -556,7 +569,7 @@ function checkoutVenda() {
       else if(tecla==='F3'){ evento.preventDefault(); this.focarQuantidade(); }
       else if(tecla==='F4'){ evento.preventDefault(); evento.shiftKey ? this.abrirCadastroCliente() : this.focarCliente(); }
       else if(tecla==='F6'){ evento.preventDefault(); this.solicitarAutorizacaoDesconto(); }
-      else if(tecla==='F7'){ evento.preventDefault(); this.focarPagamento(); }
+      else if(tecla==='F7'){ evento.preventDefault(); if(!evento.repeat)this.alternarFormaPagamento(); }
       else if(tecla==='F8'){ evento.preventDefault(); this.focarValorPagamento(); }
       else if(tecla==='F10'){ evento.preventDefault(); this.solicitarFinalizacao(); }
     },
@@ -624,26 +637,33 @@ function checkoutVenda() {
     async encerrarBuscaPorNome(){
       try{await fetch('{% url "pdv:api_checkout_encerrar_busca_nome" %}',{method:'POST',headers:{'X-CSRFToken':this.csrf()}});}catch(e){}
     },
-    solicitarAutorizacaoDesconto(){
-      if(this.descontoLiberado){this.focar('desconto');return;}
-      this.itemDescontoPendenteId=null;
-      this.modalSenhaDesconto=true;this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto='';this.focar('usuarioDesconto');
-    },
+    solicitarAutorizacaoDesconto(){ this.abrirModalDesconto(); },
     solicitarDescontoItem(item,evento){
       if(this.pedidoCatalogoInicial){evento?.target?.blur();this.mensagem='O desconto dos itens de um pedido do catálogo deve ser alterado no próprio pedido.';return;}
-      if(this.descontoLiberado){evento?.target?.select();return;}
-      evento?.target?.blur();this.itemDescontoPendenteId=item.id;this.modalSenhaDesconto=true;this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto='';this.focar('usuarioDesconto');
+      this.abrirModalDesconto(item,evento);
     },
-    focarDescontoItem(id){this.$nextTick(()=>{const campo=document.querySelector('[data-item-discount="'+id+'"]');if(campo){campo.focus();campo.select();}});},
-    fecharSenhaDesconto(){this.modalSenhaDesconto=false;this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto='';this.itemDescontoPendenteId=null;this.focarProduto();},
+    abrirModalDesconto(item=null,evento=null){
+      evento?.target?.blur(); this.itemDescontoPendenteId=item?.id??null;
+      this.descontoModalEntrada=item ? item.descontoEntrada : this.descontoEntrada;
+      this.modalSenhaDesconto=true;this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto='';this.focar('valorDescontoModal');
+    },
+    fecharSenhaDesconto(){this.modalSenhaDesconto=false;this.descontoModalEntrada='';this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto='';this.itemDescontoPendenteId=null;this.focarProduto();},
     async liberarDesconto(){
-      if(!this.usuarioDescontoId){this.erroSenhaDesconto='Selecione o usuário autorizador.';this.focar('usuarioDesconto');return;}
-      if(!this.senhaDesconto){this.erroSenhaDesconto='Informe a senha do usuário autorizador.';this.focar('senhaDesconto');return;}
+      const valor=this.numero(this.descontoModalEntrada);
+      if(valor<0){this.erroSenhaDesconto='Informe um desconto igual ou maior que zero.';this.focar('valorDescontoModal');return;}
+      if(valor>this.descontoModalMaximo){this.erroSenhaDesconto='O desconto máximo para este lançamento é '+this.moeda(this.descontoModalMaximo)+'.';this.focar('valorDescontoModal');return;}
+      if(valor>0 && !this.descontoLiberado && !this.usuarioDescontoId){this.erroSenhaDesconto='Selecione o usuário autorizador.';this.focar('usuarioDesconto');return;}
+      if(valor>0 && !this.descontoLiberado && !this.senhaDesconto){this.erroSenhaDesconto='Informe a senha do usuário autorizador.';this.focar('senhaDesconto');return;}
       this.liberandoDesconto=true;this.erroSenhaDesconto='';
       try{
-        const r=await fetch('{% url "pdv:api_checkout_liberar_desconto" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({usuario_id:this.usuarioDescontoId,senha:this.senhaDesconto})});
-        const d=await r.json();if(!r.ok)throw new Error(d.erro||'Não foi possível autorizar o desconto.');
-        const itemPendente=this.itemDescontoPendenteId;this.descontoLiberado=true;this.modalSenhaDesconto=false;this.usuarioDescontoId='';this.senhaDesconto='';this.itemDescontoPendenteId=null;if(itemPendente!==null)this.focarDescontoItem(itemPendente);else this.focar('desconto');
+        if(valor>0 && !this.descontoLiberado){
+          const r=await fetch('{% url "pdv:api_checkout_liberar_desconto" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({usuario_id:this.usuarioDescontoId,senha:this.senhaDesconto})});
+          const d=await r.json();if(!r.ok)throw new Error(d.erro||'Não foi possível autorizar o desconto.');this.descontoLiberado=true;
+        }
+        const item=this.itemDescontoPendente;
+        if(item){item.descontoEntrada=this.formatarNumeroInput(valor);this.normalizarDescontoItem(item);}
+        else{this.descontoEntrada=this.formatarNumeroInput(valor);this.normalizarDesconto();}
+        this.fecharSenhaDesconto();
       }catch(e){this.erroSenhaDesconto=e.message;this.senhaDesconto='';this.focar('senhaDesconto');}
       finally{this.liberandoDesconto=false;}
     },
@@ -679,6 +699,12 @@ function checkoutVenda() {
       this.quantidadeEntrada='1'; this.busca=''; this.resultados=[]; this.indiceProduto=-1; this.erroBusca=''; this.mensagem=''; this.sincronizarValorPagamento(); this.focarProduto();
     },
     selecionarForma(forma){ this.formaPagamentoId=forma.id; this.bandeiraPagamento=''; this.parcelasPagamento=Math.max(1,Number(forma.minimo_parcelas||1)); this.sincronizarValorPagamento(true); },
+    alternarFormaPagamento(){
+      if(!this.formasPagamento.length){ this.mensagem='Nenhuma forma de pagamento disponível.'; this.focarPagamento(); return; }
+      const indiceAtual=this.formasPagamento.findIndex(forma=>String(forma.id)===String(this.formaPagamentoId));
+      const proximoIndice=indiceAtual<0 ? 0 : (indiceAtual+1)%this.formasPagamento.length;
+      this.selecionarForma(this.formasPagamento[proximoIndice]); this.mensagem=''; this.focarPagamento();
+    },
     selecionarFormaPorId(){ const forma=this.formaSelecionada; if(forma)this.selecionarForma(forma); },
     alterarQuantidade(item,delta){ this.definirQuantidade(item,Number(item.quantidade)+Number(delta)); },
     definirQuantidade(item,valor){ const min=Number(item.quantidade_step||1); const n=Math.max(min,Number(valor)||min); item.quantidade=Number(n.toFixed(item.quantidade_decimais||0)); if(this.numero(item.descontoEntrada)>this.totalBrutoItem(item))item.descontoEntrada=this.formatarNumeroInput(this.totalBrutoItem(item)); this.sincronizarValorPagamento(); },
@@ -722,7 +748,15 @@ function checkoutVenda() {
       try{
         const r=await fetch('{% url "pdv:api_checkout_venda_finalizar" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify(payload)});
         const d=await r.json();
-        if(!r.ok){if(r.status===403 && this.descontoSolicitado){this.descontoLiberado=false;this.modalSenhaDesconto=true;this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto=d.erro||'Autorize o desconto novamente.';this.focar('usuarioDesconto');}throw new Error(d.erro||'Não foi possível finalizar a venda.');}
+        if(!r.ok){
+          if(r.status===403 && this.descontoSolicitado){
+            this.descontoLiberado=false;
+            const itemComDesconto=this.itens.find(item=>this.descontoItemValor(item)>0)||null;
+            this.abrirModalDesconto(this.desconto>0?null:itemComDesconto);
+            this.erroSenhaDesconto=d.erro||'Autorize o desconto novamente.';
+          }
+          throw new Error(d.erro||'Não foi possível finalizar a venda.');
+        }
         this.sucesso=true; this.mensagem='Venda #'+String(d.numero_venda).padStart(6,'0')+' finalizada com sucesso.';
         this.vendaFinalizada={id:d.venda_id||d.id||null,numero:d.numero_venda};
         this.itens=[]; this.quantidadeEntrada='1'; this.descontoEntrada=''; this.descontoLiberado=false; this.valorPagamentoEntrada=''; this.valorPagamentoManual=false;
