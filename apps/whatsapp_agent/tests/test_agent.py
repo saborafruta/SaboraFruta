@@ -595,17 +595,14 @@ class AgenteWhatsAppTests(TestCase):
         responder.side_effect = [
             decisao('abrir_catalogo'),
             decisao(nome_cliente='Diego Cliente'),
-            decisao(confirmou_nome=True),
             decisao(itens_pedido=[{
                 'produto_id': produto.pk, 'quantidade': 2, 'operacao': 'adicionar',
             }]),
-            decisao(avancar_pedido=True),
             decisao(modalidade='entrega'),
             decisao(cep='59000000'),
             decisao(numero_endereco='100'),
             decisao(forma_pagamento='pix'),
             decisao(sem_observacao=True),
-            decisao('confirmar_pedido', confirmou_pedido=True),
         ]
         conversa = self.nova_conversa('5584999991212')
 
@@ -641,6 +638,90 @@ class AgenteWhatsAppTests(TestCase):
         conversa.refresh_from_db()
         self.assertFalse(conversa.ativa)
         self.assertEqual(conversa.etapa, 'encerrada')
+
+    @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
+    def test_confirmacoes_naturais_avancam_o_carrinho_sem_depender_da_ia(self, responder):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
+        self.configuracao.save(update_fields=['ia_ativa', 'ia_restringir_horario'])
+        produto = Produto.objects.create(
+            filial=self.filial, unidade_medida=self.servico.unidade_medida,
+            descricao='Polpa de manga 100g', ncm='00000000',
+            tipo_produto=Produto.TipoProduto.UNITARIO,
+            exibir_catalogo=True, preco_venda=Decimal('6.00'),
+        )
+        ProdutoFilial.objects.create(produto=produto, filial=self.filial)
+        confirmacoes = (
+            'Continua', 'Continuar', 'Vai ser só os dois itens mesmo.',
+            'Está certo', 'Isso mesmo', 'Pode seguir', 'Confirmo',
+            'Não quero adicionar mais nada', 'Não', 'Fechou', 'Pode ir',
+        )
+
+        for indice, texto in enumerate(confirmacoes):
+            with self.subTest(texto=texto):
+                conversa = self.nova_conversa(f'558499998{indice:04d}')
+                conversa.contexto = {
+                    'ia_pedido': {
+                        'fluxo_ativo': True,
+                        'nome_cliente': 'Ana Cliente',
+                        'nome_confirmado': True,
+                        'itens': {str(produto.pk): 2},
+                        'itens_confirmados': False,
+                    },
+                }
+                conversa.etapa = 'ia_pedido'
+                conversa.save(update_fields=['contexto', 'etapa'])
+                mensagem = MensagemWhatsApp.objects.create(
+                    conversa=conversa,
+                    direcao=MensagemWhatsApp.Direcao.ENTRADA,
+                    texto=texto,
+                )
+
+                resposta = processar_com_ia(conversa, texto, mensagem)
+
+                self.assertIn('Como deseja receber', resposta)
+                conversa.refresh_from_db()
+                self.assertTrue(conversa.contexto['ia_pedido']['itens_confirmados'])
+
+        responder.assert_not_called()
+
+    @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
+    def test_confirmacao_natural_finaliza_e_cria_o_pedido(self, responder):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
+        self.configuracao.save(update_fields=['ia_ativa', 'ia_restringir_horario'])
+        produto = Produto.objects.create(
+            filial=self.filial, unidade_medida=self.servico.unidade_medida,
+            descricao='Polpa de caju 100g', ncm='00000000',
+            tipo_produto=Produto.TipoProduto.UNITARIO,
+            exibir_catalogo=True, preco_venda=Decimal('7.00'),
+        )
+        ProdutoFilial.objects.create(produto=produto, filial=self.filial)
+        conversa = self.nova_conversa('5584999971212')
+        conversa.contexto = {
+            'ia_pedido': {
+                'fluxo_ativo': True,
+                'nome_cliente': 'Ana Cliente', 'nome_confirmado': True,
+                'itens': {str(produto.pk): 2}, 'itens_confirmados': True,
+                'modalidade': 'retirada', 'forma_pagamento': 'pix',
+                'observacao': '', 'observacao_respondida': True,
+                'aguardando_confirmacao': True,
+            },
+        }
+        conversa.etapa = 'ia_pedido'
+        conversa.save(update_fields=['contexto', 'etapa'])
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa, direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Está tudo certo, pode finalizar.',
+        )
+
+        resposta = processar_com_ia(conversa, mensagem.texto, mensagem)
+
+        self.assertIn('Polpa de caju 100g', resposta)
+        pedido = PedidoCatalogo.objects.get()
+        self.assertEqual(pedido.status, PedidoCatalogo.Status.AGUARDANDO_LOJA)
+        self.assertEqual(pedido.total, Decimal('14.00'))
+        responder.assert_not_called()
 
     @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
     def test_ia_inicia_agendamento_sem_enviar_link(self, responder):

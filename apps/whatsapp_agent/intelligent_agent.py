@@ -1042,6 +1042,68 @@ def _cancelar_pedido_ia(conversa):
     return 'Tudo bem, cancelei esse pedido. Posso ajudar com outra coisa?'
 
 
+def _confirmacao_natural_pedido(texto, *, aceitar_nao=False):
+    """Reconhece confirmações comuns sem depender da decisão probabilística da IA."""
+    valor = re.sub(r'[^a-z0-9 ]+', ' ', normalizar(texto))
+    valor = ' '.join(valor.split())
+    if not valor:
+        return False
+
+    confirmacoes_sem_mais_itens = (
+        'nao quero mais nada', 'nao precisa adicionar mais',
+        'nao vou adicionar mais', 'nao quero adicionar mais',
+        'nao precisa de mais nada', 'sem mais itens',
+        'vai ser so isso', 'vai ser so esses', 'vai ser so estes',
+        'so os dois itens', 'somente os dois itens',
+    )
+    if any(frase in valor for frase in confirmacoes_sem_mais_itens):
+        return True
+    if aceitar_nao and valor in {'nao', 'nao vou querer mais', 'nao quero mais'}:
+        return True
+    if 'nao' in valor.split():
+        return False
+
+    pedidos_de_alteracao = (
+        'nao esta certo', 'nao ta certo', 'esta errado', 'ta errado',
+        'quero alterar', 'quero corrigir', 'quero trocar',
+        'adicionar', 'acrescentar', 'incluir mais', 'remover',
+        'retirar um item', 'tirar um item', 'mudar a quantidade',
+    )
+    if any(frase in valor for frase in pedidos_de_alteracao):
+        return False
+    if re.search(r'\b(adicion|acrescent|inclu|remov|retir|tir|troc|alter|mud|corrig)\w*', valor):
+        return False
+
+    confirmacoes = (
+        'sim', 'ok', 'okay', 'certo', 'correto', 'confirmo', 'confirmado',
+        'isso', 'isso mesmo', 'esta certo', 'ta certo', 'tudo certo',
+        'esta tudo certo', 'ta tudo certo',
+        'pode continuar', 'pode seguir', 'pode prosseguir', 'pode avancar',
+        'pode fechar', 'fechar pedido', 'finalizar', 'finaliza', 'concluir',
+        'prosseguir', 'avancar', 'pronto', 'beleza', 'so isso',
+        'somente isso', 'esses mesmos', 'estes mesmos', 'pode ser',
+        'pode', 'pode ir', 'pode confirmar', 'pode concluir', 'segue',
+        'fechou', 'perfeito', 'combinado', 'de acordo', 'aprovado',
+        'manda ver', 'e isso', 'e isso ai', 'vai ser isso mesmo',
+        'so esses', 'so estes', 'sao so esses', 'sao so estes',
+    )
+    if valor.startswith('continu'):
+        return True
+    return valor in confirmacoes or any(
+        valor.startswith(f'{confirmacao} ') for confirmacao in confirmacoes
+    )
+
+
+def _decisao_confirmacao_pedido(estado):
+    if estado.get('nome_cliente') and not estado.get('nome_confirmado'):
+        return {'acao': 'gerenciar_pedido', 'confirmou_nome': True}
+    if estado.get('aguardando_confirmacao'):
+        return {'acao': 'confirmar_pedido', 'confirmou_pedido': True}
+    if estado.get('itens') and not estado.get('itens_confirmados'):
+        return {'acao': 'gerenciar_pedido', 'avancar_pedido': True}
+    return None
+
+
 def _consultar_agenda(conversa, decisao, negocio, filial, alias):
     estado_anterior = dict((conversa.contexto or {}).get('ia_agenda') or {})
     servico_ids = _ids_servicos(decisao, estado_anterior)
@@ -1302,6 +1364,20 @@ def processar_com_ia(conversa, texto, mensagem):
         return 'Olá! Como posso ajudar você hoje?'
     _marcar_atendimento_ia(conversa)
     filial, alias, negocio = _catalogo_negocio(conversa)
+    estado_pedido = dict((conversa.contexto or {}).get('ia_pedido') or {})
+    confirmando_carrinho = bool(
+        estado_pedido.get('itens') and not estado_pedido.get('itens_confirmados')
+    )
+    if (
+        filial
+        and estado_pedido
+        and _confirmacao_natural_pedido(texto, aceitar_nao=confirmando_carrinho)
+    ):
+        decisao_confirmacao = _decisao_confirmacao_pedido(estado_pedido)
+        if decisao_confirmacao:
+            return _gerenciar_pedido(
+                conversa, decisao_confirmacao, texto, negocio, filial, alias,
+            )
     if filial and _pedido_datas_disponiveis(texto):
         return _consultar_datas_disponiveis(conversa, {
             'servico_id': None,
