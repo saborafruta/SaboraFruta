@@ -39,11 +39,6 @@
 
       <div x-show="iaAtiva" x-cloak class="wa-ai-settings">
       <div class="wa-system-note"><strong>Decisões protegidas pelo sistema</strong><span>A IA entende a intenção, mas não inventa disponibilidade, preço ou status. Confirmações usam sempre os dados reais do iTED.</span></div>
-      <div class="wa-usage-summary" aria-label="Resumo de uso da IA neste mês">
-        <div><span>Tokens utilizados no mês</span><strong>{{ uso_ia.tokens_total|default:0 }}</strong></div>
-        <div><span>Chamadas da IA</span><strong>{{ uso_ia.chamadas|default:0 }}</strong></div>
-        <div class="cost"><span>Custo estimado</span><strong>R$ {{ uso_ia.custo_brl|default:0|floatformat:4 }}</strong></div>
-      </div>
       <div class="wa-grid">
         <div class="wa-field full wa-checks"><label for="{{ form.ia_restringir_horario.id_for_label }}">{{ form.ia_restringir_horario }} {{ form.ia_restringir_horario.label }}</label><div class="wa-help">Desmarcado: a IA atende 24 horas. Marcado: fora da janela abaixo, o cliente recebe o aviso e a conversa vai para atendimento humano no CRM.</div></div>
         <div class="wa-field"><label for="{{ form.ia_horario_inicio.id_for_label }}">{{ form.ia_horario_inicio.label }}</label>{{ form.ia_horario_inicio }}{% if form.ia_horario_inicio.errors %}<div class="wa-errors">{{ form.ia_horario_inicio.errors|first }}</div>{% endif %}</div>
@@ -58,11 +53,14 @@
         <div class="wa-field full"><label for="{{ form.ia_instrucoes.id_for_label }}">{{ form.ia_instrucoes.label }}</label>{{ form.ia_instrucoes }}<div class="wa-help">Ex.: tom de voz, regras da empresa e quando transferir para uma pessoa.</div></div>
       </div>
       <details class="wa-disclosure">
-        <summary>Detalhamento do consumo <span>Ver detalhes</span></summary>
+        <summary>Uso e custo estimado da IA <span>Ver detalhes</span></summary>
         <div class="wa-usage-grid">
+          <div class="wa-metric"><span>Chamadas no mês</span><strong>{{ uso_ia.chamadas|default:0 }}</strong></div>
           <div class="wa-metric"><span>Tokens de entrada</span><strong>{{ uso_ia.tokens_entrada|default:0 }}</strong></div>
           <div class="wa-metric"><span>Tokens de saída</span><strong>{{ uso_ia.tokens_saida|default:0 }}</strong></div>
+          <div class="wa-metric"><span>Tokens totais</span><strong>{{ uso_ia.tokens_total|default:0 }}</strong></div>
           <div class="wa-metric"><span>Áudio transcrito</span><strong>{{ uso_ia.segundos_audio|default:0|floatformat:0 }} s</strong></div>
+          <div class="wa-metric cost"><span>Custo estimado</span><strong>R$ {{ uso_ia.custo_brl|default:0|floatformat:4 }}</strong></div>
         </div>
         <div class="wa-help">Valores estimados por tokens e pela cotação configurada. A provedora cobra pelo uso da IA, não por agendamento concluído.</div>
       </details>

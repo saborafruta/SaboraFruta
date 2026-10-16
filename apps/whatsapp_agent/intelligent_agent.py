@@ -15,6 +15,7 @@ from .agent import (
     _destino_agenda,
     _link_agendamento,
     _link_catalogo,
+    normalizar,
 )
 from .ai_service import IAWhatsAppError, OpenAIWhatsAppClient
 from .models import ConversaWhatsApp
@@ -41,6 +42,11 @@ SCHEMA_DECISAO = {
         },
         'mensagem': {'type': 'string'},
         'servico_id': {'type': ['integer', 'null']},
+        'servico_ids': {
+            'type': 'array',
+            'items': {'type': 'integer'},
+        },
+        'confirmou_servicos': {'type': 'boolean'},
         'profissional_id': {'type': ['integer', 'null']},
         'data': {'type': 'string'},
         'periodo': {'type': 'string', 'enum': ['', 'manha', 'tarde', 'noite']},
@@ -48,8 +54,8 @@ SCHEMA_DECISAO = {
         'nome_cliente': {'type': 'string'},
     },
     'required': [
-        'acao', 'mensagem', 'servico_id', 'profissional_id', 'data',
-        'periodo', 'horario', 'nome_cliente',
+        'acao', 'mensagem', 'servico_id', 'servico_ids', 'confirmou_servicos',
+        'profissional_id', 'data', 'periodo', 'horario', 'nome_cliente',
     ],
 }
 
@@ -123,10 +129,15 @@ perguntas abertas e respostas curtas ou numéricas. Se a pessoa apenas cumprimen
 e pergunte naturalmente como pode ajudar, sem exibir um menu numerado.
 Você atende agenda e/ou catálogo conforme o modo: {config.modo_atendimento}.
 Nunca invente serviço, produto, preço, profissional, data ou horário. A disponibilidade real será
-consultada pelo sistema depois da sua decisão. Se o cliente quiser agendar e já informou serviço e
-dia, use consultar_agenda. Quando ele escolher um horário oferecido, use agendar. Se houver mais de
-um profissional e ele não escolher, deixe profissional_id nulo. Se faltar o nome, ainda use agendar:
-o sistema fará a pergunta. Para pedidos, dúvidas de produtos ou intenção de compra, use
+consultada pelo sistema depois da sua decisão. Assim que identificar intenção de agendamento, use
+consultar_agenda, mesmo que ainda faltem dados. Extraia serviço, dia e período em qualquer ordem e
+preserve os dados que já constam em estado_agenda. Use servico_ids com todos os serviços escolhidos;
+servico_id deve repetir o primeiro por compatibilidade. O sistema oferecerá serviços complementares.
+Quando o cliente disser que não quer adicionais ou terminar de escolhê-los, marque
+confirmou_servicos=true. Nunca escreva horários por conta própria: o sistema fará a consulta. Quando
+o cliente escolher um horário oferecido, use agendar. Se houver mais de um profissional e ele não
+escolher, deixe profissional_id nulo. Se faltar o nome, ainda use agendar: o sistema fará a pergunta.
+Para pedidos, dúvidas de produtos ou intenção de compra, use
 abrir_catalogo; o pedido e o pagamento continuam no link seguro. Use atendente quando a pessoa pedir
 um humano e encerrar quando pedir para finalizar. Se a pessoa pedir menu ou opções, use
 mostrar_menu e explique naturalmente o que você consegue fazer, sem criar um menu numerado.
@@ -152,8 +163,11 @@ def _mensagem_fora_horario(conversa):
     conversa.atendimento_humano = True
     conversa.etapa = 'aguardando_atendimento_humano'
     conversa.etapa_crm = ConversaWhatsApp.EtapaCRM.ATENDIMENTO_HUMANO
+    contexto = dict(conversa.contexto or {})
+    contexto['ia_encaminhamento'] = 'fora_horario'
+    conversa.contexto = contexto
     conversa.save(update_fields=[
-        'ativa', 'atendimento_humano', 'etapa', 'etapa_crm', 'updated_at',
+        'ativa', 'atendimento_humano', 'etapa', 'etapa_crm', 'contexto', 'updated_at',
     ])
     try:
         return config.ia_mensagem_fora_horario.format(
@@ -201,8 +215,11 @@ def _encaminhar_erro_ia(conversa):
     conversa.atendimento_humano = True
     conversa.etapa = 'aguardando_atendimento_humano'
     conversa.etapa_crm = ConversaWhatsApp.EtapaCRM.ATENDIMENTO_HUMANO
+    contexto = dict(conversa.contexto or {})
+    contexto['ia_encaminhamento'] = 'erro'
+    conversa.contexto = contexto
     conversa.save(update_fields=[
-        'ativa', 'atendimento_humano', 'etapa', 'etapa_crm', 'updated_at',
+        'ativa', 'atendimento_humano', 'etapa', 'etapa_crm', 'contexto', 'updated_at',
     ])
     return config.ia_mensagem_erro.strip() or (
         'Estou com uma instabilidade no atendimento automático agora. '
@@ -240,36 +257,114 @@ def _salvar_contexto_agenda(conversa, dados):
     return atual
 
 
-def _servico_e_profissional(filial, estado):
-    servico = Produto.objects.for_filial(filial).filter(
-        pk=estado.get('servico_id'), ativo=True, agendavel=True,
-    ).first()
-    if not servico:
-        return None, None
-    profissionais = ProfissionalAgenda.objects.filter(
-        filial=filial,
-        ativo=True,
-        servicos_vinculados__servico=servico,
-        servicos_vinculados__ativo=True,
-    ).select_related('funcionario').distinct()
+def _ids_servicos(decisao, estado=None):
+    ids = []
+    for valor in decisao.get('servico_ids') or []:
+        if valor and valor not in ids:
+            ids.append(valor)
+    servico_id = decisao.get('servico_id')
+    if servico_id and servico_id not in ids:
+        ids.insert(0, servico_id)
+    if not ids and estado:
+        ids = list(estado.get('servico_ids') or [])
+        if not ids and estado.get('servico_id'):
+            ids = [estado['servico_id']]
+    return ids
+
+
+def _servicos_e_profissional(filial, estado):
+    ids = _ids_servicos({}, estado)
+    encontrados = {
+        item.pk: item
+        for item in Produto.objects.for_filial(filial).filter(
+            pk__in=ids, ativo=True, agendavel=True,
+        )
+    }
+    servicos = [encontrados[item_id] for item_id in ids if item_id in encontrados]
+    if not servicos or len(servicos) != len(ids):
+        return [], None, ProfissionalAgenda.objects.none()
+    profissionais = ProfissionalAgenda.objects.filter(filial=filial, ativo=True)
+    for servico in servicos:
+        profissionais = profissionais.filter(
+            servicos_vinculados__servico=servico,
+            servicos_vinculados__ativo=True,
+        )
+    profissionais = profissionais.select_related('funcionario').distinct()
     profissional = profissionais.filter(pk=estado.get('profissional_id')).first()
     if not profissional and profissionais.count() == 1:
         profissional = profissionais.first()
-    return servico, profissional
+    return servicos, profissional, profissionais
+
+
+def _complementares(negocio, selecionados):
+    selecionados = set(selecionados)
+    profissionais_compativeis = None
+    for item in negocio['servicos']:
+        if item['id'] not in selecionados:
+            continue
+        ids = {profissional['id'] for profissional in item['profissionais']}
+        profissionais_compativeis = (
+            ids if profissionais_compativeis is None
+            else profissionais_compativeis & ids
+        )
+    return [
+        item for item in negocio['servicos']
+        if item['id'] not in selecionados
+        and (
+            profissionais_compativeis is None
+            or profissionais_compativeis & {
+                profissional['id'] for profissional in item['profissionais']
+            }
+        )
+    ][:4]
 
 
 def _consultar_agenda(conversa, decisao, negocio, filial, alias):
+    estado_anterior = dict((conversa.contexto or {}).get('ia_agenda') or {})
+    servico_ids = _ids_servicos(decisao, estado_anterior)
+    if estado_anterior.get('aguardando_complementos'):
+        anteriores = _ids_servicos({}, estado_anterior)
+        servico_ids = anteriores + [
+            item_id for item_id in servico_ids if item_id not in anteriores
+        ]
+    confirmou_servicos = bool(decisao.get('confirmou_servicos'))
+    if (
+        estado_anterior.get('aguardando_complementos')
+        and len(servico_ids) > len(_ids_servicos({}, estado_anterior))
+    ):
+        confirmou_servicos = True
     estado = _salvar_contexto_agenda(conversa, {
-        'servico_id': decisao.get('servico_id'),
+        'fluxo_ativo': True,
+        'servico_id': servico_ids[0] if servico_ids else None,
+        'servico_ids': servico_ids or None,
+        'complementos_confirmados': confirmou_servicos or None,
         'profissional_id': decisao.get('profissional_id'),
         'data': decisao.get('data'),
         'periodo': decisao.get('periodo'),
     })
-    if not estado.get('servico_id'):
+    if not servico_ids:
+        if not negocio['servicos']:
+            return 'Ainda não há serviços disponíveis para agendamento.'
+        if not estado.get('periodo'):
+            return 'Qual período você prefere: manhã, tarde ou noite?'
         nomes = ', '.join(item['nome'] for item in negocio['servicos'][:8])
-        return f'Qual serviço você quer agendar? Temos: {nomes}.' if nomes else (
-            'Ainda não há serviços disponíveis para agendamento.'
-        )
+        return f'Qual serviço você quer agendar? Temos: {nomes}.'
+    if not estado.get('complementos_confirmados'):
+        adicionais = _complementares(negocio, servico_ids)
+        if adicionais:
+            _salvar_contexto_agenda(conversa, {'aguardando_complementos': True})
+            escolhidos = [
+                item['nome'] for item in negocio['servicos'] if item['id'] in servico_ids
+            ]
+            opcoes = ', '.join(item['nome'] for item in adicionais)
+            return (
+                f'Certo, vou incluir {", ".join(escolhidos)}. '
+                f'Deseja adicionar também {opcoes}? Você pode escolher ou responder “não”.'
+            )
+        estado = _salvar_contexto_agenda(conversa, {
+            'complementos_confirmados': True,
+            'aguardando_complementos': False,
+        })
     try:
         dia = date.fromisoformat(estado.get('data') or '')
         if not timezone.localdate() <= dia <= timezone.localdate() + timedelta(days=60):
@@ -278,20 +373,15 @@ def _consultar_agenda(conversa, decisao, negocio, filial, alias):
         return 'Para qual dia você quer o atendimento? Pode responder, por exemplo, “amanhã”.'
 
     with tenant_db(alias):
-        servico, profissional = _servico_e_profissional(filial, estado)
-        if not servico:
+        servicos, profissional, profissionais = _servicos_e_profissional(filial, estado)
+        if not servicos:
             return 'Não encontrei esse serviço. Qual dos serviços disponíveis você deseja?'
         if not profissional:
-            profissionais = [
-                item['nome'] for item in next(
-                    (item for item in negocio['servicos'] if item['id'] == servico.pk),
-                    {'profissionais': []},
-                )['profissionais']
-            ]
-            if profissionais:
-                return 'Com qual profissional você prefere? ' + ', '.join(profissionais) + '.'
+            nomes_profissionais = [item.funcionario.nome for item in profissionais]
+            if nomes_profissionais:
+                return 'Com qual profissional você prefere? ' + ', '.join(nomes_profissionais) + '.'
             return 'Não há profissional disponível para esse serviço.'
-        horarios = listar_horarios(profissional, [servico], dia)
+        horarios = listar_horarios(profissional, servicos, dia)
 
     if not horarios:
         return 'Não encontrei horários disponíveis nesse dia. Quer tentar outra data?'
@@ -331,8 +421,16 @@ def _formatar_confirmacao(config, agendamento):
 
 
 def _agendar(conversa, decisao, negocio, filial, alias):
+    estado_anterior = dict((conversa.contexto or {}).get('ia_agenda') or {})
+    servico_ids = _ids_servicos(decisao, estado_anterior)
+    anteriores = _ids_servicos({}, estado_anterior)
+    servico_ids = anteriores + [
+        item_id for item_id in servico_ids if item_id not in anteriores
+    ]
     estado = _salvar_contexto_agenda(conversa, {
-        'servico_id': decisao.get('servico_id'),
+        'servico_id': servico_ids[0] if servico_ids else None,
+        'servico_ids': servico_ids or None,
+        'complementos_confirmados': True,
         'profissional_id': decisao.get('profissional_id'),
         'data': decisao.get('data'),
         'periodo': decisao.get('periodo'),
@@ -353,10 +451,10 @@ def _agendar(conversa, decisao, negocio, filial, alias):
         return _consultar_agenda(conversa, decisao, negocio, filial, alias)
 
     with tenant_db(alias):
-        servico, profissional = _servico_e_profissional(filial, estado)
-        if not servico or not profissional:
+        servicos, profissional, _ = _servicos_e_profissional(filial, estado)
+        if not servicos or not profissional:
             return _consultar_agenda(conversa, decisao, negocio, filial, alias)
-        disponiveis = listar_horarios(profissional, [servico], dia)
+        disponiveis = listar_horarios(profissional, servicos, dia)
         inicio = next(
             (item for item in disponiveis if timezone.localtime(item).time().replace(second=0, microsecond=0) == hora),
             None,
@@ -370,7 +468,7 @@ def _agendar(conversa, decisao, negocio, filial, alias):
             agendamento = criar_agendamento(
                 filial=filial,
                 profissional=profissional,
-                servicos=[servico],
+                servicos=servicos,
                 inicio=inicio,
                 pessoa_atendida_nome=nome,
                 cliente=cliente,
@@ -400,7 +498,24 @@ def _agendar(conversa, decisao, negocio, filial, alias):
 
 def processar_com_ia(conversa, texto, mensagem):
     config = conversa.configuracao
-    if not config.ia_ativa or conversa.atendimento_humano:
+    if not config.ia_ativa:
+        return None
+    saudacao_simples = normalizar(texto) in {
+        'oi', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'e ai', 'opa',
+    }
+    if (
+        conversa.atendimento_humano
+        and conversa.etapa == 'aguardando_atendimento_humano'
+        and saudacao_simples
+        and _dentro_horario_ia(config)
+    ):
+        conversa.atendimento_humano = False
+        conversa.etapa = 'ia_atendimento'
+        conversa.etapa_crm = ConversaWhatsApp.EtapaCRM.NOVA
+        conversa.save(update_fields=[
+            'atendimento_humano', 'etapa', 'etapa_crm', 'updated_at',
+        ])
+    if conversa.atendimento_humano:
         return None
     # Confirmações transacionais continuam determinísticas: a IA não decide
     # nem inventa dados em etapas que alteram agenda ou pedido.
@@ -409,6 +524,15 @@ def processar_com_ia(conversa, texto, mensagem):
     aviso_fora_horario = resposta_fora_horario(conversa)
     if aviso_fora_horario:
         return aviso_fora_horario
+    if saudacao_simples:
+        contexto = dict(conversa.contexto or {})
+        contexto.pop('ia_agenda', None)
+        contexto.pop('ia_encaminhamento', None)
+        conversa.contexto = contexto
+        conversa.ativa = True
+        conversa.etapa = 'ia_atendimento'
+        conversa.save(update_fields=['contexto', 'ativa', 'etapa', 'updated_at'])
+        return 'Olá! Como posso ajudar você hoje?'
     _marcar_atendimento_ia(conversa)
     filial, alias, negocio = _catalogo_negocio(conversa)
     entrada = json.dumps({

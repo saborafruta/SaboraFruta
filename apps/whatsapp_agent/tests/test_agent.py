@@ -263,7 +263,7 @@ class AgenteWhatsAppTests(TestCase):
         self.assertEqual(UsoIAWhatsApp.objects.filter(conversa=conversa).count(), 2)
 
     @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
-    def test_ia_atende_qualquer_primeira_mensagem_sem_exigir_menu(self, responder):
+    def test_saudacao_reinicia_contexto_sem_reaproveitar_horarios(self, responder):
         self.configuracao.ia_ativa = True
         self.configuracao.ia_restringir_horario = False
         self.configuracao.definir_ia_api_key('sk-teste')
@@ -281,6 +281,14 @@ class AgenteWhatsAppTests(TestCase):
             'nome_cliente': '',
         })
         conversa = self.nova_conversa('5584999996666')
+        conversa.contexto = {
+            'ia_agenda': {
+                'servico_id': self.servico.pk,
+                'periodo': 'tarde',
+                'horarios_oferecidos': ['14:00'],
+            },
+        }
+        conversa.save(update_fields=['contexto'])
         mensagem = MensagemWhatsApp.objects.create(
             conversa=conversa,
             direcao=MensagemWhatsApp.Direcao.ENTRADA,
@@ -289,9 +297,123 @@ class AgenteWhatsAppTests(TestCase):
 
         resposta = processar_com_ia(conversa, mensagem.texto, mensagem)
 
-        self.assertEqual(resposta, 'Olá! Como posso ajudar?')
-        responder.assert_called_once()
+        self.assertEqual(resposta, 'Olá! Como posso ajudar você hoje?')
+        responder.assert_not_called()
         conversa.refresh_from_db()
+        self.assertEqual(conversa.etapa, 'ia_atendimento')
+        self.assertNotIn('ia_agenda', conversa.contexto)
+
+    @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
+    def test_ia_oferece_complementos_e_agenda_multiplos_servicos(self, responder):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
+        self.configuracao.definir_ia_api_key('sk-teste')
+        self.configuracao.save(update_fields=[
+            'ia_ativa', 'ia_restringir_horario', 'ia_api_key_criptografada',
+        ])
+        barba = Produto.objects.create(
+            filial=self.filial,
+            unidade_medida=self.servico.unidade_medida,
+            descricao='Barba',
+            ncm='00000000',
+            tipo_produto=Produto.TipoProduto.SERVICO,
+            agendavel=True,
+            duracao_servico_minutos=15,
+            intervalo_apos_servico_minutos=5,
+            preco_venda=Decimal('20.00'),
+        )
+        ProdutoFilial.objects.create(produto=barba, filial=self.filial)
+        ProfissionalServico.objects.create(
+            profissional=self.profissional,
+            servico=barba,
+        )
+        proxima_segunda = timezone.localdate() + timedelta(
+            days=(7 - timezone.localdate().weekday()) % 7 or 7,
+        )
+        decisoes = [
+            {
+                'acao': 'consultar_agenda', 'mensagem': '',
+                'servico_id': self.servico.pk,
+                'servico_ids': [self.servico.pk],
+                'confirmou_servicos': False,
+                'profissional_id': self.profissional.pk,
+                'data': proxima_segunda.isoformat(), 'periodo': 'manha',
+                'horario': '', 'nome_cliente': '',
+            },
+            {
+                'acao': 'consultar_agenda', 'mensagem': '',
+                'servico_id': barba.pk,
+                'servico_ids': [barba.pk],
+                'confirmou_servicos': True,
+                'profissional_id': self.profissional.pk,
+                'data': proxima_segunda.isoformat(), 'periodo': 'manha',
+                'horario': '', 'nome_cliente': '',
+            },
+            {
+                'acao': 'agendar', 'mensagem': '',
+                'servico_id': self.servico.pk,
+                'servico_ids': [self.servico.pk, barba.pk],
+                'confirmou_servicos': True,
+                'profissional_id': self.profissional.pk,
+                'data': proxima_segunda.isoformat(), 'periodo': 'manha',
+                'horario': '08:00', 'nome_cliente': 'Ana Cliente',
+            },
+        ]
+        responder.side_effect = [
+            SimpleNamespace(conteudo=decisao) for decisao in decisoes
+        ]
+        conversa = self.nova_conversa('5584999996677')
+
+        primeira = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Quero corte na segunda de manhã',
+        )
+        oferta = processar_com_ia(conversa, primeira.texto, primeira)
+        self.assertIn('Deseja adicionar também Barba?', oferta)
+
+        segunda = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Sim, barba também',
+        )
+        horarios = processar_com_ia(conversa, segunda.texto, segunda)
+        self.assertIn('08:00', horarios)
+
+        terceira = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='08:00, Ana Cliente',
+        )
+        confirmacao = processar_com_ia(conversa, terceira.texto, terceira)
+        self.assertIn('Seu agendamento foi confirmado', confirmacao)
+        agendamento = Agendamento.objects.get(telefone_contato='5584999996677')
+        self.assertEqual(agendamento.itens.count(), 2)
+        self.assertEqual(
+            agendamento.fim - agendamento.inicio,
+            timedelta(minutes=45),
+        )
+
+    def test_saudacao_retoma_ia_apos_falha_tecnica(self):
+        self.configuracao.ia_ativa = True
+        self.configuracao.ia_restringir_horario = False
+        self.configuracao.save(update_fields=['ia_ativa', 'ia_restringir_horario'])
+        conversa = self.nova_conversa('5584999996688')
+        conversa.atendimento_humano = True
+        conversa.etapa = 'aguardando_atendimento_humano'
+        conversa.etapa_crm = ConversaWhatsApp.EtapaCRM.ATENDIMENTO_HUMANO
+        conversa.save(update_fields=['atendimento_humano', 'etapa', 'etapa_crm'])
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.ENTRADA,
+            texto='Oi',
+        )
+
+        resposta = processar_com_ia(conversa, mensagem.texto, mensagem)
+
+        self.assertEqual(resposta, 'Olá! Como posso ajudar você hoje?')
+        conversa.refresh_from_db()
+        self.assertFalse(conversa.atendimento_humano)
         self.assertEqual(conversa.etapa, 'ia_atendimento')
 
     @patch('apps.whatsapp_agent.intelligent_agent.OpenAIWhatsAppClient.responder_estruturado')
