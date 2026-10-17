@@ -11,7 +11,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.cadastros.models import Cliente, ClienteFilial
-from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
 from apps.core.services.modulos import modulo_da_url, modulos_ativos
 from apps.estoque.models import Estoque, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
@@ -203,7 +203,7 @@ class ForcaVendasTests(TestCase):
             valor_unitario=Decimal('5.00'),
         )
 
-    def test_modulo_e_menu_reunem_as_tres_telas(self):
+    def test_modulo_e_menu_reunem_as_quatro_telas(self):
         self.assertEqual(modulo_da_url('/vendas/acompanhamento/'), 'forca_vendas')
         self.assertIn('forca_vendas', modulos_ativos(self.filial))
 
@@ -211,10 +211,78 @@ class ForcaVendasTests(TestCase):
 
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, 'Força de Vendas')
+        self.assertContains(resposta, reverse('vendas:forca-vendas-dashboard'))
         self.assertContains(resposta, reverse('vendas:pedido-externo-novo'))
         self.assertContains(resposta, reverse('vendas:pedido-kanban'))
         self.assertContains(resposta, reverse('vendas:pedido-separacao'))
         self.assertNotContains(resposta, 'Pré-venda')
+
+    def test_dashboard_exibe_indicadores_reais_e_filtros(self):
+        pedido_id = self.criar_pedido_pela_tela(quantidade='4').json()['pedido_id']
+        PedidoVenda.objects.filter(pk=pedido_id).update(
+            status=PedidoVenda.Status.CONFIRMADO,
+        )
+
+        resposta = self.client.get(reverse('vendas:forca-vendas-dashboard'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.context['vendas']['pedidos'], 1)
+        self.assertEqual(resposta.context['vendas']['valor'], Decimal('30.00'))
+        self.assertEqual(resposta.context['vendas']['clientes'], 1)
+        self.assertEqual(resposta.context['produtos'][0]['produto__descricao'], 'Caixa de Polpa')
+        self.assertEqual(resposta.context['regioes'][0]['label'], 'Natal / RN')
+        self.assertContains(resposta, 'Ranking de vendedores')
+        self.assertContains(resposta, 'Produtos mais vendidos')
+        self.assertContains(resposta, 'Boleto bancário')
+
+        filtrada = self.client.get(reverse('vendas:forca-vendas-dashboard'), {
+            'regiao': 'Mossoró|RN',
+        })
+        self.assertEqual(filtrada.context['vendas']['pedidos'], 0)
+        self.assertEqual(filtrada.context['vendas']['valor'], Decimal('0'))
+
+    def test_dashboard_do_vendedor_nao_exibe_pedidos_de_outros_usuarios(self):
+        pedido_gestor = PedidoVenda.objects.get(
+            pk=self.criar_pedido_pela_tela().json()['pedido_id'],
+        )
+        PedidoVenda.objects.filter(pk=pedido_gestor.pk).update(
+            status=PedidoVenda.Status.CONFIRMADO,
+        )
+        perfil_vendedor = PerfilAcesso.objects.create(
+            empresa=self.empresa,
+            nome='Vendedor externo',
+            is_admin=False,
+        )
+        Permissao.objects.create(
+            perfil=perfil_vendedor,
+            modulo='vendas',
+            pode_ver=True,
+            pode_criar=True,
+        )
+        vendedor = Usuario.objects.create_user(
+            email='vendedor-externo@inoovated.com',
+            nome='Vendedor Externo',
+            password='teste1234',
+            empresa=self.empresa,
+            filial=self.filial,
+            perfil=perfil_vendedor,
+        )
+        self.client.force_login(vendedor)
+        pedido_vendedor = VendaService.criar_pedido(
+            self.filial, vendedor, self.cliente,
+        )
+        pedido_vendedor.origem = PedidoVenda.Origem.EXTERNO
+        pedido_vendedor.status = PedidoVenda.Status.CONFIRMADO
+        pedido_vendedor.valor_total = Decimal('12.00')
+        pedido_vendedor.save(update_fields=['origem', 'status', 'valor_total', 'updated_at'])
+
+        resposta = self.client.get(reverse('vendas:forca-vendas-dashboard'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertFalse(resposta.context['visao_equipe'])
+        self.assertEqual(resposta.context['vendas']['pedidos'], 1)
+        self.assertEqual(resposta.context['vendas']['valor'], Decimal('12.00'))
+        self.assertNotContains(resposta, self.usuario.nome)
 
     def test_busca_produto_exibe_preco_da_tabela_do_cliente(self):
         resposta = self.client.get(reverse('vendas:api-produtos'), {

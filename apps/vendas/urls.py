@@ -6,6 +6,7 @@ app_name = 'vendas'
 
 urlpatterns = [
     path('', views.PedidoListView.as_view(), name='pedido-list'),
+    path('dashboard/', views.DashboardForcaVendasView.as_view(), name='forca-vendas-dashboard'),
     path('externo/novo/', views.PedidoExternoNovoView.as_view(), name='pedido-externo-novo'),
     path('acompanhamento/', views.PedidoKanbanView.as_view(), name='pedido-kanban'),
     path('separacao/', views.PedidoSeparacaoFilaView.as_view(), name='pedido-separacao'),

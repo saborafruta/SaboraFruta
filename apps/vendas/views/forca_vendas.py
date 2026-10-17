@@ -20,7 +20,18 @@ from apps.financeiro.models import CondicaoPagamento, FormaPagamento
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
 from apps.produtos.models import CategoriaProduto, Produto
 from apps.vendas.models import PedidoVenda
+from apps.vendas.services.dashboard_forca_vendas import montar_dashboard
 from apps.vendas.services.venda_service import VendaService
+
+
+def _pode_ver_equipe(request):
+    perfil = request.user.perfil
+    return bool(
+        request.user.is_superuser
+        or perfil.is_admin
+        or request.user.tem_permissao('vendas', 'aprovar')
+        or request.user.tem_permissao('vendas', 'editar')
+    )
 
 
 def _pedidos_visiveis(request):
@@ -30,14 +41,24 @@ def _pedidos_visiveis(request):
         .select_related('cliente', 'usuario', 'representante', 'tabela_preco')
         .prefetch_related('itens__produto')
     )
-    perfil = request.user.perfil
-    pode_ver_todos = bool(
-        request.user.is_superuser
-        or perfil.is_admin
-        or request.user.tem_permissao('vendas', 'aprovar')
-        or request.user.tem_permissao('vendas', 'editar')
-    )
-    return qs if pode_ver_todos else qs.filter(usuario=request.user)
+    return qs if _pode_ver_equipe(request) else qs.filter(usuario=request.user)
+
+
+class DashboardForcaVendasView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'vendas'
+    template_name = 'vendas/forca_vendas/dashboard.html'
+
+    def get(self, request):
+        contexto = montar_dashboard(
+            pedidos_visiveis=_pedidos_visiveis(request),
+            filial=request.filial_ativa,
+            params=request.GET,
+        )
+        contexto.update({
+            'title': 'Dashboard da força de vendas',
+            'visao_equipe': _pode_ver_equipe(request),
+        })
+        return render(request, self.template_name, contexto)
 
 
 class PedidoExternoNovoView(PermissaoRequiredMixin, View):

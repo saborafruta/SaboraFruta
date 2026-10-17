@@ -1,0 +1,112 @@
+{% extends "_base.html" %}
+{% load erp_extras %}
+
+{% block title %}Dashboard da força de vendas{% endblock %}
+{% block page_title %}Dashboard da força de vendas{% endblock %}
+
+{% block extra_head %}
+<style>
+  .fd-shell{--fd-bg:#171b22;--fd-card:#20252e;--fd-raised:#282e39;--fd-border:#39414f;--fd-border-soft:#303744;--fd-text:#f4f7fb;--fd-muted:#99a5b5;--fd-blue:#60a5fa;--fd-blue-strong:#3b82f6;--fd-blue-soft:rgba(59,130,246,.14);--fd-green:#34d399;--fd-amber:#fbbf24;--fd-red:#fb7185;max-width:1600px;margin:0 auto;color:var(--fd-text)}
+  body.tema-claro .fd-shell{--fd-bg:#f3f6fa;--fd-card:#fff;--fd-raised:#f7f9fc;--fd-border:#d9e1eb;--fd-border-soft:#e8edf3;--fd-text:#172033;--fd-muted:#64748b;--fd-blue:#2563eb;--fd-blue-strong:#2563eb;--fd-blue-soft:#eff6ff;--fd-green:#059669;--fd-amber:#d97706;--fd-red:#e11d48}
+  .fd-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:22px;padding:24px;border:1px solid #2d4770;border-radius:20px;background:#142033;color:#fff;box-shadow:0 18px 45px rgba(3,7,18,.14)}
+  body.tema-claro .fd-hero{border-color:#d5e3f5;background:#eaf2fc;color:#13213a}.fd-kicker{color:#7dd3fc;font-size:11px;font-weight:850;letter-spacing:.14em;text-transform:uppercase}body.tema-claro .fd-kicker{color:#2563eb}.fd-hero h2{margin-top:5px;font-size:29px;font-weight:900;line-height:1.08}.fd-hero p{max-width:700px;margin-top:8px;color:#bdc9da;font-size:13px}body.tema-claro .fd-hero p{color:#52647c}.fd-hero-actions{display:flex;gap:8px;flex-wrap:wrap}.fd-hero .btn-secondary{border-color:rgba(255,255,255,.2);color:#e2e8f0;background:rgba(255,255,255,.05)}body.tema-claro .fd-hero .btn-secondary{border-color:#bfd0e6;color:#263a55;background:#fff}.fd-hero .btn-primary{background:#fff;color:#172033}body.tema-claro .fd-hero .btn-primary{background:#2563eb;color:#fff}
+  .fd-filter{display:grid;grid-template-columns:repeat(2,minmax(145px,.8fr)) minmax(180px,1fr) minmax(180px,1fr) minmax(180px,1fr) auto;gap:10px;align-items:end;margin-top:14px;padding:15px;border:1px solid var(--fd-border);border-radius:16px;background:var(--fd-card)}.fd-field label{display:block;margin:0 0 6px 2px;color:var(--fd-muted);font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase}.fd-shell .form-input{height:42px;border-color:var(--fd-border);background:var(--fd-raised);color:var(--fd-text);box-shadow:none}.fd-shell .form-input:focus{border-color:var(--fd-blue);box-shadow:0 0 0 3px var(--fd-blue-soft)}.fd-shell select option{background:var(--fd-card);color:var(--fd-text)}.fd-filter-actions{display:flex;gap:7px}.fd-filter-actions .btn-primary,.fd-filter-actions .btn-secondary{height:42px;white-space:nowrap}
+  .fd-kpis{display:grid;grid-template-columns:repeat(6,minmax(155px,1fr));gap:11px;margin-top:14px}.fd-kpi{min-height:130px;padding:16px;border:1px solid var(--fd-border);border-radius:16px;background:var(--fd-card);box-shadow:0 9px 24px rgba(3,7,18,.05)}.fd-kpi-top{display:flex;align-items:center;justify-content:space-between;gap:8px}.fd-kpi-label{color:var(--fd-muted);font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase}.fd-kpi-icon{display:grid;width:30px;height:30px;place-items:center;border-radius:9px;background:var(--fd-blue-soft);color:var(--fd-blue)}.fd-kpi-icon svg{width:16px;height:16px}.fd-kpi-value{display:block;margin-top:13px;font-size:25px;font-weight:900;letter-spacing:-.035em;line-height:1}.fd-kpi-meta{margin-top:9px;color:var(--fd-muted);font-size:10px}.fd-trend-up{color:var(--fd-green);font-weight:800}.fd-trend-down{color:var(--fd-red);font-weight:800}
+  .fd-grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(320px,.8fr);gap:12px;margin-top:12px}.fd-card{border:1px solid var(--fd-border);border-radius:17px;background:var(--fd-card);box-shadow:0 10px 28px rgba(3,7,18,.05);overflow:hidden}.fd-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--fd-border-soft)}.fd-card-head h3{font-size:14px;font-weight:850}.fd-card-head p{margin-top:3px;color:var(--fd-muted);font-size:10px}.fd-card-body{padding:17px 18px}
+  .fd-chart{display:flex;height:250px;align-items:flex-end;gap:8px;padding:24px 4px 4px;border-bottom:1px solid var(--fd-border-soft)}.fd-bar-wrap{display:flex;min-width:18px;height:100%;flex:1;align-items:flex-end;justify-content:center;position:relative}.fd-bar{width:min(34px,76%);min-height:6px;border-radius:7px 7px 3px 3px;background:var(--fd-blue-strong);transition:filter .15s ease}.fd-bar-wrap:hover .fd-bar{filter:brightness(1.18)}.fd-bar-tip{display:none;position:absolute;z-index:2;bottom:calc(var(--bar-height) + 9px);left:50%;padding:6px 8px;border:1px solid var(--fd-border);border-radius:8px;background:var(--fd-raised);font-size:10px;font-weight:800;white-space:nowrap;transform:translateX(-50%)}.fd-bar-wrap:hover .fd-bar-tip{display:block}.fd-chart-labels{display:flex;gap:8px;padding:8px 4px 0}.fd-chart-labels span{min-width:18px;flex:1;color:var(--fd-muted);font-size:9px;text-align:center}.fd-empty{display:grid;min-height:190px;place-items:center;color:var(--fd-muted);font-size:12px;text-align:center}
+  .fd-pipeline{display:grid;gap:13px}.fd-stage-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px}.fd-stage-head strong{font-size:12px}.fd-stage-head span{color:var(--fd-muted)}.fd-stage-track{height:7px;margin-top:7px;overflow:hidden;border-radius:999px;background:var(--fd-raised)}.fd-stage-fill{height:100%;border-radius:inherit;background:var(--fd-blue-strong)}.fd-stage:nth-child(2) .fd-stage-fill{background:#8b5cf6}.fd-stage:nth-child(3) .fd-stage-fill{background:#f59e0b}.fd-stage:nth-child(4) .fd-stage-fill{background:#14b8a6}.fd-stage:nth-child(5) .fd-stage-fill{background:#22c55e}
+  .fd-rank-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.fd-ranking{display:grid}.fd-rank-row{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid var(--fd-border-soft)}.fd-rank-row:last-child{border-bottom:0}.fd-position{display:grid;width:26px;height:26px;place-items:center;border-radius:8px;background:var(--fd-raised);color:var(--fd-muted);font-size:10px;font-weight:900}.fd-rank-row:first-child .fd-position{background:rgba(251,191,36,.14);color:var(--fd-amber)}.fd-rank-name{display:block;overflow:hidden;font-size:12px;font-weight:800;text-overflow:ellipsis;white-space:nowrap}.fd-rank-meta{display:block;margin-top:3px;color:var(--fd-muted);font-size:9px}.fd-rank-track{height:4px;margin-top:7px;overflow:hidden;border-radius:99px;background:var(--fd-raised)}.fd-rank-track i{display:block;height:100%;border-radius:inherit;background:var(--fd-blue)}.fd-rank-value{text-align:right}.fd-rank-value strong{display:block;font-size:12px}.fd-rank-value small{color:var(--fd-muted);font-size:9px}
+  .fd-bottom{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(320px,.8fr);gap:12px;margin-top:12px}.fd-table-wrap{overflow:auto}.fd-table{width:100%;border-collapse:collapse}.fd-table th{padding:10px 12px;border-bottom:1px solid var(--fd-border);color:var(--fd-muted);font-size:9px;font-weight:850;letter-spacing:.07em;text-align:left;text-transform:uppercase;white-space:nowrap}.fd-table td{padding:12px;border-bottom:1px solid var(--fd-border-soft);font-size:11px}.fd-table tbody tr:last-child td{border-bottom:0}.fd-product strong{display:block;max-width:340px;overflow:hidden;font-size:12px;text-overflow:ellipsis;white-space:nowrap}.fd-product small{color:var(--fd-muted);font-size:9px}.fd-table .is-number{text-align:right;white-space:nowrap}
+  .fd-payments{display:grid;gap:13px}.fd-payment-head{display:flex;justify-content:space-between;gap:10px;font-size:11px}.fd-payment-head strong{font-size:12px}.fd-payment-head span{color:var(--fd-muted)}.fd-payment-track{height:7px;margin-top:6px;overflow:hidden;border-radius:99px;background:var(--fd-raised)}.fd-payment-track i{display:block;height:100%;border-radius:inherit;background:var(--fd-blue)}
+  .fd-alerts{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}.fd-alert{display:flex;align-items:center;gap:12px;padding:15px;border:1px solid var(--fd-border);border-radius:15px;background:var(--fd-card)}.fd-alert b{display:grid;min-width:39px;height:39px;place-items:center;border-radius:11px;background:var(--fd-raised);font-size:15px}.fd-alert strong{display:block;font-size:11px}.fd-alert span{display:block;margin-top:3px;color:var(--fd-muted);font-size:9px}.fd-alert.is-warning b{background:rgba(245,158,11,.12);color:var(--fd-amber)}.fd-alert.is-danger b{background:rgba(244,63,94,.12);color:var(--fd-red)}
+  @media(max-width:1250px){.fd-kpis{grid-template-columns:repeat(3,1fr)}.fd-filter{grid-template-columns:repeat(3,1fr)}.fd-filter-actions{grid-column:span 3}.fd-alerts{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:900px){.fd-hero{align-items:flex-start;flex-direction:column}.fd-grid,.fd-bottom{grid-template-columns:1fr}.fd-rank-grid{grid-template-columns:1fr}.fd-chart{height:210px}}
+  @media(max-width:680px){.fd-hero{padding:18px}.fd-hero h2{font-size:23px}.fd-hero-actions{width:100%}.fd-hero-actions a{flex:1;justify-content:center}.fd-filter{grid-template-columns:1fr 1fr}.fd-filter-actions{grid-column:span 2}.fd-filter-actions>*{flex:1;justify-content:center}.fd-kpis{grid-template-columns:1fr 1fr}.fd-kpi{min-height:118px;padding:14px}.fd-kpi-value{font-size:21px}.fd-alerts{grid-template-columns:1fr}.fd-chart{gap:4px}.fd-chart-labels{gap:4px}.fd-chart-labels span:nth-child(even){visibility:hidden}.fd-card-head,.fd-card-body{padding-left:14px;padding-right:14px}}
+  @media(max-width:430px){.fd-filter,.fd-kpis{grid-template-columns:1fr}.fd-filter-actions{grid-column:auto}.fd-chart{height:185px}.fd-kpi{min-height:108px}}
+  @media(prefers-reduced-motion:reduce){.fd-bar{transition:none}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fd-shell">
+  <header class="fd-hero">
+    <div>
+      <div class="fd-kicker">Força de vendas</div>
+      <h2>{% if visao_equipe %}Visão comercial da equipe{% else %}Seu desempenho comercial{% endif %}</h2>
+      <p>Acompanhe pedidos externos, faturamento, regiões, produtos e gargalos da operação em um único lugar.</p>
+    </div>
+    <div class="fd-hero-actions">
+      <a class="btn-secondary" href="{% url 'vendas:pedido-kanban' %}">Acompanhamento</a>
+      <a class="btn-primary" href="{% url 'vendas:pedido-externo-novo' %}">+ Novo pedido</a>
+    </div>
+  </header>
+
+  <form class="fd-filter" method="get">
+    <div class="fd-field"><label for="fd-inicio">De</label><input id="fd-inicio" class="form-input w-full" type="date" name="inicio" value="{{ inicio|date:'Y-m-d' }}"></div>
+    <div class="fd-field"><label for="fd-fim">Até</label><input id="fd-fim" class="form-input w-full" type="date" name="fim" value="{{ fim|date:'Y-m-d' }}"></div>
+    <div class="fd-field">
+      <label for="fd-vendedor">Vendedor</label>
+      <select id="fd-vendedor" class="form-input w-full" name="vendedor">
+        <option value="">Todos os vendedores</option>
+        {% for opcao in opcoes_vendedores %}<option value="{{ opcao.usuario_id }}" {% if opcao.usuario_id|stringformat:'s' == filtros.vendedor %}selected{% endif %}>{{ opcao.usuario__nome }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="fd-field">
+      <label for="fd-regiao">Região</label>
+      <select id="fd-regiao" class="form-input w-full" name="regiao">
+        <option value="">Todas as regiões</option>
+        {% for opcao in opcoes_regioes %}<option value="{{ opcao.valor }}" {% if opcao.valor == filtros.regiao %}selected{% endif %}>{{ opcao.label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="fd-field">
+      <label for="fd-pagamento">Pagamento</label>
+      <select id="fd-pagamento" class="form-input w-full" name="pagamento">
+        <option value="">Todas as formas</option>
+        {% for opcao in opcoes_pagamentos %}<option value="{{ opcao.forma_pagamento_id }}" {% if opcao.forma_pagamento_id|stringformat:'s' == filtros.pagamento %}selected{% endif %}>{{ opcao.forma_pagamento__descricao }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="fd-filter-actions"><button class="btn-primary" type="submit">Aplicar</button><a class="btn-secondary" href="{% url 'vendas:forca-vendas-dashboard' %}">Limpar</a></div>
+  </form>
+
+  <section class="fd-kpis" aria-label="Indicadores comerciais">
+    <article class="fd-kpi"><div class="fd-kpi-top"><span class="fd-kpi-label">Vendas aprovadas</span><span class="fd-kpi-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 17l5-5 4 4 7-9m0 0h-5m5 0v5"/></svg></span></div><strong class="fd-kpi-value">{{ vendas.valor|moeda }}</strong><p class="fd-kpi-meta">{% if vendas.variacao_valor >= 0 %}<span class="fd-trend-up">↑ {{ vendas.variacao_valor|quantidade }}%</span>{% else %}<span class="fd-trend-down">↓ {{ vendas.variacao_valor|stringformat:'s'|slice:'1:' }}%</span>{% endif %} ante {{ inicio_anterior|date:'d/m' }}–{{ fim_anterior|date:'d/m' }}</p></article>
+    <article class="fd-kpi"><div class="fd-kpi-top"><span class="fd-kpi-label">Pedidos</span><span class="fd-kpi-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 3h12v18H6zM9 8h6m-6 4h6m-6 4h4"/></svg></span></div><strong class="fd-kpi-value">{{ vendas.pedidos }}</strong><p class="fd-kpi-meta">{{ resumo.pedidos }} enviados · {{ vendas.conversao|quantidade }}% convertidos</p></article>
+    <article class="fd-kpi"><div class="fd-kpi-top"><span class="fd-kpi-label">Ticket médio</span><span class="fd-kpi-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 7h16v10H4zM8 12h.01M16 12h.01M12 14a2 2 0 100-4 2 2 0 000 4z"/></svg></span></div><strong class="fd-kpi-value">{{ vendas.ticket_medio|moeda }}</strong><p class="fd-kpi-meta">Média dos pedidos aprovados</p></article>
+    <article class="fd-kpi"><div class="fd-kpi-top"><span class="fd-kpi-label">Clientes compradores</span><span class="fd-kpi-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m7-10a4 4 0 100-8 4 4 0 000 8zm13 10v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></span></div><strong class="fd-kpi-value">{{ vendas.clientes }}</strong><p class="fd-kpi-meta">Carteira ativa no período</p></article>
+    <article class="fd-kpi"><div class="fd-kpi-top"><span class="fd-kpi-label">Margem estimada</span><span class="fd-kpi-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 2v20M17 6H9.5a3.5 3.5 0 000 7H14a3.5 3.5 0 010 7H6"/></svg></span></div><strong class="fd-kpi-value">{{ vendas.margem_percentual|quantidade }}%</strong><p class="fd-kpi-meta">{{ vendas.margem_valor|moeda }} sobre custo registrado</p></article>
+    <article class="fd-kpi"><div class="fd-kpi-top"><span class="fd-kpi-label">Descontos</span><span class="fd-kpi-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 5L5 19M7.5 5a2.5 2.5 0 110 5 2.5 2.5 0 010-5zm9 9a2.5 2.5 0 110 5 2.5 2.5 0 010-5z"/></svg></span></div><strong class="fd-kpi-value">{{ vendas.descontos|moeda }}</strong><p class="fd-kpi-meta">Desconto total em vendas aprovadas</p></article>
+  </section>
+
+  <div class="fd-grid">
+    <section class="fd-card">
+      <header class="fd-card-head"><div><h3>Evolução das vendas</h3><p>Pedidos aprovados de {{ inicio|date:'d/m/Y' }} a {{ fim|date:'d/m/Y' }}</p></div><strong>{{ vendas.valor|moeda }}</strong></header>
+      <div class="fd-card-body">
+        {% if serie %}<div class="fd-chart">{% for ponto in serie %}<div class="fd-bar-wrap" style="--bar-height:{{ ponto.altura }}%"><span class="fd-bar-tip">{{ ponto.label }} · {{ ponto.valor|moeda }}</span><i class="fd-bar" style="height:{{ ponto.altura }}%"></i></div>{% endfor %}</div><div class="fd-chart-labels">{% for ponto in serie %}<span>{{ ponto.label }}</span>{% endfor %}</div>{% else %}<div class="fd-empty">Ainda não há vendas aprovadas neste período.</div>{% endif %}
+      </div>
+    </section>
+    <section class="fd-card">
+      <header class="fd-card-head"><div><h3>Funil operacional</h3><p>Onde os pedidos estão agora</p></div></header>
+      <div class="fd-card-body fd-pipeline">
+        {% for etapa in pipeline %}<div class="fd-stage"><div class="fd-stage-head"><strong>{{ etapa.label }}</strong><span>{{ etapa.quantidade }} · {{ etapa.valor|moeda }}</span></div><div class="fd-stage-track"><i class="fd-stage-fill" style="width:{{ etapa.largura }}%"></i></div></div>{% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <div class="fd-rank-grid">
+    <section class="fd-card"><header class="fd-card-head"><div><h3>Ranking de vendedores</h3><p>Receita aprovada, pedidos e clientes</p></div></header><div class="fd-card-body fd-ranking">{% for vendedor in vendedores %}<div class="fd-rank-row"><span class="fd-position">{{ vendedor.posicao }}</span><div><strong class="fd-rank-name">{{ vendedor.usuario__nome }}</strong><span class="fd-rank-meta">{{ vendedor.pedidos }} pedidos · {{ vendedor.clientes }} clientes · ticket {{ vendedor.ticket|moeda }}</span><div class="fd-rank-track"><i style="width:{{ vendedor.largura }}%"></i></div></div><div class="fd-rank-value"><strong>{{ vendedor.valor|moeda }}</strong></div></div>{% empty %}<div class="fd-empty">Nenhum vendedor com venda aprovada.</div>{% endfor %}</div></section>
+    <section class="fd-card"><header class="fd-card-head"><div><h3>Regiões com maior venda</h3><p>Agrupamento por cidade e estado</p></div></header><div class="fd-card-body fd-ranking">{% for regiao in regioes %}<div class="fd-rank-row"><span class="fd-position">{{ regiao.posicao }}</span><div><strong class="fd-rank-name">{{ regiao.label }}</strong><span class="fd-rank-meta">{{ regiao.pedidos }} pedidos · {{ regiao.clientes }} clientes</span><div class="fd-rank-track"><i style="width:{{ regiao.largura }}%"></i></div></div><div class="fd-rank-value"><strong>{{ regiao.valor|moeda }}</strong></div></div>{% empty %}<div class="fd-empty">Nenhuma região com venda aprovada.</div>{% endfor %}</div></section>
+  </div>
+
+  <div class="fd-bottom">
+    <section class="fd-card"><header class="fd-card-head"><div><h3>Produtos mais vendidos</h3><p>Valor e volume nos pedidos aprovados</p></div></header><div class="fd-table-wrap"><table class="fd-table"><thead><tr><th>Produto</th><th class="is-number">Quantidade</th><th class="is-number">Pedidos</th><th class="is-number">Valor</th></tr></thead><tbody>{% for produto in produtos %}<tr><td class="fd-product"><strong>{{ produto.produto__descricao }}</strong><small>{{ produto.produto__categoria__nome|default:'Sem categoria' }}{% if produto.produto__codigo %} · {{ produto.produto__codigo }}{% endif %}</small></td><td class="is-number">{{ produto.quantidade|quantidade }} {{ produto.produto__unidade_medida__sigla }}</td><td class="is-number">{{ produto.pedidos }}</td><td class="is-number"><strong>{{ produto.valor|moeda }}</strong></td></tr>{% empty %}<tr><td colspan="4"><div class="fd-empty">Nenhum produto vendido no período.</div></td></tr>{% endfor %}</tbody></table></div></section>
+    <section class="fd-card"><header class="fd-card-head"><div><h3>Formas de pagamento</h3><p>Participação nas vendas aprovadas</p></div></header><div class="fd-card-body fd-payments">{% for pagamento in pagamentos %}<div><div class="fd-payment-head"><strong>{{ pagamento.label }}</strong><span>{{ pagamento.percentual|quantidade }}% · {{ pagamento.valor|moeda }}</span></div><div class="fd-payment-track"><i style="width:{{ pagamento.percentual }}%"></i></div></div>{% empty %}<div class="fd-empty">Nenhum pagamento informado.</div>{% endfor %}</div></section>
+  </div>
+
+  <section class="fd-alerts" aria-label="Alertas comerciais">
+    <article class="fd-alert {% if alertas.analise_atrasada %}is-warning{% endif %}"><b>{{ alertas.analise_atrasada }}</b><div><strong>Pedidos parados em análise</strong><span>Há mais de 48 horas</span></div></article>
+    <article class="fd-alert {% if alertas.separacao_atrasada %}is-warning{% endif %}"><b>{{ alertas.separacao_atrasada }}</b><div><strong>Aguardando separação</strong><span>Há mais de 24 horas</span></div></article>
+    <article class="fd-alert"><b>{{ alertas.clientes_sem_compra }}</b><div><strong>Clientes sem compra recente</strong><span>Sem venda aprovada em 30 dias</span></div></article>
+    <article class="fd-alert {% if alertas.taxa_cancelamento > 10 %}is-danger{% endif %}"><b>{{ alertas.taxa_cancelamento|quantidade }}%</b><div><strong>Taxa de cancelamento</strong><span>No período selecionado</span></div></article>
+  </section>
+</div>
+{% endblock %}

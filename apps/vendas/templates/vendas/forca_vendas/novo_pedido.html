@@ -35,6 +35,7 @@
     <h2>Monte o pedido junto com o cliente</h2>
     <p>A tabela comercial do cliente é aplicada automaticamente. Ao enviar, o pedido segue para análise e não aparece nas pendências do caixa.</p>
     <nav class="fv-nav" aria-label="Força de vendas">
+      <a href="{% url 'vendas:forca-vendas-dashboard' %}">Dashboard</a>
       <a class="is-active" href="{% url 'vendas:pedido-externo-novo' %}">Novo pedido</a>
       <a href="{% url 'vendas:pedido-kanban' %}">Acompanhamento</a>
       <a href="{% url 'vendas:pedido-separacao' %}">Separação</a>
