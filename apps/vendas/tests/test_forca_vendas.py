@@ -438,6 +438,9 @@ assert.equal(pedido.buscaProdutoExecutada, false);
 
         self.assertContains(resposta, externo.numero_pedido)
         self.assertNotContains(resposta, interno.numero_pedido)
+        self.assertContains(resposta, '--fk-card:#272a2f')
+        self.assertContains(resposta, 'body.tema-claro .fk-shell')
+        self.assertNotContains(resposta, 'var(--erp-card-bg,#fff)')
 
     def test_kanban_aprovacao_e_fila_de_separacao_fecham_o_fluxo(self):
         self.abastecer()
