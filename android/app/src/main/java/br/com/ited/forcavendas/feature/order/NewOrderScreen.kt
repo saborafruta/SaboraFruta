@@ -22,6 +22,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AddShoppingCart
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Search
@@ -30,6 +31,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -43,9 +46,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -70,6 +76,9 @@ import br.com.ited.forcavendas.data.SavedOrderDraft
 import br.com.ited.forcavendas.data.UserSession
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -110,6 +119,19 @@ fun NewOrderScreen(
     var conditionId by remember { mutableStateOf<Long?>(null) }
     var priority by remember { mutableStateOf("normal") }
     var deliveryDate by remember { mutableStateOf("") }
+    var selectedDeliveryShortcut by remember { mutableStateOf<Int?>(null) }
+    var showDeliveryDatePicker by remember { mutableStateOf(false) }
+    val earliestDeliveryMillis = remember {
+        LocalDate.now().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+    }
+    val deliveryDatePickerState = rememberDatePickerState(
+        selectableDates = remember(earliestDeliveryMillis) {
+            object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                    utcTimeMillis >= earliestDeliveryMillis
+            }
+        },
+    )
     var observation by remember { mutableStateOf("") }
     var draftMessage by remember { mutableStateOf<String?>(null) }
     var categoryMenuVisible by remember { mutableStateOf(false) }
@@ -173,12 +195,15 @@ fun NewOrderScreen(
             val saved = repository.savedOrderDraft(session)
             if (saved == null) {
                 paymentId = options.payments.firstOrNull()?.id
+                selectedDeliveryShortcut = 10
+                deliveryDate = LocalDate.now().plusDays(10).toString()
             } else {
                 selectedClient = saved.client
                 paymentId = saved.paymentId ?: options.payments.firstOrNull()?.id
                 conditionId = saved.conditionId
                 priority = saved.priority
                 deliveryDate = saved.deliveryDate
+                selectedDeliveryShortcut = deliveryShortcutFor(saved.deliveryDate)
                 observation = saved.observation
                 saved.lines.forEach { line ->
                     cart[line.product.id] = line.quantity
@@ -604,12 +629,52 @@ fun NewOrderScreen(
                         }
                         Spacer(Modifier.height(10.dp))
                         OutlinedTextField(
-                            value = deliveryDate,
-                            onValueChange = { deliveryDate = it },
+                            value = displayDeliveryDate(deliveryDate),
+                            onValueChange = {},
                             modifier = Modifier.fillMaxWidth(),
+                            readOnly = true,
                             label = { Text("Entrega prevista") },
-                            placeholder = { Text("AAAA-MM-DD") },
+                            placeholder = { Text("Selecione uma data") },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        deliveryDatePickerState.selectedDateMillis =
+                                            isoDateToUtcMillis(deliveryDate)
+                                        showDeliveryDatePicker = true
+                                    },
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.CalendarMonth,
+                                        contentDescription = "Abrir calendário",
+                                    )
+                                }
+                            },
                             singleLine = true,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Atalhos de entrega",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(listOf(5, 10, 15), key = { it }) { days ->
+                                FilterChip(
+                                    selected = selectedDeliveryShortcut == days,
+                                    onClick = {
+                                        selectedDeliveryShortcut = days
+                                        deliveryDate = LocalDate.now()
+                                            .plusDays(days.toLong())
+                                            .toString()
+                                    },
+                                    label = { Text("+$days dias") },
+                                )
+                            }
+                        }
+                        Text(
+                            "Os atalhos contam a partir de hoje.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.height(10.dp))
                         OutlinedTextField(
@@ -739,6 +804,50 @@ fun NewOrderScreen(
                 }
             }
         }
+    }
+    if (showDeliveryDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDeliveryDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deliveryDatePickerState.selectedDateMillis?.let { selected ->
+                            deliveryDate = utcMillisToIsoDate(selected)
+                            selectedDeliveryShortcut = deliveryShortcutFor(deliveryDate)
+                        }
+                        showDeliveryDatePicker = false
+                    },
+                ) { Text("Confirmar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeliveryDatePicker = false }) {
+                    Text("Cancelar")
+                }
+            },
+        ) {
+            DatePicker(state = deliveryDatePickerState)
+        }
+    }
+}
+
+private fun isoDateToUtcMillis(raw: String): Long? = runCatching {
+    LocalDate.parse(raw).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+}.getOrNull()
+
+private fun utcMillisToIsoDate(value: Long): String = Instant.ofEpochMilli(value)
+    .atZone(ZoneOffset.UTC)
+    .toLocalDate()
+    .toString()
+
+private fun displayDeliveryDate(raw: String): String = runCatching {
+    val date = LocalDate.parse(raw)
+    "%02d/%02d/%04d".format(date.dayOfMonth, date.monthValue, date.year)
+}.getOrDefault(raw)
+
+private fun deliveryShortcutFor(raw: String): Int? {
+    val date = runCatching { LocalDate.parse(raw) }.getOrNull() ?: return null
+    return listOf(5, 10, 15).firstOrNull {
+        date == LocalDate.now().plusDays(it.toLong())
     }
 }
 

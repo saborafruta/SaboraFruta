@@ -57,6 +57,8 @@ O APK será criado em `app/build/outputs/apk/debug/app-debug.apk`.
   excluir;
 - categorias apresentadas em uma lista suspensa, com os produtos do filtro
   exibidos logo abaixo e fechamento ao tocar fora;
+- calendário para a entrega prevista, com preenchimento inicial em +10 dias e
+  atalhos de +5, +10 e +15 dias;
 - interface de novo pedido reorganizada em cartões compactos e proporcionais;
 - logo preservada com contorno branco adaptado para o tema escuro;
 - preço comercial calculado pelo servidor para o cliente selecionado;
