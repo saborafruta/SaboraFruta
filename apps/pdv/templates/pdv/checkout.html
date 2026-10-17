@@ -5,7 +5,7 @@
 
 {% block content %}
 <style>
-  .checkout-page { width:100%; height:calc(100dvh - 7.5rem); min-height:560px; margin:0 auto; overflow:hidden; display:flex; flex-direction:column; --co-card:#18181b; --co-panel:#111318; --co-border:#2d323d; --co-muted:#9299a8; --co-text:#f7f8fb; --co-input:#101217; --co-blue:#3a7afe; --co-accent:#ff692e; --co-green:#38d493; }
+  .checkout-page { width:100%; height:calc(100dvh - 7.5rem); min-height:0; margin:0 auto; overflow:hidden; display:flex; flex-direction:column; --co-card:#18181b; --co-panel:#111318; --co-border:#2d323d; --co-muted:#9299a8; --co-text:#f7f8fb; --co-input:#101217; --co-blue:#3a7afe; --co-accent:#ff692e; --co-green:#38d493; }
   body.tema-claro .checkout-page { --co-card:#fff; --co-panel:#f8fafc; --co-border:#e2e8f0; --co-muted:#64748b; --co-text:#111827; --co-input:#f8fafc; --co-blue:#2563eb; --co-accent:#f15a24; --co-green:#059669; }
   .co-head { flex:0 0 auto; display:flex; justify-content:space-between; align-items:center; gap:14px; margin-bottom:8px; }
   .co-title { font-size:21px; line-height:1.1; font-weight:900; color:var(--co-text); }
@@ -55,7 +55,7 @@
   .co-client-search { position:relative; margin-top:7px; }
   .co-client-results { position:absolute; z-index:30; left:0; right:0; max-height:180px; overflow:auto; margin-top:4px; padding:4px; border:1px solid var(--co-border); background:var(--co-card); border-radius:9px; box-shadow:0 16px 35px rgba(0,0,0,.3); }
   .co-summary-card { min-height:0; display:flex; flex-direction:column; overflow:hidden; }
-  .co-payment-body { flex:1 1 auto; min-height:0; overflow:auto; overscroll-behavior:contain; }
+  .co-payment-body { flex:1 1 auto; min-height:0; overflow:hidden; }
   .co-summary { flex:0 0 auto; display:grid; gap:6px; padding:9px 10px 10px; border-top:1px solid var(--co-border); }
   .co-summary-row { display:flex; justify-content:space-between; gap:12px; color:var(--co-muted); font-size:13px; }
   .co-summary-row strong { color:var(--co-text); }
@@ -103,18 +103,27 @@
   .co-payment-metric { padding:8px 9px; border:1px solid var(--co-border); border-radius:8px; background:var(--co-panel); }
   .co-payment-metric span { display:block; color:var(--co-muted); font-size:9px; }
   .co-payment-metric strong { display:block; margin-top:2px; color:var(--co-text); font-size:12px; }
-  .co-payment-methods { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:6px; }
-  .co-payment-method { min-height:52px; padding:8px 11px; display:flex; align-items:center; gap:9px; border:1px solid var(--co-border); border-radius:10px; background:var(--co-panel); color:var(--co-text); font-weight:850; text-align:left; cursor:pointer; }
+  .co-quick-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .co-quick-action { min-height:48px; padding:9px 11px; display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid var(--co-border); border-radius:10px; background:var(--co-panel); color:var(--co-text); text-align:left; cursor:pointer; }
+  .co-quick-action>span:first-child { min-width:0; display:flex; align-items:center; gap:9px; }
+  .co-quick-action strong { display:block; font-size:12px; }
+  .co-quick-action small { display:block; max-width:120px; margin-top:2px; overflow:hidden; color:var(--co-muted); font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+  .co-quick-action kbd { flex:0 0 auto; padding:3px 6px; border:1px solid var(--co-border); border-bottom-width:2px; border-radius:6px; background:var(--co-input); color:var(--co-muted); font-size:9px; font-weight:900; }
+  .co-quick-icon { width:29px; height:29px; flex:0 0 auto; display:grid; place-items:center; border-radius:8px; background:color-mix(in srgb,var(--co-blue) 15%,transparent); color:var(--co-blue); font-size:12px; font-weight:900; }
+  .co-payment-modal { width:min(620px,100%); }
+  .co-payment-modal .co-payment-methods { max-height:min(430px,62dvh); overflow:auto; overscroll-behavior:contain; }
+  .co-payment-methods { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px; }
+  .co-payment-method { position:relative; min-height:58px; padding:9px 44px 9px 11px; display:flex; align-items:center; gap:9px; border:1px solid var(--co-border); border-radius:10px; background:var(--co-panel); color:var(--co-text); font-weight:850; text-align:left; cursor:pointer; }
   .co-payment-method.active { border-color:var(--co-blue); background:color-mix(in srgb,var(--co-blue) 18%,var(--co-card)); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--co-blue) 45%,transparent); }
   .co-payment-icon { width:29px; height:29px; flex:0 0 auto; display:grid; place-items:center; border-radius:8px; background:color-mix(in srgb,var(--co-border) 75%,transparent); color:var(--co-text); font-size:12px; }
   .co-payment-method.active .co-payment-icon { background:var(--co-blue); color:#fff; }
+  .co-payment-key { position:absolute; top:50%; right:10px; min-width:25px; padding:3px 5px; border:1px solid var(--co-border); border-bottom-width:2px; border-radius:6px; background:var(--co-input); color:var(--co-muted); font-size:10px; font-weight:900; text-align:center; transform:translateY(-50%); }
   .co-payment-value { padding:11px 12px; border:1px solid var(--co-border); border-radius:10px; background:var(--co-panel); }
   .co-payment-value .co-input { min-height:45px; padding:0; border:0; background:transparent; box-shadow:none; font-size:29px; font-weight:950; letter-spacing:-.5px; }
   .co-payment-value label { display:flex; justify-content:space-between; }
   .co-change-card { padding:10px 12px; display:flex; justify-content:space-between; align-items:center; border:1px solid color-mix(in srgb,var(--co-green) 38%,var(--co-border)); border-radius:10px; background:color-mix(in srgb,var(--co-green) 11%,transparent); }
   .co-change-card span { color:color-mix(in srgb,var(--co-green) 72%,var(--co-text)); font-size:10px; font-weight:850; }
   .co-change-card strong { color:var(--co-green); font-size:21px; }
-  .co-sale-discount { padding-top:2px; }
   .co-discount-inputs { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:10px; }
   .co-discount-modal-value { margin-top:7px; padding:12px 14px; display:flex; align-items:center; gap:9px; border:1px solid var(--co-border); border-radius:11px; background:var(--co-panel); }
   .co-discount-modal-value span { color:var(--co-accent); font-size:18px; font-weight:900; }
@@ -133,6 +142,7 @@
   .checkout-page button, .checkout-page a, .checkout-page [role="button"] { touch-action:manipulation; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; transition:transform 100ms ease-out,border-color 100ms ease-out,background-color 100ms ease-out; }
   .checkout-page button:active, .checkout-page [role="button"]:active { transform:scale(.98); }
   html.checkout-focus-mode body { overflow:hidden; }
+  html.checkout-route body { overflow:hidden; overscroll-behavior:none; }
   html.checkout-focus-mode .app-sidebar,
   html.checkout-focus-mode .app-topbar { display:none!important; }
   html.checkout-focus-mode .app-shell-content { margin-left:0!important; }
@@ -143,30 +153,35 @@
     .co-btn:hover { border-color:var(--co-blue); }
     .co-result:hover { background:color-mix(in srgb,var(--co-blue) 15%,transparent); outline:1px solid color-mix(in srgb,var(--co-blue) 55%,transparent); }
     .co-doc-option:hover { border-color:var(--co-blue); background:color-mix(in srgb,var(--co-blue) 11%,transparent); }
-    .co-payment-method:hover { border-color:color-mix(in srgb,var(--co-blue) 65%,var(--co-border)); }
+    .co-payment-method:hover,.co-quick-action:hover { border-color:color-mix(in srgb,var(--co-blue) 65%,var(--co-border)); }
   }
   @media(pointer:coarse){ .co-input,select.co-input,textarea.co-input{font-size:16px}.co-btn{min-height:44px}.co-btn-danger{min-width:44px}.co-qty{grid-template-columns:42px 52px 42px}.co-qty button,.co-qty input{height:42px}.co-qty input{width:52px} }
-  @media(max-height:760px) and (min-width:1181px){ .co-shortcut{padding:2px 5px}.co-sub{display:none}.co-side-body{padding:7px}.co-summary{padding:7px}.co-input{min-height:36px}.co-btn{min-height:35px}.co-payment-total{font-size:40px}.co-payment-hero{padding:12px}.co-payment-method{min-height:44px}.co-payment-value .co-input{font-size:24px} }
+  @media(max-height:760px) and (min-width:1181px){ .co-shortcut{padding:2px 5px}.co-sub{display:none}.co-side-body{padding:7px}.co-summary{padding:7px}.co-input{min-height:36px}.co-btn{min-height:35px}.co-payment-total{font-size:40px}.co-payment-hero{padding:12px}.co-quick-action{min-height:42px}.co-payment-value .co-input{font-size:24px} }
   @media(max-width:1180px){
-    .checkout-page{height:auto;min-height:0;overflow:visible}
-    .co-layout{grid-template-columns:1fr}
-    .co-side{display:block}
-    .co-summary-card{min-height:690px}
-    .co-cart-card{min-height:340px}
+    .checkout-page{height:calc(100dvh - 7.5rem);min-height:0;overflow:hidden}
+    .co-layout{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}
+    .co-main{min-height:0;gap:7px}
+    .co-side{display:block;min-height:0}
+    .co-summary-card{min-height:0;overflow:hidden}
+    .co-payment-hero{padding:9px 11px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .co-payment-label{margin-right:auto}.co-payment-total{margin-top:0;font-size:34px;white-space:nowrap}.co-payment-total small{font-size:15px;vertical-align:5px}
+    .co-payment-metrics{display:none}
+    .co-payment-body{padding:7px;display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,.72fr);gap:7px;align-items:end}
+    .co-quick-actions{grid-column:1}.co-payment-value{grid-column:2}.co-card-options{grid-column:1/-1}.co-change-card{grid-column:1/-1}
+    .co-summary{padding:7px 9px 9px}.co-summary-breakdown{display:none}.co-finish{min-height:48px}
     .co-shortcuts{justify-content:flex-start}
-    html.checkout-focus-mode .checkout-page{height:calc(100dvh - 16px);overflow:auto;overscroll-behavior:contain;padding-bottom:env(safe-area-inset-bottom,0)}
+    html.checkout-focus-mode .checkout-page{height:calc(100dvh - 16px);overflow:hidden;padding-bottom:env(safe-area-inset-bottom,0)}
   }
   @media(max-width:680px){
-    .co-head{align-items:flex-start;gap:10px}.co-head>div:first-child{min-width:0}.co-title{font-size:19px}.co-sub{font-size:11px}
+    .checkout-page{height:calc(100dvh - 6.5rem)}.co-head{align-items:center;gap:8px;margin-bottom:5px}.co-head>div:first-child{min-width:0}.co-title{font-size:18px}.co-sub{display:none}
     .co-head-actions{margin-left:auto}.co-fullscreen span{display:none}.co-fullscreen{width:44px;padding:0;justify-content:center}
-    .co-grid,.co-doc-list,.co-discount-inputs{grid-template-columns:1fr}.co-search-row{grid-template-columns:78px minmax(0,1fr)}.co-search-row .co-btn-primary{grid-column:1/-1}.co-results{top:105px}.co-shortcuts{display:none}
-    .co-client-card .co-side-body{grid-template-columns:1fr}.co-client-current{padding:9px}.co-client-card .co-section-head small{display:none}
-    .co-table thead{display:none}.co-table,.co-table tbody{display:block}.co-table tr{display:grid;grid-template-columns:1fr auto;grid-template-areas:'product remove' 'unit total' 'qty discount';gap:9px 12px;padding:13px;border-bottom:1px solid var(--co-border)}.co-table td{padding:0;border:0}.co-item-product{grid-area:product}.co-item-unit{grid-area:unit;color:var(--co-muted);font-size:12px}.co-item-qty{grid-area:qty}.co-item-discount{grid-area:discount}.co-item-total{grid-area:total;text-align:right}.co-item-remove{grid-area:remove}.co-item-discount-input{width:92px}.co-cart-scroll{overflow:visible}
-    .co-payment-total{font-size:44px}.co-payment-metrics{grid-template-columns:1fr 1fr}.co-payment-metric:first-child{grid-column:1/-1}.co-payment-method{min-height:56px}.co-payment-value .co-input{font-size:30px}
-    .co-summary-card{min-height:0;overflow:visible}.co-payment-body{overflow:visible}.co-finish{min-height:58px}.co-modal{padding:17px}.co-modal-actions{flex-direction:column-reverse}.co-modal-actions .co-btn{width:100%;justify-content:center;min-height:46px}
+    .co-grid,.co-doc-list,.co-discount-inputs{grid-template-columns:1fr}.co-search{padding:7px}.co-search-row{grid-template-columns:70px minmax(0,1fr) 68px;gap:5px}.co-results{top:58px;left:7px;right:7px}.co-shortcuts{display:none}.co-mode{margin-top:3px;font-size:9px}
+    .co-section-head{min-height:38px;padding:7px 9px}.co-client-card .co-side-body{grid-template-columns:1fr;padding:6px}.co-client-current{padding:6px 8px}.co-client-card .co-section-head small{display:none}.co-client-card .co-section-head .co-btn{min-height:32px;padding:5px 8px}.co-client-current .co-product-code{display:none}
+    .co-table thead{display:none}.co-table,.co-table tbody{display:block}.co-table tr{display:grid;grid-template-columns:1fr auto;grid-template-areas:'product remove' 'unit total' 'qty discount';gap:9px 12px;padding:13px;border-bottom:1px solid var(--co-border)}.co-table td{padding:0;border:0}.co-item-product{grid-area:product}.co-item-unit{grid-area:unit;color:var(--co-muted);font-size:12px}.co-item-qty{grid-area:qty}.co-item-discount{grid-area:discount}.co-item-total{grid-area:total;text-align:right}.co-item-remove{grid-area:remove}.co-item-discount-input{width:92px}.co-cart-scroll{overflow:auto}
+    .co-payment-hero{padding:7px 9px}.co-payment-label{font-size:9px}.co-payment-total{font-size:29px}.co-payment-body{grid-template-columns:1fr;padding:6px}.co-quick-actions,.co-payment-value{grid-column:1}.co-quick-action{min-height:44px}.co-payment-value{padding:7px 10px}.co-payment-value .co-input{min-height:36px;font-size:24px}.co-payment-value label{font-size:9px}.co-summary{padding:6px}.co-finish{min-height:48px}.co-modal{padding:17px}.co-payment-modal .co-payment-methods{max-height:min(420px,55dvh)}.co-modal-actions{flex-direction:column-reverse}.co-modal-actions .co-btn{width:100%;justify-content:center;min-height:46px}
     .co-input,select.co-input,textarea.co-input{font-size:16px}
   }
-  @media(max-width:390px){ .co-payment-methods{grid-template-columns:1fr}.co-payment-total{font-size:39px}.co-payment-metrics{grid-template-columns:1fr}.co-payment-metric:first-child{grid-column:auto} }
+  @media(max-width:470px){ .co-payment-methods{grid-template-columns:1fr}.co-quick-actions{gap:6px}.co-quick-action{padding:7px}.co-quick-action kbd{display:none}.co-payment-total{font-size:27px} }
 </style>
 
 {{ caixas|json_script:"checkout-caixas" }}
@@ -174,6 +189,7 @@
 {{ configuracao_descontos|json_script:"checkout-configuracao-descontos" }}
 {{ agendamento_checkout|json_script:"checkout-agendamento" }}
 {{ pedido_catalogo_checkout|json_script:"checkout-pedido-catalogo" }}
+<script>document.documentElement.classList.add('checkout-route');</script>
 <div class="checkout-page" x-data="checkoutVenda()" x-init="init()" @keydown.window="atalhoTeclado($event)">
   <div class="co-head">
     <div>
@@ -288,7 +304,7 @@
 
     <aside class="co-side">
       <div class="co-card co-summary-card">
-        <div class="co-section-head"><strong>Pagamento (F7)</strong><span class="co-count" aria-live="polite" x-text="formaSelecionada ? formaSelecionada.descricao : 'Selecione uma forma'"></span></div>
+        <div class="co-section-head"><strong>Resumo da venda</strong><span class="co-count" aria-live="polite" x-text="formaSelecionada ? formaSelecionada.descricao : 'Pagamento pendente'"></span></div>
         <div class="co-payment-hero">
           <div class="co-payment-label">Total a pagar</div>
           <div class="co-payment-total"><small>R$</small><span x-text="formatarValorSemCifrao(total)"></span></div>
@@ -299,18 +315,15 @@
           </div>
         </div>
         <div class="co-side-body co-payment-body">
-          <div class="co-field" x-ref="formaPagamento" tabindex="-1">
-            <label>Forma de pagamento</label>
-            <div class="co-payment-methods">
-              <template x-for="forma in formasPagamento" :key="'forma-'+forma.id">
-                <button type="button" class="co-payment-method" :class="{'active':String(forma.id)===String(formaPagamentoId)}" @click="selecionarForma(forma)" :aria-pressed="String(forma.id)===String(formaPagamentoId)">
-                  <span class="co-payment-icon" x-text="iconeFormaPagamento(forma)"></span><span x-text="forma.descricao"></span>
-                </button>
-              </template>
-            </div>
+          <div class="co-quick-actions">
+            <button type="button" class="co-quick-action" @click="solicitarAutorizacaoDesconto()" aria-haspopup="dialog">
+              <span><span class="co-quick-icon">%</span><span><strong>Desconto</strong><small x-text="descontoSolicitado ? '- '+moeda(descontoItens+desconto) : 'Aplicar na venda'"></small></span></span><kbd>F6</kbd>
+            </button>
+            <button type="button" class="co-quick-action" @click="abrirModalPagamento()" aria-haspopup="dialog">
+              <span><span class="co-quick-icon" x-text="formaSelecionada ? iconeFormaPagamento(formaSelecionada) : '$'"></span><span><strong>Forma de pagamento</strong><small x-text="formaSelecionada ? formaSelecionada.descricao : 'Selecionar forma'"></small></span></span><kbd>F7</kbd>
+            </button>
           </div>
-          <p class="co-empty" x-show="!formasPagamento.length" style="padding:20px 0">Nenhuma forma disponível no PDV.</p>
-          <div class="co-grid" x-show="formaCartao" x-cloak>
+          <div class="co-grid co-card-options" x-show="formaCartao" x-cloak>
             <div class="co-field">
               <label>Bandeira do cartão</label>
               <select x-ref="bandeiraPagamento" class="co-input" x-model="bandeiraPagamento">
@@ -323,10 +336,6 @@
                 <template x-for="parcela in opcoesParcelas" :key="parcela"><option :value="parcela" x-text="parcela+'x'"></option></template>
               </select>
             </div>
-          </div>
-          <div class="co-field co-sale-discount">
-            <label for="checkout-desconto">Desconto sobre a venda (F6)</label>
-            <input id="checkout-desconto" x-ref="desconto" class="co-input co-discount-trigger" type="text" inputmode="decimal" x-model="descontoEntrada" readonly @click="solicitarAutorizacaoDesconto()" @keydown.enter.prevent="solicitarAutorizacaoDesconto()" placeholder="Clique ou pressione F6" aria-haspopup="dialog">
           </div>
           <div class="co-field co-payment-value">
             <label for="checkout-valor-pagamento"><span>Valor recebido (F8)</span><span x-show="formaSelecionada" x-text="formaSelecionada?.descricao"></span></label>
@@ -351,6 +360,22 @@
         </div>
       </div>
     </aside>
+  </div>
+
+  <div class="co-backdrop" x-show="modalPagamento" x-cloak @click.self="fecharModalPagamento()">
+    <div class="co-modal co-payment-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-pagamento-titulo">
+      <h3 id="checkout-pagamento-titulo">Forma de pagamento</h3>
+      <p class="co-sub">Escolha uma opção ou pressione o atalho indicado.</p>
+      <div class="co-payment-methods" x-ref="listaFormasPagamento">
+        <template x-for="(forma, indice) in formasPagamento" :key="'forma-modal-'+forma.id">
+          <button type="button" class="co-payment-method" :class="{'active':String(forma.id)===String(formaPagamentoId)}" @click="selecionarFormaPagamento(forma)" :aria-pressed="String(forma.id)===String(formaPagamentoId)">
+            <span class="co-payment-icon" x-text="iconeFormaPagamento(forma)"></span><span x-text="forma.descricao"></span><kbd class="co-payment-key" x-text="atalhoFormaPagamento(indice)"></kbd>
+          </button>
+        </template>
+      </div>
+      <p class="co-empty" x-show="!formasPagamento.length" style="padding:20px 0">Nenhuma forma disponível no PDV.</p>
+      <div class="co-modal-actions"><button type="button" class="co-btn" @click="fecharModalPagamento()">Cancelar</button></div>
+    </div>
   </div>
 
   <div class="co-backdrop" x-show="!carregando && !sessao" x-cloak>
@@ -499,7 +524,7 @@ function checkoutVenda() {
     busca:'', quantidadeEntrada:'1', buscarPorNome:false, buscando:false, resultados:[], indiceProduto:-1, erroBusca:'', itens:[],
     buscaNomeLiberada:false, modalSenhaBuscaNome:false, usuarioAutorizadorId:'', senhaBuscaNome:'', erroSenhaBuscaNome:'', liberandoBuscaNome:false,
     descontoLiberado:false, modalSenhaDesconto:false, descontoModalEntrada:'', descontoModalPercentual:'', usuarioDescontoId:'', senhaDesconto:'', erroSenhaDesconto:'', liberandoDesconto:false, itemDescontoPendenteId:null,
-    formasPagamento:[], formaPagamentoId:null, bandeiraPagamento:'', parcelasPagamento:1, cliente:null, buscaCliente:'', clientes:[], indiceCliente:-1,
+    formasPagamento:[], formaPagamentoId:null, modalPagamento:false, bandeiraPagamento:'', parcelasPagamento:1, cliente:null, buscaCliente:'', clientes:[], indiceCliente:-1,
     descontoEntrada:'', valorPagamentoEntrada:'', valorPagamentoManual:false, mensagem:'', sucesso:false, finalizando:false,
     modalCliente:false, novoCliente:{razao_social:'',cpf_cnpj:'',celular:'',email:'',tipo_pessoa:'F'}, erroCliente:'', salvandoCliente:false,
     modalDocumento:false, vendaFinalizada:{id:null,numero:null}, processandoDocumento:false, mensagemDocumento:'',
@@ -582,7 +607,7 @@ function checkoutVenda() {
     focarProduto(){ this.focar('buscaProduto'); },
     focarQuantidade(){ this.focar('quantidadeProduto'); },
     focarCliente(){ this.focar('buscaCliente'); },
-    focarPagamento(){ this.focar('formaPagamento'); },
+    focarPagamento(){ this.abrirModalPagamento(); },
     focarValorPagamento(){ this.focar('valorPagamento'); },
     normalizarDesconto(){ this.mensagem=''; this.sincronizarValorPagamento(); },
     normalizarDescontoItem(item){ this.mensagem=''; if(this.numero(item.descontoEntrada)>this.totalBrutoItem(item))item.descontoEntrada=this.formatarNumeroInput(this.totalBrutoItem(item)); this.sincronizarValorPagamento(); },
@@ -603,10 +628,12 @@ function checkoutVenda() {
         evento.preventDefault();
         if(this.modalSenhaBuscaNome)this.fecharSenhaBuscaNome();
         else if(this.modalSenhaDesconto)this.fecharSenhaDesconto();
+        else if(this.modalPagamento)this.fecharModalPagamento();
         else if(this.modalDocumento)return;
         else this.fecharModais();
         return;
       }
+      if(this.modalPagamento){ this.atalhoPagamento(evento); return; }
       if(this.modalSenhaBuscaNome || this.modalSenhaDesconto)return;
       if(this.modalDocumento){ this.atalhoDocumento(evento); return; }
       if(this.modalCliente || !this.sessao || this.carregando)return;
@@ -614,7 +641,7 @@ function checkoutVenda() {
       else if(tecla==='F3'){ evento.preventDefault(); this.focarQuantidade(); }
       else if(tecla==='F4'){ evento.preventDefault(); evento.shiftKey ? this.abrirCadastroCliente() : this.focarCliente(); }
       else if(tecla==='F6'){ evento.preventDefault(); this.solicitarAutorizacaoDesconto(); }
-      else if(tecla==='F7'){ evento.preventDefault(); if(!evento.repeat)this.alternarFormaPagamento(); }
+      else if(tecla==='F7'){ evento.preventDefault(); if(!evento.repeat)this.abrirModalPagamento(); }
       else if(tecla==='F8'){ evento.preventDefault(); this.focarValorPagamento(); }
       else if(tecla==='F10'){ evento.preventDefault(); this.solicitarFinalizacao(); }
     },
@@ -763,11 +790,21 @@ function checkoutVenda() {
       this.quantidadeEntrada='1'; this.busca=''; this.resultados=[]; this.indiceProduto=-1; this.erroBusca=''; this.mensagem=''; this.sincronizarValorPagamento(); this.focarProduto();
     },
     selecionarForma(forma){ this.formaPagamentoId=forma.id; this.bandeiraPagamento=''; this.parcelasPagamento=Math.max(1,Number(forma.minimo_parcelas||1)); this.sincronizarValorPagamento(true); },
-    alternarFormaPagamento(){
-      if(!this.formasPagamento.length){ this.mensagem='Nenhuma forma de pagamento disponível.'; this.focarPagamento(); return; }
-      const indiceAtual=this.formasPagamento.findIndex(forma=>String(forma.id)===String(this.formaPagamentoId));
-      const proximoIndice=indiceAtual<0 ? 0 : (indiceAtual+1)%this.formasPagamento.length;
-      this.selecionarForma(this.formasPagamento[proximoIndice]); this.mensagem=''; this.focarPagamento();
+    atalhoFormaPagamento(indice){ return indice<9 ? String(indice+1) : String.fromCharCode(65+indice-9); },
+    abrirModalPagamento(){
+      if(!this.formasPagamento.length){ this.mensagem='Nenhuma forma de pagamento disponível.'; return; }
+      this.modalPagamento=true; this.mensagem='';
+      this.$nextTick(()=>{ const lista=this.$refs.listaFormasPagamento; const botao=lista?.querySelector('.co-payment-method.active')||lista?.querySelector('.co-payment-method'); botao?.focus(); });
+    },
+    fecharModalPagamento(){ this.modalPagamento=false; this.focarProduto(); },
+    selecionarFormaPagamento(forma){ this.selecionarForma(forma); this.modalPagamento=false; this.mensagem=''; this.formaCartao ? this.focar('bandeiraPagamento') : this.focarValorPagamento(); },
+    atalhoPagamento(evento){
+      const tecla=String(evento.key||'').toUpperCase();
+      if(tecla==='F7'){ evento.preventDefault(); return; }
+      if(evento.repeat)return;
+      const indice=this.formasPagamento.findIndex((forma,posicao)=>this.atalhoFormaPagamento(posicao)===tecla);
+      if(indice<0)return;
+      evento.preventDefault(); this.selecionarFormaPagamento(this.formasPagamento[indice]);
     },
     selecionarFormaPorId(){ const forma=this.formaSelecionada; if(forma)this.selecionarForma(forma); },
     alterarQuantidade(item,delta){ this.definirQuantidade(item,Number(item.quantidade)+Number(delta)); },
@@ -874,7 +911,7 @@ function checkoutVenda() {
       finally{this.processandoDocumento=false;}
     },
     fecharDocumento(){ this.modalDocumento=false; this.mensagemDocumento=''; this.focarProduto(); },
-    fecharModais(){this.modalCliente=false;this.resultados=[];this.indiceProduto=-1;this.clientes=[];this.indiceCliente=-1;this.focarProduto();}
+    fecharModais(){this.modalCliente=false;this.modalPagamento=false;this.resultados=[];this.indiceProduto=-1;this.clientes=[];this.indiceCliente=-1;this.focarProduto();}
   };
 }
 </script>

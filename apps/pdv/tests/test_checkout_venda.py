@@ -192,7 +192,7 @@ class CheckoutVendaTests(TestCase):
         resposta = self.client.get(reverse('pdv:checkout'))
 
         self.assertContains(resposta, 'x-ref="quantidadeProduto"')
-        self.assertContains(resposta, 'x-ref="formaPagamento"')
+        self.assertContains(resposta, 'x-ref="listaFormasPagamento"')
         self.assertContains(resposta, 'x-ref="valorPagamento"')
         self.assertContains(resposta, '<kbd>F10</kbd>Finalizar', html=True)
         self.assertContains(resposta, 'quantidadeParaProduto(produto)')
@@ -217,6 +217,11 @@ class CheckoutVendaTests(TestCase):
         self.assertContains(resposta, 'Desconto no item')
         self.assertContains(resposta, 'descontoItemValor(item)')
         self.assertContains(resposta, "formatarQuantidade(quantidadeItens)")
+        self.assertContains(resposta, 'Forma de pagamento</strong>')
+        self.assertContains(resposta, 'abrirModalPagamento()')
+        self.assertContains(resposta, 'atalhoFormaPagamento(indice)')
+        self.assertNotContains(resposta, 'id="checkout-desconto"')
+        self.assertContains(resposta, '.checkout-page{height:calc(100dvh - 7.5rem);min-height:0;overflow:hidden}')
 
     def test_desconto_exige_aprovacao_e_escape_nao_fecha_modal_pos_venda(self):
         self.habilitar_checkout()
@@ -505,18 +510,23 @@ checkout.formasPagamento = [
   {id: 4, descricao: 'Pix', tipo: 'pix'},
   {id: 5, descricao: 'Crédito', tipo: 'cartao_credito', minimo_parcelas: 1}
 ];
-checkout.alternarFormaPagamento();
-assert.equal(checkout.formaPagamentoId, 3);
-checkout.alternarFormaPagamento();
-assert.equal(checkout.formaPagamentoId, 4);
-checkout.alternarFormaPagamento();
-assert.equal(checkout.formaPagamentoId, 5);
-checkout.alternarFormaPagamento();
-assert.equal(checkout.formaPagamentoId, 3);
 checkout.carregando = false;
 checkout.atalhoTeclado({key: 'F7', repeat: false, preventDefault: () => {}});
+assert.equal(checkout.modalPagamento, true);
+assert.equal(checkout.formaPagamentoId, null);
+checkout.atalhoTeclado({key: '2', repeat: false, preventDefault: () => {}});
 assert.equal(checkout.formaPagamentoId, 4);
+assert.equal(checkout.modalPagamento, false);
+checkout.atalhoTeclado({key: 'F7', repeat: false, preventDefault: () => {}});
+assert.equal(checkout.modalPagamento, true);
 checkout.atalhoTeclado({key: 'F7', repeat: true, preventDefault: () => {}});
+assert.equal(checkout.formaPagamentoId, 4);
+checkout.atalhoTeclado({key: '3', repeat: false, preventDefault: () => {}});
+assert.equal(checkout.formaPagamentoId, 5);
+assert.equal(checkout.atalhoFormaPagamento(0), '1');
+assert.equal(checkout.atalhoFormaPagamento(9), 'A');
+checkout.abrirModalPagamento();
+checkout.atalhoPagamento({key: '2', repeat: false, preventDefault: () => {}});
 assert.equal(checkout.formaPagamentoId, 4);
 assert.equal(checkout.valorPagamentoEntrada, '50,00');
 checkout.valorPagamentoEntrada = '60,00';
