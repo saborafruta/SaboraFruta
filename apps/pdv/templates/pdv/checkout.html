@@ -118,7 +118,7 @@
   .co-payment-icon { width:29px; height:29px; flex:0 0 auto; display:grid; place-items:center; border-radius:8px; background:color-mix(in srgb,var(--co-border) 75%,transparent); color:var(--co-text); font-size:12px; }
   .co-payment-method.active .co-payment-icon { background:var(--co-blue); color:#fff; }
   .co-payment-key { position:absolute; top:50%; right:10px; min-width:25px; padding:3px 5px; border:1px solid var(--co-border); border-bottom-width:2px; border-radius:6px; background:var(--co-input); color:var(--co-muted); font-size:10px; font-weight:900; text-align:center; transform:translateY(-50%); }
-  .co-payment-value { padding:11px 12px; border:1px solid var(--co-border); border-radius:10px; background:var(--co-panel); }
+  .co-payment-value { margin-top:8px; padding:11px 12px; border:1px solid var(--co-border); border-radius:10px; background:var(--co-panel); }
   .co-payment-value .co-input { min-height:45px; padding:0; border:0; background:transparent; box-shadow:none; font-size:29px; font-weight:950; letter-spacing:-.5px; }
   .co-payment-value label { display:flex; justify-content:space-between; }
   .co-change-card { padding:10px 12px; display:flex; justify-content:space-between; align-items:center; border:1px solid color-mix(in srgb,var(--co-green) 38%,var(--co-border)); border-radius:10px; background:color-mix(in srgb,var(--co-green) 11%,transparent); }
@@ -167,7 +167,7 @@
     .co-payment-label{margin-right:auto}.co-payment-total{margin-top:0;font-size:34px;white-space:nowrap}.co-payment-total small{font-size:15px;vertical-align:5px}
     .co-payment-metrics{display:none}
     .co-payment-body{padding:7px;display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,.72fr);gap:7px;align-items:end}
-    .co-quick-actions{grid-column:1}.co-payment-value{grid-column:2}.co-card-options{grid-column:1/-1}.co-change-card{grid-column:1/-1}
+    .co-quick-actions{grid-column:1}.co-payment-value{grid-column:2;margin-top:0}.co-card-options{grid-column:1/-1}.co-change-card{grid-column:1/-1}
     .co-summary{padding:7px 9px 9px}.co-summary-breakdown{display:none}.co-finish{min-height:48px}
     .co-shortcuts{justify-content:flex-start}
     html.checkout-focus-mode .checkout-page{height:calc(100dvh - 16px);overflow:hidden;padding-bottom:env(safe-area-inset-bottom,0)}

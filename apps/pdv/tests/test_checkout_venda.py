@@ -226,6 +226,8 @@ class CheckoutVendaTests(TestCase):
         self.assertContains(resposta, '.co-summary-card>.co-section-head{display:none}')
         self.assertContains(resposta, '.co-cart-card{min-height:78px}')
         self.assertContains(resposta, '.co-quick-actions{grid-column:1;gap:5px}')
+        self.assertContains(resposta, '.co-payment-value { margin-top:8px;')
+        self.assertContains(resposta, '.co-payment-value{grid-column:2;margin-top:0}')
 
     def test_desconto_exige_aprovacao_e_escape_nao_fecha_modal_pos_venda(self):
         self.habilitar_checkout()
