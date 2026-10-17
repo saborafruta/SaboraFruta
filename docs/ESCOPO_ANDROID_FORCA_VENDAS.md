@@ -43,3 +43,23 @@ antes da baixa atômica. Produtos sem controle de lote não exigem seleção.
 - versão instalável: 12 a 15 dias úteis;
 - piloto completo: 22 a 28 dias úteis;
 - produção: após validação do piloto nos aparelhos reais.
+
+## Marco técnico 0.2
+
+Implementado no primeiro recorte vertical:
+
+- autenticação JWT no diretório central e seleção de empresa/filial;
+- contratos REST de clientes, produtos, preços, pagamentos e pedidos;
+- envio idempotente de pedidos e confirmação pelo número oficial;
+- cache local e fila de pedidos pendentes quando a internet falha;
+- sincronização manual e periódica condicionada à disponibilidade de rede;
+- consulta da fila de separação, depósitos, saldos e lotes vigentes;
+- conferência de quantidade/depósito, escolha manual de lote ou FEFO e
+  conclusão online idempotente;
+- baixa de estoque reutilizando o `VendaService`, sem duplicar a regra do ERP.
+
+Produtos controlados permitem escolher um lote vigente ou manter a sugestão
+automática por FEFO. O servidor revalida status, validade, saldo global do lote
+e saldo do depósito antes da baixa. O modelo atual ainda não distribui o saldo
+de cada lote entre depósitos; essa granularidade é uma evolução futura e fica
+explicitada para não sugerir uma precisão que o banco ainda não armazena.

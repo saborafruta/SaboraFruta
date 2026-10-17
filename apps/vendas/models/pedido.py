@@ -4,6 +4,7 @@ Ciclo: rascunho → aguardando_aprovacao → aprovado → confirmado → em_sepa
        → faturado → entregue | cancelado | devolvido
 """
 from django.db import models
+from django.db.models import Q
 
 from apps.core.models.base import FilialScopedModel, TimestampedModel
 
@@ -53,6 +54,11 @@ class PedidoVenda(FilialScopedModel):
         SEM_FRETE = 9, '9 - Sem frete'
 
     numero_pedido = models.CharField(max_length=20, db_index=True)
+    idempotency_key = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text='Identificador único enviado por clientes offline para evitar pedidos duplicados.',
+    )
 
     # Partes envolvidas
     cliente = models.ForeignKey(
@@ -175,6 +181,13 @@ class PedidoVenda(FilialScopedModel):
         indexes = [
             models.Index(fields=['filial', 'status']),
             models.Index(fields=['cliente', '-data_emissao']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['filial', 'idempotency_key'],
+                condition=~Q(idempotency_key=''),
+                name='pedido_venda_idempotencia_filial_unica',
+            ),
         ]
         verbose_name = 'Pedido de Venda'
         verbose_name_plural = 'Pedidos de Venda'

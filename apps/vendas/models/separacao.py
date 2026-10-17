@@ -1,5 +1,6 @@
 """Separação de pedido — processo intermediário antes do faturamento."""
 from django.db import models
+from django.db.models import Q
 
 from apps.core.models.base import FilialScopedModel, TimestampedModel
 
@@ -17,6 +18,11 @@ class SeparacaoPedido(FilialScopedModel):
         'vendas.PedidoVenda', on_delete=models.PROTECT, related_name='separacoes',
     )
     numero = models.CharField(max_length=20)
+    idempotency_key = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text='Identificador único da conferência enviada pelo aplicativo.',
+    )
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.ABERTA,
     )
@@ -31,6 +37,13 @@ class SeparacaoPedido(FilialScopedModel):
     class Meta:
         db_table = 'separacoes_pedido'
         ordering = ['-data_inicio']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['filial', 'idempotency_key'],
+                condition=~Q(idempotency_key=''),
+                name='separacao_idempotencia_filial_unica',
+            ),
+        ]
 
     def __str__(self):
         return f'Separação {self.numero} — {self.pedido.numero_pedido}'

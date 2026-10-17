@@ -22,7 +22,7 @@ from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import (
     DadosInvalidosError, EstoqueInsuficienteError, PermissaoNegadaError,
 )
-from apps.estoque.models import Deposito, Estoque, MovimentacaoEstoque
+from apps.estoque.models import Deposito, Estoque, LoteProduto, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
 from apps.produtos.services.preco_service import PrecoService
@@ -45,7 +45,7 @@ class VendaService:
     @tenant_atomic
     def criar_pedido(
         cls, filial, usuario, cliente, tipo=PedidoVenda.Tipo.PEDIDO,
-        representante=None, tabela_preco=None, observacao='',
+        representante=None, tabela_preco=None, observacao='', idempotency_key='',
     ) -> PedidoVenda:
         """Cria pedido em rascunho."""
         if cliente.bloqueado:
@@ -68,6 +68,7 @@ class VendaService:
             status=PedidoVenda.Status.RASCUNHO,
             data_emissao=timezone.now(),
             observacao=observacao,
+            idempotency_key=(idempotency_key or '').strip()[:64],
         )
         return pedido
 
@@ -213,7 +214,7 @@ class VendaService:
     @tenant_atomic
     def separar_pedido(
         cls, pedido: PedidoVenda, usuario, itens_conferidos: list[dict] | None = None,
-        observacao: str = '',
+        observacao: str = '', idempotency_key: str = '',
     ) -> SeparacaoPedido:
         """
         Cria separação consumindo lotes via FEFO.
@@ -234,6 +235,7 @@ class VendaService:
             status=SeparacaoPedido.Status.EM_ANDAMENTO,
             usuario_separador=usuario,
             observacao=(observacao or '').strip(),
+            idempotency_key=(idempotency_key or '').strip()[:64],
         )
 
         itens_originais = list(pedido.itens.select_related('produto').order_by('numero_item'))
@@ -429,17 +431,64 @@ class VendaService:
                         f'"{deposito_saida.nome}". Disponível: '
                         f'{estoque_saida.quantidade_disponivel}; solicitado: {item.quantidade}.'
                     )
-                movimentos = MovimentacaoService.registrar_saida_fefo(
-                    produto_id=item.produto_id,
-                    filial_id=pedido.filial_id,
-                    quantidade=item.quantidade,
-                    usuario_id=usuario.pk,
-                    tipo_operacao=MovimentacaoEstoque.TipoOperacao.SAIDA,
-                    documento_tipo=MovimentacaoEstoque.DocumentoTipo.PEDIDO_VENDA,
-                    documento_id=pedido.pk,
-                    documento_numero=pedido.numero_pedido,
-                    deposito_id=deposito_saida_id,
-                )
+                lotes_informados = dados_por_item.get(item.pk, {}).get('lotes') or []
+                if lotes_informados and item.produto.controla_lote:
+                    ids = [int(lote['lote_id']) for lote in lotes_informados]
+                    if len(ids) != len(set(ids)):
+                        raise DadosInvalidosError(
+                            f'Não repita o mesmo lote no item {item.numero_item}.'
+                        )
+                    total_lotes = sum(
+                        (Decimal(str(lote['quantidade'])) for lote in lotes_informados),
+                        Decimal('0'),
+                    )
+                    if total_lotes != item.quantidade:
+                        raise DadosInvalidosError(
+                            f'A soma dos lotes do item {item.numero_item} deve ser '
+                            f'{item.quantidade}.'
+                        )
+                    lotes = {
+                        lote.pk: lote
+                        for lote in LoteProduto.objects.filter(
+                            pk__in=ids,
+                            produto_id=item.produto_id,
+                            filial_id=pedido.filial_id,
+                        )
+                    }
+                    if set(lotes) != set(ids):
+                        raise DadosInvalidosError(
+                            f'Um dos lotes do item {item.numero_item} não pertence ao produto.'
+                        )
+                    movimentos = []
+                    for alocacao in lotes_informados:
+                        lote = lotes[int(alocacao['lote_id'])]
+                        quantidade_lote = Decimal(str(alocacao['quantidade']))
+                        movimentos.append(MovimentacaoService.registrar_movimentacao(
+                            produto_id=item.produto_id,
+                            filial_id=pedido.filial_id,
+                            quantidade=quantidade_lote,
+                            usuario_id=usuario.pk,
+                            lote_id=lote.pk,
+                            valor_unitario=lote.custo_unitario,
+                            tipo_operacao=MovimentacaoEstoque.TipoOperacao.SAIDA,
+                            documento_tipo=MovimentacaoEstoque.DocumentoTipo.PEDIDO_VENDA,
+                            documento_id=pedido.pk,
+                            documento_numero=pedido.numero_pedido,
+                            deposito_id=deposito_saida_id,
+                            observacao=f'Lote escolhido na separação: {lote.numero_lote}',
+                        ))
+                else:
+                    movimentos = MovimentacaoService.registrar_saida_fefo(
+                        produto_id=item.produto_id,
+                        filial_id=pedido.filial_id,
+                        quantidade=item.quantidade,
+                        usuario_id=usuario.pk,
+                        tipo_operacao=MovimentacaoEstoque.TipoOperacao.SAIDA,
+                        documento_tipo=MovimentacaoEstoque.DocumentoTipo.PEDIDO_VENDA,
+                        documento_id=pedido.pk,
+                        documento_numero=pedido.numero_pedido,
+                        deposito_id=deposito_saida_id,
+                    )
                 item.quantidade_reservada = Decimal('0')
                 item.save(update_fields=['quantidade_reservada', 'updated_at'])
                 for movimento in movimentos:

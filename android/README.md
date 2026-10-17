@@ -38,3 +38,27 @@ O APK será criado em `app/build/outputs/apk/debug/app-debug.apk`.
 - toda escrita usa identificador idempotente para não duplicar pedidos;
 - preço, crédito, estoque, depósito e lote são revalidados no servidor;
 - a baixa definitiva da separação exige conexão.
+
+## Funcionalidades da versão 0.2
+
+- login JWT com o mesmo usuário do ITED;
+- seleção segura de empresa e filial pelo Banco Gerencial;
+- busca de clientes por ID, nome, CPF/CNPJ ou celular;
+- busca de produtos por ID, código, código de barras ou nome;
+- preço comercial calculado pelo servidor para o cliente selecionado;
+- criação de pedido externo com forma e condição de pagamento;
+- fila local de pedidos quando a conexão falha, com envio idempotente;
+- sincronização manual e automática a cada 15 minutos quando houver rede;
+- acompanhamento pelo número oficial devolvido pelo ITED;
+- fila de separação com saldo por depósito e lotes vigentes;
+- escolha manual de lote ou baixa automática por FEFO;
+- conclusão online da separação com nova validação de estoque.
+
+## API utilizada
+
+Os endpoints ficam sob `/api/v1/mobile/`. Requisições operacionais enviam
+`Authorization: Bearer`, `X-Tenant-Alias` e `X-Filial-ID`. Criação de pedido e
+conclusão da separação também exigem `Idempotency-Key`.
+
+O aplicativo não emite documento fiscal. Depois da separação, faturamento,
+financeiro e eventual emissão fiscal continuam nos fluxos do ERP web.

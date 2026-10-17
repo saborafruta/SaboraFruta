@@ -1,0 +1,159 @@
+package br.com.ited.forcavendas.data
+
+data class AuthTokens(
+    val access: String,
+    val refresh: String,
+)
+
+data class WorkContext(
+    val tenantAlias: String,
+    val empresaId: Long,
+    val empresaNome: String,
+    val filialId: Long,
+    val filialNome: String,
+    val filialCnpj: String,
+    val podeCriarPedido: Boolean,
+    val podeSeparar: Boolean,
+)
+
+data class UserSession(
+    val tokens: AuthTokens,
+    val usuarioNome: String,
+    val usuarioEmail: String,
+    val context: WorkContext,
+)
+
+data class LoginResult(
+    val tokens: AuthTokens,
+    val usuarioNome: String,
+    val usuarioEmail: String,
+    val contexts: List<WorkContext>,
+)
+
+data class Client(
+    val id: Long,
+    val nome: String,
+    val documento: String,
+    val cidadeUf: String,
+    val creditoDisponivel: String,
+    val tabelaPreco: String,
+    val prazoPagamentoDias: Int,
+    val bloqueado: Boolean,
+    val motivoBloqueio: String,
+)
+
+data class StockBalance(
+    val depositoId: Long,
+    val depositoNome: String,
+    val disponivel: String,
+)
+
+data class Product(
+    val id: Long,
+    val descricao: String,
+    val codigo: String,
+    val unidade: String,
+    val preco: String,
+    val estoqueDisponivel: String,
+    val controlaLote: Boolean,
+    val podeVender: Boolean,
+    val bloqueios: List<String>,
+    val estoques: List<StockBalance>,
+)
+
+data class PaymentOption(
+    val id: Long,
+    val descricao: String,
+)
+
+data class PaymentCondition(
+    val id: Long,
+    val descricao: String,
+)
+
+data class OrderOptions(
+    val payments: List<PaymentOption>,
+    val conditions: List<PaymentCondition>,
+)
+
+data class OrderLineDraft(
+    val product: Product,
+    val quantity: String,
+)
+
+data class OrderDraft(
+    val client: Client,
+    val paymentId: Long,
+    val conditionId: Long?,
+    val prazoDias: Int,
+    val prioridade: String,
+    val dataEntrega: String?,
+    val observacao: String,
+    val lines: List<OrderLineDraft>,
+)
+
+data class SubmitOrderResult(
+    val orderId: Long?,
+    val officialNumber: String?,
+    val queued: Boolean,
+)
+
+data class OrderSummary(
+    val id: Long,
+    val numero: String,
+    val cliente: String,
+    val status: String,
+    val statusDescricao: String,
+    val valorTotal: String,
+    val dataEmissao: String,
+)
+
+data class BatchSuggestion(
+    val id: Long,
+    val numero: String,
+    val quantidade: String,
+    val validade: String?,
+)
+
+data class SeparationDeposit(
+    val id: Long,
+    val nome: String,
+    val disponivel: String,
+    val padrao: Boolean,
+)
+
+data class SeparationLine(
+    val id: Long,
+    val numeroItem: Int,
+    val produtoDescricao: String,
+    val produtoCodigo: String,
+    val unidade: String,
+    val quantidadeSolicitada: String,
+    val controlaLote: Boolean,
+    val lotesSugeridos: List<BatchSuggestion>,
+    val depositos: List<SeparationDeposit>,
+)
+
+data class SeparationOrder(
+    val id: Long,
+    val numero: String,
+    val cliente: String,
+    val prioridade: String,
+    val dataEntrega: String?,
+    val status: String,
+    val lines: List<SeparationLine>,
+)
+
+data class SeparationInput(
+    val itemId: Long,
+    val depositoId: Long,
+    val quantidade: String,
+    val batchId: Long? = null,
+    val observacao: String = "",
+)
+
+data class SyncSummary(
+    val pendingBefore: Int,
+    val pendingAfter: Int,
+    val sentOrders: Int,
+)

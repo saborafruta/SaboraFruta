@@ -10,6 +10,10 @@ from apps.core.views import HomeRedirectView
 
 urlpatterns = [
     path('health/', health_check, name='health'),
+    path(
+        'api/v1/mobile/',
+        include('apps.vendas.api_mobile.urls', namespace='forca_vendas_mobile_api'),
+    ),
     path('api/v1/', include('apps.integracoes.urls', namespace='integracoes_api')),
     path('api/produtos/', include('apps.produtos.api.urls', namespace='produtos_api')),
     path('api/pdv/', include('apps.pdv.api.urls', namespace='pdv_api')),
