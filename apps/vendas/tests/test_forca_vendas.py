@@ -508,6 +508,19 @@ assert.equal(pedido.buscaProdutoExecutada, false);
         self.assertContains(resposta, 'body.tema-claro .fk-shell')
         self.assertNotContains(resposta, 'var(--erp-card-bg,#fff)')
 
+    def test_busca_de_cliente_evitar_zoom_automatico_no_mobile(self):
+        resposta = self.client.get(reverse('vendas:pedido-externo-novo'))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(
+            resposta,
+            '.fv-client-search-input{font-size:16px!important',
+        )
+        self.assertContains(resposta, 'class="form-input fv-client-search-input w-full"')
+        self.assertContains(resposta, 'inputmode="search"')
+        self.assertContains(resposta, 'enterkeyhint="search"')
+        self.assertNotContains(resposta, 'user-scalable=no')
+
     def test_kanban_aprovacao_e_fila_de_separacao_fecham_o_fluxo(self):
         self.abastecer()
         criado = self.criar_pedido_pela_tela().json()
