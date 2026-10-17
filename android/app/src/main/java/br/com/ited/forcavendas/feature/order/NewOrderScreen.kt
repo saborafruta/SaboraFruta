@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -863,10 +864,11 @@ private fun ProductResult(product: Product, inCart: Boolean, onAdd: () -> Unit) 
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "Disponível ${product.estoqueDisponivel} ${product.unidade}",
+                    "Total disponível: ${product.estoqueDisponivel} ${product.unidade}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                ProductStockBalances(product)
                 product.bloqueios.firstOrNull()?.let {
                     Text(
                         it,
@@ -926,6 +928,7 @@ private fun CartItemCard(
                     )
                 }
             }
+            ProductStockBalances(product)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -954,6 +957,59 @@ private fun CartItemCard(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProductStockBalances(product: Product) {
+    if (product.estoques.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(
+            "Estoque por depósito",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            product.estoques.forEach { stock ->
+                val containerColor = when {
+                    stock.origemPedido -> MaterialTheme.colorScheme.primaryContainer
+                    stock.permiteVenda -> MaterialTheme.colorScheme.secondaryContainer
+                    else -> MaterialTheme.colorScheme.surfaceVariant
+                }
+                val contentColor = when {
+                    stock.origemPedido -> MaterialTheme.colorScheme.onPrimaryContainer
+                    stock.permiteVenda -> MaterialTheme.colorScheme.onSecondaryContainer
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = containerColor,
+                    contentColor = contentColor,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            if (stock.origemPedido) "✓ ${stock.depositoNome}" else stock.depositoNome,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            "${stock.disponivel} ${product.unidade}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
             }
         }

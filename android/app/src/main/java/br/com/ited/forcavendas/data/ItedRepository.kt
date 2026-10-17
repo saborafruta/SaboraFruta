@@ -469,6 +469,8 @@ class ItedRepository(private val store: SessionStore) {
                 depositoId = saldo.getLong("deposito_id"),
                 depositoNome = saldo.getString("deposito_nome"),
                 disponivel = saldo.getString("disponivel"),
+                permiteVenda = saldo.optBoolean("permite_venda"),
+                origemPedido = saldo.optBoolean("origem_pedido"),
             )
         } ?: emptyList(),
     )
@@ -491,7 +493,9 @@ class ItedRepository(private val store: SessionStore) {
                 JSONObject()
                     .put("deposito_id", stock.depositoId)
                     .put("deposito_nome", stock.depositoNome)
-                    .put("disponivel", stock.disponivel),
+                    .put("disponivel", stock.disponivel)
+                    .put("permite_venda", stock.permiteVenda)
+                    .put("origem_pedido", stock.origemPedido),
             )
         }
         return JSONObject()

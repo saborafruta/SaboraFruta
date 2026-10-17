@@ -193,6 +193,44 @@ class ForcaVendasMobileApiTests(TestCase):
             [categoria['id'] for categoria in opcoes.json()['categorias']],
         )
 
+    def test_catalogo_mobile_exibe_saldo_de_todos_os_depositos(self):
+        loja_id = Deposito.padrao_id(self.filial.pk)
+        Deposito.objects.filter(pk=loja_id).update(nome='Frente de loja')
+        galpao = Deposito.objects.create(
+            filial=self.filial,
+            nome='Galpão',
+            tipo=Deposito.Tipo.REVENDA,
+            permite_venda=True,
+            permite_producao=False,
+        )
+        for deposito_id, quantidade in ((loja_id, '7'), (galpao.pk, '13')):
+            MovimentacaoService.registrar_movimentacao(
+                produto_id=self.produto.pk,
+                filial_id=self.filial.pk,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+                quantidade=Decimal(quantidade),
+                usuario_id=self.usuario.pk,
+                valor_unitario=Decimal('5'),
+                deposito_id=deposito_id,
+            )
+
+        resposta = self.client.get(
+            reverse('forca_vendas_mobile_api:produtos'),
+            {'cliente_id': self.cliente.pk, 'q': self.produto.codigo},
+            **self.headers,
+        )
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        saldos = {
+            saldo['deposito_nome']: saldo
+            for saldo in resposta.json()['produtos'][0]['estoques']
+        }
+
+        self.assertEqual(saldos['Frente de loja']['disponivel'], '7.000')
+        self.assertEqual(saldos['Galpão']['disponivel'], '13.000')
+        self.assertTrue(saldos['Frente de loja']['origem_pedido'])
+        self.assertTrue(saldos['Galpão']['permite_venda'])
+        self.assertFalse(saldos['Galpão']['origem_pedido'])
+
     def test_pedido_mobile_e_idempotente_e_recebe_numero_oficial(self):
         chave = 'pedido-mobile-0001'
         url = reverse('forca_vendas_mobile_api:pedidos')

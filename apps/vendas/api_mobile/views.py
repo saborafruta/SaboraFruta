@@ -266,6 +266,8 @@ class ProdutosMobileView(MobileTenantAPIView):
                         'deposito_id': saldo['id'],
                         'deposito_nome': saldo['nome'],
                         'disponivel': _decimal(saldo['disponivel'], 3),
+                        'permite_venda': saldo['permite_venda'],
+                        'origem_pedido': saldo['origem_pedido'],
                     }
                     for saldo in produto.saldos_depositos
                 ],

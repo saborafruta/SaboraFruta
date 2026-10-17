@@ -46,6 +46,8 @@ data class StockBalance(
     val depositoId: Long,
     val depositoNome: String,
     val disponivel: String,
+    val permiteVenda: Boolean,
+    val origemPedido: Boolean,
 )
 
 data class Product(

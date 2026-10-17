@@ -50,6 +50,8 @@ O APK será criado em `app/build/outputs/apk/debug/app-debug.apk`.
   resultados ao tocar fora;
 - descoberta de produtos por Destaques, Todos ou categoria, seguindo o mesmo
   fluxo da força de vendas mobile no navegador;
+- estoque detalhado por depósito na busca e nos itens adicionados, destacando
+  com ✓ o depósito que atenderá o pedido;
 - interface de novo pedido reorganizada em cartões compactos e proporcionais;
 - logo preservada com contorno branco adaptado para o tema escuro;
 - preço comercial calculado pelo servidor para o cliente selecionado;
