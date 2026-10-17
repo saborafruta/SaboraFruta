@@ -1,7 +1,10 @@
 """Fluxo web da força de vendas: pedido, Kanban e separação."""
 
 import json
+import shutil
+import subprocess
 from decimal import Decimal
+from unittest import skipUnless
 
 from django.test import TestCase
 from django.urls import reverse
@@ -252,6 +255,48 @@ class ForcaVendasTests(TestCase):
         self.assertContains(tela, 'Abrir calendário')
         self.assertContains(tela, '[7,10,15,30]')
         self.assertContains(tela, 'prazoSelecionado:10')
+
+    @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do pedido externo')
+    def test_categoria_pode_ser_desmarcada_e_lista_fecha_sem_escolher_produto(self):
+        resposta = self.client.get(reverse('vendas:pedido-externo-novo'))
+        html = resposta.content.decode('utf-8')
+        script = 'function pedidoExterno()' + html.split(
+            'function pedidoExterno()', 1,
+        )[1].split('</script>', 1)[0]
+        script += r'''
+const assert = require('node:assert/strict');
+const pedido = pedidoExterno();
+pedido.produtos = [{id: 1}];
+pedido.buscaProdutoExecutada = true;
+pedido.buscandoProdutos = true;
+pedido.categoriaId = '7';
+let buscas = 0;
+pedido.buscarProdutos = () => { buscas += 1; };
+pedido.selecionarCategoria('7');
+assert.equal(pedido.categoriaId, '');
+assert.deepEqual(pedido.produtos, []);
+assert.equal(pedido.buscaProdutoExecutada, false);
+assert.equal(pedido.buscandoProdutos, false);
+assert.equal(buscas, 0);
+pedido.selecionarCategoria('8');
+assert.equal(pedido.categoriaId, '8');
+assert.equal(buscas, 1);
+pedido.produtos = [{id: 2}];
+pedido.buscaProdutoExecutada = true;
+pedido.fecharBuscaProdutos();
+assert.deepEqual(pedido.produtos, []);
+assert.equal(pedido.buscaProdutoExecutada, false);
+'''
+
+        resultado = subprocess.run(
+            [shutil.which('node')], input=script, text=True, encoding='utf-8',
+            capture_output=True, timeout=20,
+        )
+
+        self.assertEqual(resultado.returncode, 0, resultado.stdout + resultado.stderr)
+        self.assertContains(resposta, '@click.outside="fecharBuscaProdutos()"')
+        self.assertContains(resposta, 'fv-category-panel')
+        self.assertContains(resposta, 'fv-highlight-copy')
 
     def test_pedido_externo_usa_preco_do_servidor_e_nao_cai_no_pdv(self):
         resposta = self.criar_pedido_pela_tela()
