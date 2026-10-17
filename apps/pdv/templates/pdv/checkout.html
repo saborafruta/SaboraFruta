@@ -327,7 +327,6 @@
           <div class="co-field co-sale-discount">
             <label for="checkout-desconto">Desconto sobre a venda (F6)</label>
             <input id="checkout-desconto" x-ref="desconto" class="co-input co-discount-trigger" type="text" inputmode="decimal" x-model="descontoEntrada" readonly @click="solicitarAutorizacaoDesconto()" @keydown.enter.prevent="solicitarAutorizacaoDesconto()" placeholder="Clique ou pressione F6" aria-haspopup="dialog">
-            <small x-text="resumoPoliticaDesconto" :style="descontoLiberado || descontoPercentualMaximoLivre>0 || arredondamentoMaximoLivre>0 ? 'color:var(--co-green)' : ''"></small>
           </div>
           <div class="co-field co-payment-value">
             <label for="checkout-valor-pagamento"><span>Valor recebido (F8)</span><span x-show="formaSelecionada" x-text="formaSelecionada?.descricao"></span></label>
@@ -559,13 +558,6 @@ function checkoutVenda() {
       return !this.itemDescontoPendente && this.numero(this.descontoModalEntrada)>0 && this.arredondamentoMaximoLivre>0 && Math.abs(this.totalComDescontoRascunho-Math.round(this.totalComDescontoRascunho))<0.001 && excesso<=this.arredondamentoMaximoLivre+0.001;
     },
     get descontoModalRequerAutorizacao(){ return this.descontoTotalComRascunho>0 && !this.descontoLiberado && !this.descontoModalDentroPercentual && !this.descontoModalEhArredondamento; },
-    get resumoPoliticaDesconto(){
-      if(this.descontoLiberado)return 'Descontos autorizados para esta venda';
-      if(this.descontoPercentualMaximoLivre>0 && this.arredondamentoMaximoLivre>0)return 'Até '+this.formatarPercentual(this.descontoPercentualMaximoLivre)+' ou arredondamento sem senha';
-      if(this.descontoPercentualMaximoLivre>0)return 'Até '+this.formatarPercentual(this.descontoPercentualMaximoLivre)+' sem autorização';
-      if(this.arredondamentoMaximoLivre>0)return 'Arredondamento de até '+this.moeda(this.arredondamentoMaximoLivre)+' sem senha';
-      return 'Exige PDV → Aprovar';
-    },
     get descricaoPoliticaDesconto(){
       if(this.numero(this.descontoModalEntrada)<=0)return 'Informe um valor ou uma porcentagem para conferir a política da loja.';
       if(this.descontoLiberado)return 'A autorização já está válida para a venda atual.';

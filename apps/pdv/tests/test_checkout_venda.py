@@ -224,7 +224,8 @@ class CheckoutVendaTests(TestCase):
         resposta = self.client.get(reverse('pdv:checkout'))
 
         self.assertContains(resposta, 'Autorizar desconto')
-        self.assertContains(resposta, 'Exige PDV → Aprovar')
+        self.assertNotContains(resposta, 'Exige PDV → Aprovar')
+        self.assertNotContains(resposta, 'arredondamento sem senha')
         self.assertContains(resposta, 'id="checkout-valor-desconto"')
         self.assertContains(resposta, 'id="checkout-percentual-desconto"')
         self.assertContains(resposta, 'checkout-configuracao-descontos')
