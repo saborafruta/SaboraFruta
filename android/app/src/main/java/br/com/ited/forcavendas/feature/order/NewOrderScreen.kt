@@ -47,6 +47,7 @@ import br.com.ited.forcavendas.data.OrderDraft
 import br.com.ited.forcavendas.data.OrderLineDraft
 import br.com.ited.forcavendas.data.OrderOptions
 import br.com.ited.forcavendas.data.Product
+import br.com.ited.forcavendas.data.SavedOrderDraft
 import br.com.ited.forcavendas.data.UserSession
 import java.math.BigDecimal
 import kotlinx.coroutines.launch
@@ -74,7 +75,27 @@ fun NewOrderScreen(
     var priority by remember { mutableStateOf("normal") }
     var deliveryDate by remember { mutableStateOf("") }
     var observation by remember { mutableStateOf("") }
+    var draftRecovered by remember { mutableStateOf(false) }
     val cart = remember { mutableStateMapOf<Long, String>() }
+    val cartProducts = remember { mutableStateMapOf<Long, Product>() }
+
+    fun currentDraft(): SavedOrderDraft? {
+        val client = selectedClient ?: return null
+        if (cart.isEmpty()) return null
+        val lines = cart.mapNotNull { (productId, quantity) ->
+            cartProducts[productId]?.let { OrderLineDraft(it, quantity) }
+        }
+        if (lines.size != cart.size) return null
+        return SavedOrderDraft(
+            client = client,
+            paymentId = paymentId,
+            conditionId = conditionId,
+            priority = priority,
+            deliveryDate = deliveryDate,
+            observation = observation,
+            lines = lines,
+        )
+    }
 
     suspend fun loadInitial() {
         loading = true
@@ -82,7 +103,26 @@ fun NewOrderScreen(
         runCatching {
             clients = repository.clients(session)
             options = repository.orderOptions(session)
-            paymentId = options.payments.firstOrNull()?.id
+            val saved = repository.savedOrderDraft(session)
+            if (saved == null) {
+                paymentId = options.payments.firstOrNull()?.id
+            } else {
+                selectedClient = saved.client
+                paymentId = saved.paymentId ?: options.payments.firstOrNull()?.id
+                conditionId = saved.conditionId
+                priority = saved.priority
+                deliveryDate = saved.deliveryDate
+                observation = saved.observation
+                saved.lines.forEach { line ->
+                    cart[line.product.id] = line.quantity
+                    cartProducts[line.product.id] = line.product
+                }
+                val currentProducts = runCatching {
+                    repository.products(session, saved.client.id)
+                }.getOrDefault(emptyList())
+                products = (currentProducts + saved.lines.map { it.product }).distinctBy { it.id }
+                draftRecovered = true
+            }
         }.onFailure { error = it.message ?: "Não foi possível carregar os dados." }
         loading = false
     }
@@ -90,6 +130,7 @@ fun NewOrderScreen(
     suspend fun selectClient(client: Client) {
         selectedClient = client
         cart.clear()
+        cartProducts.clear()
         products = emptyList()
         loading = true
         error = null
@@ -105,7 +146,10 @@ fun NewOrderScreen(
             TopAppBar(
                 title = { Text("Novo pedido") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        currentDraft()?.let { repository.saveOrderDraft(session, it) }
+                        onBack()
+                    }) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Voltar")
                     }
                 },
@@ -129,6 +173,15 @@ fun NewOrderScreen(
             }
             if (!error.isNullOrBlank()) {
                 item { Text(error!!, color = MaterialTheme.colorScheme.error) }
+            }
+            if (draftRecovered) {
+                item {
+                    Text(
+                        "Rascunho recuperado deste aparelho.",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
 
             item { SectionTitle("1. Cliente") }
@@ -162,9 +215,12 @@ fun NewOrderScreen(
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             OutlinedButton(onClick = {
+                                repository.clearOrderDraft(session)
                                 selectedClient = null
                                 products = emptyList()
                                 cart.clear()
+                                cartProducts.clear()
+                                draftRecovered = false
                             }) { Text("Trocar cliente") }
                         }
                     }
@@ -226,14 +282,19 @@ fun NewOrderScreen(
                     ProductCard(
                         product = product,
                         inCart = cart.containsKey(product.id),
-                        onAdd = { if (product.podeVender) cart[product.id] = "1.000" },
+                        onAdd = {
+                            if (product.podeVender) {
+                                cart[product.id] = "1.000"
+                                cartProducts[product.id] = product
+                            }
+                        },
                     )
                 }
 
                 if (cart.isNotEmpty()) {
                     item { SectionTitle("3. Itens do pedido") }
                     items(cart.keys.toList()) { productId ->
-                        val product = products.firstOrNull { it.id == productId }
+                        val product = cartProducts[productId]
                         if (product != null) {
                             Card(modifier = Modifier.fillMaxWidth()) {
                                 Column(
@@ -250,7 +311,14 @@ fun NewOrderScreen(
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                         singleLine = true,
                                     )
-                                    OutlinedButton(onClick = { cart.remove(productId) }) {
+                                    OutlinedButton(onClick = {
+                                        cart.remove(productId)
+                                        cartProducts.remove(productId)
+                                        if (cart.isEmpty()) {
+                                            repository.clearOrderDraft(session)
+                                            draftRecovered = false
+                                        }
+                                    }) {
                                         Text("Remover")
                                     }
                                 }
@@ -310,7 +378,7 @@ fun NewOrderScreen(
                     }
                     item {
                         val total = cart.entries.fold(BigDecimal.ZERO) { sum, entry ->
-                            val product = products.firstOrNull { it.id == entry.key }
+                            val product = cartProducts[entry.key]
                             val price = product?.preco?.toBigDecimalOrNull() ?: BigDecimal.ZERO
                             val quantity = entry.value.toBigDecimalOrNull() ?: BigDecimal.ZERO
                             sum + price.multiply(quantity)
@@ -322,13 +390,30 @@ fun NewOrderScreen(
                         )
                     }
                     item {
+                        OutlinedButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                val draft = currentDraft()
+                                if (draft == null) {
+                                    error = "Revise o cliente e os itens antes de salvar."
+                                } else {
+                                    repository.saveOrderDraft(session, draft)
+                                    draftRecovered = true
+                                    error = null
+                                }
+                            },
+                        ) {
+                            Text("Salvar rascunho neste aparelho")
+                        }
+                    }
+                    item {
                         Button(
                             modifier = Modifier.fillMaxWidth(),
                             enabled = !submitting && paymentId != null,
                             onClick = {
                                 val client = selectedClient ?: return@Button
                                 val lines = cart.mapNotNull { (id, quantity) ->
-                                    products.firstOrNull { it.id == id }
+                                    cartProducts[id]
                                         ?.takeIf { (quantity.toBigDecimalOrNull() ?: BigDecimal.ZERO) > BigDecimal.ZERO }
                                         ?.let { OrderLineDraft(it, quantity) }
                                 }
@@ -354,6 +439,7 @@ fun NewOrderScreen(
                                             ),
                                         )
                                     }.onSuccess { result ->
+                                        repository.clearOrderDraft(session)
                                         if (result.queued) {
                                             onSubmitted(
                                                 "Pedido salvo no aparelho. Use Sincronizar para enviá-lo ao ITED.",

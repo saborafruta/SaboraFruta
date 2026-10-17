@@ -92,6 +92,16 @@ data class OrderDraft(
     val lines: List<OrderLineDraft>,
 )
 
+data class SavedOrderDraft(
+    val client: Client,
+    val paymentId: Long?,
+    val conditionId: Long?,
+    val priority: String,
+    val deliveryDate: String,
+    val observation: String,
+    val lines: List<OrderLineDraft>,
+)
+
 data class SubmitOrderResult(
     val orderId: Long?,
     val officialNumber: String?,
@@ -144,11 +154,16 @@ data class SeparationOrder(
     val lines: List<SeparationLine>,
 )
 
+data class BatchAllocation(
+    val batchId: Long,
+    val quantity: String,
+)
+
 data class SeparationInput(
     val itemId: Long,
     val depositoId: Long,
     val quantidade: String,
-    val batchId: Long? = null,
+    val batchAllocations: List<BatchAllocation> = emptyList(),
     val observacao: String = "",
 )
 
@@ -156,4 +171,22 @@ data class SyncSummary(
     val pendingBefore: Int,
     val pendingAfter: Int,
     val sentOrders: Int,
+    val refreshedResources: List<String>,
+    val errors: List<String>,
+)
+
+data class PendingOrderInfo(
+    val key: String,
+    val clientName: String,
+    val createdAt: String,
+    val attempts: Int,
+    val lastError: String?,
+)
+
+data class SyncDashboard(
+    val lastSuccessAt: String?,
+    val lastError: String?,
+    val hasOrderDraft: Boolean,
+    val pendingOrders: List<PendingOrderInfo>,
+    val cachedResources: List<String>,
 )

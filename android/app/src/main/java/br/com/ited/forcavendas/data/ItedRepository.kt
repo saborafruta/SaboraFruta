@@ -6,6 +6,7 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -48,26 +49,86 @@ class ItedRepository(private val store: SessionStore) {
 
     fun logout() = store.clearSession()
 
-    fun pendingCount(): Int = store.pendingOrders().length()
+    fun pendingCount(session: UserSession): Int = pendingItems(session).size
 
-    suspend fun clients(session: UserSession, query: String = ""): List<Client> {
-        val key = "clients_${session.context.tenantAlias}_${session.context.filialId}"
-        val path = "api/v1/mobile/clientes/?q=${query.encoded()}"
-        val json = cachedRequest(session, key, path)
-        return json.getJSONArray("clientes").mapObjects { item ->
-            Client(
-                id = item.getLong("id"),
-                nome = item.getString("nome"),
-                documento = item.optString("cpf_cnpj"),
-                cidadeUf = listOf(item.optString("cidade"), item.optString("uf"))
-                    .filter(String::isNotBlank).joinToString("/") ,
-                creditoDisponivel = item.getString("credito_disponivel"),
-                tabelaPreco = item.getString("tabela_preco"),
-                prazoPagamentoDias = item.optInt("prazo_pagamento_dias"),
-                bloqueado = item.optBoolean("bloqueado"),
-                motivoBloqueio = item.optString("motivo_bloqueio"),
+    fun syncDashboard(session: UserSession): SyncDashboard {
+        val suffix = "${session.context.tenantAlias}_${session.context.filialId}"
+        val cached = buildList {
+            if (store.hasCache("clients_${suffix}_${queryCacheKey("")}")) add("Clientes")
+            if (store.hasCacheStartingWith("products_${suffix}_")) add("Produtos e preços")
+            if (store.hasCache("options_$suffix")) add("Pagamentos")
+            if (store.hasCache("orders_$suffix")) add("Pedidos")
+            if (store.hasCache("separation_$suffix")) add("Separações")
+        }
+        return SyncDashboard(
+            lastSuccessAt = store.lastSyncSuccess(session.context, session.usuarioEmail),
+            lastError = store.lastSyncError(session.context, session.usuarioEmail),
+            hasOrderDraft = store.orderDraft(session.context, session.usuarioEmail) != null,
+            pendingOrders = pendingItems(session).map { item ->
+                PendingOrderInfo(
+                    key = item.optString("key"),
+                    clientName = item.optString("client_name", "Cliente não identificado"),
+                    createdAt = item.optString("created_at"),
+                    attempts = item.optInt("attempts", 0),
+                    lastError = item.optString("last_error").takeIf(String::isNotBlank),
+                )
+            },
+            cachedResources = cached,
+        )
+    }
+
+    fun savedOrderDraft(session: UserSession): SavedOrderDraft? = runCatching {
+        store.orderDraft(session.context, session.usuarioEmail)?.let { json ->
+            SavedOrderDraft(
+                client = parseClient(json.getJSONObject("client")),
+                paymentId = json.optNullableLong("payment_id"),
+                conditionId = json.optNullableLong("condition_id"),
+                priority = json.optString("priority", "normal"),
+                deliveryDate = json.optString("delivery_date"),
+                observation = json.optString("observation"),
+                lines = json.getJSONArray("lines").mapObjects { line ->
+                    OrderLineDraft(
+                        product = parseProduct(line.getJSONObject("product")),
+                        quantity = line.getString("quantity"),
+                    )
+                },
             )
         }
+    }.getOrNull()
+
+    fun saveOrderDraft(session: UserSession, draft: SavedOrderDraft) {
+        val lines = JSONArray()
+        draft.lines.forEach { line ->
+            lines.put(
+                JSONObject()
+                    .put("product", productToJson(line.product))
+                    .put("quantity", line.quantity),
+            )
+        }
+        store.saveOrderDraft(
+            session.context,
+            session.usuarioEmail,
+            JSONObject()
+                .put("client", clientToJson(draft.client))
+                .put("payment_id", draft.paymentId ?: JSONObject.NULL)
+                .put("condition_id", draft.conditionId ?: JSONObject.NULL)
+                .put("priority", draft.priority)
+                .put("delivery_date", draft.deliveryDate)
+                .put("observation", draft.observation)
+                .put("lines", lines),
+        )
+    }
+
+    fun clearOrderDraft(session: UserSession) = store.clearOrderDraft(
+        session.context,
+        session.usuarioEmail,
+    )
+
+    suspend fun clients(session: UserSession, query: String = ""): List<Client> {
+        val key = "clients_${session.context.tenantAlias}_${session.context.filialId}_${queryCacheKey(query)}"
+        val path = "api/v1/mobile/clientes/?q=${query.encoded()}"
+        val json = cachedRequest(session, key, path)
+        return json.getJSONArray("clientes").mapObjects(::parseClient)
     }
 
     suspend fun products(
@@ -75,29 +136,10 @@ class ItedRepository(private val store: SessionStore) {
         clientId: Long,
         query: String = "",
     ): List<Product> {
-        val key = "products_${session.context.tenantAlias}_${session.context.filialId}_$clientId"
+        val key = "products_${session.context.tenantAlias}_${session.context.filialId}_${clientId}_${queryCacheKey(query)}"
         val path = "api/v1/mobile/produtos/?cliente_id=$clientId&q=${query.encoded()}"
         val json = cachedRequest(session, key, path)
-        return json.getJSONArray("produtos").mapObjects { item ->
-            Product(
-                id = item.getLong("id"),
-                descricao = item.getString("descricao"),
-                codigo = item.optString("codigo"),
-                unidade = item.getString("unidade"),
-                preco = item.getString("preco"),
-                estoqueDisponivel = item.getString("estoque_disponivel"),
-                controlaLote = item.optBoolean("controla_lote"),
-                podeVender = item.optBoolean("pode_vender"),
-                bloqueios = item.optJSONArray("bloqueios")?.mapStrings() ?: emptyList(),
-                estoques = item.optJSONArray("estoques")?.mapObjects { saldo ->
-                    StockBalance(
-                        depositoId = saldo.getLong("deposito_id"),
-                        depositoNome = saldo.getString("deposito_nome"),
-                        disponivel = saldo.getString("disponivel"),
-                    )
-                } ?: emptyList(),
-            )
-        }
+        return json.getJSONArray("produtos").mapObjects(::parseProduct)
     }
 
     suspend fun orderOptions(session: UserSession): OrderOptions {
@@ -134,6 +176,11 @@ class ItedRepository(private val store: SessionStore) {
                     .put("key", idempotencyKey)
                     .put("tenant_alias", session.context.tenantAlias)
                     .put("filial_id", session.context.filialId)
+                    .put("user_email", session.usuarioEmail.trim().lowercase())
+                    .put("client_name", draft.client.nome)
+                    .put("created_at", Instant.now().toString())
+                    .put("attempts", 0)
+                    .put("last_error", "Aguardando conexão para o primeiro envio.")
                     .put("payload", payload),
             )
             store.savePendingOrders(pending)
@@ -213,14 +260,18 @@ class ItedRepository(private val store: SessionStore) {
                 .put("quantidade_separada", input.quantidade)
                 .put("conferido", true)
                 .put("observacao", input.observacao)
-            input.batchId?.let { batchId ->
+            if (input.batchAllocations.isNotEmpty()) {
+                val allocations = JSONArray()
+                input.batchAllocations.forEach { allocation ->
+                    allocations.put(
+                        JSONObject()
+                            .put("lote_id", allocation.batchId)
+                            .put("quantidade", allocation.quantity),
+                    )
+                }
                 item.put(
                     "lotes",
-                    JSONArray().put(
-                        JSONObject()
-                            .put("lote_id", batchId)
-                            .put("quantidade", input.quantidade),
-                    ),
+                    allocations,
                 )
             }
             items.put(item)
@@ -237,14 +288,16 @@ class ItedRepository(private val store: SessionStore) {
     }
 
     suspend fun sync(session: UserSession): SyncSummary {
+        val before = pendingItems(session).size
         val pending = store.pendingOrders()
-        val before = pending.length()
         val remaining = JSONArray()
         var sent = 0
+        val errors = mutableListOf<String>()
         for (index in 0 until pending.length()) {
             val item = pending.getJSONObject(index)
             val sameContext = item.getString("tenant_alias") == session.context.tenantAlias &&
-                item.getLong("filial_id") == session.context.filialId
+                item.getLong("filial_id") == session.context.filialId &&
+                item.optString("user_email") == session.usuarioEmail.trim().lowercase()
             if (!sameContext) {
                 remaining.put(item)
                 continue
@@ -259,32 +312,63 @@ class ItedRepository(private val store: SessionStore) {
                     item.getString("key"),
                 )
                 sent += 1
-            } catch (_: Exception) {
+            } catch (error: Exception) {
+                item.put("attempts", item.optInt("attempts", 0) + 1)
+                item.put("last_error", (error.message ?: "Falha ao enviar pedido.").take(500))
                 remaining.put(item)
+                errors += item.getString("last_error")
             }
         }
         store.savePendingOrders(remaining)
         // Atualiza também os dados mais importantes para o trabalho offline.
         val suffix = "${session.context.tenantAlias}_${session.context.filialId}"
         val refreshes = listOf(
-            runCatching {
+            "Pagamentos" to runCatching {
                 api.authorized(session, session.context, "GET", "api/v1/mobile/opcoes-pedido/")
                     .also { store.cache("options_$suffix", it) }
             },
-            runCatching {
+            "Clientes" to runCatching {
                 api.authorized(session, session.context, "GET", "api/v1/mobile/clientes/")
-                    .also { store.cache("clients_$suffix", it) }
+                    .also { store.cache("clients_${suffix}_${queryCacheKey("")}", it) }
             },
-            runCatching {
+            "Pedidos" to runCatching {
                 api.authorized(session, session.context, "GET", "api/v1/mobile/pedidos/")
                     .also { store.cache("orders_$suffix", it) }
             },
+            "Separações" to runCatching {
+                api.authorized(session, session.context, "GET", "api/v1/mobile/separacoes/")
+                    .also { store.cache("separation_$suffix", it) }
+            },
         )
-        if (refreshes.all { it.isFailure }) {
-            throw refreshes.first().exceptionOrNull()
+        val refreshErrors = refreshes.mapNotNull { (resource, result) ->
+            result.exceptionOrNull()?.let { "$resource: ${it.message ?: "falha"}" }
+        }
+        if (refreshes.all { it.second.isFailure }) {
+            val failure = refreshes.first().second.exceptionOrNull()
+            store.saveSyncError(
+                session.context,
+                session.usuarioEmail,
+                failure?.message ?: "Não foi possível sincronizar.",
+            )
+            throw failure
                 ?: NetworkException("Não foi possível sincronizar com o ITED.")
         }
-        return SyncSummary(before, remaining.length(), sent)
+        val allErrors = errors + refreshErrors
+        store.saveSyncSuccess(session.context, session.usuarioEmail, Instant.now().toString())
+        if (allErrors.isNotEmpty()) {
+            store.saveSyncError(
+                session.context,
+                session.usuarioEmail,
+                allErrors.joinToString(" • "),
+            )
+        }
+        return SyncSummary(
+            pendingBefore = before,
+            pendingAfter = pendingItems(session).size,
+            sentOrders = sent,
+            refreshedResources = refreshes.filter { it.second.isSuccess }.map { it.first },
+            errors = allErrors,
+        )
     }
 
     private suspend fun cachedRequest(
@@ -315,6 +399,94 @@ class ItedRepository(private val store: SessionStore) {
             .put("data_entrega_prevista", draft.dataEntrega ?: JSONObject.NULL)
             .put("observacao", draft.observacao)
             .put("itens", items)
+    }
+
+    private fun pendingItems(session: UserSession): List<JSONObject> {
+        val pending = store.pendingOrders()
+        var migrated = false
+        val items = (0 until pending.length()).map { pending.getJSONObject(it) }
+        items.forEach { item ->
+            val sameContext = item.optString("tenant_alias") == session.context.tenantAlias &&
+                item.optLong("filial_id") == session.context.filialId
+            if (sameContext && !item.has("user_email")) {
+                item.put("user_email", session.usuarioEmail.trim().lowercase())
+                migrated = true
+            }
+        }
+        if (migrated) store.savePendingOrders(pending)
+        return items.filter { item ->
+            item.optString("tenant_alias") == session.context.tenantAlias &&
+                item.optLong("filial_id") == session.context.filialId &&
+                item.optString("user_email") == session.usuarioEmail.trim().lowercase()
+        }
+    }
+
+    private fun parseClient(item: JSONObject): Client = Client(
+        id = item.getLong("id"),
+        nome = item.getString("nome"),
+        documento = item.optString("cpf_cnpj", item.optString("documento")),
+        cidadeUf = item.optString("cidade_uf").ifBlank {
+            listOf(item.optString("cidade"), item.optString("uf"))
+                .filter(String::isNotBlank).joinToString("/")
+        },
+        creditoDisponivel = item.getString("credito_disponivel"),
+        tabelaPreco = item.getString("tabela_preco"),
+        prazoPagamentoDias = item.optInt("prazo_pagamento_dias"),
+        bloqueado = item.optBoolean("bloqueado"),
+        motivoBloqueio = item.optString("motivo_bloqueio"),
+    )
+
+    private fun parseProduct(item: JSONObject): Product = Product(
+        id = item.getLong("id"),
+        descricao = item.getString("descricao"),
+        codigo = item.optString("codigo"),
+        unidade = item.getString("unidade"),
+        preco = item.getString("preco"),
+        estoqueDisponivel = item.getString("estoque_disponivel"),
+        controlaLote = item.optBoolean("controla_lote"),
+        podeVender = item.optBoolean("pode_vender"),
+        bloqueios = item.optJSONArray("bloqueios")?.mapStrings() ?: emptyList(),
+        estoques = item.optJSONArray("estoques")?.mapObjects { saldo ->
+            StockBalance(
+                depositoId = saldo.getLong("deposito_id"),
+                depositoNome = saldo.getString("deposito_nome"),
+                disponivel = saldo.getString("disponivel"),
+            )
+        } ?: emptyList(),
+    )
+
+    private fun clientToJson(client: Client): JSONObject = JSONObject()
+        .put("id", client.id)
+        .put("nome", client.nome)
+        .put("documento", client.documento)
+        .put("cidade_uf", client.cidadeUf)
+        .put("credito_disponivel", client.creditoDisponivel)
+        .put("tabela_preco", client.tabelaPreco)
+        .put("prazo_pagamento_dias", client.prazoPagamentoDias)
+        .put("bloqueado", client.bloqueado)
+        .put("motivo_bloqueio", client.motivoBloqueio)
+
+    private fun productToJson(product: Product): JSONObject {
+        val stocks = JSONArray()
+        product.estoques.forEach { stock ->
+            stocks.put(
+                JSONObject()
+                    .put("deposito_id", stock.depositoId)
+                    .put("deposito_nome", stock.depositoNome)
+                    .put("disponivel", stock.disponivel),
+            )
+        }
+        return JSONObject()
+            .put("id", product.id)
+            .put("descricao", product.descricao)
+            .put("codigo", product.codigo)
+            .put("unidade", product.unidade)
+            .put("preco", product.preco)
+            .put("estoque_disponivel", product.estoqueDisponivel)
+            .put("controla_lote", product.controlaLote)
+            .put("pode_vender", product.podeVender)
+            .put("bloqueios", JSONArray(product.bloqueios))
+            .put("estoques", stocks)
     }
 }
 
@@ -423,6 +595,9 @@ private class ItedApiClient(private val store: SessionStore) {
 
 private fun String.encoded(): String = URLEncoder.encode(this, StandardCharsets.UTF_8.toString())
 
+private fun queryCacheKey(query: String): String =
+    query.trim().lowercase().hashCode().toUInt().toString(16)
+
 private inline fun <T> JSONArray.mapObjects(transform: (JSONObject) -> T): List<T> =
     (0 until length()).map { transform(getJSONObject(it)) }
 
@@ -431,6 +606,9 @@ private fun JSONArray.mapStrings(): List<String> =
 
 private fun JSONObject.optNullableString(key: String): String? =
     if (isNull(key)) null else optString(key).takeIf(String::isNotBlank)
+
+private fun JSONObject.optNullableLong(key: String): Long? =
+    if (isNull(key) || !has(key)) null else getLong(key)
 
 private fun parseContext(json: JSONObject): WorkContext {
     val permissions = json.getJSONObject("permissoes")

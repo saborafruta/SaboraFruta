@@ -21,15 +21,17 @@ import br.com.ited.forcavendas.data.NetworkException
 import br.com.ited.forcavendas.data.UserSession
 import br.com.ited.forcavendas.feature.auth.ContextSelectionScreen
 import br.com.ited.forcavendas.feature.auth.LoginScreen
+import br.com.ited.forcavendas.feature.client.ClientsScreen
 import br.com.ited.forcavendas.feature.home.HomeScreen
 import br.com.ited.forcavendas.feature.order.NewOrderScreen
 import br.com.ited.forcavendas.feature.order.OrdersScreen
 import br.com.ited.forcavendas.feature.separation.SeparationScreen
+import br.com.ited.forcavendas.feature.sync.SyncCenterScreen
 import br.com.ited.forcavendas.sync.SyncStatus
 import java.time.Instant
 import kotlinx.coroutines.launch
 
-private enum class AppScreen { LOGIN, CONTEXT, HOME, NEW_ORDER, ORDERS, SEPARATION }
+private enum class AppScreen { LOGIN, CONTEXT, HOME, NEW_ORDER, ORDERS, CLIENTS, SEPARATION, SYNC }
 
 @Composable
 fun AppRoot(repository: ItedRepository) {
@@ -42,7 +44,9 @@ fun AppRoot(repository: ItedRepository) {
     }
     var loginLoading by remember { mutableStateOf(false) }
     var loginError by remember { mutableStateOf<String?>(null) }
-    var pending by remember { mutableIntStateOf(repository.pendingCount()) }
+    var pending by remember {
+        mutableIntStateOf(session?.let { repository.pendingCount(it) } ?: 0)
+    }
     var syncStatus by remember {
         mutableStateOf<SyncStatus>(
             if (pending > 0) SyncStatus.Pending(pending) else SyncStatus.Idle,
@@ -54,10 +58,48 @@ fun AppRoot(repository: ItedRepository) {
     }
 
     fun goHome(message: String? = null) {
-        pending = repository.pendingCount()
-        syncStatus = if (pending > 0) SyncStatus.Pending(pending) else SyncStatus.Idle
+        pending = session?.let { repository.pendingCount(it) } ?: 0
+        syncStatus = if (pending > 0) {
+            SyncStatus.Pending(pending)
+        } else {
+            session?.let { current ->
+                repository.syncDashboard(current).lastSuccessAt?.let { raw ->
+                    runCatching { SyncStatus.Synced(Instant.parse(raw)) }.getOrNull()
+                }
+            } ?: SyncStatus.Idle
+        }
         screen = AppScreen.HOME
         message?.let(::notify)
+    }
+
+    fun synchronize(current: UserSession) {
+        scope.launch {
+            syncStatus = SyncStatus.Syncing
+            runCatching { repository.sync(current) }
+                .onSuccess { summary ->
+                    pending = summary.pendingAfter
+                    syncStatus = when {
+                        pending > 0 -> SyncStatus.Pending(pending)
+                        summary.errors.isNotEmpty() -> SyncStatus.Failed(summary.errors.first())
+                        else -> SyncStatus.Synced(Instant.now())
+                    }
+                    val text = when {
+                        summary.sentOrders > 0 ->
+                            "${summary.sentOrders} pedido(s) enviado(s) ao ITED."
+                        summary.errors.isNotEmpty() ->
+                            "Sincronização parcial. Consulte os detalhes."
+                        else -> "Dados sincronizados."
+                    }
+                    notify(text)
+                }
+                .onFailure { error ->
+                    syncStatus = if (error is NetworkException) {
+                        SyncStatus.Offline
+                    } else {
+                        SyncStatus.Failed(error.message ?: "Falha de sincronização")
+                    }
+                }
+        }
     }
 
     BackHandler(enabled = screen !in listOf(AppScreen.LOGIN, AppScreen.HOME)) { goHome() }
@@ -77,7 +119,12 @@ fun AppRoot(repository: ItedRepository) {
                                 when (result.contexts.size) {
                                     0 -> loginError = "Seu usuário não possui empresa e filial disponíveis."
                                     1 -> {
-                                        session = repository.selectContext(result, result.contexts.first())
+                                        val selected = repository.selectContext(
+                                            result,
+                                            result.contexts.first(),
+                                        )
+                                        session = selected
+                                        pending = repository.pendingCount(selected)
                                         screen = AppScreen.HOME
                                     }
                                     else -> screen = AppScreen.CONTEXT
@@ -93,7 +140,9 @@ fun AppRoot(repository: ItedRepository) {
 
             AppScreen.CONTEXT -> loginResult?.let { result ->
                 ContextSelectionScreen(result) { context ->
-                    session = repository.selectContext(result, context)
+                    val selected = repository.selectContext(result, context)
+                    session = selected
+                    pending = repository.pendingCount(selected)
                     screen = AppScreen.HOME
                 }
             }
@@ -103,35 +152,11 @@ fun AppRoot(repository: ItedRepository) {
                     session = current,
                     syncStatus = syncStatus,
                     pendingOperations = pending,
-                    onSync = {
-                        scope.launch {
-                            syncStatus = SyncStatus.Syncing
-                            runCatching { repository.sync(current) }
-                                .onSuccess { summary ->
-                                    pending = summary.pendingAfter
-                                    syncStatus = if (pending > 0) {
-                                        SyncStatus.Pending(pending)
-                                    } else {
-                                        SyncStatus.Synced(Instant.now())
-                                    }
-                                    val text = if (summary.sentOrders > 0) {
-                                        "${summary.sentOrders} pedido(s) enviado(s) ao ITED."
-                                    } else {
-                                        "Dados sincronizados."
-                                    }
-                                    notify(text)
-                                }
-                                .onFailure { error ->
-                                    syncStatus = if (error is NetworkException) {
-                                        SyncStatus.Offline
-                                    } else {
-                                        SyncStatus.Failed(error.message ?: "Falha de sincronização")
-                                    }
-                                }
-                        }
-                    },
+                    onSync = { synchronize(current) },
+                    onOpenSync = { screen = AppScreen.SYNC },
                     onNewOrder = { screen = AppScreen.NEW_ORDER },
                     onOrders = { screen = AppScreen.ORDERS },
+                    onClients = { screen = AppScreen.CLIENTS },
                     onSeparation = { screen = AppScreen.SEPARATION },
                     onLogout = {
                         repository.logout()
@@ -155,12 +180,26 @@ fun AppRoot(repository: ItedRepository) {
                 OrdersScreen(repository, current) { goHome() }
             }
 
+            AppScreen.CLIENTS -> session?.let { current ->
+                ClientsScreen(repository, current) { goHome() }
+            }
+
             AppScreen.SEPARATION -> session?.let { current ->
                 SeparationScreen(
                     repository = repository,
                     session = current,
                     onBack = { goHome() },
                     onCompleted = { goHome(it) },
+                )
+            }
+
+            AppScreen.SYNC -> session?.let { current ->
+                SyncCenterScreen(
+                    session = current,
+                    dashboard = repository.syncDashboard(current),
+                    status = syncStatus,
+                    onSync = { synchronize(current) },
+                    onBack = { goHome() },
                 )
             }
         }

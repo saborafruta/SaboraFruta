@@ -39,20 +39,30 @@ O APK será criado em `app/build/outputs/apk/debug/app-debug.apk`.
 - preço, crédito, estoque, depósito e lote são revalidados no servidor;
 - a baixa definitiva da separação exige conexão.
 
-## Funcionalidades da versão 0.2
+## Funcionalidades da versão 0.3
 
 - login JWT com o mesmo usuário do ITED;
 - seleção segura de empresa e filial pelo Banco Gerencial;
 - busca de clientes por ID, nome, CPF/CNPJ ou celular;
+- consulta independente da carteira, crédito, bloqueio e tabela do cliente;
 - busca de produtos por ID, código, código de barras ou nome;
 - preço comercial calculado pelo servidor para o cliente selecionado;
 - criação de pedido externo com forma e condição de pagamento;
+- rascunho local recuperável, inclusive depois de fechar a tela;
 - fila local de pedidos quando a conexão falha, com envio idempotente;
 - sincronização manual e automática a cada 15 minutos quando houver rede;
+- Central de sincronização com horário, dados locais, tentativas e erros de envio;
 - acompanhamento pelo número oficial devolvido pelo ITED;
 - fila de separação com saldo por depósito e lotes vigentes;
-- escolha manual de lote ou baixa automática por FEFO;
+- escolha manual, divisão entre vários lotes ou baixa automática por FEFO;
 - conclusão online da separação com nova validação de estoque.
+
+O cache separa cada pesquisa de cliente e produto, evitando que uma consulta
+offline reutilize o resultado de outra busca. Pedidos pendentes guardam data,
+quantidade de tentativas e a última mensagem devolvida pelo servidor.
+Os itens adicionados permanecem no carrinho mesmo quando uma nova busca de
+produtos substitui a lista de resultados. Rascunhos e pedidos pendentes são
+isolados também por usuário, além de empresa e filial.
 
 ## API utilizada
 

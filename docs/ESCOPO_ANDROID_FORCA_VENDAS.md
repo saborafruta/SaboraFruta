@@ -63,3 +63,26 @@ automática por FEFO. O servidor revalida status, validade, saldo global do lote
 e saldo do depósito antes da baixa. O modelo atual ainda não distribui o saldo
 de cada lote entre depósitos; essa granularidade é uma evolução futura e fica
 explicitada para não sugerir uma precisão que o banco ainda não armazena.
+
+## Marco técnico 0.3
+
+Complementos implementados sobre o piloto:
+
+- Central de sincronização com empresa, filial, última atualização, recursos
+  disponíveis localmente e erros;
+- histórico local de cada pedido pendente, incluindo criação, tentativas e
+  última falha de envio;
+- rascunho persistente por empresa/filial e carrinho independente do resultado
+  atual da pesquisa de produtos, com isolamento adicional por usuário;
+- repetição manual de todos os envios pela Central e repetição automática pelo
+  WorkManager;
+- cache de buscas isolado por termo para não misturar clientes ou produtos no
+  uso offline;
+- separação manual dividida entre dois ou mais lotes, mantendo FEFO como opção;
+- validação local da soma e do saldo informado por lote antes do envio, seguida
+  pela revalidação atômica no servidor.
+
+Continuam fora do aplicativo a emissão fiscal e o faturamento. A precisão de
+saldo de cada lote por depósito depende de uma futura evolução do modelo de
+estoque; hoje o servidor valida separadamente o saldo do depósito e o saldo
+global do lote.

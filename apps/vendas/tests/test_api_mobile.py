@@ -238,7 +238,7 @@ class ForcaVendasMobileApiTests(TestCase):
         self.assertTrue(repetida.json()['repetido'])
         self.assertEqual(SeparacaoPedido.objects.count(), 1)
 
-    def test_separacao_mobile_respeita_lote_escolhido(self):
+    def test_separacao_mobile_permite_dividir_quantidade_entre_lotes(self):
         self.produto.controla_lote = True
         self.produto.save(update_fields=['controla_lote', 'updated_at'])
         lote = LoteProduto.objects.create(
@@ -249,15 +249,24 @@ class ForcaVendasMobileApiTests(TestCase):
             quantidade_atual=Decimal('0'),
             custo_unitario=Decimal('5'),
         )
-        MovimentacaoService.registrar_movimentacao(
-            produto_id=self.produto.pk,
-            filial_id=self.filial.pk,
-            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
-            quantidade=Decimal('10'),
-            usuario_id=self.usuario.pk,
-            lote_id=lote.pk,
-            valor_unitario=Decimal('5'),
+        outro_lote = LoteProduto.objects.create(
+            produto=self.produto,
+            filial=self.filial,
+            numero_lote='LOTE-MOBILE-03',
+            quantidade_inicial=Decimal('0'),
+            quantidade_atual=Decimal('0'),
+            custo_unitario=Decimal('5'),
         )
+        for lote_entrada in [lote, outro_lote]:
+            MovimentacaoService.registrar_movimentacao(
+                produto_id=self.produto.pk,
+                filial_id=self.filial.pk,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+                quantidade=Decimal('10'),
+                usuario_id=self.usuario.pk,
+                lote_id=lote_entrada.pk,
+                valor_unitario=Decimal('5'),
+            )
         criado = self.client.post(
             reverse('forca_vendas_mobile_api:pedidos'),
             data=self._payload_pedido(),
@@ -283,7 +292,10 @@ class ForcaVendasMobileApiTests(TestCase):
                     'deposito_id': Deposito.padrao_id(self.filial.pk),
                     'quantidade_separada': '2.000',
                     'conferido': True,
-                    'lotes': [{'lote_id': lote.pk, 'quantidade': '2.000'}],
+                    'lotes': [
+                        {'lote_id': lote.pk, 'quantidade': '1.000'},
+                        {'lote_id': outro_lote.pk, 'quantidade': '1.000'},
+                    ],
                 }],
             },
             content_type='application/json',
@@ -291,6 +303,11 @@ class ForcaVendasMobileApiTests(TestCase):
             **self.headers,
         )
         self.assertEqual(resposta.status_code, 201, resposta.content)
-        item_separado = ItemSeparacao.objects.get(separacao_id=resposta.json()['separacao_id'])
-        self.assertEqual(item_separado.lote_id, lote.pk)
-        self.assertEqual(item_separado.quantidade_separada, Decimal('2.000'))
+        itens_separados = ItemSeparacao.objects.filter(
+            separacao_id=resposta.json()['separacao_id'],
+        ).order_by('lote_id')
+        self.assertEqual(itens_separados.count(), 2)
+        self.assertEqual(
+            {item.lote_id: item.quantidade_separada for item in itens_separados},
+            {lote.pk: Decimal('1.000'), outro_lote.pk: Decimal('1.000')},
+        )

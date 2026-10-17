@@ -28,6 +28,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -60,8 +61,10 @@ fun HomeScreen(
     syncStatus: SyncStatus,
     pendingOperations: Int,
     onSync: () -> Unit,
+    onOpenSync: () -> Unit,
     onNewOrder: () -> Unit,
     onOrders: () -> Unit,
+    onClients: () -> Unit,
     onSeparation: () -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -85,7 +88,7 @@ fun HomeScreen(
             "Carteira, crédito e tabela comercial",
             Icons.Outlined.People,
             session.context.podeCriarPedido,
-            onNewOrder,
+            onClients,
         ),
         HomeAction(
             "Separação",
@@ -143,6 +146,7 @@ fun HomeScreen(
                     syncStatus = syncStatus,
                     pendingOperations = pendingOperations,
                     onSync = onSync,
+                    onOpenSync = onOpenSync,
                 )
             }
             item {
@@ -163,6 +167,7 @@ private fun SyncCard(
     syncStatus: SyncStatus,
     pendingOperations: Int,
     onSync: () -> Unit,
+    onOpenSync: () -> Unit,
 ) {
     val statusText = when (syncStatus) {
         SyncStatus.Idle -> "Toque para atualizar clientes, preços e pedidos"
@@ -204,6 +209,12 @@ private fun SyncCard(
                 onClick = onSync,
             ) {
                 Text("Sincronizar agora")
+            }
+            OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onOpenSync,
+            ) {
+                Text("Abrir Central de sincronização")
             }
         }
     }

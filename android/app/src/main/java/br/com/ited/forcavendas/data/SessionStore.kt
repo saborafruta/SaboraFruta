@@ -64,6 +64,50 @@ class SessionStore(context: Context) {
         preferences.getString("cache_$key", null)?.let(::JSONObject)
     }.getOrNull()
 
+    fun hasCache(key: String): Boolean = preferences.contains("cache_$key")
+
+    fun hasCacheStartingWith(prefix: String): Boolean =
+        preferences.all.keys.any { it.startsWith("cache_$prefix") }
+
+    fun saveSyncSuccess(context: WorkContext, userEmail: String, at: String) {
+        preferences.edit()
+            .putString(userKey("last_success", context, userEmail), at)
+            .remove(userKey("last_error", context, userEmail))
+            .apply()
+    }
+
+    fun saveSyncError(context: WorkContext, userEmail: String, message: String) {
+        preferences.edit()
+            .putString(userKey("last_error", context, userEmail), message.take(500))
+            .apply()
+    }
+
+    fun lastSyncSuccess(context: WorkContext, userEmail: String): String? =
+        preferences.getString(userKey("last_success", context, userEmail), null)
+
+    fun lastSyncError(context: WorkContext, userEmail: String): String? =
+        preferences.getString(userKey("last_error", context, userEmail), null)
+
+    fun saveOrderDraft(context: WorkContext, userEmail: String, draft: JSONObject) {
+        preferences.edit()
+            .putString(userKey("order_draft", context, userEmail), draft.toString())
+            .apply()
+    }
+
+    fun orderDraft(context: WorkContext, userEmail: String): JSONObject? = runCatching {
+        preferences.getString(userKey("order_draft", context, userEmail), null)?.let(::JSONObject)
+    }.getOrNull()
+
+    fun clearOrderDraft(context: WorkContext, userEmail: String) {
+        preferences.edit().remove(userKey("order_draft", context, userEmail)).apply()
+    }
+
+    private fun syncKey(prefix: String, context: WorkContext): String =
+        "${prefix}_${context.tenantAlias}_${context.filialId}"
+
+    private fun userKey(prefix: String, context: WorkContext, userEmail: String): String =
+        "${syncKey(prefix, context)}_${userEmail.trim().lowercase().hashCode().toUInt().toString(16)}"
+
     private fun contextToJson(context: WorkContext) = JSONObject()
         .put("tenant_alias", context.tenantAlias)
         .put("empresa_id", context.empresaId)

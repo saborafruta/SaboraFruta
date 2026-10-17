@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import br.com.ited.forcavendas.data.ItedRepository
+import br.com.ited.forcavendas.data.BatchAllocation
 import br.com.ited.forcavendas.data.SeparationInput
 import br.com.ited.forcavendas.data.SeparationLine
 import br.com.ited.forcavendas.data.SeparationOrder
@@ -64,7 +65,8 @@ fun SeparationScreen(
     var generalObservation by remember { mutableStateOf("") }
     val quantities = remember { mutableStateMapOf<Long, String>() }
     val deposits = remember { mutableStateMapOf<Long, Long>() }
-    val batches = remember { mutableStateMapOf<Long, Long?>() }
+    val manualLots = remember { mutableStateMapOf<Long, Boolean>() }
+    val batchQuantities = remember { mutableStateMapOf<String, String>() }
     val observations = remember { mutableStateMapOf<Long, String>() }
 
     suspend fun reload() {
@@ -79,7 +81,8 @@ fun SeparationScreen(
         selectedOrderId = if (selectedOrderId == order.id) null else order.id
         quantities.clear()
         deposits.clear()
-        batches.clear()
+        manualLots.clear()
+        batchQuantities.clear()
         observations.clear()
         order.lines.forEach { line ->
             quantities[line.id] = line.quantidadeSolicitada
@@ -179,11 +182,18 @@ fun SeparationScreen(
                                     line = line,
                                     quantity = quantities[line.id].orEmpty(),
                                     selectedDeposit = deposits[line.id],
-                                    selectedBatch = batches[line.id],
+                                    manualLots = manualLots[line.id] == true,
+                                    batchQuantities = line.lotesSugeridos.associate { lote ->
+                                        lote.id to batchQuantities[batchKey(line.id, lote.id)].orEmpty()
+                                    },
                                     observation = observations[line.id].orEmpty(),
                                     onQuantityChange = { quantities[line.id] = it.replace(',', '.') },
                                     onDepositChange = { deposits[line.id] = it },
-                                    onBatchChange = { batches[line.id] = it },
+                                    onManualLotsChange = { manualLots[line.id] = it },
+                                    onBatchQuantityChange = { batchId, value ->
+                                        batchQuantities[batchKey(line.id, batchId)] =
+                                            value.replace(',', '.')
+                                    },
                                     onObservationChange = { observations[line.id] = it },
                                 )
                             }
@@ -199,25 +209,55 @@ fun SeparationScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     enabled = !submitting,
                                     onClick = {
-                                        val inputs = order.lines.mapNotNull { line ->
+                                        val inputs = mutableListOf<SeparationInput>()
+                                        for (line in order.lines) {
                                             val depositId = deposits[line.id]
                                             val quantity = quantities[line.id]
                                             val decimal = quantity?.toBigDecimalOrNull()
                                             if (depositId == null || decimal == null || decimal < BigDecimal.ZERO) {
-                                                null
-                                            } else {
-                                                SeparationInput(
-                                                    itemId = line.id,
-                                                    depositoId = depositId,
-                                                    quantidade = quantity,
-                                                    batchId = batches[line.id],
-                                                    observacao = observations[line.id].orEmpty(),
-                                                )
+                                                error = "Revise depósito e quantidade do item ${line.numeroItem}."
+                                                return@Button
                                             }
-                                        }
-                                        if (inputs.size != order.lines.size) {
-                                            error = "Revise depósito e quantidade de todos os itens."
-                                            return@Button
+                                            val allocations = if (
+                                                line.controlaLote && manualLots[line.id] == true
+                                            ) {
+                                                line.lotesSugeridos.mapNotNull { lote ->
+                                                    val value = batchQuantities[
+                                                        batchKey(line.id, lote.id)
+                                                    ].orEmpty()
+                                                    val allocated = value.toBigDecimalOrNull()
+                                                    when {
+                                                        value.isBlank() || allocated == BigDecimal.ZERO -> null
+                                                        allocated == null || allocated < BigDecimal.ZERO -> {
+                                                            error = "Quantidade inválida no lote ${lote.numero}."
+                                                            return@Button
+                                                        }
+                                                        allocated > lote.quantidade.toBigDecimal() -> {
+                                                            error = "O lote ${lote.numero} não possui saldo suficiente."
+                                                            return@Button
+                                                        }
+                                                        else -> BatchAllocation(lote.id, value)
+                                                    }
+                                                }
+                                            } else {
+                                                emptyList()
+                                            }
+                                            if (
+                                                line.controlaLote &&
+                                                manualLots[line.id] == true &&
+                                                decimal > BigDecimal.ZERO &&
+                                                allocations.sumOf { it.quantity.toBigDecimal() } != decimal
+                                            ) {
+                                                error = "A soma dos lotes do item ${line.numeroItem} deve ser $quantity."
+                                                return@Button
+                                            }
+                                            inputs += SeparationInput(
+                                                itemId = line.id,
+                                                depositoId = depositId,
+                                                quantidade = quantity,
+                                                batchAllocations = allocations,
+                                                observacao = observations[line.id].orEmpty(),
+                                            )
                                         }
                                         scope.launch {
                                             submitting = true
@@ -255,11 +295,13 @@ private fun SeparationLineEditor(
     line: SeparationLine,
     quantity: String,
     selectedDeposit: Long?,
-    selectedBatch: Long?,
+    manualLots: Boolean,
+    batchQuantities: Map<Long, String>,
     observation: String,
     onQuantityChange: (String) -> Unit,
     onDepositChange: (Long) -> Unit,
-    onBatchChange: (Long?) -> Unit,
+    onManualLotsChange: (Boolean) -> Unit,
+    onBatchQuantityChange: (Long, String) -> Unit,
     onObservationChange: (String) -> Unit,
 ) {
     Card(modifier = Modifier.padding(top = 10.dp)) {
@@ -283,20 +325,34 @@ private fun SeparationLineEditor(
                     Text("Nenhum lote vigente disponível", color = MaterialTheme.colorScheme.error)
                 } else {
                     FilterChip(
-                        selected = selectedBatch == null,
-                        onClick = { onBatchChange(null) },
+                        selected = !manualLots,
+                        onClick = { onManualLotsChange(false) },
                         label = { Text("Automático por FEFO") },
                     )
-                    line.lotesSugeridos.take(4).forEach { lote ->
-                        FilterChip(
-                            selected = selectedBatch == lote.id,
-                            onClick = { onBatchChange(lote.id) },
-                            label = {
-                                Text(
-                                    "${lote.numero}: ${lote.quantidade}" +
-                                        (lote.validade?.let { " • $it" } ?: ""),
-                                )
-                            },
+                    FilterChip(
+                        selected = manualLots,
+                        onClick = { onManualLotsChange(true) },
+                        label = { Text("Dividir/selecionar lotes") },
+                    )
+                    if (manualLots) {
+                        line.lotesSugeridos.forEach { lote ->
+                            OutlinedTextField(
+                                value = batchQuantities[lote.id].orEmpty(),
+                                onValueChange = { onBatchQuantityChange(lote.id, it) },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Lote ${lote.numero} — disponível ${lote.quantidade}") },
+                                supportingText = {
+                                    Text(lote.validade?.let { "Validade $it" } ?: "Sem validade informada")
+                                },
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal,
+                                ),
+                                singleLine = true,
+                            )
+                        }
+                        Text(
+                            "A soma informada nos lotes deve ser igual à quantidade separada.",
+                            style = MaterialTheme.typography.bodySmall,
                         )
                     }
                 }
@@ -321,3 +377,5 @@ private fun SeparationLineEditor(
         }
     }
 }
+
+private fun batchKey(lineId: Long, batchId: Long): String = "$lineId:$batchId"
