@@ -4,8 +4,15 @@
 {% block title %}Pedido {{ pedido.numero_pedido }}{% endblock %}
 {% block page_title %}Pedido {{ pedido.numero_pedido }}{% endblock %}
 
+{% block extra_head %}
+<style>
+  .fp-detail{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}.fp-actions a,.fp-actions button,.fp-dialog button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}.fp-actions a,.fp-actions button{user-select:none}.fp-table-wrap{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}.fp-table-wrap table{min-width:720px}.fp-dialog{max-height:calc(100dvh - 24px);overflow:auto}
+  @media(max-width:640px){.fp-detail{gap:16px}.fp-detail>div:first-child .flex{align-items:flex-start;flex-direction:column}.fp-actions{display:grid;grid-template-columns:1fr}.fp-actions>a,.fp-actions>button,.fp-actions>form{display:block;width:100%}.fp-actions>form>button,.fp-actions>a,.fp-actions>button{width:100%;min-height:44px;justify-content:center}.fp-dialog{width:calc(100% - 24px)!important;margin:auto}.fp-dialog form{padding:18px}.fp-dialog .flex.justify-end{align-items:stretch;flex-direction:column-reverse}.fp-dialog .flex.justify-end button{width:100%;min-height:44px}.fp-detail input,.fp-detail select,.fp-detail textarea{font-size:16px}.fp-detail .card{border-radius:14px}.fp-detail .p-5{padding:16px}}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="max-w-6xl mx-auto space-y-6">
+<div class="fp-detail max-w-6xl mx-auto space-y-6">
   <div>
     <div class="flex items-center gap-3">
       <h2 class="text-2xl font-semibold">{{ pedido.numero_pedido }}</h2>
@@ -46,7 +53,7 @@
   {% endif %}
 
   {# Ações #}
-  <div class="card p-4 bg-primary-900/20 border-primary-200 flex flex-wrap gap-2" x-data="{}">
+  <div class="fp-actions card p-4 bg-primary-900/20 border-primary-200 flex flex-wrap gap-2" x-data="{}">
     {% if pedido.status == 'rascunho' %}
       <a href="{% url 'vendas:pedido-editar' pedido.pk %}" class="btn-secondary">Editar cabeçalho</a>
     {% endif %}
@@ -94,7 +101,7 @@
     {% if pedido.origem == 'externo' %}<a href="{% url 'vendas:pedido-kanban' %}" class="btn-secondary">Voltar ao acompanhamento</a>{% endif %}
 
     {% if pedido.pode_faturar and pedido.origem == 'externo' %}
-      <dialog x-ref="modalFaturar" class="card max-w-xl w-full p-0 backdrop:bg-black/50">
+      <dialog x-ref="modalFaturar" class="fp-dialog card max-w-xl w-full p-0 backdrop:bg-black/50">
         <form method="post" action="{% url 'vendas:pedido-faturar' pedido.pk %}" class="p-6 space-y-4">
           {% csrf_token %}<h3 class="text-lg font-semibold">Faturar {{ pedido.numero_pedido }}</h3><p class="text-xs text-gray-500">Defina como este pedido será recebido. Se ainda não estiver pago, o sistema gera automaticamente o Contas a Receber.</p>
           <div><label class="form-label">Forma de pagamento *</label><select name="forma_pagamento" class="form-input w-full" required><option value="">Selecione</option>{% for forma in formas_pagamento %}<option value="{{ forma.pk }}" {% if pedido.forma_pagamento_id == forma.pk %}selected{% endif %}>{{ forma.descricao }}</option>{% endfor %}</select></div>
@@ -107,12 +114,12 @@
     {% endif %}
 
     {% if pedido.pode_iniciar_entrega %}
-      <dialog x-ref="modalEntrega" class="card max-w-lg w-full p-0 backdrop:bg-black/50"><form method="post" action="{% url 'vendas:pedido-iniciar-entrega' pedido.pk %}" class="p-6 space-y-4">{% csrf_token %}<h3 class="text-lg font-semibold">Colocar pedido em entrega</h3><div class="p-3 rounded-lg bg-gray-100/10 text-sm"><strong>Destino</strong><br>{{ pedido.cliente.endereco }}, {{ pedido.cliente.numero }}{% if pedido.cliente.complemento %} · {{ pedido.cliente.complemento }}{% endif %}<br>{{ pedido.cliente.bairro }} · {{ pedido.cliente.cidade }}/{{ pedido.cliente.uf }} · CEP {{ pedido.cliente.cep }}</div><div><label class="form-label">Responsável / motorista</label><input name="responsavel_entrega" class="form-input w-full" required></div><div><label class="form-label">Observação da entrega</label><textarea name="observacao_entrega" class="form-input w-full" rows="3"></textarea></div><div class="flex justify-end gap-2"><button type="button" @click="$refs.modalEntrega.close()" class="btn-secondary">Voltar</button><button type="submit" class="btn-primary">Confirmar saída</button></div></form></dialog>
+      <dialog x-ref="modalEntrega" class="fp-dialog card max-w-lg w-full p-0 backdrop:bg-black/50"><form method="post" action="{% url 'vendas:pedido-iniciar-entrega' pedido.pk %}" class="p-6 space-y-4">{% csrf_token %}<h3 class="text-lg font-semibold">Colocar pedido em entrega</h3><div class="p-3 rounded-lg bg-gray-100/10 text-sm"><strong>Destino</strong><br>{{ pedido.cliente.endereco }}, {{ pedido.cliente.numero }}{% if pedido.cliente.complemento %} · {{ pedido.cliente.complemento }}{% endif %}<br>{{ pedido.cliente.bairro }} · {{ pedido.cliente.cidade }}/{{ pedido.cliente.uf }} · CEP {{ pedido.cliente.cep }}</div><div><label class="form-label">Responsável / motorista</label><input name="responsavel_entrega" class="form-input w-full" required></div><div><label class="form-label">Observação da entrega</label><textarea name="observacao_entrega" class="form-input w-full" rows="3"></textarea></div><div class="flex justify-end gap-2"><button type="button" @click="$refs.modalEntrega.close()" class="btn-secondary">Voltar</button><button type="submit" class="btn-primary">Confirmar saída</button></div></form></dialog>
     {% endif %}
 
     {# Modal Cancelar #}
     {% if pedido.pode_cancelar %}
-      <dialog x-ref="modalCancelar" class="card max-w-md w-full p-0 backdrop:bg-black/50">
+      <dialog x-ref="modalCancelar" class="fp-dialog card max-w-md w-full p-0 backdrop:bg-black/50">
         <form method="post" action="{% url 'vendas:pedido-cancelar' pedido.pk %}" class="p-6">
           {% csrf_token %}
           <h3 class="text-lg font-semibold mb-4">Cancelar pedido {{ pedido.numero_pedido }}</h3>
@@ -130,7 +137,7 @@
 
     {# Modal Devolução #}
     {% if pedido.status == 'faturado' %}
-      <dialog x-ref="modalDevolver" class="card max-w-2xl w-full p-0 backdrop:bg-black/50">
+      <dialog x-ref="modalDevolver" class="fp-dialog card max-w-2xl w-full p-0 backdrop:bg-black/50">
         <form method="post" action="{% url 'vendas:pedido-devolver' pedido.pk %}" class="p-6">
           {% csrf_token %}
           <h3 class="text-lg font-semibold mb-4">Devolver pedido {{ pedido.numero_pedido }}</h3>
@@ -229,7 +236,7 @@
     <div class="px-5 py-3 border-b border-transparent flex items-center justify-between">
       <h3 class="font-semibold">Itens</h3>
     </div>
-    <table class="w-full text-sm">
+    <div class="fp-table-wrap"><table class="w-full text-sm">
       <thead class="bg-transparent">
         <tr>
           <th class="text-left px-5 py-2 font-medium text-gray-600">#</th>
@@ -278,7 +285,7 @@
           {% if pedido.status == 'rascunho' %}<td></td>{% endif %}
         </tr>
       </tfoot>
-    </table>
+    </table></div>
   </div>
 
   {# Form Adicionar Item (só em rascunho) #}

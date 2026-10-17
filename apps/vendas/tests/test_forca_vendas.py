@@ -12,6 +12,7 @@ from django.urls import reverse
 
 from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
+from apps.core.services.exceptions import EstoqueInsuficienteError
 from apps.core.services.modulos import modulo_da_url, modulos_ativos
 from apps.estoque.models import Estoque, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
@@ -216,6 +217,35 @@ class ForcaVendasTests(TestCase):
         self.assertContains(resposta, reverse('vendas:pedido-kanban'))
         self.assertContains(resposta, reverse('vendas:pedido-separacao'))
         self.assertNotContains(resposta, 'Pré-venda')
+
+    def test_telas_da_forca_de_vendas_sao_responsivas_e_respeitam_o_tema(self):
+        rotas = (
+            reverse('vendas:forca-vendas-dashboard'),
+            reverse('vendas:pedido-externo-novo'),
+            reverse('vendas:pedido-kanban'),
+            reverse('vendas:pedido-separacao'),
+        )
+
+        for rota in rotas:
+            with self.subTest(rota=rota):
+                resposta = self.client.get(rota)
+                self.assertEqual(resposta.status_code, 200)
+                self.assertContains(resposta, 'viewport-fit=cover')
+                self.assertContains(resposta, 'interactive-widget=resizes-content')
+                self.assertContains(resposta, 'touch-action:manipulation')
+                self.assertContains(resposta, 'font-size:16px')
+
+        separacao = self.client.get(reverse('vendas:pedido-separacao'))
+        self.assertContains(separacao, '--fs-card:#242830')
+        self.assertContains(separacao, 'body.tema-claro .fs-shell')
+        self.assertContains(separacao, 'Imprimir fila')
+        self.assertNotContains(separacao, 'var(--erp-card-bg,#fff)')
+
+        pedido_id = self.criar_pedido_pela_tela().json()['pedido_id']
+        detalhe = self.client.get(reverse('vendas:pedido-detail', args=[pedido_id]))
+        self.assertContains(detalhe, 'fp-detail')
+        self.assertContains(detalhe, 'max-height:calc(100dvh - 24px)')
+        self.assertContains(detalhe, 'overscroll-behavior-x:contain')
 
     def test_dashboard_exibe_indicadores_reais_e_filtros(self):
         pedido_id = self.criar_pedido_pela_tela(quantidade='4').json()['pedido_id']
@@ -486,12 +516,20 @@ assert.equal(pedido.buscaProdutoExecutada, false);
         self.assertEqual(pedido.status, PedidoVenda.Status.EM_SEPARACAO)
         self.assertTrue(pedido.separacoes.exists())
         item = pedido.itens.get(produto=self.produto)
+        estoque_produto = Estoque.objects.get(produto=self.produto, filial=self.filial)
+        estoque_substituto = Estoque.objects.get(
+            produto=self.produto_substituto, filial=self.filial,
+        )
         self.assertEqual(item.quantidade_solicitada, Decimal('2.000'))
         self.assertEqual(item.quantidade_atendida, Decimal('1.000'))
         self.assertTrue(item.separacao_conferida)
+        self.assertEqual(estoque_produto.quantidade_atual, Decimal('19.000'))
+        self.assertEqual(estoque_produto.quantidade_reservada, Decimal('0.000'))
         substituto = pedido.itens.get(produto=self.produto_substituto)
         self.assertEqual(substituto.item_substituido, item)
         self.assertEqual(substituto.quantidade_atendida, Decimal('1.000'))
+        self.assertEqual(estoque_substituto.quantidade_atual, Decimal('19.000'))
+        self.assertEqual(estoque_substituto.quantidade_reservada, Decimal('0.000'))
 
         fila_atualizada = self.client.get(reverse('vendas:pedido-separacao'))
         self.assertContains(fila_atualizada, 'Separado')
@@ -506,6 +544,16 @@ assert.equal(pedido.buscaProdutoExecutada, false);
             f'item_{item.pk}_conferido': 'on',
             f'item_{item.pk}_quantidade': '2',
         })
+        saidas_antes = MovimentacaoEstoque.objects.filter(
+            documento_tipo=MovimentacaoEstoque.DocumentoTipo.PEDIDO_VENDA,
+            documento_id=pedido.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.SAIDA,
+        ).count()
+        self.assertEqual(saidas_antes, 1)
+        Estoque.objects.filter(produto=self.produto, filial=self.filial).update(
+            quantidade_atual=Decimal('0'),
+            quantidade_disponivel=Decimal('0'),
+        )
 
         faturamento = self.client.post(reverse('vendas:pedido-faturar', args=[pedido.pk]), {
             'forma_pagamento': self.forma.pk,
@@ -516,6 +564,14 @@ assert.equal(pedido.buscaProdutoExecutada, false);
         self.assertRedirects(faturamento, reverse('vendas:pedido-detail', args=[pedido.pk]))
         pedido.refresh_from_db()
         self.assertEqual(pedido.status, PedidoVenda.Status.FATURADO)
+        self.assertEqual(
+            MovimentacaoEstoque.objects.filter(
+                documento_tipo=MovimentacaoEstoque.DocumentoTipo.PEDIDO_VENDA,
+                documento_id=pedido.pk,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.SAIDA,
+            ).count(),
+            saidas_antes,
+        )
         titulos = ContaReceber.objects.filter(documento_tipo='pedido_venda', documento_id=pedido.pk)
         self.assertEqual(titulos.count(), 2)
         self.assertTrue(all(t.status == StatusContaReceber.ABERTO for t in titulos))
@@ -530,6 +586,62 @@ assert.equal(pedido.buscaProdutoExecutada, false);
         self.client.post(reverse('vendas:pedido-concluir-entrega', args=[pedido.pk]))
         pedido.refresh_from_db()
         self.assertEqual(pedido.status, PedidoVenda.Status.ENTREGUE)
+
+    def test_separacao_externa_bloqueia_se_saldo_sumir_apos_analise(self):
+        self.abastecer()
+        pedido = PedidoVenda.objects.get(pk=self.criar_pedido_pela_tela().json()['pedido_id'])
+        self.client.post(reverse('vendas:pedido-aprovar-externo', args=[pedido.pk]))
+        pedido.refresh_from_db()
+        item = pedido.itens.get()
+        MovimentacaoService.registrar_saida_fefo(
+            produto_id=self.produto.pk,
+            filial_id=self.filial.pk,
+            quantidade=Decimal('20'),
+            usuario_id=self.usuario.pk,
+            deposito_id=Estoque.objects.get(
+                produto=self.produto, filial=self.filial,
+            ).deposito_id,
+        )
+
+        with self.assertRaises(EstoqueInsuficienteError):
+            VendaService.separar_pedido(pedido, self.usuario, [{
+                'item_id': item.pk,
+                'conferido': True,
+                'quantidade_separada': item.quantidade,
+            }])
+
+        pedido.refresh_from_db()
+        item.refresh_from_db()
+        self.assertEqual(pedido.status, PedidoVenda.Status.CONFIRMADO)
+        self.assertEqual(item.quantidade_reservada, Decimal('2.000'))
+        self.assertFalse(pedido.separacoes.exists())
+
+    def test_cancelamento_externo_devolve_estoque_baixado_na_separacao(self):
+        self.abastecer()
+        pedido = PedidoVenda.objects.get(pk=self.criar_pedido_pela_tela().json()['pedido_id'])
+        VendaService.aprovar_e_confirmar_pedido(pedido, self.usuario)
+        item = pedido.itens.get()
+        VendaService.separar_pedido(pedido, self.usuario, [{
+            'item_id': item.pk,
+            'conferido': True,
+            'quantidade_separada': item.quantidade,
+        }])
+        estoque = Estoque.objects.get(produto=self.produto, filial=self.filial)
+        self.assertEqual(estoque.quantidade_atual, Decimal('18.000'))
+
+        VendaService.cancelar_pedido(pedido, self.usuario, 'Cliente desistiu após separação')
+
+        pedido.refresh_from_db()
+        estoque.refresh_from_db()
+        self.assertEqual(pedido.status, PedidoVenda.Status.CANCELADO)
+        self.assertEqual(estoque.quantidade_atual, Decimal('20.000'))
+        self.assertEqual(estoque.quantidade_reservada, Decimal('0.000'))
+        self.assertTrue(MovimentacaoEstoque.objects.filter(
+            documento_tipo=MovimentacaoEstoque.DocumentoTipo.PEDIDO_VENDA,
+            documento_id=pedido.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            observacao='Retorno ao estoque por cancelamento após separação.',
+        ).exists())
 
     def test_payload_malformado_retorna_erro_json(self):
         resposta = self.client.post(

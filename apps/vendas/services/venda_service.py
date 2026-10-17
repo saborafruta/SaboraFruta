@@ -217,7 +217,10 @@ class VendaService:
     ) -> SeparacaoPedido:
         """
         Cria separação consumindo lotes via FEFO.
-        Não dá baixa ainda — só identifica os lotes.
+
+        Pedido externo representa separação física para expedição: valida e
+        baixa o estoque aqui. Nos demais fluxos legados, apenas identifica os
+        lotes e mantém a baixa no faturamento.
         """
         if not pedido.pode_separar:
             raise DadosInvalidosError(
@@ -356,21 +359,53 @@ class VendaService:
         ])
 
         for item in itens_finais:
-            if not item.produto.controla_lote:
-                # Produto sem controle de lote — separação simples
-                continue
-            consumos = MovimentacaoService.selecionar_lotes_fifo(
-                produto_id=item.produto_id,
-                filial_id=pedido.filial_id,
-                quantidade=item.quantidade,
-            )
-            for c in consumos:
-                ItemSeparacao.objects.create(
-                    separacao=separacao,
-                    item_pedido=item,
-                    lote_id=c.lote_id,
-                    quantidade_separada=c.quantidade,
+            if pedido.origem == PedidoVenda.Origem.EXTERNO:
+                # A conferência é a última barreira operacional de estoque.
+                # A transação inteira volta se não houver saldo, portanto não
+                # existe separação concluída sem a correspondente saída.
+                MovimentacaoService.liberar_reserva(
+                    produto_id=item.produto_id,
+                    filial_id=pedido.filial_id,
+                    quantidade=item.quantidade,
+                    tolerar_ausente=True,
+                    deposito_id=Deposito.venda_id(pedido.filial_id),
                 )
+                movimentos = MovimentacaoService.registrar_saida_fefo(
+                    produto_id=item.produto_id,
+                    filial_id=pedido.filial_id,
+                    quantidade=item.quantidade,
+                    usuario_id=usuario.pk,
+                    tipo_operacao=MovimentacaoEstoque.TipoOperacao.SAIDA,
+                    documento_tipo=MovimentacaoEstoque.DocumentoTipo.PEDIDO_VENDA,
+                    documento_id=pedido.pk,
+                    documento_numero=pedido.numero_pedido,
+                    deposito_id=Deposito.venda_id(pedido.filial_id),
+                )
+                item.quantidade_reservada = Decimal('0')
+                item.save(update_fields=['quantidade_reservada', 'updated_at'])
+                for movimento in movimentos:
+                    if movimento.lote_id:
+                        ItemSeparacao.objects.create(
+                            separacao=separacao,
+                            item_pedido=item,
+                            lote_id=movimento.lote_id,
+                            quantidade_separada=movimento.quantidade,
+                        )
+                continue
+
+            if item.produto.controla_lote:
+                consumos = MovimentacaoService.selecionar_lotes_fifo(
+                    produto_id=item.produto_id,
+                    filial_id=pedido.filial_id,
+                    quantidade=item.quantidade,
+                )
+                for consumo in consumos:
+                    ItemSeparacao.objects.create(
+                        separacao=separacao,
+                        item_pedido=item,
+                        lote_id=consumo.lote_id,
+                        quantidade_separada=consumo.quantidade,
+                    )
 
         separacao.status = SeparacaoPedido.Status.CONCLUIDA
         separacao.data_fim = timezone.now()
@@ -399,8 +434,10 @@ class VendaService:
         prazo_pagamento_dias: int | None = None, referencia_pagamento: str = '',
     ) -> PedidoVenda:
         """
-        Dá baixa real no estoque, libera reserva e muda para FATURADO.
-        Se houver separação, usa os lotes identificados; senão, usa FEFO direto.
+        Finaliza o financeiro e muda para FATURADO.
+
+        No pedido externo, a saída física já ocorreu na separação e nunca é
+        revalidada aqui. Os demais fluxos mantêm a baixa legada no faturamento.
         """
         if not pedido.pode_faturar:
             raise DadosInvalidosError(
@@ -429,6 +466,9 @@ class VendaService:
         separacao = pedido.separacoes.filter(
             status=SeparacaoPedido.Status.CONCLUIDA,
         ).order_by('-data_inicio').first()
+        estoque_baixado_na_separacao = bool(
+            pedido.origem == PedidoVenda.Origem.EXTERNO and separacao
+        )
 
         for item in pedido.itens.select_related('produto'):
             if (item.quantidade or Decimal('0')) <= Decimal('0'):
@@ -438,6 +478,30 @@ class VendaService:
                     'quantidade_reservada', 'quantidade_faturada', 'updated_at',
                 ])
                 continue
+
+            if estoque_baixado_na_separacao:
+                # Compatibilidade com pedidos separados antes desta regra:
+                # uma reserva antiga pode continuar registrada, mas faturar
+                # não consulta nem movimenta saldo físico.
+                if item.quantidade_reservada > 0:
+                    MovimentacaoService.liberar_reserva(
+                        produto_id=item.produto_id,
+                        filial_id=pedido.filial_id,
+                        quantidade=item.quantidade_reservada,
+                        tolerar_ausente=True,
+                        deposito_id=Deposito.venda_id(pedido.filial_id),
+                    )
+                item.quantidade_atendida = item.quantidade
+                item.quantidade_reservada = Decimal('0')
+                item.quantidade_faturada = item.quantidade
+                item.save(update_fields=[
+                    'quantidade_atendida',
+                    'quantidade_reservada',
+                    'quantidade_faturada',
+                    'updated_at',
+                ])
+                continue
+
             # Liberar reserva primeiro
             MovimentacaoService.liberar_reserva(
                 produto_id=item.produto_id,
@@ -613,18 +677,47 @@ class VendaService:
         if not motivo.strip():
             raise DadosInvalidosError('Cancelamento exige motivo.')
 
-        # Liberar reservas se o pedido estava reservado
+        # Liberar reservas se o pedido estava reservado. Em pedidos externos
+        # já separados, devolve também a saída feita pela separação.
         if pedido.status in (
             PedidoVenda.Status.CONFIRMADO, PedidoVenda.Status.EM_SEPARACAO,
         ):
-            for item in pedido.itens.select_related('produto'):
-                MovimentacaoService.liberar_reserva(
-                    produto_id=item.produto_id,
-                    filial_id=pedido.filial_id,
-                    quantidade=item.quantidade,
-                    tolerar_ausente=True,
-                    deposito_id=Deposito.venda_id(pedido.filial_id),
+            if (
+                pedido.origem == PedidoVenda.Origem.EXTERNO
+                and pedido.status == PedidoVenda.Status.EM_SEPARACAO
+            ):
+                saidas = list(
+                    MovimentacaoEstoque.objects.filter(
+                        filial=pedido.filial,
+                        documento_tipo=MovimentacaoEstoque.DocumentoTipo.PEDIDO_VENDA,
+                        documento_id=pedido.pk,
+                        tipo_operacao=MovimentacaoEstoque.TipoOperacao.SAIDA,
+                    ).select_related('lote')
                 )
+                for saida in saidas:
+                    MovimentacaoService.registrar_movimentacao(
+                        produto_id=saida.produto_id,
+                        filial_id=pedido.filial_id,
+                        tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+                        quantidade=saida.quantidade,
+                        usuario_id=usuario.pk,
+                        lote_id=saida.lote_id,
+                        valor_unitario=saida.valor_unitario,
+                        documento_tipo=MovimentacaoEstoque.DocumentoTipo.PEDIDO_VENDA,
+                        documento_id=pedido.pk,
+                        documento_numero=pedido.numero_pedido,
+                        observacao='Retorno ao estoque por cancelamento após separação.',
+                        deposito_id=saida.deposito_id,
+                    )
+            for item in pedido.itens.select_related('produto'):
+                if item.quantidade_reservada > 0:
+                    MovimentacaoService.liberar_reserva(
+                        produto_id=item.produto_id,
+                        filial_id=pedido.filial_id,
+                        quantidade=item.quantidade_reservada,
+                        tolerar_ausente=True,
+                        deposito_id=Deposito.venda_id(pedido.filial_id),
+                    )
                 item.quantidade_reservada = Decimal('0')
                 item.save(update_fields=['quantidade_reservada', 'updated_at'])
 

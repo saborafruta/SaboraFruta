@@ -4,8 +4,8 @@ A mercadoria de um pedido sai do estoque UMA vez.
 O DEFEITO QUE ISTO FECHA. Um pedido de venda tem hoje duas portas para o
 mesmo movimento físico:
 
-  · o FATURAMENTO (`VendaService.faturar_pedido`) baixa o estoque e libera a
-    reserva;
+  · a SEPARAÇÃO de pedidos externos baixa o estoque e libera a reserva;
+  · o FATURAMENTO dos demais pedidos baixa o estoque e libera a reserva;
   · a VIAGEM, ao fechar a carga, baixa o estoque de cada item — inclusive dos
     itens que vieram de um pedido de venda.
 
@@ -29,7 +29,7 @@ uma saída só.
 
 AS DUAS FONTES SÃO LIDAS DE ONDE ELAS SÃO VERDADE:
 
-  · o faturamento deixa rastro no RAZÃO, com o documento do pedido;
+  · a separação/faturamento deixa rastro no RAZÃO, com o documento do pedido;
   · a viagem deixa rastro na CARGA, e o razão dela aponta para a viagem, não
     para o pedido. Somar o razão da viagem exigiria adivinhar qual pedido
     pagou qual movimento quando dois pedidos levam o mesmo produto no mesmo
@@ -55,7 +55,7 @@ class SaidaUnicaService:
 
     @staticmethod
     def baixado_no_faturamento(filial_id, pedido_id, produto_id) -> Decimal:
-        """Quanto o faturamento deste pedido já tirou do estoque."""
+        """Quanto uma saída vinculada ao pedido já tirou do estoque."""
         total = (
             MovimentacaoEstoque.objects
             .filter(

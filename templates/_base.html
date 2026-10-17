@@ -3,7 +3,7 @@
 <html lang="pt-BR" class="erp-prehydrate tema-escuro" style="height:100%;">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="theme-color" content="#1c1c1e">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -36,6 +36,10 @@
         root.style.setProperty('--erp-sidebar-width', sidebarCollapsed ? '4rem' : '16rem');
         root.style.backgroundColor = temaClaro ? '#f3f6fb' : '#1c1c1e';
         root.style.colorScheme = temaClaro ? 'light' : 'dark';
+        var themeColorMeta = document.querySelector('meta[name="theme-color"]');
+        if (themeColorMeta) {
+          themeColorMeta.setAttribute('content', temaClaro ? '#f3f6fb' : '#1c1c1e');
+        }
         if (document.body) {
           document.body.classList.toggle('tema-claro', temaClaro);
           document.body.classList.toggle('tema-escuro', !temaClaro);
