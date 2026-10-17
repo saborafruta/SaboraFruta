@@ -22,7 +22,7 @@ from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import (
     DadosInvalidosError, EstoqueInsuficienteError, PermissaoNegadaError,
 )
-from apps.estoque.models import Deposito, MovimentacaoEstoque
+from apps.estoque.models import Deposito, Estoque, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
 from apps.produtos.services.preco_service import PrecoService
@@ -237,6 +237,14 @@ class VendaService:
         )
 
         itens_originais = list(pedido.itens.select_related('produto').order_by('numero_item'))
+        deposito_venda_id = Deposito.venda_id(pedido.filial_id)
+        depositos_ativos = {
+            deposito.pk: deposito
+            for deposito in Deposito.objects.filter(
+                filial_id=pedido.filial_id,
+                ativo=True,
+            )
+        }
         if pedido.origem == PedidoVenda.Origem.EXTERNO and itens_conferidos is None:
             raise DadosInvalidosError(
                 'A separação de pedido externo exige a conferência de todos os itens.'
@@ -252,6 +260,7 @@ class VendaService:
             ]
         dados_por_item = {int(dado['item_id']): dado for dado in itens_conferidos}
         itens_finais = []
+        depositos_reserva_por_item = {}
         proximo_numero = (
             pedido.itens.aggregate(maior=Max('numero_item'))['maior'] or 0
         ) + 1
@@ -262,6 +271,20 @@ class VendaService:
                 raise DadosInvalidosError(
                     f'Confirme a separação do item {item.numero_item}: {item.produto}.'
                 )
+            try:
+                deposito_id = int(dado.get('deposito_id') or deposito_venda_id)
+            except (TypeError, ValueError) as exc:
+                raise DadosInvalidosError(
+                    f'Selecione um depósito válido para o item {item.numero_item}.'
+                ) from exc
+            if deposito_id not in depositos_ativos:
+                raise DadosInvalidosError(
+                    f'O depósito escolhido para o item {item.numero_item} não está ativo nesta filial.'
+                )
+            # Os itens originais foram reservados na aprovação no depósito
+            # comercial padrão. A saída física pode ser de outro depósito,
+            # mas a reserva anterior precisa ser liberada no local correto.
+            depositos_reserva_por_item[item.pk] = deposito_venda_id
             solicitada = item.quantidade_solicitada or item.quantidade
             try:
                 separada = Decimal(str(dado.get('quantidade_separada', '0')))
@@ -289,7 +312,7 @@ class VendaService:
                     filial_id=pedido.filial_id,
                     quantidade=diferenca,
                     tolerar_ausente=True,
-                    deposito_id=Deposito.venda_id(pedido.filial_id),
+                    deposito_id=deposito_venda_id,
                 )
             item.quantidade_solicitada = solicitada
             item.quantidade = separada
@@ -297,11 +320,13 @@ class VendaService:
             item.quantidade_reservada = separada
             item.separacao_conferida = True
             item.observacao_separacao = observacao_item
+            item.deposito_separacao_id = deposito_id
             item.calcular_totais()
             item.save(update_fields=[
                 'quantidade_solicitada', 'quantidade', 'quantidade_atendida',
                 'quantidade_reservada', 'separacao_conferida',
-                'observacao_separacao', 'valor_bruto', 'valor_desconto',
+                'observacao_separacao', 'deposito_separacao',
+                'valor_bruto', 'valor_desconto',
                 'desconto_percentual', 'desconto_valor', 'valor_total', 'updated_at',
             ])
             if separada > 0:
@@ -319,6 +344,18 @@ class VendaService:
                     raise DadosInvalidosError(
                         f'O produto substituto do item {item.numero_item} não está disponível.'
                     )
+                try:
+                    deposito_substituto_id = int(
+                        dado.get('deposito_substituto_id') or deposito_id
+                    )
+                except (TypeError, ValueError) as exc:
+                    raise DadosInvalidosError(
+                        f'Selecione um depósito válido para o substituto do item {item.numero_item}.'
+                    ) from exc
+                if deposito_substituto_id not in depositos_ativos:
+                    raise DadosInvalidosError(
+                        f'O depósito do substituto do item {item.numero_item} não está ativo nesta filial.'
+                    )
                 contrato = ProdutoVendavelService.validar_venda(
                     produto=substituto,
                     filial=pedido.filial,
@@ -331,7 +368,7 @@ class VendaService:
                     filial_id=pedido.filial_id,
                     quantidade=quantidade_substituta,
                     permitir_sem_estoque=substituto.permite_venda_sem_estoque,
-                    deposito_id=Deposito.venda_id(pedido.filial_id),
+                    deposito_id=deposito_substituto_id,
                 )
                 novo_item = ItemPedidoVenda(
                     pedido=pedido,
@@ -346,9 +383,11 @@ class VendaService:
                     separacao_conferida=True,
                     item_substituido=item,
                     observacao_separacao=f'Substitui o item {item.numero_item}. {observacao_item}'.strip(),
+                    deposito_separacao_id=deposito_substituto_id,
                 )
                 novo_item.calcular_totais()
                 novo_item.save()
+                depositos_reserva_por_item[novo_item.pk] = deposito_substituto_id
                 proximo_numero += 1
                 itens_finais.append(novo_item)
 
@@ -368,8 +407,28 @@ class VendaService:
                     filial_id=pedido.filial_id,
                     quantidade=item.quantidade,
                     tolerar_ausente=True,
-                    deposito_id=Deposito.venda_id(pedido.filial_id),
+                    deposito_id=depositos_reserva_por_item.get(
+                        item.pk, deposito_venda_id,
+                    ),
                 )
+                deposito_saida_id = item.deposito_separacao_id or deposito_venda_id
+                estoque_saida, _ = Estoque.objects.select_for_update().get_or_create(
+                    produto_id=item.produto_id,
+                    filial_id=pedido.filial_id,
+                    deposito_id=deposito_saida_id,
+                    defaults={
+                        'quantidade_atual': 0,
+                        'quantidade_reservada': 0,
+                        'quantidade_disponivel': 0,
+                    },
+                )
+                if estoque_saida.quantidade_disponivel < item.quantidade:
+                    deposito_saida = depositos_ativos[deposito_saida_id]
+                    raise EstoqueInsuficienteError(
+                        f'Produto "{item.produto}" sem saldo suficiente no depósito '
+                        f'"{deposito_saida.nome}". Disponível: '
+                        f'{estoque_saida.quantidade_disponivel}; solicitado: {item.quantidade}.'
+                    )
                 movimentos = MovimentacaoService.registrar_saida_fefo(
                     produto_id=item.produto_id,
                     filial_id=pedido.filial_id,
@@ -379,7 +438,7 @@ class VendaService:
                     documento_tipo=MovimentacaoEstoque.DocumentoTipo.PEDIDO_VENDA,
                     documento_id=pedido.pk,
                     documento_numero=pedido.numero_pedido,
-                    deposito_id=Deposito.venda_id(pedido.filial_id),
+                    deposito_id=deposito_saida_id,
                 )
                 item.quantidade_reservada = Decimal('0')
                 item.save(update_fields=['quantidade_reservada', 'updated_at'])

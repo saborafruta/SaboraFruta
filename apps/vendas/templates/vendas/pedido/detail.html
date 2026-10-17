@@ -255,7 +255,7 @@
         {% for item in itens %}
           <tr>
             <td class="px-5 py-2 font-mono text-xs">{{ item.numero_item }}</td>
-            <td class="px-5 py-2">{{ item.produto.descricao }}</td>
+            <td class="px-5 py-2">{{ item.produto.descricao }}{% if item.deposito_separacao_id %}<small class="block text-blue-500">Retirado de: {{ item.deposito_separacao.nome }}</small>{% endif %}</td>
             <td class="px-5 py-2 text-right">{% if pedido.origem == 'externo' %}{{ item.quantidade_solicitada|quantidade:2 }}{% else %}{{ item.quantidade|quantidade:2 }}{% endif %} {{ item.produto.unidade_medida.sigla }}</td>
             {% if pedido.origem == 'externo' and pedido.status != 'aguardando_aprovacao' and pedido.status != 'confirmado' %}<td class="px-5 py-2 text-right">{{ item.quantidade_atendida|quantidade:2 }}{% if item.quantidade_solicitada and item.quantidade_solicitada != item.quantidade_atendida %}<small class="block text-orange-500">pedido: {{ item.quantidade_solicitada|quantidade:2 }}</small>{% endif %}{% if item.item_substituido_id %}<small class="block text-blue-500">substituto</small>{% endif %}</td>{% endif %}
             <td class="px-5 py-2 text-right">{{ item.valor_unitario|moeda }}</td>

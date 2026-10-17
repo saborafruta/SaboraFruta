@@ -15,7 +15,7 @@ from apps.cadastros.models import Cliente
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.tenant_context import tenant_atomic
-from apps.estoque.models import Deposito, Estoque
+from apps.estoque.models import Deposito
 from apps.estoque.services.saldos_por_deposito import anexar_saldos_por_deposito
 from apps.financeiro.models import CondicaoPagamento, FormaPagamento
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
@@ -394,23 +394,33 @@ class PedidoSeparacaoFilaView(PermissaoRequiredMixin, View):
             .prefetch_related('itens__produto__unidade_medida', 'separacoes')
             .order_by('data_entrega_prevista', 'data_emissao')
         )
-        produto_ids = {
-            item.produto_id for pedido in pedidos for item in pedido.itens.all()
+        depositos = list(
+            Deposito.objects.filter(filial=request.filial_ativa, ativo=True)
+            .order_by('-is_padrao', 'nome')
+        )
+        produtos = {
+            item.produto_id: item.produto
+            for pedido in pedidos for item in pedido.itens.all()
         }
-        saldos = {
-            estoque.produto_id: estoque.quantidade_disponivel
-            for estoque in Estoque.objects.filter(
-                filial=request.filial_ativa,
-                deposito_id=Deposito.venda_id(request.filial_ativa.pk),
-                produto_id__in=produto_ids,
-            )
+        anexar_saldos_por_deposito(
+            produtos=produtos.values(),
+            filial=request.filial_ativa,
+            depositos=depositos,
+        )
+        saldos_por_produto = {
+            produto.pk: produto.saldos_depositos
+            for produto in produtos.values()
         }
         for pedido in pedidos:
             for item in pedido.itens.all():
-                item.saldo_disponivel_tela = (
-                    saldos.get(item.produto_id, Decimal('0'))
-                    + (item.quantidade_reservada or Decimal('0'))
-                )
+                item.saldos_depositos_tela = []
+                for saldo in saldos_por_produto.get(item.produto_id, []):
+                    saldo_tela = dict(saldo)
+                    saldo_tela['disponivel_separacao'] = saldo['disponivel'] + (
+                        (item.quantidade_reservada or Decimal('0'))
+                        if saldo['origem_pedido'] else Decimal('0')
+                    )
+                    item.saldos_depositos_tela.append(saldo_tela)
         return render(request, self.template_name, {
             'title': 'Separação de pedidos',
             'pedidos_a_separar': [
@@ -421,4 +431,5 @@ class PedidoSeparacaoFilaView(PermissaoRequiredMixin, View):
                 pedido for pedido in pedidos
                 if pedido.status == PedidoVenda.Status.EM_SEPARACAO
             ],
+            'depositos': depositos,
         })

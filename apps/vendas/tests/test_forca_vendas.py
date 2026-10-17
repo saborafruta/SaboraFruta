@@ -570,6 +570,80 @@ assert.equal(pedido.buscaProdutoExecutada, false);
         fila_atualizada = self.client.get(reverse('vendas:pedido-separacao'))
         self.assertContains(fila_atualizada, 'Separado')
 
+    def test_estoquista_escolhe_deposito_e_saida_ocorre_no_local_selecionado(self):
+        self.abastecer()
+        galpao = Deposito.objects.create(
+            filial=self.filial,
+            nome='Galpão de revenda',
+            tipo=Deposito.Tipo.REVENDA,
+            permite_venda=True,
+            permite_producao=False,
+        )
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=self.produto.pk,
+            filial_id=self.filial.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('9'),
+            usuario_id=self.usuario.pk,
+            valor_unitario=Decimal('4'),
+            deposito_id=galpao.pk,
+        )
+        pedido = PedidoVenda.objects.get(
+            pk=self.criar_pedido_pela_tela().json()['pedido_id'],
+        )
+        self.client.post(reverse('vendas:pedido-aprovar-externo', args=[pedido.pk]))
+        item = pedido.itens.get()
+
+        fila = self.client.get(reverse('vendas:pedido-separacao'))
+
+        self.assertContains(fila, 'Estoque de retirada')
+        self.assertContains(fila, 'Estoque Geral')
+        self.assertContains(fila, 'Galpão de revenda')
+        resposta = self.client.post(
+            reverse('vendas:pedido-separar', args=[pedido.pk]),
+            {
+                'origem': 'fila-separacao',
+                'conferencia_detalhada': '1',
+                f'item_{item.pk}_conferido': 'on',
+                f'item_{item.pk}_quantidade': '2',
+                f'item_{item.pk}_deposito_id': galpao.pk,
+            },
+        )
+
+        self.assertRedirects(resposta, reverse('vendas:pedido-separacao'))
+        item.refresh_from_db()
+        pedido.refresh_from_db()
+        estoque_geral = Estoque.objects.get(
+            produto=self.produto,
+            filial=self.filial,
+            deposito_id=Deposito.padrao_id(self.filial.pk),
+        )
+        estoque_galpao = Estoque.objects.get(
+            produto=self.produto,
+            filial=self.filial,
+            deposito=galpao,
+        )
+        self.assertEqual(pedido.status, PedidoVenda.Status.EM_SEPARACAO)
+        self.assertEqual(item.deposito_separacao, galpao)
+        self.assertEqual(estoque_geral.quantidade_atual, Decimal('20.000'))
+        self.assertEqual(estoque_geral.quantidade_reservada, Decimal('0.000'))
+        self.assertEqual(estoque_galpao.quantidade_atual, Decimal('7.000'))
+        self.assertTrue(MovimentacaoEstoque.objects.filter(
+            documento_tipo=MovimentacaoEstoque.DocumentoTipo.PEDIDO_VENDA,
+            documento_id=pedido.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.SAIDA,
+            deposito=galpao,
+        ).exists())
+        detalhe = self.client.get(reverse('vendas:pedido-detail', args=[pedido.pk]))
+        self.assertContains(detalhe, 'Retirado de: Galpão de revenda')
+        VendaService.cancelar_pedido(
+            pedido, self.usuario, 'Cliente cancelou depois da separação',
+        )
+        estoque_galpao.refresh_from_db()
+        estoque_geral.refresh_from_db()
+        self.assertEqual(estoque_galpao.quantidade_atual, Decimal('9.000'))
+        self.assertEqual(estoque_geral.quantidade_atual, Decimal('20.000'))
+
     def test_faturamento_externo_gera_contas_a_receber_e_entrega(self):
         self.abastecer()
         pedido = PedidoVenda.objects.get(pk=self.criar_pedido_pela_tela().json()['pedido_id'])

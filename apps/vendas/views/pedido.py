@@ -112,7 +112,9 @@ class PedidoDetailView(PermissaoRequiredMixin, View):
             ),
             pk=pk,
         )
-        itens = pedido.itens.select_related('produto', 'produto__unidade_medida').all()
+        itens = pedido.itens.select_related(
+            'produto', 'produto__unidade_medida', 'deposito_separacao',
+        ).all()
         apresentacoes_por_produto = {}
         if pedido.status == 'faturado':
             apresentacoes = ProdutoApresentacao.objects.ativas().filter(
@@ -293,6 +295,9 @@ class SepararPedidoView(PermissaoRequiredMixin, View):
                         'quantidade_separada': request.POST.get(
                             f'item_{item.pk}_quantidade', '0',
                         ).replace(',', '.'),
+                        'deposito_id': request.POST.get(
+                            f'item_{item.pk}_deposito_id',
+                        ),
                         'observacao': request.POST.get(f'item_{item.pk}_observacao', ''),
                         'produto_substituto_id': request.POST.get(
                             f'item_{item.pk}_substituto_id',
@@ -300,6 +305,9 @@ class SepararPedidoView(PermissaoRequiredMixin, View):
                         'quantidade_substituta': request.POST.get(
                             f'item_{item.pk}_substituto_quantidade', '0',
                         ).replace(',', '.'),
+                        'deposito_substituto_id': request.POST.get(
+                            f'item_{item.pk}_substituto_deposito_id',
+                        ),
                     })
             separacao = VendaService.separar_pedido(
                 pedido,

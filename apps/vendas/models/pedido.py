@@ -290,6 +290,11 @@ class ItemPedidoVenda(TimestampedModel):
     observacao = models.CharField(max_length=255, blank=True)
     separacao_conferida = models.BooleanField(default=False)
     observacao_separacao = models.CharField(max_length=255, blank=True)
+    deposito_separacao = models.ForeignKey(
+        'estoque.Deposito', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='itens_pedido_separados',
+        help_text='Depósito físico escolhido pelo estoquista para retirar o item.',
+    )
     item_substituido = models.ForeignKey(
         'self', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='itens_substitutos',
