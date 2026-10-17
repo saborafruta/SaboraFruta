@@ -222,6 +222,10 @@ class CheckoutVendaTests(TestCase):
         self.assertContains(resposta, 'atalhoFormaPagamento(indice)')
         self.assertNotContains(resposta, 'id="checkout-desconto"')
         self.assertContains(resposta, '.checkout-page{height:calc(100dvh - 7.5rem);min-height:0;overflow:hidden}')
+        self.assertContains(resposta, 'html.checkout-route .app-content-frame{height:calc(100dvh - 3.5rem)')
+        self.assertContains(resposta, '.co-summary-card>.co-section-head{display:none}')
+        self.assertContains(resposta, '.co-cart-card{min-height:78px}')
+        self.assertContains(resposta, '.co-quick-actions{grid-column:1;gap:5px}')
 
     def test_desconto_exige_aprovacao_e_escape_nao_fecha_modal_pos_venda(self):
         self.habilitar_checkout()
