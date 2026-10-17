@@ -79,6 +79,7 @@ import java.math.RoundingMode
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -190,7 +191,7 @@ fun NewOrderScreen(
     LaunchedEffect(Unit) {
         initialLoading = true
         error = null
-        runCatching {
+        runCatchingCancellable {
             options = repository.orderOptions(session)
             val saved = repository.savedOrderDraft(session)
             if (saved == null) {
@@ -228,7 +229,7 @@ fun NewOrderScreen(
         clientSearchLoading = true
         clientResultsVisible = true
         clientSearchExecuted = false
-        runCatching { repository.clients(session, query) }
+        runCatchingCancellable { repository.clients(session, query) }
             .onSuccess { clients = it }
             .onFailure {
                 clients = emptyList()
@@ -251,7 +252,7 @@ fun NewOrderScreen(
         productSearchLoading = true
         productResultsVisible = true
         productSearchExecuted = false
-        runCatching {
+        runCatchingCancellable {
             repository.products(
                 session = session,
                 clientId = client.id,
@@ -329,9 +330,7 @@ fun NewOrderScreen(
                         ExposedDropdownMenuBox(
                             expanded = clientResultsVisible &&
                                 (clientSearchLoading || clientSearchExecuted),
-                            onExpandedChange = { expanded ->
-                                clientResultsVisible = expanded && clientQuery.trim().length >= 2
-                            },
+                            onExpandedChange = {},
                         ) {
                             OutlinedTextField(
                                 value = clientQuery,
@@ -351,10 +350,6 @@ fun NewOrderScreen(
                                         CircularProgressIndicator(
                                             modifier = Modifier.size(18.dp),
                                             strokeWidth = 2.dp,
-                                        )
-                                    } else {
-                                        ExposedDropdownMenuDefaults.TrailingIcon(
-                                            expanded = clientResultsVisible,
                                         )
                                     }
                                 },
@@ -762,7 +757,7 @@ fun NewOrderScreen(
                             scope.launch {
                                 submitting = true
                                 error = null
-                                runCatching {
+                                runCatchingCancellable {
                                     repository.submitOrder(
                                         session,
                                         OrderDraft(
@@ -1183,4 +1178,12 @@ private fun ErrorMessage(message: String) {
             style = MaterialTheme.typography.bodySmall,
         )
     }
+}
+
+private suspend fun <T> runCatchingCancellable(block: suspend () -> T): Result<T> = try {
+    Result.success(block())
+} catch (cancelled: CancellationException) {
+    throw cancelled
+} catch (error: Exception) {
+    Result.failure(error)
 }
