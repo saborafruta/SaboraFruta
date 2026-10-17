@@ -41,6 +41,14 @@ staticfiles/
 *.swo
 .DS_Store
 
+# Android
+android/.gradle/
+android/dist/
+android/local.properties
+android/**/build/
+*.jks
+*.keystore
+
 # Docker
 docker-compose.override.yml
 
