@@ -72,6 +72,23 @@ class Deposito(FilialScopedModel):
     def __str__(self):
         return f'{self.nome} — {self.filial}'
 
+    @property
+    def finalidades_valores(self):
+        """Finalidades efetivas, preservando os campos legados de roteamento."""
+        valores = []
+        if self.tipo == self.Tipo.GERAL:
+            valores.append(self.Tipo.GERAL)
+        if self.tipo == self.Tipo.REVENDA or self.permite_venda:
+            valores.append(self.Tipo.REVENDA)
+        if self.tipo == self.Tipo.PRODUCAO or self.permite_producao:
+            valores.append(self.Tipo.PRODUCAO)
+        return list(dict.fromkeys(valores))
+
+    @property
+    def finalidades_uso(self):
+        rotulos = dict(self.Tipo.choices)
+        return [(valor, rotulos[valor]) for valor in self.finalidades_valores]
+
     # ------------------------------------------------------------------
     # Resolução do depósito padrão
     # ------------------------------------------------------------------
@@ -130,11 +147,14 @@ class Deposito(FilialScopedModel):
         candidatos = list(
             cls.objects.filter(
                 filial_id=filial_id,
-                tipo=cls.Tipo.PRODUCAO,
                 ativo=True,
                 permite_producao=True,
             ).order_by('nome', 'pk')
         )
+        # Um depósito dedicado à produção continua tendo preferência. Se o
+        # usuário marcou "Geral + Produção", ele também participa, mas depois
+        # dos depósitos cuja finalidade principal já era produção.
+        candidatos.sort(key=lambda dep: (dep.tipo != cls.Tipo.PRODUCAO, dep.nome, dep.pk))
         tipos = {tipo_material} if isinstance(tipo_material, str) else set(tipo_material)
         tipos.discard('')
         if tipos:

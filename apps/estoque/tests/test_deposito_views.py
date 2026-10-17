@@ -63,19 +63,46 @@ class DepositoCrudViewTests(DepositoViewsBase):
     def test_cria_deposito(self):
         self._set_filial_sessao()
         resp = self.client.post(reverse('estoque:deposito-create'), {
-            'nome': 'Fábrica', 'tipo': 'producao',
-            'permite_producao': 'on', 'ativo': 'on',
+            'nome': 'Fábrica', 'finalidades': ['producao'], 'ativo': 'on',
         })
         self.assertEqual(resp.status_code, 302)
-        self.assertTrue(
-            Deposito.objects.filter(filial=self.filial, nome='Fábrica').exists()
+        deposito = Deposito.objects.get(filial=self.filial, nome='Fábrica')
+        self.assertEqual(deposito.tipo, Deposito.Tipo.PRODUCAO)
+        self.assertFalse(deposito.permite_venda)
+        self.assertTrue(deposito.permite_producao)
+
+    def test_cria_deposito_com_finalidades_geral_e_revenda(self):
+        self._set_filial_sessao()
+        resp = self.client.post(reverse('estoque:deposito-create'), {
+            'nome': 'Frente de loja',
+            'finalidades': ['geral', 'revenda'],
+            'ativo': 'on',
+        })
+
+        self.assertEqual(resp.status_code, 302)
+        deposito = Deposito.objects.get(filial=self.filial, nome='Frente de loja')
+        self.assertEqual(deposito.tipo, Deposito.Tipo.GERAL)
+        self.assertTrue(deposito.permite_venda)
+        self.assertFalse(deposito.permite_producao)
+        self.assertEqual(
+            deposito.finalidades_valores,
+            [Deposito.Tipo.GERAL, Deposito.Tipo.REVENDA],
         )
+
+    def test_exige_ao_menos_uma_finalidade(self):
+        self._set_filial_sessao()
+        resp = self.client.post(reverse('estoque:deposito-create'), {
+            'nome': 'Sem finalidade', 'ativo': 'on',
+        })
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Selecione ao menos uma finalidade')
 
     def test_nao_cria_nome_repetido(self):
         self._set_filial_sessao()
         Deposito.objects.create(filial=self.filial, nome='Fábrica')
         resp = self.client.post(reverse('estoque:deposito-create'), {
-            'nome': 'fábrica', 'tipo': 'geral', 'ativo': 'on',
+            'nome': 'fábrica', 'finalidades': ['geral'], 'ativo': 'on',
         })
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'Já existe um depósito')

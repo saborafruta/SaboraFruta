@@ -986,6 +986,13 @@
   <th class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Categoria</th>
   <th class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Fornecedor</th>
   <th class="text-left px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">Un.</th>
+  {% if tem_varios_depositos and not deposito_id %}
+    {% for deposito in depositos %}
+      <th class="text-right px-4 py-3 font-medium whitespace-nowrap" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">
+        {{ deposito.nome }}<span class="block text-[9px] normal-case tracking-normal opacity-60">Disponível</span>
+      </th>
+    {% endfor %}
+  {% endif %}
   <th class="text-right px-4 py-3 font-medium" :style="temaClaro ? 'color:#444; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;' : 'color:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:0.05em;'">
     <a href="?{{ sort_urls.atual }}" class="inline-flex items-center gap-1 hover:underline">Atual<span>{% if ordem == 'atual' %}&uarr;{% elif ordem == 'atual_desc' %}&darr;{% endif %}</span></a>
   </th>
@@ -1028,6 +1035,13 @@
       <td class="px-4 py-3 text-sm estoque-inline-cell" data-field="categoria" data-type="select" data-value="{{ p.categoria_id|default:'' }}" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'"><span class="inline-display">{{ p.categoria.nome|default:"-" }}</span></td>
       <td class="px-4 py-3 text-sm estoque-inline-cell" data-field="fornecedor" data-type="select" data-value="{{ p.fornecedor_id|default:'' }}" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'"><span class="inline-display">{{ p.fornecedor|default:"-" }}</span></td>
       <td class="px-4 py-3 text-sm">{{ p.unidade_medida.sigla }}</td>
+      {% if tem_varios_depositos and not deposito_id %}
+        {% for saldo in p.saldos_depositos %}
+          <td class="px-4 py-3 text-right whitespace-nowrap" title="{{ saldo.nome }}: atual {{ saldo.atual|quantidade_produto:p }}, reservado {{ saldo.reservada|quantidade_produto:p }}">
+            <span class="font-semibold">{{ saldo.disponivel|quantidade_produto:p }}</span>
+          </td>
+        {% endfor %}
+      {% endif %}
       <td class="px-4 py-3 text-right estoque-inline-cell" data-field="estoque_atual" data-type="decimal" data-value="{{ p.estoque_quantidade_atual }}" data-stock-current-cell><span class="inline-display">{{ p.estoque_quantidade_atual|quantidade_produto:p }}</span></td>
       <td class="px-4 py-3 text-right text-xs estoque-inline-cell" data-field="estoque_minimo" data-type="decimal" data-value="{{ p.estoque_minimo }}" data-stock-minimum-cell :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'"><span class="inline-display">{{ p.estoque_minimo|quantidade_produto:p }}</span></td>
       <td class="px-4 py-3 text-right text-xs font-semibold" data-stock-replacement-cell :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">
@@ -1048,6 +1062,6 @@
       </td>
     </tr>
   {% empty %}
-    <tr><td colspan="11" class="text-center py-12" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nenhum produto encontrado para a filial atual.</td></tr>
+    <tr><td colspan="{{ tabela_colspan }}" class="text-center py-12" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nenhum produto encontrado para a filial atual.</td></tr>
   {% endfor %}
 {% endblock %}

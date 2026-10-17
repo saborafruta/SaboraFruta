@@ -4,6 +4,13 @@ from apps.estoque.models import Deposito
 
 
 class DepositoForm(forms.ModelForm):
+    finalidades = forms.MultipleChoiceField(
+        choices=Deposito.Tipo.choices,
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label='Finalidades',
+        help_text='Marque todas as formas como este depósito será utilizado.',
+    )
     # Não é campo de model direto: `tipos_material` é JSONField (lista),
     # não mapeia num widget de ModelForm sozinho. Escolhas vêm da moda
     # (import local no __init__, pra não criar dependência de módulo
@@ -21,7 +28,7 @@ class DepositoForm(forms.ModelForm):
 
     class Meta:
         model = Deposito
-        fields = ['nome', 'tipo', 'permite_venda', 'permite_producao', 'ativo']
+        fields = ['nome', 'ativo']
         widgets = {
             'nome': forms.TextInput(attrs={'placeholder': 'Ex.: Loja, Fábrica'}),
         }
@@ -31,6 +38,28 @@ class DepositoForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         from apps.moda.models import MaterialFicha
         self.fields['tipos_material'].choices = MaterialFicha.Tipo.choices
+        self.initial.setdefault(
+            'finalidades',
+            self.instance.finalidades_valores if self.instance and self.instance.pk else [Deposito.Tipo.GERAL],
+        )
+        # Compatibilidade com integrações/testes que ainda enviem o formulário
+        # antigo. A interface nova sempre envia `finalidades`.
+        campos_legados = {'tipo', 'permite_venda', 'permite_producao'}
+        if (
+            self.is_bound
+            and 'finalidades' not in self.data
+            and campos_legados.intersection(self.data.keys())
+        ):
+            dados = self.data.copy()
+            valores = []
+            tipo = dados.get('tipo') or Deposito.Tipo.GERAL
+            valores.append(tipo)
+            if dados.get('permite_venda'):
+                valores.append(Deposito.Tipo.REVENDA)
+            if dados.get('permite_producao'):
+                valores.append(Deposito.Tipo.PRODUCAO)
+            dados.setlist('finalidades', list(dict.fromkeys(valores)))
+            self.data = dados
         if self.instance and self.instance.pk:
             self.initial.setdefault('tipos_material', list(self.instance.tipos_material or []))
         if self.instance and self.instance.pk and self.instance.is_padrao:
@@ -41,10 +70,28 @@ class DepositoForm(forms.ModelForm):
 
     def save(self, commit=True):
         instance = super().save(commit=False)
+        finalidades = self.cleaned_data['finalidades']
+        # `tipo` permanece como classificação principal para compatibilidade.
+        # A presença de Geral precisa ser persistida nele; as outras duas
+        # finalidades já possuem flags próprias.
+        if Deposito.Tipo.GERAL in finalidades:
+            instance.tipo = Deposito.Tipo.GERAL
+        elif Deposito.Tipo.PRODUCAO in finalidades:
+            instance.tipo = Deposito.Tipo.PRODUCAO
+        else:
+            instance.tipo = Deposito.Tipo.REVENDA
+        instance.permite_venda = Deposito.Tipo.REVENDA in finalidades
+        instance.permite_producao = Deposito.Tipo.PRODUCAO in finalidades
         instance.tipos_material = self.cleaned_data.get('tipos_material') or []
         if commit:
             instance.save()
         return instance
+
+    def clean_finalidades(self):
+        finalidades = self.cleaned_data.get('finalidades') or []
+        if not finalidades:
+            raise forms.ValidationError('Selecione ao menos uma finalidade.')
+        return finalidades
 
     def clean_nome(self):
         nome = self.cleaned_data['nome'].strip()

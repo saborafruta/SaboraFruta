@@ -16,6 +16,7 @@ from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.tenant_context import tenant_atomic
 from apps.estoque.models import Deposito, Estoque
+from apps.estoque.services.saldos_por_deposito import anexar_saldos_por_deposito
 from apps.financeiro.models import CondicaoPagamento, FormaPagamento
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
 from apps.produtos.models import CategoriaProduto, Produto
@@ -264,10 +265,15 @@ class ProdutoForcaVendasBuscaView(PermissaoRequiredMixin, View):
                 | Q(codigo_barras__icontains=termo)
             )
 
-        produtos = []
-        for produto in qs.select_related('unidade_medida', 'categoria').order_by(
+        produtos_consulta = list(qs.select_related('unidade_medida', 'categoria').order_by(
             '-catalogo_destaque', 'descricao',
-        )[:30]:
+        )[:30])
+        anexar_saldos_por_deposito(
+            produtos=produtos_consulta,
+            filial=request.filial_ativa,
+        )
+        produtos = []
+        for produto in produtos_consulta:
             contrato = ProdutoVendavelService.consultar(
                 produto=produto,
                 filial=request.filial_ativa,
@@ -285,6 +291,12 @@ class ProdutoForcaVendasBuscaView(PermissaoRequiredMixin, View):
                 'preco': float(contrato['preco_aplicado']),
                 'preco_origem': contrato['preco_origem'],
                 'estoque_disponivel': float(contrato['saldo_disponivel']),
+                'estoques': [{
+                    **saldo,
+                    'atual': float(saldo['atual']),
+                    'reservada': float(saldo['reservada']),
+                    'disponivel': float(saldo['disponivel']),
+                } for saldo in produto.saldos_depositos],
                 'pode_vender': contrato['pode_vender'],
                 'bloqueios': [item['label'] for item in contrato['bloqueios']],
                 'categoria': produto.categoria.nome if produto.categoria_id else 'Sem categoria',

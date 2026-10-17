@@ -38,6 +38,7 @@ from apps.estoque.models import (
     Deposito, Estoque, Inventario, LoteProduto, MovimentacaoEstoque,
 )
 from apps.estoque.services.movimentacao_service import MovimentacaoService
+from apps.estoque.services.saldos_por_deposito import anexar_saldos_por_deposito
 from apps.estoque.views.permissoes import (
     bloquear_exportacao_sem_permissao,
     permissoes_estoque,
@@ -375,6 +376,12 @@ class EstoqueListView(PermissaoRequiredMixin, View):
         qs = qs.order_by(ordenacoes.get(ordem, 'id'))
         page_obj = Paginator(qs, 30).get_page(request.GET.get('page'))
         anexar_prontidao_produtos(page_obj.object_list, filial=request.filial_ativa)
+        if len(depositos) > 1 and not deposito_id:
+            anexar_saldos_por_deposito(
+                produtos=page_obj.object_list,
+                filial=request.filial_ativa,
+                depositos=depositos,
+            )
         querydict = request.GET.copy()
         querydict.pop('page', None)
         querydict.pop('export', None)
@@ -409,6 +416,7 @@ class EstoqueListView(PermissaoRequiredMixin, View):
             'depositos': depositos,
             'deposito_id': deposito_id,
             'tem_varios_depositos': len(depositos) > 1,
+            'tabela_colspan': 11 + (len(depositos) if len(depositos) > 1 and not deposito_id else 0),
             'categorias': CategoriaProduto.objects.for_filial(request.filial_ativa).filter(
                 empresa=empresa_operacional(request),
                 ativo=True,
@@ -1227,6 +1235,18 @@ class RelatorioEstoqueView(PermissaoRequiredMixin, View):
     def get(self, request):
         filial = request.filial_ativa
         produtos = produtos_estoque_queryset(filial)
+        depositos = list(
+            Deposito.objects.filter(filial=filial, ativo=True)
+            .order_by('-is_padrao', 'nome')
+        )
+        saldo_page = Paginator(
+            produtos.order_by('descricao'), 30,
+        ).get_page(request.GET.get('saldo_page'))
+        anexar_saldos_por_deposito(
+            produtos=saldo_page.object_list,
+            filial=filial,
+            depositos=depositos,
+        )
         valor_custo_expr = ExpressionWrapper(
             F('estoque_quantidade_atual') * F('estoque_custo_unitario'),
             output_field=DecimalField(max_digits=18, decimal_places=4),
@@ -1346,6 +1366,8 @@ class RelatorioEstoqueView(PermissaoRequiredMixin, View):
 
         return render(request, self.template_name, {
             'resumo': resumo,
+            'depositos': depositos,
+            'saldo_page': saldo_page,
             'lotes_vencidos': lotes_vencidos,
             'lotes_proximos': lotes_proximos,
             'divergencias': divergencias,

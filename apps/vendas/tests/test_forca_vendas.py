@@ -14,7 +14,7 @@ from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
 from apps.core.services.exceptions import EstoqueInsuficienteError
 from apps.core.services.modulos import modulo_da_url, modulos_ativos
-from apps.estoque.models import Estoque, MovimentacaoEstoque
+from apps.estoque.models import Deposito, Estoque, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.pdv.models import VendaPDV
 from apps.financeiro.constants.enums import StatusContaReceber, TipoFormaPagamento
@@ -342,6 +342,42 @@ class ForcaVendasTests(TestCase):
         })
         self.assertEqual(destaques.json()['produtos'][0]['id'], self.produto.pk)
         self.assertTrue(destaques.json()['produtos'][0]['destaque'])
+
+    def test_busca_produto_exibe_saldo_com_nome_de_todos_os_depositos(self):
+        loja_id = Deposito.padrao_id(self.filial.pk)
+        Deposito.objects.filter(pk=loja_id).update(nome='Frente de loja')
+        galpao = Deposito.objects.create(
+            filial=self.filial,
+            nome='Galpão',
+            tipo=Deposito.Tipo.REVENDA,
+            permite_venda=True,
+            permite_producao=False,
+        )
+        for deposito_id, quantidade in ((loja_id, '7'), (galpao.pk, '13')):
+            MovimentacaoService.registrar_movimentacao(
+                produto_id=self.produto.pk,
+                filial_id=self.filial.pk,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+                quantidade=Decimal(quantidade),
+                usuario_id=self.usuario.pk,
+                valor_unitario=Decimal('4'),
+                deposito_id=deposito_id,
+            )
+
+        resposta = self.client.get(reverse('vendas:api-produtos'), {
+            'cliente_id': self.cliente.pk,
+            'produto_id': self.produto.pk,
+        })
+        produto = resposta.json()['produtos'][0]
+        saldos = {saldo['nome']: saldo for saldo in produto['estoques']}
+
+        self.assertEqual(saldos['Frente de loja']['disponivel'], 7.0)
+        self.assertEqual(saldos['Galpão']['disponivel'], 13.0)
+        self.assertTrue(saldos['Frente de loja']['origem_pedido'])
+        self.assertFalse(saldos['Galpão']['origem_pedido'])
+        tela = self.client.get(reverse('vendas:pedido-externo-novo'))
+        self.assertContains(tela, 'produto.estoques')
+        self.assertContains(tela, 'Depósitos de revenda aparecem em azul')
 
     def test_busca_cliente_por_primeiro_nome_e_prazos_rapidos(self):
         busca = self.client.get(reverse('vendas:api-clientes'), {'q': 'Mercadinho'})

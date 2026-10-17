@@ -34,7 +34,7 @@
   .dep-hint { font-size: 12px; color: var(--dep-muted); margin-top: 6px; line-height: 1.45; }
   .dep-error { font-size: 12px; color: #f87171; margin-top: 4px; }
 
-  /* Tipo do depósito: três opções lado a lado em vez de um select. */
+  /* Finalidades do depósito: seleção múltipla com cartões compactos. */
   .dep-segment { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .dep-segment label { cursor: pointer; }
   .dep-segment input { position: absolute; opacity: 0; pointer-events: none; }
@@ -129,7 +129,7 @@
       <h2 class="text-2xl font-semibold mt-1 dep-text">{{ title }}</h2>
       {% if deposito %}
         <div class="flex flex-wrap items-center gap-2 mt-2">
-          <span class="dep-badge is-accent">{{ deposito.get_tipo_display }}</span>
+          {% for valor, rotulo in deposito.finalidades_uso %}<span class="dep-badge is-accent">{{ rotulo }}</span>{% endfor %}
           {% if deposito.is_padrao %}<span class="dep-badge">Padrão da filial</span>{% endif %}
           {% if deposito.ativo %}<span class="dep-badge is-ok">Ativo</span>{% else %}<span class="dep-badge is-warn">Inativo</span>{% endif %}
         </div>
@@ -161,33 +161,14 @@
         </div>
 
         <div style="margin-top:16px;">
-          <span class="dep-label">Tipo</span>
-          {% with atual=form.tipo.value|default:'geral' %}
-          <div class="dep-segment" role="radiogroup" aria-label="Tipo do depósito">
-            {% for valor, rotulo in form.tipo.field.choices %}
-              <label>
-                <input type="radio" name="{{ form.tipo.html_name }}" value="{{ valor }}" {% if atual == valor %}checked{% endif %}>
-                <span>{{ rotulo }}</span>
-              </label>
+          <span class="dep-label">Finalidades</span>
+          <div class="dep-segment" role="group" aria-label="Finalidades do depósito">
+            {% for checkbox in form.finalidades %}
+              <label>{{ checkbox.tag }}<span>{{ checkbox.choice_label }}</span></label>
             {% endfor %}
           </div>
-          {% endwith %}
-          <p class="dep-hint">Só organiza a lista; as regras de venda e produção são as opções abaixo.</p>
-          {% if form.tipo.errors %}<p class="dep-error">{{ form.tipo.errors.0 }}</p>{% endif %}
-        </div>
-      </div>
-
-      <div class="dep-section">
-        <p class="dep-section-title">Como este depósito é usado</p>
-        <div class="dep-options">
-          <label class="dep-option">
-            {{ form.permite_venda }}
-            <span><strong>Disponível para venda</strong><small>O saldo aparece no PDV e nos pedidos.</small></span>
-          </label>
-          <label class="dep-option">
-            {{ form.permite_producao }}
-            <span><strong>Usado pela produção</strong><small>Recebe entradas e serve consumo das OPs.</small></span>
-          </label>
+          <p class="dep-hint">Geral identifica armazenagem; Revenda libera o saldo para vendas e pedidos; Produção permite entradas e consumo das ordens de produção. Você pode combinar as opções.</p>
+          {% if form.finalidades.errors %}<p class="dep-error">{{ form.finalidades.errors.0 }}</p>{% endif %}
         </div>
       </div>
 

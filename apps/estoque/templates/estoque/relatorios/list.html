@@ -42,6 +42,52 @@
     </div>
   </div>
 
+  <div class="card overflow-hidden">
+    <div class="px-5 py-3 border-b border-transparent flex flex-wrap items-center justify-between gap-2">
+      <div>
+        <h3 class="font-semibold">Saldo por depósito</h3>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cada coluna usa o nome cadastrado do depósito e mostra o saldo disponível.</p>
+      </div>
+      <a href="{% url 'estoque:deposito-list' %}" class="text-sm text-blue-500">Gerenciar depósitos</a>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm min-w-[680px]">
+        <thead>
+          <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+            <th class="px-4 py-3">Produto</th>
+            {% for deposito in depositos %}<th class="px-4 py-3 text-right whitespace-nowrap">{{ deposito.nome }}</th>{% endfor %}
+            <th class="px-4 py-3 text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for produto in saldo_page %}
+            <tr class="table-row-hover">
+              <td class="px-4 py-3">
+                <div class="font-medium">{{ produto.descricao }}</div>
+                <div class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ produto.codigo|default:produto.codigo_replicacao }} · {{ produto.unidade_medida.sigla }}</div>
+              </td>
+              {% for saldo in produto.saldos_depositos %}
+                <td class="px-4 py-3 text-right font-semibold whitespace-nowrap" title="Atual {{ saldo.atual|quantidade_produto:produto }} · Reservado {{ saldo.reservada|quantidade_produto:produto }}">{{ saldo.disponivel|quantidade_produto:produto }}</td>
+              {% endfor %}
+              <td class="px-4 py-3 text-right font-bold">{{ produto.estoque_quantidade_disponivel|quantidade_produto:produto }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="99" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nenhum produto cadastrado.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if saldo_page.paginator.num_pages > 1 %}
+      <div class="px-5 py-3 flex items-center justify-between border-t border-transparent text-sm">
+        <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Página {{ saldo_page.number }} de {{ saldo_page.paginator.num_pages }}</span>
+        <div class="flex gap-2">
+          {% if saldo_page.has_previous %}<a class="btn-secondary" href="?saldo_page={{ saldo_page.previous_page_number }}">Anterior</a>{% endif %}
+          {% if saldo_page.has_next %}<a class="btn-secondary" href="?saldo_page={{ saldo_page.next_page_number }}">Próxima</a>{% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
   <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
     <div class="card overflow-hidden">
       <div class="px-5 py-3 border-b border-transparent flex items-center justify-between">

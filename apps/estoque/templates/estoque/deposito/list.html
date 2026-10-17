@@ -29,7 +29,7 @@
       <thead>
         <tr :style="temaClaro ? 'background:#f8fafc;color:#475569;' : 'background:#0f172a;color:#94a3b8;'">
           <th class="text-left font-medium px-4 py-3">Depósito</th>
-          <th class="text-left font-medium px-4 py-3">Tipo</th>
+          <th class="text-left font-medium px-4 py-3">Finalidades</th>
           <th class="text-center font-medium px-4 py-3">Venda</th>
           <th class="text-center font-medium px-4 py-3">Produção</th>
           <th class="text-right font-medium px-4 py-3">Itens com saldo</th>
@@ -48,7 +48,11 @@
               <div class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ d.tipos_material_labels|join:", " }}</div>
             {% endif %}
           </td>
-          <td class="px-4 py-3" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">{{ d.get_tipo_display }}</td>
+          <td class="px-4 py-3" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">
+            <div class="flex flex-wrap gap-1">
+              {% for valor, rotulo in d.finalidades_uso %}<span class="text-xs px-2 py-1 rounded-full" :style="temaClaro ? 'background:#eef2ff;color:#3730a3;' : 'background:rgba(99,102,241,.16);color:#c7d2fe;'">{{ rotulo }}</span>{% endfor %}
+            </div>
+          </td>
           <td class="px-4 py-3 text-center">{% if d.permite_venda %}✓{% else %}—{% endif %}</td>
           <td class="px-4 py-3 text-center">{% if d.permite_producao %}✓{% else %}—{% endif %}</td>
           <td class="px-4 py-3 text-right" :style="temaClaro ? 'color:#475569;' : 'color:#cbd5e1;'">{{ d.itens_com_saldo }}</td>

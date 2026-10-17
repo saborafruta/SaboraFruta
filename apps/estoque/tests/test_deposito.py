@@ -459,6 +459,24 @@ class ConsolidadoPorDepositoTests(DepositoBase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.context['deposito_id'], str(self.fabrica.pk))
 
+    def test_lista_e_relatorio_exibem_coluna_com_nome_de_cada_deposito(self):
+        from django.test import Client
+        client = Client()
+        client.force_login(self.usuario)
+        session = client.session
+        session['filial_ativa_id'] = self.filial.pk
+        session.save()
+
+        lista = client.get('/estoque/', {'q': 'Bermuda'})
+        relatorio = client.get('/estoque/relatorios/')
+
+        for resposta in (lista, relatorio):
+            self.assertEqual(resposta.status_code, 200)
+            self.assertContains(resposta, 'Estoque Geral')
+            self.assertContains(resposta, 'Fábrica')
+            self.assertContains(resposta, '30')
+            self.assertContains(resposta, '12')
+
 
 class ProducaoIdPorTipoDeMaterialTests(DepositoBase):
     """`Deposito.producao_id(tipo_material=...)` roteia por tipo quando o
