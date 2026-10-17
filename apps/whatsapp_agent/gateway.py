@@ -1,3 +1,4 @@
+import base64
 import io
 from urllib.parse import quote
 
@@ -103,6 +104,22 @@ class EvolutionClient:
             'delay': 700,
             'linkPreview': False,
         })
+
+    def enviar_documento(self, telefone, conteudo, nome_arquivo, legenda=''):
+        return self._request(
+            'POST',
+            f'/message/sendMedia/{quote(self.configuracao.instancia)}',
+            json={
+                'number': telefone,
+                'mediatype': 'document',
+                'mimetype': 'application/pdf',
+                'caption': legenda,
+                'media': base64.b64encode(conteudo).decode('ascii'),
+                'fileName': nome_arquivo,
+                'delay': 700,
+                'linkPreview': False,
+            },
+        )
 
     def obter_midia_base64(self, dados_mensagem):
         dados = self._request(

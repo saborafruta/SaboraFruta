@@ -1437,6 +1437,27 @@ class EvolutionClientTests(SimpleTestCase):
         self.assertEqual(requisicao.call_args.kwargs['json']['number'], '5584999990000')
 
     @patch('apps.whatsapp_agent.gateway.requests.request')
+    def test_envia_pdf_como_documento_em_base64(self, requisicao):
+        resposta = Mock(status_code=200)
+        resposta.json.return_value = {'key': {'id': 'documento-1'}}
+        requisicao.return_value = resposta
+
+        retorno = EvolutionClient(self.configuracao()).enviar_documento(
+            '5584999990000', b'%PDF-', 'pedido-123.pdf', 'Resumo do pedido 123',
+        )
+
+        self.assertEqual(retorno['key']['id'], 'documento-1')
+        self.assertEqual(
+            requisicao.call_args.args,
+            ('POST', 'https://evolution.example.com/message/sendMedia/ited-teste'),
+        )
+        payload = requisicao.call_args.kwargs['json']
+        self.assertEqual(payload['mediatype'], 'document')
+        self.assertEqual(payload['mimetype'], 'application/pdf')
+        self.assertEqual(payload['fileName'], 'pedido-123.pdf')
+        self.assertEqual(payload['media'], 'JVBERi0=')
+
+    @patch('apps.whatsapp_agent.gateway.requests.request')
     def test_baixa_audio_em_base64_pela_evolution(self, requisicao):
         resposta = Mock(status_code=200)
         resposta.json.return_value = {

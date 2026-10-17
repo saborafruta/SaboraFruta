@@ -1,5 +1,6 @@
 from .pedido import (
     PedidoListView, PedidoCreateView, PedidoDetailView, PedidoEditarView,
+    PedidoVendaPdfView, EnviarPedidoVendaPdfWhatsAppView,
     AdicionarItemView, RemoverItemView,
     ConfirmarPedidoView, SepararPedidoView, FaturarPedidoView,
     CancelarPedidoView, DevolverPedidoView,
@@ -16,6 +17,7 @@ from .forca_vendas import (
 
 __all__ = [
     'PedidoListView', 'PedidoCreateView', 'PedidoDetailView', 'PedidoEditarView',
+    'PedidoVendaPdfView', 'EnviarPedidoVendaPdfWhatsAppView',
     'AdicionarItemView', 'RemoverItemView',
     'ConfirmarPedidoView', 'SepararPedidoView', 'FaturarPedidoView',
     'CancelarPedidoView', 'DevolverPedidoView',

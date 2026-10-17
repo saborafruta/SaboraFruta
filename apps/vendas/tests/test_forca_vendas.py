@@ -5,6 +5,7 @@ import shutil
 import subprocess
 from decimal import Decimal
 from unittest import skipUnless
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
@@ -30,6 +31,7 @@ from apps.produtos.models import (
 )
 from apps.vendas.models import PedidoVenda
 from apps.vendas.services.venda_service import VendaService
+from apps.whatsapp_agent.models import ConfiguracaoWhatsApp, MensagemWhatsApp
 
 
 class ForcaVendasTests(TestCase):
@@ -257,7 +259,7 @@ class ForcaVendasTests(TestCase):
         self.assertContains(tela, 'prazoSelecionado:10')
 
     @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do pedido externo')
-    def test_categoria_pode_ser_desmarcada_e_lista_fecha_sem_escolher_produto(self):
+    def test_busca_e_categoria_dividem_a_linha_e_destaques_abrem_a_lista(self):
         resposta = self.client.get(reverse('vendas:pedido-externo-novo'))
         html = resposta.content.decode('utf-8')
         script = 'function pedidoExterno()' + html.split(
@@ -272,14 +274,8 @@ pedido.buscandoProdutos = true;
 pedido.categoriaId = '7';
 let buscas = 0;
 pedido.buscarProdutos = () => { buscas += 1; };
-pedido.selecionarCategoria('7');
-assert.equal(pedido.categoriaId, '');
-assert.deepEqual(pedido.produtos, []);
-assert.equal(pedido.buscaProdutoExecutada, false);
-assert.equal(pedido.buscandoProdutos, false);
-assert.equal(buscas, 0);
-pedido.selecionarCategoria('8');
-assert.equal(pedido.categoriaId, '8');
+pedido.selecionarCategoria('destaques');
+assert.equal(pedido.categoriaId, 'destaques');
 assert.equal(buscas, 1);
 pedido.produtos = [{id: 2}];
 pedido.buscaProdutoExecutada = true;
@@ -295,8 +291,10 @@ assert.equal(pedido.buscaProdutoExecutada, false);
 
         self.assertEqual(resultado.returncode, 0, resultado.stdout + resultado.stderr)
         self.assertContains(resposta, '@click.outside="fecharBuscaProdutos()"')
-        self.assertContains(resposta, 'fv-category-panel')
-        self.assertContains(resposta, 'fv-highlight-copy')
+        self.assertContains(resposta, 'grid-template-columns:minmax(0,1fr) minmax(0,1fr)')
+        self.assertContains(resposta, '<option value="destaques">Destaques</option>')
+        self.assertContains(resposta, "if(this.categoriaId==='destaques')url+='&destaques=1'")
+        self.assertNotContains(resposta, 'fv-highlights-list')
 
     def test_pedido_externo_usa_preco_do_servidor_e_nao_cai_no_pdv(self):
         resposta = self.criar_pedido_pela_tela()
@@ -312,6 +310,52 @@ assert.equal(pedido.buscaProdutoExecutada, false);
         self.assertEqual(item.valor_unitario, Decimal('7.5000'))
         self.assertEqual(pedido.valor_total, Decimal('15.00'))
         self.assertEqual(VendaPDV.objects.count(), 0)
+        self.assertEqual(
+            resposta.json()['redirect_url'],
+            f'{reverse("vendas:pedido-detail", args=[pedido.pk])}?criado=1',
+        )
+
+        detalhe = self.client.get(resposta.json()['redirect_url'])
+        self.assertContains(detalhe, 'Pedido enviado para análise')
+        self.assertContains(detalhe, reverse('vendas:pedido-pdf', args=[pedido.pk]))
+        self.assertContains(detalhe, reverse('vendas:pedido-enviar-pdf', args=[pedido.pk]))
+
+    def test_pdf_do_pedido_pode_ser_baixado(self):
+        pedido = PedidoVenda.objects.get(pk=self.criar_pedido_pela_tela().json()['pedido_id'])
+
+        resposta = self.client.get(reverse('vendas:pedido-pdf', args=[pedido.pk]))
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta['Content-Type'], 'application/pdf')
+        self.assertIn(f'pedido-{pedido.numero_pedido}.pdf', resposta['Content-Disposition'])
+        self.assertTrue(resposta.content.startswith(b'%PDF-'))
+        self.assertGreater(len(resposta.content), 2000)
+
+    @patch('apps.vendas.services.pedido_pdf.EvolutionClient')
+    def test_pdf_do_pedido_pode_ser_enviado_ao_whatsapp(self, evolution_client):
+        self.cliente.celular = '(84) 99999-1234'
+        self.cliente.save(update_fields=['celular', 'updated_at'])
+        ConfiguracaoWhatsApp.objects.create(
+            filial=self.filial,
+            instancia='pedido-pdf-teste',
+            status=ConfiguracaoWhatsApp.Status.CONECTADO,
+            ativo=True,
+        )
+        evolution_client.return_value.enviar_documento.return_value = {
+            'key': {'id': 'mensagem-pdf-123'},
+        }
+        pedido = PedidoVenda.objects.get(pk=self.criar_pedido_pela_tela().json()['pedido_id'])
+
+        resposta = self.client.post(reverse('vendas:pedido-enviar-pdf', args=[pedido.pk]))
+
+        self.assertRedirects(resposta, reverse('vendas:pedido-detail', args=[pedido.pk]))
+        chamada = evolution_client.return_value.enviar_documento.call_args
+        self.assertEqual(chamada.args[0], '5584999991234')
+        self.assertTrue(chamada.args[1].startswith(b'%PDF-'))
+        self.assertEqual(chamada.args[2], f'pedido-{pedido.numero_pedido}.pdf')
+        mensagem = MensagemWhatsApp.objects.get(tipo='pdf_pedido_venda')
+        self.assertEqual(mensagem.status, 'enviada')
+        self.assertEqual(mensagem.identificador_externo, 'mensagem-pdf-123')
 
     def test_kanban_nao_mistura_pedidos_internos(self):
         interno = VendaService.criar_pedido(

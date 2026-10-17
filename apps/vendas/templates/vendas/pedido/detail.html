@@ -29,6 +29,22 @@
     </div>
   </div>
 
+  {% if pedido_criado %}
+    <div class="card p-5 border-blue-500/30 bg-blue-500/10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div>
+        <h3 class="font-semibold text-blue-500">Pedido enviado para análise</h3>
+        <p class="text-sm text-gray-500 mt-1">O resumo já está pronto. Você pode baixar o PDF ou enviá-lo agora para o WhatsApp do cliente.</p>
+      </div>
+      <div class="flex flex-wrap gap-2 shrink-0">
+        <a href="{% url 'vendas:pedido-pdf' pedido.pk %}" class="btn-secondary">↓ Baixar PDF</a>
+        <form method="post" action="{% url 'vendas:pedido-enviar-pdf' pedido.pk %}" class="inline" onsubmit="return confirm('Enviar o PDF deste pedido para o WhatsApp do cliente?')">
+          {% csrf_token %}
+          <button type="submit" class="btn-primary">Enviar PDF no WhatsApp</button>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
   {# Ações #}
   <div class="card p-4 bg-primary-900/20 border-primary-200 flex flex-wrap gap-2" x-data="{}">
     {% if pedido.status == 'rascunho' %}
@@ -67,6 +83,13 @@
     {% endif %}
     {% if pedido.status == 'em_entrega' %}
       <form method="post" action="{% url 'vendas:pedido-concluir-entrega' pedido.pk %}" class="inline" onsubmit="return confirm('Confirmar que o pedido foi entregue?')">{% csrf_token %}<button type="submit" class="btn-primary">✓ Confirmar entrega</button></form>
+    {% endif %}
+    {% if not pedido_criado %}
+      <a href="{% url 'vendas:pedido-pdf' pedido.pk %}" class="btn-secondary">↓ PDF do pedido</a>
+      <form method="post" action="{% url 'vendas:pedido-enviar-pdf' pedido.pk %}" class="inline" onsubmit="return confirm('Enviar o PDF deste pedido para o WhatsApp do cliente?')">
+        {% csrf_token %}
+        <button type="submit" class="btn-secondary">Enviar PDF no WhatsApp</button>
+      </form>
     {% endif %}
     {% if pedido.origem == 'externo' %}<a href="{% url 'vendas:pedido-kanban' %}" class="btn-secondary">Voltar ao acompanhamento</a>{% endif %}
 

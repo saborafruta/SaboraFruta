@@ -2,12 +2,14 @@
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Q
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views import View
 
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.tenant_context import get_current_database_alias
 from apps.financeiro.models import CondicaoPagamento, ContaReceber, FormaPagamento
 from apps.vendas.forms import (
     AdicionarItemForm, CancelarPedidoForm, DevolverPedidoForm, PedidoVendaForm,
@@ -15,6 +17,11 @@ from apps.vendas.forms import (
 from apps.produtos.models import ProdutoApresentacao
 from apps.vendas.models import PedidoVenda
 from apps.vendas.services.venda_service import VendaService
+from apps.vendas.services.pedido_pdf import (
+    PedidoVendaPdfService,
+    enviar_pdf_pedido_whatsapp,
+    nome_arquivo_pedido,
+)
 
 
 class PedidoListView(PermissaoRequiredMixin, View):
@@ -141,7 +148,48 @@ class PedidoDetailView(PermissaoRequiredMixin, View):
             'ultima_separacao': pedido.separacoes.select_related(
                 'usuario_separador',
             ).order_by('-data_inicio').first(),
+            'pedido_criado': request.GET.get('criado') == '1',
         })
+
+
+class PedidoVendaPdfView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'vendas'
+
+    def get(self, request, pk):
+        pedido = get_object_or_404(
+            PedidoVenda.objects.for_filial(request.filial_ativa).select_related(
+                'filial', 'cliente', 'usuario', 'forma_pagamento', 'condicao_pagamento',
+            ),
+            pk=pk,
+        )
+        resposta = HttpResponse(
+            PedidoVendaPdfService.gerar(pedido),
+            content_type='application/pdf',
+        )
+        resposta['Content-Disposition'] = f'attachment; filename="{nome_arquivo_pedido(pedido)}"'
+        return resposta
+
+
+class EnviarPedidoVendaPdfWhatsAppView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'vendas'
+    permissao_acao = 'criar'
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(
+            PedidoVenda.objects.for_filial(request.filial_ativa).select_related(
+                'filial', 'cliente', 'usuario', 'forma_pagamento', 'condicao_pagamento',
+            ),
+            pk=pk,
+        )
+        enviado, mensagem = enviar_pdf_pedido_whatsapp(
+            pedido,
+            db_alias=get_current_database_alias(),
+        )
+        if enviado:
+            messages.success(request, mensagem)
+        else:
+            messages.error(request, mensagem)
+        return redirect('vendas:pedido-detail', pk=pedido.pk)
 
 
 class PedidoEditarView(PermissaoRequiredMixin, View):

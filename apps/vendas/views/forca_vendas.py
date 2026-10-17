@@ -157,7 +157,7 @@ class PedidoExternoNovoView(PermissaoRequiredMixin, View):
             'ok': True,
             'pedido_id': pedido.pk,
             'numero_pedido': pedido.numero_pedido,
-            'redirect_url': reverse('vendas:pedido-kanban'),
+            'redirect_url': f'{reverse("vendas:pedido-detail", args=[pedido.pk])}?criado=1',
         })
 
 

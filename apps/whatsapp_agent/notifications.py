@@ -59,6 +59,16 @@ def _configuracao_conectada(filial, db_alias):
     )
 
 
+def numero_whatsapp(valor):
+    """Normaliza um telefone para o formato aceito pelo gateway."""
+    return _numero_whatsapp(valor)
+
+
+def configuracao_whatsapp_conectada(filial, db_alias):
+    """Localiza a conexão central correspondente à filial operacional."""
+    return _configuracao_conectada(filial, db_alias)
+
+
 def _aplicar_variaveis_agendamento(modelo, valores):
     """Substitui somente as variáveis conhecidas sem quebrar textos personalizados."""
     texto = modelo or ''
