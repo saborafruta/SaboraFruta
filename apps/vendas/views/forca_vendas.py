@@ -16,8 +16,9 @@ from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.tenant_context import tenant_atomic
 from apps.estoque.models import Deposito, Estoque
+from apps.financeiro.models import CondicaoPagamento, FormaPagamento
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
-from apps.produtos.models import Produto
+from apps.produtos.models import CategoriaProduto, Produto
 from apps.vendas.models import PedidoVenda
 from apps.vendas.services.venda_service import VendaService
 
@@ -45,8 +46,20 @@ class PedidoExternoNovoView(PermissaoRequiredMixin, View):
     template_name = 'vendas/forca_vendas/novo_pedido.html'
 
     def get(self, request):
+        formas = FormaPagamento.objects.filter(
+            empresa=request.filial_ativa.empresa,
+            ativo=True,
+        ).filter(Q(filial=request.filial_ativa) | Q(filial__isnull=True)).order_by('descricao')
+        condicoes = CondicaoPagamento.objects.filter(
+            empresa=request.filial_ativa.empresa,
+            ativo=True,
+        ).order_by('descricao')
         return render(request, self.template_name, {
             'title': 'Novo pedido externo',
+            'categorias': CategoriaProduto.objects.for_filial(request.filial_ativa)
+            .filter(ativo=True).order_by('nome'),
+            'formas_pagamento': formas,
+            'condicoes_pagamento': condicoes,
         })
 
     def post(self, request):
@@ -76,6 +89,22 @@ class PedidoExternoNovoView(PermissaoRequiredMixin, View):
             prioridade = PedidoVenda.Prioridade.NORMAL
 
         data_entrega = parse_date(body.get('data_entrega_prevista') or '')
+        forma_pagamento = FormaPagamento.objects.filter(
+            pk=body.get('forma_pagamento_id'),
+            empresa=request.filial_ativa.empresa,
+            ativo=True,
+        ).filter(Q(filial=request.filial_ativa) | Q(filial__isnull=True)).first()
+        if not forma_pagamento:
+            return JsonResponse({'erro': 'Selecione uma forma de pagamento válida.'}, status=400)
+        condicao_pagamento = CondicaoPagamento.objects.filter(
+            pk=body.get('condicao_pagamento_id'),
+            empresa=request.filial_ativa.empresa,
+            ativo=True,
+        ).first() if body.get('condicao_pagamento_id') else None
+        try:
+            prazo_pagamento = max(int(body.get('prazo_pagamento_dias') or 0), 0)
+        except (TypeError, ValueError):
+            return JsonResponse({'erro': 'O prazo de pagamento é inválido.'}, status=400)
 
         try:
             with tenant_atomic():
@@ -90,9 +119,13 @@ class PedidoExternoNovoView(PermissaoRequiredMixin, View):
                 pedido.prioridade = prioridade
                 pedido.data_entrega_prevista = data_entrega
                 pedido.observacao_interna = (body.get('observacao_interna') or '').strip()
+                pedido.forma_pagamento = forma_pagamento
+                pedido.condicao_pagamento = condicao_pagamento
+                pedido.prazo_pagamento_dias = prazo_pagamento
                 pedido.save(update_fields=[
                     'origem', 'prioridade', 'data_entrega_prevista',
-                    'observacao_interna', 'updated_at',
+                    'observacao_interna', 'forma_pagamento', 'condicao_pagamento',
+                    'prazo_pagamento_dias', 'updated_at',
                 ])
 
                 for item in itens:
@@ -166,6 +199,7 @@ class ClienteForcaVendasBuscaView(PermissaoRequiredMixin, View):
                     cliente.tabela_preco.descricao if cliente.tabela_preco_id
                     else 'Preço padrão'
                 ),
+                'prazo_pagamento_dias': cliente.prazo_pagamento_dias or 0,
             })
         return JsonResponse({'clientes': clientes})
 
@@ -192,6 +226,12 @@ class ProdutoForcaVendasBuscaView(PermissaoRequiredMixin, View):
             return JsonResponse({'erro': 'Selecione o cliente antes dos produtos.'}, status=400)
 
         qs = Produto.objects.for_filial(request.filial_ativa).filter(ativo=True)
+        categoria_id = request.GET.get('categoria_id')
+        if categoria_id:
+            qs = qs.filter(Q(categoria_id=categoria_id) | Q(subcategoria_id=categoria_id))
+        somente_destaques = request.GET.get('destaques') == '1'
+        if somente_destaques:
+            qs = qs.filter(catalogo_destaque=True)
         produto_id = request.GET.get('produto_id')
         if produto_id:
             qs = qs.filter(pk=produto_id)
@@ -204,7 +244,9 @@ class ProdutoForcaVendasBuscaView(PermissaoRequiredMixin, View):
             )
 
         produtos = []
-        for produto in qs.select_related('unidade_medida').order_by('descricao')[:30]:
+        for produto in qs.select_related('unidade_medida', 'categoria').order_by(
+            '-catalogo_destaque', 'descricao',
+        )[:30]:
             contrato = ProdutoVendavelService.consultar(
                 produto=produto,
                 filial=request.filial_ativa,
@@ -224,6 +266,8 @@ class ProdutoForcaVendasBuscaView(PermissaoRequiredMixin, View):
                 'estoque_disponivel': float(contrato['saldo_disponivel']),
                 'pode_vender': contrato['pode_vender'],
                 'bloqueios': [item['label'] for item in contrato['bloqueios']],
+                'categoria': produto.categoria.nome if produto.categoria_id else 'Sem categoria',
+                'destaque': produto.catalogo_destaque,
             })
         return JsonResponse({'produtos': produtos})
 
@@ -238,13 +282,16 @@ class PedidoKanbanView(PermissaoRequiredMixin, View):
             PedidoVenda.Status.AGUARDANDO_APROVACAO,
             PedidoVenda.Status.APROVADO,
         )),
-        ('liberado', 'Liberado', (PedidoVenda.Status.CONFIRMADO,)),
-        ('separacao', 'Separação', (PedidoVenda.Status.EM_SEPARACAO,)),
+        ('aguardando_separacao', 'Aguardando separação', (PedidoVenda.Status.CONFIRMADO,)),
+        ('separado', 'Separado', (PedidoVenda.Status.EM_SEPARACAO,)),
         ('faturado', 'Faturado', (
             PedidoVenda.Status.FATURADO,
             PedidoVenda.Status.PARCIALMENTE_FATURADO,
         )),
-        ('entregue', 'Entregue', (PedidoVenda.Status.ENTREGUE,)),
+        ('entrega', 'Em entrega / Entregue', (
+            PedidoVenda.Status.EM_ENTREGA,
+            PedidoVenda.Status.ENTREGUE,
+        )),
     )
 
     def get(self, request):
@@ -271,7 +318,6 @@ class PedidoKanbanView(PermissaoRequiredMixin, View):
             'title': 'Acompanhamento de pedidos',
             'colunas': colunas,
             'busca': termo,
-            'pode_aprovar': request.user.tem_permissao('vendas', 'aprovar'),
         })
 
 
@@ -293,7 +339,7 @@ class AprovarPedidoExternoView(PermissaoRequiredMixin, View):
             )
         except DomainError as exc:
             messages.error(request, str(exc))
-        return redirect('vendas:pedido-kanban')
+        return redirect('vendas:pedido-detail', pk=pedido.pk)
 
 
 class PedidoSeparacaoFilaView(PermissaoRequiredMixin, View):
@@ -328,7 +374,10 @@ class PedidoSeparacaoFilaView(PermissaoRequiredMixin, View):
         }
         for pedido in pedidos:
             for item in pedido.itens.all():
-                item.saldo_disponivel_tela = saldos.get(item.produto_id, Decimal('0'))
+                item.saldo_disponivel_tela = (
+                    saldos.get(item.produto_id, Decimal('0'))
+                    + (item.quantidade_reservada or Decimal('0'))
+                )
         return render(request, self.template_name, {
             'title': 'Separação de pedidos',
             'pedidos_a_separar': [

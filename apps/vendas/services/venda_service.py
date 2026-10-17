@@ -12,9 +12,10 @@ Regras:
 from __future__ import annotations
 
 import logging
-from decimal import Decimal
+from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 
-from django.db.models import F
+from django.db.models import F, Max
 from django.utils import timezone
 
 from apps.core.tenant_context import tenant_atomic
@@ -111,6 +112,7 @@ class VendaService:
             produto=produto,
             numero_item=numero_item,
             quantidade=quantidade,
+            quantidade_solicitada=quantidade,
             valor_unitario=valor_unitario,
             percentual_desconto=percentual_desconto,
             custo_unitario_snapshot=contrato['custo_atual'],
@@ -209,7 +211,10 @@ class VendaService:
 
     @classmethod
     @tenant_atomic
-    def separar_pedido(cls, pedido: PedidoVenda, usuario) -> SeparacaoPedido:
+    def separar_pedido(
+        cls, pedido: PedidoVenda, usuario, itens_conferidos: list[dict] | None = None,
+        observacao: str = '',
+    ) -> SeparacaoPedido:
         """
         Cria separação consumindo lotes via FEFO.
         Não dá baixa ainda — só identifica os lotes.
@@ -225,9 +230,132 @@ class VendaService:
             numero=cls._gerar_numero_separacao(pedido.filial),
             status=SeparacaoPedido.Status.EM_ANDAMENTO,
             usuario_separador=usuario,
+            observacao=(observacao or '').strip(),
         )
 
-        for item in pedido.itens.select_related('produto'):
+        itens_originais = list(pedido.itens.select_related('produto').order_by('numero_item'))
+        if pedido.origem == PedidoVenda.Origem.EXTERNO and itens_conferidos is None:
+            raise DadosInvalidosError(
+                'A separação de pedido externo exige a conferência de todos os itens.'
+            )
+        if itens_conferidos is None:
+            itens_conferidos = [
+                {
+                    'item_id': item.pk,
+                    'conferido': True,
+                    'quantidade_separada': item.quantidade,
+                }
+                for item in itens_originais
+            ]
+        dados_por_item = {int(dado['item_id']): dado for dado in itens_conferidos}
+        itens_finais = []
+        proximo_numero = (
+            pedido.itens.aggregate(maior=Max('numero_item'))['maior'] or 0
+        ) + 1
+
+        for item in itens_originais:
+            dado = dados_por_item.get(item.pk)
+            if not dado or not dado.get('conferido'):
+                raise DadosInvalidosError(
+                    f'Confirme a separação do item {item.numero_item}: {item.produto}.'
+                )
+            solicitada = item.quantidade_solicitada or item.quantidade
+            try:
+                separada = Decimal(str(dado.get('quantidade_separada', '0')))
+            except (InvalidOperation, TypeError, ValueError) as exc:
+                raise DadosInvalidosError(f'Quantidade inválida no item {item.numero_item}.') from exc
+            if separada < 0 or separada > solicitada:
+                raise DadosInvalidosError(
+                    f'A quantidade separada do item {item.numero_item} deve ficar entre 0 e {solicitada}.'
+                )
+            observacao_item = (dado.get('observacao') or '').strip()
+            substituto_id = dado.get('produto_substituto_id')
+            try:
+                quantidade_substituta = Decimal(str(dado.get('quantidade_substituta') or '0'))
+            except (InvalidOperation, TypeError, ValueError) as exc:
+                raise DadosInvalidosError(f'Quantidade substituta inválida no item {item.numero_item}.') from exc
+            if separada < solicitada and not observacao_item and not (substituto_id and quantidade_substituta > 0):
+                raise DadosInvalidosError(
+                    f'Informe a divergência ou um substituto para o item {item.numero_item}.'
+                )
+
+            diferenca = item.quantidade - separada
+            if diferenca > 0:
+                MovimentacaoService.liberar_reserva(
+                    produto_id=item.produto_id,
+                    filial_id=pedido.filial_id,
+                    quantidade=diferenca,
+                    tolerar_ausente=True,
+                    deposito_id=Deposito.venda_id(pedido.filial_id),
+                )
+            item.quantidade_solicitada = solicitada
+            item.quantidade = separada
+            item.quantidade_atendida = separada
+            item.quantidade_reservada = separada
+            item.separacao_conferida = True
+            item.observacao_separacao = observacao_item
+            item.calcular_totais()
+            item.save(update_fields=[
+                'quantidade_solicitada', 'quantidade', 'quantidade_atendida',
+                'quantidade_reservada', 'separacao_conferida',
+                'observacao_separacao', 'valor_bruto', 'valor_desconto',
+                'desconto_percentual', 'desconto_valor', 'valor_total', 'updated_at',
+            ])
+            if separada > 0:
+                itens_finais.append(item)
+
+            if substituto_id and quantidade_substituta > 0:
+                from apps.produtos.models import Produto
+
+                substituto = (
+                    Produto.objects.for_filial(pedido.filial)
+                    .filter(pk=substituto_id, ativo=True)
+                    .first()
+                )
+                if not substituto:
+                    raise DadosInvalidosError(
+                        f'O produto substituto do item {item.numero_item} não está disponível.'
+                    )
+                contrato = ProdutoVendavelService.validar_venda(
+                    produto=substituto,
+                    filial=pedido.filial,
+                    quantidade=quantidade_substituta,
+                    cliente=pedido.cliente,
+                    tabela_preco=pedido.tabela_preco,
+                )
+                MovimentacaoService.reservar_estoque(
+                    produto_id=substituto.pk,
+                    filial_id=pedido.filial_id,
+                    quantidade=quantidade_substituta,
+                    permitir_sem_estoque=substituto.permite_venda_sem_estoque,
+                    deposito_id=Deposito.venda_id(pedido.filial_id),
+                )
+                novo_item = ItemPedidoVenda(
+                    pedido=pedido,
+                    produto=substituto,
+                    numero_item=proximo_numero,
+                    quantidade=quantidade_substituta,
+                    quantidade_solicitada=quantidade_substituta,
+                    quantidade_atendida=quantidade_substituta,
+                    quantidade_reservada=quantidade_substituta,
+                    valor_unitario=contrato['preco_aplicado'],
+                    custo_unitario_snapshot=contrato['custo_atual'],
+                    separacao_conferida=True,
+                    item_substituido=item,
+                    observacao_separacao=f'Substitui o item {item.numero_item}. {observacao_item}'.strip(),
+                )
+                novo_item.calcular_totais()
+                novo_item.save()
+                proximo_numero += 1
+                itens_finais.append(novo_item)
+
+        pedido.recalcular_totais()
+        pedido.save(update_fields=[
+            'valor_produtos', 'valor_desconto', 'desconto_percentual',
+            'desconto_valor', 'acrescimo', 'valor_total', 'updated_at',
+        ])
+
+        for item in itens_finais:
             if not item.produto.controla_lote:
                 # Produto sem controle de lote — separação simples
                 continue
@@ -265,7 +393,11 @@ class VendaService:
 
     @classmethod
     @tenant_atomic
-    def faturar_pedido(cls, pedido: PedidoVenda, usuario) -> PedidoVenda:
+    def faturar_pedido(
+        cls, pedido: PedidoVenda, usuario, forma_pagamento=None,
+        condicao_pagamento=None, pagamento_confirmado: bool | None = None,
+        prazo_pagamento_dias: int | None = None, referencia_pagamento: str = '',
+    ) -> PedidoVenda:
         """
         Dá baixa real no estoque, libera reserva e muda para FATURADO.
         Se houver separação, usa os lotes identificados; senão, usa FEFO direto.
@@ -275,11 +407,37 @@ class VendaService:
                 f'Pedido não pode ser faturado no status "{pedido.get_status_display()}".'
             )
 
+        if pedido.origem == PedidoVenda.Origem.EXTERNO and not (
+            forma_pagamento or pedido.forma_pagamento_id
+        ):
+            raise DadosInvalidosError('Informe a forma de pagamento antes de faturar.')
+        if forma_pagamento is not None:
+            pedido.forma_pagamento = forma_pagamento
+        if condicao_pagamento is not None:
+            pedido.condicao_pagamento = condicao_pagamento
+        if pagamento_confirmado is not None:
+            pedido.pagamento_confirmado = pagamento_confirmado
+        if prazo_pagamento_dias is not None:
+            pedido.prazo_pagamento_dias = max(int(prazo_pagamento_dias), 0)
+        if referencia_pagamento:
+            pedido.referencia_pagamento = referencia_pagamento.strip()[:500]
+        pedido.save(update_fields=[
+            'forma_pagamento', 'condicao_pagamento', 'pagamento_confirmado',
+            'prazo_pagamento_dias', 'referencia_pagamento', 'updated_at',
+        ])
+
         separacao = pedido.separacoes.filter(
             status=SeparacaoPedido.Status.CONCLUIDA,
         ).order_by('-data_inicio').first()
 
         for item in pedido.itens.select_related('produto'):
+            if (item.quantidade or Decimal('0')) <= Decimal('0'):
+                item.quantidade_reservada = Decimal('0')
+                item.quantidade_faturada = Decimal('0')
+                item.save(update_fields=[
+                    'quantidade_reservada', 'quantidade_faturada', 'updated_at',
+                ])
+                continue
             # Liberar reserva primeiro
             MovimentacaoService.liberar_reserva(
                 produto_id=item.produto_id,
@@ -351,18 +509,97 @@ class VendaService:
                 'updated_at',
             ])
 
-        # Atualizar saldo devedor do cliente
-        pedido.cliente.saldo_devedor = F('saldo_devedor') + pedido.valor_total
-        pedido.cliente.save(update_fields=['saldo_devedor', 'updated_at'])
+        # Atualizar saldo devedor apenas quando a venda ficou a receber.
+        if not pedido.pagamento_confirmado:
+            pedido.cliente.saldo_devedor = F('saldo_devedor') + pedido.valor_total
+            pedido.cliente.save(update_fields=['saldo_devedor', 'updated_at'])
 
         pedido.status = PedidoVenda.Status.FATURADO
         pedido.save(update_fields=['status', 'updated_at'])
+
+        if pedido.forma_pagamento_id and not pedido.pagamento_confirmado:
+            cls._gerar_contas_receber(pedido, usuario)
 
         # Atualiza o padrão de recompra do cliente (CRM). Falha aqui nunca
         # pode derrubar o faturamento — o serviço já engole a exceção.
         from apps.crm.services import RecompraService
         RecompraService.recalcular_cliente_da_venda(pedido.filial, pedido.cliente_id)
 
+        return pedido
+
+    @staticmethod
+    def _gerar_contas_receber(pedido: PedidoVenda, usuario):
+        """Gera títulos idempotentes conforme a condição comercial do pedido."""
+        from apps.financeiro.models import ContaReceber
+        from apps.financeiro.services.parcelamento import ParcelamentoService
+        from apps.financeiro.services.receber_service import ContaReceberService
+
+        documento_tipo = 'pedido_venda'
+        if ContaReceber.objects.for_filial(pedido.filial).filter(
+            documento_tipo=documento_tipo,
+            documento_id=pedido.pk,
+        ).exists():
+            return
+
+        emissao = timezone.localdate()
+        parcelas = ParcelamentoService.parcelas(
+            pedido.valor_total,
+            emissao,
+            condicao=pedido.condicao_pagamento,
+            forma=pedido.forma_pagamento,
+        )
+        if pedido.prazo_pagamento_dias and parcelas:
+            primeira_original = parcelas[0][0]
+            primeira_desejada = emissao + timedelta(days=pedido.prazo_pagamento_dias)
+            deslocamento = primeira_desejada - primeira_original
+            parcelas = [(vencimento + deslocamento, valor) for vencimento, valor in parcelas]
+
+        total = len(parcelas)
+        for indice, (vencimento, valor) in enumerate(parcelas, start=1):
+            conta = ContaReceberService.criar(
+                filial=pedido.filial,
+                cliente=pedido.cliente,
+                valor_original=valor,
+                data_emissao=emissao,
+                data_vencimento=vencimento,
+                parcela=indice,
+                total_parcelas=total,
+                documento_numero=pedido.numero_pedido,
+                forma_pagamento=pedido.forma_pagamento,
+                observacao=f'Gerado pelo faturamento do pedido {pedido.numero_pedido}.',
+                usuario=usuario,
+            )
+            conta.documento_tipo = documento_tipo
+            conta.documento_id = pedido.pk
+            conta.save(update_fields=['documento_tipo', 'documento_id', 'updated_at'])
+
+    @classmethod
+    @tenant_atomic
+    def iniciar_entrega(
+        cls, pedido: PedidoVenda, usuario, responsavel: str = '', observacao: str = '',
+    ) -> PedidoVenda:
+        if not pedido.pode_iniciar_entrega:
+            raise DadosInvalidosError(
+                f'Pedido não pode sair para entrega no status "{pedido.get_status_display()}".'
+            )
+        pedido.status = PedidoVenda.Status.EM_ENTREGA
+        pedido.data_saida_entrega = timezone.now()
+        pedido.responsavel_entrega = (responsavel or '').strip()[:120]
+        pedido.observacao_entrega = (observacao or '').strip()
+        pedido.save(update_fields=[
+            'status', 'data_saida_entrega', 'responsavel_entrega',
+            'observacao_entrega', 'updated_at',
+        ])
+        return pedido
+
+    @classmethod
+    @tenant_atomic
+    def concluir_entrega(cls, pedido: PedidoVenda) -> PedidoVenda:
+        if pedido.status != PedidoVenda.Status.EM_ENTREGA:
+            raise DadosInvalidosError('Apenas pedidos em entrega podem ser concluídos.')
+        pedido.status = PedidoVenda.Status.ENTREGUE
+        pedido.data_entrega_realizada = timezone.localdate()
+        pedido.save(update_fields=['status', 'data_entrega_realizada', 'updated_at'])
         return pedido
 
     @classmethod

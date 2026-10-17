@@ -12,11 +12,13 @@
       {% if pedido.status == 'rascunho' %}
         <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-700 font-medium">Rascunho</span>
       {% elif pedido.status == 'confirmado' %}
-        <span class="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-700 font-medium">Confirmado</span>
+        <span class="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-700 font-medium">Aguardando Separação</span>
       {% elif pedido.status == 'em_separacao' %}
-        <span class="px-2 py-1 text-xs rounded-full bg-orange-100 text-orange-700 font-medium">Em Separação</span>
+        <span class="px-2 py-1 text-xs rounded-full bg-orange-100 text-orange-700 font-medium">Separado</span>
       {% elif pedido.status == 'faturado' %}
         <span class="px-2 py-1 text-xs rounded-full bg-emerald-100 text-emerald-700 font-medium">Faturado</span>
+      {% elif pedido.status == 'em_entrega' %}
+        <span class="px-2 py-1 text-xs rounded-full bg-cyan-100 text-cyan-700 font-medium">Em Entrega</span>
       {% elif pedido.status == 'cancelado' %}
         <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700 font-medium">Cancelado</span>
       {% elif pedido.status == 'devolvido' %}
@@ -32,29 +34,57 @@
     {% if pedido.status == 'rascunho' %}
       <a href="{% url 'vendas:pedido-editar' pedido.pk %}" class="btn-secondary">Editar cabeçalho</a>
     {% endif %}
-    {% if pedido.pode_confirmar %}
+    {% if pode_aprovar_externo %}
+      <form method="post" action="{% url 'vendas:pedido-aprovar-externo' pedido.pk %}" class="inline" onsubmit="return confirm('Aprovar este pedido e reservar o estoque?')">
+        {% csrf_token %}
+        <button type="submit" class="btn-primary">✓ Aprovar e liberar para separação</button>
+      </form>
+    {% elif pedido.pode_confirmar %}
       <form method="post" action="{% url 'vendas:pedido-confirmar' pedido.pk %}" class="inline">
         {% csrf_token %}
         <button type="submit" class="btn-primary">▶ Confirmar (reservar estoque)</button>
       </form>
     {% endif %}
-    {% if pedido.pode_separar %}
+    {% if pedido.pode_separar and pedido.origem == 'externo' %}
+      <a href="{% url 'vendas:pedido-separacao' %}" class="btn-primary">📦 Abrir conferência no estoque</a>
+    {% elif pedido.pode_separar %}
       <form method="post" action="{% url 'vendas:pedido-separar' pedido.pk %}" class="inline">
         {% csrf_token %}
         <button type="submit" class="btn-primary">📦 Separar (FEFO)</button>
       </form>
     {% endif %}
     {% if pedido.pode_faturar %}
-      <form method="post" action="{% url 'vendas:pedido-faturar' pedido.pk %}" class="inline">
-        {% csrf_token %}
-        <button type="submit" class="btn-primary">💰 Faturar</button>
-      </form>
+      {% if pedido.origem == 'externo' %}<button type="button" @click="$refs.modalFaturar.showModal()" class="btn-primary">💰 Faturar</button>{% else %}<form method="post" action="{% url 'vendas:pedido-faturar' pedido.pk %}" class="inline">{% csrf_token %}<button type="submit" class="btn-primary">💰 Faturar</button></form>{% endif %}
     {% endif %}
     {% if pedido.pode_cancelar %}
       <button @click="$refs.modalCancelar.showModal()" class="btn-danger">✕ Cancelar</button>
     {% endif %}
     {% if pedido.status == 'faturado' %}
       <button @click="$refs.modalDevolver.showModal()" class="btn-secondary">↩ Devolução</button>
+    {% endif %}
+    {% if pedido.pode_iniciar_entrega %}
+      <button type="button" @click="$refs.modalEntrega.showModal()" class="btn-primary">🚚 Colocar em entrega</button>
+    {% endif %}
+    {% if pedido.status == 'em_entrega' %}
+      <form method="post" action="{% url 'vendas:pedido-concluir-entrega' pedido.pk %}" class="inline" onsubmit="return confirm('Confirmar que o pedido foi entregue?')">{% csrf_token %}<button type="submit" class="btn-primary">✓ Confirmar entrega</button></form>
+    {% endif %}
+    {% if pedido.origem == 'externo' %}<a href="{% url 'vendas:pedido-kanban' %}" class="btn-secondary">Voltar ao acompanhamento</a>{% endif %}
+
+    {% if pedido.pode_faturar and pedido.origem == 'externo' %}
+      <dialog x-ref="modalFaturar" class="card max-w-xl w-full p-0 backdrop:bg-black/50">
+        <form method="post" action="{% url 'vendas:pedido-faturar' pedido.pk %}" class="p-6 space-y-4">
+          {% csrf_token %}<h3 class="text-lg font-semibold">Faturar {{ pedido.numero_pedido }}</h3><p class="text-xs text-gray-500">Defina como este pedido será recebido. Se ainda não estiver pago, o sistema gera automaticamente o Contas a Receber.</p>
+          <div><label class="form-label">Forma de pagamento *</label><select name="forma_pagamento" class="form-input w-full" required><option value="">Selecione</option>{% for forma in formas_pagamento %}<option value="{{ forma.pk }}" {% if pedido.forma_pagamento_id == forma.pk %}selected{% endif %}>{{ forma.descricao }}</option>{% endfor %}</select></div>
+          <div><label class="form-label">Condição de pagamento</label><select name="condicao_pagamento" class="form-input w-full"><option value="">Sem condição cadastrada</option>{% for condicao in condicoes_pagamento %}<option value="{{ condicao.pk }}" {% if pedido.condicao_pagamento_id == condicao.pk %}selected{% endif %}>{{ condicao.descricao }}</option>{% endfor %}</select></div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="form-label">Prazo da 1ª parcela (dias)</label><input type="number" min="0" step="1" name="prazo_pagamento_dias" class="form-input w-full" value="{{ pedido.prazo_pagamento_dias }}"></div><label class="flex items-center gap-2 mt-6"><input type="checkbox" name="pagamento_confirmado" {% if pedido.pagamento_confirmado %}checked{% endif %}><span class="text-sm font-medium">Pagamento já confirmado</span></label></div>
+          <div><label class="form-label">Link ou referência do pagamento</label><input name="referencia_pagamento" class="form-input w-full" value="{{ pedido.referencia_pagamento }}" placeholder="Link, TXID do PIX ou identificação"></div>
+          <div class="flex justify-end gap-2"><button type="button" @click="$refs.modalFaturar.close()" class="btn-secondary">Voltar</button><button type="submit" class="btn-primary">Confirmar faturamento</button></div>
+        </form>
+      </dialog>
+    {% endif %}
+
+    {% if pedido.pode_iniciar_entrega %}
+      <dialog x-ref="modalEntrega" class="card max-w-lg w-full p-0 backdrop:bg-black/50"><form method="post" action="{% url 'vendas:pedido-iniciar-entrega' pedido.pk %}" class="p-6 space-y-4">{% csrf_token %}<h3 class="text-lg font-semibold">Colocar pedido em entrega</h3><div class="p-3 rounded-lg bg-gray-100/10 text-sm"><strong>Destino</strong><br>{{ pedido.cliente.endereco }}, {{ pedido.cliente.numero }}{% if pedido.cliente.complemento %} · {{ pedido.cliente.complemento }}{% endif %}<br>{{ pedido.cliente.bairro }} · {{ pedido.cliente.cidade }}/{{ pedido.cliente.uf }} · CEP {{ pedido.cliente.cep }}</div><div><label class="form-label">Responsável / motorista</label><input name="responsavel_entrega" class="form-input w-full" required></div><div><label class="form-label">Observação da entrega</label><textarea name="observacao_entrega" class="form-input w-full" rows="3"></textarea></div><div class="flex justify-end gap-2"><button type="button" @click="$refs.modalEntrega.close()" class="btn-secondary">Voltar</button><button type="submit" class="btn-primary">Confirmar saída</button></div></form></dialog>
     {% endif %}
 
     {# Modal Cancelar #}
@@ -145,17 +175,31 @@
       <div><span class="text-gray-500">Origem:</span> {{ pedido.get_origem_display }}</div>
       <div><span class="text-gray-500">Data emissão:</span> {{ pedido.data_emissao|date:"d/m/Y H:i" }}</div>
       <div><span class="text-gray-500">Vendedor:</span> {{ pedido.usuario.nome }}</div>
+      <div><span class="text-gray-500">Endereço de entrega:</span> {% if pedido.endereco_entrega %}{{ pedido.endereco_entrega.endereco }}, {{ pedido.endereco_entrega.numero }} · {{ pedido.endereco_entrega.cidade }}/{{ pedido.endereco_entrega.uf }}{% else %}{{ pedido.cliente.endereco }}, {{ pedido.cliente.numero }} · {{ pedido.cliente.bairro }} · {{ pedido.cliente.cidade }}/{{ pedido.cliente.uf }}{% endif %}</div>
+      <div><span class="text-gray-500">Pagamento previsto:</span> <strong>{{ pedido.forma_pagamento.descricao|default:"Não definido" }}</strong>{% if pedido.condicao_pagamento %} · {{ pedido.condicao_pagamento.descricao }}{% endif %}{% if pedido.prazo_pagamento_dias %} · {{ pedido.prazo_pagamento_dias }} dias{% endif %}</div>
       {% if pedido.representante %}
         <div><span class="text-gray-500">Representante:</span> {{ pedido.representante.nome }}</div>
       {% endif %}
       {% if pedido.data_entrega_prevista %}
         <div><span class="text-gray-500">Entrega prevista:</span> {{ pedido.data_entrega_prevista|date:"d/m/Y" }}</div>
       {% endif %}
+      {% if ultima_separacao %}<div><span class="text-gray-500">Separado por:</span> {{ ultima_separacao.usuario_separador.nome }} em {{ ultima_separacao.data_fim|date:"d/m/Y H:i" }}</div>{% endif %}
+      {% if pedido.data_saida_entrega %}<div><span class="text-gray-500">Saiu para entrega:</span> {{ pedido.data_saida_entrega|date:"d/m/Y H:i" }} · {{ pedido.responsavel_entrega }}</div>{% endif %}
       {% if pedido.motivo_cancelamento %}
         <div class="md:col-span-2 text-red-600"><span class="text-gray-500">Motivo cancelamento:</span> {{ pedido.motivo_cancelamento }}</div>
       {% endif %}
     </div>
   </div>
+
+  {% if pedido.origem == 'externo' and pedido.status == 'faturado' or pedido.origem == 'externo' and pedido.status == 'em_entrega' or pedido.origem == 'externo' and pedido.status == 'entregue' %}
+    <div class="card">
+      <div class="px-5 py-3 border-b border-transparent flex items-center justify-between"><h3 class="font-semibold">Financeiro do pedido</h3><span class="text-xs {% if pedido.pagamento_confirmado %}text-emerald-500{% else %}text-amber-500{% endif %}">{% if pedido.pagamento_confirmado %}Pagamento confirmado{% else %}A receber{% endif %}</span></div>
+      <div class="p-5 text-sm">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4"><div><span class="text-gray-500">Forma:</span><br><strong>{{ pedido.forma_pagamento.descricao|default:"—" }}</strong></div><div><span class="text-gray-500">Condição:</span><br><strong>{{ pedido.condicao_pagamento.descricao|default:"Pagamento único" }}</strong></div><div><span class="text-gray-500">Referência:</span><br><strong class="break-all">{{ pedido.referencia_pagamento|default:"—" }}</strong></div></div>
+        {% if contas_receber %}<div class="overflow-x-auto"><table class="w-full"><thead><tr><th class="text-left py-2">Parcela</th><th class="text-left py-2">Vencimento</th><th class="text-right py-2">Valor</th><th class="text-right py-2">Situação</th></tr></thead><tbody>{% for conta in contas_receber %}<tr class="border-t border-gray-800"><td class="py-2">{{ conta.parcela }}/{{ conta.total_parcelas }}</td><td class="py-2">{{ conta.data_vencimento|date:"d/m/Y" }}</td><td class="py-2 text-right">{{ conta.valor_original|moeda }}</td><td class="py-2 text-right">{{ conta.get_status_display }}</td></tr>{% endfor %}</tbody></table></div>{% elif not pedido.pagamento_confirmado %}<p class="text-amber-500">Nenhum título financeiro foi localizado para este pedido.</p>{% endif %}
+      </div>
+    </div>
+  {% endif %}
 
   {# Itens #}
   <div class="card">
@@ -167,7 +211,8 @@
         <tr>
           <th class="text-left px-5 py-2 font-medium text-gray-600">#</th>
           <th class="text-left px-5 py-2 font-medium text-gray-600">Produto</th>
-          <th class="text-right px-5 py-2 font-medium text-gray-600">Qtd</th>
+          <th class="text-right px-5 py-2 font-medium text-gray-600">{% if pedido.origem == 'externo' %}Pedido{% else %}Qtd{% endif %}</th>
+          {% if pedido.origem == 'externo' and pedido.status != 'aguardando_aprovacao' and pedido.status != 'confirmado' %}<th class="text-right px-5 py-2 font-medium text-gray-600">Separado</th>{% endif %}
           <th class="text-right px-5 py-2 font-medium text-gray-600">V. Unit.</th>
           <th class="text-right px-5 py-2 font-medium text-gray-600">Desc.</th>
           <th class="text-right px-5 py-2 font-medium text-gray-600">Total</th>
@@ -181,7 +226,8 @@
           <tr>
             <td class="px-5 py-2 font-mono text-xs">{{ item.numero_item }}</td>
             <td class="px-5 py-2">{{ item.produto.descricao }}</td>
-            <td class="px-5 py-2 text-right">{{ item.quantidade|quantidade:2 }} {{ item.produto.unidade_medida.sigla }}</td>
+            <td class="px-5 py-2 text-right">{% if pedido.origem == 'externo' %}{{ item.quantidade_solicitada|quantidade:2 }}{% else %}{{ item.quantidade|quantidade:2 }}{% endif %} {{ item.produto.unidade_medida.sigla }}</td>
+            {% if pedido.origem == 'externo' and pedido.status != 'aguardando_aprovacao' and pedido.status != 'confirmado' %}<td class="px-5 py-2 text-right">{{ item.quantidade_atendida|quantidade:2 }}{% if item.quantidade_solicitada and item.quantidade_solicitada != item.quantidade_atendida %}<small class="block text-orange-500">pedido: {{ item.quantidade_solicitada|quantidade:2 }}</small>{% endif %}{% if item.item_substituido_id %}<small class="block text-blue-500">substituto</small>{% endif %}</td>{% endif %}
             <td class="px-5 py-2 text-right">{{ item.valor_unitario|moeda }}</td>
             <td class="px-5 py-2 text-right text-xs text-gray-500">
               {% if item.percentual_desconto %}{{ item.percentual_desconto }}%{% endif %}

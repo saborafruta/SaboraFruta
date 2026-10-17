@@ -12,7 +12,11 @@ from apps.core.services.modulos import modulo_da_url, modulos_ativos
 from apps.estoque.models import Estoque, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.pdv.models import VendaPDV
+from apps.financeiro.constants.enums import StatusContaReceber, TipoFormaPagamento
+from apps.financeiro.models import CondicaoPagamento, ContaReceber, FormaPagamento
 from apps.produtos.models import (
+    CategoriaProduto,
+    CategoriaProdutoFilial,
     ItemTabelaPreco,
     Produto,
     ProdutoFilial,
@@ -80,12 +84,20 @@ class ForcaVendasTests(TestCase):
             uf='RN',
             tabela_preco=cls.tabela,
             limite_credito=Decimal('1000.00'),
+            prazo_pagamento_dias=15,
             ativo=True,
         )
         ClienteFilial.objects.create(cliente=cls.cliente, filial=cls.filial)
+        cls.categoria = CategoriaProduto.objects.create(
+            empresa=cls.empresa,
+            filial=cls.filial,
+            nome='Congelados',
+        )
+        CategoriaProdutoFilial.objects.create(categoria=cls.categoria, filial=cls.filial)
         cls.produto = Produto.objects.create(
             filial=cls.filial,
             unidade_medida=cls.unidade,
+            categoria=cls.categoria,
             descricao='Caixa de Polpa',
             codigo='POLPA-001',
             ncm='20089900',
@@ -93,8 +105,22 @@ class ForcaVendasTests(TestCase):
             permite_venda_sem_estoque=False,
             preco_venda=Decimal('10.00'),
             preco_custo=Decimal('4.00'),
+            catalogo_destaque=True,
         )
         ProdutoFilial.objects.create(produto=cls.produto, filial=cls.filial)
+        cls.produto_substituto = Produto.objects.create(
+            filial=cls.filial,
+            unidade_medida=cls.unidade,
+            categoria=cls.categoria,
+            descricao='Caixa de Polpa Premium',
+            codigo='POLPA-002',
+            ncm='20089900',
+            controla_lote=False,
+            permite_venda_sem_estoque=False,
+            preco_venda=Decimal('12.00'),
+            preco_custo=Decimal('5.00'),
+        )
+        ProdutoFilial.objects.create(produto=cls.produto_substituto, filial=cls.filial)
         ItemTabelaPreco.objects.create(
             tabela=cls.tabela,
             produto=cls.produto,
@@ -106,6 +132,26 @@ class ForcaVendasTests(TestCase):
             produto=cls.produto,
             preco_unitario=Decimal('6.50'),
             quantidade_minima=5,
+        )
+        ItemTabelaPreco.objects.create(
+            tabela=cls.tabela,
+            produto=cls.produto_substituto,
+            preco_unitario=Decimal('8.00'),
+            quantidade_minima=0,
+        )
+        cls.forma = FormaPagamento.objects.create(
+            empresa=cls.empresa,
+            filial=cls.filial,
+            descricao='Boleto bancário',
+            tipo=TipoFormaPagamento.BOLETO,
+            gera_parcelas=True,
+        )
+        cls.condicao = CondicaoPagamento.objects.create(
+            empresa=cls.empresa,
+            descricao='15/30 dias',
+            numero_parcelas=2,
+            intervalo_dias=15,
+            dias_primeira_parcela=15,
         )
 
     def setUp(self):
@@ -127,6 +173,9 @@ class ForcaVendasTests(TestCase):
                 }],
                 'prioridade': 'urgente',
                 'observacao': 'Entregar pela manhã.',
+                'forma_pagamento_id': self.forma.pk,
+                'condicao_pagamento_id': self.condicao.pk,
+                'prazo_pagamento_dias': 15,
             }),
             content_type='application/json',
         )
@@ -139,6 +188,14 @@ class ForcaVendasTests(TestCase):
             quantidade=Decimal(quantidade),
             usuario_id=self.usuario.pk,
             valor_unitario=Decimal('4.00'),
+        )
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=self.produto_substituto.pk,
+            filial_id=self.filial.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal(quantidade),
+            usuario_id=self.usuario.pk,
+            valor_unitario=Decimal('5.00'),
         )
 
     def test_modulo_e_menu_reunem_as_tres_telas(self):
@@ -175,6 +232,14 @@ class ForcaVendasTests(TestCase):
             Decimal('6.5'),
         )
 
+        destaques = self.client.get(reverse('vendas:api-produtos'), {
+            'cliente_id': self.cliente.pk,
+            'categoria_id': self.categoria.pk,
+            'destaques': '1',
+        })
+        self.assertEqual(destaques.json()['produtos'][0]['id'], self.produto.pk)
+        self.assertTrue(destaques.json()['produtos'][0]['destaque'])
+
     def test_busca_cliente_por_primeiro_nome_e_prazos_rapidos(self):
         busca = self.client.get(reverse('vendas:api-clientes'), {'q': 'Mercadinho'})
 
@@ -197,6 +262,8 @@ class ForcaVendasTests(TestCase):
         self.assertEqual(pedido.origem, PedidoVenda.Origem.EXTERNO)
         self.assertEqual(pedido.status, PedidoVenda.Status.AGUARDANDO_APROVACAO)
         self.assertEqual(pedido.prioridade, PedidoVenda.Prioridade.URGENTE)
+        self.assertEqual(pedido.forma_pagamento, self.forma)
+        self.assertEqual(pedido.condicao_pagamento, self.condicao)
         self.assertEqual(item.valor_unitario, Decimal('7.5000'))
         self.assertEqual(pedido.valor_total, Decimal('15.00'))
         self.assertEqual(VendaPDV.objects.count(), 0)
@@ -222,12 +289,17 @@ class ForcaVendasTests(TestCase):
 
         kanban = self.client.get(reverse('vendas:pedido-kanban'))
         self.assertContains(kanban, pedido.numero_pedido)
-        self.assertContains(kanban, 'Analisar e liberar')
+        self.assertNotContains(kanban, 'Analisar e liberar')
+        self.assertContains(kanban, 'Abra o pedido para analisar e aprovar')
+
+        detalhe = self.client.get(reverse('vendas:pedido-detail', args=[pedido.pk]))
+        self.assertContains(detalhe, 'Aprovar e liberar para separação')
+        self.assertContains(detalhe, self.usuario.nome)
 
         aprovacao = self.client.post(
             reverse('vendas:pedido-aprovar-externo', args=[pedido.pk]),
         )
-        self.assertRedirects(aprovacao, reverse('vendas:pedido-kanban'))
+        self.assertRedirects(aprovacao, reverse('vendas:pedido-detail', args=[pedido.pk]))
         pedido.refresh_from_db()
         self.assertEqual(pedido.status, PedidoVenda.Status.CONFIRMADO)
         estoque = Estoque.objects.get(produto=self.produto, filial=self.filial)
@@ -235,19 +307,69 @@ class ForcaVendasTests(TestCase):
 
         fila = self.client.get(reverse('vendas:pedido-separacao'))
         self.assertContains(fila, pedido.numero_pedido)
-        self.assertContains(fila, 'Confirmar separação')
+        self.assertContains(fila, 'Concluir separação')
 
         separacao = self.client.post(
             reverse('vendas:pedido-separar', args=[pedido.pk]),
-            {'origem': 'fila-separacao'},
+            {
+                'origem': 'fila-separacao',
+                'conferencia_detalhada': '1',
+                f'item_{pedido.itens.get().pk}_conferido': 'on',
+                f'item_{pedido.itens.get().pk}_quantidade': '1',
+                f'item_{pedido.itens.get().pk}_substituto_id': self.produto_substituto.pk,
+                f'item_{pedido.itens.get().pk}_substituto_quantidade': '1',
+                f'item_{pedido.itens.get().pk}_observacao': 'Cliente aceitou o substituto.',
+            },
         )
         self.assertRedirects(separacao, reverse('vendas:pedido-separacao'))
         pedido.refresh_from_db()
         self.assertEqual(pedido.status, PedidoVenda.Status.EM_SEPARACAO)
         self.assertTrue(pedido.separacoes.exists())
+        item = pedido.itens.get(produto=self.produto)
+        self.assertEqual(item.quantidade_solicitada, Decimal('2.000'))
+        self.assertEqual(item.quantidade_atendida, Decimal('1.000'))
+        self.assertTrue(item.separacao_conferida)
+        substituto = pedido.itens.get(produto=self.produto_substituto)
+        self.assertEqual(substituto.item_substituido, item)
+        self.assertEqual(substituto.quantidade_atendida, Decimal('1.000'))
 
         fila_atualizada = self.client.get(reverse('vendas:pedido-separacao'))
-        self.assertContains(fila_atualizada, 'Aguardando faturamento')
+        self.assertContains(fila_atualizada, 'Separado')
+
+    def test_faturamento_externo_gera_contas_a_receber_e_entrega(self):
+        self.abastecer()
+        pedido = PedidoVenda.objects.get(pk=self.criar_pedido_pela_tela().json()['pedido_id'])
+        self.client.post(reverse('vendas:pedido-aprovar-externo', args=[pedido.pk]))
+        item = pedido.itens.get()
+        self.client.post(reverse('vendas:pedido-separar', args=[pedido.pk]), {
+            'conferencia_detalhada': '1',
+            f'item_{item.pk}_conferido': 'on',
+            f'item_{item.pk}_quantidade': '2',
+        })
+
+        faturamento = self.client.post(reverse('vendas:pedido-faturar', args=[pedido.pk]), {
+            'forma_pagamento': self.forma.pk,
+            'condicao_pagamento': self.condicao.pk,
+            'prazo_pagamento_dias': '15',
+            'referencia_pagamento': 'Boleto solicitado pelo cliente',
+        })
+        self.assertRedirects(faturamento, reverse('vendas:pedido-detail', args=[pedido.pk]))
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.status, PedidoVenda.Status.FATURADO)
+        titulos = ContaReceber.objects.filter(documento_tipo='pedido_venda', documento_id=pedido.pk)
+        self.assertEqual(titulos.count(), 2)
+        self.assertTrue(all(t.status == StatusContaReceber.ABERTO for t in titulos))
+        self.assertEqual(sum((t.valor_original for t in titulos), Decimal('0')), pedido.valor_total)
+
+        self.client.post(reverse('vendas:pedido-iniciar-entrega', args=[pedido.pk]), {
+            'responsavel_entrega': 'João Motorista',
+            'observacao_entrega': 'Rota norte',
+        })
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.status, PedidoVenda.Status.EM_ENTREGA)
+        self.client.post(reverse('vendas:pedido-concluir-entrega', args=[pedido.pk]))
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.status, PedidoVenda.Status.ENTREGUE)
 
     def test_payload_malformado_retorna_erro_json(self):
         resposta = self.client.post(

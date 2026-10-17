@@ -13,10 +13,11 @@
   .fv-search{position:relative}.fv-results{position:absolute;z-index:35;top:calc(100% + 6px);left:0;right:0;max-height:340px;overflow:auto;border:1px solid rgba(148,163,184,.28);border-radius:14px;background:#242426;color:#f8fafc;box-shadow:0 18px 45px rgba(15,23,42,.22)}body.tema-claro .fv-results{background:#fff;color:#111827}.fv-result{display:flex;width:100%;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;text-align:left;border-bottom:1px solid rgba(148,163,184,.14)}.fv-result:last-child{border-bottom:0}.fv-result:hover{background:rgba(59,130,246,.12)}.fv-result-state{padding:15px;text-align:center;color:#94a3b8;font-size:12px}
   .fv-client{display:grid;grid-template-columns:1fr auto;gap:12px;padding:14px;border:1px solid rgba(34,197,94,.28);border-radius:14px;background:rgba(34,197,94,.07)}.fv-client strong{display:block;font-size:15px}.fv-meta{color:#94a3b8;font-size:11px;margin-top:3px}.fv-credit{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.fv-credit div{padding:9px;border-radius:10px;background:rgba(148,163,184,.08)}.fv-credit span{display:block;color:#94a3b8;font-size:10px}.fv-credit b{font-size:12px}
   .fv-items{display:grid;gap:9px}.fv-item{display:grid;grid-template-columns:minmax(0,1fr) 108px 110px 36px;gap:10px;align-items:center;padding:11px;border:1px solid rgba(148,163,184,.18);border-radius:13px}.fv-item-name{font-size:13px;font-weight:750}.fv-item small{display:block;color:#94a3b8;font-size:10px;margin-top:3px}.fv-price{text-align:right;font-size:13px;font-weight:800}.fv-remove{width:34px;height:34px;border-radius:9px;color:#f87171}.fv-remove:hover{background:rgba(248,113,113,.1)}
+  .fv-categories{display:flex;gap:7px;overflow-x:auto;padding:10px 0 2px}.fv-category{white-space:nowrap;padding:7px 10px;border:1px solid rgba(148,163,184,.24);border-radius:999px;font-size:10px;font-weight:800}.fv-category.is-active{border-color:#2563eb;background:#2563eb;color:#fff}.fv-highlights{margin-top:14px;padding:13px;border-radius:14px;background:linear-gradient(135deg,rgba(245,158,11,.11),rgba(249,115,22,.05))}.fv-highlights-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:9px}.fv-highlights-head strong{font-size:12px}.fv-highlights-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.fv-highlight{padding:10px;text-align:left;border:1px solid rgba(245,158,11,.24);border-radius:11px;background:var(--erp-card-bg,#fff)}.fv-highlight strong{display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fv-highlight span{display:block;margin-top:5px;font-size:12px;font-weight:900;color:#f59e0b}
   .fv-date-wrap{position:relative}.fv-date-wrap input{padding-right:45px}.fv-calendar-button{position:absolute;z-index:2;right:5px;top:5px;display:grid;width:34px;height:34px;place-items:center;border-radius:9px;color:#3b82f6}.fv-calendar-button:hover{background:rgba(59,130,246,.1)}.fv-calendar-button svg{width:18px;height:18px}.fv-date-input::-webkit-calendar-picker-indicator{opacity:0;position:absolute;inset:0;width:100%;height:100%;cursor:pointer}.fv-deadlines{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.fv-deadline{padding:7px 10px;border:1px solid rgba(148,163,184,.25);border-radius:999px;font-size:11px;font-weight:800;transition:.15s}.fv-deadline:hover{border-color:#3b82f6;color:#3b82f6}.fv-deadline.is-active{border-color:#2563eb;background:#2563eb;color:#fff}.fv-date-caption{margin-top:7px;color:#94a3b8;font-size:10px}
   .fv-empty{text-align:center;padding:42px 16px;color:#94a3b8}.fv-empty svg{width:34px;height:34px;margin:0 auto 8px;opacity:.6}.fv-summary{position:sticky;top:14px}.fv-total{padding:16px;border-radius:14px;background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(14,165,233,.08))}.fv-total span{display:block;color:#94a3b8;font-size:10px;text-transform:uppercase;letter-spacing:.09em}.fv-total strong{display:block;margin-top:4px;font-size:31px;line-height:1;font-weight:900}.fv-line{display:flex;justify-content:space-between;gap:14px;font-size:12px;padding:7px 0;border-bottom:1px solid rgba(148,163,184,.12)}.fv-line:last-child{border-bottom:0}.fv-submit{width:100%;min-height:48px;margin-top:14px;border-radius:12px;background:#2563eb;color:#fff;font-weight:850}.fv-submit:disabled{opacity:.45;cursor:not-allowed}.fv-alert{margin-top:10px;padding:10px 11px;border-radius:10px;background:rgba(239,68,68,.1);color:#ef4444;font-size:12px}
   @media(max-width:900px){.fv-layout{grid-template-columns:1fr}.fv-summary{position:static}.fv-hero{padding:18px}.fv-hero h2{font-size:23px}}
-  @media(max-width:620px){.fv-item{grid-template-columns:1fr 92px 34px}.fv-price{grid-column:1/2;text-align:left}.fv-item .fv-qty{grid-column:2/3;grid-row:1/3}.fv-remove{grid-column:3/4;grid-row:1/3}.fv-credit{grid-template-columns:1fr}.fv-body{padding:13px}}
+  @media(max-width:620px){.fv-item{grid-template-columns:1fr 92px 34px}.fv-price{grid-column:1/2;text-align:left}.fv-item .fv-qty{grid-column:2/3;grid-row:1/3}.fv-remove{grid-column:3/4;grid-row:1/3}.fv-credit{grid-template-columns:1fr}.fv-body{padding:13px}.fv-highlights-list{grid-template-columns:1fr 1fr}}
 </style>
 {% endblock %}
 
@@ -85,6 +86,20 @@
             </div>
           </div>
 
+          <div class="fv-categories" x-show="cliente" x-cloak aria-label="Filtrar por categoria">
+            <button type="button" class="fv-category" :class="!categoriaId&&'is-active'" @click="categoriaId='';buscarProdutos(true)">Todas</button>
+            {% for categoria in categorias %}<button type="button" class="fv-category" :class="String(categoriaId)==='{{ categoria.pk }}'&&'is-active'" @click="categoriaId='{{ categoria.pk }}';buscarProdutos(true)">{{ categoria.nome }}</button>{% endfor %}
+          </div>
+
+          <div class="fv-highlights" x-show="cliente && destaques.length" x-cloak>
+            <div class="fv-highlights-head"><strong>⭐ Produtos em destaque para oferecer</strong><small class="fv-meta">Sugestões comerciais</small></div>
+            <div class="fv-highlights-list">
+              <template x-for="produto in destaques" :key="produto.id">
+                <button type="button" class="fv-highlight" @click="adicionarProduto(produto)" :disabled="!produto.pode_vender"><strong x-text="produto.descricao"></strong><small class="fv-meta" x-text="produto.categoria"></small><span x-text="moeda(produto.preco)"></span></button>
+              </template>
+            </div>
+          </div>
+
           <div class="fv-items mt-4" x-show="itens.length" x-cloak>
             <template x-for="(item, indice) in itens" :key="item.id">
               <div class="fv-item">
@@ -103,8 +118,11 @@
       </section>
 
       <section class="fv-card">
-        <div class="fv-card-head"><h3>3. Entrega e observações</h3></div>
+        <div class="fv-card-head"><h3>3. Pagamento, entrega e observações</h3></div>
         <div class="fv-body grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div><label class="form-label">Forma de pagamento *</label><select class="form-input w-full" x-model="formaPagamento"><option value="">Selecione</option>{% for forma in formas_pagamento %}<option value="{{ forma.pk }}">{{ forma.descricao }}</option>{% endfor %}</select></div>
+          <div><label class="form-label">Condição de pagamento</label><select class="form-input w-full" x-model="condicaoPagamento"><option value="">Sem condição cadastrada</option>{% for condicao in condicoes_pagamento %}<option value="{{ condicao.pk }}">{{ condicao.descricao }}</option>{% endfor %}</select></div>
+          <div><label class="form-label">Prazo da 1ª parcela (dias)</label><input class="form-input w-full" type="number" min="0" step="1" x-model.number="prazoPagamento"><p class="fv-date-caption">O prazo padrão do cliente é preenchido automaticamente.</p></div>
           <div>
             <label class="form-label">Entrega prevista</label>
             <div class="fv-date-wrap">
@@ -134,6 +152,7 @@
           <div class="fv-line"><span>Itens diferentes</span><strong x-text="itens.length"></strong></div>
           <div class="fv-line"><span>Quantidade total</span><strong x-text="numero(quantidadeTotal)"></strong></div>
           <div class="fv-line"><span>Cliente</span><strong class="text-right truncate max-w-[190px]" x-text="cliente?.nome || 'Não selecionado'"></strong></div>
+          <div class="fv-line"><span>Pagamento</span><strong x-text="formaPagamento ? 'Definido' : 'Não definido'"></strong></div>
           <div class="fv-line"><span>Situação inicial</span><strong>Em análise</strong></div>
         </div>
         <div class="fv-alert" x-show="erro" x-text="erro" x-cloak></div>
@@ -146,21 +165,22 @@
 
 <script>
 function pedidoExterno(){return{
-  cliente:null,clientes:[],buscaCliente:'',buscandoClientes:false,buscaClienteExecutada:false,erroCliente:'',buscaClienteSeq:0,produtos:[],buscaProduto:'',itens:[],dataEntrega:'',dataMinima:'',prazoSelecionado:10,prioridade:'normal',observacao:'',erro:'',enviando:false,
+  cliente:null,clientes:[],buscaCliente:'',buscandoClientes:false,buscaClienteExecutada:false,erroCliente:'',buscaClienteSeq:0,produtos:[],destaques:[],buscaProduto:'',categoriaId:'',itens:[],formaPagamento:'',condicaoPagamento:'',prazoPagamento:0,dataEntrega:'',dataMinima:'',prazoSelecionado:10,prioridade:'normal',observacao:'',erro:'',enviando:false,
   init(){this.dataMinima=this.dataLocal(new Date());this.aplicarPrazo(10);},
   moeda(v){return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});},numero(v){return Number(v||0).toLocaleString('pt-BR',{maximumFractionDigits:3});},
   dataLocal(data){const pad=n=>String(n).padStart(2,'0');return data.getFullYear()+'-'+pad(data.getMonth()+1)+'-'+pad(data.getDate());},
   aplicarPrazo(dias){const data=new Date();data.setHours(12,0,0,0);data.setDate(data.getDate()+dias);this.dataEntrega=this.dataLocal(data);this.prazoSelecionado=dias;},
   abrirCalendario(){const campo=this.$refs.dataEntrega;if(campo?.showPicker)campo.showPicker();else campo?.focus();},
-  get total(){return this.itens.reduce((s,i)=>s+(Number(i.preco)||0)*(Number(i.quantidade)||0),0);},get quantidadeTotal(){return this.itens.reduce((s,i)=>s+(Number(i.quantidade)||0),0);},get podeEnviar(){return !!this.cliente&&this.itens.length>0&&this.itens.every(i=>Number(i.quantidade)>0);},
+  get total(){return this.itens.reduce((s,i)=>s+(Number(i.preco)||0)*(Number(i.quantidade)||0),0);},get quantidadeTotal(){return this.itens.reduce((s,i)=>s+(Number(i.quantidade)||0),0);},get podeEnviar(){return !!this.cliente&&!!this.formaPagamento&&this.itens.length>0&&this.itens.every(i=>Number(i.quantidade)>0);},
   fecharBuscaCliente(){this.clientes=[];this.buscaClienteExecutada=false;},
   async buscarClientes(){const termo=this.buscaCliente.trim();if(termo.length<2){this.clientes=[];this.buscaClienteExecutada=false;this.erroCliente='';return;}const seq=++this.buscaClienteSeq;this.buscandoClientes=true;this.buscaClienteExecutada=false;this.erroCliente='';try{const r=await fetch('{% url "vendas:api-clientes" %}?q='+encodeURIComponent(termo));const d=await r.json();if(!r.ok)throw new Error(d.erro||'Não foi possível buscar clientes.');if(seq!==this.buscaClienteSeq)return;this.clientes=d.clientes||[];this.buscaClienteExecutada=true;}catch(e){if(seq!==this.buscaClienteSeq)return;this.clientes=[];this.erroCliente=e.message;this.buscaClienteExecutada=true;}finally{if(seq===this.buscaClienteSeq)this.buscandoClientes=false;}},
-  selecionarCliente(c){this.cliente=c;this.clientes=[];this.buscaCliente='';this.buscaClienteExecutada=false;this.itens=[];this.produtos=[];this.buscaProduto='';},trocarCliente(){this.cliente=null;this.itens=[];this.produtos=[];this.buscaProduto='';},
-  async buscarProdutos(){if(!this.cliente||this.buscaProduto.trim().length<2){this.produtos=[];return;}const url='{% url "vendas:api-produtos" %}?cliente_id='+this.cliente.id+'&q='+encodeURIComponent(this.buscaProduto);const r=await fetch(url);const d=await r.json();if(!r.ok){this.erro=d.erro||'Não foi possível buscar produtos.';return;}this.produtos=d.produtos||[];},
+  selecionarCliente(c){this.cliente=c;this.clientes=[];this.buscaCliente='';this.buscaClienteExecutada=false;this.itens=[];this.produtos=[];this.buscaProduto='';this.prazoPagamento=Number(c.prazo_pagamento_dias||0);this.carregarDestaques();},trocarCliente(){this.cliente=null;this.itens=[];this.produtos=[];this.destaques=[];this.buscaProduto='';},
+  async carregarDestaques(){if(!this.cliente)return;const r=await fetch('{% url "vendas:api-produtos" %}?cliente_id='+this.cliente.id+'&destaques=1');const d=await r.json();if(r.ok)this.destaques=(d.produtos||[]).slice(0,6);},
+  async buscarProdutos(forcar=false){if(!this.cliente||(!forcar&&this.buscaProduto.trim().length<2&&!this.categoriaId)){this.produtos=[];return;}let url='{% url "vendas:api-produtos" %}?cliente_id='+this.cliente.id+'&q='+encodeURIComponent(this.buscaProduto);if(this.categoriaId)url+='&categoria_id='+this.categoriaId;const r=await fetch(url);const d=await r.json();if(!r.ok){this.erro=d.erro||'Não foi possível buscar produtos.';return;}this.produtos=d.produtos||[];},
   adicionarProduto(p){if(!p.pode_vender){this.erro=(p.bloqueios||[]).join(' · ')||'Produto indisponível.';return;}const atual=this.itens.find(i=>i.id===p.id);if(atual){atual.quantidade=Number(atual.quantidade)+1;this.atualizarPreco(atual);}else this.itens.push({...p,quantidade:1});this.buscaProduto='';this.produtos=[];this.erro='';},
   async atualizarPreco(item){if(!this.cliente||Number(item.quantidade)<=0)return;const url='{% url "vendas:api-produtos" %}?cliente_id='+this.cliente.id+'&produto_id='+item.id+'&quantidade='+encodeURIComponent(item.quantidade);const r=await fetch(url);const d=await r.json();if(r.ok&&d.produtos?.length){item.preco=d.produtos[0].preco;item.preco_origem=d.produtos[0].preco_origem;}},
   csrf(){return document.cookie.split('; ').find(v=>v.startsWith('csrftoken='))?.split('=')[1]||'';},
-  async enviarPedido(){if(!this.podeEnviar||this.enviando)return;this.enviando=true;this.erro='';try{const r=await fetch('{% url "vendas:pedido-externo-novo" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({cliente_id:this.cliente.id,itens:this.itens.map(i=>({produto_id:i.id,quantidade:i.quantidade})),data_entrega_prevista:this.dataEntrega,prioridade:this.prioridade,observacao:this.observacao})});const d=await r.json();if(!r.ok)throw new Error(d.erro||'Não foi possível enviar o pedido.');window.location.href=d.redirect_url;}catch(e){this.erro=e.message;}finally{this.enviando=false;}}
+  async enviarPedido(){if(!this.podeEnviar||this.enviando)return;this.enviando=true;this.erro='';try{const r=await fetch('{% url "vendas:pedido-externo-novo" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({cliente_id:this.cliente.id,itens:this.itens.map(i=>({produto_id:i.id,quantidade:i.quantidade})),forma_pagamento_id:this.formaPagamento,condicao_pagamento_id:this.condicaoPagamento,prazo_pagamento_dias:this.prazoPagamento,data_entrega_prevista:this.dataEntrega,prioridade:this.prioridade,observacao:this.observacao})});const d=await r.json();if(!r.ok)throw new Error(d.erro||'Não foi possível enviar o pedido.');window.location.href=d.redirect_url;}catch(e){this.erro=e.message;}finally{this.enviando=false;}}
 }}
 </script>
 {% endblock %}

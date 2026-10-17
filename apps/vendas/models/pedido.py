@@ -21,10 +21,11 @@ class PedidoVenda(FilialScopedModel):
         RASCUNHO = 'rascunho', 'Rascunho'
         AGUARDANDO_APROVACAO = 'aguardando_aprovacao', 'Aguardando Aprovação'
         APROVADO = 'aprovado', 'Aprovado'
-        CONFIRMADO = 'confirmado', 'Confirmado'
-        EM_SEPARACAO = 'em_separacao', 'Em Separação'
+        CONFIRMADO = 'confirmado', 'Aguardando Separação'
+        EM_SEPARACAO = 'em_separacao', 'Separado'
         FATURADO = 'faturado', 'Faturado'
         PARCIALMENTE_FATURADO = 'parcialmente_faturado', 'Parcialmente Faturado'
+        EM_ENTREGA = 'em_entrega', 'Em Entrega'
         ENTREGUE = 'entregue', 'Entregue'
         CANCELADO = 'cancelado', 'Cancelado'
         DEVOLVIDO = 'devolvido', 'Devolvido'
@@ -78,6 +79,20 @@ class PedidoVenda(FilialScopedModel):
         'produtos.TabelaPreco', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='+',
     )
+    forma_pagamento = models.ForeignKey(
+        'financeiro.FormaPagamento', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='pedidos_venda',
+    )
+    condicao_pagamento = models.ForeignKey(
+        'financeiro.CondicaoPagamento', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='pedidos_venda',
+    )
+    prazo_pagamento_dias = models.PositiveSmallIntegerField(default=0)
+    pagamento_confirmado = models.BooleanField(default=False)
+    referencia_pagamento = models.CharField(
+        max_length=500, blank=True,
+        help_text='Link de pagamento, identificação do PIX ou outra referência.',
+    )
 
     # Tipo e status
     tipo = models.CharField(max_length=20, choices=Tipo.choices, default=Tipo.PEDIDO)
@@ -103,6 +118,9 @@ class PedidoVenda(FilialScopedModel):
     data_validade_orcamento = models.DateField(null=True, blank=True)
     data_entrega_prevista = models.DateField(null=True, blank=True)
     data_entrega_realizada = models.DateField(null=True, blank=True)
+    data_saida_entrega = models.DateTimeField(null=True, blank=True)
+    responsavel_entrega = models.CharField(max_length=120, blank=True)
+    observacao_entrega = models.TextField(blank=True)
 
     # Frete
     modalidade_frete = models.SmallIntegerField(
@@ -175,7 +193,13 @@ class PedidoVenda(FilialScopedModel):
 
     @property
     def pode_faturar(self):
+        if self.origem == self.Origem.EXTERNO:
+            return self.status == self.Status.EM_SEPARACAO
         return self.status in (self.Status.CONFIRMADO, self.Status.EM_SEPARACAO)
+
+    @property
+    def pode_iniciar_entrega(self):
+        return self.status in (self.Status.FATURADO, self.Status.PARCIALMENTE_FATURADO)
 
     @property
     def pode_cancelar(self):
@@ -218,6 +242,10 @@ class ItemPedidoVenda(TimestampedModel):
 
     # Preço e quantidade
     quantidade = models.DecimalField(max_digits=12, decimal_places=3)
+    quantidade_solicitada = models.DecimalField(
+        max_digits=12, decimal_places=3, default=0,
+        help_text='Quantidade originalmente solicitada, preservada após a conferência.',
+    )
     quantidade_atendida = models.DecimalField(
         max_digits=12, decimal_places=3, default=0,
         help_text='Quantidade efetivamente separada/faturada',
@@ -260,6 +288,13 @@ class ItemPedidoVenda(TimestampedModel):
     )
 
     observacao = models.CharField(max_length=255, blank=True)
+    separacao_conferida = models.BooleanField(default=False)
+    observacao_separacao = models.CharField(max_length=255, blank=True)
+    item_substituido = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='itens_substitutos',
+        help_text='Item original que este produto substituiu durante a separação.',
+    )
 
     class Meta:
         db_table = 'itens_pedido_venda'

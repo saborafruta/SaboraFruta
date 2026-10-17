@@ -20,6 +20,8 @@ urlpatterns = [
     path('<int:pk>/confirmar/', views.ConfirmarPedidoView.as_view(), name='pedido-confirmar'),
     path('<int:pk>/separar/', views.SepararPedidoView.as_view(), name='pedido-separar'),
     path('<int:pk>/faturar/', views.FaturarPedidoView.as_view(), name='pedido-faturar'),
+    path('<int:pk>/iniciar-entrega/', views.IniciarEntregaPedidoView.as_view(), name='pedido-iniciar-entrega'),
+    path('<int:pk>/concluir-entrega/', views.ConcluirEntregaPedidoView.as_view(), name='pedido-concluir-entrega'),
     path('<int:pk>/cancelar/', views.CancelarPedidoView.as_view(), name='pedido-cancelar'),
     path('<int:pk>/devolver/', views.DevolverPedidoView.as_view(), name='pedido-devolver'),
 ]

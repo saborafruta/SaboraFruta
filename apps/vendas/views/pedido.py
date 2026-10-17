@@ -8,6 +8,7 @@ from django.views import View
 
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.financeiro.models import CondicaoPagamento, ContaReceber, FormaPagamento
 from apps.vendas.forms import (
     AdicionarItemForm, CancelarPedidoForm, DevolverPedidoForm, PedidoVendaForm,
 )
@@ -98,7 +99,10 @@ class PedidoDetailView(PermissaoRequiredMixin, View):
     def get(self, request, pk):
         pedido = get_object_or_404(
             PedidoVenda.objects.for_filial(request.filial_ativa)
-            .select_related('cliente', 'representante', 'tabela_preco', 'usuario'),
+            .select_related(
+                'cliente', 'representante', 'tabela_preco', 'usuario',
+                'forma_pagamento', 'condicao_pagamento', 'endereco_entrega',
+            ),
             pk=pk,
         )
         itens = pedido.itens.select_related('produto', 'produto__unidade_medida').all()
@@ -116,6 +120,27 @@ class PedidoDetailView(PermissaoRequiredMixin, View):
             'adicionar_item_form': AdicionarItemForm(filial=request.filial_ativa) if pedido.status == 'rascunho' else None,
             'cancelar_form': CancelarPedidoForm() if pedido.pode_cancelar else None,
             'devolver_form': DevolverPedidoForm() if pedido.status == 'faturado' else None,
+            'pode_aprovar_externo': (
+                pedido.origem == PedidoVenda.Origem.EXTERNO
+                and pedido.status == PedidoVenda.Status.AGUARDANDO_APROVACAO
+                and request.user.tem_permissao('vendas', 'aprovar')
+            ),
+            'formas_pagamento': FormaPagamento.objects.filter(
+                empresa=request.filial_ativa.empresa,
+                ativo=True,
+            ).filter(
+                Q(filial=request.filial_ativa) | Q(filial__isnull=True)
+            ).order_by('descricao'),
+            'condicoes_pagamento': CondicaoPagamento.objects.filter(
+                empresa=request.filial_ativa.empresa,
+                ativo=True,
+            ).order_by('descricao'),
+            'contas_receber': ContaReceber.objects.for_filial(request.filial_ativa).filter(
+                documento_tipo='pedido_venda', documento_id=pedido.pk,
+            ).order_by('parcela'),
+            'ultima_separacao': pedido.separacoes.select_related(
+                'usuario_separador',
+            ).order_by('-data_inicio').first(),
         })
 
 
@@ -210,7 +235,30 @@ class SepararPedidoView(PermissaoRequiredMixin, View):
     def post(self, request, pk):
         pedido = get_object_or_404(PedidoVenda.objects.for_filial(request.filial_ativa), pk=pk)
         try:
-            separacao = VendaService.separar_pedido(pedido, request.user)
+            itens_conferidos = None
+            if request.POST.get('conferencia_detalhada') == '1':
+                itens_conferidos = []
+                for item in pedido.itens.order_by('numero_item'):
+                    itens_conferidos.append({
+                        'item_id': item.pk,
+                        'conferido': request.POST.get(f'item_{item.pk}_conferido') == 'on',
+                        'quantidade_separada': request.POST.get(
+                            f'item_{item.pk}_quantidade', '0',
+                        ).replace(',', '.'),
+                        'observacao': request.POST.get(f'item_{item.pk}_observacao', ''),
+                        'produto_substituto_id': request.POST.get(
+                            f'item_{item.pk}_substituto_id',
+                        ),
+                        'quantidade_substituta': request.POST.get(
+                            f'item_{item.pk}_substituto_quantidade', '0',
+                        ).replace(',', '.'),
+                    })
+            separacao = VendaService.separar_pedido(
+                pedido,
+                request.user,
+                itens_conferidos=itens_conferidos,
+                observacao=request.POST.get('observacao_separacao', ''),
+            )
             messages.success(request, f'Separação {separacao.numero} concluída.')
         except DomainError as e:
             messages.error(request, str(e))
@@ -226,10 +274,78 @@ class FaturarPedidoView(PermissaoRequiredMixin, View):
     def post(self, request, pk):
         pedido = get_object_or_404(PedidoVenda.objects.for_filial(request.filial_ativa), pk=pk)
         try:
-            VendaService.faturar_pedido(pedido, request.user)
+            forma = None
+            condicao = None
+            pagamento_confirmado = None
+            prazo = None
+            referencia = ''
+            if pedido.origem == PedidoVenda.Origem.EXTERNO:
+                forma = FormaPagamento.objects.filter(
+                    pk=request.POST.get('forma_pagamento'),
+                    empresa=request.filial_ativa.empresa,
+                    ativo=True,
+                ).filter(
+                    Q(filial=request.filial_ativa) | Q(filial__isnull=True)
+                ).first()
+                if not forma:
+                    raise DomainError('Selecione uma forma de pagamento válida.')
+                condicao_id = request.POST.get('condicao_pagamento')
+                condicao = CondicaoPagamento.objects.filter(
+                    pk=condicao_id,
+                    empresa=request.filial_ativa.empresa,
+                    ativo=True,
+                ).first() if condicao_id else None
+                pagamento_confirmado = request.POST.get('pagamento_confirmado') == 'on'
+                try:
+                    prazo = max(int(request.POST.get('prazo_pagamento_dias') or 0), 0)
+                except ValueError as exc:
+                    raise DomainError('O prazo de pagamento é inválido.') from exc
+                referencia = request.POST.get('referencia_pagamento', '')
+            VendaService.faturar_pedido(
+                pedido,
+                request.user,
+                forma_pagamento=forma,
+                condicao_pagamento=condicao,
+                pagamento_confirmado=pagamento_confirmado,
+                prazo_pagamento_dias=prazo,
+                referencia_pagamento=referencia,
+            )
             messages.success(request, f'Pedido {pedido.numero_pedido} faturado.')
         except DomainError as e:
             messages.error(request, str(e))
+        return redirect('vendas:pedido-detail', pk=pk)
+
+
+class IniciarEntregaPedidoView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'vendas'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(PedidoVenda.objects.for_filial(request.filial_ativa), pk=pk)
+        try:
+            VendaService.iniciar_entrega(
+                pedido,
+                request.user,
+                responsavel=request.POST.get('responsavel_entrega', ''),
+                observacao=request.POST.get('observacao_entrega', ''),
+            )
+            messages.success(request, f'Pedido {pedido.numero_pedido} saiu para entrega.')
+        except DomainError as exc:
+            messages.error(request, str(exc))
+        return redirect('vendas:pedido-detail', pk=pk)
+
+
+class ConcluirEntregaPedidoView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'vendas'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        pedido = get_object_or_404(PedidoVenda.objects.for_filial(request.filial_ativa), pk=pk)
+        try:
+            VendaService.concluir_entrega(pedido)
+            messages.success(request, f'Entrega do pedido {pedido.numero_pedido} concluída.')
+        except DomainError as exc:
+            messages.error(request, str(exc))
         return redirect('vendas:pedido-detail', pk=pk)
 
 
