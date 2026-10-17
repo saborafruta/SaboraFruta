@@ -39,13 +39,19 @@ O APK será criado em `app/build/outputs/apk/debug/app-debug.apk`.
 - preço, crédito, estoque, depósito e lote são revalidados no servidor;
 - a baixa definitiva da separação exige conexão.
 
-## Funcionalidades da versão 0.3
+## Funcionalidades da versão 0.4
 
 - login JWT com o mesmo usuário do ITED;
 - seleção segura de empresa e filial pelo Banco Gerencial;
 - busca de clientes por ID, nome, CPF/CNPJ ou celular;
 - consulta independente da carteira, crédito, bloqueio e tabela do cliente;
 - busca de produtos por ID, código, código de barras ou nome;
+- cliente e produtos só aparecem depois da pesquisa, com fechamento dos
+  resultados ao tocar fora;
+- descoberta de produtos por Destaques, Todos ou categoria, seguindo o mesmo
+  fluxo da força de vendas mobile no navegador;
+- interface de novo pedido reorganizada em cartões compactos e proporcionais;
+- logo preservada com contorno branco adaptado para o tema escuro;
 - preço comercial calculado pelo servidor para o cliente selecionado;
 - criação de pedido externo com forma e condição de pagamento;
 - rascunho local recuperável, inclusive depois de fechar a tela;

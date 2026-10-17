@@ -54,11 +54,19 @@ data class Product(
     val codigo: String,
     val unidade: String,
     val preco: String,
+    val precoOrigem: String,
+    val categoria: String,
+    val destaque: Boolean,
     val estoqueDisponivel: String,
     val controlaLote: Boolean,
     val podeVender: Boolean,
     val bloqueios: List<String>,
     val estoques: List<StockBalance>,
+)
+
+data class ProductCategory(
+    val id: Long,
+    val nome: String,
 )
 
 data class PaymentOption(
@@ -74,6 +82,7 @@ data class PaymentCondition(
 data class OrderOptions(
     val payments: List<PaymentOption>,
     val conditions: List<PaymentCondition>,
+    val categories: List<ProductCategory> = emptyList(),
 )
 
 data class OrderLineDraft(

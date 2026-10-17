@@ -135,9 +135,21 @@ class ItedRepository(private val store: SessionStore) {
         session: UserSession,
         clientId: Long,
         query: String = "",
+        categoryId: Long? = null,
+        highlightsOnly: Boolean = false,
     ): List<Product> {
-        val key = "products_${session.context.tenantAlias}_${session.context.filialId}_${clientId}_${queryCacheKey(query)}"
-        val path = "api/v1/mobile/produtos/?cliente_id=$clientId&q=${query.encoded()}"
+        val filterKey = when {
+            highlightsOnly -> "highlights"
+            categoryId != null -> "category_$categoryId"
+            else -> "all"
+        }
+        val key = "products_${session.context.tenantAlias}_${session.context.filialId}_${clientId}_${filterKey}_${queryCacheKey(query)}"
+        val filters = buildString {
+            append("&q=${query.encoded()}")
+            if (highlightsOnly) append("&destaques=1")
+            else if (categoryId != null) append("&categoria_id=$categoryId")
+        }
+        val path = "api/v1/mobile/produtos/?cliente_id=$clientId$filters"
         val json = cachedRequest(session, key, path)
         return json.getJSONArray("produtos").mapObjects(::parseProduct)
     }
@@ -152,6 +164,9 @@ class ItedRepository(private val store: SessionStore) {
             conditions = json.getJSONArray("condicoes_pagamento").mapObjects {
                 PaymentCondition(it.getLong("id"), it.getString("descricao"))
             },
+            categories = json.optJSONArray("categorias")?.mapObjects {
+                ProductCategory(it.getLong("id"), it.getString("nome"))
+            } ?: emptyList(),
         )
     }
 
@@ -442,6 +457,9 @@ class ItedRepository(private val store: SessionStore) {
         codigo = item.optString("codigo"),
         unidade = item.getString("unidade"),
         preco = item.getString("preco"),
+        precoOrigem = item.optString("preco_origem"),
+        categoria = item.optString("categoria", "Sem categoria"),
+        destaque = item.optBoolean("destaque"),
         estoqueDisponivel = item.getString("estoque_disponivel"),
         controlaLote = item.optBoolean("controla_lote"),
         podeVender = item.optBoolean("pode_vender"),
@@ -482,6 +500,9 @@ class ItedRepository(private val store: SessionStore) {
             .put("codigo", product.codigo)
             .put("unidade", product.unidade)
             .put("preco", product.preco)
+            .put("preco_origem", product.precoOrigem)
+            .put("categoria", product.categoria)
+            .put("destaque", product.destaque)
             .put("estoque_disponivel", product.estoqueDisponivel)
             .put("controla_lote", product.controlaLote)
             .put("pode_vender", product.podeVender)

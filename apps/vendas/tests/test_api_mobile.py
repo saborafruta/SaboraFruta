@@ -10,6 +10,8 @@ from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.financeiro.constants.enums import TipoFormaPagamento
 from apps.financeiro.models import CondicaoPagamento, FormaPagamento
 from apps.produtos.models import (
+    CategoriaProduto,
+    CategoriaProdutoFilial,
     Produto,
     ProdutoFilial,
     UnidadeMedida,
@@ -58,9 +60,19 @@ class ForcaVendasMobileApiTests(TestCase):
             tipo=UnidadeMedida.Tipo.UNIDADE,
         )
         UnidadeMedidaFilial.objects.create(unidade=cls.unidade, filial=cls.filial)
+        cls.categoria = CategoriaProduto.objects.create(
+            empresa=cls.empresa,
+            filial=cls.filial,
+            nome='Destaques mobile',
+        )
+        CategoriaProdutoFilial.objects.create(
+            categoria=cls.categoria,
+            filial=cls.filial,
+        )
         cls.produto = Produto.objects.create(
             filial=cls.filial,
             unidade_medida=cls.unidade,
+            categoria=cls.categoria,
             descricao='Produto para pedido mobile',
             codigo='MOB-001',
             ncm='20089900',
@@ -68,6 +80,7 @@ class ForcaVendasMobileApiTests(TestCase):
             permite_venda_sem_estoque=False,
             preco_venda=Decimal('12.50'),
             preco_custo=Decimal('5.00'),
+            catalogo_destaque=True,
         )
         ProdutoFilial.objects.create(produto=cls.produto, filial=cls.filial)
         cls.cliente = Cliente.objects.create(
@@ -144,6 +157,27 @@ class ForcaVendasMobileApiTests(TestCase):
         )
         self.assertEqual(produtos.status_code, 200, produtos.content)
         self.assertEqual(produtos.json()['produtos'][0]['preco'], '12.50')
+        self.assertEqual(
+            produtos.json()['produtos'][0]['categoria'],
+            self.categoria.nome,
+        )
+        self.assertTrue(produtos.json()['produtos'][0]['destaque'])
+
+        destaques = self.client.get(
+            reverse('forca_vendas_mobile_api:produtos'),
+            {'cliente_id': self.cliente.pk, 'destaques': '1'},
+            **self.headers,
+        )
+        self.assertEqual(destaques.status_code, 200, destaques.content)
+        self.assertEqual(destaques.json()['produtos'][0]['id'], self.produto.pk)
+
+        por_categoria = self.client.get(
+            reverse('forca_vendas_mobile_api:produtos'),
+            {'cliente_id': self.cliente.pk, 'categoria_id': self.categoria.pk},
+            **self.headers,
+        )
+        self.assertEqual(por_categoria.status_code, 200, por_categoria.content)
+        self.assertEqual(por_categoria.json()['produtos'][0]['id'], self.produto.pk)
 
         opcoes = self.client.get(
             reverse('forca_vendas_mobile_api:opcoes_pedido'),
@@ -153,6 +187,10 @@ class ForcaVendasMobileApiTests(TestCase):
         self.assertIn(
             self.forma.pk,
             [forma['id'] for forma in opcoes.json()['formas_pagamento']],
+        )
+        self.assertIn(
+            self.categoria.pk,
+            [categoria['id'] for categoria in opcoes.json()['categorias']],
         )
 
     def test_pedido_mobile_e_idempotente_e_recebe_numero_oficial(self):

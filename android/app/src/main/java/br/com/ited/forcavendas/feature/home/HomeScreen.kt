@@ -1,6 +1,5 @@
 package br.com.ited.forcavendas.feature.home
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,13 +37,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import br.com.ited.forcavendas.R
 import br.com.ited.forcavendas.data.UserSession
 import br.com.ited.forcavendas.sync.SyncStatus
+import br.com.ited.forcavendas.ui.components.ItedLogo
 
 private data class HomeAction(
     val title: String,
@@ -133,12 +130,7 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Image(
-                        painter = painterResource(R.drawable.logo_ited),
-                        contentDescription = "ITED",
-                        modifier = Modifier.size(104.dp),
-                        contentScale = ContentScale.Fit,
-                    )
+                    ItedLogo(modifier = Modifier.size(88.dp))
                 }
             }
             item {

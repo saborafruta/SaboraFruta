@@ -17,7 +17,7 @@ from apps.estoque.models import Deposito, LoteProduto
 from apps.estoque.services.saldos_por_deposito import anexar_saldos_por_deposito
 from apps.financeiro.models import CondicaoPagamento, FormaPagamento
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
-from apps.produtos.models import Produto
+from apps.produtos.models import CategoriaProduto, Produto
 from apps.vendas.models import PedidoVenda, SeparacaoPedido
 from apps.vendas.services.venda_service import VendaService
 
@@ -203,6 +203,19 @@ class ProdutosMobileView(MobileTenantAPIView):
             raise exceptions.ValidationError({'cliente_id': 'Selecione um cliente válido.'})
         termo = request.query_params.get('q', '').strip()
         qs = Produto.objects.for_filial(request.filial_ativa).filter(ativo=True)
+        categoria_id = request.query_params.get('categoria_id', '').strip()
+        if categoria_id:
+            try:
+                categoria_id = int(categoria_id)
+            except (TypeError, ValueError) as exc:
+                raise exceptions.ValidationError({
+                    'categoria_id': 'Selecione uma categoria válida.',
+                }) from exc
+            qs = qs.filter(
+                Q(categoria_id=categoria_id) | Q(subcategoria_id=categoria_id)
+            )
+        if request.query_params.get('destaques') == '1':
+            qs = qs.filter(catalogo_destaque=True)
         if termo:
             filtro = (
                 Q(descricao__icontains=termo)
@@ -239,6 +252,11 @@ class ProdutosMobileView(MobileTenantAPIView):
                 'unidade': produto.unidade_medida.sigla,
                 'preco': _decimal(contrato['preco_aplicado']),
                 'preco_origem': contrato['preco_origem'],
+                'categoria': (
+                    produto.categoria.nome
+                    if produto.categoria_id else 'Sem categoria'
+                ),
+                'destaque': produto.catalogo_destaque,
                 'estoque_disponivel': _decimal(contrato['saldo_disponivel'], 3),
                 'controla_lote': produto.controla_lote,
                 'pode_vender': contrato['pode_vender'],
@@ -270,6 +288,11 @@ class OpcoesPedidoMobileView(MobileTenantAPIView):
             empresa=request.filial_ativa.empresa,
             ativo=True,
         ).order_by('descricao')
+        categorias = (
+            CategoriaProduto.objects.for_filial(request.filial_ativa)
+            .filter(ativo=True)
+            .order_by('nome')
+        )
         return Response({
             'formas_pagamento': [
                 {'id': forma.pk, 'descricao': forma.descricao, 'tipo': forma.tipo}
@@ -284,6 +307,10 @@ class OpcoesPedidoMobileView(MobileTenantAPIView):
                     'dias_primeira_parcela': condicao.dias_primeira_parcela,
                 }
                 for condicao in condicoes
+            ],
+            'categorias': [
+                {'id': categoria.pk, 'nome': categoria.nome}
+                for categoria in categorias
             ],
             'prioridades': [
                 {'codigo': codigo, 'descricao': descricao}
