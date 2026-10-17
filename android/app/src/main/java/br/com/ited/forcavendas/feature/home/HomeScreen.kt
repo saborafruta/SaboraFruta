@@ -20,10 +20,12 @@ import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.CloudSync
+import androidx.compose.material.icons.outlined.Business
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -76,6 +78,8 @@ fun HomeScreen(
     onOrders: () -> Unit,
     onClients: () -> Unit,
     onSeparation: () -> Unit,
+    contextLoading: Boolean,
+    onSwitchContext: () -> Unit,
     darkTheme: Boolean,
     onToggleTheme: () -> Unit,
     onLogout: () -> Unit,
@@ -135,12 +139,6 @@ fun HomeScreen(
                             fontFamily = SpaceGroteskFontFamily,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = (-0.35).sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            "${session.context.empresaNome} • ${session.context.filialNome}",
-                            style = MaterialTheme.typography.labelSmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -204,6 +202,50 @@ fun HomeScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     ItedLogo(modifier = Modifier.size(88.dp))
+                }
+            }
+            item {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !contextLoading, onClick = onSwitchContext),
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Business,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                session.context.empresaNome,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                            Text(
+                                session.context.filialNome,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        if (contextLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.5.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Outlined.SwapHoriz,
+                                contentDescription = "Trocar filial",
+                            )
+                        }
+                    }
                 }
             }
             item {

@@ -38,14 +38,43 @@ class ItedRepository(private val store: SessionStore) {
         )
     }
 
-    fun selectContext(result: LoginResult, context: WorkContext): UserSession = UserSession(
+    fun selectContext(
+        result: LoginResult,
+        context: WorkContext,
+        secureAccess: Boolean? = null,
+    ): UserSession = UserSession(
         tokens = result.tokens,
         usuarioNome = result.usuarioNome,
         usuarioEmail = result.usuarioEmail,
         context = context,
-    ).also(store::saveSession)
+    ).also { session ->
+        val shouldPersist = secureAccess ?: store.secureAccessEnabled()
+        store.setSecureAccessEnabled(shouldPersist)
+        if (shouldPersist) store.saveSession(session) else store.clearSession()
+    }
 
-    fun savedSession(): UserSession? = store.loadSession()
+    suspend fun contexts(session: UserSession): LoginResult {
+        val contextJson = api.authorized(
+            session = session,
+            context = session.context,
+            method = "GET",
+            path = "api/v1/mobile/contexto/",
+        )
+        val user = contextJson.getJSONObject("usuario")
+        val currentTokens = store.currentTokens(session.tokens)
+        return LoginResult(
+            tokens = currentTokens,
+            usuarioNome = user.getString("nome"),
+            usuarioEmail = user.getString("email"),
+            contexts = contextJson.getJSONArray("contextos").mapObjects(::parseContext),
+        )
+    }
+
+    fun savedSession(): UserSession? = if (store.secureAccessEnabled()) {
+        store.loadSession()
+    } else {
+        null
+    }
 
     fun logout() = store.clearSession()
 
@@ -544,7 +573,7 @@ private class ItedApiClient(private val store: SessionStore) {
         body: JSONObject? = null,
         idempotencyKey: String? = null,
     ): JSONObject {
-        val currentTokens = store.loadSession()?.tokens ?: session.tokens
+        val currentTokens = store.currentTokens(session.tokens)
         return try {
             request(method, path, body, currentTokens.access, context, idempotencyKey)
         } catch (unauthorized: ApiException) {

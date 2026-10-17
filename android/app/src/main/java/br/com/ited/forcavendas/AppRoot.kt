@@ -21,6 +21,7 @@ import br.com.ited.forcavendas.data.NetworkException
 import br.com.ited.forcavendas.data.UserSession
 import br.com.ited.forcavendas.feature.auth.ContextSelectionScreen
 import br.com.ited.forcavendas.feature.auth.LoginScreen
+import br.com.ited.forcavendas.feature.auth.UnlockScreen
 import br.com.ited.forcavendas.feature.client.ClientsScreen
 import br.com.ited.forcavendas.feature.home.HomeScreen
 import br.com.ited.forcavendas.feature.order.NewOrderScreen
@@ -31,12 +32,14 @@ import br.com.ited.forcavendas.sync.SyncStatus
 import java.time.Instant
 import kotlinx.coroutines.launch
 
-private enum class AppScreen { LOGIN, CONTEXT, HOME, NEW_ORDER, ORDERS, CLIENTS, SEPARATION, SYNC }
+private enum class AppScreen { LOCKED, LOGIN, CONTEXT, HOME, NEW_ORDER, ORDERS, CLIENTS, SEPARATION, SYNC }
 
 @Composable
 fun AppRoot(
     repository: ItedRepository,
     darkTheme: Boolean,
+    deviceSecurityAvailable: Boolean,
+    onAuthenticate: (onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit,
     onToggleTheme: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -44,10 +47,13 @@ fun AppRoot(
     var session by remember { mutableStateOf<UserSession?>(repository.savedSession()) }
     var loginResult by remember { mutableStateOf<LoginResult?>(null) }
     var screen by remember {
-        mutableStateOf(if (session == null) AppScreen.LOGIN else AppScreen.HOME)
+        mutableStateOf(if (session == null) AppScreen.LOGIN else AppScreen.LOCKED)
     }
     var loginLoading by remember { mutableStateOf(false) }
     var loginError by remember { mutableStateOf<String?>(null) }
+    var unlockError by remember { mutableStateOf<String?>(null) }
+    var contextLoading by remember { mutableStateOf(false) }
+    var rememberSecureAccess by remember { mutableStateOf(false) }
     var pending by remember {
         mutableIntStateOf(session?.let { repository.pendingCount(it) } ?: 0)
     }
@@ -106,17 +112,54 @@ fun AppRoot(
         }
     }
 
-    BackHandler(enabled = screen !in listOf(AppScreen.LOGIN, AppScreen.HOME)) { goHome() }
+    fun requestUnlock() {
+        unlockError = null
+        onAuthenticate(
+            {
+                unlockError = null
+                screen = AppScreen.HOME
+            },
+            { message -> unlockError = message },
+        )
+    }
+
+    LaunchedEffect(Unit) {
+        if (screen == AppScreen.LOCKED) requestUnlock()
+    }
+
+    BackHandler(enabled = screen !in listOf(AppScreen.LOCKED, AppScreen.LOGIN, AppScreen.HOME)) {
+        if (screen == AppScreen.CONTEXT && session == null) {
+            screen = AppScreen.LOGIN
+        } else {
+            goHome()
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         when (screen) {
+            AppScreen.LOCKED -> session?.let { saved ->
+                UnlockScreen(
+                    userName = saved.usuarioNome,
+                    error = unlockError,
+                    onUnlock = ::requestUnlock,
+                    onUseAnotherAccount = {
+                        repository.logout()
+                        session = null
+                        loginResult = null
+                        screen = AppScreen.LOGIN
+                    },
+                )
+            }
+
             AppScreen.LOGIN -> LoginScreen(
                 loading = loginLoading,
                 error = loginError,
-                onLogin = { email, password ->
+                deviceSecurityAvailable = deviceSecurityAvailable,
+                onLogin = { email, password, secureAccess ->
                     scope.launch {
                         loginLoading = true
                         loginError = null
+                        rememberSecureAccess = secureAccess
                         runCatching { repository.login(email, password) }
                             .onSuccess { result ->
                                 loginResult = result
@@ -126,6 +169,7 @@ fun AppRoot(
                                         val selected = repository.selectContext(
                                             result,
                                             result.contexts.first(),
+                                            rememberSecureAccess,
                                         )
                                         session = selected
                                         pending = repository.pendingCount(selected)
@@ -143,12 +187,26 @@ fun AppRoot(
             )
 
             AppScreen.CONTEXT -> loginResult?.let { result ->
-                ContextSelectionScreen(result) { context ->
-                    val selected = repository.selectContext(result, context)
-                    session = selected
-                    pending = repository.pendingCount(selected)
-                    screen = AppScreen.HOME
-                }
+                ContextSelectionScreen(
+                    result = result,
+                    currentContext = session?.context,
+                    onBack = session?.let { { goHome() } },
+                    onSelect = { context ->
+                        val selected = repository.selectContext(
+                            result,
+                            context,
+                            secureAccess = if (session == null) rememberSecureAccess else null,
+                        )
+                        session = selected
+                        pending = repository.pendingCount(selected)
+                        syncStatus = if (pending > 0) {
+                            SyncStatus.Pending(pending)
+                        } else {
+                            SyncStatus.Idle
+                        }
+                        screen = AppScreen.HOME
+                    },
+                )
             }
 
             AppScreen.HOME -> session?.let { current ->
@@ -162,6 +220,21 @@ fun AppRoot(
                     onOrders = { screen = AppScreen.ORDERS },
                     onClients = { screen = AppScreen.CLIENTS },
                     onSeparation = { screen = AppScreen.SEPARATION },
+                    contextLoading = contextLoading,
+                    onSwitchContext = {
+                        scope.launch {
+                            contextLoading = true
+                            runCatching { repository.contexts(current) }
+                                .onSuccess { result ->
+                                    loginResult = result
+                                    screen = AppScreen.CONTEXT
+                                }
+                                .onFailure { error ->
+                                    notify(error.message ?: "Não foi possível carregar as filiais.")
+                                }
+                            contextLoading = false
+                        }
+                    },
                     darkTheme = darkTheme,
                     onToggleTheme = onToggleTheme,
                     onLogout = {

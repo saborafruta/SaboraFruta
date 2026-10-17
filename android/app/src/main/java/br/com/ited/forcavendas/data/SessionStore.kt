@@ -1,44 +1,22 @@
 package br.com.ited.forcavendas.data
 
 import android.content.Context
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONArray
 import org.json.JSONObject
 
 class SessionStore(context: Context) {
     private val preferences = context.getSharedPreferences("ited_mobile", Context.MODE_PRIVATE)
+    private var transientTokens: AuthTokens? = null
 
-    fun saveSession(session: UserSession) {
-        preferences.edit()
-            .putString("access", session.tokens.access)
-            .putString("refresh", session.tokens.refresh)
-            .putString("user_name", session.usuarioNome)
-            .putString("user_email", session.usuarioEmail)
-            .putString("context", contextToJson(session.context).toString())
-            .apply()
-    }
-
-    fun loadSession(): UserSession? {
-        val access = preferences.getString("access", null) ?: return null
-        val refresh = preferences.getString("refresh", null) ?: return null
-        val contextRaw = preferences.getString("context", null) ?: return null
-        return runCatching {
-            UserSession(
-                tokens = AuthTokens(access, refresh),
-                usuarioNome = preferences.getString("user_name", "") ?: "",
-                usuarioEmail = preferences.getString("user_email", "") ?: "",
-                context = contextFromJson(JSONObject(contextRaw)),
-            )
-        }.getOrNull()
-    }
-
-    fun updateTokens(tokens: AuthTokens) {
-        preferences.edit()
-            .putString("access", tokens.access)
-            .putString("refresh", tokens.refresh)
-            .apply()
-    }
-
-    fun clearSession() {
+    init {
         preferences.edit()
             .remove("access")
             .remove("refresh")
@@ -46,6 +24,65 @@ class SessionStore(context: Context) {
             .remove("user_email")
             .remove("context")
             .apply()
+    }
+
+    fun saveSession(session: UserSession) {
+        transientTokens = session.tokens
+        val payload = JSONObject()
+            .put("access", session.tokens.access)
+            .put("refresh", session.tokens.refresh)
+            .put("user_name", session.usuarioNome)
+            .put("user_email", session.usuarioEmail)
+            .put("context", contextToJson(session.context))
+            .toString()
+        preferences.edit()
+            .putString(ENCRYPTED_SESSION, encrypt(payload))
+            .remove("access")
+            .remove("refresh")
+            .remove("user_name")
+            .remove("user_email")
+            .remove("context")
+            .apply()
+    }
+
+    fun loadSession(): UserSession? {
+        val encrypted = preferences.getString(ENCRYPTED_SESSION, null) ?: return null
+        return runCatching {
+            val json = JSONObject(decrypt(encrypted))
+            UserSession(
+                tokens = AuthTokens(json.getString("access"), json.getString("refresh")),
+                usuarioNome = json.optString("user_name"),
+                usuarioEmail = json.optString("user_email"),
+                context = contextFromJson(json.getJSONObject("context")),
+            )
+        }.getOrNull()
+    }
+
+    fun updateTokens(tokens: AuthTokens) {
+        transientTokens = tokens
+        loadSession()?.let { saveSession(it.copy(tokens = tokens)) }
+    }
+
+    fun currentTokens(fallback: AuthTokens): AuthTokens =
+        loadSession()?.tokens ?: transientTokens ?: fallback
+
+    fun clearSession() {
+        transientTokens = null
+        preferences.edit()
+            .remove(ENCRYPTED_SESSION)
+            .remove(SECURE_ACCESS)
+            .remove("access")
+            .remove("refresh")
+            .remove("user_name")
+            .remove("user_email")
+            .remove("context")
+            .apply()
+    }
+
+    fun secureAccessEnabled(): Boolean = preferences.getBoolean(SECURE_ACCESS, false)
+
+    fun setSecureAccessEnabled(enabled: Boolean) {
+        preferences.edit().putBoolean(SECURE_ACCESS, enabled).apply()
     }
 
     fun darkThemePreference(): Boolean? = if (preferences.contains("dark_theme")) {
@@ -138,4 +175,48 @@ class SessionStore(context: Context) {
         podeCriarPedido = json.optBoolean("pedidos_criar", false),
         podeSeparar = json.optBoolean("separacao_editar", false),
     )
+
+    private fun encrypt(value: String): String {
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, encryptionKey())
+        val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
+        return Base64.encodeToString(cipher.iv + encrypted, Base64.NO_WRAP)
+    }
+
+    private fun decrypt(value: String): String {
+        val packed = Base64.decode(value, Base64.NO_WRAP)
+        require(packed.size > IV_SIZE) { "Sessão protegida inválida" }
+        val iv = packed.copyOfRange(0, IV_SIZE)
+        val encrypted = packed.copyOfRange(IV_SIZE, packed.size)
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, encryptionKey(), GCMParameterSpec(128, iv))
+        return cipher.doFinal(encrypted).toString(Charsets.UTF_8)
+    }
+
+    private fun encryptionKey(): SecretKey {
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+            .apply {
+                init(
+                    KeyGenParameterSpec.Builder(
+                        KEY_ALIAS,
+                        KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+                    )
+                        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                        .setKeySize(256)
+                        .build(),
+                )
+            }
+            .generateKey()
+    }
+
+    private companion object {
+        const val ENCRYPTED_SESSION = "encrypted_session_v1"
+        const val SECURE_ACCESS = "secure_access_enabled"
+        const val KEY_ALIAS = "ited_secure_session_key"
+        const val TRANSFORMATION = "AES/GCM/NoPadding"
+        const val IV_SIZE = 12
+    }
 }

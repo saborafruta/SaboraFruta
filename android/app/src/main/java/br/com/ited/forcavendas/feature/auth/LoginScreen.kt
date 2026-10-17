@@ -14,14 +14,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Business
+import androidx.compose.material.icons.outlined.Fingerprint
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,10 +48,14 @@ import br.com.ited.forcavendas.ui.theme.SpaceGroteskFontFamily
 fun LoginScreen(
     loading: Boolean,
     error: String?,
-    onLogin: (String, String) -> Unit,
+    deviceSecurityAvailable: Boolean,
+    onLogin: (String, String, Boolean) -> Unit,
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var secureAccess by remember(deviceSecurityAvailable) {
+        mutableStateOf(deviceSecurityAvailable)
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -92,13 +101,36 @@ fun LoginScreen(
                     imeAction = ImeAction.Done,
                 ),
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.Lock, contentDescription = null)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Salvar acesso com segurança", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (deviceSecurityAvailable) {
+                            "Use biometria, PIN, padrão ou senha do celular nos próximos acessos."
+                        } else {
+                            "Configure um bloqueio de tela seguro no celular para habilitar."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Switch(
+                    checked = secureAccess,
+                    enabled = deviceSecurityAvailable && !loading,
+                    onCheckedChange = { secureAccess = it },
+                )
+            }
             if (!error.isNullOrBlank()) {
                 Text(error, color = MaterialTheme.colorScheme.error)
             }
             Button(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !loading && email.isNotBlank() && password.isNotBlank(),
-                onClick = { onLogin(email, password) },
+                onClick = { onLogin(email, password, secureAccess) },
             ) {
                 if (loading) {
                     CircularProgressIndicator(
@@ -114,8 +146,58 @@ fun LoginScreen(
 }
 
 @Composable
+fun UnlockScreen(
+    userName: String,
+    error: String?,
+    onUnlock: () -> Unit,
+    onUseAnotherAccount: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            ItedLogo(modifier = Modifier.size(132.dp))
+            Icon(
+                imageVector = Icons.Outlined.Fingerprint,
+                contentDescription = null,
+                modifier = Modifier.size(44.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                "Acesso protegido",
+                style = MaterialTheme.typography.headlineSmall,
+                fontFamily = SpaceGroteskFontFamily,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                "Olá, $userName. Confirme sua identidade usando a segurança do aparelho.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (!error.isNullOrBlank()) {
+                Text(error, color = MaterialTheme.colorScheme.error)
+            }
+            Button(modifier = Modifier.fillMaxWidth(), onClick = onUnlock) {
+                Text("Desbloquear")
+            }
+            androidx.compose.material3.TextButton(onClick = onUseAnotherAccount) {
+                Text("Entrar com outra conta")
+            }
+        }
+    }
+}
+
+@Composable
 fun ContextSelectionScreen(
     result: LoginResult,
+    currentContext: WorkContext? = null,
+    onBack: (() -> Unit)? = null,
     onSelect: (WorkContext) -> Unit,
 ) {
     LazyColumn(
@@ -124,8 +206,16 @@ fun ContextSelectionScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
+            if (onBack != null) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = "Voltar",
+                    )
+                }
+            }
             Text(
-                "Onde você vai trabalhar?",
+                if (currentContext == null) "Onde você vai trabalhar?" else "Trocar filial",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
@@ -152,6 +242,18 @@ fun ContextSelectionScreen(
                         Text(
                             context.filialCnpj,
                             style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                    if (
+                        currentContext != null &&
+                        context.tenantAlias == currentContext.tenantAlias &&
+                        context.filialId == currentContext.filialId
+                    ) {
+                        Text(
+                            "Atual",
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
                         )
                     }
                 }
