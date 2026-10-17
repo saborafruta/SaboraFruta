@@ -14,17 +14,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.CloudDone
+import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.People
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,14 +38,23 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import br.com.ited.forcavendas.data.UserSession
 import br.com.ited.forcavendas.sync.SyncStatus
 import br.com.ited.forcavendas.ui.components.ItedLogo
+import br.com.ited.forcavendas.ui.theme.ItedSuccess
+import br.com.ited.forcavendas.ui.theme.ItedWarning
+import br.com.ited.forcavendas.ui.theme.SpaceGroteskFontFamily
 
 private data class HomeAction(
     val title: String,
@@ -69,6 +80,21 @@ fun HomeScreen(
     onToggleTheme: () -> Unit,
     onLogout: () -> Unit,
 ) {
+    var syncDialogOpen by remember { mutableStateOf(false) }
+    val isSynced = syncStatus is SyncStatus.Synced
+    val syncColor = when (syncStatus) {
+        is SyncStatus.Synced -> ItedSuccess
+        SyncStatus.Syncing -> ItedWarning
+        else -> MaterialTheme.colorScheme.error
+    }
+    val syncLabel = when (syncStatus) {
+        SyncStatus.Idle -> "Não sincronizado"
+        is SyncStatus.Synced -> "Sincronizado"
+        SyncStatus.Syncing -> "Sincronizando"
+        is SyncStatus.Pending -> "Envio pendente"
+        SyncStatus.Offline -> "Sem conexão"
+        is SyncStatus.Failed -> "Falha na sincronização"
+    }
     val actions = listOf(
         HomeAction(
             "Novo pedido",
@@ -104,14 +130,43 @@ fun HomeScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("ITED Força de Vendas", fontWeight = FontWeight.Bold)
+                        Text(
+                            "ITED Força de Vendas",
+                            fontFamily = SpaceGroteskFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.35).sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         Text(
                             "${session.context.empresaNome} • ${session.context.filialNome}",
                             style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 },
                 actions = {
+                    Surface(
+                        shape = CircleShape,
+                        color = syncColor.copy(alpha = 0.14f),
+                    ) {
+                        IconButton(onClick = { syncDialogOpen = true }) {
+                            if (syncStatus == SyncStatus.Syncing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(21.dp),
+                                    color = syncColor,
+                                    strokeWidth = 2.5.dp,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Outlined.CloudSync,
+                                    contentDescription = "Sincronização: $syncLabel",
+                                    tint = syncColor,
+                                )
+                            }
+                        }
+                    }
                     IconButton(onClick = onToggleTheme) {
                         Icon(
                             imageVector = if (darkTheme) {
@@ -152,14 +207,6 @@ fun HomeScreen(
                 }
             }
             item {
-                SyncCard(
-                    syncStatus = syncStatus,
-                    pendingOperations = pendingOperations,
-                    onSync = onSync,
-                    onOpenSync = onOpenSync,
-                )
-            }
-            item {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     "Operação",
@@ -170,63 +217,64 @@ fun HomeScreen(
             items(actions) { action -> ActionCard(action) }
         }
     }
-}
-
-@Composable
-private fun SyncCard(
-    syncStatus: SyncStatus,
-    pendingOperations: Int,
-    onSync: () -> Unit,
-    onOpenSync: () -> Unit,
-) {
-    val statusText = when (syncStatus) {
-        SyncStatus.Idle -> "Toque para atualizar clientes, preços e pedidos"
-        is SyncStatus.Synced -> "Sincronizado com o ITED"
-        SyncStatus.Syncing -> "Sincronizando…"
-        is SyncStatus.Pending -> "${syncStatus.operations} operação(ões) aguardando envio"
-        SyncStatus.Offline -> "Sem conexão — dados locais disponíveis"
-        is SyncStatus.Failed -> syncStatus.message
-    }
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Sincronização", fontWeight = FontWeight.Bold)
-                    Text(statusText, style = MaterialTheme.typography.bodySmall)
+    if (syncDialogOpen) {
+        val statusDescription = when (syncStatus) {
+            SyncStatus.Idle -> "Faça a primeira atualização para baixar clientes, preços e estoque."
+            is SyncStatus.Synced -> "Os dados do aplicativo estão atualizados com o ITED."
+            SyncStatus.Syncing -> "Aguarde enquanto os dados são enviados e atualizados."
+            is SyncStatus.Pending -> "${syncStatus.operations} operação(ões) aguardando envio."
+            SyncStatus.Offline -> "Sem internet no momento. Os dados locais continuam disponíveis."
+            is SyncStatus.Failed -> syncStatus.message
+        }
+        AlertDialog(
+            onDismissRequest = { syncDialogOpen = false },
+            title = { Text("Sincronização") },
+            confirmButton = {},
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = if (isSynced) Icons.Outlined.CloudDone else Icons.Outlined.CloudSync,
+                            contentDescription = null,
+                            tint = syncColor,
+                        )
+                        Column {
+                            Text(syncLabel, fontWeight = FontWeight.Bold, color = syncColor)
+                            Text(statusDescription, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
                     if (pendingOperations > 0) {
                         Text(
                             "$pendingOperations pedido(s) pendente(s)",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.error,
                         )
                     }
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = syncStatus != SyncStatus.Syncing,
+                        onClick = {
+                            syncDialogOpen = false
+                            onSync()
+                        },
+                    ) {
+                        Text("Sincronizar agora")
+                    }
+                    OutlinedButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            syncDialogOpen = false
+                            onOpenSync()
+                        },
+                    ) {
+                        Text("Abrir Central de sincronização")
+                    }
                 }
-                Icon(Icons.Outlined.CloudDone, contentDescription = null)
-            }
-            Button(
-                modifier = Modifier.fillMaxWidth(),
-                enabled = syncStatus != SyncStatus.Syncing,
-                onClick = onSync,
-            ) {
-                Text("Sincronizar agora")
-            }
-            OutlinedButton(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onOpenSync,
-            ) {
-                Text("Abrir Central de sincronização")
-            }
-        }
+            },
+        )
     }
 }
 

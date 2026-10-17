@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import br.com.ited.forcavendas.data.LoginResult
 import br.com.ited.forcavendas.data.WorkContext
 import br.com.ited.forcavendas.ui.components.ItedLogo
+import br.com.ited.forcavendas.ui.theme.SpaceGroteskFontFamily
 
 @Composable
 fun LoginScreen(
@@ -61,6 +62,7 @@ fun LoginScreen(
             Text(
                 "Força de Vendas",
                 style = MaterialTheme.typography.headlineSmall,
+                fontFamily = SpaceGroteskFontFamily,
                 fontWeight = FontWeight.Bold,
             )
             Text(

@@ -31,6 +31,7 @@ fun ITEDTheme(
 ) {
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
+        typography = ItedTypography,
         content = content,
     )
 }
