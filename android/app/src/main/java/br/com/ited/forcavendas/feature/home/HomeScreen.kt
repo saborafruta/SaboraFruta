@@ -18,7 +18,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.CloudDone
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -63,6 +65,8 @@ fun HomeScreen(
     onOrders: () -> Unit,
     onClients: () -> Unit,
     onSeparation: () -> Unit,
+    darkTheme: Boolean,
+    onToggleTheme: () -> Unit,
     onLogout: () -> Unit,
 ) {
     val actions = listOf(
@@ -75,7 +79,7 @@ fun HomeScreen(
         ),
         HomeAction(
             "Meus pedidos",
-            "Envio e acompanhamento pelo número oficial",
+            "Rascunhos, envio e acompanhamento",
             Icons.Outlined.CloudDone,
             true,
             onOrders,
@@ -108,6 +112,20 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onToggleTheme) {
+                        Icon(
+                            imageVector = if (darkTheme) {
+                                Icons.Outlined.LightMode
+                            } else {
+                                Icons.Outlined.DarkMode
+                            },
+                            contentDescription = if (darkTheme) {
+                                "Usar tema claro"
+                            } else {
+                                "Usar tema escuro"
+                            },
+                        )
+                    }
                     IconButton(onClick = onLogout) {
                         Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = "Sair")
                     }

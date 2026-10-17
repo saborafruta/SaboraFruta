@@ -48,6 +48,16 @@ class SessionStore(context: Context) {
             .apply()
     }
 
+    fun darkThemePreference(): Boolean? = if (preferences.contains("dark_theme")) {
+        preferences.getBoolean("dark_theme", false)
+    } else {
+        null
+    }
+
+    fun saveDarkThemePreference(enabled: Boolean) {
+        preferences.edit().putBoolean("dark_theme", enabled).apply()
+    }
+
     fun pendingOrders(): JSONArray = runCatching {
         JSONArray(preferences.getString("pending_orders", "[]"))
     }.getOrDefault(JSONArray())

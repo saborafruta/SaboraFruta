@@ -22,6 +22,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AddShoppingCart
+import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.StarOutline
@@ -86,6 +87,7 @@ fun NewOrderScreen(
     session: UserSession,
     onBack: () -> Unit,
     onSubmitted: (String) -> Unit,
+    onDraftSaved: (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var initialLoading by remember { mutableStateOf(true) }
@@ -109,14 +111,15 @@ fun NewOrderScreen(
     var priority by remember { mutableStateOf("normal") }
     var deliveryDate by remember { mutableStateOf("") }
     var observation by remember { mutableStateOf("") }
-    var draftRecovered by remember { mutableStateOf(false) }
+    var draftMessage by remember { mutableStateOf<String?>(null) }
+    var categoryMenuVisible by remember { mutableStateOf(false) }
     val cart = remember { mutableStateMapOf<Long, String>() }
     val cartProducts = remember { mutableStateMapOf<Long, Product>() }
 
     val productFilters = remember(options.categories) {
         listOf(
             ProductFilter("highlights", "Destaques", highlightsOnly = true),
-            ProductFilter("all", "Todos"),
+            ProductFilter("all", "Todas as categorias"),
         ) + options.categories.map { category ->
             ProductFilter("category-${category.id}", category.nome, categoryId = category.id)
         }
@@ -181,7 +184,7 @@ fun NewOrderScreen(
                     cart[line.product.id] = line.quantity
                     cartProducts[line.product.id] = line.product
                 }
-                draftRecovered = true
+                draftMessage = "Rascunho recuperado deste aparelho."
             }
         }.onFailure { error = it.message ?: "Não foi possível carregar os dados." }
         initialLoading = false
@@ -277,14 +280,14 @@ fun NewOrderScreen(
                 }
             }
             if (!error.isNullOrBlank()) item { ErrorMessage(error.orEmpty()) }
-            if (draftRecovered) {
+            draftMessage?.let { message ->
                 item {
                     Surface(
                         shape = MaterialTheme.shapes.medium,
                         color = MaterialTheme.colorScheme.primaryContainer,
                     ) {
                         Text(
-                            "Rascunho recuperado deste aparelho.",
+                            message,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             style = MaterialTheme.typography.bodySmall,
@@ -391,7 +394,7 @@ fun NewOrderScreen(
                                 clearProductSearch()
                                 cart.clear()
                                 cartProducts.clear()
-                                draftRecovered = false
+                                draftMessage = null
                             },
                         )
                     }
@@ -411,6 +414,59 @@ fun NewOrderScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     } else {
+                        ExposedDropdownMenuBox(
+                            expanded = categoryMenuVisible,
+                            onExpandedChange = { expanded ->
+                                categoryMenuVisible = expanded
+                                if (expanded) productResultsVisible = false
+                            },
+                        ) {
+                            OutlinedTextField(
+                                value = selectedProductFilter?.label.orEmpty(),
+                                onValueChange = {},
+                                modifier = Modifier
+                                    .menuAnchor()
+                                    .fillMaxWidth(),
+                                readOnly = true,
+                                label = { Text("Categoria dos produtos") },
+                                placeholder = { Text("Selecione uma categoria") },
+                                leadingIcon = {
+                                    Icon(Icons.Outlined.Category, contentDescription = null)
+                                },
+                                trailingIcon = {
+                                    ExposedDropdownMenuDefaults.TrailingIcon(
+                                        expanded = categoryMenuVisible,
+                                    )
+                                },
+                                singleLine = true,
+                            )
+                            ExposedDropdownMenu(
+                                expanded = categoryMenuVisible,
+                                onDismissRequest = { categoryMenuVisible = false },
+                            ) {
+                                productFilters.forEach { filter ->
+                                    DropdownMenuItem(
+                                        text = { Text(filter.label) },
+                                        leadingIcon = if (filter.highlightsOnly) {
+                                            {
+                                                Icon(
+                                                    Icons.Outlined.StarOutline,
+                                                    contentDescription = null,
+                                                )
+                                            }
+                                        } else null,
+                                        onClick = {
+                                            selectedProductFilter = filter
+                                            categoryMenuVisible = false
+                                            productResultsVisible = true
+                                            error = null
+                                        },
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(10.dp))
                         ExposedDropdownMenuBox(
                             expanded = productResultsVisible &&
                                 (productSearchLoading || productSearchExecuted),
@@ -480,43 +536,8 @@ fun NewOrderScreen(
                             }
                         }
 
-                        Spacer(Modifier.height(12.dp))
                         Text(
-                            "Categorias",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            contentPadding = PaddingValues(end = 8.dp),
-                        ) {
-                            items(productFilters, key = { it.key }) { filter ->
-                                FilterChip(
-                                    selected = selectedProductFilter?.key == filter.key,
-                                    onClick = {
-                                        selectedProductFilter = if (
-                                            selectedProductFilter?.key == filter.key
-                                        ) null else filter
-                                        productResultsVisible = selectedProductFilter != null ||
-                                            productQuery.trim().length >= 2
-                                        error = null
-                                    },
-                                    label = { Text(filter.label) },
-                                    leadingIcon = if (filter.highlightsOnly) {
-                                        {
-                                            Icon(
-                                                Icons.Outlined.StarOutline,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(18.dp),
-                                            )
-                                        }
-                                    } else null,
-                                )
-                            }
-                        }
-                        Text(
-                            "Digite para pesquisar ou escolha uma categoria. Destaques reúne as sugestões comerciais.",
+                            "Escolha uma categoria ou digite para pesquisar. Toque fora dos resultados para fechá-los.",
                             modifier = Modifier.padding(top = 6.dp),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -540,7 +561,7 @@ fun NewOrderScreen(
                                             cartProducts.remove(productId)
                                             if (cart.isEmpty()) {
                                                 repository.clearOrderDraft(session)
-                                                draftRecovered = false
+                                                draftMessage = null
                                             }
                                         },
                                     )
@@ -648,8 +669,11 @@ fun NewOrderScreen(
                                 error = "Revise o cliente e os itens antes de salvar."
                             } else {
                                 repository.saveOrderDraft(session, draft)
-                                draftRecovered = true
+                                draftMessage = "Rascunho salvo neste aparelho."
                                 error = null
+                                onDraftSaved(
+                                    "Rascunho salvo. Abra Meus pedidos para continuar depois.",
+                                )
                             }
                         },
                     ) { Text("Salvar rascunho neste aparelho") }

@@ -110,6 +110,7 @@ data class SavedOrderDraft(
     val priority: String,
     val deliveryDate: String,
     val observation: String,
+    val savedAt: String = "",
     val lines: List<OrderLineDraft>,
 )
 

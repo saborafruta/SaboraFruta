@@ -15,8 +15,8 @@ android {
         applicationId = "br.com.ited.forcavendas"
         minSdk = 28
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.4.1"
+        versionCode = 6
+        versionName = "0.5.0"
 
         buildConfigField("String", "ITED_API_BASE_URL", "\"$apiBaseUrl\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

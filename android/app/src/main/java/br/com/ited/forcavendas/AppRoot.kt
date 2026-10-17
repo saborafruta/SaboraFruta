@@ -34,7 +34,11 @@ import kotlinx.coroutines.launch
 private enum class AppScreen { LOGIN, CONTEXT, HOME, NEW_ORDER, ORDERS, CLIENTS, SEPARATION, SYNC }
 
 @Composable
-fun AppRoot(repository: ItedRepository) {
+fun AppRoot(
+    repository: ItedRepository,
+    darkTheme: Boolean,
+    onToggleTheme: () -> Unit,
+) {
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     var session by remember { mutableStateOf<UserSession?>(repository.savedSession()) }
@@ -158,6 +162,8 @@ fun AppRoot(repository: ItedRepository) {
                     onOrders = { screen = AppScreen.ORDERS },
                     onClients = { screen = AppScreen.CLIENTS },
                     onSeparation = { screen = AppScreen.SEPARATION },
+                    darkTheme = darkTheme,
+                    onToggleTheme = onToggleTheme,
                     onLogout = {
                         repository.logout()
                         session = null
@@ -173,11 +179,17 @@ fun AppRoot(repository: ItedRepository) {
                     session = current,
                     onBack = { goHome() },
                     onSubmitted = { goHome(it) },
+                    onDraftSaved = ::notify,
                 )
             }
 
             AppScreen.ORDERS -> session?.let { current ->
-                OrdersScreen(repository, current) { goHome() }
+                OrdersScreen(
+                    repository = repository,
+                    session = current,
+                    onContinueDraft = { screen = AppScreen.NEW_ORDER },
+                    onBack = { goHome() },
+                )
             }
 
             AppScreen.CLIENTS -> session?.let { current ->

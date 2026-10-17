@@ -49,6 +49,10 @@ class ItedRepository(private val store: SessionStore) {
 
     fun logout() = store.clearSession()
 
+    fun darkThemePreference(): Boolean? = store.darkThemePreference()
+
+    fun saveDarkThemePreference(enabled: Boolean) = store.saveDarkThemePreference(enabled)
+
     fun pendingCount(session: UserSession): Int = pendingItems(session).size
 
     fun syncDashboard(session: UserSession): SyncDashboard {
@@ -86,6 +90,7 @@ class ItedRepository(private val store: SessionStore) {
                 priority = json.optString("priority", "normal"),
                 deliveryDate = json.optString("delivery_date"),
                 observation = json.optString("observation"),
+                savedAt = json.optString("saved_at"),
                 lines = json.getJSONArray("lines").mapObjects { line ->
                     OrderLineDraft(
                         product = parseProduct(line.getJSONObject("product")),
@@ -115,6 +120,7 @@ class ItedRepository(private val store: SessionStore) {
                 .put("priority", draft.priority)
                 .put("delivery_date", draft.deliveryDate)
                 .put("observation", draft.observation)
+                .put("saved_at", Instant.now().toString())
                 .put("lines", lines),
         )
     }

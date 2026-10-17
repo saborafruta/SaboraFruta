@@ -5,9 +5,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import br.com.ited.forcavendas.data.ItedRepository
 import br.com.ited.forcavendas.data.SessionStore
@@ -21,13 +25,24 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val repository = remember { ItedRepository(SessionStore(applicationContext)) }
-            ITEDTheme {
+            val systemDarkTheme = isSystemInDarkTheme()
+            var darkTheme by remember {
+                mutableStateOf(repository.darkThemePreference() ?: systemDarkTheme)
+            }
+            ITEDTheme(darkTheme = darkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                     contentColor = MaterialTheme.colorScheme.onBackground,
                 ) {
-                    AppRoot(repository)
+                    AppRoot(
+                        repository = repository,
+                        darkTheme = darkTheme,
+                        onToggleTheme = {
+                            darkTheme = !darkTheme
+                            repository.saveDarkThemePreference(darkTheme)
+                        },
+                    )
                 }
             }
         }
