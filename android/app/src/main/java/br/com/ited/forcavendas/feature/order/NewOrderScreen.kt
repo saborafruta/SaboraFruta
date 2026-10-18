@@ -24,7 +24,9 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AddShoppingCart
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Button
@@ -136,6 +138,7 @@ fun NewOrderScreen(
     var observation by remember { mutableStateOf("") }
     var draftMessage by remember { mutableStateOf<String?>(null) }
     var categoryMenuVisible by remember { mutableStateOf(false) }
+    var paymentMenuVisible by remember { mutableStateOf(false) }
     val cart = remember { mutableStateMapOf<Long, String>() }
     val cartProducts = remember { mutableStateMapOf<Long, Product>() }
 
@@ -593,12 +596,68 @@ fun NewOrderScreen(
 
                 item {
                     SectionCard(step = "4", title = "Condições comerciais") {
-                        Text("Forma de pagamento", style = MaterialTheme.typography.labelLarge)
-                        ChoiceRow(
-                            choices = options.payments.map { it.id to it.descricao },
-                            selectedId = paymentId,
-                            onSelect = { paymentId = it },
-                        )
+                        ExposedDropdownMenuBox(
+                            expanded = paymentMenuVisible,
+                            onExpandedChange = { expanded ->
+                                paymentMenuVisible = expanded && options.payments.isNotEmpty()
+                            },
+                        ) {
+                            OutlinedTextField(
+                                value = options.payments
+                                    .firstOrNull { it.id == paymentId }
+                                    ?.descricao
+                                    .orEmpty(),
+                                onValueChange = {},
+                                modifier = Modifier
+                                    .menuAnchor()
+                                    .fillMaxWidth(),
+                                readOnly = true,
+                                label = { Text("Forma de pagamento") },
+                                placeholder = { Text("Selecione a forma de pagamento") },
+                                leadingIcon = {
+                                    Icon(Icons.Outlined.Payments, contentDescription = null)
+                                },
+                                trailingIcon = {
+                                    ExposedDropdownMenuDefaults.TrailingIcon(
+                                        expanded = paymentMenuVisible,
+                                    )
+                                },
+                                singleLine = true,
+                            )
+                            ExposedDropdownMenu(
+                                expanded = paymentMenuVisible,
+                                onDismissRequest = { paymentMenuVisible = false },
+                            ) {
+                                options.payments.forEach { payment ->
+                                    val selected = payment.id == paymentId
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                payment.descricao,
+                                                fontWeight = if (selected) {
+                                                    FontWeight.Bold
+                                                } else {
+                                                    FontWeight.Normal
+                                                },
+                                            )
+                                        },
+                                        leadingIcon = if (selected) {
+                                            {
+                                                Icon(
+                                                    Icons.Outlined.Check,
+                                                    contentDescription = "Selecionada",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                )
+                                            }
+                                        } else null,
+                                        onClick = {
+                                            paymentId = payment.id
+                                            paymentMenuVisible = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
                         if (options.conditions.isNotEmpty()) {
                             Spacer(Modifier.height(10.dp))
                             Text("Condição de pagamento", style = MaterialTheme.typography.labelLarge)
