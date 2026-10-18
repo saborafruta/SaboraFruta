@@ -385,16 +385,23 @@ struct CheckoutView: View {
             HStack(spacing: 10) {
                 Button { Task { await savePending() } } label: {
                     Label("Salvar pendência", systemImage: "clock")
-                        .frame(maxWidth: .infinity)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .frame(maxWidth: .infinity, minHeight: 28)
                 }
                 .buttonStyle(.bordered)
+                .buttonBorderShape(.roundedRectangle(radius: 14))
                 .controlSize(.large)
+                .frame(maxWidth: .infinity, minHeight: 52)
                 .disabled(lines.isEmpty || pendingID != nil || (discountRequiresAuthorization && discountAuthorization == nil))
                 Button { Task { await finalize() } } label: {
                     Label("Finalizar", systemImage: "cart.badge.checkmark")
-                        .frame(maxWidth: .infinity)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .frame(maxWidth: .infinity, minHeight: 28)
                 }
                 .itedPrimaryButton()
+                .frame(maxWidth: .infinity, minHeight: 52)
                 .disabled(lines.isEmpty || payment == nil || state?.sessionOpen != true || (discountRequiresAuthorization && discountAuthorization == nil))
             }
         }
