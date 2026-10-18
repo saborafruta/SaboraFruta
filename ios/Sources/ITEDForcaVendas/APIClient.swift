@@ -132,6 +132,29 @@ struct APIClient: Sendable {
         return response.clientes
     }
 
+    func createCheckoutClient(
+        session: UserSession,
+        name: String,
+        document: String,
+        phone: String
+    ) async throws -> Client {
+        struct Body: Encodable {
+            let nome: String
+            let cpfCnpj: String
+            let celular: String
+        }
+        struct Response: Decodable { let cliente: Client }
+        let response: Response = try await authorized(
+            "api/v1/mobile/checkout/clientes/", method: "POST", session: session,
+            body: Body(
+                nome: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                cpfCnpj: document.trimmingCharacters(in: .whitespacesAndNewlines),
+                celular: phone.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        )
+        return response.cliente
+    }
+
     func checkoutProducts(session: UserSession, query: String, clientID: Int?) async throws -> [Product] {
         struct Response: Decodable { let produtos: [Product] }
         var path = "api/v1/mobile/checkout/produtos/?q=\(query.urlEncoded)"
@@ -157,11 +180,13 @@ struct APIClient: Sendable {
         payment: PaymentOption,
         discount: Decimal,
         received: Decimal,
+        pendingID: Int? = nil,
         discountAuthorization: String? = nil
     ) async throws -> String {
         struct Item: Encodable { let produtoId: Int; let quantidade: String }
         struct Payment: Encodable { let formaId: Int; let valor: String }
         struct Body: Encodable {
+            let pendenciaId: Int?
             let clienteId: Int?
             let desconto: String
             let autorizacaoDesconto: String
@@ -170,6 +195,7 @@ struct APIClient: Sendable {
         }
         struct Response: Decodable { let numeroVenda: Int }
         let body = Body(
+            pendenciaId: pendingID,
             clienteId: client?.id,
             desconto: discount.apiString,
             autorizacaoDesconto: discountAuthorization ?? "",

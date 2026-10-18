@@ -1,5 +1,12 @@
 import SwiftUI
 
+private enum CheckoutField: Hashable {
+    case client
+    case quantity
+    case product
+    case received
+}
+
 struct CheckoutView: View {
     @Environment(AppModel.self) private var model
     @State private var state: CheckoutState?
@@ -15,29 +22,66 @@ struct CheckoutView: View {
     @State private var discount: Decimal = 0
     @State private var showDiscount = false
     @State private var showDiscountAuthorization = false
+    @State private var showQuickClient = false
     @State private var discountAuthorization: String?
     @State private var clientSearchTask: Task<Void, Never>?
     @State private var productSearchTask: Task<Void, Never>?
+    @FocusState private var focusedField: CheckoutField?
+    @State private var pendingID: Int?
+    private let pendingPaymentID: Int?
 
     private var subtotal: Decimal { lines.reduce(0) { $0 + $1.total } }
     private var total: Decimal { max(0, subtotal - discount) }
+    private var change: Decimal { max(0, Decimal.parse(received) - total) }
+
+    init(initialPending: CheckoutPendingDetail? = nil) {
+        _pendingID = State(initialValue: initialPending?.id)
+        pendingPaymentID = initialPending?.formaPagamentoId
+        _selectedClient = State(initialValue: initialPending?.cliente)
+        _lines = State(initialValue: initialPending?.itens.map {
+            CheckoutLine(product: $0.produto, quantity: .parse($0.quantidade))
+        } ?? [])
+        _discount = State(initialValue: .parse(initialPending?.desconto ?? "0"))
+    }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
                 statusHeader
+                if let pendingID {
+                    Label("Venda pendente #\(pendingID). Revise o pagamento e finalize para dar baixa.", systemImage: "hourglass")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(ITEDStyle.blue)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                        .background(ITEDStyle.blue.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+                }
                 clientSection
                 productSection
                 cartSection
                 totalsSection
-            }.padding()
+            }
+            .padding()
+            .padding(.bottom, 118)
         }
         .scrollDismissesKeyboard(.interactively)
+        .simultaneousGesture(TapGesture().onEnded { focusedField = nil })
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Checkout de venda")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { SyncButton() } }
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                NavigationLink { PendingSalesView() } label: { Image(systemName: "hourglass") }
+                    .accessibilityLabel("Vendas pendentes")
+                SyncButton()
+            }
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Concluir") { focusedField = nil }
+            }
+        }
         .task { await loadState() }
+        .safeAreaInset(edge: .bottom) { checkoutActions }
         .sheet(isPresented: $showDiscount) {
             DiscountSheet(subtotal: subtotal, initialDiscount: discount, percentages: state?.discountPercentages ?? []) {
                 discount = min($0, subtotal)
@@ -46,6 +90,13 @@ struct CheckoutView: View {
         .sheet(isPresented: $showDiscountAuthorization) {
             DiscountAuthorizationSheet { email, password in
                 await authorizeDiscount(email: email, password: password)
+            }
+        }
+        .sheet(isPresented: $showQuickClient) {
+            QuickClientSheet { client in
+                selectedClient = client
+                clientQuery = ""
+                clientResults = []
             }
         }
     }
@@ -68,26 +119,20 @@ struct CheckoutView: View {
                     Text(selectedClient?.nome ?? "Cliente balcão").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                NavigationLink("Cadastro completo") { ClientRegistrationView() }.font(.caption.bold())
+                Button("Cadastro rápido") { showQuickClient = true }
+                    .font(.caption.bold())
             }
-            HStack(spacing: 10) {
-                Button {
-                    selectedClient = nil; clientQuery = ""; clientResults = []
-                } label: { Label("Balcão", systemImage: "person") }
-                    .buttonStyle(.bordered).buttonBorderShape(.capsule)
-                TextField("Nome ou CPF/CNPJ", text: $clientQuery)
-                    .textFieldStyle(.roundedBorder)
-                    .onChange(of: clientQuery) { _, value in searchClients(value) }
-                if !clientQuery.isEmpty {
-                    Button { clientQuery = ""; clientResults = [] } label: { Image(systemName: "xmark.circle.fill") }
-                }
-            }.padding(.top, 10)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { clientSelectionButton; clientSearchField }
+                VStack(spacing: 10) { clientSearchField; clientSelectionButton }
+            }
+            .padding(.top, 10)
             if !clientResults.isEmpty {
                 SearchResultPanel {
                     LazyVStack(spacing: 0) {
                         ForEach(clientResults) { client in
                             Button {
-                                selectedClient = client; clientQuery = client.nome; clientResults = []
+                                selectedClient = client; clientQuery = ""; clientResults = []; focusedField = nil
                             } label: {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(client.nome).foregroundStyle(.primary)
@@ -114,19 +159,48 @@ struct CheckoutView: View {
         }
     }
 
+    private var clientSelectionButton: some View {
+        Button {
+            selectedClient = nil; clientQuery = ""; clientResults = []; focusedField = nil
+        } label: {
+            Label(selectedClient == nil ? "Balcão" : "Usar cliente balcão", systemImage: "person")
+                .lineLimit(1)
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+    }
+
+    private var clientSearchField: some View {
+        HStack(spacing: 8) {
+            TextField("Nome ou CPF/CNPJ", text: $clientQuery)
+                .focused($focusedField, equals: .client)
+                .textFieldStyle(.roundedBorder)
+                .onChange(of: clientQuery) { _, value in
+                    selectedClient = nil
+                    searchClients(value)
+                }
+                .submitLabel(.search)
+            if !clientQuery.isEmpty {
+                Button {
+                    clientQuery = ""; clientResults = []
+                } label: { Image(systemName: "xmark.circle.fill") }
+                    .accessibilityLabel("Limpar cliente")
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private var productSection: some View {
         ITEDCard {
-            Text("Adicionar produto").font(.headline)
-            Text("Bipe ou pesquise pelo código e nome").font(.caption).foregroundStyle(.secondary)
-            HStack(alignment: .top, spacing: 8) {
-                TextField("Qtd.", text: $quantity).keyboardType(.decimalPad)
-                    .textFieldStyle(.roundedBorder).frame(width: 74)
-                TextField("Código ou produto", text: $productQuery)
-                    .textFieldStyle(.roundedBorder)
-                    .onChange(of: productQuery) { _, value in searchProducts(value) }
-                Button { searchProducts(productQuery, immediate: true) } label: { Image(systemName: "magnifyingglass") }
-                    .buttonStyle(.borderedProminent).tint(ITEDStyle.blue)
-            }.padding(.top, 10)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Adicionar produto").font(.headline)
+                Text("Bipe ou pesquise pelo código e nome").font(.caption).foregroundStyle(.secondary)
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 8) { quantityField; productSearchField }
+                VStack(spacing: 10) { quantityField; productSearchField }
+            }
+            .padding(.top, 10)
             if !productResults.isEmpty {
                 SearchResultPanel {
                     LazyVStack(spacing: 0) {
@@ -153,6 +227,33 @@ struct CheckoutView: View {
                 }.padding(.top, 8)
             }
         }
+    }
+
+    private var quantityField: some View {
+        TextField("Qtd.", text: $quantity)
+            .focused($focusedField, equals: .quantity)
+            .keyboardType(.decimalPad)
+            .textFieldStyle(.roundedBorder)
+            .frame(minWidth: 74, maxWidth: 92)
+    }
+
+    private var productSearchField: some View {
+        HStack(spacing: 8) {
+            TextField("Código ou produto", text: $productQuery)
+                .focused($focusedField, equals: .product)
+                .textFieldStyle(.roundedBorder)
+                .onChange(of: productQuery) { _, value in searchProducts(value) }
+                .submitLabel(.search)
+                .onSubmit { searchProducts(productQuery, immediate: true) }
+            Button { searchProducts(productQuery, immediate: true) } label: {
+                Image(systemName: "magnifyingglass")
+                    .frame(minWidth: 28, minHeight: 28)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(ITEDStyle.blue)
+            .disabled(productQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var cartSection: some View {
@@ -188,30 +289,87 @@ struct CheckoutView: View {
 
     private var totalsSection: some View {
         ITEDCard {
-            HStack(spacing: 10) {
-                Button { showDiscount = true } label: { Label("Desconto", systemImage: "tag") }.buttonStyle(.bordered)
-                Menu {
-                    ForEach(state?.payments ?? []) { option in Button(option.descricao) { payment = option } }
-                } label: { Label(payment?.descricao ?? "Forma de pagamento", systemImage: "banknote") }
-                    .buttonStyle(.bordered).lineLimit(1).minimumScaleFactor(0.75)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { discountButton; paymentMenu }
+                VStack(spacing: 10) { discountButton; paymentMenu }
             }
             if let payment { Text("Selecionada: \(payment.descricao)").font(.caption).foregroundStyle(.secondary).padding(.top, 4) }
-            TextField("Valor recebido", text: $received).keyboardType(.decimalPad).textFieldStyle(.roundedBorder).padding(.top, 8)
-            Divider().padding(.vertical, 8)
-            HStack { Text("TOTAL A PAGAR").font(.caption); Spacer(); Text(total.currency).font(.title.bold()) }
-            Button { Task { await savePending() } } label: {
-                Label("Salvar em pendência", systemImage: "clock").frame(maxWidth: .infinity)
-            }.buttonStyle(.bordered).controlSize(.large).disabled(lines.isEmpty || (discountRequiresAuthorization && discountAuthorization == nil))
-            Button { Task { await finalize() } } label: {
-                Label("Finalizar venda", systemImage: "cart.badge.checkmark").frame(maxWidth: .infinity)
-            }.itedPrimaryButton().disabled(lines.isEmpty || payment == nil || state?.sessionOpen != true || (discountRequiresAuthorization && discountAuthorization == nil))
+            TextField("Valor recebido", text: $received)
+                .focused($focusedField, equals: .received)
+                .keyboardType(.decimalPad)
+                .textFieldStyle(.roundedBorder)
+                .padding(.top, 8)
+            if !received.isEmpty {
+                LabeledContent("Troco", value: change.currency)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(change > 0 ? Color.green : Color.secondary)
+                    .padding(.top, 4)
+            }
         }
+    }
+
+    private var discountButton: some View {
+        Button { showDiscount = true } label: {
+            Label(discount > 0 ? "Desconto \(discount.currency)" : "Desconto", systemImage: "tag")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .disabled(state?.canApplyDiscount != true || subtotal <= 0)
+    }
+
+    private var paymentMenu: some View {
+        Menu {
+            ForEach(state?.payments ?? []) { option in
+                Button(option.descricao) {
+                    payment = option
+                    if received.isEmpty { received = total.apiString }
+                }
+            }
+        } label: {
+            Label(payment?.descricao ?? "Forma de pagamento", systemImage: "banknote")
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+    }
+
+    private var checkoutActions: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Text("TOTAL A PAGAR").font(.caption.weight(.semibold))
+                Spacer()
+                Text(total.currency).font(.title2.bold())
+            }
+            HStack(spacing: 10) {
+                Button { Task { await savePending() } } label: {
+                    Label("Salvar pendência", systemImage: "clock")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .disabled(lines.isEmpty || pendingID != nil || (discountRequiresAuthorization && discountAuthorization == nil))
+                Button { Task { await finalize() } } label: {
+                    Label("Finalizar", systemImage: "cart.badge.checkmark")
+                        .frame(maxWidth: .infinity)
+                }
+                .itedPrimaryButton()
+                .disabled(lines.isEmpty || payment == nil || state?.sessionOpen != true || (discountRequiresAuthorization && discountAuthorization == nil))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.bar)
     }
 
     private func loadState() async {
         guard let session = model.session else { return }
         await model.perform {
             state = try await model.api.checkoutState(session: session)
+            if let paymentID = pendingPaymentID {
+                payment = state?.payments.first { $0.id == paymentID }
+            }
+            if pendingID != nil, received.isEmpty { received = total.apiString }
             model.lastSync = Date()
         }
     }
@@ -272,6 +430,7 @@ struct CheckoutView: View {
             let number = try await model.api.finalizeCheckout(
                 session: session, client: selectedClient, lines: lines, payment: payment,
                 discount: discount, received: max(Decimal.parse(received), total),
+                pendingID: pendingID,
                 discountAuthorization: discountAuthorization
             )
             model.successMessage = "Venda #\(number) finalizada. O checkout já está pronto para a próxima venda."
@@ -282,6 +441,7 @@ struct CheckoutView: View {
     private func resetSale() {
         selectedClient = nil; clientQuery = ""; clientResults = []
         productQuery = ""; productResults = []; lines = []; payment = nil; received = ""; discount = 0; discountAuthorization = nil
+        pendingID = nil
     }
 
     private var discountRequiresAuthorization: Bool {
@@ -377,22 +537,179 @@ private struct DiscountAuthorizationSheet: View {
     }
 }
 
+private struct QuickClientSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let onCreated: (Client) -> Void
+    @State private var name = ""
+    @State private var document = ""
+    @State private var phone = ""
+    @State private var isSaving = false
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable { case name, document, phone }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("Cadastre somente os dados necessários para esta venda. O cadastro completo continua disponível na área Clientes.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Section("Cliente") {
+                    TextField("Nome / Razão social", text: $name)
+                        .focused($focusedField, equals: .name)
+                        .textContentType(.name)
+                    TextField("CPF/CNPJ (opcional)", text: $document)
+                        .focused($focusedField, equals: .document)
+                        .keyboardType(.numberPad)
+                    TextField("Celular (opcional)", text: $phone)
+                        .focused($focusedField, equals: .phone)
+                        .keyboardType(.phonePad)
+                        .textContentType(.telephoneNumber)
+                }
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .navigationTitle("Cadastro rápido")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancelar") { dismiss() }.disabled(isSaving)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Cadastrar") { Task { await save() } }
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Concluir") { focusedField = nil }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func save() async {
+        guard let session = model.session else { return }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            let client = try await model.api.createCheckoutClient(
+                session: session,
+                name: name,
+                document: document,
+                phone: phone
+            )
+            onCreated(client)
+            dismiss()
+        } catch {
+            model.errorMessage = error.localizedDescription
+        }
+    }
+}
+
 struct PendingSalesView: View {
     @Environment(AppModel.self) private var model
     @State private var sales: [CheckoutPendingSummary] = []
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+
     var body: some View {
-        List(sales) { sale in
-            VStack(alignment: .leading, spacing: 4) {
-                HStack { Text("Venda #\(sale.numeroVenda)").font(.headline); Spacer(); Text(Decimal.parse(sale.valorTotal).currency).bold() }
-                Text(sale.clienteNome)
-                Text("\(sale.quantidadeItens) item(ns) • \(sale.dataVenda)").font(.caption).foregroundStyle(.secondary)
-            }.padding(.vertical, 4)
+        List {
+            if let errorMessage {
+                ContentUnavailableView {
+                    Label("Não foi possível carregar", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(errorMessage)
+                } actions: {
+                    Button("Tentar novamente") { Task { await load() } }
+                }
+            } else {
+                ForEach(sales) { sale in
+                    NavigationLink {
+                        PendingCheckoutLoader(pendingID: sale.id)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "hourglass")
+                                .foregroundStyle(ITEDStyle.orange)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Venda #\(sale.numeroVenda)").font(.headline)
+                                Text(sale.clienteNome).lineLimit(1)
+                                Text("\(sale.quantidadeItens) item(ns) • \(sale.dataVenda)")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 8)
+                            Text(Decimal.parse(sale.valorTotal).currency)
+                                .font(.subheadline.bold())
+                        }
+                        .padding(.vertical, 6)
+                    }
+                }
+            }
         }
-        .overlay { if sales.isEmpty && !model.isBusy { ContentUnavailableView("Nenhuma pendência", systemImage: "checkmark.circle") } }
+        .overlay {
+            if isLoading { ProgressView("Carregando pendências…") }
+            else if sales.isEmpty && errorMessage == nil {
+                ContentUnavailableView(
+                    "Nenhuma venda pendente",
+                    systemImage: "checkmark.circle",
+                    description: Text("As vendas salvas no checkout aparecerão aqui para recebimento.")
+                )
+            }
+        }
         .navigationTitle("Vendas pendentes")
-        .task {
-            guard let session = model.session else { return }
-            await model.perform { sales = try await model.api.checkoutPendings(session: session) }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { Task { await load() } } label: { Image(systemName: "arrow.clockwise") }
+                    .disabled(isLoading)
+            }
         }
+        .task { await load() }
+    }
+
+    private func load() async {
+        guard let session = model.session else { return }
+        isLoading = true
+        errorMessage = nil
+        do { sales = try await model.api.checkoutPendings(session: session) }
+        catch { errorMessage = error.localizedDescription }
+        isLoading = false
+    }
+}
+
+private struct PendingCheckoutLoader: View {
+    @Environment(AppModel.self) private var model
+    let pendingID: Int
+    @State private var pending: CheckoutPendingDetail?
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Group {
+            if let pending {
+                CheckoutView(initialPending: pending)
+            } else if isLoading {
+                ProgressView("Abrindo venda…")
+            } else {
+                ContentUnavailableView {
+                    Label("Não foi possível abrir", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(errorMessage ?? "Tente novamente.")
+                } actions: {
+                    Button("Tentar novamente") { Task { await load() } }
+                }
+            }
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        guard let session = model.session else { return }
+        isLoading = true
+        errorMessage = nil
+        do { pending = try await model.api.checkoutPending(session: session, id: pendingID) }
+        catch { errorMessage = error.localizedDescription }
+        isLoading = false
     }
 }

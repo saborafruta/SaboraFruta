@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum ITEDStyle {
     static let blue = Color(red: 0.02, green: 0.48, blue: 0.90)
@@ -26,9 +27,18 @@ struct ITEDLogo: View {
     var compact = false
 
     var body: some View {
-        Image("LogoITED", bundle: .module)
-            .resizable()
-            .scaledToFit()
+        Group {
+            if let url = Bundle.module.url(forResource: "LogoITED", withExtension: "png"),
+               let image = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Text("iTED")
+                    .font(compact ? .headline.bold() : .largeTitle.bold())
+                    .foregroundStyle(ITEDStyle.navy)
+            }
+        }
             .frame(height: compact ? 38 : 100)
             .padding(compact ? 4 : 10)
             .background(.white, in: RoundedRectangle(cornerRadius: compact ? 12 : 24))
