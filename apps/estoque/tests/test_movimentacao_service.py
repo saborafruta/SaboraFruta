@@ -147,6 +147,53 @@ class MovimentacaoServiceTests(TestCase):
         self.assertEqual(estoque.quantidade_atual, Decimal('6.000'))
         self.assertEqual(estoque.quantidade_disponivel, Decimal('6.000'))
 
+    def test_saida_sem_saldo_identifica_codigo_e_descricao_do_produto(self):
+        produto = self.criar_produto(
+            descricao='Suco de acerola sem açúcar',
+            controla_lote=False,
+        )
+        produto.codigo = 'SUC-AC-01'
+        produto.save(update_fields=['codigo', 'updated_at'])
+
+        with self.assertRaises(EstoqueInsuficienteError) as contexto:
+            MovimentacaoService.registrar_saida_fefo(
+                produto_id=produto.pk,
+                filial_id=self.filial.pk,
+                quantidade=Decimal('2'),
+                usuario_id=self.usuario.pk,
+            )
+
+        mensagem = str(contexto.exception)
+        self.assertIn('SUC-AC-01 — Suco de acerola sem açúcar', mensagem)
+        self.assertIn('Atual: 0', mensagem)
+        self.assertIn('solicitado: 2', mensagem)
+
+    def test_saida_sem_lote_suficiente_tambem_identifica_o_produto(self):
+        produto = self.criar_produto(
+            descricao='Polpa de caju 1 kg',
+            controla_lote=True,
+        )
+        produto.codigo = 'POL-CAJ-1K'
+        produto.save(update_fields=['codigo', 'updated_at'])
+        self.criar_lote(
+            produto,
+            numero='CAJ-001',
+            quantidade='1',
+            validade=timezone.localdate() + timedelta(days=30),
+        )
+
+        with self.assertRaises(EstoqueInsuficienteError) as contexto:
+            MovimentacaoService.registrar_saida_fefo(
+                produto_id=produto.pk,
+                filial_id=self.filial.pk,
+                quantidade=Decimal('3'),
+                usuario_id=self.usuario.pk,
+            )
+
+        mensagem = str(contexto.exception)
+        self.assertIn('POL-CAJ-1K — Polpa de caju 1 kg', mensagem)
+        self.assertIn('disponível em lotes vigentes: 1.000', mensagem)
+
     def test_lote_de_outra_filial_nao_movimenta_produto(self):
         produto = self.criar_produto(controla_lote=True)
         lote_local = self.criar_lote(produto, numero='LT-LOCAL')

@@ -329,8 +329,9 @@ class MovimentacaoService:
                     deposito_id=deposito_id,
                 ).values_list('quantidade_atual', flat=True).first() or 0
                 if estoque_atual < quantidade:
-                    raise EstoqueInsuficienteError(
-                        f'Estoque insuficiente. Atual: {estoque_atual}, solicitado: {quantidade}.'
+                    raise cls._erro_estoque_produto(
+                        produto_id,
+                        f'Estoque insuficiente. Atual: {estoque_atual}, solicitado: {quantidade}.',
                     )
             # O VALOR DA SAIDA VEM DO CUSTO MEDIO quando nao ha lote de onde
             # tira-lo. Sem isto `valor_total` ficava NULO nesta via, e todo
@@ -368,7 +369,10 @@ class MovimentacaoService:
                 )
             ]
 
-        consumos = cls.selecionar_lotes_fifo(produto_id, filial_id, quantidade)
+        try:
+            consumos = cls.selecionar_lotes_fifo(produto_id, filial_id, quantidade)
+        except EstoqueInsuficienteError as exc:
+            raise cls._erro_estoque_produto(produto_id, str(exc)) from exc
         movimentacoes = []
         for c in consumos:
             mov = cls.registrar_movimentacao(
@@ -958,6 +962,25 @@ class MovimentacaoService:
         if controla_lote is None:
             raise DadosInvalidosError('Produto nao encontrado.')
         return bool(controla_lote)
+
+    @staticmethod
+    def _erro_estoque_produto(produto_id: int, detalhe: str) -> EstoqueInsuficienteError:
+        """Identifica o item na mensagem compartilhada por PDV, web e mobile."""
+        from apps.produtos.models import Produto
+
+        produto = Produto.objects.filter(pk=produto_id).values(
+            'codigo',
+            'codigo_barras',
+            'descricao',
+            'descricao_pdv',
+        ).first()
+        if not produto:
+            identificacao = f'#{produto_id}'
+        else:
+            codigo = produto['codigo'] or produto['codigo_barras'] or f'#{produto_id}'
+            descricao = produto['descricao_pdv'] or produto['descricao'] or 'Produto sem descrição'
+            identificacao = f'{codigo} — {descricao}'
+        return EstoqueInsuficienteError(f'Produto "{identificacao}": {detalhe}')
 
     @staticmethod
     def _validar_produto_transferivel(

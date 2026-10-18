@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.LocalOffer
+import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Search
@@ -106,6 +108,7 @@ fun CheckoutScreen(
     var productQuery by remember { mutableStateOf("") }
     var productResults by remember { mutableStateOf<List<Product>>(emptyList()) }
     var productSearching by remember { mutableStateOf(false) }
+    val productResultsScrollState = rememberScrollState()
     var lines by remember(initialPending?.id) { mutableStateOf(initialPending?.lines.orEmpty()) }
     var discount by remember(initialPending?.id) { mutableStateOf(initialPending?.discount ?: "0.00") }
     var selectedPayment by remember { mutableStateOf<PaymentOption?>(null) }
@@ -151,6 +154,9 @@ fun CheckoutScreen(
     }
 
     LaunchedEffect(Unit) { loadState() }
+    LaunchedEffect(productResults) {
+        if (productResults.isNotEmpty()) productResultsScrollState.scrollTo(0)
+    }
     LaunchedEffect(total, selectedPayment) {
         if (selectedPayment?.tipo != "dinheiro" || received.isBlank()) {
             received = total.toPlainString()
@@ -537,13 +543,36 @@ fun CheckoutScreen(
                     }
                 }
                 if (productResults.isNotEmpty()) {
-                    items(productResults, key = { "product-${it.id}" }) { product ->
-                        SearchResult(
-                            title = product.descricao,
-                            subtitle = "${product.codigo} • ${money(decimal(product.preco))} • Estoque ${product.estoqueDisponivel}",
-                            enabled = product.podeVender,
-                            onClick = { addProduct(product) },
-                        )
+                    item {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.large,
+                            tonalElevation = 1.dp,
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 328.dp)
+                                    .verticalScroll(productResultsScrollState)
+                                    .padding(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(
+                                    "${productResults.size} resultado(s) • role somente esta lista",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                productResults.forEach { product ->
+                                    SearchResult(
+                                        title = product.descricao,
+                                        subtitle = "${product.codigo} • ${money(decimal(product.preco))} • Estoque ${product.estoqueDisponivel}",
+                                        enabled = product.podeVender,
+                                        onClick = { addProduct(product) },
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
                 item { SectionTitle("Produtos da venda", "${lines.size} produto(s)") }
@@ -577,7 +606,7 @@ fun CheckoutScreen(
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(0.9f),
                             enabled = state?.canApplyDiscount == true && subtotal > BigDecimal.ZERO,
                             onClick = { discountDialog = true },
                         ) {
@@ -586,10 +615,22 @@ fun CheckoutScreen(
                             Text(if (decimal(discount) > BigDecimal.ZERO) "Desconto ${money(decimal(discount))}" else "Desconto")
                         }
                         OutlinedButton(
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1.1f),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
                             onClick = { paymentDialog = true },
                         ) {
-                            Text("Forma de pagamento", maxLines = 1)
+                            Icon(
+                                Icons.Outlined.Payments,
+                                contentDescription = null,
+                                modifier = Modifier.size(19.dp),
+                            )
+                            Spacer(Modifier.size(6.dp))
+                            Text(
+                                "Forma de pagamento",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
                         }
                     }
                     selectedPayment?.let { payment ->
