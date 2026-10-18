@@ -34,6 +34,9 @@ struct CheckoutView: View {
     private var subtotal: Decimal { lines.reduce(0) { $0 + $1.total } }
     private var total: Decimal { max(0, subtotal - discount) }
     private var change: Decimal { max(0, Decimal.parse(received) - total) }
+    private var isCashPayment: Bool {
+        payment?.tipo.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "dinheiro"
+    }
 
     init(initialPending: CheckoutPendingDetail? = nil) {
         _pendingID = State(initialValue: initialPending?.id)
@@ -232,9 +235,9 @@ struct CheckoutView: View {
 
     private var productSection: some View {
         ITEDCard {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 8) { quantityField; productSearchField }
-                VStack(spacing: 10) { quantityField; productSearchField }
+            HStack(alignment: .center, spacing: 8) {
+                quantityField
+                productSearchField
             }
             if !productResults.isEmpty {
                 SearchResultPanel {
@@ -285,7 +288,7 @@ struct CheckoutView: View {
                     .frame(minWidth: 28, minHeight: 28)
             }
             .buttonStyle(.borderedProminent)
-            .tint(ITEDStyle.blue)
+            .tint(ITEDStyle.orange)
             .disabled(productQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .frame(maxWidth: .infinity)
@@ -334,7 +337,7 @@ struct CheckoutView: View {
                 .keyboardType(.decimalPad)
                 .textFieldStyle(.roundedBorder)
                 .padding(.top, 8)
-            if !received.isEmpty {
+            if isCashPayment, !received.isEmpty {
                 LabeledContent("Troco", value: change.currency)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(change > 0 ? Color.green : Color.secondary)
@@ -357,7 +360,10 @@ struct CheckoutView: View {
             ForEach(state?.payments ?? []) { option in
                 Button(option.descricao) {
                     payment = option
-                    if received.isEmpty { received = total.apiString }
+                    let cashPayment = option.tipo
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .lowercased() == "dinheiro"
+                    if !cashPayment || received.isEmpty { received = total.apiString }
                 }
             }
         } label: {

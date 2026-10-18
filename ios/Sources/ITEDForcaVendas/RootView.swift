@@ -152,7 +152,8 @@ private struct HomeView: View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 ITEDLogo()
-                    .frame(maxHeight: 88)
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, 10)
 
                 Button {
                     Task { await model.switchContext() }
