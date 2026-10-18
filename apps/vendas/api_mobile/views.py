@@ -71,6 +71,7 @@ def _serializar_cliente_mobile(cliente):
             cliente.tabela_preco.descricao
             if cliente.tabela_preco_id else 'Preço padrão'
         ),
+        'tabela_preco_id': cliente.tabela_preco_id or 0,
         'prazo_pagamento_dias': cliente.prazo_pagamento_dias or 0,
     }
 
@@ -205,9 +206,10 @@ class ClientesMobileView(MobileTenantAPIView):
             if termo.isdigit():
                 filtro |= Q(pk=int(termo))
             qs = qs.filter(filtro)
+        limite = None if request.query_params.get('sync') == '1' else 50
         clientes = [
             _serializar_cliente_mobile(cliente)
-            for cliente in qs.order_by('razao_social')[:50]
+            for cliente in qs.order_by('razao_social')[:limite]
         ]
         return Response({'clientes': clientes, 'sincronizado_em': timezone.now().isoformat()})
 
@@ -294,9 +296,10 @@ class ProdutosMobileView(MobileTenantAPIView):
             if termo.isdigit():
                 filtro |= Q(pk=int(termo))
             qs = qs.filter(filtro)
+        limite = None if request.query_params.get('sync') == '1' else 50
         produtos_consulta = list(
             qs.select_related('unidade_medida', 'categoria')
-            .order_by('-catalogo_destaque', 'descricao')[:50]
+            .order_by('-catalogo_destaque', 'descricao')[:limite]
         )
         anexar_saldos_por_deposito(
             produtos=produtos_consulta,
@@ -324,6 +327,7 @@ class ProdutosMobileView(MobileTenantAPIView):
                     produto.categoria.nome
                     if produto.categoria_id else 'Sem categoria'
                 ),
+                'categoria_id': produto.categoria_id,
                 'destaque': produto.catalogo_destaque,
                 'estoque_disponivel': _decimal(contrato['saldo_disponivel'], 3),
                 'controla_lote': produto.controla_lote,
@@ -361,6 +365,7 @@ def _serializar_cliente_checkout(cliente):
             max(Decimal('0'), Decimal(cliente.limite_credito or 0) - Decimal(cliente.saldo_devedor or 0)),
         ),
         'tabela_preco': cliente.tabela_preco.descricao if cliente.tabela_preco_id else 'Preço padrão',
+        'tabela_preco_id': cliente.tabela_preco_id or 0,
         'prazo_pagamento_dias': cliente.prazo_pagamento_dias or 0,
     }
 
@@ -549,6 +554,7 @@ class CheckoutProdutosMobileView(MobileTenantAPIView):
                 'preco': _decimal(contrato['preco_aplicado']),
                 'preco_origem': contrato['preco_origem'],
                 'categoria': produto.categoria.nome if produto.categoria_id else 'Sem categoria',
+                'categoria_id': produto.categoria_id,
                 'destaque': produto.catalogo_destaque,
                 'estoque_disponivel': _decimal(contrato['saldo_disponivel'], 3),
                 'controla_lote': produto.controla_lote,
@@ -843,6 +849,7 @@ class CheckoutPendenteDetalheMobileView(MobileTenantAPIView):
                     'preco': _decimal(item.valor_unitario),
                     'preco_origem': item.preco_origem_detalhe or item.preco_origem,
                     'categoria': produto.categoria.nome if produto.categoria_id else 'Sem categoria',
+                    'categoria_id': produto.categoria_id,
                     'destaque': produto.catalogo_destaque,
                     'estoque_disponivel': _decimal(sum(
                         (saldo['disponivel'] for saldo in produto.saldos_depositos),

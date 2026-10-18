@@ -237,6 +237,11 @@ private struct HomeView: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle("ITED Força de Vendas")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            if model.lastSync == nil && !model.isBusy {
+                await model.synchronize()
+            }
+        }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 SyncButton()
@@ -298,8 +303,8 @@ struct SyncButton: View {
     @State private var showSheet = false
     var body: some View {
         Button { showSheet = true } label: {
-            Image(systemName: model.lastSync == nil ? "wifi.exclamationmark" : "wifi")
-                .foregroundStyle(model.lastSync == nil ? .red : .green)
+            Image(systemName: model.pendingOrderCount > 0 ? "wifi.exclamationmark" : (model.lastSync == nil ? "wifi.slash" : "wifi"))
+                .foregroundStyle(model.pendingOrderCount > 0 ? .orange : (model.lastSync == nil ? .red : .green))
                 .font(.title3).padding(10).background(.thinMaterial, in: Circle())
         }
         .sheet(isPresented: $showSheet) {
@@ -308,7 +313,14 @@ struct SyncButton: View {
                     Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 48)).foregroundStyle(ITEDStyle.blue)
                     Text("Central de sincronização").font(.title2.bold())
                     if let date = model.lastSync { Text("Última sincronização: \(date.formatted(date: .abbreviated, time: .shortened))") }
-                    else { Text("Ainda não sincronizado nesta sessão.") }
+                    else { Text("Ainda não há dados disponíveis offline.") }
+                    if model.pendingOrderCount > 0 {
+                        Label(
+                            "\(model.pendingOrderCount) pedido(s) aguardando envio",
+                            systemImage: "tray.and.arrow.up.fill"
+                        )
+                        .foregroundStyle(.orange)
+                    }
                     Button("Sincronizar agora") { Task { await model.synchronize(); showSheet = false } }
                         .itedPrimaryButton()
                     Spacer()

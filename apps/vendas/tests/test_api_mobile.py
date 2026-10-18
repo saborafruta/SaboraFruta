@@ -169,6 +169,7 @@ class ForcaVendasMobileApiTests(TestCase):
         )
         self.assertEqual(clientes.status_code, 200, clientes.content)
         self.assertEqual(clientes.json()['clientes'][0]['nome'], 'Cliente Mobile')
+        self.assertIn('tabela_preco_id', clientes.json()['clientes'][0])
 
         produtos = self.client.get(
             reverse('forca_vendas_mobile_api:produtos'),
@@ -181,6 +182,7 @@ class ForcaVendasMobileApiTests(TestCase):
             produtos.json()['produtos'][0]['categoria'],
             self.categoria.nome,
         )
+        self.assertEqual(produtos.json()['produtos'][0]['categoria_id'], self.categoria.pk)
         self.assertTrue(produtos.json()['produtos'][0]['destaque'])
 
         destaques = self.client.get(
@@ -212,6 +214,34 @@ class ForcaVendasMobileApiTests(TestCase):
             self.categoria.pk,
             [categoria['id'] for categoria in opcoes.json()['categorias']],
         )
+
+    def test_sincronizacao_mobile_nao_limita_clientes_a_cinquenta(self):
+        novos = Cliente.objects.bulk_create([
+            Cliente(
+                filial=self.filial,
+                tipo_pessoa='F',
+                razao_social=f'Cliente offline {indice:02d}',
+                ativo=True,
+            )
+            for indice in range(55)
+        ])
+        ClienteFilial.objects.bulk_create([
+            ClienteFilial(cliente=cliente, filial=self.filial)
+            for cliente in novos
+        ])
+
+        resposta_normal = self.client.get(
+            reverse('forca_vendas_mobile_api:clientes'),
+            **self.headers,
+        )
+        resposta_sync = self.client.get(
+            reverse('forca_vendas_mobile_api:clientes'),
+            {'sync': '1'},
+            **self.headers,
+        )
+
+        self.assertEqual(len(resposta_normal.json()['clientes']), 50)
+        self.assertEqual(len(resposta_sync.json()['clientes']), 56)
 
     @patch('apps.vendas.api_mobile.views.CepService.consultar')
     def test_cadastra_cliente_completo_e_consulta_cep(self, consultar_cep):

@@ -34,6 +34,7 @@ struct Client: Codable, Identifiable, Hashable, Sendable {
     let uf: String
     let creditoDisponivel: String
     let tabelaPreco: String
+    let tabelaPrecoId: Int
     let prazoPagamentoDias: Int
     let bloqueado: Bool
     let motivoBloqueio: String
@@ -58,6 +59,7 @@ struct Product: Codable, Identifiable, Hashable, Sendable {
     let preco: String
     let precoOrigem: String
     let categoria: String
+    let categoriaId: Int?
     let destaque: Bool
     let estoqueDisponivel: String
     let controlaLote: Bool
@@ -127,7 +129,7 @@ struct OrderSummary: Codable, Identifiable, Sendable {
     let dataEmissao: String
 }
 
-struct OrderOptions: Sendable {
+struct OrderOptions: Codable, Sendable {
     let payments: [PaymentOption]
     let conditions: [PaymentCondition]
     let categories: [ProductCategory]
@@ -264,6 +266,39 @@ struct OrderDraftLine: Identifiable, Hashable, Sendable {
     var quantity: Decimal
     var id: Int { product.id }
     var total: Decimal { .parse(product.preco) * quantity }
+}
+
+struct OfflineSnapshot: Codable, Sendable {
+    let clients: [Client]
+    let options: OrderOptions
+    let catalogs: [String: [Product]]
+    let synchronizedAt: Date
+}
+
+struct QueuedOrderItem: Codable, Sendable {
+    let productId: Int
+    let quantity: String
+}
+
+struct QueuedOrder: Codable, Identifiable, Sendable {
+    let id: UUID
+    let contextKey: String
+    let userEmail: String
+    let idempotencyKey: String
+    let clientId: Int
+    let paymentId: Int
+    let conditionId: Int?
+    let paymentTermDays: Int
+    let priority: String
+    let deliveryDate: String?
+    let notes: String
+    let items: [QueuedOrderItem]
+    let createdAt: Date
+}
+
+enum OrderSubmission: Sendable {
+    case sent(OrderSummary)
+    case queued
 }
 
 struct APIMessage: Codable, Sendable {

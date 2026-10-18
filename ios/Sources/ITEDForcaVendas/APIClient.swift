@@ -68,9 +68,9 @@ struct APIClient: Sendable {
         return (response.usuario.nome, response.usuario.email, contexts)
     }
 
-    func clients(session: UserSession, query: String = "") async throws -> [Client] {
+    func clients(session: UserSession, query: String = "", fullSync: Bool = false) async throws -> [Client] {
         struct Response: Decodable { let clientes: [Client] }
-        let path = "api/v1/mobile/clientes/?q=\(query.urlEncoded)"
+        let path = "api/v1/mobile/clientes/?q=\(query.urlEncoded)\(fullSync ? "&sync=1" : "")"
         let response: Response = try await authorized(path, session: session)
         return response.clientes
     }
@@ -273,11 +273,12 @@ struct APIClient: Sendable {
         )
     }
 
-    func orderProducts(session: UserSession, clientID: Int, query: String = "", categoryID: Int? = nil, featured: Bool = false) async throws -> [Product] {
+    func orderProducts(session: UserSession, clientID: Int, query: String = "", categoryID: Int? = nil, featured: Bool = false, fullSync: Bool = false) async throws -> [Product] {
         struct Response: Decodable { let produtos: [Product] }
         var path = "api/v1/mobile/produtos/?cliente_id=\(clientID)&q=\(query.urlEncoded)"
         if let categoryID { path += "&categoria_id=\(categoryID)" }
         if featured { path += "&destaques=1" }
+        if fullSync { path += "&sync=1" }
         let response: Response = try await authorized(path, session: session)
         return response.produtos
     }
@@ -292,35 +293,41 @@ struct APIClient: Sendable {
         deliveryDate: Date?,
         notes: String
     ) async throws -> OrderSummary {
-        struct Item: Encodable { let produtoId: Int; let quantidade: String }
-        struct Body: Encodable {
-            let clienteId: Int
-            let formaPagamentoId: Int
-            let condicaoPagamentoId: Int?
-            let prazoPagamentoDias: Int
-            let prioridade: String
-            let dataEntregaPrevista: String?
-            let observacao: String
-            let itens: [Item]
-        }
-        struct Response: Decodable { let pedido: OrderSummary }
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd"
+        let queued = QueuedOrder(
+            id: UUID(), contextKey: session.context.id, userEmail: session.usuarioEmail.lowercased(),
+            idempotencyKey: UUID().uuidString,
+            clientId: client.id,
+            paymentId: payment.id, conditionId: condition?.id,
+            paymentTermDays: condition?.diasPrimeiraParcela ?? client.prazoPagamentoDias,
+            priority: priority.codigo, deliveryDate: deliveryDate.map(formatter.string), notes: notes,
+            items: lines.map { QueuedOrderItem(productId: $0.product.id, quantity: $0.quantity.apiString) },
+            createdAt: Date()
+        )
+        return try await createOrder(session: session, queued: queued)
+    }
+
+    func createOrder(session: UserSession, queued: QueuedOrder) async throws -> OrderSummary {
+        struct Item: Encodable { let produtoId: Int; let quantidade: String }
+        struct Body: Encodable {
+            let clienteId: Int; let formaPagamentoId: Int; let condicaoPagamentoId: Int?
+            let prazoPagamentoDias: Int; let prioridade: String; let dataEntregaPrevista: String?
+            let observacao: String; let itens: [Item]
+        }
+        struct Response: Decodable { let pedido: OrderSummary }
         let body = Body(
-            clienteId: client.id,
-            formaPagamentoId: payment.id,
-            condicaoPagamentoId: condition?.id,
-            prazoPagamentoDias: condition?.diasPrimeiraParcela ?? client.prazoPagamentoDias,
-            prioridade: priority.codigo,
-            dataEntregaPrevista: deliveryDate.map(formatter.string),
-            observacao: notes,
-            itens: lines.map { Item(produtoId: $0.product.id, quantidade: $0.quantity.apiString) }
+            clienteId: queued.clientId, formaPagamentoId: queued.paymentId,
+            condicaoPagamentoId: queued.conditionId, prazoPagamentoDias: queued.paymentTermDays,
+            prioridade: queued.priority, dataEntregaPrevista: queued.deliveryDate,
+            observacao: queued.notes,
+            itens: queued.items.map { Item(produtoId: $0.productId, quantidade: $0.quantity) }
         )
         let response: Response = try await authorized(
             "api/v1/mobile/pedidos/", method: "POST", session: session,
-            body: body, idempotencyKey: UUID().uuidString
+            body: body, idempotencyKey: queued.idempotencyKey
         )
         return response.pedido
     }

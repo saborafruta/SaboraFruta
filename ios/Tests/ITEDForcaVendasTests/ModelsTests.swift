@@ -9,7 +9,7 @@ import Testing
 @Test func checkoutLineCalculatesTotal() {
     let product = Product(
         id: 1, descricao: "Produto", codigo: "1", unidade: "UN",
-        preco: "7.50", precoOrigem: "padrao", categoria: "Geral",
+        preco: "7.50", precoOrigem: "padrao", categoria: "Geral", categoriaId: 1,
         destaque: false, estoqueDisponivel: "10.000", controlaLote: false,
         podeVender: true, bloqueios: [], estoques: []
     )

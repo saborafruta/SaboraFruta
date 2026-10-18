@@ -151,31 +151,30 @@ struct NewOrderView: View {
     }
 
     private func loadOptions() async {
-        guard let session = model.session else { return }
         await model.perform {
-            options = try await model.api.orderOptions(session: session)
+            options = try await model.orderOptions()
             priority = options?.priorities.first
         }
     }
 
     private func searchClients(_ query: String) {
         searchTask?.cancel()
-        guard query.count >= 2, let session = model.session else { clientResults = []; return }
+        guard query.count >= 2 else { clientResults = []; return }
         searchTask = Task {
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
-            do { clientResults = try await model.api.clients(session: session, query: query) }
+            do { clientResults = try await model.clients(query: query) }
             catch { model.errorMessage = error.localizedDescription }
         }
     }
 
     private func searchProducts() async {
-        guard let session = model.session, let client else {
+        guard let client else {
             model.errorMessage = "Selecione o cliente antes de buscar produtos."; return
         }
         await model.perform {
-            products = try await model.api.orderProducts(
-                session: session, clientID: client.id, query: productQuery,
+            products = try await model.orderProducts(
+                client: client, query: productQuery,
                 categoryID: category?.id, featured: productQuery.isEmpty && category == nil
             )
         }
@@ -190,13 +189,16 @@ struct NewOrderView: View {
     }
 
     private func submit() async {
-        guard let session = model.session, let client, let payment, let priority else { return }
+        guard let client, let payment, let priority else { return }
         await model.perform {
-            let order = try await model.api.createOrder(
-                session: session, client: client, lines: lines, payment: payment, condition: condition,
+            let result = try await model.submitOrder(
+                client: client, lines: lines, payment: payment, condition: condition,
                 priority: priority, deliveryDate: hasDeliveryDate ? deliveryDate : nil, notes: notes
             )
-            model.successMessage = "Pedido #\(order.numeroPedido) enviado ao iTED."
+            switch result {
+            case let .sent(order): model.successMessage = "Pedido #\(order.numeroPedido) enviado ao iTED."
+            case .queued: model.successMessage = "Pedido salvo offline. Ele será enviado na próxima sincronização."
+            }
             dismiss()
         }
     }

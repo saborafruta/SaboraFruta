@@ -162,8 +162,18 @@ class ItedRepository(private val store: SessionStore) {
     suspend fun clients(session: UserSession, query: String = ""): List<Client> {
         val key = "clients_${session.context.tenantAlias}_${session.context.filialId}_${queryCacheKey(query)}"
         val path = "api/v1/mobile/clientes/?q=${query.encoded()}"
-        val json = cachedRequest(session, key, path)
-        return json.getJSONArray("clientes").mapObjects(::parseClient)
+        return try {
+            cachedRequest(session, key, path).getJSONArray("clientes").mapObjects(::parseClient)
+        } catch (network: NetworkException) {
+            val masterKey = "clients_${session.context.tenantAlias}_${session.context.filialId}_${queryCacheKey("")}"
+            val clients = store.cached(masterKey)?.getJSONArray("clientes")
+                ?.mapObjects(::parseClient) ?: throw network
+            val term = query.trim().lowercase()
+            clients.filter {
+                term.isBlank() || listOf(it.nome, it.documento, it.cidadeUf)
+                    .any { value -> value.lowercase().contains(term) }
+            }.take(50)
+        }
     }
 
     suspend fun createClient(session: UserSession, registration: ClientRegistration): Client {
@@ -415,8 +425,24 @@ class ItedRepository(private val store: SessionStore) {
             else if (categoryId != null) append("&categoria_id=$categoryId")
         }
         val path = "api/v1/mobile/produtos/?cliente_id=$clientId$filters"
-        val json = cachedRequest(session, key, path)
-        return json.getJSONArray("produtos").mapObjects(::parseProduct)
+        return try {
+            cachedRequest(session, key, path).getJSONArray("produtos").mapObjects(::parseProduct)
+        } catch (network: NetworkException) {
+            val masterKey = "products_${session.context.tenantAlias}_${session.context.filialId}_${clientId}_all_${queryCacheKey("")}"
+            val products = store.cached(masterKey)?.getJSONArray("produtos")
+                ?.mapObjects(::parseProduct) ?: throw network
+            val term = query.trim().lowercase()
+            products.filter { product ->
+                val matchesQuery = term.isBlank() || listOf(product.descricao, product.codigo)
+                    .any { it.lowercase().contains(term) }
+                val matchesFilter = when {
+                    highlightsOnly -> product.destaque
+                    categoryId != null -> product.categoriaId == categoryId
+                    else -> true
+                }
+                matchesQuery && matchesFilter
+            }.take(50)
+        }
     }
 
     suspend fun orderOptions(session: UserSession): OrderOptions {
@@ -607,9 +633,27 @@ class ItedRepository(private val store: SessionStore) {
                 api.authorized(session, session.context, "GET", "api/v1/mobile/opcoes-pedido/")
                     .also { store.cache("options_$suffix", it) }
             },
-            "Clientes" to runCatching {
-                api.authorized(session, session.context, "GET", "api/v1/mobile/clientes/")
-                    .also { store.cache("clients_${suffix}_${queryCacheKey("")}", it) }
+            "Clientes e produtos" to runCatching {
+                val clientResponse = api.authorized(
+                    session, session.context, "GET", "api/v1/mobile/clientes/?sync=1",
+                )
+                store.cache("clients_${suffix}_${queryCacheKey("")}", clientResponse)
+                val clients = clientResponse.getJSONArray("clientes").mapObjects(::parseClient)
+                clients.groupBy { it.tabelaPrecoId }.values.forEach { group ->
+                    val representative = group.first()
+                    val products = api.authorized(
+                        session,
+                        session.context,
+                        "GET",
+                        "api/v1/mobile/produtos/?cliente_id=${representative.id}&sync=1",
+                    )
+                    group.forEach { client ->
+                        store.cache(
+                            "products_${suffix}_${client.id}_all_${queryCacheKey("")}",
+                            products,
+                        )
+                    }
+                }
             },
             "Pedidos" to runCatching {
                 api.authorized(session, session.context, "GET", "api/v1/mobile/pedidos/")
@@ -731,6 +775,7 @@ class ItedRepository(private val store: SessionStore) {
         },
         creditoDisponivel = item.getString("credito_disponivel"),
         tabelaPreco = item.getString("tabela_preco"),
+        tabelaPrecoId = item.optLong("tabela_preco_id"),
         prazoPagamentoDias = item.optInt("prazo_pagamento_dias"),
         bloqueado = item.optBoolean("bloqueado"),
         motivoBloqueio = item.optString("motivo_bloqueio"),
@@ -778,6 +823,7 @@ class ItedRepository(private val store: SessionStore) {
         preco = item.getString("preco"),
         precoOrigem = item.optString("preco_origem"),
         categoria = item.optString("categoria", "Sem categoria"),
+        categoriaId = item.optLong("categoria_id").takeIf { item.has("categoria_id") && !item.isNull("categoria_id") },
         destaque = item.optBoolean("destaque"),
         estoqueDisponivel = item.getString("estoque_disponivel"),
         controlaLote = item.optBoolean("controla_lote"),
@@ -801,6 +847,7 @@ class ItedRepository(private val store: SessionStore) {
         .put("cidade_uf", client.cidadeUf)
         .put("credito_disponivel", client.creditoDisponivel)
         .put("tabela_preco", client.tabelaPreco)
+        .put("tabela_preco_id", client.tabelaPrecoId)
         .put("prazo_pagamento_dias", client.prazoPagamentoDias)
         .put("bloqueado", client.bloqueado)
         .put("motivo_bloqueio", client.motivoBloqueio)
@@ -825,6 +872,7 @@ class ItedRepository(private val store: SessionStore) {
             .put("preco", product.preco)
             .put("preco_origem", product.precoOrigem)
             .put("categoria", product.categoria)
+            .put("categoria_id", product.categoriaId ?: JSONObject.NULL)
             .put("destaque", product.destaque)
             .put("estoque_disponivel", product.estoqueDisponivel)
             .put("controla_lote", product.controlaLote)

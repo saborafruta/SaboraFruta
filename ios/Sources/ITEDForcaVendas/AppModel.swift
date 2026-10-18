@@ -29,9 +29,11 @@ final class AppModel {
     var errorMessage: String?
     var successMessage: String?
     var lastSync: Date?
+    var pendingOrderCount = 0
 
     let api = APIClient()
     private let credentials = CredentialStore()
+    private let offline = OfflineStore()
     private var pendingTokens: AuthTokens?
     private var pendingUserName = ""
     private var pendingUserEmail = ""
@@ -44,6 +46,8 @@ final class AppModel {
         }
         if let restored = credentials.load() {
             session = restored
+            lastSync = offline.snapshot(for: restored)?.synchronizedAt
+            pendingOrderCount = offline.queuedOrders(for: restored).count
             phase = .locked
         }
     }
@@ -68,7 +72,6 @@ final class AppModel {
             guard let first = contexts.first else { throw APIError.http(403, "Nenhuma filial liberada para este usuário.") }
             if contexts.count == 1 { selectContext(first, remember: remember) }
             else { phase = .chooseContext }
-            lastSync = Date()
         }
     }
 
@@ -81,6 +84,9 @@ final class AppModel {
         }
         guard let session else { return }
         if remember ?? pendingRemember { credentials.save(session) }
+        let snapshot = offline.snapshot(for: session)
+        lastSync = snapshot?.synchronizedAt
+        pendingOrderCount = offline.queuedOrders(for: session).count
         phase = .ready
     }
 
@@ -112,9 +118,111 @@ final class AppModel {
     func synchronize() async {
         guard let session else { return }
         await perform {
-            _ = try await api.contexts(accessToken: session.tokens.access)
-            lastSync = Date()
-            successMessage = "Dados sincronizados com o iTED."
+            async let clientsRequest = api.clients(session: session, fullSync: true)
+            async let optionsRequest = api.orderOptions(session: session)
+            let (clients, options) = try await (clientsRequest, optionsRequest)
+            var catalogs: [String: [Product]] = [:]
+            for group in Dictionary(grouping: clients, by: { $0.tabelaPrecoId }).values {
+                guard let representative = group.first else { continue }
+                catalogs[String(representative.tabelaPrecoId)] = try await api.orderProducts(
+                    session: session, clientID: representative.id, fullSync: true
+                )
+            }
+            let now = Date()
+            offline.save(
+                snapshot: OfflineSnapshot(
+                    clients: clients, options: options, catalogs: catalogs, synchronizedAt: now
+                ),
+                for: session
+            )
+            var sent = 0
+            for order in offline.queuedOrders(for: session) {
+                do {
+                    _ = try await api.createOrder(session: session, queued: order)
+                    offline.removeQueuedOrder(id: order.id)
+                    sent += 1
+                } catch APIError.offline {
+                    break
+                }
+            }
+            lastSync = now
+            pendingOrderCount = offline.queuedOrders(for: session).count
+            successMessage = sent == 0
+                ? "Clientes, produtos e opções atualizados para uso offline."
+                : "Dados atualizados e \(sent) pedido(s) pendente(s) enviado(s)."
+        }
+    }
+
+    func clients(query: String) async throws -> [Client] {
+        guard let session else { return [] }
+        do { return try await api.clients(session: session, query: query) }
+        catch APIError.offline {
+            guard let cached = offline.snapshot(for: session)?.clients else { throw APIError.offline }
+            let term = query.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            return cached.filter { client in
+                term.isEmpty || [client.nome, client.cpfCnpj, client.cidadeUf].contains { value in
+                    value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                        .localizedCaseInsensitiveContains(term)
+                }
+            }.prefix(50).map { $0 }
+        }
+    }
+
+    func orderOptions() async throws -> OrderOptions {
+        guard let session else { throw APIError.invalidResponse }
+        do { return try await api.orderOptions(session: session) }
+        catch APIError.offline {
+            guard let cached = offline.snapshot(for: session)?.options else { throw APIError.offline }
+            return cached
+        }
+    }
+
+    func orderProducts(client: Client, query: String, categoryID: Int?, featured: Bool) async throws -> [Product] {
+        guard let session else { return [] }
+        do {
+            return try await api.orderProducts(
+                session: session, clientID: client.id, query: query,
+                categoryID: categoryID, featured: featured
+            )
+        } catch APIError.offline {
+            guard let products = offline.snapshot(for: session)?.catalogs[String(client.tabelaPrecoId)] else {
+                throw APIError.offline
+            }
+            let term = query.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            return products.filter { product in
+                let matchesQuery = term.isEmpty || [product.descricao, product.codigo].contains { value in
+                    value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                        .localizedCaseInsensitiveContains(term)
+                }
+                let matchesFilter = featured ? product.destaque : (categoryID == nil || product.categoriaId == categoryID)
+                return matchesQuery && matchesFilter
+            }.prefix(50).map { $0 }
+        }
+    }
+
+    func submitOrder(
+        client: Client, lines: [OrderDraftLine], payment: PaymentOption,
+        condition: PaymentCondition?, priority: OrderPriority, deliveryDate: Date?, notes: String
+    ) async throws -> OrderSubmission {
+        guard let session else { throw APIError.invalidResponse }
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        let order = QueuedOrder(
+            id: UUID(), contextKey: session.context.id, userEmail: session.usuarioEmail.lowercased(),
+            idempotencyKey: UUID().uuidString, clientId: client.id, paymentId: payment.id,
+            conditionId: condition?.id,
+            paymentTermDays: condition?.diasPrimeiraParcela ?? client.prazoPagamentoDias,
+            priority: priority.codigo, deliveryDate: deliveryDate.map(formatter.string), notes: notes,
+            items: lines.map { QueuedOrderItem(productId: $0.product.id, quantity: $0.quantity.apiString) },
+            createdAt: Date()
+        )
+        do { return .sent(try await api.createOrder(session: session, queued: order)) }
+        catch APIError.offline {
+            offline.enqueue(order)
+            pendingOrderCount = offline.queuedOrders(for: session).count
+            return .queued
         }
     }
 
