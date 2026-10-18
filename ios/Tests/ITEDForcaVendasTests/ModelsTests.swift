@@ -25,3 +25,26 @@ import Testing
     )
     #expect(context.id == "cliente_a-7")
 }
+
+@Test func orderDraftQuantityChangesKeepTheProductInTheOrder() {
+    let product = Product(
+        id: 42, descricao: "Produto do pedido", codigo: "42", unidade: "UN",
+        preco: "5.00", precoOrigem: "padrao", categoria: "Geral", categoriaId: 1,
+        destaque: false, estoqueDisponivel: "10.000", controlaLote: false,
+        podeVender: true, bloqueios: [], estoques: []
+    )
+    var line = OrderDraftLine(product: product, quantity: 1)
+
+    line.incrementQuantity()
+    #expect(line.id == product.id)
+    #expect(line.quantity == 2)
+
+    line.decrementQuantity()
+    #expect(line.id == product.id)
+    #expect(line.quantity == 1)
+
+    line.decrementQuantity()
+    line.decrementQuantity()
+    #expect(line.id == product.id)
+    #expect(line.quantity == Decimal(string: "0.001"))
+}

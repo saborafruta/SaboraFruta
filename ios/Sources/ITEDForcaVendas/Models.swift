@@ -266,6 +266,14 @@ struct OrderDraftLine: Identifiable, Hashable, Sendable {
     var quantity: Decimal
     var id: Int { product.id }
     var total: Decimal { .parse(product.preco) * quantity }
+
+    mutating func incrementQuantity() {
+        quantity += 1
+    }
+
+    mutating func decrementQuantity(minimum: Decimal = 0.001) {
+        quantity = max(minimum, quantity - 1)
+    }
 }
 
 struct OfflineSnapshot: Codable, Sendable {

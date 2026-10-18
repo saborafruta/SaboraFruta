@@ -98,11 +98,17 @@ struct NewOrderView: View {
                         VStack(alignment: .leading) {
                             Text(line.product.descricao).font(.subheadline.bold())
                             HStack {
-                                Button { line.quantity = max(0.001, line.quantity - 1) } label: { Image(systemName: "minus.circle") }
+                                Button { line.decrementQuantity() } label: { Image(systemName: "minus.circle") }
+                                    .buttonStyle(.borderless)
+                                    .accessibilityLabel("Diminuir quantidade de \(line.product.descricao)")
                                 TextField("Qtd.", value: $line.quantity, format: .number.precision(.fractionLength(0...3))).keyboardType(.decimalPad).frame(width: 74)
-                                Button { line.quantity += 1 } label: { Image(systemName: "plus.circle") }
+                                Button { line.incrementQuantity() } label: { Image(systemName: "plus.circle") }
+                                    .buttonStyle(.borderless)
+                                    .accessibilityLabel("Aumentar quantidade de \(line.product.descricao)")
                                 Spacer(); Text(line.total.currency)
                                 Button(role: .destructive) { lines.removeAll { $0.id == line.id } } label: { Image(systemName: "trash") }
+                                    .buttonStyle(.borderless)
+                                    .accessibilityLabel("Remover \(line.product.descricao) do pedido")
                             }
                         }
                     }
