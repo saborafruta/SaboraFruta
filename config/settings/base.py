@@ -386,6 +386,10 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@inoovated.com.br
 
 # IntegraÃ§Ãµes externas
 VIACEP_URL = env('VIACEP_URL', default='https://viacep.com.br/ws/{cep}/json/')
+BRASILAPI_CNPJ_URL = env(
+    'BRASILAPI_CNPJ_URL',
+    default='https://brasilapi.com.br/api/cnpj/v1/{cnpj}',
+)
 FISCAL_DFE_MODE = env('FISCAL_DFE_MODE', default='local')
 FISCAL_DFE_ENABLE_REAL_CONSULTA = env.bool('FISCAL_DFE_ENABLE_REAL_CONSULTA', default=False)
 FISCAL_DFE_ENABLE_REAL_EVENTS = env.bool('FISCAL_DFE_ENABLE_REAL_EVENTS', default=False)

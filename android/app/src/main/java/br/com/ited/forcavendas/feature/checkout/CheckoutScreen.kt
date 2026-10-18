@@ -119,6 +119,7 @@ fun CheckoutScreen(
     var discountAuthorization by remember(initialPending?.id) { mutableStateOf("") }
     var paymentDialog by remember { mutableStateOf(false) }
     var quickClientDialog by remember { mutableStateOf(false) }
+    var editingQuantityLine by remember { mutableStateOf<CheckoutLine?>(null) }
 
     val subtotal = lines.fold(BigDecimal.ZERO) { total, line ->
         total + decimal(line.product.preco).multiply(decimal(line.quantity))
@@ -335,10 +336,22 @@ fun CheckoutScreen(
                                         )
                                     }.onSuccess { sale ->
                                         val change = decimal(sale.change)
+                                        client = null
+                                        clientQuery = ""
+                                        clientResults = emptyList()
+                                        quantity = "1"
+                                        productQuery = ""
+                                        productResults = emptyList()
+                                        lines = emptyList()
+                                        discount = "0.00"
+                                        selectedPayment = null
+                                        received = ""
+                                        discountAuthorization = ""
                                         onCompleted(
                                             buildString {
                                                 append("Venda #${sale.number} finalizada")
                                                 if (change > BigDecimal.ZERO) append(" • Troco ${money(change)}")
+                                                append(". Checkout pronto para a próxima venda.")
                                             },
                                         )
                                     }.onFailure {
@@ -597,6 +610,7 @@ fun CheckoutScreen(
                             line = line,
                             onMinus = { changeQuantity(line, -1) },
                             onPlus = { changeQuantity(line, 1) },
+                            onEdit = { editingQuantityLine = line },
                             onRemove = { lines = lines.filterNot { it.product.id == line.product.id } },
                         )
                     }
@@ -658,6 +672,51 @@ fun CheckoutScreen(
                 item { Spacer(Modifier.height(8.dp)) }
             }
         }
+    }
+
+    editingQuantityLine?.let { line ->
+        var input by remember(line.product.id) { mutableStateOf(line.quantity) }
+        AlertDialog(
+            onDismissRequest = { editingQuantityLine = null },
+            title = { Text("Alterar quantidade") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(line.product.descricao, fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
+                        value = input,
+                        onValueChange = {
+                            input = it.filter { char -> char.isDigit() || char == ',' || char == '.' }
+                        },
+                        label = { Text("Quantidade") },
+                        suffix = { Text(line.product.unidade) },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Done,
+                        ),
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val amount = decimal(input)
+                    if (amount <= BigDecimal.ZERO) {
+                        onMessage("Informe uma quantidade maior que zero.")
+                        return@TextButton
+                    }
+                    lines = lines.map {
+                        if (it.product.id == line.product.id) {
+                            it.copy(quantity = amount.stripTrailingZeros().toPlainString())
+                        } else it
+                    }
+                    editingQuantityLine = null
+                }) { Text("Aplicar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingQuantityLine = null }) { Text("Cancelar") }
+            },
+        )
     }
 
     if (discountDialog) {
@@ -736,25 +795,18 @@ fun CheckoutScreen(
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     )
-                    Surface(
-                        shape = MaterialTheme.shapes.medium,
-                        color = if (requiresAuthorization) {
-                            MaterialTheme.colorScheme.errorContainer
-                        } else {
-                            MaterialTheme.colorScheme.primaryContainer
-                        },
-                    ) {
-                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        "${money(previewDiscount)} • ${previewPercent.setScale(2, RoundingMode.HALF_UP)}%",
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (requiresAuthorization) {
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.errorContainer,
+                        ) {
                             Text(
-                                "${money(previewDiscount)} • ${previewPercent.setScale(2, RoundingMode.HALF_UP)}%",
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                                if (requiresAuthorization) {
-                                    "Acima do limite de ${decimal(state?.maxDiscountPercent.orEmpty()).stripTrailingZeros().toPlainString()}%. Exige autorização."
-                                } else {
-                                    "Dentro da política da loja. Qualquer operador pode aplicar."
-                                },
+                                "Acima do limite de ${decimal(state?.maxDiscountPercent.orEmpty()).stripTrailingZeros().toPlainString()}%. Exige autorização.",
+                                modifier = Modifier.padding(12.dp),
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
@@ -987,6 +1039,7 @@ private fun CartLine(
     line: CheckoutLine,
     onMinus: () -> Unit,
     onPlus: () -> Unit,
+    onEdit: () -> Unit,
     onRemove: () -> Unit,
 ) {
     Surface(shape = MaterialTheme.shapes.large, tonalElevation = 1.dp) {
@@ -1006,7 +1059,12 @@ private fun CartLine(
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onMinus) { Icon(Icons.Outlined.Remove, contentDescription = "Diminuir") }
-                Text(line.quantity, fontWeight = FontWeight.Bold)
+                OutlinedButton(
+                    onClick = onEdit,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                ) {
+                    Text(line.quantity, fontWeight = FontWeight.Bold)
+                }
                 IconButton(onClick = onPlus) { Icon(Icons.Outlined.Add, contentDescription = "Aumentar") }
                 Spacer(Modifier.weight(1f))
                 Text(

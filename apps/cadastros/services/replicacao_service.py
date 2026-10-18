@@ -11,7 +11,7 @@ from apps.core.models import Filial
 CLIENTE_CAMPOS_REPLICAVEIS = [
     'tipo_pessoa', 'tipo', 'razao_social', 'nome_fantasia', 'cpf_cnpj', 'rg_ie',
     'inscricao_municipal', 'inscricao_estadual', 'data_nascimento', 'sexo',
-    'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'cep',
+    'endereco', 'numero', 'complemento', 'ponto_referencia', 'bairro', 'cidade', 'uf', 'cep',
     'codigo_municipio_ibge', 'pais', 'codigo_pais_bacen', 'id_estrangeiro',
     'telefone', 'celular', 'email', 'email_nfe', 'contato_nome',
     'prazo_pagamento_dias', 'grupo_desconto', 'consumidor_final',

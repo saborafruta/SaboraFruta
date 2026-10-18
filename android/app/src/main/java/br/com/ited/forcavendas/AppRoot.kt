@@ -271,7 +271,10 @@ fun AppRoot(
                     session = current,
                     initialPending = checkoutPendingDraft,
                     onBack = { goHome() },
-                    onCompleted = { goHome(it) },
+                    onCompleted = {
+                        checkoutPendingDraft = null
+                        notify(it)
+                    },
                     onPendingSaved = { goHome(it) },
                     onOpenPendings = { screen = AppScreen.CHECKOUT_PENDINGS },
                     onMessage = ::notify,

@@ -1,5 +1,7 @@
 from decimal import Decimal
+from unittest.mock import patch
 
+from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 
@@ -125,6 +127,7 @@ class ForcaVendasMobileApiTests(TestCase):
         )
 
     def setUp(self):
+        cache.clear()
         token = self.client.post(
             reverse('forca_vendas_mobile_api:token'),
             data={'email': self.usuario.email, 'password': 'senha-mobile-123'},
@@ -209,6 +212,85 @@ class ForcaVendasMobileApiTests(TestCase):
             self.categoria.pk,
             [categoria['id'] for categoria in opcoes.json()['categorias']],
         )
+
+    @patch('apps.vendas.api_mobile.views.CepService.consultar')
+    def test_cadastra_cliente_completo_e_consulta_cep(self, consultar_cep):
+        consultar_cep.return_value = {
+            'cep': '59064100',
+            'endereco': 'Rua dos Testes',
+            'complemento': '',
+            'bairro': 'Lagoa Nova',
+            'cidade': 'Natal',
+            'uf': 'RN',
+            'codigo_municipio_ibge': '2408102',
+        }
+        cep = self.client.get(
+            reverse('forca_vendas_mobile_api:cliente_cep'),
+            {'cep': '59064-100'},
+            **self.headers,
+        )
+        self.assertEqual(cep.status_code, 200, cep.content)
+        self.assertEqual(cep.json()['endereco']['bairro'], 'Lagoa Nova')
+
+        resposta = self.client.post(
+            reverse('forca_vendas_mobile_api:clientes'),
+            data={
+                'tipo_pessoa': 'F',
+                'tipo': 'varejo',
+                'razao_social': 'Cliente Completo Android',
+                'cpf_cnpj': '123.456.789-09',
+                'celular': '(84) 99999-1111',
+                'email': 'cliente@android.test',
+                'cep': '59064-100',
+                'endereco': 'Rua dos Testes',
+                'numero': '120',
+                'complemento': 'Casa',
+                'ponto_referencia': 'Próximo à praça',
+                'bairro': 'Lagoa Nova',
+                'cidade': 'Natal',
+                'uf': 'rn',
+                'codigo_municipio_ibge': '2408102',
+                'limite_credito': '150.00',
+                'prazo_pagamento_dias': 15,
+                'observacao': 'Cadastrado no aplicativo.',
+            },
+            content_type='application/json',
+            **self.headers,
+        )
+        self.assertEqual(resposta.status_code, 201, resposta.content)
+        cliente = Cliente.objects.get(pk=resposta.json()['cliente']['id'])
+        self.assertEqual(cliente.ponto_referencia, 'Próximo à praça')
+        self.assertEqual(cliente.codigo_municipio_ibge, '2408102')
+        self.assertEqual(cliente.uf, 'RN')
+        self.assertEqual(cliente.prazo_pagamento_dias, 15)
+
+    @patch('apps.vendas.api_mobile.views.CnpjService.consultar')
+    def test_consulta_cnpj_para_preencher_cliente_pessoa_juridica(self, consultar_cnpj):
+        consultar_cnpj.return_value = {
+            'cnpj': '71345678000194',
+            'razao_social': 'Empresa Consultada LTDA',
+            'nome_fantasia': 'Empresa Consultada',
+            'inscricao_estadual': '20202020',
+            'endereco': 'Rua da Receita',
+            'numero': '99',
+            'complemento': 'Sala 2',
+            'bairro': 'Centro',
+            'cidade': 'Natal',
+            'uf': 'RN',
+            'cep': '59000000',
+            'codigo_municipio_ibge': '2408102',
+            'telefone': '8433334444',
+            'email': 'empresa@consultada.test',
+            'situacao_cadastral': 'ATIVA',
+        }
+        resposta = self.client.get(
+            reverse('forca_vendas_mobile_api:cliente_cnpj'),
+            {'cnpj': '71.345.678/0001-94'},
+            **self.headers,
+        )
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        self.assertEqual(resposta.json()['empresa']['razao_social'], 'Empresa Consultada LTDA')
+        self.assertEqual(resposta.json()['empresa']['situacao_cadastral'], 'ATIVA')
 
     def test_catalogo_mobile_exibe_saldo_de_todos_os_depositos(self):
         loja_id = Deposito.padrao_id(self.filial.pk)

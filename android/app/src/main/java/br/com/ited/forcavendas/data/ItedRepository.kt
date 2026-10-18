@@ -166,6 +166,61 @@ class ItedRepository(private val store: SessionStore) {
         return json.getJSONArray("clientes").mapObjects(::parseClient)
     }
 
+    suspend fun createClient(session: UserSession, registration: ClientRegistration): Client {
+        val json = api.authorized(
+            session,
+            session.context,
+            "POST",
+            "api/v1/mobile/clientes/",
+            registration.toJson(),
+        )
+        return parseClient(json.getJSONObject("cliente"))
+    }
+
+    suspend fun lookupCep(session: UserSession, cep: String): CepAddress {
+        val json = api.authorized(
+            session,
+            session.context,
+            "GET",
+            "api/v1/mobile/clientes/cep/?cep=${cep.encoded()}",
+        ).getJSONObject("endereco")
+        return CepAddress(
+            postalCode = json.optString("cep"),
+            street = json.optString("endereco"),
+            complement = json.optString("complemento"),
+            neighborhood = json.optString("bairro"),
+            city = json.optString("cidade"),
+            state = json.optString("uf"),
+            cityCode = json.optString("codigo_municipio_ibge"),
+        )
+    }
+
+    suspend fun lookupCompany(session: UserSession, cnpj: String): CompanyLookup {
+        val json = api.authorized(
+            session,
+            session.context,
+            "GET",
+            "api/v1/mobile/clientes/cnpj/?cnpj=${cnpj.encoded()}",
+        ).getJSONObject("empresa")
+        return CompanyLookup(
+            document = json.optString("cnpj"),
+            legalName = json.optString("razao_social"),
+            tradeName = json.optString("nome_fantasia"),
+            stateRegistration = json.optString("inscricao_estadual"),
+            street = json.optString("endereco"),
+            number = json.optString("numero"),
+            complement = json.optString("complemento"),
+            neighborhood = json.optString("bairro"),
+            city = json.optString("cidade"),
+            state = json.optString("uf"),
+            postalCode = json.optString("cep"),
+            cityCode = json.optString("codigo_municipio_ibge"),
+            phone = json.optString("telefone"),
+            email = json.optString("email"),
+            registrationStatus = json.optString("situacao_cadastral"),
+        )
+    }
+
     suspend fun checkoutState(session: UserSession): CheckoutState {
         val json = api.authorized(
             session,
@@ -680,6 +735,40 @@ class ItedRepository(private val store: SessionStore) {
         bloqueado = item.optBoolean("bloqueado"),
         motivoBloqueio = item.optString("motivo_bloqueio"),
     )
+
+    private fun ClientRegistration.toJson(): JSONObject = JSONObject()
+        .put("tipo_pessoa", personType)
+        .put("tipo", customerType)
+        .put("razao_social", legalName.trim())
+        .put("nome_fantasia", tradeName.trim())
+        .put("cpf_cnpj", document.trim())
+        .put("rg_ie", identity.trim())
+        .put("inscricao_municipal", municipalRegistration.trim())
+        .put("inscricao_estadual", stateRegistration.trim())
+        .put("data_nascimento", birthDate.trim().ifBlank { JSONObject.NULL })
+        .put("sexo", gender)
+        .put("telefone", phone.trim())
+        .put("celular", mobile.trim())
+        .put("email", email.trim())
+        .put("email_nfe", invoiceEmail.trim())
+        .put("contato_nome", contactName.trim())
+        .put("cep", postalCode.trim())
+        .put("endereco", street.trim())
+        .put("numero", number.trim())
+        .put("complemento", complement.trim())
+        .put("ponto_referencia", referencePoint.trim())
+        .put("bairro", neighborhood.trim())
+        .put("cidade", city.trim())
+        .put("uf", state.trim())
+        .put("codigo_municipio_ibge", cityCode.trim())
+        .put("limite_credito", creditLimit.trim().replace(',', '.').ifBlank { "0" })
+        .put("prazo_pagamento_dias", paymentTermDays.toIntOrNull() ?: 0)
+        .put("consumidor_final", finalConsumer)
+        .put("contribuinte_icms", icmsTaxpayer)
+        .put("optante_simples", simpleTaxpayer)
+        .put("bloqueado", blocked)
+        .put("motivo_bloqueio", blockReason.trim())
+        .put("observacao", notes.trim())
 
     private fun parseProduct(item: JSONObject): Product = Product(
         id = item.getLong("id"),

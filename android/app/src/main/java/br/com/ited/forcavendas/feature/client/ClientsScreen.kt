@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -51,6 +52,7 @@ fun ClientsScreen(
     var clients by remember { mutableStateOf(emptyList<Client>()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var registering by remember { mutableStateOf(false) }
 
     fun search() {
         scope.launch {
@@ -65,6 +67,20 @@ fun ClientsScreen(
 
     LaunchedEffect(Unit) { search() }
 
+    if (registering) {
+        ClientRegistrationScreen(
+            repository = repository,
+            session = session,
+            onBack = { registering = false },
+            onSaved = {
+                registering = false
+                query = it.nome
+                search()
+            },
+        )
+        return
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -72,6 +88,11 @@ fun ClientsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Voltar")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { registering = true }) {
+                        Icon(Icons.Outlined.PersonAdd, contentDescription = "Cadastrar cliente")
                     }
                 },
             )

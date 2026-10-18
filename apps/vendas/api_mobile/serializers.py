@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
+from apps.cadastros.models import Cliente
 from apps.vendas.models import PedidoVenda
 
 
@@ -98,6 +99,56 @@ class ClienteRapidoCheckoutSerializer(serializers.Serializer):
 
     def validate_cpf_cnpj(self, value):
         return ''.join(char for char in value if char.isdigit())
+
+
+class ClienteCompletoMobileSerializer(serializers.Serializer):
+    tipo_pessoa = serializers.ChoiceField(choices=('F', 'J'))
+    tipo = serializers.ChoiceField(choices=Cliente.Tipo.choices, default=Cliente.Tipo.VAREJO)
+    razao_social = serializers.CharField(max_length=150)
+    nome_fantasia = serializers.CharField(required=False, allow_blank=True, max_length=100, default='')
+    cpf_cnpj = serializers.CharField(required=False, allow_blank=True, max_length=18, default='')
+    rg_ie = serializers.CharField(required=False, allow_blank=True, max_length=20, default='')
+    inscricao_municipal = serializers.CharField(required=False, allow_blank=True, max_length=20, default='')
+    inscricao_estadual = serializers.CharField(required=False, allow_blank=True, max_length=20, default='')
+    data_nascimento = serializers.DateField(required=False, allow_null=True, default=None)
+    sexo = serializers.ChoiceField(choices=('', 'M', 'F', 'O'), required=False, allow_blank=True, default='')
+    endereco = serializers.CharField(required=False, allow_blank=True, max_length=255, default='')
+    numero = serializers.CharField(required=False, allow_blank=True, max_length=10, default='')
+    complemento = serializers.CharField(required=False, allow_blank=True, max_length=60, default='')
+    ponto_referencia = serializers.CharField(required=False, allow_blank=True, max_length=120, default='')
+    bairro = serializers.CharField(required=False, allow_blank=True, max_length=80, default='')
+    cidade = serializers.CharField(required=False, allow_blank=True, max_length=80, default='')
+    uf = serializers.CharField(required=False, allow_blank=True, max_length=2, default='')
+    cep = serializers.CharField(required=False, allow_blank=True, max_length=9, default='')
+    codigo_municipio_ibge = serializers.CharField(required=False, allow_blank=True, max_length=7, default='')
+    telefone = serializers.CharField(required=False, allow_blank=True, max_length=20, default='')
+    celular = serializers.CharField(required=False, allow_blank=True, max_length=20, default='')
+    email = serializers.EmailField(required=False, allow_blank=True, max_length=120, default='')
+    email_nfe = serializers.EmailField(required=False, allow_blank=True, max_length=120, default='')
+    contato_nome = serializers.CharField(required=False, allow_blank=True, max_length=100, default='')
+    limite_credito = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal('0'), default=Decimal('0'))
+    prazo_pagamento_dias = serializers.IntegerField(min_value=0, max_value=3650, default=0)
+    consumidor_final = serializers.BooleanField(default=True)
+    contribuinte_icms = serializers.BooleanField(default=False)
+    optante_simples = serializers.BooleanField(default=False)
+    bloqueado = serializers.BooleanField(default=False)
+    motivo_bloqueio = serializers.CharField(required=False, allow_blank=True, max_length=2000, default='')
+    observacao = serializers.CharField(required=False, allow_blank=True, max_length=4000, default='')
+
+    def validate_cpf_cnpj(self, value):
+        documento = ''.join(char for char in value if char.isdigit())
+        if documento and len(documento) not in (11, 14):
+            raise serializers.ValidationError('CPF deve ter 11 dígitos ou CNPJ deve ter 14.')
+        return documento
+
+    def validate_cep(self, value):
+        cep = ''.join(char for char in value if char.isdigit())
+        if cep and len(cep) != 8:
+            raise serializers.ValidationError('CEP deve ter 8 dígitos.')
+        return cep
+
+    def validate_uf(self, value):
+        return value.strip().upper()
 
 
 class ItemSeparacaoSerializer(serializers.Serializer):

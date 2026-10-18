@@ -20,6 +20,8 @@ urlpatterns = [
     ),
     path('contexto/', views.ContextoMobileView.as_view(), name='contexto'),
     path('clientes/', views.ClientesMobileView.as_view(), name='clientes'),
+    path('clientes/cep/', views.ClienteCepMobileView.as_view(), name='cliente_cep'),
+    path('clientes/cnpj/', views.ClienteCnpjMobileView.as_view(), name='cliente_cnpj'),
     path('produtos/', views.ProdutosMobileView.as_view(), name='produtos'),
     path('checkout/estado/', views.CheckoutEstadoMobileView.as_view(), name='checkout_estado'),
     path(

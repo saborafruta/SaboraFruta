@@ -10,6 +10,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.cadastros.models import Cliente, ClienteFilial
+from apps.cadastros.services.cep_service import CepService
+from apps.cadastros.services.cnpj_service import CnpjService
+from apps.cadastros.services.cliente_service import ClienteService
 from apps.core.models import EmpresaBanco, Filial
 from apps.core.services.checkout import (
     checkout_venda_ativo,
@@ -36,6 +39,7 @@ from .serializers import (
     AutorizacaoDescontoCheckoutSerializer,
     CheckoutVendaSerializer,
     CheckoutPendenteSerializer,
+    ClienteCompletoMobileSerializer,
     ClienteRapidoCheckoutSerializer,
     ConcluirSeparacaoSerializer,
     NovoPedidoSerializer,
@@ -46,6 +50,29 @@ from .throttling import MobileWriteThrottle
 
 def _decimal(valor, casas=2):
     return f'{Decimal(valor or 0):.{casas}f}'
+
+
+def _serializar_cliente_mobile(cliente):
+    limite = Decimal(cliente.limite_credito or 0)
+    usado = Decimal(cliente.saldo_devedor or 0)
+    return {
+        'id': cliente.pk,
+        'nome': cliente.nome_display,
+        'razao_social': cliente.razao_social,
+        'cpf_cnpj': cliente.cpf_cnpj or '',
+        'cidade': cliente.cidade or '',
+        'uf': cliente.uf or '',
+        'bloqueado': cliente.bloqueado,
+        'motivo_bloqueio': cliente.motivo_bloqueio or '',
+        'limite_credito': _decimal(limite),
+        'saldo_devedor': _decimal(usado),
+        'credito_disponivel': _decimal(max(Decimal('0'), limite - usado)),
+        'tabela_preco': (
+            cliente.tabela_preco.descricao
+            if cliente.tabela_preco_id else 'Preço padrão'
+        ),
+        'prazo_pagamento_dias': cliente.prazo_pagamento_dias or 0,
+    }
 
 
 def _pode_ver_equipe(usuario):
@@ -178,29 +205,55 @@ class ClientesMobileView(MobileTenantAPIView):
             if termo.isdigit():
                 filtro |= Q(pk=int(termo))
             qs = qs.filter(filtro)
-        clientes = []
-        for cliente in qs.order_by('razao_social')[:50]:
-            limite = Decimal(cliente.limite_credito or 0)
-            usado = Decimal(cliente.saldo_devedor or 0)
-            clientes.append({
-                'id': cliente.pk,
-                'nome': cliente.nome_display,
-                'razao_social': cliente.razao_social,
-                'cpf_cnpj': cliente.cpf_cnpj or '',
-                'cidade': cliente.cidade or '',
-                'uf': cliente.uf or '',
-                'bloqueado': cliente.bloqueado,
-                'motivo_bloqueio': cliente.motivo_bloqueio or '',
-                'limite_credito': _decimal(limite),
-                'saldo_devedor': _decimal(usado),
-                'credito_disponivel': _decimal(max(Decimal('0'), limite - usado)),
-                'tabela_preco': (
-                    cliente.tabela_preco.descricao
-                    if cliente.tabela_preco_id else 'Preço padrão'
-                ),
-                'prazo_pagamento_dias': cliente.prazo_pagamento_dias or 0,
-            })
+        clientes = [
+            _serializar_cliente_mobile(cliente)
+            for cliente in qs.order_by('razao_social')[:50]
+        ]
         return Response({'clientes': clientes, 'sincronizado_em': timezone.now().isoformat()})
+
+    def post(self, request):
+        entrada = ClienteCompletoMobileSerializer(data=request.data)
+        entrada.is_valid(raise_exception=True)
+        try:
+            cliente = ClienteService.criar(
+                entrada.validated_data,
+                request.user,
+                request.filial_ativa,
+            )
+        except DadosInvalidosError as exc:
+            raise exceptions.ValidationError({'cliente': str(exc)}) from exc
+        return Response(
+            {'cliente': _serializar_cliente_mobile(cliente)},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ClienteCepMobileView(MobileTenantAPIView):
+    permissao_modulo = 'vendas'
+    permissao_acao = 'criar'
+
+    def get(self, request):
+        try:
+            dados = CepService.consultar(request.query_params.get('cep', ''))
+        except DadosInvalidosError as exc:
+            raise exceptions.ValidationError({'cep': str(exc)}) from exc
+        if dados is None:
+            raise exceptions.NotFound('CEP não encontrado.')
+        return Response({'endereco': dados})
+
+
+class ClienteCnpjMobileView(MobileTenantAPIView):
+    permissao_modulo = 'vendas'
+    permissao_acao = 'criar'
+
+    def get(self, request):
+        try:
+            dados = CnpjService.consultar(request.query_params.get('cnpj', ''))
+        except DadosInvalidosError as exc:
+            raise exceptions.ValidationError({'cnpj': str(exc)}) from exc
+        if dados is None:
+            raise exceptions.NotFound('CNPJ não encontrado ou serviço indisponível.')
+        return Response({'empresa': dados})
 
 
 class ProdutosMobileView(MobileTenantAPIView):

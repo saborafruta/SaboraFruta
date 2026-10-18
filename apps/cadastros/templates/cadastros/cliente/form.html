@@ -372,6 +372,10 @@ html.tema-escuro body { background: var(--cliente-bg) !important; }
             <input type="text" name="complemento" placeholder="Apto, sala..." value="{{ form.complemento.value|default:'' }}">
           </div>
           <div class="erp-field">
+            <label>Ponto de referência</label>
+            <input type="text" name="ponto_referencia" placeholder="Próximo a..." value="{{ form.ponto_referencia.value|default:'' }}">
+          </div>
+          <div class="erp-field">
             <label>Bairro</label>
             <input type="text" name="bairro" id="id_bairro" placeholder="Preenchido via CEP" value="{{ form.bairro.value|default:'' }}">
           </div>

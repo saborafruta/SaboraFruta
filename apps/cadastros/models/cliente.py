@@ -57,6 +57,7 @@ class Cliente(CoordenadaMixin, FilialScopedModel):
     endereco = models.CharField(max_length=255, blank=True)
     numero = models.CharField(max_length=10, blank=True)
     complemento = models.CharField(max_length=60, blank=True)
+    ponto_referencia = models.CharField(max_length=120, blank=True)
     bairro = models.CharField(max_length=80, blank=True)
     cidade = models.CharField(max_length=80, blank=True)
     uf = models.CharField(max_length=2, choices=UF.choices, blank=True)
