@@ -164,6 +164,7 @@ class SessionStore(context: Context) {
         .put("filial_cnpj", context.filialCnpj)
         .put("pedidos_criar", context.podeCriarPedido)
         .put("separacao_editar", context.podeSeparar)
+        .put("checkout_vender", context.podeCheckout)
 
     private fun contextFromJson(json: JSONObject) = WorkContext(
         tenantAlias = json.getString("tenant_alias"),
@@ -174,6 +175,7 @@ class SessionStore(context: Context) {
         filialCnpj = json.getString("filial_cnpj"),
         podeCriarPedido = json.optBoolean("pedidos_criar", false),
         podeSeparar = json.optBoolean("separacao_editar", false),
+        podeCheckout = json.optBoolean("checkout_vender", false),
     )
 
     private fun encrypt(value: String): String {

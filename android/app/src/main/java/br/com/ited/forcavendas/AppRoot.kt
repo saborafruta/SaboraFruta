@@ -23,6 +23,7 @@ import br.com.ited.forcavendas.feature.auth.ContextSelectionScreen
 import br.com.ited.forcavendas.feature.auth.LoginScreen
 import br.com.ited.forcavendas.feature.auth.UnlockScreen
 import br.com.ited.forcavendas.feature.client.ClientsScreen
+import br.com.ited.forcavendas.feature.checkout.CheckoutScreen
 import br.com.ited.forcavendas.feature.home.HomeScreen
 import br.com.ited.forcavendas.feature.order.NewOrderScreen
 import br.com.ited.forcavendas.feature.order.OrdersScreen
@@ -32,7 +33,7 @@ import br.com.ited.forcavendas.sync.SyncStatus
 import java.time.Instant
 import kotlinx.coroutines.launch
 
-private enum class AppScreen { LOCKED, LOGIN, CONTEXT, HOME, NEW_ORDER, ORDERS, CLIENTS, SEPARATION, SYNC }
+private enum class AppScreen { LOCKED, LOGIN, CONTEXT, HOME, CHECKOUT, NEW_ORDER, ORDERS, CLIENTS, SEPARATION, SYNC }
 
 @Composable
 fun AppRoot(
@@ -216,6 +217,7 @@ fun AppRoot(
                     pendingOperations = pending,
                     onSync = { synchronize(current) },
                     onOpenSync = { screen = AppScreen.SYNC },
+                    onCheckout = { screen = AppScreen.CHECKOUT },
                     onNewOrder = { screen = AppScreen.NEW_ORDER },
                     onOrders = { screen = AppScreen.ORDERS },
                     onClients = { screen = AppScreen.CLIENTS },
@@ -253,6 +255,16 @@ fun AppRoot(
                     onBack = { goHome() },
                     onSubmitted = { goHome(it) },
                     onDraftSaved = ::notify,
+                )
+            }
+
+            AppScreen.CHECKOUT -> session?.let { current ->
+                CheckoutScreen(
+                    repository = repository,
+                    session = current,
+                    onBack = { goHome() },
+                    onCompleted = { goHome(it) },
+                    onMessage = ::notify,
                 )
             }
 

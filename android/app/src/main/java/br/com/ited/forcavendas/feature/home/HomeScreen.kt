@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.PointOfSale
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -74,6 +75,7 @@ fun HomeScreen(
     pendingOperations: Int,
     onSync: () -> Unit,
     onOpenSync: () -> Unit,
+    onCheckout: () -> Unit,
     onNewOrder: () -> Unit,
     onOrders: () -> Unit,
     onClients: () -> Unit,
@@ -100,6 +102,13 @@ fun HomeScreen(
         is SyncStatus.Failed -> "Falha na sincronização"
     }
     val actions = listOf(
+        HomeAction(
+            "Checkout de venda",
+            "Venda de balcão, pagamento e baixa imediata",
+            Icons.Outlined.PointOfSale,
+            session.context.podeCheckout,
+            onCheckout,
+        ),
         HomeAction(
             "Novo pedido",
             "Cliente, produtos, preço e pagamento",

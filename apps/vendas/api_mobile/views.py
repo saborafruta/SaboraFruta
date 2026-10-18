@@ -9,20 +9,25 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.cadastros.models import Cliente
+from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import EmpresaBanco, Filial
-from apps.core.services.exceptions import DomainError
+from apps.core.services.checkout import checkout_venda_ativo
+from apps.core.services.exceptions import DadosInvalidosError, DomainError, EstoqueInsuficienteError
 from apps.core.tenant_context import tenant_atomic
 from apps.estoque.models import Deposito, LoteProduto
 from apps.estoque.services.saldos_por_deposito import anexar_saldos_por_deposito
 from apps.financeiro.models import CondicaoPagamento, FormaPagamento
+from apps.pdv.models import SessaoPDV, VendaPDV
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
+from apps.pdv.services.venda_pdv_service import VendaPDVService
 from apps.produtos.models import CategoriaProduto, Produto
 from apps.vendas.models import PedidoVenda, SeparacaoPedido
 from apps.vendas.services.venda_service import VendaService
 
 from .base import MobileTenantAPIView
 from .serializers import (
+    CheckoutVendaSerializer,
+    ClienteRapidoCheckoutSerializer,
     ConcluirSeparacaoSerializer,
     NovoPedidoSerializer,
     validar_idempotency_key,
@@ -116,6 +121,7 @@ class ContextoMobileView(APIView):
                     'pedidos_ver': usuario.tem_permissao('vendas', 'ver'),
                     'pedidos_criar': usuario.tem_permissao('vendas', 'criar'),
                     'separacao_editar': usuario.tem_permissao('vendas', 'editar'),
+                    'checkout_vender': usuario.tem_permissao('pdv', 'ver'),
                 }
             finally:
                 if perfil_anterior is None:
@@ -273,6 +279,267 @@ class ProdutosMobileView(MobileTenantAPIView):
                 ],
             })
         return Response({'produtos': produtos, 'sincronizado_em': timezone.now().isoformat()})
+
+
+def _checkout_disponivel(request):
+    if not checkout_venda_ativo(request):
+        raise exceptions.NotFound('Checkout de venda não habilitado para esta filial.')
+
+
+def _serializar_cliente_checkout(cliente):
+    return {
+        'id': cliente.pk,
+        'nome': cliente.nome_display,
+        'cpf_cnpj': cliente.cpf_cnpj or '',
+        'cidade': cliente.cidade or '',
+        'uf': cliente.uf or '',
+        'bloqueado': cliente.bloqueado,
+        'motivo_bloqueio': cliente.motivo_bloqueio or '',
+        'credito_disponivel': _decimal(
+            max(Decimal('0'), Decimal(cliente.limite_credito or 0) - Decimal(cliente.saldo_devedor or 0)),
+        ),
+        'tabela_preco': cliente.tabela_preco.descricao if cliente.tabela_preco_id else 'Preço padrão',
+        'prazo_pagamento_dias': cliente.prazo_pagamento_dias or 0,
+    }
+
+
+class CheckoutEstadoMobileView(MobileTenantAPIView):
+    permissao_modulo = 'pdv'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        _checkout_disponivel(request)
+        sessao = (
+            SessaoPDV.objects.for_filial(request.filial_ativa)
+            .filter(usuario=request.user, status='aberto')
+            .select_related('caixa')
+            .first()
+        )
+        formas = (
+            FormaPagamento.objects.filter(
+                empresa=request.filial_ativa.empresa,
+                ativo=True,
+                exibir_no_pdv=True,
+            )
+            .filter(Q(filial=request.filial_ativa) | Q(filial__isnull=True))
+            .order_by('descricao')
+        )
+        return Response({
+            'checkout_ativo': True,
+            'sessao': ({
+                'id': sessao.pk,
+                'caixa_id': sessao.caixa_id,
+                'caixa_nome': str(sessao.caixa),
+                'aberta_em': sessao.data_abertura.isoformat(),
+            } if sessao else None),
+            'formas_pagamento': [{
+                'id': forma.pk,
+                'descricao': forma.descricao,
+                'tipo': forma.tipo,
+            } for forma in formas],
+            'pode_aplicar_desconto': bool(
+                request.user.is_superuser or request.user.tem_permissao('pdv', 'aprovar')
+            ),
+        })
+
+
+class CheckoutClientesMobileView(MobileTenantAPIView):
+    permissao_modulo = 'pdv'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        _checkout_disponivel(request)
+        termo = request.query_params.get('q', '').strip()
+        if len(termo) < 2:
+            return Response({'clientes': []})
+        filtro = (
+            Q(razao_social__icontains=termo)
+            | Q(nome_fantasia__icontains=termo)
+            | Q(cpf_cnpj__icontains=termo)
+        )
+        if termo.isdigit():
+            filtro |= Q(pk=int(termo))
+        clientes = (
+            Cliente.objects.for_filial(request.filial_ativa)
+            .filter(ativo=True)
+            .filter(filtro)
+            .select_related('tabela_preco')
+            .order_by('razao_social')[:20]
+        )
+        return Response({'clientes': [_serializar_cliente_checkout(cliente) for cliente in clientes]})
+
+    def post(self, request):
+        _checkout_disponivel(request)
+        entrada = ClienteRapidoCheckoutSerializer(data=request.data)
+        entrada.is_valid(raise_exception=True)
+        dados = entrada.validated_data
+        documento = dados['cpf_cnpj']
+        if documento:
+            existente = (
+                Cliente.objects.for_filial(request.filial_ativa)
+                .filter(cpf_cnpj=documento, ativo=True)
+                .select_related('tabela_preco')
+                .first()
+            )
+            if existente:
+                return Response({'cliente': _serializar_cliente_checkout(existente), 'existente': True})
+        tipo_pessoa = 'J' if len(documento) == 14 else 'F'
+        with tenant_atomic():
+            cliente = Cliente.objects.create(
+                filial=request.filial_ativa,
+                tipo_pessoa=tipo_pessoa,
+                razao_social=dados['nome'].strip(),
+                cpf_cnpj=documento,
+                celular=dados['celular'].strip(),
+                consumidor_final=True,
+                ativo=True,
+            )
+            ClienteFilial.objects.create(
+                cliente=cliente,
+                filial=request.filial_ativa,
+                ativo=True,
+            )
+        return Response(
+            {'cliente': _serializar_cliente_checkout(cliente), 'existente': False},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class CheckoutProdutosMobileView(MobileTenantAPIView):
+    permissao_modulo = 'pdv'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        _checkout_disponivel(request)
+        termo = request.query_params.get('q', '').strip()
+        if not termo:
+            return Response({'produtos': []})
+        cliente = None
+        cliente_id = request.query_params.get('cliente_id', '').strip()
+        if cliente_id:
+            cliente = (
+                Cliente.objects.for_filial(request.filial_ativa)
+                .filter(pk=cliente_id, ativo=True)
+                .select_related('tabela_preco')
+                .first()
+            )
+            if cliente is None:
+                raise exceptions.ValidationError({'cliente_id': 'Selecione um cliente válido.'})
+        qs = Produto.objects.for_filial(request.filial_ativa).filter(ativo=True)
+        filtro = (
+            Q(descricao__icontains=termo)
+            | Q(descricao_pdv__icontains=termo)
+            | Q(codigo__icontains=termo)
+            | Q(codigo_barras__icontains=termo)
+        )
+        if termo.isdigit():
+            filtro |= Q(pk=int(termo))
+        produtos_consulta = list(
+            qs.filter(filtro)
+            .select_related('unidade_medida', 'categoria')
+            .order_by('descricao')[:20]
+        )
+        anexar_saldos_por_deposito(produtos=produtos_consulta, filial=request.filial_ativa)
+        produtos = []
+        for produto in produtos_consulta:
+            contrato = ProdutoVendavelService.consultar(
+                produto=produto,
+                filial=request.filial_ativa,
+                quantidade=Decimal('1'),
+                cliente=cliente,
+                tabela_preco=cliente.tabela_preco if cliente else None,
+                validar_promocoes=False,
+                incluir_promocoes_aplicaveis=False,
+            )
+            produtos.append({
+                'id': produto.pk,
+                'descricao': contrato['descricao'],
+                'codigo': produto.codigo or produto.codigo_barras or '',
+                'unidade': produto.unidade_medida.sigla,
+                'preco': _decimal(contrato['preco_aplicado']),
+                'preco_origem': contrato['preco_origem'],
+                'categoria': produto.categoria.nome if produto.categoria_id else 'Sem categoria',
+                'destaque': produto.catalogo_destaque,
+                'estoque_disponivel': _decimal(contrato['saldo_disponivel'], 3),
+                'controla_lote': produto.controla_lote,
+                'pode_vender': contrato['pode_vender'],
+                'bloqueios': [item['label'] for item in contrato['bloqueios']],
+                'estoques': [{
+                    'deposito_id': saldo['id'],
+                    'deposito_nome': saldo['nome'],
+                    'disponivel': _decimal(saldo['disponivel'], 3),
+                    'permite_venda': saldo['permite_venda'],
+                    'origem_pedido': saldo['origem_pedido'],
+                } for saldo in produto.saldos_depositos],
+            })
+        return Response({'produtos': produtos})
+
+
+class CheckoutVendaMobileView(MobileTenantAPIView):
+    permissao_modulo = 'pdv'
+    permissao_acao = 'ver'
+    throttle_classes = [MobileWriteThrottle]
+
+    def post(self, request):
+        _checkout_disponivel(request)
+        chave = validar_idempotency_key(request)
+        existente = VendaPDV.objects.for_filial(request.filial_ativa).filter(
+            idempotency_key=chave,
+        ).first()
+        if existente:
+            return Response({
+                'venda_id': existente.pk,
+                'numero_venda': existente.numero_venda,
+                'valor_total': _decimal(existente.valor_total),
+                'troco': _decimal(existente.troco),
+                'repetida': True,
+            })
+        sessao = SessaoPDV.objects.for_filial(request.filial_ativa).filter(
+            usuario=request.user,
+            status='aberto',
+        ).first()
+        if sessao is None:
+            raise exceptions.ValidationError({'sessao': 'Abra o caixa no iTED antes de finalizar a venda.'})
+        entrada = CheckoutVendaSerializer(data=request.data)
+        entrada.is_valid(raise_exception=True)
+        dados = entrada.validated_data
+        desconto = dados.get('desconto') or Decimal('0')
+        if desconto > 0 and not (
+            request.user.is_superuser or request.user.tem_permissao('pdv', 'aprovar')
+        ):
+            raise exceptions.PermissionDenied('Seu usuário não possui permissão para aplicar desconto no checkout.')
+        try:
+            venda = VendaPDVService.finalizar_venda(
+                sessao=sessao,
+                filial=request.filial_ativa,
+                usuario=request.user,
+                itens=list(dados['itens']),
+                pagamentos=list(dados['pagamentos']),
+                cliente_id=dados.get('cliente_id'),
+                desconto=desconto,
+                observacao=dados.get('observacao') or '',
+                forcar_estoque_negativo=False,
+                idempotency_key=chave,
+                request=request,
+            )
+        except EstoqueInsuficienteError as exc:
+            raise exceptions.ValidationError({'estoque': str(exc)}) from exc
+        except DadosInvalidosError as exc:
+            raise exceptions.ValidationError({'venda': str(exc)}) from exc
+        except IntegrityError:
+            existente = VendaPDV.objects.for_filial(request.filial_ativa).filter(
+                idempotency_key=chave,
+            ).first()
+            if existente is None:
+                raise
+            venda = existente
+        return Response({
+            'venda_id': venda.pk,
+            'numero_venda': venda.numero_venda,
+            'valor_total': _decimal(venda.valor_total),
+            'troco': _decimal(venda.troco),
+            'repetida': False,
+        }, status=status.HTTP_201_CREATED)
 
 
 class OpcoesPedidoMobileView(MobileTenantAPIView):

@@ -14,6 +14,7 @@ data class WorkContext(
     val filialCnpj: String,
     val podeCriarPedido: Boolean,
     val podeSeparar: Boolean,
+    val podeCheckout: Boolean = false,
 )
 
 data class UserSession(
@@ -74,6 +75,34 @@ data class ProductCategory(
 data class PaymentOption(
     val id: Long,
     val descricao: String,
+    val tipo: String = "",
+)
+
+data class CheckoutState(
+    val sessionOpen: Boolean,
+    val cashRegisterName: String?,
+    val payments: List<PaymentOption>,
+    val canApplyDiscount: Boolean,
+)
+
+data class CheckoutLine(
+    val product: Product,
+    val quantity: String,
+)
+
+data class CheckoutSale(
+    val client: Client?,
+    val lines: List<CheckoutLine>,
+    val payment: PaymentOption,
+    val discount: String,
+    val received: String,
+)
+
+data class CheckoutResult(
+    val saleId: Long,
+    val number: String,
+    val total: String,
+    val change: String,
 )
 
 data class PaymentCondition(

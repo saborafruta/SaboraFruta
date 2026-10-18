@@ -4,11 +4,12 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.cadastros.models import Cliente, ClienteFilial
-from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.core.models import Empresa, Filial, ParametrosSistema, PerfilAcesso, Usuario
 from apps.estoque.models import Deposito, LoteProduto, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.financeiro.constants.enums import TipoFormaPagamento
 from apps.financeiro.models import CondicaoPagamento, FormaPagamento
+from apps.pdv.models import Caixa, SessaoPDV, VendaPDV
 from apps.produtos.models import (
     CategoriaProduto,
     CategoriaProdutoFilial,
@@ -105,6 +106,22 @@ class ForcaVendasMobileApiTests(TestCase):
             empresa=cls.empresa,
             descricao='À vista mobile',
             numero_parcelas=1,
+        )
+        cls.forma_checkout = FormaPagamento.objects.create(
+            empresa=cls.empresa,
+            filial=cls.filial,
+            descricao='Dinheiro checkout mobile',
+            tipo=TipoFormaPagamento.DINHEIRO,
+            exibir_no_pdv=True,
+        )
+        cls.parametros = ParametrosSistema.objects.create(
+            filial=cls.filial,
+            checkout_venda_ativo=True,
+        )
+        cls.caixa = Caixa.objects.create(
+            filial=cls.filial,
+            numero=91,
+            descricao='Caixa Android',
         )
 
     def setUp(self):
@@ -230,6 +247,94 @@ class ForcaVendasMobileApiTests(TestCase):
         self.assertTrue(saldos['Frente de loja']['origem_pedido'])
         self.assertTrue(saldos['Galpão']['permite_venda'])
         self.assertFalse(saldos['Galpão']['origem_pedido'])
+
+    def test_checkout_mobile_consulta_estado_clientes_e_produtos(self):
+        estado_fechado = self.client.get(
+            reverse('forca_vendas_mobile_api:checkout_estado'),
+            **self.headers,
+        )
+        self.assertEqual(estado_fechado.status_code, 200, estado_fechado.content)
+        self.assertIsNone(estado_fechado.json()['sessao'])
+        self.assertIn(
+            self.forma_checkout.pk,
+            [forma['id'] for forma in estado_fechado.json()['formas_pagamento']],
+        )
+
+        clientes = self.client.get(
+            reverse('forca_vendas_mobile_api:checkout_clientes'),
+            {'q': 'Cliente Mobile'},
+            **self.headers,
+        )
+        self.assertEqual(clientes.status_code, 200, clientes.content)
+        self.assertEqual(clientes.json()['clientes'][0]['id'], self.cliente.pk)
+
+        criado = self.client.post(
+            reverse('forca_vendas_mobile_api:checkout_clientes'),
+            data={
+                'nome': 'Cliente rápido Android',
+                'cpf_cnpj': '123.456.789-09',
+                'celular': '84999990000',
+            },
+            content_type='application/json',
+            **self.headers,
+        )
+        self.assertEqual(criado.status_code, 201, criado.content)
+        self.assertEqual(criado.json()['cliente']['nome'], 'Cliente rápido Android')
+        self.assertEqual(criado.json()['cliente']['cpf_cnpj'], '12345678909')
+
+        produtos = self.client.get(
+            reverse('forca_vendas_mobile_api:checkout_produtos'),
+            {'q': 'MOB-001'},
+            **self.headers,
+        )
+        self.assertEqual(produtos.status_code, 200, produtos.content)
+        self.assertEqual(produtos.json()['produtos'][0]['preco'], '12.50')
+
+    def test_checkout_mobile_finaliza_uma_unica_venda_e_baixa_estoque(self):
+        SessaoPDV.objects.create(
+            filial=self.filial,
+            caixa=self.caixa,
+            usuario=self.usuario,
+            valor_abertura=Decimal('100.00'),
+            status='aberto',
+        )
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=self.produto.pk,
+            filial_id=self.filial.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('10'),
+            usuario_id=self.usuario.pk,
+            valor_unitario=Decimal('5'),
+            deposito_id=Deposito.venda_id(self.filial.pk),
+        )
+        payload = {
+            'cliente_id': self.cliente.pk,
+            'desconto': '0.00',
+            'itens': [{'produto_id': self.produto.pk, 'quantidade': '2.000'}],
+            'pagamentos': [{'forma_id': self.forma_checkout.pk, 'valor': '30.00'}],
+        }
+        url = reverse('forca_vendas_mobile_api:checkout_vendas')
+        primeira = self.client.post(
+            url,
+            data=payload,
+            content_type='application/json',
+            HTTP_IDEMPOTENCY_KEY='checkout-mobile-0001',
+            **self.headers,
+        )
+        self.assertEqual(primeira.status_code, 201, primeira.content)
+        self.assertEqual(primeira.json()['valor_total'], '25.00')
+        self.assertEqual(primeira.json()['troco'], '5.00')
+
+        repetida = self.client.post(
+            url,
+            data=payload,
+            content_type='application/json',
+            HTTP_IDEMPOTENCY_KEY='checkout-mobile-0001',
+            **self.headers,
+        )
+        self.assertEqual(repetida.status_code, 200, repetida.content)
+        self.assertTrue(repetida.json()['repetida'])
+        self.assertEqual(VendaPDV.objects.filter(idempotency_key='checkout-mobile-0001').count(), 1)
 
     def test_pedido_mobile_e_idempotente_e_recebe_numero_oficial(self):
         chave = 'pedido-mobile-0001'

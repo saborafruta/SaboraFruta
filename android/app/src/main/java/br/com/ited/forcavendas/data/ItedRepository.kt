@@ -166,6 +166,100 @@ class ItedRepository(private val store: SessionStore) {
         return json.getJSONArray("clientes").mapObjects(::parseClient)
     }
 
+    suspend fun checkoutState(session: UserSession): CheckoutState {
+        val json = api.authorized(
+            session,
+            session.context,
+            "GET",
+            "api/v1/mobile/checkout/estado/",
+        )
+        val cashSession = json.optJSONObject("sessao")
+        return CheckoutState(
+            sessionOpen = cashSession != null,
+            cashRegisterName = cashSession?.optString("caixa_nome")?.takeIf(String::isNotBlank),
+            payments = json.getJSONArray("formas_pagamento").mapObjects {
+                PaymentOption(it.getLong("id"), it.getString("descricao"), it.optString("tipo"))
+            },
+            canApplyDiscount = json.optBoolean("pode_aplicar_desconto"),
+        )
+    }
+
+    suspend fun checkoutClients(session: UserSession, query: String): List<Client> {
+        val json = api.authorized(
+            session,
+            session.context,
+            "GET",
+            "api/v1/mobile/checkout/clientes/?q=${query.encoded()}",
+        )
+        return json.getJSONArray("clientes").mapObjects(::parseClient)
+    }
+
+    suspend fun createCheckoutClient(
+        session: UserSession,
+        name: String,
+        document: String,
+        phone: String,
+    ): Client {
+        val json = api.authorized(
+            session,
+            session.context,
+            "POST",
+            "api/v1/mobile/checkout/clientes/",
+            JSONObject()
+                .put("nome", name.trim())
+                .put("cpf_cnpj", document.trim())
+                .put("celular", phone.trim()),
+        )
+        return parseClient(json.getJSONObject("cliente"))
+    }
+
+    suspend fun checkoutProducts(
+        session: UserSession,
+        query: String,
+        clientId: Long?,
+    ): List<Product> {
+        val path = buildString {
+            append("api/v1/mobile/checkout/produtos/?q=${query.encoded()}")
+            clientId?.let { append("&cliente_id=$it") }
+        }
+        val json = api.authorized(session, session.context, "GET", path)
+        return json.getJSONArray("produtos").mapObjects(::parseProduct)
+    }
+
+    suspend fun submitCheckout(session: UserSession, sale: CheckoutSale): CheckoutResult {
+        val items = JSONArray()
+        sale.lines.forEach { line ->
+            items.put(
+                JSONObject()
+                    .put("produto_id", line.product.id)
+                    .put("quantidade", line.quantity),
+            )
+        }
+        val payments = JSONArray().put(
+            JSONObject()
+                .put("forma_id", sale.payment.id)
+                .put("valor", sale.received),
+        )
+        val response = api.authorized(
+            session,
+            session.context,
+            "POST",
+            "api/v1/mobile/checkout/vendas/",
+            JSONObject()
+                .put("cliente_id", sale.client?.id ?: JSONObject.NULL)
+                .put("desconto", sale.discount)
+                .put("itens", items)
+                .put("pagamentos", payments),
+            UUID.randomUUID().toString(),
+        )
+        return CheckoutResult(
+            saleId = response.getLong("venda_id"),
+            number = response.getString("numero_venda"),
+            total = response.getString("valor_total"),
+            change = response.getString("troco"),
+        )
+    }
+
     suspend fun products(
         session: UserSession,
         clientId: Long,
@@ -681,5 +775,6 @@ private fun parseContext(json: JSONObject): WorkContext {
         filialCnpj = json.getString("filial_cnpj"),
         podeCriarPedido = permissions.optBoolean("pedidos_criar"),
         podeSeparar = permissions.optBoolean("separacao_editar"),
+        podeCheckout = permissions.optBoolean("checkout_vender"),
     )
 }

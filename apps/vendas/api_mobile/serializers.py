@@ -30,6 +30,39 @@ class NovoPedidoSerializer(serializers.Serializer):
     itens = ItemNovoPedidoSerializer(many=True, allow_empty=False)
 
 
+class ItemCheckoutSerializer(serializers.Serializer):
+    produto_id = serializers.IntegerField(min_value=1)
+    quantidade = serializers.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal('0.001'))
+
+
+class PagamentoCheckoutSerializer(serializers.Serializer):
+    forma_id = serializers.IntegerField(min_value=1)
+    valor = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal('0.01'))
+
+
+class CheckoutVendaSerializer(serializers.Serializer):
+    cliente_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    desconto = serializers.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        min_value=Decimal('0'),
+        required=False,
+        default=Decimal('0'),
+    )
+    observacao = serializers.CharField(required=False, allow_blank=True, max_length=2000, default='')
+    itens = ItemCheckoutSerializer(many=True, allow_empty=False)
+    pagamentos = PagamentoCheckoutSerializer(many=True, allow_empty=False)
+
+
+class ClienteRapidoCheckoutSerializer(serializers.Serializer):
+    nome = serializers.CharField(max_length=150)
+    cpf_cnpj = serializers.CharField(required=False, allow_blank=True, max_length=18, default='')
+    celular = serializers.CharField(required=False, allow_blank=True, max_length=20, default='')
+
+    def validate_cpf_cnpj(self, value):
+        return ''.join(char for char in value if char.isdigit())
+
+
 class ItemSeparacaoSerializer(serializers.Serializer):
     item_id = serializers.IntegerField(min_value=1)
     deposito_id = serializers.IntegerField(min_value=1)
