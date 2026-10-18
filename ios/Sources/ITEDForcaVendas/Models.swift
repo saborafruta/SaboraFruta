@@ -276,6 +276,22 @@ struct OrderDraftLine: Identifiable, Hashable, Sendable {
     }
 }
 
+extension Array where Element == OrderDraftLine {
+    mutating func adjustQuantity(for productID: Int, by amount: Decimal) {
+        guard let line = first(where: { $0.id == productID }) else { return }
+        updateQuantity(for: productID, to: line.quantity + amount)
+    }
+
+    mutating func updateQuantity(for productID: Int, to quantity: Decimal) {
+        guard let index = firstIndex(where: { $0.id == productID }) else { return }
+        self[index].quantity = Swift.max(0.001, quantity)
+    }
+
+    mutating func removeProduct(id productID: Int) {
+        removeAll { $0.id == productID }
+    }
+}
+
 struct OfflineSnapshot: Codable, Sendable {
     let clients: [Client]
     let options: OrderOptions

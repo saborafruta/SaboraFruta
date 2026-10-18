@@ -47,6 +47,7 @@ struct NewOrderView: View {
     @State private var deliveryDate = Calendar.current.date(byAdding: .day, value: 5, to: Date()) ?? Date()
     @State private var notes = ""
     @State private var searchTask: Task<Void, Never>?
+    @State private var removalCandidateID: Int?
 
     private var total: Decimal { lines.reduce(0) { $0 + $1.total } }
 
@@ -68,6 +69,19 @@ struct NewOrderView: View {
         .navigationTitle("Novo pedido")
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadOptions() }
+        .confirmationDialog(
+            "Remover produto do pedido?",
+            isPresented: removalConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Remover produto", role: .destructive) {
+                if let removalCandidateID { lines.removeProduct(id: removalCandidateID) }
+                removalCandidateID = nil
+            }
+            Button("Cancelar", role: .cancel) { removalCandidateID = nil }
+        } message: {
+            Text("O produto só será removido depois desta confirmação.")
+        }
     }
 
     private var clientSection: some View {
@@ -214,21 +228,20 @@ struct NewOrderView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Spacer(minLength: 8)
-                            Button(role: .destructive) { removeProduct(line.id) } label: {
-                                Image(systemName: "trash")
-                                    .frame(width: 32, height: 32)
+                            Menu {
+                                Button("Remover produto", systemImage: "trash", role: .destructive) {
+                                    removalCandidateID = line.id
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                                    .frame(width: 36, height: 36)
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Remover \(line.product.descricao) do pedido")
+                            .accessibilityLabel("Opções de \(line.product.descricao)")
                         }
-                        HStack(spacing: 10) {
-                            Button { adjustQuantity(for: line.id, by: -1) } label: {
-                                Image(systemName: "minus")
-                                    .frame(width: 34, height: 34)
-                            }
-                            .buttonStyle(.bordered)
-                            .accessibilityLabel("Diminuir quantidade de \(line.product.descricao)")
-
+                        Stepper(
+                            onIncrement: { lines.adjustQuantity(for: line.id, by: 1) },
+                            onDecrement: { lines.adjustQuantity(for: line.id, by: -1) }
+                        ) {
                             TextField(
                                 "Quantidade",
                                 value: quantityBinding(for: line.id),
@@ -238,18 +251,14 @@ struct NewOrderView: View {
                             .multilineTextAlignment(.center)
                             .textFieldStyle(.roundedBorder)
                             .frame(minWidth: 76, maxWidth: 96)
-
-                            Button { adjustQuantity(for: line.id, by: 1) } label: {
-                                Image(systemName: "plus")
-                                    .frame(width: 34, height: 34)
-                            }
-                            .buttonStyle(.bordered)
-                            .accessibilityLabel("Aumentar quantidade de \(line.product.descricao)")
-
-                            Spacer(minLength: 8)
-                            Text(line.total.currency).fontWeight(.bold)
                         }
                         .padding(.top, 8)
+                        HStack {
+                            Text("Subtotal").font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            Text(line.total.currency).fontWeight(.bold)
+                        }
+                        .padding(.top, 4)
                     }
                 }
             }
@@ -360,22 +369,15 @@ struct NewOrderView: View {
     private func quantityBinding(for productID: Int) -> Binding<Decimal> {
         Binding(
             get: { lines.first { $0.id == productID }?.quantity ?? 0.001 },
-            set: { updateQuantity(for: productID, to: $0) }
+            set: { lines.updateQuantity(for: productID, to: $0) }
         )
     }
 
-    private func adjustQuantity(for productID: Int, by amount: Decimal) {
-        guard let current = lines.first(where: { $0.id == productID })?.quantity else { return }
-        updateQuantity(for: productID, to: current + amount)
-    }
-
-    private func updateQuantity(for productID: Int, to quantity: Decimal) {
-        guard let index = lines.firstIndex(where: { $0.id == productID }) else { return }
-        lines[index].quantity = max(0.001, quantity)
-    }
-
-    private func removeProduct(_ productID: Int) {
-        lines.removeAll { $0.id == productID }
+    private var removalConfirmationPresented: Binding<Bool> {
+        Binding(
+            get: { removalCandidateID != nil },
+            set: { if !$0 { removalCandidateID = nil } }
+        )
     }
 
     private func submit() async {

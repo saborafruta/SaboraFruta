@@ -48,3 +48,22 @@ import Testing
     #expect(line.id == product.id)
     #expect(line.quantity == Decimal(string: "0.001"))
 }
+
+@Test func changingOrderQuantityByProductIDNeverRemovesTheLine() {
+    let product = Product(
+        id: 77, descricao: "Produto preservado", codigo: "77", unidade: "UN",
+        preco: "8.00", precoOrigem: "padrao", categoria: "Geral", categoriaId: 1,
+        destaque: false, estoqueDisponivel: "10.000", controlaLote: false,
+        podeVender: true, bloqueios: [], estoques: []
+    )
+    var lines = [OrderDraftLine(product: product, quantity: 1)]
+
+    lines.adjustQuantity(for: product.id, by: 1)
+    #expect(lines.count == 1)
+    #expect(lines.first?.id == product.id)
+    #expect(lines.first?.quantity == 2)
+
+    lines.adjustQuantity(for: product.id, by: -1)
+    #expect(lines.count == 1)
+    #expect(lines.first?.quantity == 1)
+}
