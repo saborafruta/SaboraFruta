@@ -21,12 +21,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AddShoppingCart
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Button
@@ -579,6 +581,18 @@ fun NewOrderScreen(
                                         product = product,
                                         quantity = cart[productId].orEmpty(),
                                         onQuantityChange = { cart[productId] = it.replace(',', '.') },
+                                        onDecrease = {
+                                            cart[productId] = adjustedOrderQuantity(
+                                                current = cart[productId].orEmpty(),
+                                                delta = BigDecimal.ONE.negate(),
+                                            )
+                                        },
+                                        onIncrease = {
+                                            cart[productId] = adjustedOrderQuantity(
+                                                current = cart[productId].orEmpty(),
+                                                delta = BigDecimal.ONE,
+                                            )
+                                        },
                                         onRemove = {
                                             cart.remove(productId)
                                             cartProducts.remove(productId)
@@ -1082,6 +1096,8 @@ private fun CartItemCard(
     product: Product,
     quantity: String,
     onQuantityChange: (String) -> Unit,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit,
     onRemove: () -> Unit,
 ) {
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
@@ -1118,36 +1134,60 @@ private fun CartItemCard(
             ProductStockBalances(product)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                OutlinedButton(
+                    onClick = onDecrease,
+                    modifier = Modifier.size(48.dp),
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    Icon(Icons.Outlined.Remove, contentDescription = "Diminuir quantidade")
+                }
                 OutlinedTextField(
                     value = quantity,
                     onValueChange = onQuantityChange,
-                    modifier = Modifier.width(132.dp),
+                    modifier = Modifier.weight(1f).widthIn(max = 140.dp),
                     label = { Text("Quantidade") },
                     suffix = { Text(product.unidade) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
                 )
-                val lineTotal = (product.preco.toBigDecimalOrNull() ?: BigDecimal.ZERO)
-                    .multiply(quantity.toBigDecimalOrNull() ?: BigDecimal.ZERO)
-                    .setScale(2, RoundingMode.HALF_UP)
-                Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
-                    Text(
-                        "Subtotal",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        "R$ $lineTotal",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
+                Button(
+                    onClick = onIncrease,
+                    modifier = Modifier.size(48.dp),
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    Icon(Icons.Outlined.Add, contentDescription = "Aumentar quantidade")
                 }
+            }
+            val lineTotal = (product.preco.toBigDecimalOrNull() ?: BigDecimal.ZERO)
+                .multiply(quantity.toBigDecimalOrNull() ?: BigDecimal.ZERO)
+                .setScale(2, RoundingMode.HALF_UP)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Subtotal",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "R$ $lineTotal",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
             }
         }
     }
+}
+
+internal fun adjustedOrderQuantity(current: String, delta: BigDecimal): String {
+    val minimum = BigDecimal("0.001")
+    val parsed = current.replace(',', '.').toBigDecimalOrNull() ?: BigDecimal.ZERO
+    return parsed.add(delta).max(minimum).stripTrailingZeros().toPlainString()
 }
 
 @Composable
