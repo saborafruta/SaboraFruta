@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private enum CheckoutField: Hashable {
     case client
@@ -60,13 +61,15 @@ struct CheckoutView: View {
                 productSection
                 cartSection
                 totalsSection
+                checkoutActions
             }
             .padding()
-            .padding(.bottom, 118)
         }
         .scrollDismissesKeyboard(.interactively)
-        .simultaneousGesture(TapGesture().onEnded { focusedField = nil })
-        .background(Color(.systemGroupedBackground))
+        .background {
+            Color(.systemGroupedBackground)
+                .onTapGesture { dismissKeyboard() }
+        }
         .navigationTitle("Checkout de venda")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -77,11 +80,10 @@ struct CheckoutView: View {
             }
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Concluir") { focusedField = nil }
+                Button("Concluir") { dismissKeyboard() }
             }
         }
         .task { await loadState() }
-        .safeAreaInset(edge: .bottom) { checkoutActions }
         .sheet(isPresented: $showDiscount) {
             DiscountSheet(subtotal: subtotal, initialDiscount: discount, percentages: state?.discountPercentages ?? []) {
                 discount = min($0, subtotal)
@@ -116,18 +118,25 @@ struct CheckoutView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Cliente").font(.headline)
-                    Text(selectedClient?.nome ?? "Cliente balcão").font(.caption).foregroundStyle(.secondary)
+                    Text(selectedClient == nil ? "Cliente balcão ou identificado" : "Cliente selecionado")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button("Cadastro rápido") { showQuickClient = true }
                     .font(.caption.bold())
             }
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) { clientSelectionButton; clientSearchField }
-                VStack(spacing: 10) { clientSearchField; clientSelectionButton }
+            if let selectedClient {
+                selectedClientRow(selectedClient)
+                    .padding(.top, 10)
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) { clientSelectionButton; clientSearchField }
+                    VStack(spacing: 10) { clientSearchField; clientSelectionButton }
+                }
+                .padding(.top, 10)
             }
-            .padding(.top, 10)
-            if !clientResults.isEmpty {
+            if selectedClient == nil, !clientResults.isEmpty {
                 SearchResultPanel {
                     LazyVStack(spacing: 0) {
                         ForEach(clientResults) { client in
@@ -159,11 +168,42 @@ struct CheckoutView: View {
         }
     }
 
+    private func selectedClientRow(_ client: Client) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "person.crop.circle.fill")
+                .font(.title2)
+                .foregroundStyle(ITEDStyle.blue)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(client.nome)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                let detail = [client.cpfCnpj, client.cidadeUf].filter { !$0.isEmpty }.joined(separator: " • ")
+                if !detail.isEmpty {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 8)
+            Button("Trocar") {
+                selectedClient = nil
+                clientQuery = ""
+                clientResults = []
+                focusedField = .client
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+        }
+        .padding(12)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+    }
+
     private var clientSelectionButton: some View {
         Button {
-            selectedClient = nil; clientQuery = ""; clientResults = []; focusedField = nil
+            selectedClient = nil; clientQuery = ""; clientResults = []; dismissKeyboard()
         } label: {
-            Label(selectedClient == nil ? "Balcão" : "Usar cliente balcão", systemImage: "person")
+            Label("Balcão", systemImage: "person")
                 .lineLimit(1)
         }
         .buttonStyle(.bordered)
@@ -192,15 +232,10 @@ struct CheckoutView: View {
 
     private var productSection: some View {
         ITEDCard {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Adicionar produto").font(.headline)
-                Text("Bipe ou pesquise pelo código e nome").font(.caption).foregroundStyle(.secondary)
-            }
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .center, spacing: 8) { quantityField; productSearchField }
                 VStack(spacing: 10) { quantityField; productSearchField }
             }
-            .padding(.top, 10)
             if !productResults.isEmpty {
                 SearchResultPanel {
                     LazyVStack(spacing: 0) {
@@ -239,7 +274,7 @@ struct CheckoutView: View {
 
     private var productSearchField: some View {
         HStack(spacing: 8) {
-            TextField("Código ou produto", text: $productQuery)
+            TextField("Adicionar produto", text: $productQuery, prompt: Text("Adicionar produto: código ou nome"))
                 .focused($focusedField, equals: .product)
                 .textFieldStyle(.roundedBorder)
                 .onChange(of: productQuery) { _, value in searchProducts(value) }
@@ -357,9 +392,8 @@ struct CheckoutView: View {
                 .disabled(lines.isEmpty || payment == nil || state?.sessionOpen != true || (discountRequiresAuthorization && discountAuthorization == nil))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.bar)
+        .padding(16)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: ITEDStyle.radius))
     }
 
     private func loadState() async {
@@ -444,6 +478,16 @@ struct CheckoutView: View {
         pendingID = nil
     }
 
+    private func dismissKeyboard() {
+        focusedField = nil
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
+    }
+
     private var discountRequiresAuthorization: Bool {
         guard discount > 0, let state else { return false }
         let percentageLimit = subtotal * state.maxDiscountPercent / 100
@@ -473,6 +517,7 @@ private struct DiscountSheet: View {
     let apply: (Decimal) -> Void
     @State private var mode = 0
     @State private var value = ""
+    @FocusState private var valueIsFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -484,14 +529,35 @@ private struct DiscountSheet: View {
                         HStack { ForEach(percentages, id: \.self) { percent in Button("\(percent)%") { mode = 1; value = percent } } }
                     }
                 }
-                TextField(mode == 0 ? "Valor do desconto" : "Percentual do desconto", text: $value).keyboardType(.decimalPad)
+                TextField(mode == 0 ? "Valor do desconto" : "Percentual do desconto", text: $value)
+                    .focused($valueIsFocused)
+                    .keyboardType(.decimalPad)
                 LabeledContent("Desconto calculado", value: calculated.currency)
                 LabeledContent("Total", value: max(0, subtotal - calculated).currency)
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Desconto da venda")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Aplicar") { apply(calculated); dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Aplicar") {
+                        valueIsFocused = false
+                        apply(calculated)
+                        dismiss()
+                    }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Concluir") {
+                        valueIsFocused = false
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil,
+                            from: nil,
+                            for: nil
+                        )
+                    }
+                }
             }
             .onAppear { value = initialDiscount.apiString }
         }.presentationDetents([.medium, .large])
