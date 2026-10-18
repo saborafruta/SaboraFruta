@@ -1,0 +1,5 @@
+version: 1
+bundleID: br.com.ited.forcavendas
+product: ITEDForcaVendas
+infoPath: ITED-Info.plist
+iconPath: Sources/ITEDForcaVendas/Resources/AppIcon.png

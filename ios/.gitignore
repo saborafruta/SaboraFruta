@@ -1,0 +1,6 @@
+.build/
+.swiftpm/
+.bsp/
+xtool/
+*.ipa
+*.mobileprovision
