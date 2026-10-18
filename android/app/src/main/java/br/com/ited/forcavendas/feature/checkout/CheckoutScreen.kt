@@ -221,7 +221,14 @@ fun CheckoutScreen(
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Voltar")
                     }
                 },
-                title = { Text("Checkout de venda", fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        "Checkout de venda",
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
                 actions = {
                     IconButton(onClick = onOpenPendings) {
                         Icon(Icons.Outlined.HourglassTop, contentDescription = "Vendas pendentes")
@@ -1001,13 +1008,16 @@ fun CheckoutScreen(
 
 @Composable
 private fun SectionTitle(title: String, subtitle: String) {
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Bottom,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            subtitle,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

@@ -9,6 +9,7 @@ struct ITEDForcaVendasApp: App {
             RootView()
                 .environment(model)
                 .preferredColorScheme(preferredScheme)
+                .dynamicTypeSize(.small ... .xxLarge)
         }
     }
 

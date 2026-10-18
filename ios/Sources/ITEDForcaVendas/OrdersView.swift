@@ -29,7 +29,7 @@ struct OrdersView: View {
     }
 }
 
-private struct NewOrderView: View {
+struct NewOrderView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var options: OrderOptions?

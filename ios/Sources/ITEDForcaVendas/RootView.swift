@@ -37,7 +37,6 @@ struct RootView: View {
         Binding(get: { model.successMessage != nil }, set: { if !$0 { model.successMessage = nil } })
     }
 }
-
 private struct LoginView: View {
     @Environment(AppModel.self) private var model
     @State private var email = ""
@@ -117,19 +116,29 @@ private struct LockedView: View {
     }
 }
 
+private enum MainRoute: Hashable {
+    case checkout
+    case pendingSales
+    case newOrder
+    case orders
+    case clients
+    case separation
+}
+
 private struct MainTabView: View {
     var body: some View {
-        TabView {
-            NavigationStack { HomeView() }
-                .tabItem { Label("Início", systemImage: "house.fill") }
-            NavigationStack { CheckoutView() }
-                .tabItem { Label("Checkout", systemImage: "cart.fill") }
-            NavigationStack { OrdersView() }
-                .tabItem { Label("Pedidos", systemImage: "doc.text.fill") }
-            NavigationStack { ClientsView() }
-                .tabItem { Label("Clientes", systemImage: "person.2.fill") }
-            NavigationStack { MoreView() }
-                .tabItem { Label("Mais", systemImage: "ellipsis.circle.fill") }
+        NavigationStack {
+            HomeView()
+                .navigationDestination(for: MainRoute.self) { route in
+                    switch route {
+                    case .checkout: CheckoutView()
+                    case .pendingSales: PendingSalesView()
+                    case .newOrder: NewOrderView()
+                    case .orders: OrdersView()
+                    case .clients: ClientsView()
+                    case .separation: SeparationView()
+                    }
+                }
         }
         .tint(ITEDStyle.orange)
     }
@@ -137,44 +146,149 @@ private struct MainTabView: View {
 
 private struct HomeView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
-                HStack {
-                    ITEDLogo(compact: true)
-                    VStack(alignment: .leading) {
-                        Text("Olá, \(model.session?.usuarioNome ?? "")").font(.headline)
-                        Text(model.session?.context.filialNome ?? "").font(.caption).foregroundStyle(.secondary)
+            LazyVStack(spacing: 12) {
+                ITEDLogo()
+                    .frame(maxHeight: 88)
+
+                Button {
+                    Task { await model.switchContext() }
+                } label: {
+                    ITEDCard {
+                        HStack(spacing: 12) {
+                            Image(systemName: "building.2")
+                                .foregroundStyle(ITEDStyle.blue)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(model.session?.context.empresaNome ?? "")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(model.session?.context.filialNome ?? "")
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(2)
+                            }
+                            Spacer(minLength: 8)
+                            Image(systemName: "arrow.left.arrow.right")
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                    Spacer()
-                    SyncButton()
                 }
-                ITEDCard {
-                    Label("Operação integrada", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
-                    Text("Consulte dados atualizados do iTED e acompanhe o envio das vendas e pedidos.")
-                        .font(.subheadline).foregroundStyle(.secondary).padding(.top, 4)
-                }
-                LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 12) {
-                    HomeTile(title: "Checkout", subtitle: "Venda rápida", icon: "cart.fill", color: ITEDStyle.orange)
-                    HomeTile(title: "Pedidos", subtitle: "Força de vendas", icon: "doc.badge.plus", color: ITEDStyle.blue)
-                    HomeTile(title: "Clientes", subtitle: "Busca e cadastro", icon: "person.crop.circle.badge.plus", color: .indigo)
-                    HomeTile(title: "Separação", subtitle: "Estoque e lotes", icon: "shippingbox.fill", color: .teal)
-                }
-            }.padding()
+                .buttonStyle(.plain)
+
+                Text("Operação")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 4)
+
+                HomeActionLink(
+                    route: .checkout,
+                    title: "Checkout de venda",
+                    subtitle: "Venda de balcão, pendência ou baixa imediata",
+                    icon: "cart.fill",
+                    color: ITEDStyle.orange,
+                    enabled: model.session?.context.podeCheckout == true
+                )
+                HomeActionLink(
+                    route: .pendingSales,
+                    title: "Vendas pendentes",
+                    subtitle: "Receber e dar baixa nas vendas aguardando caixa",
+                    icon: "hourglass",
+                    color: ITEDStyle.orange,
+                    enabled: model.session?.context.podeCheckout == true
+                )
+                HomeActionLink(
+                    route: .newOrder,
+                    title: "Novo pedido",
+                    subtitle: "Cliente, produtos, preço e pagamento",
+                    icon: "doc.badge.plus",
+                    color: ITEDStyle.blue,
+                    enabled: model.session?.context.podeCriarPedido == true
+                )
+                HomeActionLink(
+                    route: .orders,
+                    title: "Meus pedidos",
+                    subtitle: "Rascunhos, envio e acompanhamento",
+                    icon: "doc.text.fill",
+                    color: ITEDStyle.blue
+                )
+                HomeActionLink(
+                    route: .clients,
+                    title: "Clientes",
+                    subtitle: "Carteira, crédito e cadastro completo",
+                    icon: "person.2.fill",
+                    color: .indigo,
+                    enabled: model.session?.context.podeCriarPedido == true
+                )
+                HomeActionLink(
+                    route: .separation,
+                    title: "Separação",
+                    subtitle: "Depósito, lote e quantidade conferida",
+                    icon: "shippingbox.fill",
+                    color: .teal,
+                    enabled: model.session?.context.podeSeparar == true
+                )
+            }
+            .padding()
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle("iTED")
+        .navigationTitle("ITED Força de Vendas")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                SyncButton()
+                Button {
+                    model.theme = colorScheme == .dark ? .light : .dark
+                } label: {
+                    Image(systemName: colorScheme == .dark ? "sun.max.fill" : "moon.fill")
+                }
+                .accessibilityLabel(colorScheme == .dark ? "Usar tema claro" : "Usar tema escuro")
+                Button(role: .destructive) { model.logout() } label: {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                }
+                .accessibilityLabel("Sair")
+            }
+        }
     }
 }
 
-private struct HomeTile: View {
-    let title: String; let subtitle: String; let icon: String; let color: Color
+private struct HomeActionLink: View {
+    let route: MainRoute
+    let title: String
+    let subtitle: String
+    let icon: String
+    let color: Color
+    var enabled = true
+
     var body: some View {
-        ITEDCard {
-            Image(systemName: icon).font(.title).foregroundStyle(color)
-            Text(title).font(.headline).padding(.top, 8)
-            Text(subtitle).font(.caption).foregroundStyle(.secondary)
-        }.frame(minHeight: 128)
+        NavigationLink(value: route) {
+            ITEDCard {
+                HStack(spacing: 14) {
+                    Image(systemName: icon)
+                        .font(.title3)
+                        .foregroundStyle(enabled ? color : .secondary)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        Text(enabled ? subtitle : "Sem permissão nesta filial")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.bold())
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.58)
     }
 }
 
@@ -200,27 +314,5 @@ struct SyncButton: View {
                 }.padding().navigationTitle("Sincronização").navigationBarTitleDisplayMode(.inline)
             }.presentationDetents([.medium])
         }
-    }
-}
-
-private struct MoreView: View {
-    @Environment(AppModel.self) private var model
-    var body: some View {
-        List {
-            Section("Operação") {
-                NavigationLink { SeparationView() } label: { Label("Separação", systemImage: "shippingbox") }
-                NavigationLink { PendingSalesView() } label: { Label("Vendas pendentes", systemImage: "hourglass") }
-                Button { Task { await model.switchContext() } } label: { Label("Trocar filial", systemImage: "building.2") }
-            }
-            Section("Aparência") {
-                Picker("Tema", selection: Binding(
-                    get: { model.theme },
-                    set: { model.theme = $0 }
-                )) {
-                    ForEach(AppTheme.allCases) { Text($0.rawValue).tag($0) }
-                }
-            }
-            Section { Button("Sair", role: .destructive) { model.logout() } }
-        }.navigationTitle("Mais")
     }
 }
