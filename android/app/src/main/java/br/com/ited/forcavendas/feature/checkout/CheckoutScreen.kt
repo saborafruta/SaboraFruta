@@ -26,6 +26,8 @@ import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.HourglassTop
 import androidx.compose.material.icons.outlined.ShoppingCartCheckout
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -59,6 +61,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import br.com.ited.forcavendas.data.CheckoutLine
+import br.com.ited.forcavendas.data.CheckoutPendingDraft
 import br.com.ited.forcavendas.data.CheckoutSale
 import br.com.ited.forcavendas.data.CheckoutState
 import br.com.ited.forcavendas.data.Client
@@ -77,8 +80,11 @@ import kotlinx.coroutines.launch
 fun CheckoutScreen(
     repository: ItedRepository,
     session: UserSession,
+    initialPending: CheckoutPendingDraft? = null,
     onBack: () -> Unit,
     onCompleted: (String) -> Unit,
+    onPendingSaved: (String) -> Unit,
+    onOpenPendings: () -> Unit,
     onMessage: (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -86,7 +92,7 @@ fun CheckoutScreen(
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var client by remember { mutableStateOf<Client?>(null) }
+    var client by remember(initialPending?.id) { mutableStateOf(initialPending?.client) }
     var clientQuery by remember { mutableStateOf("") }
     var clientResults by remember { mutableStateOf<List<Client>>(emptyList()) }
     var clientSearching by remember { mutableStateOf(false) }
@@ -94,8 +100,8 @@ fun CheckoutScreen(
     var productQuery by remember { mutableStateOf("") }
     var productResults by remember { mutableStateOf<List<Product>>(emptyList()) }
     var productSearching by remember { mutableStateOf(false) }
-    var lines by remember { mutableStateOf<List<CheckoutLine>>(emptyList()) }
-    var discount by remember { mutableStateOf("0.00") }
+    var lines by remember(initialPending?.id) { mutableStateOf(initialPending?.lines.orEmpty()) }
+    var discount by remember(initialPending?.id) { mutableStateOf(initialPending?.discount ?: "0.00") }
     var selectedPayment by remember { mutableStateOf<PaymentOption?>(null) }
     var received by remember { mutableStateOf("") }
     var discountDialog by remember { mutableStateOf(false) }
@@ -114,6 +120,9 @@ fun CheckoutScreen(
             runCatching { repository.checkoutState(session) }
                 .onSuccess { loaded ->
                     state = loaded
+                    if (selectedPayment == null && initialPending?.paymentId != null) {
+                        selectedPayment = loaded.payments.firstOrNull { it.id == initialPending.paymentId }
+                    }
                 }
                 .onFailure { error = it.message ?: "Não foi possível abrir o checkout." }
             loading = false
@@ -186,6 +195,9 @@ fun CheckoutScreen(
                 },
                 title = { Text("Checkout de venda", fontWeight = FontWeight.Bold) },
                 actions = {
+                    IconButton(onClick = onOpenPendings) {
+                        Icon(Icons.Outlined.HourglassTop, contentDescription = "Vendas pendentes")
+                    }
                     val open = state?.sessionOpen == true
                     Surface(
                         shape = CircleShape,
@@ -229,6 +241,36 @@ fun CheckoutScreen(
                                 fontWeight = FontWeight.Black,
                             )
                         }
+                        if (initialPending == null) {
+                            OutlinedButton(
+                                modifier = Modifier.fillMaxWidth().height(50.dp),
+                                enabled = !busy && lines.isNotEmpty(),
+                                onClick = {
+                                    scope.launch {
+                                        busy = true
+                                        runCatching {
+                                            repository.saveCheckoutPending(
+                                                session = session,
+                                                client = client,
+                                                lines = lines,
+                                                discount = decimal(discount).setScale(2, RoundingMode.HALF_UP).toPlainString(),
+                                                payment = selectedPayment,
+                                                received = decimal(received).setScale(2, RoundingMode.HALF_UP).toPlainString(),
+                                            )
+                                        }.onSuccess { pending ->
+                                            onPendingSaved("Venda #${pending.number} salva em pendências para o caixa.")
+                                        }.onFailure {
+                                            onMessage(it.message ?: "Não foi possível salvar a venda em pendências.")
+                                        }
+                                        busy = false
+                                    }
+                                },
+                            ) {
+                                Icon(Icons.Outlined.Schedule, contentDescription = null)
+                                Spacer(Modifier.size(8.dp))
+                                Text("Salvar em pendência", fontWeight = FontWeight.Bold)
+                            }
+                        }
                         Button(
                             modifier = Modifier.fillMaxWidth().height(54.dp),
                             enabled = !busy && state?.sessionOpen == true && lines.isNotEmpty() && selectedPayment != null,
@@ -249,6 +291,7 @@ fun CheckoutScreen(
                                                 payment = payment,
                                                 discount = decimal(discount).setScale(2, RoundingMode.HALF_UP).toPlainString(),
                                                 received = decimal(received).setScale(2, RoundingMode.HALF_UP).toPlainString(),
+                                                pendingId = initialPending?.id,
                                             ),
                                         )
                                     }.onSuccess { sale ->
@@ -314,6 +357,20 @@ fun CheckoutScreen(
                                 "Abra o caixa no iTED antes de finalizar. Você pode montar o carrinho enquanto isso.",
                                 modifier = Modifier.padding(14.dp),
                                 color = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                        }
+                    }
+                }
+                initialPending?.let { pending ->
+                    item {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = MaterialTheme.shapes.large,
+                        ) {
+                            Text(
+                                "Venda #${pending.number} retomada. Revise a forma de pagamento e finalize para dar baixa.",
+                                modifier = Modifier.padding(14.dp),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
                     }

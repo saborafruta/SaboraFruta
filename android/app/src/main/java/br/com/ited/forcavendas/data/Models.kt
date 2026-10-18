@@ -96,6 +96,7 @@ data class CheckoutSale(
     val payment: PaymentOption,
     val discount: String,
     val received: String,
+    val pendingId: Long? = null,
 )
 
 data class CheckoutResult(
@@ -103,6 +104,24 @@ data class CheckoutResult(
     val number: String,
     val total: String,
     val change: String,
+)
+
+data class CheckoutPendingSummary(
+    val id: Long,
+    val number: String,
+    val clientName: String,
+    val total: String,
+    val createdAt: String,
+    val itemCount: Int,
+)
+
+data class CheckoutPendingDraft(
+    val id: Long,
+    val number: String,
+    val client: Client?,
+    val lines: List<CheckoutLine>,
+    val discount: String,
+    val paymentId: Long?,
 )
 
 data class PaymentCondition(

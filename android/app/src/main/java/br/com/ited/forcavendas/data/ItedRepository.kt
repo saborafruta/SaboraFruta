@@ -227,14 +227,7 @@ class ItedRepository(private val store: SessionStore) {
     }
 
     suspend fun submitCheckout(session: UserSession, sale: CheckoutSale): CheckoutResult {
-        val items = JSONArray()
-        sale.lines.forEach { line ->
-            items.put(
-                JSONObject()
-                    .put("produto_id", line.product.id)
-                    .put("quantidade", line.quantity),
-            )
-        }
+        val items = checkoutItems(sale.lines)
         val payments = JSONArray().put(
             JSONObject()
                 .put("forma_id", sale.payment.id)
@@ -246,6 +239,7 @@ class ItedRepository(private val store: SessionStore) {
             "POST",
             "api/v1/mobile/checkout/vendas/",
             JSONObject()
+                .put("pendencia_id", sale.pendingId ?: JSONObject.NULL)
                 .put("cliente_id", sale.client?.id ?: JSONObject.NULL)
                 .put("desconto", sale.discount)
                 .put("itens", items)
@@ -257,6 +251,69 @@ class ItedRepository(private val store: SessionStore) {
             number = response.getString("numero_venda"),
             total = response.getString("valor_total"),
             change = response.getString("troco"),
+        )
+    }
+
+    suspend fun saveCheckoutPending(
+        session: UserSession,
+        client: Client?,
+        lines: List<CheckoutLine>,
+        discount: String,
+        payment: PaymentOption?,
+        received: String,
+    ): CheckoutPendingSummary {
+        val payments = JSONArray()
+        if (payment != null) {
+            payments.put(
+                JSONObject()
+                    .put("forma_id", payment.id)
+                    .put("valor", received),
+            )
+        }
+        val response = api.authorized(
+            session,
+            session.context,
+            "POST",
+            "api/v1/mobile/checkout/pendencias/",
+            JSONObject()
+                .put("cliente_id", client?.id ?: JSONObject.NULL)
+                .put("desconto", discount)
+                .put("itens", checkoutItems(lines))
+                .put("pagamentos", payments),
+            UUID.randomUUID().toString(),
+        )
+        return parseCheckoutPendingSummary(response)
+    }
+
+    suspend fun checkoutPendings(session: UserSession): List<CheckoutPendingSummary> {
+        val response = api.authorized(
+            session,
+            session.context,
+            "GET",
+            "api/v1/mobile/checkout/pendencias/",
+        )
+        return response.getJSONArray("pendencias").mapObjects(::parseCheckoutPendingSummary)
+    }
+
+    suspend fun checkoutPendingDetail(session: UserSession, pendingId: Long): CheckoutPendingDraft {
+        val response = api.authorized(
+            session,
+            session.context,
+            "GET",
+            "api/v1/mobile/checkout/pendencias/$pendingId/",
+        )
+        return CheckoutPendingDraft(
+            id = response.getLong("id"),
+            number = response.getString("numero_venda"),
+            client = response.optJSONObject("cliente")?.let(::parseClient),
+            lines = response.getJSONArray("itens").mapObjects { item ->
+                CheckoutLine(
+                    product = parseProduct(item.getJSONObject("produto")),
+                    quantity = item.getString("quantidade"),
+                )
+            },
+            discount = response.getString("desconto"),
+            paymentId = response.optNullableLong("forma_pagamento_id"),
         )
     }
 
@@ -544,6 +601,25 @@ class ItedRepository(private val store: SessionStore) {
             .put("observacao", draft.observacao)
             .put("itens", items)
     }
+
+    private fun checkoutItems(lines: List<CheckoutLine>): JSONArray = JSONArray().also { items ->
+        lines.forEach { line ->
+            items.put(
+                JSONObject()
+                    .put("produto_id", line.product.id)
+                    .put("quantidade", line.quantity),
+            )
+        }
+    }
+
+    private fun parseCheckoutPendingSummary(item: JSONObject) = CheckoutPendingSummary(
+        id = item.getLong("id"),
+        number = item.getString("numero_venda"),
+        clientName = item.getString("cliente_nome"),
+        total = item.getString("valor_total"),
+        createdAt = item.getString("data_venda"),
+        itemCount = item.getInt("quantidade_itens"),
+    )
 
     private fun pendingItems(session: UserSession): List<JSONObject> {
         val pending = store.pendingOrders()

@@ -17,7 +17,7 @@ from apps.core.tenant_context import tenant_atomic
 from apps.estoque.models import Deposito, LoteProduto
 from apps.estoque.services.saldos_por_deposito import anexar_saldos_por_deposito
 from apps.financeiro.models import CondicaoPagamento, FormaPagamento
-from apps.pdv.models import SessaoPDV, VendaPDV
+from apps.pdv.models import ItemVendaPDV, SessaoPDV, VendaPDV
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
 from apps.pdv.services.venda_pdv_service import VendaPDVService
 from apps.produtos.models import CategoriaProduto, Produto
@@ -27,6 +27,7 @@ from apps.vendas.services.venda_service import VendaService
 from .base import MobileTenantAPIView
 from .serializers import (
     CheckoutVendaSerializer,
+    CheckoutPendenteSerializer,
     ClienteRapidoCheckoutSerializer,
     ConcluirSeparacaoSerializer,
     NovoPedidoSerializer,
@@ -503,25 +504,43 @@ class CheckoutVendaMobileView(MobileTenantAPIView):
         entrada = CheckoutVendaSerializer(data=request.data)
         entrada.is_valid(raise_exception=True)
         dados = entrada.validated_data
+        pendencia = None
+        if dados.get('pendencia_id'):
+            pendencia = (
+                VendaPDV.objects.for_filial(request.filial_ativa)
+                .filter(pk=dados['pendencia_id'], status='aberta')
+                .first()
+            )
+            if pendencia is None:
+                raise exceptions.ValidationError({'pendencia_id': 'Venda pendente não encontrada.'})
         desconto = dados.get('desconto') or Decimal('0')
         if desconto > 0 and not (
             request.user.is_superuser or request.user.tem_permissao('pdv', 'aprovar')
         ):
             raise exceptions.PermissionDenied('Seu usuário não possui permissão para aplicar desconto no checkout.')
         try:
-            venda = VendaPDVService.finalizar_venda(
-                sessao=sessao,
-                filial=request.filial_ativa,
-                usuario=request.user,
-                itens=list(dados['itens']),
-                pagamentos=list(dados['pagamentos']),
-                cliente_id=dados.get('cliente_id'),
-                desconto=desconto,
-                observacao=dados.get('observacao') or '',
-                forcar_estoque_negativo=False,
-                idempotency_key=chave,
-                request=request,
-            )
+            with tenant_atomic():
+                if pendencia is not None:
+                    pendencia = (
+                        VendaPDV.objects.for_filial(request.filial_ativa)
+                        .select_for_update()
+                        .get(pk=pendencia.pk, status='aberta')
+                    )
+                venda = VendaPDVService.finalizar_venda(
+                    sessao=sessao,
+                    filial=request.filial_ativa,
+                    usuario=request.user,
+                    itens=list(dados['itens']),
+                    pagamentos=list(dados['pagamentos']),
+                    cliente_id=dados.get('cliente_id'),
+                    desconto=desconto,
+                    observacao=dados.get('observacao') or '',
+                    forcar_estoque_negativo=False,
+                    idempotency_key=chave,
+                    request=request,
+                )
+                if pendencia is not None:
+                    pendencia.delete()
         except EstoqueInsuficienteError as exc:
             raise exceptions.ValidationError({'estoque': str(exc)}) from exc
         except DadosInvalidosError as exc:
@@ -540,6 +559,203 @@ class CheckoutVendaMobileView(MobileTenantAPIView):
             'troco': _decimal(venda.troco),
             'repetida': False,
         }, status=status.HTTP_201_CREATED)
+
+
+def _checkout_pendente_resumo(venda):
+    return {
+        'id': venda.pk,
+        'numero_venda': str(venda.numero_venda),
+        'cliente_nome': venda.cliente.nome_display if venda.cliente else 'Cliente balcão',
+        'valor_total': _decimal(venda.valor_total),
+        'data_venda': venda.data_venda.isoformat(),
+        'quantidade_itens': len(venda.itens.all()),
+    }
+
+
+class CheckoutPendenciasMobileView(MobileTenantAPIView):
+    permissao_modulo = 'pdv'
+    permissao_acao = 'ver'
+    throttle_classes = [MobileWriteThrottle]
+
+    def get(self, request):
+        _checkout_disponivel(request)
+        vendas = list(
+            VendaPDV.objects.for_filial(request.filial_ativa)
+            .filter(status='aberta')
+            .select_related('cliente')
+            .prefetch_related('itens')
+            .order_by('-data_venda')[:50]
+        )
+        return Response({'pendencias': [_checkout_pendente_resumo(venda) for venda in vendas]})
+
+    def post(self, request):
+        _checkout_disponivel(request)
+        chave = validar_idempotency_key(request)
+        existente = (
+            VendaPDV.objects.for_filial(request.filial_ativa)
+            .filter(idempotency_key=chave, status='aberta')
+            .select_related('cliente')
+            .prefetch_related('itens')
+            .first()
+        )
+        if existente:
+            return Response({**_checkout_pendente_resumo(existente), 'repetida': True})
+
+        entrada = CheckoutPendenteSerializer(data=request.data)
+        entrada.is_valid(raise_exception=True)
+        dados = entrada.validated_data
+        desconto = dados.get('desconto') or Decimal('0')
+        if desconto > 0 and not (
+            request.user.is_superuser or request.user.tem_permissao('pdv', 'aprovar')
+        ):
+            raise exceptions.PermissionDenied('Seu usuário não possui permissão para aplicar desconto no checkout.')
+
+        cliente = None
+        if dados.get('cliente_id'):
+            cliente = (
+                Cliente.objects.for_filial(request.filial_ativa)
+                .select_related('tabela_preco')
+                .filter(pk=dados['cliente_id'], ativo=True)
+                .first()
+            )
+            if cliente is None:
+                raise exceptions.ValidationError({'cliente_id': 'Selecione um cliente válido.'})
+        sessao = (
+            SessaoPDV.objects.for_filial(request.filial_ativa)
+            .filter(usuario=request.user, status='aberto')
+            .first()
+        )
+        try:
+            with tenant_atomic():
+                venda = VendaPDV.objects.create(
+                    sessao_pdv=sessao,
+                    filial=request.filial_ativa,
+                    numero_venda=VendaPDVService._proximo_numero_venda(request.filial_ativa),
+                    cliente=cliente,
+                    status='aberta',
+                    origem='checkout_mobile',
+                    pagamentos_rascunho=[
+                        {'forma_id': item['forma_id'], 'valor': str(item['valor'])}
+                        for item in dados.get('pagamentos', [])
+                    ],
+                    observacao=dados.get('observacao') or '',
+                    valor_desconto=desconto,
+                    usuario=request.user,
+                    data_venda=timezone.now(),
+                    idempotency_key=chave,
+                )
+                subtotal = Decimal('0')
+                for numero, item in enumerate(dados['itens'], start=1):
+                    produto = (
+                        Produto.objects.for_filial(request.filial_ativa)
+                        .select_related('unidade_medida')
+                        .filter(pk=item['produto_id'], ativo=True)
+                        .first()
+                    )
+                    if produto is None:
+                        raise exceptions.ValidationError({'produto_id': 'Produto não encontrado.'})
+                    quantidade = item['quantidade']
+                    preco = VendaPDVService.resolver_preco_produto(
+                        produto,
+                        request.filial_ativa,
+                        quantidade,
+                        cliente,
+                    )
+                    valor_unitario = preco['preco']
+                    valor_total = (quantidade * valor_unitario).quantize(Decimal('0.01'))
+                    ItemVendaPDV.objects.create(
+                        venda_pdv=venda,
+                        produto=produto,
+                        numero_item=numero,
+                        quantidade=quantidade,
+                        unidade_medida=produto.unidade_medida.sigla,
+                        valor_unitario=valor_unitario,
+                        valor_unitario_tabela=produto.preco_venda,
+                        preco_origem=preco['tipo'],
+                        preco_origem_detalhe=preco['origem'],
+                        valor_total=valor_total,
+                    )
+                    subtotal += valor_total
+                if desconto > subtotal:
+                    raise exceptions.ValidationError({'desconto': 'O desconto não pode superar o total da venda.'})
+                venda.valor_subtotal = subtotal
+                venda.valor_total = subtotal - desconto
+                venda.save(update_fields=['valor_subtotal', 'valor_total', 'updated_at'])
+        except IntegrityError:
+            existente = (
+                VendaPDV.objects.for_filial(request.filial_ativa)
+                .filter(idempotency_key=chave, status='aberta')
+                .select_related('cliente')
+                .prefetch_related('itens')
+                .first()
+            )
+            if existente is None:
+                raise
+            return Response({**_checkout_pendente_resumo(existente), 'repetida': True})
+        venda = (
+            VendaPDV.objects.for_filial(request.filial_ativa)
+            .select_related('cliente')
+            .prefetch_related('itens')
+            .get(pk=venda.pk)
+        )
+        return Response({**_checkout_pendente_resumo(venda), 'repetida': False}, status=status.HTTP_201_CREATED)
+
+
+class CheckoutPendenteDetalheMobileView(MobileTenantAPIView):
+    permissao_modulo = 'pdv'
+    permissao_acao = 'ver'
+
+    def get(self, request, pk):
+        _checkout_disponivel(request)
+        venda = (
+            VendaPDV.objects.for_filial(request.filial_ativa)
+            .filter(pk=pk, status='aberta')
+            .select_related('cliente__tabela_preco')
+            .prefetch_related('itens__produto__unidade_medida', 'itens__produto__categoria')
+            .first()
+        )
+        if venda is None:
+            raise exceptions.NotFound('Venda pendente não encontrada.')
+        produtos = [item.produto for item in venda.itens.all()]
+        anexar_saldos_por_deposito(produtos=produtos, filial=request.filial_ativa)
+        itens = []
+        for item in venda.itens.all():
+            produto = item.produto
+            itens.append({
+                'quantidade': _decimal(item.quantidade, 3),
+                'produto': {
+                    'id': produto.pk,
+                    'descricao': produto.descricao_pdv or produto.descricao,
+                    'codigo': produto.codigo or produto.codigo_barras or '',
+                    'unidade': item.unidade_medida,
+                    'preco': _decimal(item.valor_unitario),
+                    'preco_origem': item.preco_origem_detalhe or item.preco_origem,
+                    'categoria': produto.categoria.nome if produto.categoria_id else 'Sem categoria',
+                    'destaque': produto.catalogo_destaque,
+                    'estoque_disponivel': _decimal(sum(
+                        (saldo['disponivel'] for saldo in produto.saldos_depositos),
+                        Decimal('0'),
+                    ), 3),
+                    'controla_lote': produto.controla_lote,
+                    'pode_vender': produto.ativo,
+                    'bloqueios': [],
+                    'estoques': [{
+                        'deposito_id': saldo['id'],
+                        'deposito_nome': saldo['nome'],
+                        'disponivel': _decimal(saldo['disponivel'], 3),
+                        'permite_venda': saldo['permite_venda'],
+                        'origem_pedido': saldo['origem_pedido'],
+                    } for saldo in produto.saldos_depositos],
+                },
+            })
+        pagamentos = venda.pagamentos_rascunho or []
+        return Response({
+            **_checkout_pendente_resumo(venda),
+            'cliente': _serializar_cliente_checkout(venda.cliente) if venda.cliente else None,
+            'desconto': _decimal(venda.valor_desconto),
+            'forma_pagamento_id': pagamentos[0].get('forma_id') if pagamentos else None,
+            'itens': itens,
+        })
 
 
 class OpcoesPedidoMobileView(MobileTenantAPIView):

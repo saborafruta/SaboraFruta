@@ -41,6 +41,7 @@ class PagamentoCheckoutSerializer(serializers.Serializer):
 
 
 class CheckoutVendaSerializer(serializers.Serializer):
+    pendencia_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
     cliente_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
     desconto = serializers.DecimalField(
         max_digits=14,
@@ -52,6 +53,25 @@ class CheckoutVendaSerializer(serializers.Serializer):
     observacao = serializers.CharField(required=False, allow_blank=True, max_length=2000, default='')
     itens = ItemCheckoutSerializer(many=True, allow_empty=False)
     pagamentos = PagamentoCheckoutSerializer(many=True, allow_empty=False)
+
+
+class CheckoutPendenteSerializer(serializers.Serializer):
+    cliente_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    desconto = serializers.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        min_value=Decimal('0'),
+        required=False,
+        default=Decimal('0'),
+    )
+    observacao = serializers.CharField(required=False, allow_blank=True, max_length=2000, default='')
+    itens = ItemCheckoutSerializer(many=True, allow_empty=False)
+    pagamentos = PagamentoCheckoutSerializer(
+        many=True,
+        allow_empty=True,
+        required=False,
+        default=list,
+    )
 
 
 class ClienteRapidoCheckoutSerializer(serializers.Serializer):

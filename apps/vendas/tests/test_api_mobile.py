@@ -336,6 +336,110 @@ class ForcaVendasMobileApiTests(TestCase):
         self.assertTrue(repetida.json()['repetida'])
         self.assertEqual(VendaPDV.objects.filter(idempotency_key='checkout-mobile-0001').count(), 1)
 
+    def test_checkout_mobile_salva_pendencia_sem_caixa_e_sem_pagamento(self):
+        payload = {
+            'cliente_id': self.cliente.pk,
+            'desconto': '0.00',
+            'itens': [{'produto_id': self.produto.pk, 'quantidade': '2.000'}],
+            'pagamentos': [],
+        }
+        criada = self.client.post(
+            reverse('forca_vendas_mobile_api:checkout_pendencias'),
+            data=payload,
+            content_type='application/json',
+            HTTP_IDEMPOTENCY_KEY='checkout-pendente-mobile-0001',
+            **self.headers,
+        )
+
+        self.assertEqual(criada.status_code, 201, criada.content)
+        pendencia = VendaPDV.objects.get(pk=criada.json()['id'])
+        self.assertEqual(pendencia.status, 'aberta')
+        self.assertEqual(pendencia.origem, 'checkout_mobile')
+        self.assertIsNone(pendencia.sessao_pdv_id)
+        self.assertEqual(pendencia.valor_total, Decimal('25.00'))
+        self.assertFalse(pendencia.itens.get().estoque_baixado)
+
+        lista = self.client.get(
+            reverse('forca_vendas_mobile_api:checkout_pendencias'),
+            **self.headers,
+        )
+        self.assertEqual(lista.status_code, 200, lista.content)
+        self.assertEqual(lista.json()['pendencias'][0]['id'], pendencia.pk)
+
+        detalhe = self.client.get(
+            reverse('forca_vendas_mobile_api:checkout_pendente_detalhe', args=[pendencia.pk]),
+            **self.headers,
+        )
+        self.assertEqual(detalhe.status_code, 200, detalhe.content)
+        self.assertEqual(detalhe.json()['cliente']['id'], self.cliente.pk)
+        self.assertEqual(detalhe.json()['itens'][0]['produto']['id'], self.produto.pk)
+        self.assertEqual(detalhe.json()['itens'][0]['quantidade'], '2.000')
+
+    def test_caixa_finaliza_pendencia_mobile_e_remove_apenas_apos_sucesso(self):
+        criada = self.client.post(
+            reverse('forca_vendas_mobile_api:checkout_pendencias'),
+            data={
+                'cliente_id': self.cliente.pk,
+                'itens': [{'produto_id': self.produto.pk, 'quantidade': '2.000'}],
+                'pagamentos': [],
+            },
+            content_type='application/json',
+            HTTP_IDEMPOTENCY_KEY='checkout-pendente-mobile-0002',
+            **self.headers,
+        )
+        self.assertEqual(criada.status_code, 201, criada.content)
+        pendencia_id = criada.json()['id']
+
+        sem_caixa = self.client.post(
+            reverse('forca_vendas_mobile_api:checkout_vendas'),
+            data={
+                'pendencia_id': pendencia_id,
+                'cliente_id': self.cliente.pk,
+                'itens': [{'produto_id': self.produto.pk, 'quantidade': '2.000'}],
+                'pagamentos': [{'forma_id': self.forma_checkout.pk, 'valor': '25.00'}],
+            },
+            content_type='application/json',
+            HTTP_IDEMPOTENCY_KEY='checkout-baixa-mobile-0002',
+            **self.headers,
+        )
+        self.assertEqual(sem_caixa.status_code, 400, sem_caixa.content)
+        self.assertTrue(VendaPDV.objects.filter(pk=pendencia_id, status='aberta').exists())
+
+        SessaoPDV.objects.create(
+            filial=self.filial,
+            caixa=self.caixa,
+            usuario=self.usuario,
+            valor_abertura=Decimal('100.00'),
+            status='aberto',
+        )
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=self.produto.pk,
+            filial_id=self.filial.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('10'),
+            usuario_id=self.usuario.pk,
+            valor_unitario=Decimal('5'),
+            deposito_id=Deposito.venda_id(self.filial.pk),
+        )
+        finalizada = self.client.post(
+            reverse('forca_vendas_mobile_api:checkout_vendas'),
+            data={
+                'pendencia_id': pendencia_id,
+                'cliente_id': self.cliente.pk,
+                'itens': [{'produto_id': self.produto.pk, 'quantidade': '2.000'}],
+                'pagamentos': [{'forma_id': self.forma_checkout.pk, 'valor': '25.00'}],
+            },
+            content_type='application/json',
+            HTTP_IDEMPOTENCY_KEY='checkout-baixa-mobile-0002',
+            **self.headers,
+        )
+
+        self.assertEqual(finalizada.status_code, 201, finalizada.content)
+        self.assertFalse(VendaPDV.objects.filter(pk=pendencia_id).exists())
+        venda = VendaPDV.objects.get(pk=finalizada.json()['venda_id'])
+        self.assertEqual(venda.status, 'finalizada')
+        self.assertEqual(venda.valor_total, Decimal('25.00'))
+
     def test_pedido_mobile_e_idempotente_e_recebe_numero_oficial(self):
         chave = 'pedido-mobile-0001'
         url = reverse('forca_vendas_mobile_api:pedidos')

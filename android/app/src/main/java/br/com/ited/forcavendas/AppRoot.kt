@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import br.com.ited.forcavendas.data.ItedRepository
+import br.com.ited.forcavendas.data.CheckoutPendingDraft
 import br.com.ited.forcavendas.data.LoginResult
 import br.com.ited.forcavendas.data.NetworkException
 import br.com.ited.forcavendas.data.UserSession
@@ -24,6 +25,7 @@ import br.com.ited.forcavendas.feature.auth.LoginScreen
 import br.com.ited.forcavendas.feature.auth.UnlockScreen
 import br.com.ited.forcavendas.feature.client.ClientsScreen
 import br.com.ited.forcavendas.feature.checkout.CheckoutScreen
+import br.com.ited.forcavendas.feature.checkout.CheckoutPendingsScreen
 import br.com.ited.forcavendas.feature.home.HomeScreen
 import br.com.ited.forcavendas.feature.order.NewOrderScreen
 import br.com.ited.forcavendas.feature.order.OrdersScreen
@@ -33,7 +35,7 @@ import br.com.ited.forcavendas.sync.SyncStatus
 import java.time.Instant
 import kotlinx.coroutines.launch
 
-private enum class AppScreen { LOCKED, LOGIN, CONTEXT, HOME, CHECKOUT, NEW_ORDER, ORDERS, CLIENTS, SEPARATION, SYNC }
+private enum class AppScreen { LOCKED, LOGIN, CONTEXT, HOME, CHECKOUT, CHECKOUT_PENDINGS, NEW_ORDER, ORDERS, CLIENTS, SEPARATION, SYNC }
 
 @Composable
 fun AppRoot(
@@ -54,6 +56,7 @@ fun AppRoot(
     var loginError by remember { mutableStateOf<String?>(null) }
     var unlockError by remember { mutableStateOf<String?>(null) }
     var contextLoading by remember { mutableStateOf(false) }
+    var checkoutPendingDraft by remember { mutableStateOf<CheckoutPendingDraft?>(null) }
     var rememberSecureAccess by remember { mutableStateOf(false) }
     var pending by remember {
         mutableIntStateOf(session?.let { repository.pendingCount(it) } ?: 0)
@@ -217,7 +220,11 @@ fun AppRoot(
                     pendingOperations = pending,
                     onSync = { synchronize(current) },
                     onOpenSync = { screen = AppScreen.SYNC },
-                    onCheckout = { screen = AppScreen.CHECKOUT },
+                    onCheckout = {
+                        checkoutPendingDraft = null
+                        screen = AppScreen.CHECKOUT
+                    },
+                    onCheckoutPendings = { screen = AppScreen.CHECKOUT_PENDINGS },
                     onNewOrder = { screen = AppScreen.NEW_ORDER },
                     onOrders = { screen = AppScreen.ORDERS },
                     onClients = { screen = AppScreen.CLIENTS },
@@ -262,8 +269,24 @@ fun AppRoot(
                 CheckoutScreen(
                     repository = repository,
                     session = current,
+                    initialPending = checkoutPendingDraft,
                     onBack = { goHome() },
                     onCompleted = { goHome(it) },
+                    onPendingSaved = { goHome(it) },
+                    onOpenPendings = { screen = AppScreen.CHECKOUT_PENDINGS },
+                    onMessage = ::notify,
+                )
+            }
+
+            AppScreen.CHECKOUT_PENDINGS -> session?.let { current ->
+                CheckoutPendingsScreen(
+                    repository = repository,
+                    session = current,
+                    onBack = { goHome() },
+                    onOpen = { draft ->
+                        checkoutPendingDraft = draft
+                        screen = AppScreen.CHECKOUT
+                    },
                     onMessage = ::notify,
                 )
             }

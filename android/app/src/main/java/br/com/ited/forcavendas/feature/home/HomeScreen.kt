@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.Business
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.HourglassTop
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.PointOfSale
@@ -76,6 +77,7 @@ fun HomeScreen(
     onSync: () -> Unit,
     onOpenSync: () -> Unit,
     onCheckout: () -> Unit,
+    onCheckoutPendings: () -> Unit,
     onNewOrder: () -> Unit,
     onOrders: () -> Unit,
     onClients: () -> Unit,
@@ -104,10 +106,17 @@ fun HomeScreen(
     val actions = listOf(
         HomeAction(
             "Checkout de venda",
-            "Venda de balcão, pagamento e baixa imediata",
+            "Venda de balcão, pendência ou baixa imediata",
             Icons.Outlined.PointOfSale,
             session.context.podeCheckout,
             onCheckout,
+        ),
+        HomeAction(
+            "Vendas pendentes",
+            "Receber e dar baixa nas vendas aguardando caixa",
+            Icons.Outlined.HourglassTop,
+            session.context.podeCheckout,
+            onCheckoutPendings,
         ),
         HomeAction(
             "Novo pedido",
