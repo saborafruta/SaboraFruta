@@ -319,14 +319,14 @@ struct APIClient: Sendable {
         struct Response: Decodable { let numero: String }
         let body = Body(
             observacao: notes,
-            itens: items.map {
+            itens: items.map { item in
                 Item(
-                    itemId: $0.line.id,
-                    depositoId: $0.deposit.id,
-                    quantidadeSeparada: $0.quantity.apiString,
+                    itemId: item.line.id,
+                    depositoId: item.deposit.id,
+                    quantidadeSeparada: item.quantity.apiString,
                     conferido: true,
                     observacao: "",
-                    lotes: $0.batch.map { [Lot(loteId: $0.id, quantidade: $0.quantity.apiString)] } ?? []
+                    lotes: item.batch.map { [Lot(loteId: $0.id, quantidade: item.quantity.apiString)] } ?? []
                 )
             }
         )

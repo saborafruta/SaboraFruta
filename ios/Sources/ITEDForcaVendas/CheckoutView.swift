@@ -136,7 +136,8 @@ struct CheckoutView: View {
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(product.descricao).foregroundStyle(.primary).lineLimit(2)
                                         Text("\(product.codigo) • Estoque: \(product.estoqueDisponivel) \(product.unidade)")
-                                            .font(.caption).foregroundStyle(product.podeVender ? .secondary : .red)
+                                            .font(.caption)
+                                            .foregroundStyle(product.podeVender ? Color.secondary : Color.red)
                                         if !product.estoques.isEmpty {
                                             Text(product.estoques.map { "\($0.depositoNome): \($0.disponivel)" }.joined(separator: "  •  "))
                                                 .font(.caption2).foregroundStyle(.secondary).lineLimit(2)
