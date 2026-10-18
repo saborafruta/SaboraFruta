@@ -175,7 +175,9 @@ class SessionStore(context: Context) {
         filialCnpj = json.getString("filial_cnpj"),
         podeCriarPedido = json.optBoolean("pedidos_criar", false),
         podeSeparar = json.optBoolean("separacao_editar", false),
-        podeCheckout = json.optBoolean("checkout_vender", false),
+        // Sessões gravadas antes da 0.8.0 não possuem esta chave. Exibimos a
+        // entrada na primeira atualização; a API ainda aplica o RBAC real.
+        podeCheckout = json.optBoolean("checkout_vender", true),
     )
 
     private fun encrypt(value: String): String {
