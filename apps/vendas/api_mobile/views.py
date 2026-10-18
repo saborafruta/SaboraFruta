@@ -11,7 +11,14 @@ from rest_framework.views import APIView
 
 from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import EmpresaBanco, Filial
-from apps.core.services.checkout import checkout_venda_ativo
+from apps.core.services.checkout import (
+    checkout_venda_ativo,
+    configuracao_descontos_checkout,
+    desconto_checkout_requer_autorizacao,
+    gerar_token_desconto_checkout_mobile,
+    token_desconto_checkout_mobile_valido,
+    validar_autorizador_checkout_por_email,
+)
 from apps.core.services.exceptions import DadosInvalidosError, DomainError, EstoqueInsuficienteError
 from apps.core.tenant_context import tenant_atomic
 from apps.estoque.models import Deposito, LoteProduto
@@ -26,6 +33,7 @@ from apps.vendas.services.venda_service import VendaService
 
 from .base import MobileTenantAPIView
 from .serializers import (
+    AutorizacaoDescontoCheckoutSerializer,
     CheckoutVendaSerializer,
     CheckoutPendenteSerializer,
     ClienteRapidoCheckoutSerializer,
@@ -310,6 +318,7 @@ class CheckoutEstadoMobileView(MobileTenantAPIView):
 
     def get(self, request):
         _checkout_disponivel(request)
+        descontos = configuracao_descontos_checkout(request)
         sessao = (
             SessaoPDV.objects.for_filial(request.filial_ativa)
             .filter(usuario=request.user, status='aberto')
@@ -338,9 +347,36 @@ class CheckoutEstadoMobileView(MobileTenantAPIView):
                 'descricao': forma.descricao,
                 'tipo': forma.tipo,
             } for forma in formas],
-            'pode_aplicar_desconto': bool(
-                request.user.is_superuser or request.user.tem_permissao('pdv', 'aprovar')
-            ),
+            'pode_aplicar_desconto': True,
+            'descontos': {
+                'percentuais': [str(valor) for valor in descontos['percentuais']],
+                'percentual_maximo': str(descontos['percentual_maximo']),
+                'arredondamento_maximo': _decimal(descontos['arredondamento_maximo']),
+            },
+        })
+
+
+class CheckoutDescontoAutorizacaoMobileView(MobileTenantAPIView):
+    permissao_modulo = 'pdv'
+    permissao_acao = 'ver'
+    throttle_classes = [MobileWriteThrottle]
+
+    def post(self, request):
+        _checkout_disponivel(request)
+        entrada = AutorizacaoDescontoCheckoutSerializer(data=request.data)
+        entrada.is_valid(raise_exception=True)
+        autorizador = validar_autorizador_checkout_por_email(
+            request,
+            entrada.validated_data['email'],
+            entrada.validated_data['senha'],
+        )
+        if autorizador is None:
+            raise exceptions.PermissionDenied(
+                'Credenciais inválidas ou usuário sem permissão PDV → Aprovar.'
+            )
+        return Response({
+            'token': gerar_token_desconto_checkout_mobile(request, autorizador),
+            'autorizado_por': autorizador.nome or autorizador.email,
         })
 
 
@@ -514,10 +550,10 @@ class CheckoutVendaMobileView(MobileTenantAPIView):
             if pendencia is None:
                 raise exceptions.ValidationError({'pendencia_id': 'Venda pendente não encontrada.'})
         desconto = dados.get('desconto') or Decimal('0')
-        if desconto > 0 and not (
-            request.user.is_superuser or request.user.tem_permissao('pdv', 'aprovar')
-        ):
-            raise exceptions.PermissionDenied('Seu usuário não possui permissão para aplicar desconto no checkout.')
+        token_desconto_valido = token_desconto_checkout_mobile_valido(
+            request,
+            dados.get('autorizacao_desconto') or '',
+        )
         try:
             with tenant_atomic():
                 if pendencia is not None:
@@ -539,6 +575,20 @@ class CheckoutVendaMobileView(MobileTenantAPIView):
                     idempotency_key=chave,
                     request=request,
                 )
+                autorizada_pela_pendencia = bool(
+                    pendencia is not None
+                    and desconto <= Decimal(pendencia.valor_desconto or 0)
+                    and Decimal(venda.valor_subtotal or 0) >= Decimal(pendencia.valor_subtotal or 0)
+                )
+                if (
+                    desconto_checkout_requer_autorizacao(request, venda)
+                    and not token_desconto_valido
+                    and not autorizada_pela_pendencia
+                ):
+                    raise exceptions.PermissionDenied(
+                        'O desconto ultrapassa a política da loja. Autorize com um usuário '
+                        'que tenha PDV → Aprovar.'
+                    )
                 if pendencia is not None:
                     pendencia.delete()
         except EstoqueInsuficienteError as exc:
@@ -567,6 +617,7 @@ def _checkout_pendente_resumo(venda):
         'numero_venda': str(venda.numero_venda),
         'cliente_nome': venda.cliente.nome_display if venda.cliente else 'Cliente balcão',
         'valor_total': _decimal(venda.valor_total),
+        'desconto': _decimal(venda.valor_desconto),
         'data_venda': venda.data_venda.isoformat(),
         'quantidade_itens': len(venda.itens.all()),
     }
@@ -605,10 +656,10 @@ class CheckoutPendenciasMobileView(MobileTenantAPIView):
         entrada.is_valid(raise_exception=True)
         dados = entrada.validated_data
         desconto = dados.get('desconto') or Decimal('0')
-        if desconto > 0 and not (
-            request.user.is_superuser or request.user.tem_permissao('pdv', 'aprovar')
-        ):
-            raise exceptions.PermissionDenied('Seu usuário não possui permissão para aplicar desconto no checkout.')
+        token_desconto_valido = token_desconto_checkout_mobile_valido(
+            request,
+            dados.get('autorizacao_desconto') or '',
+        )
 
         cliente = None
         if dados.get('cliente_id'):
@@ -681,6 +732,14 @@ class CheckoutPendenciasMobileView(MobileTenantAPIView):
                 venda.valor_subtotal = subtotal
                 venda.valor_total = subtotal - desconto
                 venda.save(update_fields=['valor_subtotal', 'valor_total', 'updated_at'])
+                if (
+                    desconto_checkout_requer_autorizacao(request, venda)
+                    and not token_desconto_valido
+                ):
+                    raise exceptions.PermissionDenied(
+                        'O desconto ultrapassa a política da loja. Autorize com um usuário '
+                        'que tenha PDV → Aprovar.'
+                    )
         except IntegrityError:
             existente = (
                 VendaPDV.objects.for_filial(request.filial_ativa)

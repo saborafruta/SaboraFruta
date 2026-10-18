@@ -51,6 +51,12 @@ class CheckoutVendaSerializer(serializers.Serializer):
         default=Decimal('0'),
     )
     observacao = serializers.CharField(required=False, allow_blank=True, max_length=2000, default='')
+    autorizacao_desconto = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=2000,
+        default='',
+    )
     itens = ItemCheckoutSerializer(many=True, allow_empty=False)
     pagamentos = PagamentoCheckoutSerializer(many=True, allow_empty=False)
 
@@ -65,6 +71,12 @@ class CheckoutPendenteSerializer(serializers.Serializer):
         default=Decimal('0'),
     )
     observacao = serializers.CharField(required=False, allow_blank=True, max_length=2000, default='')
+    autorizacao_desconto = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=2000,
+        default='',
+    )
     itens = ItemCheckoutSerializer(many=True, allow_empty=False)
     pagamentos = PagamentoCheckoutSerializer(
         many=True,
@@ -72,6 +84,11 @@ class CheckoutPendenteSerializer(serializers.Serializer):
         required=False,
         default=list,
     )
+
+
+class AutorizacaoDescontoCheckoutSerializer(serializers.Serializer):
+    email = serializers.EmailField(max_length=254)
+    senha = serializers.CharField(max_length=128, trim_whitespace=False)
 
 
 class ClienteRapidoCheckoutSerializer(serializers.Serializer):

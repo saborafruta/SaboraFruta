@@ -83,6 +83,9 @@ data class CheckoutState(
     val cashRegisterName: String?,
     val payments: List<PaymentOption>,
     val canApplyDiscount: Boolean,
+    val discountPercentages: List<String>,
+    val maxDiscountPercent: String,
+    val maxRoundingDiscount: String,
 )
 
 data class CheckoutLine(
@@ -97,6 +100,7 @@ data class CheckoutSale(
     val discount: String,
     val received: String,
     val pendingId: Long? = null,
+    val discountAuthorization: String = "",
 )
 
 data class CheckoutResult(
@@ -111,6 +115,7 @@ data class CheckoutPendingSummary(
     val number: String,
     val clientName: String,
     val total: String,
+    val discount: String,
     val createdAt: String,
     val itemCount: Int,
 )

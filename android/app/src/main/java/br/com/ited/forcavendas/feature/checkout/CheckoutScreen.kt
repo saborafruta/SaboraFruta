@@ -1,6 +1,7 @@
 package br.com.ited.forcavendas.feature.checkout
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
@@ -33,6 +35,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -58,6 +61,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import br.com.ited.forcavendas.data.CheckoutLine
@@ -74,6 +78,8 @@ import java.math.RoundingMode
 import java.text.NumberFormat
 import java.util.Locale
 import kotlinx.coroutines.launch
+
+private enum class DiscountInputMode { VALUE, PERCENT }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,6 +111,9 @@ fun CheckoutScreen(
     var selectedPayment by remember { mutableStateOf<PaymentOption?>(null) }
     var received by remember { mutableStateOf("") }
     var discountDialog by remember { mutableStateOf(false) }
+    var discountAuthorizationDialog by remember { mutableStateOf(false) }
+    var pendingAuthorizedDiscount by remember { mutableStateOf(BigDecimal.ZERO) }
+    var discountAuthorization by remember(initialPending?.id) { mutableStateOf("") }
     var paymentDialog by remember { mutableStateOf(false) }
     var quickClientDialog by remember { mutableStateOf(false) }
 
@@ -112,6 +121,18 @@ fun CheckoutScreen(
         total + decimal(line.product.preco).multiply(decimal(line.quantity))
     }
     val total = (subtotal - decimal(discount)).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP)
+    val initialSubtotal = initialPending?.lines.orEmpty().fold(BigDecimal.ZERO) { sum, line ->
+        sum + decimal(line.product.preco).multiply(decimal(line.quantity))
+    }
+    val currentDiscountRequiresAuthorization = discountRequiresAuthorization(
+        subtotal = subtotal,
+        discount = decimal(discount),
+        maxPercent = decimal(state?.maxDiscountPercent.orEmpty()),
+        maxRounding = decimal(state?.maxRoundingDiscount.orEmpty()),
+    )
+    val pendingKeepsAuthorization = initialPending != null &&
+        decimal(discount) <= decimal(initialPending.discount) &&
+        subtotal >= initialSubtotal
 
     fun loadState() {
         scope.launch {
@@ -256,6 +277,7 @@ fun CheckoutScreen(
                                                 discount = decimal(discount).setScale(2, RoundingMode.HALF_UP).toPlainString(),
                                                 payment = selectedPayment,
                                                 received = decimal(received).setScale(2, RoundingMode.HALF_UP).toPlainString(),
+                                                discountAuthorization = discountAuthorization,
                                             )
                                         }.onSuccess { pending ->
                                             onPendingSaved("Venda #${pending.number} salva em pendências para o caixa.")
@@ -280,6 +302,16 @@ fun CheckoutScreen(
                                     onMessage("O valor recebido é menor que o total da venda.")
                                     return@Button
                                 }
+                                if (
+                                    currentDiscountRequiresAuthorization &&
+                                    discountAuthorization.isBlank() &&
+                                    !pendingKeepsAuthorization
+                                ) {
+                                    pendingAuthorizedDiscount = decimal(discount)
+                                    discountAuthorizationDialog = true
+                                    onMessage("Autorize o desconto antes de finalizar a venda.")
+                                    return@Button
+                                }
                                 scope.launch {
                                     busy = true
                                     runCatching {
@@ -292,6 +324,7 @@ fun CheckoutScreen(
                                                 discount = decimal(discount).setScale(2, RoundingMode.HALF_UP).toPlainString(),
                                                 received = decimal(received).setScale(2, RoundingMode.HALF_UP).toPlainString(),
                                                 pendingId = initialPending?.id,
+                                                discountAuthorization = discountAuthorization,
                                             ),
                                         )
                                     }.onSuccess { sale ->
@@ -545,7 +578,7 @@ fun CheckoutScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
                             modifier = Modifier.weight(1f),
-                            enabled = state?.canApplyDiscount == true,
+                            enabled = state?.canApplyDiscount == true && subtotal > BigDecimal.ZERO,
                             onClick = { discountDialog = true },
                         ) {
                             Icon(Icons.Outlined.LocalOffer, contentDescription = null)
@@ -587,26 +620,195 @@ fun CheckoutScreen(
     }
 
     if (discountDialog) {
-        var input by remember(discountDialog) { mutableStateOf(discount) }
+        var mode by remember(discountDialog) { mutableStateOf(DiscountInputMode.VALUE) }
+        var input by remember(discountDialog) {
+            mutableStateOf(decimal(discount).setScale(2, RoundingMode.HALF_UP).toPlainString())
+        }
+        val previewDiscount = discountFromInput(mode, input, subtotal)
+            .min(subtotal)
+            .setScale(2, RoundingMode.HALF_UP)
+        val previewPercent = percentOf(subtotal, previewDiscount)
+        val requiresAuthorization = discountRequiresAuthorization(
+            subtotal = subtotal,
+            discount = previewDiscount,
+            maxPercent = decimal(state?.maxDiscountPercent.orEmpty()),
+            maxRounding = decimal(state?.maxRoundingDiscount.orEmpty()),
+        )
         AlertDialog(
             onDismissRequest = { discountDialog = false },
             title = { Text("Desconto da venda") },
             text = {
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { input = it.filter { char -> char.isDigit() || char == ',' || char == '.' } },
-                    label = { Text("Valor em reais") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                )
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = mode == DiscountInputMode.VALUE,
+                            onClick = {
+                                mode = DiscountInputMode.VALUE
+                                input = previewDiscount.toPlainString()
+                            },
+                            label = { Text("Valor (R$)") },
+                        )
+                        FilterChip(
+                            selected = mode == DiscountInputMode.PERCENT,
+                            onClick = {
+                                mode = DiscountInputMode.PERCENT
+                                input = previewPercent.stripTrailingZeros().toPlainString()
+                            },
+                            label = { Text("Porcentagem (%)") },
+                        )
+                    }
+                    if (state?.discountPercentages.orEmpty().isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                "Descontos rápidos",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                state?.discountPercentages.orEmpty().forEach { percentage ->
+                                    FilterChip(
+                                        selected = mode == DiscountInputMode.PERCENT &&
+                                            decimal(input) == decimal(percentage),
+                                        onClick = {
+                                            mode = DiscountInputMode.PERCENT
+                                            input = decimal(percentage).stripTrailingZeros().toPlainString()
+                                        },
+                                        label = { Text("${decimal(percentage).stripTrailingZeros().toPlainString()}%") },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
+                        value = input,
+                        onValueChange = {
+                            input = it.filter { char -> char.isDigit() || char == ',' || char == '.' }
+                        },
+                        label = {
+                            Text(if (mode == DiscountInputMode.VALUE) "Valor do desconto" else "Percentual do desconto")
+                        },
+                        suffix = { Text(if (mode == DiscountInputMode.VALUE) "R$" else "%") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    )
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = if (requiresAuthorization) {
+                            MaterialTheme.colorScheme.errorContainer
+                        } else {
+                            MaterialTheme.colorScheme.primaryContainer
+                        },
+                    ) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                "${money(previewDiscount)} • ${previewPercent.setScale(2, RoundingMode.HALF_UP)}%",
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                if (requiresAuthorization) {
+                                    "Acima do limite de ${decimal(state?.maxDiscountPercent.orEmpty()).stripTrailingZeros().toPlainString()}%. Exige autorização."
+                                } else {
+                                    "Dentro da política da loja. Qualquer operador pode aplicar."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    discount = decimal(input).min(subtotal).setScale(2, RoundingMode.HALF_UP).toPlainString()
+                    if (requiresAuthorization) {
+                        pendingAuthorizedDiscount = previewDiscount
+                        discountDialog = false
+                        discountAuthorizationDialog = true
+                        return@TextButton
+                    }
+                    discount = previewDiscount.toPlainString()
+                    discountAuthorization = ""
                     discountDialog = false
                 }) { Text("Aplicar") }
             },
             dismissButton = { TextButton(onClick = { discountDialog = false }) { Text("Cancelar") } },
+        )
+    }
+    if (discountAuthorizationDialog) {
+        var email by remember(discountAuthorizationDialog) { mutableStateOf("") }
+        var password by remember(discountAuthorizationDialog) { mutableStateOf("") }
+        var authorizing by remember(discountAuthorizationDialog) { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { if (!authorizing) discountAuthorizationDialog = false },
+            title = { Text("Autorizar desconto") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        "${money(pendingAuthorizedDiscount)} (${percentOf(subtotal, pendingAuthorizedDiscount).setScale(2, RoundingMode.HALF_UP)}%) ultrapassa a política da loja.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
+                        value = email,
+                        onValueChange = { email = it },
+                        label = { Text("E-mail do aprovador") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    )
+                    OutlinedTextField(
+                        modifier = Modifier.fillMaxWidth(),
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Senha") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    )
+                    Text(
+                        "Use um usuário com a permissão PDV → Aprovar.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = email.isNotBlank() && password.isNotBlank() && !authorizing,
+                    onClick = {
+                        scope.launch {
+                            authorizing = true
+                            runCatching {
+                                repository.authorizeCheckoutDiscount(session, email, password)
+                            }.onSuccess { token ->
+                                discount = pendingAuthorizedDiscount
+                                    .min(subtotal)
+                                    .setScale(2, RoundingMode.HALF_UP)
+                                    .toPlainString()
+                                discountAuthorization = token
+                                discountAuthorizationDialog = false
+                                onMessage("Desconto autorizado e aplicado.")
+                            }.onFailure {
+                                onMessage(it.message ?: "Não foi possível autorizar o desconto.")
+                            }
+                            authorizing = false
+                        }
+                    },
+                ) {
+                    if (authorizing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    else Text("Autorizar e aplicar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !authorizing,
+                    onClick = { discountAuthorizationDialog = false },
+                ) { Text("Cancelar") }
+            },
         )
     }
     if (quickClientDialog) {
@@ -777,6 +979,38 @@ private fun CartLine(
 
 private fun decimal(value: String): BigDecimal =
     value.trim().replace(',', '.').toBigDecimalOrNull() ?: BigDecimal.ZERO
+
+private fun discountFromInput(
+    mode: DiscountInputMode,
+    input: String,
+    subtotal: BigDecimal,
+): BigDecimal = when (mode) {
+    DiscountInputMode.VALUE -> decimal(input)
+    DiscountInputMode.PERCENT -> subtotal
+        .multiply(decimal(input))
+        .divide(BigDecimal("100"), 2, RoundingMode.HALF_UP)
+}
+
+private fun percentOf(subtotal: BigDecimal, discount: BigDecimal): BigDecimal =
+    if (subtotal <= BigDecimal.ZERO) BigDecimal.ZERO
+    else discount.multiply(BigDecimal("100")).divide(subtotal, 4, RoundingMode.HALF_UP)
+
+private fun discountRequiresAuthorization(
+    subtotal: BigDecimal,
+    discount: BigDecimal,
+    maxPercent: BigDecimal,
+    maxRounding: BigDecimal,
+): Boolean {
+    if (discount <= BigDecimal.ZERO) return false
+    val percentageLimit = subtotal
+        .multiply(maxPercent)
+        .divide(BigDecimal("100"), 2, RoundingMode.HALF_UP)
+    if (maxPercent > BigDecimal.ZERO && discount <= percentageLimit) return false
+    val total = subtotal.subtract(discount)
+    val excess = discount.subtract(percentageLimit).max(BigDecimal.ZERO)
+    val integerTotal = total.stripTrailingZeros().scale() <= 0
+    return !(maxRounding > BigDecimal.ZERO && integerTotal && excess <= maxRounding)
+}
 
 private fun money(value: BigDecimal): String = NumberFormat.getCurrencyInstance(
     Locale.forLanguageTag("pt-BR"),

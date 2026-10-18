@@ -174,6 +174,7 @@ class ItedRepository(private val store: SessionStore) {
             "api/v1/mobile/checkout/estado/",
         )
         val cashSession = json.optJSONObject("sessao")
+        val discountPolicy = json.optJSONObject("descontos") ?: JSONObject()
         return CheckoutState(
             sessionOpen = cashSession != null,
             cashRegisterName = cashSession?.optString("caixa_nome")?.takeIf(String::isNotBlank),
@@ -181,6 +182,9 @@ class ItedRepository(private val store: SessionStore) {
                 PaymentOption(it.getLong("id"), it.getString("descricao"), it.optString("tipo"))
             },
             canApplyDiscount = json.optBoolean("pode_aplicar_desconto"),
+            discountPercentages = discountPolicy.optJSONArray("percentuais")?.mapStrings() ?: emptyList(),
+            maxDiscountPercent = discountPolicy.optString("percentual_maximo", "0"),
+            maxRoundingDiscount = discountPolicy.optString("arredondamento_maximo", "0.00"),
         )
     }
 
@@ -242,6 +246,7 @@ class ItedRepository(private val store: SessionStore) {
                 .put("pendencia_id", sale.pendingId ?: JSONObject.NULL)
                 .put("cliente_id", sale.client?.id ?: JSONObject.NULL)
                 .put("desconto", sale.discount)
+                .put("autorizacao_desconto", sale.discountAuthorization)
                 .put("itens", items)
                 .put("pagamentos", payments),
             UUID.randomUUID().toString(),
@@ -261,6 +266,7 @@ class ItedRepository(private val store: SessionStore) {
         discount: String,
         payment: PaymentOption?,
         received: String,
+        discountAuthorization: String = "",
     ): CheckoutPendingSummary {
         val payments = JSONArray()
         if (payment != null) {
@@ -278,11 +284,29 @@ class ItedRepository(private val store: SessionStore) {
             JSONObject()
                 .put("cliente_id", client?.id ?: JSONObject.NULL)
                 .put("desconto", discount)
+                .put("autorizacao_desconto", discountAuthorization)
                 .put("itens", checkoutItems(lines))
                 .put("pagamentos", payments),
             UUID.randomUUID().toString(),
         )
         return parseCheckoutPendingSummary(response)
+    }
+
+    suspend fun authorizeCheckoutDiscount(
+        session: UserSession,
+        email: String,
+        password: String,
+    ): String {
+        val response = api.authorized(
+            session,
+            session.context,
+            "POST",
+            "api/v1/mobile/checkout/descontos/autorizar/",
+            JSONObject()
+                .put("email", email.trim())
+                .put("senha", password),
+        )
+        return response.getString("token")
     }
 
     suspend fun checkoutPendings(session: UserSession): List<CheckoutPendingSummary> {
@@ -617,6 +641,7 @@ class ItedRepository(private val store: SessionStore) {
         number = item.getString("numero_venda"),
         clientName = item.getString("cliente_nome"),
         total = item.getString("valor_total"),
+        discount = item.optString("desconto", "0.00"),
         createdAt = item.getString("data_venda"),
         itemCount = item.getInt("quantidade_itens"),
     )

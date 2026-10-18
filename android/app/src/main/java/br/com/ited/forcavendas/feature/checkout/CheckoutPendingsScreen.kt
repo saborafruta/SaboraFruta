@@ -188,11 +188,20 @@ fun CheckoutPendingsScreen(
                             if (openingId == pending.id) {
                                 CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
                             } else {
-                                Text(
-                                    checkoutMoney(pending.total),
-                                    fontWeight = FontWeight.Black,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        checkoutMoney(pending.total),
+                                        fontWeight = FontWeight.Black,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                    if ((pending.discount.toBigDecimalOrNull() ?: BigDecimal.ZERO) > BigDecimal.ZERO) {
+                                        Text(
+                                            "Desc. ${checkoutMoney(pending.discount)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

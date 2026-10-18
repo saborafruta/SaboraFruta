@@ -4,12 +4,15 @@ import hashlib
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
+from django.core import signing
 from django.db import DEFAULT_DB_ALIAS
 from django.views.decorators.debug import sensitive_variables
 
 
 _SESSION_KEY_BUSCA_NOME = 'checkout_busca_nome_autorizacao'
 _SESSION_KEY_DESCONTO = 'checkout_desconto_autorizacao'
+_TOKEN_SALT_DESCONTO_MOBILE = 'ited.checkout.desconto.mobile'
+_TOKEN_MAX_AGE_DESCONTO_MOBILE = 10 * 60
 
 
 def _parametros_checkout(request):
@@ -118,13 +121,34 @@ def desconto_checkout_requer_autorizacao(request, venda) -> bool:
         Decimal('0.00'),
     )
     desconto_geral = Decimal(venda.valor_desconto or 0)
+    return desconto_checkout_valores_requer_autorizacao(
+        request,
+        subtotal=Decimal(venda.valor_subtotal or 0),
+        desconto_geral=desconto_geral,
+        desconto_itens=desconto_itens,
+        total=Decimal(venda.valor_total or 0),
+    )
+
+
+def desconto_checkout_valores_requer_autorizacao(
+    request,
+    *,
+    subtotal: Decimal,
+    desconto_geral: Decimal,
+    desconto_itens: Decimal = Decimal('0.00'),
+    total: Decimal | None = None,
+) -> bool:
+    """Aplica a mesma política do Checkout a valores ainda não persistidos."""
+    desconto_geral = Decimal(desconto_geral or 0)
+    desconto_itens = Decimal(desconto_itens or 0)
     desconto_total = desconto_itens + desconto_geral
     if desconto_total <= 0:
         return False
 
     configuracao = configuracao_descontos_checkout(request)
     percentual_maximo = Decimal(str(configuracao['percentual_maximo'] or 0))
-    bruto = Decimal(venda.valor_subtotal or 0) + desconto_itens
+    subtotal = Decimal(subtotal or 0)
+    bruto = subtotal + desconto_itens
     limite_percentual = (bruto * percentual_maximo / Decimal('100')).quantize(
         Decimal('0.01'),
         rounding=ROUND_HALF_UP,
@@ -134,7 +158,7 @@ def desconto_checkout_requer_autorizacao(request, venda) -> bool:
 
     limite_arredondamento = Decimal(str(configuracao['arredondamento_maximo'] or 0))
     excesso = max(Decimal('0.00'), desconto_total - limite_percentual)
-    total = Decimal(venda.valor_total or 0)
+    total = Decimal(total if total is not None else subtotal - desconto_geral)
     arredondamento_valido = bool(
         limite_arredondamento > 0
         and desconto_geral > 0
@@ -257,6 +281,88 @@ def validar_autorizador_checkout_busca_nome(request, usuario_id, senha: str):
     if not autorizador.check_password(senha):
         return None
     return autorizador
+
+
+@sensitive_variables('senha')
+def validar_autorizador_checkout_por_email(request, email: str, senha: str):
+    """Valida um aprovador pelo e-mail, adequado a clientes móveis."""
+    from apps.core.models import Usuario
+
+    email = str(email or '').strip().lower()
+    if not email or not senha or len(email) > 254 or len(senha) > 128:
+        return None
+
+    banco_operacional = _banco_operacional(request)
+    candidatos = []
+    local = (
+        Usuario.objects.using(banco_operacional).select_related('perfil')
+        .filter(
+            email__iexact=email,
+            empresa_id=request.filial_ativa.empresa_id,
+            ativo=True,
+        )
+        .first()
+    )
+    if local:
+        candidatos.append(local)
+    if banco_operacional != DEFAULT_DB_ALIAS:
+        central = (
+            Usuario.objects.using(DEFAULT_DB_ALIAS).select_related('perfil')
+            .filter(email__iexact=email, is_superuser=True, ativo=True)
+            .first()
+        )
+        if central:
+            candidatos.append(central)
+
+    for autorizador in candidatos:
+        if _autorizador_elegivel(request, autorizador) and autorizador.check_password(senha):
+            return autorizador
+    return None
+
+
+def gerar_token_desconto_checkout_mobile(request, autorizador) -> str:
+    """Emite aprovação curta, vinculada à filial e à versão atual da senha."""
+    return signing.dumps(
+        {
+            'escopo': _escopo_busca_nome(request),
+            'usuario_id': autorizador.pk,
+            'banco': autorizador._state.db or DEFAULT_DB_ALIAS,
+            'versao': _versao_senha(autorizador.password),
+        },
+        salt=_TOKEN_SALT_DESCONTO_MOBILE,
+        compress=True,
+    )
+
+
+def token_desconto_checkout_mobile_valido(request, token: str) -> bool:
+    """Confirma uma aprovação móvel recente e vinculada ao contexto atual."""
+    if not token or len(token) > 2000:
+        return False
+    try:
+        autorizacao = signing.loads(
+            token,
+            salt=_TOKEN_SALT_DESCONTO_MOBILE,
+            max_age=_TOKEN_MAX_AGE_DESCONTO_MOBILE,
+        )
+    except signing.BadSignature:
+        return False
+    if autorizacao.get('escopo') != _escopo_busca_nome(request):
+        return False
+
+    from apps.core.models import Usuario
+
+    banco = autorizacao.get('banco') or _banco_operacional(request)
+    if banco not in {DEFAULT_DB_ALIAS, _banco_operacional(request)}:
+        return False
+    autorizador = (
+        Usuario.objects.using(banco).select_related('perfil')
+        .filter(pk=autorizacao.get('usuario_id'), ativo=True)
+        .first()
+    )
+    return bool(
+        _autorizador_elegivel(request, autorizador)
+        and autorizacao.get('versao') == _versao_senha(autorizador.password)
+    )
 
 
 def autorizar_checkout_busca_nome(request, autorizador) -> None:

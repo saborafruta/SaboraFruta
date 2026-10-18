@@ -375,6 +375,75 @@ class ForcaVendasMobileApiTests(TestCase):
         self.assertEqual(detalhe.json()['itens'][0]['produto']['id'], self.produto.pk)
         self.assertEqual(detalhe.json()['itens'][0]['quantidade'], '2.000')
 
+    def test_checkout_mobile_aplica_politica_de_desconto_e_salva_na_pendencia(self):
+        self.parametros.checkout_desconto_percentual_1 = Decimal('2.00')
+        self.parametros.checkout_desconto_percentual_2 = Decimal('3.00')
+        self.parametros.checkout_desconto_percentual_3 = Decimal('5.00')
+        self.parametros.save(update_fields=[
+            'checkout_desconto_percentual_1',
+            'checkout_desconto_percentual_2',
+            'checkout_desconto_percentual_3',
+        ])
+
+        estado = self.client.get(
+            reverse('forca_vendas_mobile_api:checkout_estado'),
+            **self.headers,
+        )
+        self.assertEqual(estado.status_code, 200, estado.content)
+        self.assertEqual(estado.json()['descontos']['percentuais'], ['2.0', '3.0', '5.0'])
+        self.assertEqual(estado.json()['descontos']['percentual_maximo'], '5.0')
+
+        payload = {
+            'cliente_id': self.cliente.pk,
+            'desconto': '1.25',
+            'itens': [{'produto_id': self.produto.pk, 'quantidade': '2.000'}],
+            'pagamentos': [],
+        }
+        dentro_da_politica = self.client.post(
+            reverse('forca_vendas_mobile_api:checkout_pendencias'),
+            data=payload,
+            content_type='application/json',
+            HTTP_IDEMPOTENCY_KEY='checkout-desconto-livre-mobile',
+            **self.headers,
+        )
+        self.assertEqual(dentro_da_politica.status_code, 201, dentro_da_politica.content)
+        pendencia_livre = VendaPDV.objects.get(pk=dentro_da_politica.json()['id'])
+        self.assertEqual(pendencia_livre.valor_desconto, Decimal('1.25'))
+        self.assertEqual(pendencia_livre.valor_total, Decimal('23.75'))
+
+        payload['desconto'] = '1.26'
+        acima_sem_autorizacao = self.client.post(
+            reverse('forca_vendas_mobile_api:checkout_pendencias'),
+            data=payload,
+            content_type='application/json',
+            HTTP_IDEMPOTENCY_KEY='checkout-desconto-bloqueado-mobile',
+            **self.headers,
+        )
+        self.assertEqual(acima_sem_autorizacao.status_code, 403, acima_sem_autorizacao.content)
+        self.assertFalse(
+            VendaPDV.objects.filter(idempotency_key='checkout-desconto-bloqueado-mobile').exists()
+        )
+
+        autorizacao = self.client.post(
+            reverse('forca_vendas_mobile_api:checkout_desconto_autorizar'),
+            data={'email': self.usuario.email, 'senha': 'senha-mobile-123'},
+            content_type='application/json',
+            **self.headers,
+        )
+        self.assertEqual(autorizacao.status_code, 200, autorizacao.content)
+        payload['autorizacao_desconto'] = autorizacao.json()['token']
+        acima_autorizado = self.client.post(
+            reverse('forca_vendas_mobile_api:checkout_pendencias'),
+            data=payload,
+            content_type='application/json',
+            HTTP_IDEMPOTENCY_KEY='checkout-desconto-autorizado-mobile',
+            **self.headers,
+        )
+        self.assertEqual(acima_autorizado.status_code, 201, acima_autorizado.content)
+        pendencia_autorizada = VendaPDV.objects.get(pk=acima_autorizado.json()['id'])
+        self.assertEqual(pendencia_autorizada.valor_desconto, Decimal('1.26'))
+        self.assertEqual(pendencia_autorizada.valor_total, Decimal('23.74'))
+
     def test_caixa_finaliza_pendencia_mobile_e_remove_apenas_apos_sucesso(self):
         criada = self.client.post(
             reverse('forca_vendas_mobile_api:checkout_pendencias'),
