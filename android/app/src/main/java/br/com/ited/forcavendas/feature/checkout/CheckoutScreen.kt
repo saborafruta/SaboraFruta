@@ -11,13 +11,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material.icons.outlined.PersonOutline
@@ -28,6 +31,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,7 +70,6 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.NumberFormat
 import java.util.Locale
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -110,7 +114,6 @@ fun CheckoutScreen(
             runCatching { repository.checkoutState(session) }
                 .onSuccess { loaded ->
                     state = loaded
-                    if (selectedPayment == null) selectedPayment = loaded.payments.firstOrNull()
                 }
                 .onFailure { error = it.message ?: "Não foi possível abrir o checkout." }
             loading = false
@@ -118,21 +121,24 @@ fun CheckoutScreen(
     }
 
     LaunchedEffect(Unit) { loadState() }
-    LaunchedEffect(clientQuery) {
-        if (client != null || clientQuery.trim().length < 2) {
-            clientResults = emptyList()
-            return@LaunchedEffect
-        }
-        delay(350)
-        clientSearching = true
-        runCatching { repository.checkoutClients(session, clientQuery.trim()) }
-            .onSuccess { clientResults = it }
-            .onFailure { onMessage(it.message ?: "Falha ao buscar clientes.") }
-        clientSearching = false
-    }
     LaunchedEffect(total, selectedPayment) {
         if (selectedPayment?.tipo != "dinheiro" || received.isBlank()) {
             received = total.toPlainString()
+        }
+    }
+
+    fun searchClients() {
+        val query = clientQuery.trim()
+        if (query.length < 2 || clientSearching) return
+        scope.launch {
+            clientSearching = true
+            runCatching { repository.checkoutClients(session, query) }
+                .onSuccess {
+                    clientResults = it
+                    if (it.isEmpty()) onMessage("Nenhum cliente encontrado.")
+                }
+                .onFailure { onMessage(it.message ?: "Falha ao buscar clientes.") }
+            clientSearching = false
         }
     }
 
@@ -320,24 +326,34 @@ fun CheckoutScreen(
                     ) {
                         Column {
                             Text("Cliente", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text(
-                                "Consumidor final ou identificado",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
                         }
                         TextButton(onClick = { quickClientDialog = true }) { Text("Cadastro rápido") }
                     }
                 }
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         OutlinedButton(
+                            modifier = Modifier
+                                .widthIn(min = 96.dp)
+                                .height(56.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp),
                             onClick = {
                                 client = null
                                 clientQuery = ""
                                 clientResults = emptyList()
                             },
-                        ) { Text("Consumidor final") }
+                        ) {
+                            Icon(
+                                Icons.Outlined.PersonOutline,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.size(6.dp))
+                            Text("Balcão")
+                        }
                         OutlinedTextField(
                             modifier = Modifier.weight(1f),
                             value = client?.nome ?: clientQuery,
@@ -347,12 +363,33 @@ fun CheckoutScreen(
                             },
                             readOnly = client != null,
                             singleLine = true,
-                            label = { Text("Nome ou CPF/CNPJ") },
-                            leadingIcon = { Icon(Icons.Outlined.PersonOutline, contentDescription = null) },
-                            trailingIcon = if (clientSearching) ({
-                                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                            label = { Text("Cliente") },
+                            placeholder = { Text("Nome ou CPF/CNPJ") },
+                            trailingIcon = if (client != null) ({
+                                IconButton(
+                                    onClick = {
+                                        client = null
+                                        clientQuery = ""
+                                        clientResults = emptyList()
+                                    },
+                                ) {
+                                    Icon(Icons.Outlined.Close, contentDescription = "Limpar cliente")
+                                }
                             }) else null,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { searchClients() }),
                         )
+                        FilledTonalIconButton(
+                            modifier = Modifier.size(56.dp),
+                            enabled = client == null && clientQuery.trim().length >= 2 && !clientSearching,
+                            onClick = { searchClients() },
+                        ) {
+                            if (clientSearching) {
+                                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Outlined.Search, contentDescription = "Buscar cliente")
+                            }
+                        }
                     }
                 }
                 if (clientResults.isNotEmpty()) {
@@ -462,8 +499,16 @@ fun CheckoutScreen(
                             modifier = Modifier.weight(1f),
                             onClick = { paymentDialog = true },
                         ) {
-                            Text(selectedPayment?.descricao ?: "Forma de pagamento", maxLines = 2)
+                            Text("Forma de pagamento", maxLines = 1)
                         }
+                    }
+                    selectedPayment?.let { payment ->
+                        Text(
+                            "Selecionada: ${payment.descricao}",
+                            modifier = Modifier.padding(top = 6.dp, start = 8.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
                 item {
