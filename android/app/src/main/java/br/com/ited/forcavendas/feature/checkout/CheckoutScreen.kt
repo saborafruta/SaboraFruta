@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -259,7 +260,10 @@ fun CheckoutScreen(
         },
         bottomBar = {
             if (!loading && state != null) {
-                Surface(tonalElevation = 6.dp) {
+                Surface(
+                    modifier = Modifier.navigationBarsPadding(),
+                    tonalElevation = 6.dp,
+                ) {
                     Column(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
