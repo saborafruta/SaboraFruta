@@ -448,6 +448,51 @@ class ForcaVendasMobileApiTests(TestCase):
         self.assertTrue(repetida.json()['repetida'])
         self.assertEqual(VendaPDV.objects.filter(idempotency_key='checkout-mobile-0001').count(), 1)
 
+    def test_checkout_mobile_respeita_parametro_de_estoque_negativo(self):
+        SessaoPDV.objects.create(
+            filial=self.filial,
+            caixa=self.caixa,
+            usuario=self.usuario,
+            valor_abertura=Decimal('100.00'),
+            status='aberto',
+        )
+        payload = {
+            'cliente_id': self.cliente.pk,
+            'desconto': '0.00',
+            'itens': [{'produto_id': self.produto.pk, 'quantidade': '2.000'}],
+            'pagamentos': [{'forma_id': self.forma_checkout.pk, 'valor': '25.00'}],
+        }
+        url = reverse('forca_vendas_mobile_api:checkout_vendas')
+
+        self.parametros.checkout_permitir_estoque_negativo = False
+        self.parametros.save(update_fields=['checkout_permitir_estoque_negativo'])
+        bloqueada = self.client.post(
+            url,
+            data=payload,
+            content_type='application/json',
+            HTTP_IDEMPOTENCY_KEY='checkout-mobile-negativo-bloqueado',
+            **self.headers,
+        )
+        self.assertEqual(bloqueada.status_code, 400, bloqueada.content)
+        self.assertIn('estoque', bloqueada.json())
+
+        self.parametros.checkout_permitir_estoque_negativo = True
+        self.parametros.save(update_fields=['checkout_permitir_estoque_negativo'])
+        liberada = self.client.post(
+            url,
+            data=payload,
+            content_type='application/json',
+            HTTP_IDEMPOTENCY_KEY='checkout-mobile-negativo-liberado',
+            **self.headers,
+        )
+
+        self.assertEqual(liberada.status_code, 201, liberada.content)
+        estoque = self.produto.estoques.get(
+            filial=self.filial,
+            deposito_id=Deposito.venda_id(self.filial.pk),
+        )
+        self.assertEqual(estoque.quantidade_atual, Decimal('-2.000'))
+
     def test_checkout_mobile_salva_pendencia_sem_caixa_e_sem_pagamento(self):
         payload = {
             'cliente_id': self.cliente.pk,

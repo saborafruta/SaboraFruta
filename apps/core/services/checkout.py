@@ -53,7 +53,8 @@ def _parametros_checkout(request):
             ParametrosSistema.objects.using(DEFAULT_DB_ALIAS)
             .filter(filial_id=filial_central_id)
             .only(
-                'checkout_venda_ativo', 'balanca_ean_prefixo',
+                'checkout_venda_ativo', 'checkout_permitir_estoque_negativo',
+                'balanca_ean_prefixo',
                 'balanca_ean_plu_digitos', 'balanca_ean_conteudo',
                 'checkout_desconto_percentual_1', 'checkout_desconto_percentual_2',
                 'checkout_desconto_percentual_3', 'checkout_arredondamento_maximo',
@@ -66,7 +67,8 @@ def _parametros_checkout(request):
         ParametrosSistema.objects.using(database_alias)
         .filter(filial_id=filial.pk)
         .only(
-            'checkout_venda_ativo', 'balanca_ean_prefixo',
+            'checkout_venda_ativo', 'checkout_permitir_estoque_negativo',
+            'balanca_ean_prefixo',
             'balanca_ean_plu_digitos', 'balanca_ean_conteudo',
             'checkout_desconto_percentual_1', 'checkout_desconto_percentual_2',
             'checkout_desconto_percentual_3', 'checkout_arredondamento_maximo',
@@ -79,6 +81,15 @@ def checkout_venda_ativo(request) -> bool:
     """Retorna a flag salva pela Central para a filial ativa."""
     parametros = _parametros_checkout(request)
     return bool(parametros and parametros.checkout_venda_ativo)
+
+
+def checkout_permite_estoque_negativo(request) -> bool:
+    """Retorna a política de saldo negativo do Checkout para a filial ativa."""
+    parametros = _parametros_checkout(request)
+    return bool(
+        parametros
+        and getattr(parametros, 'checkout_permitir_estoque_negativo', True)
+    )
 
 
 def configuracao_ean_balanca(request) -> dict:

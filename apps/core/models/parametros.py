@@ -95,6 +95,14 @@ class ParametrosSistema(TimestampedModel):
         verbose_name='Utilizar checkout de venda',
         help_text='Exibe o Checkout no menu desta filial. Quando desativado, a tela fica indisponível.',
     )
+    checkout_permitir_estoque_negativo = models.BooleanField(
+        default=True,
+        verbose_name='Permitir venda com estoque negativo no Checkout e aplicativos',
+        help_text=(
+            'Quando ativado, o Checkout e os aplicativos Android e iOS podem '
+            'finalizar vendas mesmo quando o produto não possui saldo suficiente.'
+        ),
+    )
     checkout_desconto_percentual_1 = models.DecimalField(
         max_digits=5,
         decimal_places=2,

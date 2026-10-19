@@ -82,6 +82,8 @@ class ParametrosSistemaAccessTests(TestCase):
     def test_formulario_expoe_politica_de_descontos_do_checkout(self):
         form = ParametrosSistemaForm(instance=ParametrosSistema(filial=self.filial))
 
+        self.assertIn('checkout_permitir_estoque_negativo', form.fields)
+        self.assertTrue(form.fields['checkout_permitir_estoque_negativo'].initial)
         self.assertIn('checkout_desconto_percentual_1', form.fields)
         self.assertIn('checkout_desconto_percentual_2', form.fields)
         self.assertIn('checkout_desconto_percentual_3', form.fields)

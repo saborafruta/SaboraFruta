@@ -91,7 +91,7 @@ class ParametrosSistemaForm(forms.ModelForm):
         fields = [
             'email_secundario',
             'controlar_entrega_contas_receber',
-            'checkout_venda_ativo',
+            'checkout_venda_ativo', 'checkout_permitir_estoque_negativo',
             'checkout_desconto_percentual_1', 'checkout_desconto_percentual_2',
             'checkout_desconto_percentual_3', 'checkout_arredondamento_maximo',
             'balanca_ean_prefixo', 'balanca_ean_plu_digitos', 'balanca_ean_conteudo',

@@ -419,6 +419,14 @@
         </span>
       </label>
       {{ form_params.checkout_venda_ativo.errors }}
+      <label class="mt-4 flex items-start gap-3">
+        {{ form_params.checkout_permitir_estoque_negativo }}
+        <span>
+          <strong class="block text-sm">{{ form_params.checkout_permitir_estoque_negativo.label }}</strong>
+          <span class="param-card-sub">{{ form_params.checkout_permitir_estoque_negativo.help_text }}</span>
+        </span>
+      </label>
+      {{ form_params.checkout_permitir_estoque_negativo.errors }}
       <div class="param-help mt-4">
         No Checkout, a busca por nome aparece para todos. Para cada produto, o operador seleciona um usuário desta filial com a permissão <strong>Aprovar</strong> no módulo PDV e informa a senha dele. A busca por códigos continua livre.
       </div>

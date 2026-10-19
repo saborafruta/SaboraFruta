@@ -132,7 +132,6 @@
   .co-discount-presets { display:flex; flex-wrap:wrap; gap:7px; margin-top:13px; }
   .co-discount-preset { min-width:68px; min-height:39px; padding:7px 12px; border:1px solid var(--co-border); border-radius:9px; background:var(--co-panel); color:var(--co-text); font-weight:900; cursor:pointer; }
   .co-discount-preset:hover { border-color:var(--co-blue); }
-  .co-discount-policy { margin-top:12px; padding:9px 11px; border:1px solid var(--co-border); border-radius:9px; color:var(--co-muted); background:var(--co-panel); font-size:11px; }
   .co-summary { gap:8px; padding:11px 12px 12px; }
   .co-summary-breakdown { display:grid; gap:4px; padding-bottom:7px; border-bottom:1px solid var(--co-border); }
   .co-summary-row.discount strong { color:#fb9b76; }
@@ -442,8 +441,6 @@
         </div>
       </div>
       <small class="co-discount-limit" x-text="'Máximo neste lançamento: '+moeda(descontoModalMaximo)"></small>
-      <button type="button" class="co-btn" style="margin-top:10px" x-show="!itemDescontoPendente && arredondamentoMaximoLivre>0" x-cloak @click="aplicarArredondamentoDesconto()" x-text="'Arredondar total · até '+moeda(arredondamentoMaximoLivre)"></button>
-      <div class="co-discount-policy" x-text="descricaoPoliticaDesconto"></div>
       <div class="co-grid">
         <div class="co-field" style="grid-column:1/-1" x-show="descontoModalRequerAutorizacao && !descontoLiberado" x-cloak>
           <label for="checkout-usuario-desconto">Usuário autorizador</label>
@@ -460,7 +457,6 @@
         </div>
       </div>
       <div class="co-alert co-success" x-show="descontoLiberado" x-cloak style="margin-top:12px">Descontos já autorizados para esta venda.</div>
-      <div class="co-alert co-success" x-show="!descontoLiberado && numero(descontoModalEntrada)>0 && !descontoModalRequerAutorizacao" x-cloak style="margin-top:12px">Este desconto está dentro da política da loja e não exige autorização.</div>
       <div class="co-alert" x-show="descontoModalRequerAutorizacao && !descontoLiberado && !usuariosAutorizadores.length" x-cloak style="margin-top:12px">Nenhum usuário desta filial possui a permissão PDV → Aprovar.</div>
       <div class="co-alert" x-show="erroSenhaDesconto" x-text="erroSenhaDesconto" x-cloak style="margin-top:12px"></div>
       <div class="co-modal-actions"><button type="button" class="co-btn" @click="fecharSenhaDesconto()">Cancelar</button><button type="submit" class="co-btn co-btn-primary" :disabled="liberandoDesconto || (descontoModalRequerAutorizacao && !descontoLiberado && !usuariosAutorizadores.length)" x-text="liberandoDesconto ? 'Autorizando e aplicando...' : (descontoModalRequerAutorizacao && !descontoLiberado ? 'Autorizar desconto' : 'Aplicar desconto')"></button></div>
@@ -586,14 +582,6 @@ function checkoutVenda() {
       return !this.itemDescontoPendente && this.numero(this.descontoModalEntrada)>0 && this.arredondamentoMaximoLivre>0 && Math.abs(this.totalComDescontoRascunho-Math.round(this.totalComDescontoRascunho))<0.001 && excesso<=this.arredondamentoMaximoLivre+0.001;
     },
     get descontoModalRequerAutorizacao(){ return this.descontoTotalComRascunho>0 && !this.descontoLiberado && !this.descontoModalDentroPercentual && !this.descontoModalEhArredondamento; },
-    get descricaoPoliticaDesconto(){
-      if(this.numero(this.descontoModalEntrada)<=0)return 'Informe um valor ou uma porcentagem para conferir a política da loja.';
-      if(this.descontoLiberado)return 'A autorização já está válida para a venda atual.';
-      if(this.descontoModalEhArredondamento)return 'Arredondamento dentro do limite configurado. Não será solicitada senha.';
-      if(this.descontoModalDentroPercentual)return 'Desconto dentro do limite de '+this.formatarPercentual(this.descontoPercentualMaximoLivre)+'. Não será solicitada senha.';
-      if(!this.descontoPercentualMaximoLivre && !this.arredondamentoMaximoLivre)return 'A loja não configurou descontos livres. Será necessária autorização.';
-      return 'Este desconto ultrapassa a política da loja e precisa de autorização.';
-    },
     get descontoSolicitado(){ return this.desconto>0 || this.descontoItens>0; },
     get total(){ return Math.max(0,this.arredondarMoeda(this.subtotal-this.desconto+Math.max(0,Number(this.acrescimoInicial)||0))); },
     get quantidadeItens(){ return this.itens.reduce((s,i)=>s+Number(i.quantidade),0); },
@@ -733,14 +721,6 @@ function checkoutVenda() {
       this.descontoModalEntrada=this.formatarNumeroInput(this.descontoModalMaximo*percentual/100);this.erroSenhaDesconto='';
     },
     selecionarDescontoRapido(percentual){this.descontoModalPercentual=this.formatarNumeroInput(percentual);this.sincronizarDescontoModalPorPercentual();this.focar('percentualDescontoModal');},
-    aplicarArredondamentoDesconto(){
-      if(this.itemDescontoPendente)return;
-      const atual=Math.min(this.descontoModalMaximo,Math.max(0,this.numero(this.descontoModalEntrada)));
-      const totalAtual=Math.max(0,this.arredondarMoeda(this.subtotalBruto-this.descontoItens-atual+Math.max(0,Number(this.acrescimoInicial)||0)));
-      const centavos=this.arredondarMoeda(totalAtual-Math.floor(totalAtual));
-      if(centavos<=0){this.erroSenhaDesconto='O total já está arredondado.';return;}
-      this.descontoModalEntrada=this.formatarNumeroInput(Math.min(this.descontoModalMaximo,atual+centavos));this.sincronizarDescontoModalPorValor();
-    },
     fecharSenhaDesconto(){this.modalSenhaDesconto=false;this.descontoModalEntrada='';this.descontoModalPercentual='';this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto='';this.itemDescontoPendenteId=null;this.focarProduto();},
     async liberarDesconto(){
       const valor=this.numero(this.descontoModalEntrada);

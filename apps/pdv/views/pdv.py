@@ -28,6 +28,7 @@ from apps.core.services.checkout import (
     autorizar_checkout_busca_nome,
     checkout_busca_nome_liberada,
     checkout_desconto_liberado,
+    checkout_permite_estoque_negativo,
     checkout_venda_ativo,
     configuracao_descontos_checkout,
     consumir_checkout_desconto,
@@ -2021,7 +2022,11 @@ def _api_venda_finalizar(request, exigir_autorizacao_desconto=False):
         return JsonResponse({"erro": "Os valores informados para a venda são inválidos."}, status=400)
     delivery = bool(body.get("delivery", False))
     endereco_entrega = body.get("endereco_entrega", {})
-    forcar_estoque_negativo = True
+    forcar_estoque_negativo = (
+        checkout_permite_estoque_negativo(request)
+        if exigir_autorizacao_desconto
+        else True
+    )
     bonificacao = bool(body.get("bonificacao", False))
     venda_fora_estabelecimento = bool(body.get("venda_fora_estabelecimento", False))
     viagem_id = body.get("viagem_id")

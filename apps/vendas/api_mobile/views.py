@@ -15,6 +15,7 @@ from apps.cadastros.services.cnpj_service import CnpjService
 from apps.cadastros.services.cliente_service import ClienteService
 from apps.core.models import EmpresaBanco, Filial
 from apps.core.services.checkout import (
+    checkout_permite_estoque_negativo,
     checkout_venda_ativo,
     configuracao_descontos_checkout,
     desconto_checkout_requer_autorizacao,
@@ -630,7 +631,7 @@ class CheckoutVendaMobileView(MobileTenantAPIView):
                     cliente_id=dados.get('cliente_id'),
                     desconto=desconto,
                     observacao=dados.get('observacao') or '',
-                    forcar_estoque_negativo=False,
+                    forcar_estoque_negativo=checkout_permite_estoque_negativo(request),
                     idempotency_key=chave,
                     request=request,
                 )

@@ -16,7 +16,10 @@ from apps.core.models import (
     Permissao,
     Usuario,
 )
-from apps.core.services.checkout import checkout_venda_ativo
+from apps.core.services.checkout import (
+    checkout_permite_estoque_negativo,
+    checkout_venda_ativo,
+)
 from apps.financeiro.constants.enums import TipoFormaPagamento
 from apps.financeiro.models import FormaPagamento
 from apps.pdv.models import Caixa, SessaoPDV, VendaPDV
@@ -174,6 +177,7 @@ class CheckoutVendaTests(TestCase):
         )
 
         self.assertTrue(checkout_venda_ativo(request))
+        self.assertTrue(checkout_permite_estoque_negativo(request))
 
     def test_flag_da_filial_exibe_menu_e_libera_tela(self):
         self.habilitar_checkout()
@@ -240,7 +244,9 @@ class CheckoutVendaTests(TestCase):
         self.assertContains(resposta, 'id="checkout-valor-desconto"')
         self.assertContains(resposta, 'id="checkout-percentual-desconto"')
         self.assertContains(resposta, 'checkout-configuracao-descontos')
-        self.assertContains(resposta, 'Arredondar total')
+        self.assertNotContains(resposta, 'Arredondar total')
+        self.assertNotContains(resposta, 'Não será solicitada senha')
+        self.assertNotContains(resposta, 'Este desconto está dentro da política')
         self.assertContains(resposta, '@click="solicitarAutorizacaoDesconto()"')
         self.assertContains(resposta, 'descontoModalRequerAutorizacao')
         self.assertContains(resposta, reverse('pdv:api_checkout_venda_finalizar'))
@@ -298,6 +304,51 @@ class CheckoutVendaTests(TestCase):
 
         repetida = self.client.post(endpoint, data=payload, content_type='application/json')
         self.assertEqual(repetida.status_code, 403, repetida.content)
+
+    def test_checkout_respeita_parametro_de_estoque_negativo(self):
+        self.habilitar_checkout()
+        caixa = Caixa.objects.create(filial=self.filial, numero=45, descricao='Checkout 45')
+        SessaoPDV.objects.create(
+            filial=self.filial,
+            caixa=caixa,
+            usuario=self.usuario,
+            valor_abertura=Decimal('0'),
+            status='aberto',
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            descricao='Dinheiro estoque Checkout',
+            tipo=TipoFormaPagamento.DINHEIRO,
+        )
+        payload = {
+            'cliente_id': None,
+            'desconto': '0',
+            'acrescimo': 0,
+            'itens': [{
+                'produto_id': self.produto.pk,
+                'quantidade': 1,
+                'valor_unitario': '18.90',
+                'preco_origem_tipo': 'normal',
+                'preco_origem_detalhe': 'Preço normal',
+                'desconto_valor': 0,
+            }],
+            'pagamentos': [{'forma_id': forma.pk, 'valor': '18.90'}],
+        }
+        endpoint = reverse('pdv:api_checkout_venda_finalizar')
+
+        self.parametros.checkout_permitir_estoque_negativo = False
+        self.parametros.save(update_fields=['checkout_permitir_estoque_negativo'])
+        bloqueada = self.client.post(endpoint, data=payload, content_type='application/json')
+        self.assertEqual(bloqueada.status_code, 400, bloqueada.content)
+        self.assertEqual(bloqueada.json()['tipo'], 'estoque_insuficiente')
+        self.assertEqual(VendaPDV.objects.count(), 0)
+
+        self.parametros.checkout_permitir_estoque_negativo = True
+        self.parametros.save(update_fields=['checkout_permitir_estoque_negativo'])
+        liberada = self.client.post(endpoint, data=payload, content_type='application/json')
+
+        self.assertEqual(liberada.status_code, 200, liberada.content)
+        self.assertEqual(VendaPDV.objects.count(), 1)
 
     def test_endpoint_do_checkout_exige_aprovacao_para_desconto_no_item(self):
         self.habilitar_checkout()
@@ -620,7 +671,7 @@ assert.equal(checkout.descontoSolicitado, true);
         self.assertEqual(resultado.returncode, 0, resultado.stdout + resultado.stderr)
 
     @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do checkout')
-    def test_modal_sincroniza_percentual_valor_e_arredondamento(self):
+    def test_modal_sincroniza_percentual_valor_e_respeita_arredondamento(self):
         self.habilitar_checkout()
         resposta = self.client.get(reverse('pdv:checkout'))
         html = resposta.content.decode('utf-8')
@@ -657,9 +708,8 @@ assert.equal(checkout.descontoModalRequerAutorizacao, true);
 checkout.configuracaoDescontos = {
   percentuais: [], percentual_maximo: 0, arredondamento_maximo: 1
 };
-checkout.descontoModalEntrada = '0,00';
+checkout.descontoModalEntrada = '0,90';
 checkout.sincronizarDescontoModalPorValor();
-checkout.aplicarArredondamentoDesconto();
 assert.equal(checkout.descontoModalEntrada, '0,90');
 assert.equal(checkout.totalComDescontoRascunho, 18);
 assert.equal(checkout.descontoModalRequerAutorizacao, false);
