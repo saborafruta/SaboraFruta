@@ -358,6 +358,7 @@ struct NewOrderView: View {
                             ForEach(products) { product in
                                 Button { add(product) } label: {
                                     HStack {
+                                        ProductThumbnail(product: product)
                                         VStack(alignment: .leading, spacing: 3) {
                                             Text(product.descricao).foregroundStyle(.primary).lineLimit(2)
                                             Text("\(product.categoria) • Estoque: \(product.estoqueDisponivel) \(product.unidade)")
@@ -390,6 +391,7 @@ struct NewOrderView: View {
             ForEach(lines) { line in
                 OrderOutlinedGroup {
                     HStack(alignment: .top, spacing: 10) {
+                        ProductThumbnail(product: line.product)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(line.product.descricao)
                                 .font(.subheadline.bold())
@@ -649,6 +651,39 @@ struct NewOrderView: View {
             case .queued: model.successMessage = "Pedido salvo offline. Ele será enviado na próxima sincronização."
             }
             dismiss()
+        }
+    }
+}
+
+private struct ProductThumbnail: View {
+    let product: Product
+
+    var body: some View {
+        if let value = product.fotoUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !value.isEmpty,
+           let url = URL(string: value) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                case .empty:
+                    ZStack {
+                        Color.secondary.opacity(0.08)
+                        ProgressView().controlSize(.small)
+                    }
+                case .failure:
+                    Color.secondary.opacity(0.08)
+                @unknown default:
+                    Color.secondary.opacity(0.08)
+                }
+            }
+            .frame(width: 56, height: 56)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.18), lineWidth: 1)
+            }
+            .accessibilityLabel("Foto de \(product.descricao)")
         }
     }
 }

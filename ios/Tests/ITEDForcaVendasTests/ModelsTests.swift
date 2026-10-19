@@ -6,6 +6,34 @@ import Testing
     #expect(Decimal.parse("12,50") == Decimal(string: "12.50"))
 }
 
+@Test func productDecodesPhotoURLFromAPI() throws {
+    let payload = """
+    {
+      "id": 1,
+      "descricao": "Produto",
+      "codigo": "1",
+      "unidade": "UN",
+      "preco": "7.50",
+      "preco_origem": "padrao",
+      "categoria": "Geral",
+      "categoria_id": 1,
+      "destaque": false,
+      "estoque_disponivel": "10.000",
+      "controla_lote": false,
+      "pode_vender": true,
+      "bloqueios": [],
+      "estoques": [],
+      "foto_url": "https://cdn.example/produto.jpg"
+    }
+    """
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+    let product = try decoder.decode(Product.self, from: Data(payload.utf8))
+
+    #expect(product.fotoUrl == "https://cdn.example/produto.jpg")
+}
+
 @Test func checkoutLineCalculatesTotal() {
     let product = Product(
         id: 1, descricao: "Produto", codigo: "1", unidade: "UN",

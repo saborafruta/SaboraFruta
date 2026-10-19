@@ -155,6 +155,8 @@ class ForcaVendasMobileApiTests(TestCase):
         }
 
     def test_login_contexto_e_catalogos_do_pedido(self):
+        self.produto.foto_url = 'https://cdn.example/produtos/mobile.jpg'
+        self.produto.save(update_fields=['foto_url', 'updated_at'])
         contexto = self.client.get(
             reverse('forca_vendas_mobile_api:contexto'),
             HTTP_AUTHORIZATION=self.headers['HTTP_AUTHORIZATION'],
@@ -184,6 +186,10 @@ class ForcaVendasMobileApiTests(TestCase):
         )
         self.assertEqual(produtos.json()['produtos'][0]['categoria_id'], self.categoria.pk)
         self.assertTrue(produtos.json()['produtos'][0]['destaque'])
+        self.assertEqual(
+            produtos.json()['produtos'][0]['foto_url'],
+            'https://cdn.example/produtos/mobile.jpg',
+        )
 
         destaques = self.client.get(
             reverse('forca_vendas_mobile_api:produtos'),

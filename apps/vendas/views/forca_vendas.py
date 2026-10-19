@@ -20,6 +20,7 @@ from apps.estoque.services.saldos_por_deposito import anexar_saldos_por_deposito
 from apps.financeiro.models import CondicaoPagamento, FormaPagamento
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
 from apps.produtos.models import CategoriaProduto, Produto
+from apps.produtos.services.imagem_produto_service import foto_produto_thumbnail_url
 from apps.vendas.models import PedidoVenda
 from apps.vendas.services.dashboard_forca_vendas import montar_dashboard
 from apps.vendas.services.venda_service import VendaService
@@ -301,6 +302,7 @@ class ProdutoForcaVendasBuscaView(PermissaoRequiredMixin, View):
                 'bloqueios': [item['label'] for item in contrato['bloqueios']],
                 'categoria': produto.categoria.nome if produto.categoria_id else 'Sem categoria',
                 'destaque': produto.catalogo_destaque,
+                'foto_url': foto_produto_thumbnail_url(request, produto),
             })
         return JsonResponse({'produtos': produtos})
 

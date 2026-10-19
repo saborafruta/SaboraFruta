@@ -315,6 +315,8 @@ class ForcaVendasTests(TestCase):
         self.assertNotContains(resposta, self.usuario.nome)
 
     def test_busca_produto_exibe_preco_da_tabela_do_cliente(self):
+        self.produto.foto_url = 'https://cdn.example/produtos/polpa.jpg'
+        self.produto.save(update_fields=['foto_url', 'updated_at'])
         resposta = self.client.get(reverse('vendas:api-produtos'), {
             'cliente_id': self.cliente.pk,
             'q': 'Polpa',
@@ -324,6 +326,11 @@ class ForcaVendasTests(TestCase):
         produto = resposta.json()['produtos'][0]
         self.assertEqual(Decimal(str(produto['preco'])), Decimal('7.5'))
         self.assertIn('Atacado externo', produto['preco_origem'])
+        self.assertEqual(
+            produto['foto_url'],
+            f'http://testserver{reverse("produtos:produto-image-file", args=[self.produto.pk])}'
+            '?v=thumb',
+        )
 
         resposta_volume = self.client.get(reverse('vendas:api-produtos'), {
             'cliente_id': self.cliente.pk,
@@ -342,6 +349,10 @@ class ForcaVendasTests(TestCase):
         })
         self.assertEqual(destaques.json()['produtos'][0]['id'], self.produto.pk)
         self.assertTrue(destaques.json()['produtos'][0]['destaque'])
+
+        tela = self.client.get(reverse('vendas:pedido-externo-novo'))
+        self.assertContains(tela, 'produto.foto_url')
+        self.assertContains(tela, 'item.foto_url')
 
     def test_busca_produto_exibe_saldo_com_nome_de_todos_os_depositos(self):
         loja_id = Deposito.padrao_id(self.filial.pk)

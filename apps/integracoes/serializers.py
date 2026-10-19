@@ -2,20 +2,15 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
+from apps.produtos.services.imagem_produto_service import (
+    foto_produto_url,
+    url_absoluta,
+)
 from apps.produtos.services.preco_service import PrecoService
 
 
 def dinheiro(valor):
     return f'{Decimal(valor or 0):.2f}'
-
-
-def url_absoluta(request, valor):
-    valor = str(valor or '').strip()
-    if not valor:
-        return ''
-    if valor.startswith(('http://', 'https://')) or request is None:
-        return valor
-    return request.build_absolute_uri(valor)
 
 
 def logo_filial(request, filial):
@@ -25,16 +20,6 @@ def logo_filial(request, filial):
         except (ValueError, OSError):
             pass
     return url_absoluta(request, filial.empresa.logo_url)
-
-
-def foto_produto(request, produto):
-    try:
-        valor = produto.foto_url_resolvida
-    except Exception:
-        # Imagem é contexto auxiliar: falha no storage não pode derrubar a
-        # consulta de preços ou estoque usada para impressão.
-        valor = produto.foto_url
-    return url_absoluta(request, valor)
 
 
 class FilialSerializer(serializers.Serializer):
@@ -60,7 +45,7 @@ class ProdutoSerializer(serializers.Serializer):
         preco_atual = PrecoService.melhor_preco_produto_detalhado(
             produto, filial=produto.filial, quantidade=1,
         )
-        foto_url = foto_produto(request, produto)
+        foto_url = foto_produto_url(request, produto)
         return {
             'id': produto.pk,
             'filial': {
@@ -153,7 +138,7 @@ class EstoqueSerializer(serializers.Serializer):
                 'codigo': estoque.produto.codigo,
                 'codigo_barras': estoque.produto.codigo_barras,
                 'descricao': estoque.produto.descricao,
-                'foto_url': foto_produto(request, estoque.produto),
+                'foto_url': foto_produto_url(request, estoque.produto),
             },
             'deposito': {
                 'id': estoque.deposito_id,

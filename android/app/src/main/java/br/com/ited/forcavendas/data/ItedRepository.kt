@@ -838,6 +838,7 @@ class ItedRepository(private val store: SessionStore) {
                 origemPedido = saldo.optBoolean("origem_pedido"),
             )
         } ?: emptyList(),
+        fotoUrl = item.optString("foto_url").takeIf(String::isNotBlank),
     )
 
     private fun clientToJson(client: Client): JSONObject = JSONObject()
@@ -879,6 +880,7 @@ class ItedRepository(private val store: SessionStore) {
             .put("pode_vender", product.podeVender)
             .put("bloqueios", JSONArray(product.bloqueios))
             .put("estoques", stocks)
+            .put("foto_url", product.fotoUrl ?: "")
     }
 }
 

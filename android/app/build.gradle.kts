@@ -15,8 +15,8 @@ android {
         applicationId = "br.com.ited.forcavendas"
         minSdk = 28
         targetSdk = 36
-        versionCode = 21
-        versionName = "0.10.3"
+        versionCode = 22
+        versionName = "0.10.4"
 
         buildConfigField("String", "ITED_API_BASE_URL", "\"$apiBaseUrl\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -71,6 +71,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.2")
     implementation("androidx.work:work-runtime-ktx:2.10.3")
+    implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     debugImplementation("androidx.compose.ui:ui-tooling")

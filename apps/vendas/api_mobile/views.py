@@ -32,6 +32,7 @@ from apps.pdv.models import ItemVendaPDV, SessaoPDV, VendaPDV
 from apps.pdv.services.produto_vendavel_service import ProdutoVendavelService
 from apps.pdv.services.venda_pdv_service import VendaPDVService
 from apps.produtos.models import CategoriaProduto, Produto
+from apps.produtos.services.imagem_produto_service import foto_produto_url
 from apps.vendas.models import PedidoVenda, SeparacaoPedido
 from apps.vendas.services.venda_service import VendaService
 
@@ -330,6 +331,7 @@ class ProdutosMobileView(MobileTenantAPIView):
                 ),
                 'categoria_id': produto.categoria_id,
                 'destaque': produto.catalogo_destaque,
+                'foto_url': foto_produto_url(request, produto),
                 'estoque_disponivel': _decimal(contrato['saldo_disponivel'], 3),
                 'controla_lote': produto.controla_lote,
                 'pode_vender': contrato['pode_vender'],

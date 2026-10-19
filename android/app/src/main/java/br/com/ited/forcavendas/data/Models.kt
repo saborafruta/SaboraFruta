@@ -130,6 +130,7 @@ data class Product(
     val podeVender: Boolean,
     val bloqueios: List<String>,
     val estoques: List<StockBalance>,
+    val fotoUrl: String? = null,
 )
 
 data class ProductCategory(

@@ -66,6 +66,7 @@ struct Product: Codable, Identifiable, Hashable, Sendable {
     let podeVender: Bool
     let bloqueios: [String]
     let estoques: [StockBalance]
+    var fotoUrl: String? = nil
 }
 
 struct PaymentOption: Codable, Identifiable, Hashable, Sendable {

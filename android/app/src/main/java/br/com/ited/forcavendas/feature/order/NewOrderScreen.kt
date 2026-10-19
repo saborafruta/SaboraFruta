@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -64,6 +65,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -76,6 +78,7 @@ import br.com.ited.forcavendas.data.OrderOptions
 import br.com.ited.forcavendas.data.Product
 import br.com.ited.forcavendas.data.SavedOrderDraft
 import br.com.ited.forcavendas.data.UserSession
+import coil.compose.AsyncImage
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.Instant
@@ -1035,45 +1038,52 @@ private fun ProductResult(product: Product, inCart: Boolean, onAdd: () -> Unit) 
     DropdownMenuItem(
         enabled = product.podeVender,
         text = {
-            Column(
+            Row(
                 modifier = Modifier.widthIn(min = 220.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                ProductThumbnail(product)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            product.descricao,
+                            modifier = Modifier.weight(1f),
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (product.destaque) {
+                            Icon(
+                                Icons.Outlined.StarOutline,
+                                contentDescription = "Destaque",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
                     Text(
-                        product.descricao,
-                        modifier = Modifier.weight(1f),
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                        listOf(product.codigo, product.precoOrigem, product.categoria)
+                            .filter(String::isNotBlank).joinToString(" • "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (product.destaque) {
-                        Icon(
-                            Icons.Outlined.StarOutline,
-                            contentDescription = "Destaque",
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary,
+                    Text(
+                        "Total disponível: ${product.estoqueDisponivel} ${product.unidade}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    ProductStockBalances(product)
+                    product.bloqueios.firstOrNull()?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
                         )
                     }
-                }
-                Text(
-                    listOf(product.codigo, product.precoOrigem, product.categoria)
-                        .filter(String::isNotBlank).joinToString(" • "),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    "Total disponível: ${product.estoqueDisponivel} ${product.unidade}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                ProductStockBalances(product)
-                product.bloqueios.firstOrNull()?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
                 }
             }
         },
@@ -1108,6 +1118,7 @@ private fun CartItemCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.Top,
             ) {
+                ProductThumbnail(product)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         product.descricao,
@@ -1186,6 +1197,26 @@ private fun CartItemCard(
                     fontWeight = FontWeight.Bold,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ProductThumbnail(product: Product) {
+    val photoUrl = product.fotoUrl?.trim().orEmpty()
+    if (photoUrl.isNotEmpty()) {
+        Surface(
+            modifier = Modifier.size(56.dp),
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            tonalElevation = 1.dp,
+        ) {
+            AsyncImage(
+                model = photoUrl,
+                contentDescription = "Foto de ${product.descricao}",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
         }
     }
 }
