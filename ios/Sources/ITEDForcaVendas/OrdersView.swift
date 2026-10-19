@@ -33,15 +33,15 @@ private struct OrderStepHeader: View {
     let step: String
     let title: String
     var caption: String? = nil
-    var accent: Color = ITEDStyle.blue
+    var accent: Color = ITEDStyle.orderPurple
 
     var body: some View {
         HStack(spacing: 10) {
             Text(step)
                 .font(.caption.bold())
                 .foregroundStyle(.white)
-                .frame(width: 26, height: 26)
-                .background(accent, in: Circle())
+                .frame(width: 30, height: 30)
+                .background(accent, in: RoundedRectangle(cornerRadius: 10))
                 .accessibilityHidden(true)
             Text(title)
                 .font(.headline)
@@ -59,12 +59,9 @@ private struct OrderStepHeader: View {
 }
 
 private struct OrderSectionCard<Content: View>: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let accent: Color
     let content: Content
 
-    init(accent: Color, @ViewBuilder content: () -> Content) {
-        self.accent = accent
+    init(@ViewBuilder content: () -> Content) {
         self.content = content()
     }
 
@@ -72,15 +69,15 @@ private struct OrderSectionCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 12) {
             content
         }
-        .padding(16)
+        .padding(15)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            accent.opacity(colorScheme == .dark ? 0.14 : 0.08),
+            Color(.secondarySystemGroupedBackground),
             in: RoundedRectangle(cornerRadius: ITEDStyle.radius)
         )
         .overlay {
             RoundedRectangle(cornerRadius: ITEDStyle.radius)
-                .stroke(accent.opacity(0.20), lineWidth: 1)
+                .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
         }
     }
 }
@@ -111,10 +108,66 @@ private struct OrderMenuLabel: View {
         }
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-        .background(accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
         .overlay {
             RoundedRectangle(cornerRadius: 12)
-                .stroke(accent.opacity(0.24), lineWidth: 1)
+                .stroke(Color.secondary.opacity(0.55), lineWidth: 1)
+        }
+    }
+}
+
+private struct OrderOutlinedGroup<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) { content }
+            .padding(13)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.secondary.opacity(0.32), lineWidth: 1)
+            }
+    }
+}
+
+private struct StockBalanceChips: View {
+    let product: Product
+
+    var body: some View {
+        if !product.estoques.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Estoque por depósito")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(product.estoques) { stock in
+                            HStack(spacing: 4) {
+                                if stock.origemPedido {
+                                    Image(systemName: "checkmark")
+                                        .font(.caption2.bold())
+                                }
+                                Text("\(stock.depositoNome)  \(stock.disponivel) \(product.unidade)")
+                                    .font(.caption)
+                            }
+                            .foregroundStyle(stock.permiteVenda ? Color.primary : Color.secondary)
+                            .padding(.horizontal, 9)
+                            .frame(minHeight: 30)
+                            .background(
+                                stock.origemPedido
+                                    ? ITEDStyle.orderPurple.opacity(0.26)
+                                    : Color.secondary.opacity(0.13),
+                                in: Capsule()
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -134,7 +187,6 @@ struct NewOrderView: View {
     @State private var payment: PaymentOption?
     @State private var condition: PaymentCondition?
     @State private var priority: OrderPriority?
-    @State private var hasDeliveryDate = true
     @State private var deliveryDate = Calendar.current.date(byAdding: .day, value: 5, to: Date()) ?? Date()
     @State private var notes = ""
     @State private var searchTask: Task<Void, Never>?
@@ -176,37 +228,42 @@ struct NewOrderView: View {
     }
 
     private var clientSection: some View {
-        OrderSectionCard(accent: ITEDStyle.blue) {
+        OrderSectionCard {
             OrderStepHeader(step: "1", title: "Cliente", caption: "Obrigatório")
             if let client {
-                Divider().overlay(ITEDStyle.blue.opacity(0.25))
-                HStack(spacing: 12) {
-                    Image(systemName: "person.crop.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(ITEDStyle.blue)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(client.nome).font(.subheadline.weight(.semibold)).lineLimit(2)
-                        let detail = [client.cpfCnpj, client.cidadeUf].filter { !$0.isEmpty }.joined(separator: " • ")
-                        if !detail.isEmpty { Text(detail).font(.caption).foregroundStyle(.secondary) }
-                        Text("Crédito disponível: \(Decimal.parse(client.creditoDisponivel).currency)")
-                            .font(.caption.weight(.semibold))
-                        Text("Tabela: \(client.tabelaPreco)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                OrderOutlinedGroup {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(client.nome)
+                                .font(.headline)
+                                .lineLimit(2)
+                            let detail = [client.cpfCnpj, client.cidadeUf].filter { !$0.isEmpty }.joined(separator: " • ")
+                            if !detail.isEmpty {
+                                Text(detail)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer(minLength: 8)
+                        Button("Trocar") {
+                            self.client = nil
+                            clientQuery = ""
+                            clientResults = []
+                            products = []
+                            category = nil
+                            featuredOnly = false
+                            lines.removeAll()
+                        }
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.capsule)
+                        .tint(ITEDStyle.blue)
                     }
-                    Spacer(minLength: 8)
-                    Button("Trocar") {
-                        self.client = nil
-                        clientQuery = ""
-                        clientResults = []
-                        products = []
-                        category = nil
-                        featuredOnly = false
-                        lines.removeAll()
-                    }
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.capsule)
-                    .tint(ITEDStyle.blue)
+                    Divider()
+                    Text("Crédito disponível: \(Decimal.parse(client.creditoDisponivel).currency)")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Tabela: \(client.tabelaPreco)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             } else {
                 TextField("Buscar por nome, CPF ou CNPJ", text: $clientQuery)
@@ -244,12 +301,11 @@ struct NewOrderView: View {
     }
 
     private var productSection: some View {
-        OrderSectionCard(accent: ITEDStyle.orange) {
+        OrderSectionCard {
             OrderStepHeader(
                 step: "2",
                 title: "Produtos",
-                caption: client == nil ? "Selecione o cliente" : "\(lines.count) no pedido",
-                accent: ITEDStyle.orange
+                caption: client == nil ? "Selecione o cliente" : "\(lines.count) no pedido"
             )
             if client == nil {
                 Text("A busca de produtos será liberada depois que você selecionar o cliente.")
@@ -280,7 +336,7 @@ struct NewOrderView: View {
                         title: "Categoria dos produtos",
                         value: selectedProductFilterLabel,
                         icon: "list.bullet",
-                        accent: ITEDStyle.orange
+                        accent: ITEDStyle.orderPurple
                     )
                 }
                 .buttonStyle(.plain)
@@ -329,11 +385,10 @@ struct NewOrderView: View {
     }
 
     private var orderItemsSection: some View {
-        OrderSectionCard(accent: ITEDStyle.blue) {
+        OrderSectionCard {
             OrderStepHeader(step: "3", title: "Itens do pedido", caption: "\(lines.count) item(ns)")
             ForEach(lines) { line in
-                Divider().overlay(ITEDStyle.blue.opacity(0.20))
-                VStack(alignment: .leading, spacing: 10) {
+                OrderOutlinedGroup {
                     HStack(alignment: .top, spacing: 10) {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(line.product.descricao)
@@ -356,42 +411,54 @@ struct NewOrderView: View {
                         .tint(.red)
                         .accessibilityLabel("Remover \(line.product.descricao)")
                     }
+                    StockBalanceChips(product: line.product)
                     HStack(spacing: 7) {
-                        Text("Qtd.")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
                         Button {
                             lines.adjustQuantity(for: line.id, by: -1)
                         } label: {
                             Image(systemName: "minus")
                                 .font(.caption.weight(.bold))
-                                .frame(width: 20, height: 20)
+                                .frame(width: 24, height: 24)
                         }
                         .buttonStyle(.bordered)
                         .buttonBorderShape(.circle)
-                        .controlSize(.small)
                         .accessibilityLabel("Diminuir quantidade de \(line.product.descricao)")
-                        TextField(
-                            "Qtd.",
-                            value: quantityBinding(for: line.id),
-                            format: .number.precision(.fractionLength(0...3))
-                        )
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.center)
-                        .textFieldStyle(.roundedBorder)
-                        .controlSize(.small)
-                        .frame(width: 62)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Quantidade")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 4) {
+                                TextField(
+                                    "Qtd.",
+                                    value: quantityBinding(for: line.id),
+                                    format: .number.precision(.fractionLength(0...3))
+                                )
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.center)
+                                .textFieldStyle(.plain)
+                                .frame(minWidth: 44)
+                                Text(line.product.unidade)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.horizontal, 9)
+                        .frame(minHeight: 48)
+                        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 9))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 9)
+                                .stroke(Color.secondary.opacity(0.55), lineWidth: 1)
+                        }
                         Button {
                             lines.adjustQuantity(for: line.id, by: 1)
                         } label: {
                             Image(systemName: "plus")
                                 .font(.caption.weight(.bold))
-                                .frame(width: 20, height: 20)
+                                .frame(width: 24, height: 24)
                         }
                         .buttonStyle(.borderedProminent)
                         .buttonBorderShape(.circle)
-                        .controlSize(.small)
-                        .tint(ITEDStyle.orange)
+                        .tint(ITEDStyle.orderPurple)
                         .accessibilityLabel("Aumentar quantidade de \(line.product.descricao)")
                         Spacer()
                         VStack(alignment: .trailing, spacing: 1) {
@@ -405,8 +472,8 @@ struct NewOrderView: View {
     }
 
     private var commercialSection: some View {
-        OrderSectionCard(accent: ITEDStyle.orange) {
-            OrderStepHeader(step: "4", title: "Condições comerciais", accent: ITEDStyle.orange)
+        OrderSectionCard {
+            OrderStepHeader(step: "4", title: "Condições comerciais")
             Menu {
                 ForEach(options?.payments ?? []) { item in
                     Button(item.descricao) { payment = item }
@@ -416,7 +483,7 @@ struct NewOrderView: View {
                     title: "Forma de pagamento",
                     value: payment?.descricao ?? "Selecione",
                     icon: "creditcard",
-                    accent: ITEDStyle.orange
+                    accent: ITEDStyle.orderPurple
                 )
             }
             .buttonStyle(.plain)
@@ -430,7 +497,7 @@ struct NewOrderView: View {
                         title: "Condição de pagamento",
                         value: condition?.descricao ?? options?.conditions.first?.descricao ?? "Selecione",
                         icon: "calendar.badge.clock",
-                        accent: ITEDStyle.orange
+                        accent: ITEDStyle.orderPurple
                     )
                 }
                 .buttonStyle(.plain)
@@ -451,7 +518,7 @@ struct NewOrderView: View {
                                     .padding(.horizontal, 14)
                                     .frame(minHeight: 36)
                                     .background(
-                                        priority == item ? ITEDStyle.orange : Color.primary.opacity(0.07),
+                                        priority == item ? ITEDStyle.orderPurple : Color.primary.opacity(0.07),
                                         in: Capsule()
                                     )
                             }
@@ -460,17 +527,26 @@ struct NewOrderView: View {
                     }
                 }
             }
-            Divider().overlay(ITEDStyle.orange.opacity(0.22))
-            Toggle("Informar entrega prevista", isOn: $hasDeliveryDate)
-            if hasDeliveryDate {
-                DatePicker("Data", selection: $deliveryDate, displayedComponents: .date)
-                    .padding(.top, 4)
+            VStack(alignment: .leading, spacing: 7) {
+                DatePicker("Entrega prevista", selection: $deliveryDate, displayedComponents: .date)
+                    .datePickerStyle(.compact)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, minHeight: 54)
+                    .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.secondary.opacity(0.55), lineWidth: 1)
+                    }
+                Text("Atalhos de entrega")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 HStack(spacing: 8) {
                     ForEach([5, 10, 15], id: \.self) { days in
                         Button("+\(days) dias") {
                             deliveryDate = Calendar.current.date(byAdding: .day, value: days, to: Date()) ?? Date()
                         }
                         .buttonStyle(.bordered)
+                        .tint(ITEDStyle.orderPurple)
                         .frame(maxWidth: .infinity)
                     }
                 }
@@ -483,7 +559,7 @@ struct NewOrderView: View {
     }
 
     private var submitSection: some View {
-        OrderSectionCard(accent: ITEDStyle.orange) {
+        OrderSectionCard {
             HStack {
                 Text("TOTAL DO PEDIDO").font(.caption.weight(.semibold))
                 Spacer()
@@ -566,7 +642,7 @@ struct NewOrderView: View {
         await model.perform {
             let result = try await model.submitOrder(
                 client: client, lines: lines, payment: payment, condition: condition,
-                priority: priority, deliveryDate: hasDeliveryDate ? deliveryDate : nil, notes: notes
+                priority: priority, deliveryDate: deliveryDate, notes: notes
             )
             switch result {
             case let .sent(order): model.successMessage = "Pedido #\(order.numeroPedido) enviado ao iTED."

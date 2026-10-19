@@ -21,14 +21,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AddShoppingCart
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Payments
-import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Button
@@ -1134,7 +1132,7 @@ private fun CartItemCard(
             ProductStockBalances(product)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 OutlinedButton(
@@ -1142,12 +1140,16 @@ private fun CartItemCard(
                     modifier = Modifier.size(48.dp),
                     contentPadding = PaddingValues(0.dp),
                 ) {
-                    Icon(Icons.Outlined.Remove, contentDescription = "Diminuir quantidade")
+                    Text(
+                        "−",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
                 OutlinedTextField(
                     value = quantity,
                     onValueChange = onQuantityChange,
-                    modifier = Modifier.weight(1f).widthIn(max = 140.dp),
+                    modifier = Modifier.width(126.dp),
                     label = { Text("Quantidade") },
                     suffix = { Text(product.unidade) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -1158,7 +1160,11 @@ private fun CartItemCard(
                     modifier = Modifier.size(48.dp),
                     contentPadding = PaddingValues(0.dp),
                 ) {
-                    Icon(Icons.Outlined.Add, contentDescription = "Aumentar quantidade")
+                    Text(
+                        "+",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
             }
             val lineTotal = (product.preco.toBigDecimalOrNull() ?: BigDecimal.ZERO)

@@ -4,6 +4,7 @@ import UIKit
 enum ITEDStyle {
     static let blue = Color(red: 0.02, green: 0.48, blue: 0.90)
     static let orange = Color(red: 1.0, green: 0.38, blue: 0.05)
+    static let orderPurple = Color(red: 0.34, green: 0.20, blue: 0.58)
     static let navy = Color(red: 0.02, green: 0.08, blue: 0.16)
     static let radius: CGFloat = 18
 }
