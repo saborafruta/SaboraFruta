@@ -33,6 +33,7 @@ private struct OrderStepHeader: View {
     let step: String
     let title: String
     var caption: String? = nil
+    var accent: Color = ITEDStyle.blue
 
     var body: some View {
         HStack(spacing: 10) {
@@ -40,7 +41,7 @@ private struct OrderStepHeader: View {
                 .font(.caption.bold())
                 .foregroundStyle(.white)
                 .frame(width: 26, height: 26)
-                .background(ITEDStyle.blue, in: Circle())
+                .background(accent, in: Circle())
                 .accessibilityHidden(true)
             Text(title)
                 .font(.headline)
@@ -54,6 +55,67 @@ private struct OrderStepHeader: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Etapa \(step), \(title)\(caption.map { ", \($0)" } ?? "")")
+    }
+}
+
+private struct OrderSectionCard<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let accent: Color
+    let content: Content
+
+    init(accent: Color, @ViewBuilder content: () -> Content) {
+        self.accent = accent
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            content
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            accent.opacity(colorScheme == .dark ? 0.14 : 0.08),
+            in: RoundedRectangle(cornerRadius: ITEDStyle.radius)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: ITEDStyle.radius)
+                .stroke(accent.opacity(0.20), lineWidth: 1)
+        }
+    }
+}
+
+private struct OrderMenuLabel: View {
+    let title: String
+    let value: String
+    let icon: String
+    let accent: Color
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(accent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(accent)
+        }
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+        .background(accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(accent.opacity(0.24), lineWidth: 1)
+        }
     }
 }
 
@@ -114,9 +176,10 @@ struct NewOrderView: View {
     }
 
     private var clientSection: some View {
-        ITEDCard {
+        OrderSectionCard(accent: ITEDStyle.blue) {
             OrderStepHeader(step: "1", title: "Cliente", caption: "Obrigatório")
             if let client {
+                Divider().overlay(ITEDStyle.blue.opacity(0.25))
                 HStack(spacing: 12) {
                     Image(systemName: "person.crop.circle.fill")
                         .font(.title2)
@@ -143,16 +206,13 @@ struct NewOrderView: View {
                     }
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.capsule)
+                    .tint(ITEDStyle.blue)
                 }
-                .padding(12)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
-                .padding(.top, 10)
             } else {
                 TextField("Buscar por nome, CPF ou CNPJ", text: $clientQuery)
                     .textFieldStyle(.roundedBorder)
                     .submitLabel(.search)
                     .onChange(of: clientQuery) { _, value in searchClients(value) }
-                    .padding(.top, 10)
                 if !clientResults.isEmpty {
                     SearchResultPanel {
                         LazyVStack(spacing: 0) {
@@ -178,18 +238,18 @@ struct NewOrderView: View {
                             }
                         }
                     }
-                    .padding(.top, 8)
                 }
             }
         }
     }
 
     private var productSection: some View {
-        ITEDCard {
+        OrderSectionCard(accent: ITEDStyle.orange) {
             OrderStepHeader(
                 step: "2",
                 title: "Produtos",
-                caption: client == nil ? "Selecione o cliente" : "\(lines.count) no pedido"
+                caption: client == nil ? "Selecione o cliente" : "\(lines.count) no pedido",
+                accent: ITEDStyle.orange
             )
             if client == nil {
                 Text("A busca de produtos será liberada depois que você selecionar o cliente.")
@@ -216,17 +276,14 @@ struct NewOrderView: View {
                         }
                     }
                 } label: {
-                    HStack {
-                        Label(selectedProductFilterLabel, systemImage: "list.bullet")
-                            .lineLimit(1)
-                        Spacer()
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.caption.weight(.semibold))
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    OrderMenuLabel(
+                        title: "Categoria dos produtos",
+                        value: selectedProductFilterLabel,
+                        icon: "list.bullet",
+                        accent: ITEDStyle.orange
+                    )
                 }
-                .buttonStyle(.bordered)
-                .padding(.top, 10)
+                .buttonStyle(.plain)
                 HStack(spacing: 8) {
                     TextField("Nome, código ou código de barras", text: $productQuery)
                         .textFieldStyle(.roundedBorder)
@@ -239,7 +296,6 @@ struct NewOrderView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(ITEDStyle.orange)
                 }
-                .padding(.top, 10)
                 if !products.isEmpty {
                     SearchResultPanel {
                         LazyVStack(spacing: 0) {
@@ -264,107 +320,147 @@ struct NewOrderView: View {
                             }
                         }
                     }
-                    .padding(.top, 8)
                 }
                 Text("Escolha uma categoria ou digite para pesquisar.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .padding(.top, 6)
             }
         }
     }
 
     private var orderItemsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        OrderSectionCard(accent: ITEDStyle.blue) {
             OrderStepHeader(step: "3", title: "Itens do pedido", caption: "\(lines.count) item(ns)")
             ForEach(lines) { line in
-                ITEDCard {
-                    HStack(alignment: .top, spacing: 12) {
+                Divider().overlay(ITEDStyle.blue.opacity(0.20))
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top, spacing: 10) {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(line.product.descricao).font(.subheadline.bold()).lineLimit(2)
+                            Text(line.product.descricao)
+                                .font(.subheadline.bold())
+                                .lineLimit(2)
                             Text("\(Decimal.parse(line.product.preco).currency)/\(line.product.unidade)")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                        Spacer(minLength: 8)
-                        Menu {
-                            Button("Remover produto", systemImage: "trash", role: .destructive) {
-                                removalCandidateID = line.id
-                            }
+                        Spacer(minLength: 6)
+                        Button {
+                            removalCandidateID = line.id
                         } label: {
-                            Image(systemName: "ellipsis.circle")
-                                .frame(width: 36, height: 36)
+                            Image(systemName: "trash")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(width: 34, height: 34)
                         }
-                        .accessibilityLabel("Opções de \(line.product.descricao)")
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.circle)
+                        .tint(.red)
+                        .accessibilityLabel("Remover \(line.product.descricao)")
                     }
-                    HStack(spacing: 10) {
+                    HStack(spacing: 7) {
+                        Text("Qtd.")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
                         Button {
                             lines.adjustQuantity(for: line.id, by: -1)
                         } label: {
                             Image(systemName: "minus")
-                                .font(.body.weight(.bold))
-                                .frame(width: 28, height: 28)
+                                .font(.caption.weight(.bold))
+                                .frame(width: 20, height: 20)
                         }
                         .buttonStyle(.bordered)
                         .buttonBorderShape(.circle)
+                        .controlSize(.small)
                         .accessibilityLabel("Diminuir quantidade de \(line.product.descricao)")
-
-                        VStack(spacing: 3) {
-                            Text("Quantidade")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            TextField(
-                                "Quantidade",
-                                value: quantityBinding(for: line.id),
-                                format: .number.precision(.fractionLength(0...3))
-                            )
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.center)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(minWidth: 76, maxWidth: 96)
-                        }
-
+                        TextField(
+                            "Qtd.",
+                            value: quantityBinding(for: line.id),
+                            format: .number.precision(.fractionLength(0...3))
+                        )
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.center)
+                        .textFieldStyle(.roundedBorder)
+                        .controlSize(.small)
+                        .frame(width: 62)
                         Button {
                             lines.adjustQuantity(for: line.id, by: 1)
                         } label: {
                             Image(systemName: "plus")
-                                .font(.body.weight(.bold))
-                                .frame(width: 28, height: 28)
+                                .font(.caption.weight(.bold))
+                                .frame(width: 20, height: 20)
                         }
                         .buttonStyle(.borderedProminent)
                         .buttonBorderShape(.circle)
+                        .controlSize(.small)
                         .tint(ITEDStyle.orange)
                         .accessibilityLabel("Aumentar quantidade de \(line.product.descricao)")
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.top, 8)
-                    HStack {
-                        Text("Subtotal").font(.caption).foregroundStyle(.secondary)
                         Spacer()
-                        Text(line.total.currency).fontWeight(.bold)
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text("Subtotal").font(.caption2).foregroundStyle(.secondary)
+                            Text(line.total.currency).font(.subheadline.bold())
+                        }
                     }
-                    .padding(.top, 4)
                 }
             }
         }
     }
 
     private var commercialSection: some View {
-        ITEDCard {
-            OrderStepHeader(step: "4", title: "Condições comerciais")
-            Picker("Forma de pagamento", selection: $payment) {
-                Text("Selecione").tag(nil as PaymentOption?)
-                ForEach(options?.payments ?? []) { Text($0.descricao).tag(Optional($0)) }
+        OrderSectionCard(accent: ITEDStyle.orange) {
+            OrderStepHeader(step: "4", title: "Condições comerciais", accent: ITEDStyle.orange)
+            Menu {
+                ForEach(options?.payments ?? []) { item in
+                    Button(item.descricao) { payment = item }
+                }
+            } label: {
+                OrderMenuLabel(
+                    title: "Forma de pagamento",
+                    value: payment?.descricao ?? "Selecione",
+                    icon: "creditcard",
+                    accent: ITEDStyle.orange
+                )
             }
-            .padding(.top, 6)
-            Picker("Condição", selection: $condition) {
-                Text("Sem condição").tag(nil as PaymentCondition?)
-                ForEach(options?.conditions ?? []) { Text($0.descricao).tag(Optional($0)) }
+            .buttonStyle(.plain)
+            if !(options?.conditions.isEmpty ?? true) {
+                Menu {
+                    ForEach(options?.conditions ?? []) { item in
+                        Button(item.descricao) { condition = item }
+                    }
+                } label: {
+                    OrderMenuLabel(
+                        title: "Condição de pagamento",
+                        value: condition?.descricao ?? options?.conditions.first?.descricao ?? "Selecione",
+                        icon: "calendar.badge.clock",
+                        accent: ITEDStyle.orange
+                    )
+                }
+                .buttonStyle(.plain)
             }
-            Picker("Prioridade", selection: $priority) {
-                ForEach(options?.priorities ?? []) { Text($0.descricao).tag(Optional($0)) }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Prioridade")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(options?.priorities ?? []) { item in
+                            Button {
+                                priority = item
+                            } label: {
+                                Text(item.descricao)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(priority == item ? Color.white : Color.primary)
+                                    .padding(.horizontal, 14)
+                                    .frame(minHeight: 36)
+                                    .background(
+                                        priority == item ? ITEDStyle.orange : Color.primary.opacity(0.07),
+                                        in: Capsule()
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
             }
-            Divider().padding(.vertical, 4)
+            Divider().overlay(ITEDStyle.orange.opacity(0.22))
             Toggle("Informar entrega prevista", isOn: $hasDeliveryDate)
             if hasDeliveryDate {
                 DatePicker("Data", selection: $deliveryDate, displayedComponents: .date)
@@ -387,7 +483,7 @@ struct NewOrderView: View {
     }
 
     private var submitSection: some View {
-        ITEDCard {
+        OrderSectionCard(accent: ITEDStyle.orange) {
             HStack {
                 Text("TOTAL DO PEDIDO").font(.caption.weight(.semibold))
                 Spacer()
@@ -407,6 +503,7 @@ struct NewOrderView: View {
         await model.perform {
             options = try await model.orderOptions()
             priority = options?.priorities.first
+            condition = options?.conditions.first
         }
     }
 
