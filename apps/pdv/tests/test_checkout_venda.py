@@ -224,6 +224,10 @@ class CheckoutVendaTests(TestCase):
         self.assertNotContains(resposta, 'Desconto no item')
         self.assertContains(resposta, 'Desconto no produto')
         self.assertContains(resposta, 'Selecionar produto')
+        self.assertContains(resposta, 'Use 1 ou 2, as setas e Enter para escolher.')
+        self.assertContains(resposta, 'atalhoEscopoDesconto(evento)')
+        self.assertContains(resposta, 'atalhoProdutoDesconto(indice)')
+        self.assertContains(resposta, 'margin-inline-start:8px')
         self.assertContains(resposta, 'descontoItemValor(item)')
         self.assertContains(resposta, 'descricaoApresentacao(produto)')
         self.assertContains(resposta, 'descricaoApresentacao(item)')
@@ -738,6 +742,67 @@ checkout.sincronizarDescontoModalPorValor();
 assert.equal(checkout.descontoModalEntrada, '0,90');
 assert.equal(checkout.totalComDescontoRascunho, 18);
 assert.equal(checkout.descontoModalRequerAutorizacao, false);
+'''
+
+        resultado = subprocess.run(
+            [shutil.which('node')], input=script, text=True, encoding='utf-8',
+            capture_output=True, timeout=20,
+        )
+
+        self.assertEqual(resultado.returncode, 0, resultado.stdout + resultado.stderr)
+
+    @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do checkout')
+    def test_desconto_pode_ser_escolhido_sem_mouse(self):
+        self.habilitar_checkout()
+        resposta = self.client.get(reverse('pdv:checkout'))
+        html = resposta.content.decode('utf-8')
+        script = 'function checkoutVenda()' + html.split(
+            'function checkoutVenda()', 1,
+        )[1].split('</script>', 1)[0]
+        script += r'''
+const assert = require('node:assert/strict');
+global.document = {getElementById: () => ({textContent: '[]'})};
+const checkout = checkoutVenda();
+checkout.pedidoCatalogoInicial = null;
+const focos = [];
+const botao = (nome) => ({
+  focus: () => focos.push(nome),
+  scrollIntoView: () => focos.push(nome+'-visivel')
+});
+checkout.$el = {querySelector: (seletor) => botao('escopo-'+seletor.at(-3))};
+checkout.$refs = {listaProdutosDesconto: {
+  querySelector: (seletor) => botao('produto-'+seletor.at(-3))
+}};
+checkout.$nextTick = (callback) => callback();
+checkout.itens = [
+  checkout.prepararItem({id: 1, descricao: 'Unidade', preco: 10, quantidade: 1}),
+  checkout.prepararItem({id: 2, descricao: 'Caixa', preco: 50, quantidade: 1})
+];
+function tecla(key) {
+  let prevenido = false;
+  checkout.atalhoTeclado({key, repeat: false, preventDefault: () => { prevenido = true; }});
+  assert.equal(prevenido, true, key);
+}
+checkout.solicitarAutorizacaoDesconto();
+assert.equal(checkout.indiceEscopoDesconto, 0);
+tecla('ArrowDown');
+assert.equal(checkout.indiceEscopoDesconto, 1);
+tecla('Enter');
+assert.equal(checkout.etapaEscopoDesconto, 'produto');
+assert.equal(checkout.indiceProdutoDesconto, 0);
+tecla('ArrowDown');
+assert.equal(checkout.indiceProdutoDesconto, 1);
+tecla('Enter');
+assert.equal(checkout.modalEscopoDesconto, false);
+assert.equal(checkout.modalSenhaDesconto, true);
+assert.equal(checkout.itemDescontoPendenteId, '2:base');
+checkout.fecharSenhaDesconto();
+checkout.solicitarAutorizacaoDesconto();
+tecla('2');
+assert.equal(checkout.etapaEscopoDesconto, 'produto');
+tecla('1');
+assert.equal(checkout.itemDescontoPendenteId, '1:base');
+assert.ok(focos.length > 0);
 '''
 
         resultado = subprocess.run(

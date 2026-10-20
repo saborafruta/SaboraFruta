@@ -33,7 +33,7 @@
   .co-results { position:absolute; z-index:40; left:10px; right:10px; top:61px; max-height:280px; overflow:auto; padding:6px; border:1px solid var(--co-border); background:var(--co-card); border-radius:10px; box-shadow:0 20px 50px rgba(0,0,0,.3); }
   .co-result { width:100%; display:flex; justify-content:space-between; align-items:center; gap:14px; padding:11px; color:var(--co-text); background:transparent; border:0; border-radius:9px; text-align:left; cursor:pointer; }
   .co-result.active { background:color-mix(in srgb,var(--co-blue) 15%,transparent); outline:1px solid color-mix(in srgb,var(--co-blue) 55%,transparent); }
-  .co-result-code { color:var(--co-muted); font-size:12px; }
+  .co-result-code { display:inline-block; margin-inline-start:8px; color:var(--co-muted); font-size:12px; }
   .co-cart-card { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
   .co-cart-scroll { flex:1 1 auto; min-height:0; overflow:auto; overscroll-behavior:contain; }
   .co-section-head { flex:0 0 auto; min-height:43px; padding:9px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px; border-bottom:1px solid var(--co-border); }
@@ -128,12 +128,14 @@
   .co-discount-preset { min-width:68px; min-height:39px; padding:7px 12px; border:1px solid var(--co-border); border-radius:9px; background:var(--co-panel); color:var(--co-text); font-weight:900; cursor:pointer; }
   .co-discount-preset:hover { border-color:var(--co-blue); }
   .co-discount-scope-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:14px; }
-  .co-discount-scope { min-height:104px; padding:14px; display:flex; align-items:flex-start; gap:11px; border:1px solid var(--co-border); border-radius:12px; background:var(--co-panel); color:var(--co-text); text-align:left; cursor:pointer; }
+  .co-discount-scope { position:relative; min-height:104px; padding:14px 48px 14px 14px; display:flex; align-items:flex-start; gap:11px; border:1px solid var(--co-border); border-radius:12px; background:var(--co-panel); color:var(--co-text); text-align:left; cursor:pointer; }
+  .co-discount-scope.active,.co-discount-scope:focus-visible,.co-discount-product.active,.co-discount-product:focus-visible { border-color:var(--co-blue); background:color-mix(in srgb,var(--co-blue) 16%,var(--co-card)); outline:none; box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--co-blue) 42%,transparent); }
+  .co-discount-key { position:absolute; top:10px; right:10px; min-width:27px; padding:3px 5px; border:1px solid var(--co-border); border-bottom-width:2px; border-radius:6px; background:var(--co-input); color:var(--co-muted); font-size:10px; font-weight:900; text-align:center; }
   .co-discount-scope-icon { width:36px; height:36px; flex:0 0 auto; display:grid; place-items:center; border-radius:10px; background:color-mix(in srgb,var(--co-blue) 17%,transparent); color:var(--co-blue); font-size:15px; font-weight:950; }
   .co-discount-scope strong { display:block; font-size:14px; }
   .co-discount-scope small { display:block; margin-top:4px; color:var(--co-muted); font-size:11px; line-height:1.35; }
   .co-discount-products { display:grid; gap:7px; max-height:min(430px,55dvh); margin-top:13px; overflow:auto; overscroll-behavior:contain; }
-  .co-discount-product { width:100%; min-height:58px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center; gap:12px; border:1px solid var(--co-border); border-radius:10px; background:var(--co-panel); color:var(--co-text); text-align:left; cursor:pointer; }
+  .co-discount-product { position:relative; width:100%; min-height:58px; padding:10px 48px 10px 12px; display:flex; justify-content:space-between; align-items:center; gap:12px; border:1px solid var(--co-border); border-radius:10px; background:var(--co-panel); color:var(--co-text); text-align:left; cursor:pointer; }
   .co-discount-product strong { display:block; }
   .co-discount-product small { display:block; margin-top:3px; color:var(--co-muted); font-size:10px; }
   .co-discount-product-value { flex:0 0 auto; text-align:right; }
@@ -428,15 +430,17 @@
       <template x-if="etapaEscopoDesconto === 'escopo'">
         <div>
           <h3 id="checkout-escopo-desconto-titulo">Aplicar desconto</h3>
-          <p class="co-sub">Escolha onde o desconto será aplicado.</p>
+          <p class="co-sub">Use 1 ou 2, as setas e Enter para escolher.</p>
           <div class="co-discount-scope-grid">
-            <button x-ref="descontoVenda" type="button" class="co-discount-scope" @click="escolherDescontoVenda()">
+            <button x-ref="descontoVenda" type="button" class="co-discount-scope" :class="{'active':indiceEscopoDesconto===0}" data-discount-scope-index="0" @focus="indiceEscopoDesconto=0" @click="escolherDescontoVenda()">
               <span class="co-discount-scope-icon">%</span>
               <span><strong>Desconto na venda</strong><small>Aplica o valor ou percentual sobre o total dos produtos.</small></span>
+              <kbd class="co-discount-key">1</kbd>
             </button>
-            <button type="button" class="co-discount-scope" @click="mostrarSelecaoProduto()">
+            <button type="button" class="co-discount-scope" :class="{'active':indiceEscopoDesconto===1}" data-discount-scope-index="1" @focus="indiceEscopoDesconto=1" @click="mostrarSelecaoProduto()">
               <span class="co-discount-scope-icon">1</span>
               <span><strong>Desconto no produto</strong><small>Selecione um item da venda e desconte somente nele.</small></span>
+              <kbd class="co-discount-key">2</kbd>
             </button>
           </div>
         </div>
@@ -444,17 +448,18 @@
       <template x-if="etapaEscopoDesconto === 'produto'">
         <div>
           <h3>Selecionar produto</h3>
-          <p class="co-sub">Escolha a apresentação que receberá o desconto.</p>
-          <div class="co-discount-products">
-            <template x-for="item in itens" :key="'desconto-produto-'+item.item_key">
-              <button type="button" class="co-discount-product" @click="escolherProdutoDesconto(item)">
+          <p class="co-sub">Use as setas e Enter, ou pressione o número indicado.</p>
+          <div class="co-discount-products" x-ref="listaProdutosDesconto">
+            <template x-for="(item, indice) in itens" :key="'desconto-produto-'+item.item_key">
+              <button type="button" class="co-discount-product" :class="{'active':indiceProdutoDesconto===indice}" :data-discount-product-index="indice" @focus="indiceProdutoDesconto=indice" @click="escolherProdutoDesconto(item)">
                 <span><strong x-text="descricaoApresentacao(item)"></strong><small x-text="formatarQuantidade(item.quantidade)+' × '+moeda(item.preco)+(descontoItemValor(item)>0?' · desconto atual '+moeda(descontoItemValor(item)):'')"></small></span>
                 <span class="co-discount-product-value"><span>Total do item</span><strong x-text="moeda(totalLiquidoItem(item))"></strong></span>
+                <kbd class="co-discount-key" x-text="atalhoProdutoDesconto(indice)"></kbd>
               </button>
             </template>
           </div>
           <div class="co-modal-actions">
-            <button type="button" class="co-btn" @click="etapaEscopoDesconto='escopo'; focar('descontoVenda')">Voltar</button>
+            <button type="button" class="co-btn" @click="voltarEscopoDesconto()">Voltar <kbd>←</kbd></button>
           </div>
         </div>
       </template>
@@ -565,7 +570,7 @@ function checkoutVenda() {
     pedidoCatalogoInicial:JSON.parse(document.getElementById('checkout-pedido-catalogo').textContent), acrescimoInicial:0,
     busca:'', quantidadeEntrada:'1', buscarPorNome:false, buscando:false, resultados:[], indiceProduto:-1, erroBusca:'', itens:[],
     buscaNomeLiberada:false, modalSenhaBuscaNome:false, usuarioAutorizadorId:'', senhaBuscaNome:'', erroSenhaBuscaNome:'', liberandoBuscaNome:false,
-    descontoLiberado:false, modalEscopoDesconto:false, etapaEscopoDesconto:'escopo', modalSenhaDesconto:false, descontoModalEntrada:'', descontoModalPercentual:'', usuarioDescontoId:'', senhaDesconto:'', erroSenhaDesconto:'', liberandoDesconto:false, itemDescontoPendenteId:null,
+    descontoLiberado:false, modalEscopoDesconto:false, etapaEscopoDesconto:'escopo', indiceEscopoDesconto:0, indiceProdutoDesconto:0, modalSenhaDesconto:false, descontoModalEntrada:'', descontoModalPercentual:'', usuarioDescontoId:'', senhaDesconto:'', erroSenhaDesconto:'', liberandoDesconto:false, itemDescontoPendenteId:null,
     formasPagamento:[], formaPagamentoId:null, modalPagamento:false, bandeiraPagamento:'', parcelasPagamento:1, cliente:null, buscaCliente:'', clientes:[], indiceCliente:-1,
     descontoEntrada:'', valorPagamentoEntrada:'', valorPagamentoManual:false, mensagem:'', sucesso:false, finalizando:false,
     modalCliente:false, novoCliente:{razao_social:'',cpf_cnpj:'',celular:'',email:'',tipo_pessoa:'F'}, erroCliente:'', salvandoCliente:false,
@@ -680,7 +685,8 @@ function checkoutVenda() {
         return;
       }
       if(this.modalPagamento){ this.atalhoPagamento(evento); return; }
-      if(this.modalSenhaBuscaNome || this.modalSenhaDesconto || this.modalEscopoDesconto)return;
+      if(this.modalEscopoDesconto){ this.atalhoEscopoDesconto(evento); return; }
+      if(this.modalSenhaBuscaNome || this.modalSenhaDesconto)return;
       if(this.modalDocumento){ this.atalhoDocumento(evento); return; }
       if(this.modalCliente || !this.sessao || this.carregando)return;
       if(tecla==='F2'){ evento.preventDefault(); this.focarProduto(); }
@@ -757,13 +763,39 @@ function checkoutVenda() {
     },
     solicitarAutorizacaoDesconto(){
       if(!this.itens.length){this.mensagem='Adicione ao menos um produto antes de aplicar desconto.';this.focarProduto();return;}
-      this.modalEscopoDesconto=true;this.etapaEscopoDesconto='escopo';this.mensagem='';this.focar('descontoVenda');
+      this.modalEscopoDesconto=true;this.etapaEscopoDesconto='escopo';this.indiceEscopoDesconto=0;this.indiceProdutoDesconto=0;this.mensagem='';this.focar('descontoVenda');
     },
     fecharEscopoDesconto(){this.modalEscopoDesconto=false;this.etapaEscopoDesconto='escopo';this.focarProduto();},
     escolherDescontoVenda(){this.modalEscopoDesconto=false;this.abrirModalDesconto();},
     mostrarSelecaoProduto(){
       if(this.pedidoCatalogoInicial){this.modalEscopoDesconto=false;this.mensagem='O desconto dos itens de um pedido do catálogo deve ser alterado no próprio pedido.';this.focarProduto();return;}
-      this.etapaEscopoDesconto='produto';
+      this.etapaEscopoDesconto='produto';this.indiceProdutoDesconto=0;this.focarOpcaoProdutoDesconto();
+    },
+    voltarEscopoDesconto(){this.etapaEscopoDesconto='escopo';this.indiceEscopoDesconto=1;this.focarOpcaoEscopoDesconto();},
+    atalhoProdutoDesconto(indice){return indice<9?String(indice+1):'↑↓';},
+    focarOpcaoEscopoDesconto(){this.$nextTick(()=>this.$el?.querySelector(`[data-discount-scope-index="${this.indiceEscopoDesconto}"]`)?.focus());},
+    focarOpcaoProdutoDesconto(){this.$nextTick(()=>{const botao=this.$refs.listaProdutosDesconto?.querySelector(`[data-discount-product-index="${this.indiceProdutoDesconto}"]`);botao?.focus();botao?.scrollIntoView({block:'nearest'});});},
+    atalhoEscopoDesconto(evento){
+      if(evento.repeat)return;
+      const tecla=String(evento.key||'');
+      if(this.etapaEscopoDesconto==='escopo'){
+        if(['ArrowLeft','ArrowUp'].includes(tecla)){evento.preventDefault();this.indiceEscopoDesconto=(this.indiceEscopoDesconto+1)%2;this.focarOpcaoEscopoDesconto();return;}
+        if(['ArrowRight','ArrowDown'].includes(tecla)){evento.preventDefault();this.indiceEscopoDesconto=(this.indiceEscopoDesconto+1)%2;this.focarOpcaoEscopoDesconto();return;}
+        if(tecla==='1'||tecla==='2'){evento.preventDefault();this.indiceEscopoDesconto=Number(tecla)-1;}
+        else if(tecla!=='Enter')return;
+        evento.preventDefault();this.indiceEscopoDesconto===0?this.escolherDescontoVenda():this.mostrarSelecaoProduto();return;
+      }
+      if(tecla==='ArrowLeft'||tecla==='Backspace'){evento.preventDefault();this.voltarEscopoDesconto();return;}
+      if(['ArrowUp','ArrowDown','Home','End'].includes(tecla)){
+        evento.preventDefault();if(!this.itens.length)return;
+        if(tecla==='Home')this.indiceProdutoDesconto=0;
+        else if(tecla==='End')this.indiceProdutoDesconto=this.itens.length-1;
+        else this.indiceProdutoDesconto=(this.indiceProdutoDesconto+(tecla==='ArrowDown'?1:-1)+this.itens.length)%this.itens.length;
+        this.focarOpcaoProdutoDesconto();return;
+      }
+      const indiceNumero=/^[1-9]$/.test(tecla)?Number(tecla)-1:-1;
+      if(indiceNumero>=0&&indiceNumero<this.itens.length){evento.preventDefault();this.indiceProdutoDesconto=indiceNumero;this.escolherProdutoDesconto(this.itens[indiceNumero]);return;}
+      if(tecla==='Enter'&&this.itens[this.indiceProdutoDesconto]){evento.preventDefault();this.escolherProdutoDesconto(this.itens[this.indiceProdutoDesconto]);}
     },
     escolherProdutoDesconto(item){this.modalEscopoDesconto=false;this.abrirModalDesconto(item);},
     abrirModalDesconto(item=null,evento=null){
