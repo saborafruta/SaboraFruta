@@ -626,12 +626,13 @@
       </a>
 
       <a href="{{ boleto_comunicacao_url }}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         class="finance-order-1 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
          :class="collapsed ? 'justify-center' : ''"
          :style="{% if '/financeiro/boletos' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
-         title="Remessa e Retorno">
+         data-sidebar-search-terms="boleto boletos cobrança cobranca CNAB arquivo bancário bancario TOTVS TOTS"
+         title="Boletos — Remessa e Retorno CNAB">
         <span class="w-5 text-center text-base flex-shrink-0">⇄</span>
-        <span x-show="!collapsed">Remessa e Retorno</span>
+        <span x-show="!collapsed">Boletos — Remessa e Retorno</span>
       </a>
 
       <!-- Contas a Receber -->

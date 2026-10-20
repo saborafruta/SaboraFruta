@@ -37,7 +37,12 @@
       var label = labelFor(anchor);
       if (!path || !label || seen.has(path)) return;
       seen.add(path);
-      records.push({ path: path, label: label, search: normalize(label + ' ' + (anchor.title || '')) });
+      var extraTerms = anchor.getAttribute('data-sidebar-search-terms') || '';
+      records.push({
+        path: path,
+        label: label,
+        search: normalize(label + ' ' + (anchor.title || '') + ' ' + extraTerms)
+      });
     });
     return records;
   }

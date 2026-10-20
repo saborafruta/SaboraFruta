@@ -30,6 +30,7 @@ class SidebarSearchTemplateTests(SimpleTestCase):
         self.assertIn("ArrowDown", script)
         self.assertIn("ArrowUp", script)
         self.assertIn("event.key === 'Enter'", script)
+        self.assertIn("data-sidebar-search-terms", script)
         self.assertIn("logo.insertAdjacentElement('afterend', box)", script)
         self.assertIn("nav.addEventListener('scroll'", script)
         self.assertIn("classList.toggle('is-stuck'", script)
@@ -65,4 +66,12 @@ class SidebarSearchTemplateTests(SimpleTestCase):
         self.assertIn('?v=20260917-5', sidebar)
         self.assertIn('core/js/sidebar_search.js', template)
         self.assertIn('sidebar_favorites.js', template)
-        self.assertIn('v=20260917-3', template)
+        self.assertIn('v=20261020-1', template)
+
+    def test_boletos_aparecem_no_menu_e_aceitam_termos_de_pesquisa(self):
+        raiz = Path(__file__).resolve().parents[1]
+        navegacao = (raiz / "templates" / "core" / "_sidebar_navigation.html").read_text(encoding="utf-8")
+
+        self.assertIn("Boletos — Remessa e Retorno", navegacao)
+        self.assertIn('data-sidebar-search-terms="boleto boletos cobrança cobranca CNAB', navegacao)
+        self.assertIn('class="finance-order-1 flex items-center', navegacao)
