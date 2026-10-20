@@ -11,6 +11,7 @@ urlpatterns = [
     path('produtos/<int:pk>/extrato/', views.EstoqueKardexProdutoView.as_view(), name='estoque-kardex-produto'),
     path('custos-entrada/', views.EntradaCustoEstoqueListView.as_view(), name='entrada-custos-list'),
     path('relatorios/', views.RelatorioEstoqueView.as_view(), name='relatorio-list'),
+    path('relatorios/filiais/', views.RelatorioEstoqueFiliaisView.as_view(), name='relatorio-filiais'),
     path('reposicao/', views.ReposicaoListView.as_view(), name='reposicao-list'),
     path('sugestao-compras/', views.SugestaoComprasView.as_view(), name='sugestao-compras'),
     path('equilibrio/', views.EquilibrioEstoqueView.as_view(), name='equilibrio-estoque'),

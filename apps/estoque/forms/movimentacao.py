@@ -145,7 +145,11 @@ class MovimentacaoManualForm(forms.Form):
 class TransferenciaForm(forms.Form):
     """Transferencia de estoque entre filiais da mesma empresa."""
 
-    produto = forms.ModelChoiceField(queryset=Produto.objects.none(), label='Produto')
+    produto = forms.ModelChoiceField(
+        queryset=Produto.objects.none(),
+        label='Produto',
+        widget=forms.HiddenInput(),
+    )
     lote = forms.ModelChoiceField(
         queryset=LoteProduto.objects.none(),
         required=False,
@@ -171,6 +175,17 @@ class TransferenciaForm(forms.Form):
 
     def __init__(self, *args, filial=None, empresa=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['lote'].widget.attrs.update({'class': 'form-input'})
+        self.fields['filial_destino'].widget.attrs.update({'class': 'form-input'})
+        self.fields['quantidade'].widget.attrs.update({
+            'class': 'form-input',
+            'inputmode': 'decimal',
+            'placeholder': '0,000',
+        })
+        self.fields['observacao'].widget.attrs.update({
+            'class': 'form-input',
+            'placeholder': 'Informe o motivo da transferencia',
+        })
         if filial:
             self.fields['produto'].queryset = Produto.objects.for_filial(filial).filter(
                 ativo=True,

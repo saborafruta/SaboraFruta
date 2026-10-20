@@ -13,6 +13,7 @@
       <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valoracao, criticidade, lotes, inventarios e permissoes do caminho de estoque.</p>
     </div>
     <div class="flex flex-wrap gap-2">
+      <a href="{% url 'estoque:relatorio-filiais' %}" class="btn-primary">Estoque por filial</a>
       <a href="{% url 'estoque:entrada-custos-list' %}" class="btn-secondary">Custos de entrada</a>
       <a href="{% url 'estoque:reposicao-list' %}" class="btn-secondary">Reposicao</a>
       <a href="{% url 'estoque:lote-list' %}" class="btn-secondary">Lotes</a>
@@ -115,7 +116,10 @@
   <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
     <div class="card overflow-hidden">
       <div class="px-5 py-3 border-b border-transparent flex items-center justify-between">
-        <h3 class="font-semibold">Estoque por filial</h3>
+        <div>
+          <h3 class="font-semibold">Estoque por filial</h3>
+          <a href="{% url 'estoque:relatorio-filiais' %}" class="text-xs text-blue-500">Abrir relatório detalhado por depósito</a>
+        </div>
         <span class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Sem replicar estoque</span>
       </div>
       <div class="overflow-x-auto">

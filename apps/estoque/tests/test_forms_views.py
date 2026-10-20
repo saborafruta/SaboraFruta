@@ -10,7 +10,7 @@ from apps.compras.models import EntradaNF, ItemEntradaNF, PedidoCompra
 from apps.compras.services.entrada_custo_service import EntradaCustoService
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, RegistroAuditoria, Usuario
 from apps.estoque.forms import MovimentacaoManualForm, TransferenciaForm
-from apps.estoque.models import Estoque, Inventario, ItemInventario, LoteProduto, MovimentacaoEstoque
+from apps.estoque.models import Deposito, Estoque, Inventario, ItemInventario, LoteProduto, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.estoque.views import (
     EntradaCustoEstoqueListView,
@@ -28,6 +28,7 @@ from apps.estoque.views import (
     MovimentacaoManualView,
     MovimentacaoListView,
     RelatorioEstoqueView,
+    RelatorioEstoqueFiliaisView,
     ReposicaoListView,
     TransferenciaView,
 )
@@ -195,6 +196,17 @@ class EstoqueFormsViewsTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn('nao pertence ao produto', str(form.errors))
+
+    def test_transferencia_tem_busca_por_codigo_e_lote_contextual(self):
+        self.conceder(pode_ver=True, pode_aprovar=True)
+
+        response = self.client.get(reverse('estoque:transferencia'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Digite ID, código interno, código de barras ou descrição')
+        self.assertContains(response, 'type="hidden" name="produto" id="id_produto"', html=False)
+        self.assertContains(response, 'id="lot-field" class="hidden"', html=False)
+        self.assertContains(response, reverse('estoque:lote-search-json'))
 
     def test_catalogo_visual_transferencia_retorna_produtos_e_saldo(self):
         self.conceder(pode_ver=True)
@@ -1503,6 +1515,97 @@ class EstoqueFormsViewsTests(TestCase):
             com_apresentacoes.context['resumo']['quantidade_total'],
             Decimal('100'),
         )
+
+    def test_relatorio_filiais_mostra_depositos_valores_e_apresentacoes_sem_duplicar_total(self):
+        self.conceder(pode_ver=True, pode_exportar=True)
+        self.perfil.is_admin = True
+        self.perfil.save(update_fields=['is_admin'])
+        produto = self.criar_produto(descricao='Feijao preto 1 kg')
+        produto.preco_venda = Decimal('5.00')
+        produto.save(update_fields=['preco_venda'])
+        ProdutoFilial.objects.create(produto=produto, filial=self.filial_destino)
+
+        deposito_matriz = Deposito.objects.get(pk=Deposito.padrao_id(self.filial.pk))
+        deposito_loja = Deposito.objects.get(pk=Deposito.padrao_id(self.filial_destino.pk))
+        deposito_reserva = Deposito.objects.create(
+            filial=self.filial,
+            nome='Reserva',
+            tipo=Deposito.Tipo.GERAL,
+        )
+        Estoque.objects.create(
+            produto=produto,
+            filial=self.filial,
+            deposito=deposito_matriz,
+            quantidade_atual=Decimal('6'),
+            quantidade_disponivel=Decimal('6'),
+            custo_medio=Decimal('2'),
+        )
+        Estoque.objects.create(
+            produto=produto,
+            filial=self.filial,
+            deposito=deposito_reserva,
+            quantidade_atual=Decimal('4'),
+            quantidade_disponivel=Decimal('4'),
+            custo_medio=Decimal('2'),
+        )
+        Estoque.objects.create(
+            produto=produto,
+            filial=self.filial_destino,
+            deposito=deposito_loja,
+            quantidade_atual=Decimal('5'),
+            quantidade_disponivel=Decimal('5'),
+            custo_medio=Decimal('3'),
+        )
+        unidade_fardo = UnidadeMedida.objects.create(
+            empresa=self.empresa,
+            sigla='FD',
+            descricao='Fardo',
+            tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        apresentacao = ProdutoApresentacao.objects.create(
+            produto=produto,
+            unidade=unidade_fardo,
+            descricao='Fardo com 5 unidades',
+            fator_conversao=Decimal('5'),
+            preco_venda=Decimal('22'),
+            permite_estoque=True,
+        )
+        ProdutoApresentacaoFilial.objects.create(apresentacao=apresentacao, filial=self.filial)
+        ProdutoApresentacaoFilial.objects.create(apresentacao=apresentacao, filial=self.filial_destino)
+
+        response = self.client.get(reverse('estoque:relatorio-filiais'), {
+            'mostrar_apresentacoes': '1',
+            'detalhar_depositos': '1',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Estoque por filial e depósito')
+        self.assertContains(response, 'Reserva')
+        self.assertContains(response, 'Fardo com 5 unidades')
+        self.assertEqual(response.context['resumo']['atual'], Decimal('15'))
+        self.assertEqual(response.context['resumo']['valor_custo'], Decimal('35'))
+        self.assertEqual(response.context['resumo']['valor_venda'], Decimal('75'))
+        self.assertEqual(len(response.context['linhas']), 2)
+        apresentacao_linha = response.context['linhas'][1]
+        self.assertEqual(apresentacao_linha['celulas'][-1]['atual'], Decimal('3'))
+        self.assertEqual(apresentacao_linha['celulas'][-1]['valor_venda'], Decimal('66'))
+
+        csv_response = self.client.get(reverse('estoque:relatorio-filiais'), {'export': 'csv'})
+        self.assertEqual(csv_response.status_code, 200)
+        self.assertIn('estoque-por-filial.csv', csv_response['Content-Disposition'])
+        pdf_response = self.client.get(reverse('estoque:relatorio-filiais'), {'export': 'pdf'})
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
+
+    def test_relatorio_filiais_respeita_filiais_permitidas_do_usuario(self):
+        self.conceder(pode_ver=True)
+
+        response = self.client.get(reverse('estoque:relatorio-filiais'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Matriz')
+        self.assertNotContains(response, 'Destino')
+        self.assertEqual(response.context['resumo']['filiais'], 1)
 
     def test_fechar_inventario_exige_permissao_aprovar(self):
         self.conceder(pode_ver=True, pode_editar=True)

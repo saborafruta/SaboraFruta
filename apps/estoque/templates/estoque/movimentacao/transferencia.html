@@ -1,19 +1,181 @@
 {% extends "_base.html" %}
+{% load widget_tweaks %}
 
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 
-{% block content %}
-<div class="max-w-2xl mx-auto">
-  <div class="mb-6">
-    <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">{{ title }}</h2>
-    <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
-      Transferencia nao e replicacao: o sistema gera saida na filial atual e entrada na filial de destino na mesma transacao.
-    </p>
-  </div>
+{% block extra_head %}
+{{ block.super }}
+<style>
+  .transfer-shell { max-width: 1120px; margin: 0 auto; }
+  .transfer-route { display: grid; grid-template-columns: minmax(0,1fr) 46px minmax(0,1fr); align-items: center; gap: 10px; }
+  .transfer-node { min-height: 82px; padding: 14px 16px; border: 1px solid rgba(148,163,184,.22); border-radius: 12px; }
+  .transfer-arrow { width: 38px; height: 38px; border-radius: 999px; display: grid; place-items: center; background: #1d4ed8; color: white; }
+  .product-search-results { position: absolute; z-index: 30; inset: calc(100% + 6px) 0 auto; border: 1px solid rgba(148,163,184,.28); border-radius: 12px; overflow: hidden; max-height: 280px; overflow-y: auto; box-shadow: 0 16px 40px rgba(0,0,0,.24); background:#18181b; }
+  .tema-claro .product-search-results { background:#fff; }
+  .product-search-option { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 12px 14px; text-align: left; border-bottom: 1px solid rgba(148,163,184,.14); }
+  .product-search-option:last-child { border-bottom: 0; }
+  .product-search-option.is-active, .product-search-option:hover { background: rgba(37,99,235,.16); }
+  .selected-product { display: grid; grid-template-columns: 1fr auto; gap: 16px; padding: 14px; border: 1px solid rgba(59,130,246,.48); border-radius: 12px; background: rgba(37,99,235,.08); }
+  .transfer-body-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr); gap: 20px; }
+  .field-error { color: #f87171; font-size: 12px; margin-top: 5px; }
+  @media (max-width: 900px) { .transfer-body-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 700px) { .transfer-route { grid-template-columns: 1fr; } .transfer-arrow { transform: rotate(90deg); margin: 0 auto; } }
+</style>
+{% endblock %}
 
-  <div class="card p-6">
-    {% include "_form_generic.html" with form=form submit_label="Efetuar transferencia" cancel_url=cancel_url columns=1 %}
-  </div>
+{% block content %}
+<div class="transfer-shell space-y-5">
+  <header>
+    <a href="{{ cancel_url }}" class="text-sm text-blue-500">← Voltar ao estoque</a>
+    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mt-3">
+      <div>
+        <h2 class="text-2xl font-semibold">Transferência entre filiais</h2>
+        <p class="text-sm mt-1 max-w-2xl opacity-65">A saída na filial atual e a entrada no destino são registradas juntas, com rastreabilidade completa.</p>
+      </div>
+      <span class="soft-pill is-blue">Movimentação interna da empresa</span>
+    </div>
+  </header>
+
+  {% if form.non_field_errors %}<div class="rounded-xl border border-red-800 bg-red-950/20 p-4 text-sm text-red-300">{{ form.non_field_errors|join:", " }}</div>{% endif %}
+
+  <form method="post" id="transfer-form" class="space-y-5" novalidate>
+    {% csrf_token %}
+    {{ form.produto }}
+    <section class="card p-5">
+      <div class="text-xs uppercase tracking-wide opacity-60 mb-3">Rota da mercadoria</div>
+      <div class="transfer-route">
+        <div class="transfer-node">
+          <div class="text-xs opacity-60">Origem</div>
+          <div class="font-semibold mt-1">{{ request.filial_ativa.nome_fantasia|default:request.filial_ativa.razao_social }}</div>
+          <div class="text-xs opacity-60 mt-1">Estoque será baixado nesta filial</div>
+        </div>
+        <div class="transfer-arrow" aria-hidden="true">→</div>
+        <div class="transfer-node">
+          <label for="{{ form.filial_destino.id_for_label }}" class="form-label">Filial de destino <span class="text-red-400">*</span></label>
+          {{ form.filial_destino }}
+          {% if form.filial_destino.errors %}<p class="field-error">{{ form.filial_destino.errors|join:", " }}</p>{% endif %}
+        </div>
+      </div>
+    </section>
+
+    <div class="transfer-body-grid">
+      <section class="card p-5 space-y-4">
+        <div><h3 class="font-semibold">1. Selecione o produto</h3><p class="text-xs opacity-60 mt-1">Digite ID, código interno, código de barras ou descrição.</p></div>
+        <div class="relative" id="product-search-box">
+          <label for="product-search" class="form-label">Código ou produto <span class="text-red-400">*</span></label>
+          <div class="flex gap-2">
+            <input id="product-search" class="form-input" type="search" autocomplete="off" placeholder="Bipe ou digite para buscar" aria-autocomplete="list" aria-controls="product-search-results" aria-expanded="false">
+            <button type="button" id="product-search-button" class="btn-secondary">Buscar</button>
+          </div>
+          <div id="product-search-results" class="product-search-results hidden" role="listbox"></div>
+          {% if form.produto.errors %}<p class="field-error">{{ form.produto.errors|join:", " }}</p>{% endif %}
+        </div>
+        <div id="selected-product" class="selected-product hidden" aria-live="polite">
+          <div><div class="text-xs text-blue-400 font-semibold uppercase tracking-wide">Produto selecionado</div><div id="selected-product-name" class="font-semibold mt-1"></div><div id="selected-product-code" class="text-xs opacity-60 mt-1"></div></div>
+          <div class="text-right"><div class="text-xs opacity-60">Saldo na origem</div><div id="selected-product-stock" class="text-xl font-semibold mt-1"></div><button type="button" id="clear-product" class="text-xs text-blue-400 mt-2">Trocar produto</button></div>
+        </div>
+        <div id="lot-field" class="hidden">
+          <label for="{{ form.lote.id_for_label }}" class="form-label">Lote <span class="text-red-400">*</span></label>
+          {{ form.lote }}
+          <p class="text-xs opacity-60 mt-1">Este produto controla lote; escolha de qual lote o saldo será retirado.</p>
+          {% if form.lote.errors %}<p class="field-error">{{ form.lote.errors|join:", " }}</p>{% endif %}
+        </div>
+      </section>
+
+      <section class="card p-5 space-y-4">
+        <div><h3 class="font-semibold">2. Informe a movimentação</h3><p class="text-xs opacity-60 mt-1">Quantidade sempre na unidade base do produto.</p></div>
+        <div><label for="{{ form.quantidade.id_for_label }}" class="form-label">Quantidade <span class="text-red-400">*</span></label>{{ form.quantidade }}{% if form.quantidade.errors %}<p class="field-error">{{ form.quantidade.errors|join:", " }}</p>{% endif %}</div>
+        <div><label for="{{ form.observacao.id_for_label }}" class="form-label">Justificativa <span class="text-red-400">*</span></label>{{ form.observacao }}<p class="text-xs opacity-60 mt-1">Fica registrada no histórico das duas filiais.</p>{% if form.observacao.errors %}<p class="field-error">{{ form.observacao.errors|join:", " }}</p>{% endif %}</div>
+      </section>
+    </div>
+
+    <footer class="card p-4 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3">
+      <p class="text-xs opacity-60">Revise o produto, o destino e a quantidade antes de confirmar.</p>
+      <div class="flex justify-end gap-2"><a href="{{ cancel_url }}" class="btn-secondary">Cancelar</a><button type="submit" class="btn-primary" id="submit-transfer">Efetuar transferência</button></div>
+    </footer>
+  </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+(() => {
+  const endpoint = '{% url "estoque:produto-estoque-search-json" %}';
+  const lotEndpoint = '{% url "estoque:lote-search-json" %}';
+  const hidden = document.getElementById('{{ form.produto.id_for_label }}');
+  const search = document.getElementById('product-search');
+  const results = document.getElementById('product-search-results');
+  const selected = document.getElementById('selected-product');
+  const lotField = document.getElementById('lot-field');
+  const lotSelect = document.getElementById('{{ form.lote.id_for_label }}');
+  const submit = document.getElementById('submit-transfer');
+  let options = [], activeIndex = -1, timer = null;
+
+  function escapeHtml(value) { const span = document.createElement('span'); span.textContent = value || ''; return span.innerHTML; }
+  function closeResults() { results.classList.add('hidden'); search.setAttribute('aria-expanded', 'false'); activeIndex = -1; }
+  function paintActive() { results.querySelectorAll('[role="option"]').forEach((node, index) => { node.classList.toggle('is-active', index === activeIndex); node.setAttribute('aria-selected', index === activeIndex ? 'true' : 'false'); }); }
+
+  async function loadLots(product, selectedLot = '') {
+    lotField.classList.toggle('hidden', !product.controla_lote);
+    if (!product.controla_lote) { lotSelect.innerHTML = '<option value="">---------</option>'; return; }
+    lotSelect.innerHTML = '<option value="">Carregando lotes...</option>';
+    const response = await fetch(`${lotEndpoint}?produto_id=${encodeURIComponent(product.id)}`);
+    const payload = await response.json();
+    lotSelect.innerHTML = '<option value="">Selecione o lote</option>';
+    payload.results.forEach(lot => {
+      const option = document.createElement('option'); option.value = lot.id;
+      option.textContent = `${lot.label} · saldo ${lot.quantidade_atual}`;
+      option.selected = String(lot.id) === String(selectedLot); lotSelect.appendChild(option);
+    });
+    if (!payload.results.length) lotSelect.innerHTML = '<option value="">Nenhum lote ativo disponível</option>';
+  }
+
+  function choose(product, selectedLot = '') {
+    hidden.value = product.id; search.value = product.label;
+    document.getElementById('selected-product-name').textContent = product.label;
+    document.getElementById('selected-product-code').textContent = `ID ${product.id}${product.detalhe ? ' · ' + product.detalhe : ''}${product.codigo_barras ? ' · ' + product.codigo_barras : ''} · ${product.unidade || 'unidade base'}`;
+    document.getElementById('selected-product-stock').textContent = `${Number(product.estoque || 0).toLocaleString('pt-BR', {maximumFractionDigits: 3})} ${product.unidade || ''}`;
+    selected.classList.remove('hidden'); closeResults(); loadLots(product, selectedLot);
+  }
+
+  function render(list) {
+    options = list; results.innerHTML = '';
+    if (!list.length) results.innerHTML = '<div class="p-4 text-sm opacity-60">Nenhum produto encontrado.</div>';
+    list.forEach((product, index) => {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'product-search-option'; button.setAttribute('role', 'option');
+      button.innerHTML = `<span><strong>${escapeHtml(product.label)}</strong><small class="block opacity-60 mt-1">ID ${product.id}${product.detalhe ? ' · ' + escapeHtml(product.detalhe) : ''}${product.codigo_barras ? ' · ' + escapeHtml(product.codigo_barras) : ''}</small></span><span class="text-right"><strong>${Number(product.estoque || 0).toLocaleString('pt-BR', {maximumFractionDigits: 3})}</strong><small class="block opacity-60 mt-1">${escapeHtml(product.unidade || '')}</small></span>`;
+      button.addEventListener('click', () => choose(product)); button.addEventListener('mouseenter', () => { activeIndex = index; paintActive(); }); results.appendChild(button);
+    });
+    results.classList.remove('hidden'); search.setAttribute('aria-expanded', 'true');
+  }
+
+  async function runSearch(autoChooseExact = false) {
+    const query = search.value.trim(); if (!query) { closeResults(); return; }
+    const response = await fetch(`${endpoint}?q=${encodeURIComponent(query)}`); const payload = await response.json(); const list = payload.results || [];
+    const compact = query.replace(/\s/g, ''); const exact = list.find(product => String(product.id) === compact || product.detalhe === query || product.codigo_barras === compact);
+    if (autoChooseExact && exact) choose(exact); else render(list);
+  }
+
+  search.addEventListener('input', () => { hidden.value = ''; selected.classList.add('hidden'); lotField.classList.add('hidden'); clearTimeout(timer); timer = setTimeout(() => runSearch(false), 180); });
+  search.addEventListener('keydown', event => {
+    if (event.key === 'ArrowDown') { event.preventDefault(); activeIndex = Math.min(activeIndex + 1, options.length - 1); paintActive(); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); activeIndex = Math.max(activeIndex - 1, 0); paintActive(); }
+    else if (event.key === 'Enter') { event.preventDefault(); if (activeIndex >= 0 && options[activeIndex]) choose(options[activeIndex]); else if (options.length === 1) choose(options[0]); else runSearch(true); }
+    else if (event.key === 'Escape') closeResults();
+  });
+  document.getElementById('product-search-button').addEventListener('click', () => runSearch(true));
+  document.getElementById('clear-product').addEventListener('click', () => { hidden.value = ''; search.value = ''; selected.classList.add('hidden'); lotField.classList.add('hidden'); search.focus(); });
+  document.addEventListener('click', event => { if (!document.getElementById('product-search-box').contains(event.target)) closeResults(); });
+  document.getElementById('transfer-form').addEventListener('submit', () => { submit.disabled = true; submit.textContent = 'Transferindo...'; });
+
+  if (hidden.value) {
+    const selectedLot = lotSelect.value; search.value = hidden.value;
+    fetch(`${endpoint}?q=${encodeURIComponent(hidden.value)}`).then(response => response.json()).then(payload => {
+      const product = (payload.results || []).find(item => String(item.id) === String(hidden.value)); if (product) choose(product, selectedLot);
+    });
+  }
+})();
+</script>
 {% endblock %}

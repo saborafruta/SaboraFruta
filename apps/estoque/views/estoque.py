@@ -1480,6 +1480,367 @@ class RelatorioEstoqueView(PermissaoRequiredMixin, View):
         })
 
 
+class RelatorioEstoqueFiliaisView(PermissaoRequiredMixin, View):
+    """Matriz de saldo e valor por filial/deposito, sem duplicar embalagens."""
+
+    permissao_modulo = 'estoque'
+    template_name = 'estoque/relatorios/filiais.html'
+
+    @staticmethod
+    def _celula_vazia():
+        return {
+            'atual': Decimal('0'),
+            'reservada': Decimal('0'),
+            'disponivel': Decimal('0'),
+            'valor_custo': Decimal('0'),
+            'valor_venda': Decimal('0'),
+        }
+
+    @classmethod
+    def _somar(cls, destino, *, atual=0, reservada=0, disponivel=0,
+               valor_custo=0, valor_venda=0):
+        destino['atual'] += Decimal(atual or 0)
+        destino['reservada'] += Decimal(reservada or 0)
+        destino['disponivel'] += Decimal(disponivel or 0)
+        destino['valor_custo'] += Decimal(valor_custo or 0)
+        destino['valor_venda'] += Decimal(valor_venda or 0)
+
+    def _filiais(self, request):
+        empresa = empresa_operacional(request)
+        return list(
+            request.user.filiais_permitidas()
+            .filter(empresa=empresa, ativo=True)
+            .order_by('nome_fantasia', 'razao_social', 'pk')
+        )
+
+    def _produtos(self, request, filiais):
+        qs = (
+            Produto.objects
+            .filter(
+                filiais_vinculo__filial__in=filiais,
+                filiais_vinculo__ativo=True,
+                ativo=True,
+            )
+            .select_related('unidade_medida')
+            .distinct()
+        )
+        busca = request.GET.get('q', '').strip()
+        if busca:
+            filtro_codigo = Q()
+            if busca.isdigit():
+                filtro_codigo = Q(pk=int(busca))
+            qs = qs.filter(
+                filtro_codigo
+                | Q(descricao__icontains=busca)
+                | Q(codigo__icontains=busca)
+                | Q(codigo_barras__icontains=busca)
+            )
+        if request.GET.get('com_estoque') == '1':
+            qs = qs.filter(
+                estoques__filial__in=filiais,
+                estoques__quantidade_atual__gt=0,
+            ).distinct()
+        return qs.order_by('descricao', 'pk')
+
+    def _montar_relatorio(self, request):
+        filiais = self._filiais(request)
+        detalhar_depositos = (
+            request.GET.get('detalhar_depositos') == '1'
+            if request.GET.get('filtros_aplicados') == '1'
+            else True
+        )
+        mostrar_apresentacoes = request.GET.get('mostrar_apresentacoes') == '1'
+        produtos_qs = self._produtos(request, filiais)
+        todos_produto_ids = list(produtos_qs.values_list('pk', flat=True))
+        page_obj = None
+        if request.GET.get('export') in {'csv', 'pdf'}:
+            produtos_exibidos = produtos_qs
+        else:
+            page_obj = Paginator(produtos_qs, 40).get_page(request.GET.get('page'))
+            produtos_exibidos = page_obj.object_list
+        produtos_por_id = {
+            produto.pk: produto
+            for produto in produtos_exibidos
+        }
+        produto_ids = list(produtos_por_id)
+
+        depositos = list(
+            Deposito.objects.filter(filial__in=filiais, ativo=True)
+            .select_related('filial')
+            .order_by('filial_id', '-is_padrao', 'nome', 'pk')
+        )
+        depositos_por_filial = {filial.pk: [] for filial in filiais}
+        for deposito in depositos:
+            depositos_por_filial.setdefault(deposito.filial_id, []).append(deposito)
+
+        grupos = []
+        colunas = []
+        for filial in filiais:
+            colunas_filial = []
+            if detalhar_depositos:
+                for deposito in depositos_por_filial.get(filial.pk, []):
+                    coluna = {
+                        'chave': f'd{deposito.pk}',
+                        'rotulo': deposito.nome,
+                        'export_rotulo': f'{filial.nome_fantasia or filial.razao_social} / {deposito.nome}',
+                        'filial_id': filial.pk,
+                        'deposito_id': deposito.pk,
+                        'eh_total': False,
+                    }
+                    colunas.append(coluna)
+                    colunas_filial.append(coluna)
+            coluna_total = {
+                'chave': f'f{filial.pk}',
+                'rotulo': 'Total da filial' if detalhar_depositos else 'Saldo da filial',
+                'export_rotulo': filial.nome_fantasia or filial.razao_social,
+                'filial_id': filial.pk,
+                'deposito_id': None,
+                'eh_total': True,
+            }
+            colunas.append(coluna_total)
+            colunas_filial.append(coluna_total)
+            grupos.append({
+                'filial': filial,
+                'colunas': colunas_filial,
+                'colspan': len(colunas_filial),
+            })
+        colunas.append({
+            'chave': 'empresa',
+            'rotulo': 'Total empresa',
+            'export_rotulo': 'Total empresa',
+            'filial_id': None,
+            'deposito_id': None,
+            'eh_total': True,
+        })
+
+        celulas_produto = {
+            produto_id: {coluna['chave']: self._celula_vazia() for coluna in colunas}
+            for produto_id in produto_ids
+        }
+        totais_colunas = {coluna['chave']: self._celula_vazia() for coluna in colunas}
+        estoques = (
+            Estoque.objects
+            .filter(produto_id__in=todos_produto_ids, filial__in=filiais)
+            .select_related('produto', 'deposito')
+        )
+        for estoque in estoques:
+            produto = estoque.produto
+            atual = estoque.quantidade_atual or Decimal('0')
+            reservada = estoque.quantidade_reservada or Decimal('0')
+            disponivel = estoque.quantidade_disponivel or Decimal('0')
+            valor_custo = atual * (estoque.custo_medio or Decimal('0'))
+            valor_venda = atual * (produto.preco_venda or Decimal('0'))
+            chaves = [f'f{estoque.filial_id}', 'empresa']
+            if detalhar_depositos:
+                chaves.insert(0, f'd{estoque.deposito_id}')
+            for chave in chaves:
+                if produto.pk in celulas_produto:
+                    self._somar(
+                        celulas_produto[produto.pk][chave],
+                        atual=atual,
+                        reservada=reservada,
+                        disponivel=disponivel,
+                        valor_custo=valor_custo,
+                        valor_venda=valor_venda,
+                    )
+                self._somar(
+                    totais_colunas[chave],
+                    atual=atual,
+                    reservada=reservada,
+                    disponivel=disponivel,
+                    valor_custo=valor_custo,
+                    valor_venda=valor_venda,
+                )
+
+        linhas = []
+        for produto in produtos_por_id.values():
+            linhas.append({
+                'produto': produto,
+                'descricao': produto.descricao,
+                'unidade': produto.unidade_medida.sigla,
+                'codigo': produto.codigo or produto.codigo_barras or produto.pk,
+                'eh_apresentacao': False,
+                'celulas': list(celulas_produto[produto.pk].values()),
+            })
+
+        if mostrar_apresentacoes and produto_ids:
+            apresentacoes = list(
+                ProdutoApresentacao.objects
+                .filter(
+                    produto_id__in=produto_ids,
+                    ativo=True,
+                    permite_estoque=True,
+                    fator_conversao__gt=0,
+                    filiais_vinculo__filial__in=filiais,
+                    filiais_vinculo__ativo=True,
+                )
+                .select_related('produto', 'unidade')
+                .distinct()
+                .order_by('produto_id', 'fator_conversao', 'descricao')
+            )
+            vinculos = {}
+            for apresentacao_id, filial_id in (
+                ProdutoApresentacao.objects
+                .filter(
+                    pk__in=[item.pk for item in apresentacoes],
+                    filiais_vinculo__filial__in=filiais,
+                    filiais_vinculo__ativo=True,
+                )
+                .values_list('pk', 'filiais_vinculo__filial_id')
+            ):
+                vinculos.setdefault(apresentacao_id, set()).add(filial_id)
+            apresentacoes_por_produto = {}
+            for apresentacao in apresentacoes:
+                base = celulas_produto[apresentacao.produto_id]
+                celulas = []
+                filiais_ativas = vinculos.get(apresentacao.pk, set())
+                for coluna in colunas:
+                    if coluna['chave'] == 'empresa':
+                        origem = self._celula_vazia()
+                        for filial_id in filiais_ativas:
+                            self._somar(origem, **base[f'f{filial_id}'])
+                    else:
+                        origem = base[coluna['chave']]
+                        if coluna['filial_id'] not in filiais_ativas:
+                            origem = self._celula_vazia()
+                    fator = apresentacao.fator_conversao
+                    quantidade_apresentacao = origem['atual'] / fator
+                    celulas.append({
+                        'atual': quantidade_apresentacao,
+                        'reservada': origem['reservada'] / fator,
+                        'disponivel': origem['disponivel'] / fator,
+                        'valor_custo': origem['valor_custo'],
+                        'valor_venda': quantidade_apresentacao * apresentacao.preco_venda,
+                    })
+                apresentacoes_por_produto.setdefault(apresentacao.produto_id, []).append({
+                    'produto': apresentacao.produto,
+                    'descricao': apresentacao.descricao,
+                    'unidade': apresentacao.unidade.sigla,
+                    'codigo': apresentacao.codigo or apresentacao.pk,
+                    'fator': apresentacao.fator_conversao,
+                    'eh_apresentacao': True,
+                    'celulas': celulas,
+                })
+            linhas_com_apresentacoes = []
+            for linha in linhas:
+                linhas_com_apresentacoes.append(linha)
+                linhas_com_apresentacoes.extend(
+                    apresentacoes_por_produto.get(linha['produto'].pk, [])
+                )
+            linhas = linhas_com_apresentacoes
+
+        resumo = totais_colunas.get('empresa', self._celula_vazia()).copy()
+        resumo.update({
+            'produtos': len(todos_produto_ids),
+            'filiais': len(filiais),
+            'depositos': len(depositos),
+            'margem_potencial': resumo['valor_venda'] - resumo['valor_custo'],
+        })
+        filtros = request.GET.copy()
+        filtros.pop('export', None)
+        filtros.pop('page', None)
+        return {
+            'filiais': filiais,
+            'grupos': grupos,
+            'colunas': colunas,
+            'linhas': linhas,
+            'totais_colunas': list(totais_colunas.values()),
+            'resumo': resumo,
+            'busca': request.GET.get('q', '').strip(),
+            'com_estoque': request.GET.get('com_estoque') == '1',
+            'detalhar_depositos': detalhar_depositos,
+            'mostrar_apresentacoes': mostrar_apresentacoes,
+            'filtros_query': filtros.urlencode(),
+            'page_obj': page_obj,
+        }
+
+    def get(self, request):
+        export = request.GET.get('export')
+        if export in {'csv', 'pdf'}:
+            bloqueio = bloquear_exportacao_sem_permissao(
+                request,
+                'estoque:relatorio-filiais',
+            )
+            if bloqueio:
+                return bloqueio
+        contexto = self._montar_relatorio(request)
+        if export in {'csv', 'pdf'}:
+            if export == 'pdf':
+                return self._exportar_pdf(contexto)
+            return self._exportar_csv(contexto)
+        return render(request, self.template_name, contexto)
+
+    @staticmethod
+    def _exportar_csv(contexto):
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="estoque-por-filial.csv"'
+        response.write('\ufeff')
+        writer = csv.writer(response, delimiter=';')
+        cabecalho = ['Produto', 'Codigo', 'Unidade', 'Tipo']
+        cabecalho.extend(coluna['export_rotulo'] for coluna in contexto['colunas'])
+        writer.writerow(cabecalho)
+        for linha in contexto['linhas']:
+            writer.writerow([
+                linha['descricao'], linha['codigo'], linha['unidade'],
+                'Apresentacao' if linha['eh_apresentacao'] else 'Base',
+                *[
+                    f"Qtd {celula['atual']} | Custo {celula['valor_custo']:.2f} | Venda {celula['valor_venda']:.2f}"
+                    for celula in linha['celulas']
+                ],
+            ])
+        return response
+
+    @staticmethod
+    def _exportar_pdf(contexto):
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="estoque-por-filial.pdf"'
+        doc = SimpleDocTemplate(
+            response,
+            pagesize=landscape(A4),
+            rightMargin=20,
+            leftMargin=20,
+            topMargin=24,
+            bottomMargin=24,
+        )
+        styles = getSampleStyleSheet()
+        elementos = [
+            Paragraph('Estoque por filial e deposito', styles['Title']),
+            Spacer(1, 8),
+            Paragraph(
+                f"{contexto['resumo']['produtos']} produtos | "
+                f"Custo R$ {contexto['resumo']['valor_custo']:.2f} | "
+                f"Venda R$ {contexto['resumo']['valor_venda']:.2f}",
+                styles['Normal'],
+            ),
+            Spacer(1, 12),
+        ]
+        dados = [['Produto', 'Tipo', 'Un.', 'Filial / deposito', 'Qtd.', 'Custo', 'Venda']]
+        for linha in contexto['linhas'][:120]:
+            for coluna, celula in zip(contexto['colunas'], linha['celulas']):
+                dados.append([
+                    ('↳ ' if linha['eh_apresentacao'] else '') + linha['descricao'],
+                    'Embalagem' if linha['eh_apresentacao'] else 'Base',
+                    linha['unidade'],
+                    coluna['export_rotulo'],
+                    f"{celula['atual']:.3f}",
+                    f"R$ {celula['valor_custo']:.2f}",
+                    f"R$ {celula['valor_venda']:.2f}",
+                ])
+        tabela = Table(dados, repeatRows=1, colWidths=[190, 58, 35, 155, 60, 75, 75])
+        tabela.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 6.5),
+            ('GRID', (0, 0), (-1, -1), .25, colors.HexColor('#cbd5e1')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')]),
+        ]))
+        elementos.append(tabela)
+        doc.build(elementos)
+        return response
+
+
 class ReposicaoListView(PermissaoRequiredMixin, View):
     """Plano operacional de reposicao a partir dos pontos de estoque."""
 

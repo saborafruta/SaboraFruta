@@ -1,0 +1,138 @@
+{% extends "_base.html" %}
+{% load erp_extras %}
+
+{% block title %}Estoque por filial e depósito{% endblock %}
+{% block page_title %}Estoque por filial e depósito{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<style>
+  .stock-matrix-shell { border: 1px solid var(--border-color, #30343b); border-radius: 14px; overflow: hidden; }
+  .stock-matrix { border-collapse: separate; border-spacing: 0; min-width: 980px; width: 100%; }
+  .stock-matrix th, .stock-matrix td { border-right: 1px solid rgba(148,163,184,.16); border-bottom: 1px solid rgba(148,163,184,.14); }
+  .stock-matrix thead th { background: #172554; color: #dbeafe; position: sticky; top: 0; z-index: 3; }
+  .stock-matrix thead tr:nth-child(2) th { top: 39px; background: #1e3a8a; }
+  .stock-matrix .stock-product { position: sticky; left: 0; z-index: 2; background: #1d1d20; min-width: 250px; max-width: 320px; }
+  .tema-claro .stock-matrix .stock-product { background: #fff; }
+  .stock-matrix thead .stock-product { z-index: 5; background: #172554; }
+  .stock-matrix-cell { min-width: 148px; }
+  .stock-matrix-cell strong { font-variant-numeric: tabular-nums; }
+  .stock-value-line { display: flex; justify-content: space-between; gap: 12px; margin-top: 3px; font-size: 11px; white-space: nowrap; }
+  .stock-package-row td { background: rgba(37,99,235,.055); }
+  .stock-package-row .stock-product { background: #181f2d; }
+  .tema-claro .stock-package-row .stock-product { background: #eff6ff; }
+  .report-check { min-height: 42px; display: inline-flex; align-items: center; gap: 8px; padding: 8px 11px; border: 1px solid rgba(148,163,184,.28); border-radius: 10px; cursor: pointer; }
+  @media (max-width: 700px) { .stock-matrix .stock-product { min-width: 210px; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <header class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
+    <div>
+      <a href="{% url 'estoque:relatorio-list' %}" class="text-sm text-blue-500">← Relatórios de estoque</a>
+      <h2 class="text-2xl font-semibold mt-2">Estoque por filial e depósito</h2>
+      <p class="text-sm mt-1 max-w-3xl" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Uma visão única do saldo físico da empresa. Custo e venda usam a quantidade atual; apresentações são apenas conversões e não duplicam os totais gerais.
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a class="btn-secondary" href="?{% if filtros_query %}{{ filtros_query }}&amp;{% endif %}export=csv">Exportar Excel</a>
+      <a class="btn-secondary" href="?{% if filtros_query %}{{ filtros_query }}&amp;{% endif %}export=pdf">Exportar PDF</a>
+    </div>
+  </header>
+
+  <section class="grid grid-cols-2 lg:grid-cols-5 gap-3" aria-label="Resumo do estoque">
+    <div class="card p-4"><div class="text-xs uppercase tracking-wide opacity-60">Produtos</div><div class="text-2xl font-semibold mt-1">{{ resumo.produtos }}</div><div class="text-xs opacity-60 mt-1">{{ resumo.filiais }} filial(is) · {{ resumo.depositos }} depósito(s)</div></div>
+    <div class="card p-4"><div class="text-xs uppercase tracking-wide opacity-60">Quantidade atual</div><div class="text-2xl font-semibold mt-1">{{ resumo.atual|quantidade:3 }}</div><div class="text-xs opacity-60 mt-1">{{ resumo.reservada|quantidade:3 }} reservado</div></div>
+    <div class="card p-4"><div class="text-xs uppercase tracking-wide opacity-60">Valor em custo</div><div class="text-2xl font-semibold mt-1 text-blue-400">{{ resumo.valor_custo|moeda }}</div><div class="text-xs opacity-60 mt-1">Custo médio por depósito</div></div>
+    <div class="card p-4"><div class="text-xs uppercase tracking-wide opacity-60">Valor em venda</div><div class="text-2xl font-semibold mt-1 text-green-400">{{ resumo.valor_venda|moeda }}</div><div class="text-xs opacity-60 mt-1">Preço de venda cadastrado</div></div>
+    <div class="card p-4 col-span-2 lg:col-span-1"><div class="text-xs uppercase tracking-wide opacity-60">Margem potencial</div><div class="text-2xl font-semibold mt-1">{{ resumo.margem_potencial|moeda }}</div><div class="text-xs opacity-60 mt-1">Venda menos custo</div></div>
+  </section>
+
+  <form method="get" class="card p-4 flex flex-col xl:flex-row xl:items-end gap-3">
+    <input type="hidden" name="filtros_aplicados" value="1">
+    <div class="flex-1 min-w-[240px]">
+      <label for="report-search" class="form-label">Produto, ID ou código</label>
+      <input id="report-search" class="form-input" type="search" name="q" value="{{ busca }}" placeholder="Ex.: 120, feijão ou código de barras">
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <label class="report-check"><input type="checkbox" name="com_estoque" value="1" {% if com_estoque %}checked{% endif %}><span class="text-sm">Somente com estoque</span></label>
+      <label class="report-check"><input type="checkbox" name="detalhar_depositos" value="1" {% if detalhar_depositos %}checked{% endif %}><span class="text-sm">Detalhar depósitos</span></label>
+      <label class="report-check"><input type="checkbox" name="mostrar_apresentacoes" value="1" {% if mostrar_apresentacoes %}checked{% endif %}><span class="text-sm">Mostrar produtos por embalagem</span></label>
+    </div>
+    <div class="flex gap-2">
+      <a href="{% url 'estoque:relatorio-filiais' %}" class="btn-secondary">Limpar</a>
+      <button class="btn-primary" type="submit">Aplicar filtros</button>
+    </div>
+  </form>
+
+  <section class="card overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-800 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h3 class="font-semibold">Posição consolidada</h3>
+        <p class="text-xs opacity-60 mt-1">Qtd. é o saldo atual. Passe o cursor para consultar disponível e reservado.</p>
+      </div>
+      {% if mostrar_apresentacoes %}<span class="soft-pill is-blue">Embalagens visíveis · sem somar nos KPIs</span>{% endif %}
+    </div>
+    <div class="overflow-x-auto stock-matrix-shell">
+      <table class="stock-matrix text-sm">
+        <thead>
+          <tr>
+            <th class="stock-product px-4 py-3 text-left" rowspan="2">Produto</th>
+            {% for grupo in grupos %}<th class="px-3 py-3 text-center" colspan="{{ grupo.colspan }}">{{ grupo.filial.nome_fantasia|default:grupo.filial.razao_social }}</th>{% endfor %}
+            <th class="px-3 py-3 text-center" colspan="1">Empresa</th>
+          </tr>
+          <tr>
+            {% for coluna in colunas %}<th class="stock-matrix-cell px-3 py-2 text-left">{{ coluna.rotulo }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for linha in linhas %}
+            <tr class="{% if linha.eh_apresentacao %}stock-package-row{% endif %}">
+              <td class="stock-product px-4 py-3">
+                <div class="{% if linha.eh_apresentacao %}pl-3 border-l-2 border-blue-500{% endif %}">
+                  <div class="font-semibold {% if linha.eh_apresentacao %}text-blue-400{% endif %}">{% if linha.eh_apresentacao %}{{ linha.descricao }}{% else %}{{ linha.produto.descricao }}{% endif %}</div>
+                  <div class="text-xs opacity-60 mt-0.5">{% if linha.eh_apresentacao %}Apresentação · 1 {{ linha.unidade }} = {{ linha.fator|quantidade:3 }} {{ linha.produto.unidade_medida.sigla }}{% else %}ID {{ linha.produto.pk }} · {{ linha.codigo }} · {{ linha.unidade }}{% endif %}</div>
+                </div>
+              </td>
+              {% for celula in linha.celulas %}
+                <td class="stock-matrix-cell px-3 py-3" title="Disponível: {{ celula.disponivel|quantidade:3 }} · Reservado: {{ celula.reservada|quantidade:3 }}">
+                  <div class="flex items-baseline justify-between gap-2"><span class="text-xs opacity-60">Qtd.</span><strong>{{ celula.atual|quantidade:3 }}</strong></div>
+                  <div class="stock-value-line opacity-70"><span>Custo</span><span>{{ celula.valor_custo|moeda }}</span></div>
+                  <div class="stock-value-line text-green-400"><span>Venda</span><span>{{ celula.valor_venda|moeda }}</span></div>
+                </td>
+              {% endfor %}
+            </tr>
+          {% empty %}
+            <tr><td colspan="99" class="px-5 py-12 text-center opacity-60">Nenhum produto encontrado para os filtros informados.</td></tr>
+          {% endfor %}
+        </tbody>
+        {% if linhas %}
+        <tfoot>
+          <tr>
+            <th class="stock-product px-4 py-3 text-left">Total filtrado</th>
+            {% for total in totais_colunas %}
+              <th class="stock-matrix-cell px-3 py-3 text-left">
+                <div class="flex justify-between"><span class="opacity-60">Qtd.</span><strong>{{ total.atual|quantidade:3 }}</strong></div>
+                <div class="stock-value-line"><span>Custo</span><span>{{ total.valor_custo|moeda }}</span></div>
+                <div class="stock-value-line text-green-400"><span>Venda</span><span>{{ total.valor_venda|moeda }}</span></div>
+              </th>
+            {% endfor %}
+          </tr>
+        </tfoot>
+        {% endif %}
+      </table>
+    </div>
+    {% if page_obj and page_obj.paginator.num_pages > 1 %}
+      <div class="px-5 py-3 border-t border-gray-800 flex items-center justify-between gap-3 text-sm">
+        <span class="opacity-60">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} produtos</span>
+        <div class="flex gap-2">
+          {% if page_obj.has_previous %}<a class="btn-secondary" href="?{% if filtros_query %}{{ filtros_query }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}
+          {% if page_obj.has_next %}<a class="btn-secondary" href="?{% if filtros_query %}{{ filtros_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Próxima</a>{% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
