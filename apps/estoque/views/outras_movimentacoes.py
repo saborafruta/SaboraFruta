@@ -404,16 +404,18 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
                     | db_models.Q(codigo_barras__icontains=term)
                 )
                 if incluir_apresentacoes:
-                    term_filter |= (
-                        db_models.Q(apresentacoes__descricao__icontains=term)
-                        | db_models.Q(apresentacoes__codigo__icontains=term)
-                        | db_models.Q(apresentacoes__codigos_barras__ean__icontains=term)
-                    ) & db_models.Q(
-                        apresentacoes__ativo=True,
-                        apresentacoes__permite_estoque=True,
-                        apresentacoes__filiais_vinculo__filial=filial,
-                        apresentacoes__filiais_vinculo__ativo=True,
+                    apresentacoes_encontradas = (
+                        ProdutoApresentacao.objects.for_filial_com_fallback_legado(filial)
+                        .filter(
+                            db_models.Q(descricao__icontains=term)
+                            | db_models.Q(codigo__icontains=term)
+                            | db_models.Q(codigos_barras__ean__icontains=term),
+                            permite_estoque=True,
+                            fator_conversao__gt=0,
+                        )
+                        .values('produto_id')
                     )
+                    term_filter |= db_models.Q(pk__in=apresentacoes_encontradas)
                 if term.isdigit():
                     term_filter |= db_models.Q(pk=int(term))
                 qs = qs.filter(term_filter)
@@ -492,7 +494,7 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
 
         apresentacoes_por_produto = {}
         apresentacoes = (
-            ProdutoApresentacao.objects.for_filial(filial)
+            ProdutoApresentacao.objects.for_filial_com_fallback_legado(filial)
             .filter(
                 produto_id__in=[produto.pk for produto in produtos],
                 permite_estoque=True,

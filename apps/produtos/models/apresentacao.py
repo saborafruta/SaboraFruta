@@ -45,6 +45,20 @@ class ProdutoApresentacaoManager(models.Manager):
             filiais_vinculo__filial=filial, filiais_vinculo__ativo=True,
         ).distinct()
 
+    def for_filial_com_fallback_legado(self, filial):
+        """Inclui cadastros antigos que ainda não possuem vínculo por filial.
+
+        Quando a apresentação já possui algum vínculo, respeita somente o
+        vínculo ativo da filial informada. A ausência total de vínculos mantém
+        a apresentação global disponível, como já ocorre no checkout.
+        """
+        if filial is None:
+            return self.get_queryset().none()
+        return self.ativas().filter(
+            Q(filiais_vinculo__isnull=True)
+            | Q(filiais_vinculo__filial=filial, filiais_vinculo__ativo=True)
+        ).distinct()
+
 
 class ProdutoApresentacao(TimestampedModel):
     produto = models.ForeignKey(

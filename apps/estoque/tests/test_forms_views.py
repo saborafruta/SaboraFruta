@@ -248,6 +248,40 @@ class EstoqueFormsViewsTests(TestCase):
         self.assertEqual(form.cleaned_data['itens'][0]['quantidade_base'], Decimal('20'))
         self.assertEqual(form.cleaned_data['itens'][0]['quantidade_comercial'], Decimal('2'))
 
+    def test_form_transferencia_aceita_apresentacao_legada_sem_vinculos(self):
+        produto = self.criar_produto(descricao='Produto legado')
+        ProdutoFilial.objects.create(produto=produto, filial=self.filial_destino)
+        unidade = UnidadeMedida.objects.create(
+            empresa=self.empresa,
+            sigla='FD',
+            descricao='Fardo',
+            tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        apresentacao = ProdutoApresentacao.objects.create(
+            produto=produto,
+            unidade=unidade,
+            descricao='Fardo legado com 10',
+            fator_conversao=Decimal('10'),
+            permite_estoque=True,
+        )
+
+        form = TransferenciaMultiplaForm(
+            data={
+                'filial_destino': self.filial_destino.pk,
+                'observacao': 'Reposicao de produto legado',
+                'itens_json': json.dumps([{
+                    'produto_id': produto.pk,
+                    'apresentacao_id': apresentacao.pk,
+                    'quantidade': '1',
+                }]),
+            },
+            filial=self.filial,
+            empresa=self.empresa,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['itens'][0]['quantidade_base'], Decimal('10'))
+
     def test_transferencia_multipla_registra_produto_e_embalagem_no_mesmo_documento(self):
         self.conceder(pode_ver=True, pode_aprovar=True)
         produto = self.criar_produto(descricao='Feijao preto')
@@ -374,6 +408,40 @@ class EstoqueFormsViewsTests(TestCase):
         self.assertEqual(resultado['produto_label'], 'Luva descartavel')
         self.assertEqual(resultado['estoque'], 3.0)
         self.assertEqual(resultado['codigo_barras'], '2909999999999')
+
+    def test_catalogo_transferencia_inclui_apresentacao_legada_sem_vinculo(self):
+        self.conceder(pode_ver=True)
+        produto = self.criar_produto(descricao='Copo descartavel')
+        unidade = UnidadeMedida.objects.create(
+            empresa=self.empresa,
+            sigla='CX',
+            descricao='Caixa',
+            tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        apresentacao = ProdutoApresentacao.objects.create(
+            produto=produto,
+            unidade=unidade,
+            descricao='Caixa com 10 pacotes',
+            fator_conversao=Decimal('10'),
+            permite_estoque=True,
+        )
+        ProdutoCodigoBarras.objects.create(
+            produto=produto,
+            apresentacao=apresentacao,
+            ean='2903888888888',
+            ativo=True,
+        )
+
+        response = self.client.get(reverse('estoque:produto-estoque-search-json'), {
+            'q': '2903888888888',
+            'incluir_apresentacoes': '1',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(any(
+            item['apresentacao_id'] == apresentacao.pk
+            for item in response.json()['results']
+        ))
 
     def test_a_busca_devolve_o_que_a_tela_precisa_para_calcular(self):
         """

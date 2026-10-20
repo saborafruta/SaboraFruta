@@ -277,7 +277,7 @@ class TransferenciaMultiplaForm(forms.Form):
         }
         apresentacoes = {
             apresentacao.pk: apresentacao
-            for apresentacao in ProdutoApresentacao.objects.for_filial(self.filial).filter(
+            for apresentacao in ProdutoApresentacao.objects.for_filial_com_fallback_legado(self.filial).filter(
                 pk__in=apresentacoes_ids,
                 permite_estoque=True,
                 fator_conversao__gt=0,
@@ -311,10 +311,9 @@ class TransferenciaMultiplaForm(forms.Form):
                     raise forms.ValidationError(
                         f'Item {indice}: apresentacao nao pertence ao produto ou nao permite estoque.'
                     )
-                if destino and not apresentacao.filiais_vinculo.filter(
-                    filial=destino,
-                    ativo=True,
-                ).exists():
+                if destino and not ProdutoApresentacao.objects.for_filial_com_fallback_legado(
+                    destino,
+                ).filter(pk=apresentacao.pk).exists():
                     raise forms.ValidationError(
                         f'Item {indice}: a apresentacao "{apresentacao.descricao}" nao esta ativa na filial de destino.'
                     )
