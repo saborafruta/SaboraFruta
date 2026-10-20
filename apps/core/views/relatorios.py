@@ -72,6 +72,11 @@ class RelatoriosHubView(PermissaoRequiredMixin, TemplateView):
                         'url_name': 'estoque:relatorio-list',
                     },
                     {
+                        'nome': 'Produtos sem Giro',
+                        'descricao': 'Produtos com saldo e sem venda concluída há 60, 90 dias ou nunca vendidos.',
+                        'url_name': 'estoque:produtos-sem-giro',
+                    },
+                    {
                         'nome': 'Dashboard Operacional',
                         'descricao': 'OPs em andamento, alertas de vencimento e rendimento por linha de produção.',
                         'url_name': 'analytics:operacional',

@@ -7,7 +7,82 @@
 {% block extra_head %}
 {{ block.super }}
 <style>
-  .dashboard-shell .dashboard-kpi-card { overflow: hidden; }
+  .dashboard-shell .dashboard-kpi-card { position: relative; overflow: visible; }
+  .dashboard-shell .dashboard-kpi-trigger { position: relative; z-index: 5; }
+  .dashboard-shell .dashboard-kpi-trigger:focus-visible {
+    outline: 2px solid #60a5fa;
+    outline-offset: 3px;
+  }
+  .dashboard-shell .dashboard-kpi-popover {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 40;
+    width: min(330px, calc(100vw - 3rem));
+    padding-top: 10px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-5px) scale(.985);
+    transform-origin: top right;
+    pointer-events: none;
+    transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
+  }
+  .dashboard-shell .dashboard-kpi-trigger:hover .dashboard-kpi-popover,
+  .dashboard-shell .dashboard-kpi-trigger:focus .dashboard-kpi-popover,
+  .dashboard-shell .dashboard-kpi-trigger:focus-within .dashboard-kpi-popover {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
+  }
+  .dashboard-shell .dashboard-kpi-popover-panel {
+    overflow: hidden;
+    border: 1px solid #34343a;
+    border-radius: 12px;
+    background: #1d1d20;
+    box-shadow: 0 18px 45px rgba(0,0,0,.35);
+  }
+  .dashboard-shell .dashboard-kpi-popover-head {
+    padding: 11px 13px;
+    border-bottom: 1px solid #2a2a2e;
+    color: #f0f0f0;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .dashboard-shell .dashboard-kpi-popover-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 9px 13px;
+    border-bottom: 1px solid rgba(255,255,255,.055);
+    color: #d4d4d4;
+    font-size: 12px;
+  }
+  .dashboard-shell .dashboard-kpi-popover-row:last-child { border-bottom: 0; }
+  .dashboard-shell .dashboard-kpi-popover-row strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  .dashboard-shell .dashboard-kpi-popover-row span { flex-shrink: 0; color: #a3a3a3; }
+  .dashboard-shell .dashboard-kpi-popover-empty { padding: 14px 13px; color: #888; font-size: 12px; }
+  .dashboard-shell .dashboard-kpi-popover-foot {
+    padding: 9px 13px;
+    border-top: 1px solid #2a2a2e;
+    color: #60a5fa;
+    font-size: 11px;
+  }
+  body.tema-claro .dashboard-shell .dashboard-kpi-popover-panel {
+    border-color: #e2e8f0;
+    background: #fff;
+    box-shadow: 0 18px 45px rgba(15,23,42,.16);
+  }
+  body.tema-claro .dashboard-shell .dashboard-kpi-popover-head { border-bottom-color:#e5e7eb; color:#111827; }
+  body.tema-claro .dashboard-shell .dashboard-kpi-popover-row { border-bottom-color:#f1f5f9; color:#334155; }
+  body.tema-claro .dashboard-shell .dashboard-kpi-popover-row span { color:#64748b; }
+  body.tema-claro .dashboard-shell .dashboard-kpi-popover-foot { border-top-color:#e5e7eb; color:#2563eb; }
   .dashboard-shell .dashboard-hero {
     position: relative;
     overflow: hidden;
@@ -163,11 +238,11 @@
           <div class="text-xs font-medium uppercase tracking-widest mb-2" style="color:#888; letter-spacing:0.1em;">Produtos ativos</div>
           <div class="text-3xl font-semibold" :style="temaClaro ? 'color:#1a1a1a;' : 'color:#f0f0f0;'">{{ kpis.total_produtos|default:0 }}</div>
         </div>
-        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(59,130,246,0.12);">
+        <a href="{% url 'produtos:produto-list' %}?status=ativo" class="dashboard-kpi-trigger w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(59,130,246,0.12);" aria-label="Ver produtos ativos">
           <svg class="w-5 h-5" fill="none" stroke="#3b82f6" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
           </svg>
-        </div>
+        </a>
       </div>
     </div>
 
@@ -177,11 +252,22 @@
           <div class="text-xs font-medium uppercase tracking-widest mb-2" style="color:#888; letter-spacing:0.1em;">Estoque crítico</div>
           <div class="text-3xl font-semibold" style="color:#f87171;">{{ kpis.produtos_criticos|default:0 }}</div>
         </div>
-        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(239,68,68,0.10);">
+        <a href="{% url 'estoque:estoque-list' %}?status=critico" class="dashboard-kpi-trigger w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(239,68,68,0.10);" aria-label="Ver produtos com estoque crítico">
           <svg class="w-5 h-5" fill="none" stroke="#ef4444" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
-        </div>
+          <span class="dashboard-kpi-popover" aria-hidden="true">
+            <span class="dashboard-kpi-popover-panel block text-left">
+              <span class="dashboard-kpi-popover-head block">Estoque abaixo do mínimo</span>
+              {% for item in produtos_criticos_preview %}
+                <span class="dashboard-kpi-popover-row"><strong>{{ item.produto__descricao }}</strong><span>{{ item.disp|quantidade:2 }} / mín. {{ item.produto__estoque_minimo|quantidade:2 }}</span></span>
+              {% empty %}
+                <span class="dashboard-kpi-popover-empty block">Nenhum produto crítico nesta filial.</span>
+              {% endfor %}
+              <span class="dashboard-kpi-popover-foot block">Clique para abrir a lista completa →</span>
+            </span>
+          </span>
+        </a>
       </div>
     </div>
 
@@ -189,29 +275,50 @@
       <div class="flex items-center justify-between">
         <div>
           <div class="text-xs font-medium uppercase tracking-widest mb-2" style="color:#888; letter-spacing:0.1em;">Alertas de vencimento</div>
-          <div class="text-3xl font-semibold" style="color:#fbbf24;">{{ alertas|length }}</div>
+          <div class="text-3xl font-semibold" style="color:#fbbf24;">{{ total_alertas_vencimento }}</div>
         </div>
-        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(251,191,36,0.10);">
+        <a href="{% url 'estoque:alerta-list' %}?tipo=vencimento" class="dashboard-kpi-trigger w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(251,191,36,0.10);" aria-label="Ver alertas de vencimento">
           <svg class="w-5 h-5" fill="none" stroke="#fbbf24" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
-        </div>
+          <span class="dashboard-kpi-popover" aria-hidden="true">
+            <span class="dashboard-kpi-popover-panel block text-left">
+              <span class="dashboard-kpi-popover-head block">Lotes próximos do vencimento</span>
+              {% for alerta in alertas|slice:":5" %}
+                <span class="dashboard-kpi-popover-row"><strong>{{ alerta.produto.descricao }}</strong><span>{{ alerta.data_validade|date:"d/m" }} · {{ alerta.dias_para_vencer }}d</span></span>
+              {% empty %}
+                <span class="dashboard-kpi-popover-empty block">Nenhum vencimento pendente nesta filial.</span>
+              {% endfor %}
+              <span class="dashboard-kpi-popover-foot block">Clique para abrir todos os alertas →</span>
+            </span>
+          </span>
+        </a>
       </div>
     </div>
 
     <div class="card p-5 dashboard-kpi-card" style="border-radius:12px;">
       <div class="flex items-center justify-between">
         <div class="dashboard-kpi-copy">
-          <div class="text-xs font-medium uppercase tracking-widest mb-2" style="color:#888; letter-spacing:0.1em;">Filial</div>
-          {% firstof filial_ativa.nome_fantasia filial_ativa.razao_social '' as titulo_filial %}
-          <div class="dashboard-branch-name text-base font-semibold" :style="temaClaro ? 'color:#1a1a1a;' : 'color:#f0f0f0;'" title="{{ titulo_filial }}">{{ filial_ativa|filial_apelido }}</div>
-          <div class="text-xs mt-0.5" style="color:#888;">{{ filial_ativa.cidade }}/{{ filial_ativa.uf }} - {{ filial_ativa.is_matriz|yesno:"Matriz,Filial" }}</div>
+          <div class="text-xs font-medium uppercase tracking-widest mb-2" style="color:#888; letter-spacing:0.1em;">Produtos sem giro</div>
+          <div class="text-3xl font-semibold" style="color:#c084fc;">{{ produtos_sem_giro.resumo.total }}</div>
+          <div class="text-xs mt-0.5" style="color:#888;">{{ produtos_sem_giro.resumo.dias_90_mais }} há 90+ dias · {{ produtos_sem_giro.resumo.nunca }} nunca vendido{{ produtos_sem_giro.resumo.nunca|pluralize }}</div>
         </div>
-        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(16,185,129,0.10);">
-          <svg class="w-5 h-5" fill="none" stroke="#10b981" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+        <a href="{% url 'estoque:produtos-sem-giro' %}" class="dashboard-kpi-trigger w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(168,85,247,0.11);" aria-label="Ver relatório de produtos sem giro">
+          <svg class="w-5 h-5" fill="none" stroke="#c084fc" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l2.5 1.5M5.5 5.5A9 9 0 1012 3M3 3v5h5"/>
           </svg>
-        </div>
+          <span class="dashboard-kpi-popover" aria-hidden="true">
+            <span class="dashboard-kpi-popover-panel block text-left">
+              <span class="dashboard-kpi-popover-head block">Sem venda concluída há 60+ dias</span>
+              {% for item in produtos_sem_giro.preview %}
+                <span class="dashboard-kpi-popover-row"><strong>{{ item.descricao }}</strong><span>{% if item.dias_sem_venda is not None %}{{ item.dias_sem_venda }} dias{% else %}Nunca vendido{% endif %}</span></span>
+              {% empty %}
+                <span class="dashboard-kpi-popover-empty block">Todos os produtos com saldo venderam recentemente.</span>
+              {% endfor %}
+              <span class="dashboard-kpi-popover-foot block">Clique para abrir o relatório completo →</span>
+            </span>
+          </span>
+        </a>
       </div>
     </div>
 
@@ -1239,7 +1346,7 @@
     <div class="table-container" style="border-radius:12px; overflow:hidden;">
       <div class="px-5 py-4 flex items-center justify-between table-divider" style="border-bottom:1px solid #2a2a2e;">
         <h3 class="text-sm font-medium" :style="temaClaro ? 'color:#1a1a1a;' : 'color:#f0f0f0;'">Próximos vencimentos</h3>
-        <a href="#" class="text-xs transition-colors" style="color:#3b82f6;"
+        <a href="{% url 'estoque:alerta-list' %}?tipo=vencimento" class="text-xs transition-colors" style="color:#3b82f6;"
            onmouseover="this.style.color='#60a5fa';" onmouseout="this.style.color='#3b82f6';">Ver todos</a>
       </div>
       <div class="overflow-x-auto">

@@ -1,0 +1,132 @@
+{% extends "_base.html" %}
+{% load erp_extras %}
+
+{% block title %}Produtos sem giro{% endblock %}
+{% block page_title %}Produtos sem giro{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<style>
+  .giro-filter.is-active { border-color:rgba(245,158,11,.55); box-shadow:0 0 0 1px rgba(245,158,11,.16); }
+  @media print {
+    header, aside, nav, .giro-no-print { display:none !important; }
+    main { margin:0 !important; padding:0 !important; }
+    .card { box-shadow:none !important; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+    <div>
+      <a href="{% url 'core:dashboard' %}" class="text-sm giro-no-print" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Dashboard</a>
+      <h2 class="text-xl font-semibold mt-1" :style="temaClaro ? 'color:#111827;' : 'color:#f8fafc;'">Produtos sem giro comercial</h2>
+      <p class="text-sm mt-1 max-w-3xl" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+        Produtos ativos com saldo na {{ filial.nome_fantasia|default:filial.razao_social }} e sem venda concluída há pelo menos 60 dias. Transferências, perdas, produção e ajustes não contam como venda.
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2 giro-no-print">
+      <button type="button" class="btn-secondary" onclick="window.print()">Imprimir</button>
+      <a href="?{% if export_querystring %}{{ export_querystring }}&amp;{% endif %}export=csv" class="btn-primary">Exportar CSV</a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+    <a href="{% url 'estoque:produtos-sem-giro' %}" class="card p-4 giro-filter {% if not faixa %}is-active{% endif %}">
+      <div class="text-xs uppercase tracking-wide" style="color:#888;">Total sem giro</div>
+      <div class="mt-1 text-2xl font-semibold">{{ resumo.total }}</div>
+    </a>
+    <a href="?faixa=60_89" class="card p-4 giro-filter {% if faixa == '60_89' %}is-active{% endif %}">
+      <div class="text-xs uppercase tracking-wide" style="color:#888;">60 a 89 dias</div>
+      <div class="mt-1 text-2xl font-semibold" style="color:#fbbf24;">{{ resumo.dias_60_89 }}</div>
+    </a>
+    <a href="?faixa=90_mais" class="card p-4 giro-filter {% if faixa == '90_mais' %}is-active{% endif %}">
+      <div class="text-xs uppercase tracking-wide" style="color:#888;">90 dias ou mais</div>
+      <div class="mt-1 text-2xl font-semibold" style="color:#f87171;">{{ resumo.dias_90_mais }}</div>
+    </a>
+    <a href="?faixa=nunca" class="card p-4 giro-filter {% if faixa == 'nunca' %}is-active{% endif %}">
+      <div class="text-xs uppercase tracking-wide" style="color:#888;">Nunca vendidos</div>
+      <div class="mt-1 text-2xl font-semibold" style="color:#c084fc;">{{ resumo.nunca }}</div>
+    </a>
+    <div class="card p-4 col-span-2 lg:col-span-1">
+      <div class="text-xs uppercase tracking-wide" style="color:#888;">Valor parado em custo</div>
+      <div class="mt-1 text-xl font-semibold" :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">{{ resumo.valor_custo|moeda }}</div>
+    </div>
+  </div>
+
+  <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px_auto] gap-3 giro-no-print">
+    <input type="search" name="q" value="{{ busca }}" class="form-input" placeholder="Buscar por produto, código ou categoria">
+    <select name="faixa" class="form-input">
+      <option value="">Todas as faixas</option>
+      <option value="60_89" {% if faixa == '60_89' %}selected{% endif %}>60 a 89 dias</option>
+      <option value="90_mais" {% if faixa == '90_mais' %}selected{% endif %}>90 dias ou mais</option>
+      <option value="nunca" {% if faixa == 'nunca' %}selected{% endif %}>Nunca vendido</option>
+    </select>
+    <div class="flex gap-2">
+      <button type="submit" class="btn-primary">Filtrar</button>
+      <a href="{% url 'estoque:produtos-sem-giro' %}" class="btn-secondary">Limpar</a>
+    </div>
+  </form>
+
+  <div class="card overflow-hidden">
+    <div class="px-5 py-3 flex items-center justify-between gap-3" style="border-bottom:1px solid rgba(148,163,184,.16);">
+      <div>
+        <h3 class="font-semibold">Produtos parados por venda</h3>
+        <p class="text-xs mt-0.5" style="color:#888;">{{ total_filtrado }} produto{{ total_filtrado|pluralize }} no filtro atual</p>
+      </div>
+      <span class="text-xs" style="color:#888;">Atualizado em {% now "d/m/Y H:i" %}</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm min-w-[940px]">
+        <thead>
+          <tr class="text-left text-xs uppercase tracking-wide" style="color:#888;">
+            <th class="px-4 py-3">Produto</th>
+            <th class="px-4 py-3">Categoria</th>
+            <th class="px-4 py-3 text-right">Estoque</th>
+            <th class="px-4 py-3">Última venda</th>
+            <th class="px-4 py-3 text-center">Dias sem venda</th>
+            <th class="px-4 py-3">Canal</th>
+            <th class="px-4 py-3 text-right">Valor em custo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in itens %}
+            <tr class="table-row-hover">
+              <td class="px-4 py-3">
+                <div class="font-medium">{{ item.descricao }}</div>
+                <div class="text-xs mt-0.5" style="color:#888;">{{ item.codigo|default:"Sem código" }} · {{ item.unidade }}</div>
+              </td>
+              <td class="px-4 py-3">{{ item.categoria }}</td>
+              <td class="px-4 py-3 text-right font-semibold">{{ item.estoque_atual|quantidade:3 }}</td>
+              <td class="px-4 py-3">
+                {% if item.ultima_venda %}{{ item.ultima_venda|date:"d/m/Y" }}{% else %}<span style="color:#c084fc;">Nunca vendido</span>{% endif %}
+              </td>
+              <td class="px-4 py-3 text-center">
+                {% if item.dias_sem_venda is not None %}
+                  <span class="soft-pill {% if item.faixa == '90_mais' %}is-red{% else %}is-amber{% endif %}">{{ item.dias_sem_venda }} dias</span>
+                {% else %}
+                  <span class="soft-pill" style="background:rgba(168,85,247,.13);color:#c084fc;">Nunca</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">{{ item.canal_ultima_venda }}</td>
+              <td class="px-4 py-3 text-right font-semibold">{{ item.valor_custo|moeda }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7" class="px-4 py-12 text-center" style="color:#888;">Nenhum produto sem giro neste filtro.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj.paginator.num_pages > 1 %}
+      <div class="px-5 py-3 flex items-center justify-between text-sm giro-no-print" style="border-top:1px solid rgba(148,163,184,.16);">
+        <span style="color:#888;">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <div class="flex gap-2">
+          {% if page_obj.has_previous %}<a class="btn-secondary" href="?{% if page_querystring %}{{ page_querystring }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}
+          {% if page_obj.has_next %}<a class="btn-secondary" href="?{% if page_querystring %}{{ page_querystring }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Próxima</a>{% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

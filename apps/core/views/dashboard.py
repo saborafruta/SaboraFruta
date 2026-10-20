@@ -41,6 +41,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ).split()[0]
         ctx['kpis'] = self._calcular_kpis(filial)
         ctx['alertas'] = self._coletar_alertas(filial)
+        ctx['total_alertas_vencimento'] = self._contar_alertas(filial)
+        ctx['produtos_criticos_preview'] = self._produtos_criticos_preview(filial)
+        ctx['produtos_sem_giro'] = self._produtos_sem_giro(filial)
         ctx['estoque_filiais'] = self._estoque_por_filiais(filial)
         ctx['rfm_segmentos'] = self._calcular_rfm(filial)
         ctx['abc_clientes'] = self._curva_abc_clientes(filial)
@@ -137,6 +140,50 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             )
         except Exception:
             return []
+
+    def _contar_alertas(self, filial):
+        if not filial:
+            return 0
+        try:
+            from apps.estoque.models import AlertaVencimento
+            return AlertaVencimento.objects.filter(filial=filial, resolvido=False).count()
+        except Exception:
+            return 0
+
+    def _produtos_criticos_preview(self, filial, limite=5):
+        if not filial:
+            return []
+        try:
+            from apps.estoque.models import Estoque
+            return list(
+                Estoque.objects.filter(filial=filial, produto__ativo=True)
+                .values(
+                    'produto_id', 'produto__descricao', 'produto__codigo',
+                    'produto__estoque_minimo',
+                )
+                .annotate(disp=Sum('quantidade_disponivel'))
+                .filter(disp__lt=F('produto__estoque_minimo'))
+                .order_by('disp', 'produto__descricao')[:limite]
+            )
+        except Exception:
+            return []
+
+    def _produtos_sem_giro(self, filial):
+        vazio = {
+            'resumo': {'total': 0, 'dias_60_89': 0, 'dias_90_mais': 0, 'nunca': 0},
+            'preview': [],
+        }
+        if not filial:
+            return vazio
+        try:
+            from apps.estoque.services.produtos_sem_giro_service import ProdutosSemGiroService
+            itens = ProdutosSemGiroService.analisar(filial)
+            return {
+                'resumo': ProdutosSemGiroService.resumo(itens),
+                'preview': itens[:5],
+            }
+        except Exception:
+            return vazio
 
     # ------------------------------------------------------------------
     # Estoque por filial

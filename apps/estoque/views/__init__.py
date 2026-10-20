@@ -20,6 +20,7 @@ from .alerta import AlertaListView
 from .desperdicio import DesperdicioDashboardView
 from .sugestao_compras import SugestaoComprasView
 from .equilibrio_estoque import EquilibrioEstoqueView
+from .produtos_sem_giro import ProdutosSemGiroRelatorioView
 from .outras_movimentacoes import (
     OutrasMovimentacoesHubView, DevolucaoClienteView, DevolucaoFornecedorView, SaidaEspecialView,
     FornecedorSearchJsonView, ProdutoEstoqueSearchJsonView,
@@ -50,6 +51,7 @@ __all__ = [
     'DesperdicioDashboardView',
     'SugestaoComprasView',
     'EquilibrioEstoqueView',
+    'ProdutosSemGiroRelatorioView',
     'OutrasMovimentacoesHubView', 'DevolucaoClienteView', 'DevolucaoFornecedorView', 'SaidaEspecialView',
     'FornecedorSearchJsonView', 'ProdutoEstoqueSearchJsonView',
     'ClienteSearchJsonView', 'LoteSearchJsonView', 'VendaDevolucaoJsonView', 'DevolucaoClienteApiView',
