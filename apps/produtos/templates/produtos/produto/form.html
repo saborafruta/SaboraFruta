@@ -682,6 +682,13 @@
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.categoria required=True %}</div>
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.subcategoria %}</div>
           <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.tipo_produto required=True %}</div>
+          <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=form.finalidade required=True %}<p class="produto-help">Use Matéria-prima, Embalagem ou Intermediário para itens consumidos na produção.</p></div>
+          <div class="produto-field md">
+            <input type="hidden" name="permite_venda_presente" value="1">
+            <label class="produto-toggle-row">{{ form.permite_venda }} <span>Pode ser vendido</span></label>
+            {% if form.permite_venda.errors %}<p class="produto-error">{{ form.permite_venda.errors|first }}</p>{% endif %}
+            <p class="produto-help">Desmarcado: continua em compras, XML, estoque e produção, mas não aparece nos canais de venda.</p>
+          </div>
           <div class="produto-field" x-show="tipoProduto !== 'servico'">{% include "produtos/produto/partials/_field.html" with field=form.tempo_preparo_minutos %}<p class="produto-help">Tempo médio de preparo (min) — usado pela fila do KDS.</p></div>
           <div class="produto-field full" x-show="tipoProduto === 'servico'" x-cloak>
             <div class="produto-card">
@@ -703,7 +710,7 @@
               </div>
             </div>
           </div>
-          <div class="produto-field full">
+          <div class="produto-field full" x-show="permiteVenda" x-cloak>
             <div class="produto-card">
               <h3 class="produto-card-title"><span>#</span> Catálogo digital e pedidos pelo WhatsApp</h3>
               <div class="produto-field-grid">
@@ -1391,6 +1398,8 @@
       step: 1,
       loading: false,
       tipoProduto: '{{ form.tipo_produto.value|default:"unitario"|escapejs }}',
+      finalidadeProduto: '{{ form.finalidade.value|default:"revenda"|escapejs }}',
+      permiteVenda: {% if form.permite_venda.value %}true{% else %}false{% endif %},
       steps: [
         { id: 1, label: 'Identificacao', hasError: errorSteps.includes(1) },
         { id: 2, label: 'Industrial', hasError: errorSteps.includes(2) },
@@ -1493,6 +1502,17 @@
         this.$watch('tipoProduto', (value) => {
           if (value !== 'servico' && this.$refs.agendaToggle) {
             this.$refs.agendaToggle.checked = false;
+          }
+          if (value === 'servico') {
+            this.finalidadeProduto = 'servico';
+            this.permiteVenda = true;
+          }
+        });
+        this.$watch('finalidadeProduto', (value) => {
+          if (['materia_prima', 'embalagem', 'intermediario'].includes(value)) {
+            this.permiteVenda = false;
+          } else if (['revenda', 'acabado', 'servico'].includes(value)) {
+            this.permiteVenda = true;
           }
         });
         this.initSpecs();

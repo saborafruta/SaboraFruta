@@ -294,6 +294,30 @@ class ProdutoForm(forms.ModelForm):
         }
 
     def __init__(self, *args, empresa=None, filial=None, estoque_atual=None, **kwargs):
+        # Compatibilidade com integrações e telas antigas que ainda não
+        # enviam os campos de finalidade. A tela atual manda o marcador
+        # `permite_venda_presente`, permitindo distinguir "desmarcado" de
+        # "campo ainda inexistente no cliente".
+        dados = args[0] if args else kwargs.get('data')
+        if dados is not None:
+            dados_ajustados = dados.copy()
+            instancia = kwargs.get('instance')
+            if not dados_ajustados.get('finalidade'):
+                dados_ajustados['finalidade'] = (
+                    Produto.Finalidade.SERVICO
+                    if dados_ajustados.get('tipo_produto') == Produto.TipoProduto.SERVICO
+                    else getattr(instancia, 'finalidade', None) or Produto.Finalidade.REVENDA
+                )
+            if (
+                'permite_venda' not in dados_ajustados
+                and 'permite_venda_presente' not in dados_ajustados
+                and getattr(instancia, 'permite_venda', True)
+            ):
+                dados_ajustados['permite_venda'] = 'on'
+            if args:
+                args = (dados_ajustados, *args[1:])
+            else:
+                kwargs['data'] = dados_ajustados
         super().__init__(*args, **kwargs)
         self.empresa = empresa
         self.filial = filial
@@ -314,6 +338,8 @@ class ProdutoForm(forms.ModelForm):
         })
         self.fields['remover_imagem'].widget.attrs.update({'class': 'produto-image-remove-checkbox'})
         self.fields['tipo_produto'].widget.attrs['x-model'] = 'tipoProduto'
+        self.fields['finalidade'].widget.attrs['x-model'] = 'finalidadeProduto'
+        self.fields['permite_venda'].widget.attrs['x-model'] = 'permiteVenda'
         self.fields['agendavel'].widget.attrs['x-ref'] = 'agendaToggle'
         self.fields['catalogo_ordem'].required = False
         self.fields['catalogo_quantidade_maxima'].required = False
@@ -362,6 +388,8 @@ class ProdutoForm(forms.ModelForm):
 
         if not self.is_bound and not getattr(self.instance, 'pk', None):
             self.fields['tipo_produto'].initial = Produto.TipoProduto.UNITARIO
+            self.fields['finalidade'].initial = Produto.Finalidade.REVENDA
+            self.fields['permite_venda'].initial = True
             self.fields['ativo'].initial = True
             self.fields['permite_venda_sem_estoque'].initial = True
 
@@ -417,6 +445,22 @@ class ProdutoForm(forms.ModelForm):
 
         for field_name in self.DEFAULT_IF_EMPTY_FIELDS:
             if field_name in self.fields:
+                self.fields[field_name].required = False
+
+        finalidade_informada = (
+            self.data.get('finalidade') if self.is_bound
+            else self.initial.get('finalidade') or getattr(self.instance, 'finalidade', '')
+        )
+        if finalidade_informada in {
+            Produto.Finalidade.MATERIA_PRIMA,
+            Produto.Finalidade.EMBALAGEM,
+            Produto.Finalidade.INTERMEDIARIO,
+        }:
+            # Insumo precisa de dados de compra, custo e estoque, mas não de
+            # campos exclusivos da operação comercial.
+            for field_name in (
+                'preco_venda', 'cfop_venda_interna', 'cfop_venda_interestadual',
+            ):
                 self.fields[field_name].required = False
 
         if empresa:
@@ -642,6 +686,8 @@ class ProdutoForm(forms.ModelForm):
                 self.add_error(field_name, 'Este codigo de barras ja pertence a outro produto.')
 
         tipo = cleaned.get('tipo_produto')
+        finalidade = cleaned.get('finalidade')
+        permite_venda = bool(cleaned.get('permite_venda'))
         cleaned['catalogo_ordem'] = cleaned.get('catalogo_ordem') or 0
         cleaned['catalogo_quantidade_maxima'] = cleaned.get('catalogo_quantidade_maxima') or 99
         agendavel = bool(cleaned.get('agendavel'))
@@ -649,6 +695,18 @@ class ProdutoForm(forms.ModelForm):
         intervalo_servico = cleaned.get('intervalo_apos_servico_minutos')
         controla_lote = cleaned.get('controla_lote')
         controla_validade = cleaned.get('controla_validade')
+
+        if tipo == Produto.TipoProduto.SERVICO:
+            cleaned['finalidade'] = Produto.Finalidade.SERVICO
+        elif finalidade == Produto.Finalidade.SERVICO:
+            self.add_error(
+                'finalidade',
+                'A finalidade Serviço só pode ser usada com o tipo de produto Serviço.',
+            )
+
+        if not permite_venda:
+            cleaned['exibir_catalogo'] = False
+            cleaned['catalogo_destaque'] = False
 
         if agendavel and tipo != Produto.TipoProduto.SERVICO:
             self.add_error(

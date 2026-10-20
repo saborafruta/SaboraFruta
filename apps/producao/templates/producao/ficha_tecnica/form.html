@@ -56,13 +56,18 @@
       </div>
 
       {{ formset.management_form }}
+      {% if formset.non_form_errors %}
+        <div class="mx-6 mt-4 rounded-lg bg-red-900/20 p-3 border border-red-200 text-sm text-red-700">
+          {{ formset.non_form_errors }}
+        </div>
+      {% endif %}
 
       <div class="overflow-x-auto">
         <table class="w-full text-sm" id="formset-itens">
           <thead class="bg-transparent">
             <tr>
               <th class="text-left px-4 py-2 font-medium text-gray-600">Matéria-prima</th>
-              <th class="text-left px-4 py-2 font-medium text-gray-600">Quantidade</th>
+              <th class="text-left px-4 py-2 font-medium text-gray-600">Quantidade (unidade do insumo)</th>
               <th class="text-left px-4 py-2 font-medium text-gray-600">Perda (%)</th>
               <th class="text-left px-4 py-2 font-medium text-gray-600">Observação</th>
               <th class="text-center px-4 py-2 font-medium text-gray-600">Remover</th>
@@ -74,8 +79,9 @@
                 <td class="p-2">
                   {% for field in subform.hidden_fields %}{{ field }}{% endfor %}
                   {{ subform.materia_prima|add_class:"form-input" }}
+                  {% if subform.materia_prima.errors %}<p class="text-xs text-red-600 mt-1">{{ subform.materia_prima.errors|first }}</p>{% endif %}
                 </td>
-                <td class="p-2">{{ subform.quantidade|add_class:"form-input" }}</td>
+                <td class="p-2">{{ subform.quantidade|add_class:"form-input" }}{% if subform.quantidade.errors %}<p class="text-xs text-red-600 mt-1">{{ subform.quantidade.errors|first }}</p>{% endif %}</td>
                 <td class="p-2">{{ subform.perda_prevista|add_class:"form-input" }}</td>
                 <td class="p-2">{{ subform.observacao|add_class:"form-input" }}</td>
                 <td class="p-2 text-center">

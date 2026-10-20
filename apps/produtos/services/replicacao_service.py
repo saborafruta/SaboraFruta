@@ -20,7 +20,7 @@ class ReplicacaoProdutoService:
         'fator_conversao_compra', 'codigo', 'codigo_barras',
         'codigos_barras_extras', 'descricao',
         'descricao_curta', 'descricao_completa', 'descricao_pdv',
-        'tipo_produto', 'observacao', 'ativo', 'foto_url',
+        'tipo_produto', 'finalidade', 'permite_venda', 'observacao', 'ativo', 'foto_url',
         'permite_venda_sem_estoque',
     ]
     CAMPOS_FISCAL = [

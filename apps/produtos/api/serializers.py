@@ -121,7 +121,7 @@ class ProdutoSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'codigo', 'codigo_barras', 'descricao', 'descricao_curta',
             'categoria', 'subcategoria', 'marca', 'fornecedor',
-            'unidade_medida', 'tipo_produto', 'ncm',
+            'unidade_medida', 'tipo_produto', 'finalidade', 'permite_venda', 'ncm',
             'agendavel', 'duracao_servico_minutos', 'intervalo_apos_servico_minutos',
             'preco_custo', 'preco_venda', 'ativo',
             'controla_lote', 'controla_validade', 'permite_venda_sem_estoque',

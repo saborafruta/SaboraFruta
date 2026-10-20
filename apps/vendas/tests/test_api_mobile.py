@@ -154,6 +154,29 @@ class ForcaVendasMobileApiTests(TestCase):
             }],
         }
 
+    def test_insumo_nao_aparece_no_catalogo_mobile(self):
+        insumo = Produto.objects.create(
+            filial=self.filial,
+            unidade_medida=self.unidade,
+            categoria=self.categoria,
+            descricao='Conservante interno mobile',
+            codigo='INSUMO-MOBILE-001',
+            ncm='38249989',
+            preco_venda=Decimal('40.00'),
+            finalidade=Produto.Finalidade.MATERIA_PRIMA,
+            permite_venda=False,
+        )
+        ProdutoFilial.objects.create(produto=insumo, filial=self.filial)
+
+        resposta = self.client.get(
+            reverse('forca_vendas_mobile_api:produtos'),
+            {'cliente_id': self.cliente.pk, 'q': insumo.codigo},
+            **self.headers,
+        )
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        self.assertEqual(resposta.json()['produtos'], [])
+
     def test_login_contexto_e_catalogos_do_pedido(self):
         self.produto.foto_url = 'https://cdn.example/produtos/mobile.jpg'
         self.produto.save(update_fields=['foto_url', 'updated_at'])

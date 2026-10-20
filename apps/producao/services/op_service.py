@@ -19,7 +19,7 @@ from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import (
     DadosInvalidosError, EstoqueInsuficienteError,
 )
-from apps.estoque.models import Estoque, LoteProduto, MovimentacaoEstoque
+from apps.estoque.models import Deposito, Estoque, LoteProduto, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.producao.models import FichaTecnica, OrdemProducao, PerdaProducao
 
@@ -117,16 +117,18 @@ class OrdemProducaoService:
         """Retorna lista de MPs com estoque insuficiente para a OP."""
         faltas = []
         fator = op.quantidade_planejada / op.ficha_tecnica.quantidade_produzida
+        deposito_id = Deposito.producao_id(op.filial_id)
 
         for item in op.ficha_tecnica.itens.select_related('materia_prima', 'materia_prima__unidade_medida'):
             necessario = item.quantidade_com_perda() * fator
-            try:
-                estoque = Estoque.objects.get(
-                    produto=item.materia_prima, filial=op.filial,
-                )
-                disponivel = estoque.quantidade_disponivel
-            except Estoque.DoesNotExist:
-                disponivel = Decimal('0')
+            disponivel = (
+                Estoque.objects.filter(
+                    produto=item.materia_prima,
+                    filial=op.filial,
+                    deposito_id=deposito_id,
+                ).values_list('quantidade_disponivel', flat=True).first()
+                or Decimal('0')
+            )
 
             if disponivel < necessario:
                 faltas.append({
@@ -187,6 +189,7 @@ class OrdemProducaoService:
             raise DadosInvalidosError('Quantidade produzida deve ser positiva.')
 
         fator = op.quantidade_planejada / op.ficha_tecnica.quantidade_produzida
+        deposito_producao_id = Deposito.producao_id(op.filial_id)
         custo_mp_total = Decimal('0')
         peso_entrada = Decimal('0')
 
@@ -202,6 +205,7 @@ class OrdemProducaoService:
                 documento_tipo=MovimentacaoEstoque.DocumentoTipo.ORDEM_PRODUCAO,
                 documento_id=op.pk,
                 documento_numero=op.numero,
+                deposito_id=deposito_producao_id,
             )
             for m in movimentacoes:
                 if m.valor_total:
@@ -213,11 +217,9 @@ class OrdemProducaoService:
         if not numero_lote_gerado:
             numero_lote_gerado = cls._gerar_numero_lote(op)
 
-        custo_total = (
-            custo_mp_total
-            + op.ficha_tecnica.custo_mao_obra_padrao
-            + op.ficha_tecnica.custo_indireto_padrao
-        )
+        custo_mao_obra = op.ficha_tecnica.custo_mao_obra_padrao * fator
+        custo_indireto = op.ficha_tecnica.custo_indireto_padrao * fator
+        custo_total = custo_mp_total + custo_mao_obra + custo_indireto
         custo_unitario = (
             (custo_total / quantidade_produzida).quantize(Decimal('0.0001'))
             if quantidade_produzida > 0
@@ -250,6 +252,7 @@ class OrdemProducaoService:
             documento_id=op.pk,
             documento_numero=op.numero,
             observacao=f'Entrada por produção — OP {op.numero}',
+            deposito_id=deposito_producao_id,
         )
 
         # 4. Registrar perdas
@@ -268,8 +271,8 @@ class OrdemProducaoService:
         op.peso_saida_produzido = peso_saida or Decimal('0')
         op.rendimento = rendimento
         op.custo_materia_prima = custo_mp_total
-        op.custo_mao_obra = op.ficha_tecnica.custo_mao_obra_padrao
-        op.custo_indireto = op.ficha_tecnica.custo_indireto_padrao
+        op.custo_mao_obra = custo_mao_obra
+        op.custo_indireto = custo_indireto
         op.custo_total = custo_total
         op.custo_unitario_lote = custo_unitario
         op.lote_gerado = lote_pa
@@ -337,9 +340,12 @@ class OrdemProducaoService:
         Baseado na média de vendas dos últimos 30 dias.
         Retorna None se sugestão não é aplicável.
         """
-        try:
-            estoque = Estoque.objects.get(produto=produto, filial=filial)
-        except Estoque.DoesNotExist:
+        estoque = Estoque.objects.filter(
+            produto=produto,
+            filial=filial,
+            deposito_id=Deposito.producao_id(filial.pk),
+        ).first()
+        if estoque is None:
             return None
 
         if estoque.quantidade_disponivel >= produto.estoque_minimo:

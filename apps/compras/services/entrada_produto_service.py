@@ -485,6 +485,7 @@ def criar_produto_e_vincular_item(entrada, item) -> Produto:
         preco_minimo=preco_custo,
         controla_lote=controla_lote,
         controla_validade=controla_validade,
+        permite_venda=False,
         permite_venda_sem_estoque=False,
         rascunho_comercial=True,
         observacao=(

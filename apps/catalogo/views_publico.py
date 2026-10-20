@@ -46,8 +46,8 @@ def _logo(filial):
 
 def _produtos(filial):
     return list(
-        Produto.objects.for_filial(filial).filter(
-            ativo=True, exibir_catalogo=True,
+        Produto.objects.for_filial(filial).vendaveis().filter(
+            exibir_catalogo=True,
         ).exclude(tipo_produto=Produto.TipoProduto.SERVICO).select_related(
             'categoria', 'subcategoria',
         ).order_by('-catalogo_destaque', 'catalogo_ordem', 'descricao')
@@ -332,8 +332,8 @@ class CatalogoPublicoView(_CatalogoPublicoBase):
             if quantidade > 0:
                 quantidades[produto_id] = min(quantidade, 999)
         produtos = {
-            item.pk: item for item in Produto.objects.for_filial(link.filial).filter(
-                pk__in=quantidades, ativo=True, exibir_catalogo=True,
+            item.pk: item for item in Produto.objects.for_filial(link.filial).vendaveis().filter(
+                pk__in=quantidades, exibir_catalogo=True,
             ).exclude(tipo_produto=Produto.TipoProduto.SERVICO)
         }
         if len(produtos) != len(quantidades):

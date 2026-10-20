@@ -274,7 +274,7 @@ class ProdutosMobileView(MobileTenantAPIView):
         if cliente is None:
             raise exceptions.ValidationError({'cliente_id': 'Selecione um cliente válido.'})
         termo = request.query_params.get('q', '').strip()
-        qs = Produto.objects.for_filial(request.filial_ativa).filter(ativo=True)
+        qs = Produto.objects.for_filial(request.filial_ativa).vendaveis()
         categoria_id = request.query_params.get('categoria_id', '').strip()
         if categoria_id:
             try:
@@ -523,7 +523,7 @@ class CheckoutProdutosMobileView(MobileTenantAPIView):
             )
             if cliente is None:
                 raise exceptions.ValidationError({'cliente_id': 'Selecione um cliente válido.'})
-        qs = Produto.objects.for_filial(request.filial_ativa).filter(ativo=True)
+        qs = Produto.objects.for_filial(request.filial_ativa).vendaveis()
         filtro = (
             Q(descricao__icontains=termo)
             | Q(descricao_pdv__icontains=termo)
@@ -762,7 +762,7 @@ class CheckoutPendenciasMobileView(MobileTenantAPIView):
                     produto = (
                         Produto.objects.for_filial(request.filial_ativa)
                         .select_related('unidade_medida')
-                        .filter(pk=item['produto_id'], ativo=True)
+                        .vendaveis().filter(pk=item['produto_id'])
                         .first()
                     )
                     if produto is None:
@@ -1018,7 +1018,7 @@ class PedidosMobileView(MobileTenantAPIView):
                 for item in dados['itens']:
                     produto = (
                         Produto.objects.for_filial(request.filial_ativa)
-                        .filter(pk=item['produto_id'], ativo=True)
+                        .vendaveis().filter(pk=item['produto_id'])
                         .first()
                     )
                     if produto is None:

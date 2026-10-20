@@ -160,7 +160,7 @@ class PedidoExternoNovoView(PermissaoRequiredMixin, View):
                         raise ValueError('Quantidade inválida.') from exc
                     produto = (
                         Produto.objects.for_filial(request.filial_ativa)
-                        .filter(ativo=True, pk=item.get('produto_id'))
+                        .vendaveis().filter(pk=item.get('produto_id'))
                         .first()
                     )
                     if not produto:
@@ -248,7 +248,7 @@ class ProdutoForcaVendasBuscaView(PermissaoRequiredMixin, View):
         if not cliente:
             return JsonResponse({'erro': 'Selecione o cliente antes dos produtos.'}, status=400)
 
-        qs = Produto.objects.for_filial(request.filial_ativa).filter(ativo=True)
+        qs = Produto.objects.for_filial(request.filial_ativa).vendaveis()
         categoria_id = request.GET.get('categoria_id')
         if categoria_id:
             qs = qs.filter(Q(categoria_id=categoria_id) | Q(subcategoria_id=categoria_id))

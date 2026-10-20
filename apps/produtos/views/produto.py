@@ -773,6 +773,8 @@ PRODUTO_AUDIT_FIELDS = {
     'marca': 'Marca / Fabricante',
     'fornecedor': 'Fornecedor',
     'tipo_produto': 'Tipo produto',
+    'finalidade': 'Finalidade do produto',
+    'permite_venda': 'Pode ser vendido',
     'agendavel': 'Disponível para agendamento',
     'duracao_servico_minutos': 'Duração do serviço (min)',
     'intervalo_apos_servico_minutos': 'Intervalo após o serviço (min)',
@@ -1212,7 +1214,7 @@ def _produto_log_pdf_response(produto, request):
 PRODUTO_STEP_FIELDS = {
     1: {
         'descricao', 'categoria', 'subcategoria', 'marca', 'fornecedor',
-        'tipo_produto', 'linha_producao',
+        'tipo_produto', 'finalidade', 'permite_venda', 'linha_producao',
         'agendavel', 'duracao_servico_minutos', 'intervalo_apos_servico_minutos',
         'exibir_catalogo', 'catalogo_destaque', 'catalogo_descricao',
         'catalogo_ordem', 'catalogo_quantidade_maxima',

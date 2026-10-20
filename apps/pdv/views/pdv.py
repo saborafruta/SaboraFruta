@@ -720,10 +720,12 @@ def checkout_consumir_busca_nome(request):
         produto_id = int(dados.get('produto_id'))
     except (json.JSONDecodeError, TypeError, ValueError):
         return JsonResponse({'erro': 'Produto inválido.'}, status=400)
-    produto_existe = Produto.objects.for_filial(request.filial_ativa).filter(
-        pk=produto_id,
-        ativo=True,
-    ).exists()
+    produto_existe = (
+        Produto.objects.for_filial(request.filial_ativa)
+        .vendaveis()
+        .filter(pk=produto_id)
+        .exists()
+    )
     if not produto_existe:
         return JsonResponse({'erro': 'Produto não encontrado nesta filial.'}, status=404)
     if not consumir_checkout_busca_nome(request):
@@ -759,7 +761,7 @@ def checkout_buscar_produto(request):
         return JsonResponse({'produtos': []})
 
     filial = request.filial_ativa
-    produtos_base = Produto.objects.for_filial(filial).filter(ativo=True)
+    produtos_base = Produto.objects.for_filial(filial).vendaveis()
     leitura_balanca = None
     opcao_exata = None
     if por_nome:
@@ -928,7 +930,7 @@ def buscar_produto(request):
     fim = inicio + tamanho_pagina
     filial = request.filial_ativa
     cliente = _cliente_precificacao(request)
-    qs = Produto.objects.for_filial(filial).filter(ativo=True)
+    qs = Produto.objects.for_filial(filial).vendaveis()
     if linha_id:
         qs = qs.filter(linha_producao_id=linha_id)
 
@@ -1728,13 +1730,17 @@ def api_estado(request):
         ids_ordenados = [r['produto_id'] for r in ranking]
         if ids_ordenados:
             produtos = {
-                p.id: p for p in Produto.objects.filter(id__in=ids_ordenados)
+                p.id: p for p in Produto.objects.filter(
+                    id__in=ids_ordenados,
+                    ativo=True,
+                    permite_venda=True,
+                )
                 .select_related('linha_producao')
             }
             contexto_ofertas = _preparar_contexto_ofertas(produtos.values(), request.filial_ativa)
             for pid in ids_ordenados:
                 p = produtos.get(pid)
-                if p and p.ativo:
+                if p:
                     top_produtos.append(_serializa_produto(
                         p,
                         request.filial_ativa,
@@ -1746,7 +1752,7 @@ def api_estado(request):
         if not top_produtos:
             fallback = list(
                 Produto.objects.for_filial(request.filial_ativa)
-                .filter(ativo=True)
+                .vendaveis()
                 .select_related('linha_producao')
                 .order_by('descricao')[:10]
             )
@@ -2049,7 +2055,7 @@ def api_precos_cliente(request):
     produtos = {
         produto.pk: produto
         for produto in Produto.objects.for_filial(request.filial_ativa)
-        .filter(pk__in=ids, ativo=True)
+        .vendaveis().filter(pk__in=ids)
         .select_related('linha_producao', 'unidade_medida')
     }
     contexto_ofertas = _preparar_contexto_ofertas(produtos.values(), request.filial_ativa)
@@ -2651,7 +2657,7 @@ def api_venda_pendente(request):
             for idx, item in enumerate(itens, start=1):
                 produto = (
                     Produto.objects.for_filial(request.filial_ativa)
-                    .select_related("unidade_medida").get(id=int(item["produto_id"]), ativo=True)
+                    .vendaveis().select_related("unidade_medida").get(id=int(item["produto_id"]))
                 )
                 item_salvo = _criar_item_rascunho(venda, produto, item, idx)
                 subtotal += item_salvo.valor_total
@@ -2730,7 +2736,7 @@ def api_pre_venda_criar(request):
             for idx, item in enumerate(itens, start=1):
                 produto = (
                     Produto.objects.for_filial(request.filial_ativa)
-                    .select_related("unidade_medida").get(id=int(item["produto_id"]), ativo=True)
+                    .vendaveis().select_related("unidade_medida").get(id=int(item["produto_id"]))
                 )
                 item_salvo = _criar_item_rascunho(venda, produto, item, idx)
                 subtotal += item_salvo.valor_total
@@ -3308,7 +3314,7 @@ def api_venda_orcamento(request):
             for idx, item in enumerate(itens, start=1):
                 produto = (
                     Produto.objects.for_filial(request.filial_ativa)
-                    .select_related("unidade_medida").get(id=int(item["produto_id"]), ativo=True)
+                    .vendaveis().select_related("unidade_medida").get(id=int(item["produto_id"]))
                 )
                 item_salvo = _criar_item_rascunho(venda, produto, item, idx)
                 subtotal += item_salvo.valor_total

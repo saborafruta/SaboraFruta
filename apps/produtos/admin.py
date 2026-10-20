@@ -102,10 +102,14 @@ class ProdutoApresentacaoInline(admin.TabularInline):
 @admin.register(Produto)
 class ProdutoAdmin(admin.ModelAdmin):
     list_display = [
-        'codigo', 'descricao', 'categoria', 'subcategoria', 'marca', 'fornecedor', 'tipo_produto', 'ncm',
+        'codigo', 'descricao', 'categoria', 'subcategoria', 'marca', 'fornecedor',
+        'tipo_produto', 'finalidade', 'permite_venda', 'ncm',
         'preco_venda', 'preco_custo_medio', 'ativo',
     ]
-    list_filter = ['ativo', 'tipo_produto', 'categoria', 'marca', 'fornecedor', 'controla_lote', 'filial']
+    list_filter = [
+        'ativo', 'permite_venda', 'finalidade', 'tipo_produto', 'categoria',
+        'marca', 'fornecedor', 'controla_lote', 'filial',
+    ]
     search_fields = ['codigo', 'codigo_barras', 'descricao', 'ncm']
     readonly_fields = ['preco_custo_medio', 'margem_lucro']
     autocomplete_fields = ['filial', 'categoria', 'subcategoria', 'marca', 'fornecedor', 'unidade_medida', 'classe_fiscal']
@@ -115,7 +119,8 @@ class ProdutoAdmin(admin.ModelAdmin):
             'fields': ('filial', 'codigo', 'codigo_barras', 'codigos_barras_extras',
                        'descricao', 'descricao_completa', 'descricao_pdv',
                        'categoria', 'subcategoria', 'marca', 'fornecedor', 'unidade_medida', 'unidade_medida_compra',
-                       'fator_conversao_compra', 'tipo_produto', 'foto_url', 'ativo'),
+                       'fator_conversao_compra', 'tipo_produto', 'finalidade',
+                       'permite_venda', 'foto_url', 'ativo'),
         }),
         ('Agenda de serviços', {
             'fields': ('agendavel', 'duracao_servico_minutos', 'intervalo_apos_servico_minutos'),

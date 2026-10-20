@@ -71,8 +71,10 @@ class FichaTecnicaCreateView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         return render(request, self.template_name, {
-            'form': FichaTecnicaForm(),
-            'formset': ItemFichaTecnicaFormSet(),
+            'form': FichaTecnicaForm(filial=request.filial_ativa),
+            'formset': ItemFichaTecnicaFormSet(
+                form_kwargs={'filial': request.filial_ativa},
+            ),
             'title': 'Nova Ficha Técnica',
             'cancel_url': reverse_lazy('producao:ficha-list'),
             'pode_cadastrar_produto': request.user.tem_permissao('produtos', 'criar'),
@@ -80,9 +82,15 @@ class FichaTecnicaCreateView(PermissaoRequiredMixin, View):
 
     @tenant_atomic
     def post(self, request):
-        form = FichaTecnicaForm(request.POST)
-        formset = ItemFichaTecnicaFormSet(request.POST)
-        if form.is_valid() and formset.is_valid():
+        form = FichaTecnicaForm(request.POST, filial=request.filial_ativa)
+        formset = ItemFichaTecnicaFormSet(
+            request.POST,
+            form_kwargs={'filial': request.filial_ativa},
+        )
+        form_valido = form.is_valid()
+        if form_valido:
+            formset.instance = form.instance
+        if form_valido and formset.is_valid():
             ficha = form.save(commit=False)
             ficha.filial = request.filial_ativa
             ficha.save()
@@ -108,8 +116,11 @@ class FichaTecnicaUpdateView(PermissaoRequiredMixin, View):
     def get(self, request, pk):
         ficha = get_object_or_404(FichaTecnica.objects.for_filial(request.filial_ativa), pk=pk)
         return render(request, self.template_name, {
-            'form': FichaTecnicaForm(instance=ficha),
-            'formset': ItemFichaTecnicaFormSet(instance=ficha),
+            'form': FichaTecnicaForm(instance=ficha, filial=request.filial_ativa),
+            'formset': ItemFichaTecnicaFormSet(
+                instance=ficha,
+                form_kwargs={'filial': request.filial_ativa},
+            ),
             'ficha': ficha,
             'title': f'Editar — {ficha}',
             'cancel_url': reverse_lazy('producao:ficha-list'),
@@ -119,8 +130,14 @@ class FichaTecnicaUpdateView(PermissaoRequiredMixin, View):
     @tenant_atomic
     def post(self, request, pk):
         ficha = get_object_or_404(FichaTecnica.objects.for_filial(request.filial_ativa), pk=pk)
-        form = FichaTecnicaForm(request.POST, instance=ficha)
-        formset = ItemFichaTecnicaFormSet(request.POST, instance=ficha)
+        form = FichaTecnicaForm(
+            request.POST, instance=ficha, filial=request.filial_ativa,
+        )
+        formset = ItemFichaTecnicaFormSet(
+            request.POST,
+            instance=ficha,
+            form_kwargs={'filial': request.filial_ativa},
+        )
         if form.is_valid() and formset.is_valid():
             ficha = form.save()
             formset.save()

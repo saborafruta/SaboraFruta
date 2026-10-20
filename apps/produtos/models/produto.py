@@ -30,7 +30,13 @@ def _limitar_decimal(value, max_value, places):
     return value.quantize(quantizer, rounding=ROUND_HALF_UP)
 
 
-class ProdutoManager(FilialManager):
+class ProdutoQuerySet(models.QuerySet):
+    def vendaveis(self):
+        """Produtos que podem ser oferecidos em qualquer canal comercial."""
+        return self.filter(ativo=True, permite_venda=True)
+
+
+class ProdutoManager(FilialManager.from_queryset(ProdutoQuerySet)):
     def for_filial(self, filial):
         if filial is None:
             return self.get_queryset().none()
@@ -49,6 +55,14 @@ class ProdutoManager(FilialManager):
 
 
 class Produto(FilialScopedModel):
+    class Finalidade(models.TextChoices):
+        REVENDA = 'revenda', 'Produto para revenda'
+        MATERIA_PRIMA = 'materia_prima', 'Matéria-prima / insumo'
+        EMBALAGEM = 'embalagem', 'Embalagem / rótulo'
+        INTERMEDIARIO = 'intermediario', 'Produto intermediário'
+        ACABADO = 'acabado', 'Produto acabado'
+        SERVICO = 'servico', 'Serviço'
+
     class TipoProduto(models.TextChoices):
         UNITARIO = 'unitario', 'Unidade'
         FRACIONADO = 'fracionado', 'Fracionado'
@@ -201,6 +215,22 @@ class Produto(FilialScopedModel):
     # Tipo e granel
     tipo_produto = models.CharField(
         max_length=20, choices=TipoProduto.choices, default=TipoProduto.UNITARIO,
+    )
+    finalidade = models.CharField(
+        max_length=20,
+        choices=Finalidade.choices,
+        default=Finalidade.REVENDA,
+        db_index=True,
+        help_text='Define o uso operacional do cadastro no estoque e na produção.',
+    )
+    permite_venda = models.BooleanField(
+        default=True,
+        db_index=True,
+        verbose_name='Pode ser vendido',
+        help_text=(
+            'Desmarque para insumos, embalagens e intermediários. O produto '
+            'continua disponível em compras, XML, estoque e produção.'
+        ),
     )
     codigo_balanca = models.CharField(
         max_length=6, blank=True,
@@ -371,6 +401,14 @@ class Produto(FilialScopedModel):
         verbose_name = 'Produto'
         indexes = [
             models.Index(fields=['filial', 'ativo']),
+            models.Index(
+                fields=['filial', 'permite_venda'],
+                name='produtos_filial_vendavel_idx',
+            ),
+            models.Index(
+                fields=['filial', 'finalidade'],
+                name='produtos_filial_finalidade_idx',
+            ),
             models.Index(fields=['filial', 'codigo']),
             models.Index(fields=['filial', 'codigo_barras']),
             models.Index(fields=['filial', 'descricao']),

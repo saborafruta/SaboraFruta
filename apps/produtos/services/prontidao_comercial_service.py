@@ -69,11 +69,20 @@ def avaliar_produto_para_venda(produto: Produto, filial=None) -> dict:
             'severidade': severidade,
         })
 
+    if not getattr(produto, 'permite_venda', True):
+        add(
+            'produto_nao_vendavel',
+            'Produto de uso interno (insumo, embalagem ou intermediário).',
+            STATUS_COMERCIAL,
+            'bloqueio',
+        )
+
     if getattr(produto, 'rascunho_comercial', False):
         add(
             'rascunho_comercial',
             'Produto criado pelo XML esta em rascunho comercial.',
             STATUS_COMERCIAL,
+            'bloqueio',
         )
     if preco_venda <= 0:
         add('sem_preco_venda', 'Sem preco de venda valido.', STATUS_COMERCIAL, 'bloqueio')

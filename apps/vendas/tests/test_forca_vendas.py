@@ -186,6 +186,28 @@ class ForcaVendasTests(TestCase):
             content_type='application/json',
         )
 
+    def test_insumo_nao_aparece_na_busca_da_forca_de_vendas(self):
+        insumo = Produto.objects.create(
+            filial=self.filial,
+            unidade_medida=self.unidade,
+            categoria=self.categoria,
+            descricao='Essência interna força de vendas',
+            codigo='INSUMO-FORCA-001',
+            ncm='33029090',
+            preco_venda=Decimal('50.00'),
+            finalidade=Produto.Finalidade.MATERIA_PRIMA,
+            permite_venda=False,
+        )
+        ProdutoFilial.objects.create(produto=insumo, filial=self.filial)
+
+        resposta = self.client.get(reverse('vendas:api-produtos'), {
+            'cliente_id': self.cliente.pk,
+            'q': insumo.codigo,
+        })
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        self.assertEqual(resposta.json()['produtos'], [])
+
     def abastecer(self, quantidade='20'):
         MovimentacaoService.registrar_movimentacao(
             produto_id=self.produto.pk,

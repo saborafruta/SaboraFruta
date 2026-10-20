@@ -2749,6 +2749,7 @@ class EntradaRecebimentoTests(TestCase):
 
         produto.refresh_from_db()
         self.assertTrue(produto.rascunho_comercial)
+        self.assertFalse(produto.permite_venda)
         self.assertFalse(contrato_pdv_produto(produto, filial=self.filial)['pode_vender'])
 
         request_get = self.request('get', reverse('compras:entrada-detail', args=[entrada.pk]))

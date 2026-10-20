@@ -151,6 +151,25 @@ class CheckoutVendaTests(TestCase):
         dados = {'q': termo, **params}
         return self.client.get(reverse('pdv:api_checkout_produtos'), dados)
 
+    def test_insumo_nao_aparece_na_busca_do_checkout(self):
+        self.habilitar_checkout()
+        insumo = Produto.objects.create(
+            filial=self.filial,
+            unidade_medida=self.unidade,
+            descricao='Tensoativo industrial checkout',
+            codigo='INSUMO-CHECKOUT-001',
+            ncm='34022000',
+            preco_venda=Decimal('99.00'),
+            finalidade=Produto.Finalidade.MATERIA_PRIMA,
+            permite_venda=False,
+        )
+        ProdutoFilial.objects.create(produto=insumo, filial=self.filial)
+
+        resposta = self.buscar(insumo.codigo)
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        self.assertEqual(resposta.json()['produtos'], [])
+
     def test_checkout_fica_oculto_e_indisponivel_por_padrao(self):
         resposta = self.client.get(reverse('pdv:checkout'))
 

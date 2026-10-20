@@ -139,6 +139,21 @@ class CatalogoTests(TestCase):
         self.assertIn('Buscando endereço', conteudo)
         self.assertLess(conteudo.index('id="delivery-cep"'), conteudo.index('id="delivery-street"'))
 
+    def test_insumo_nao_aparece_no_catalogo_mesmo_se_estiver_marcado_para_exibir(self):
+        self.produto.permite_venda = False
+        self.produto.finalidade = Produto.Finalidade.MATERIA_PRIMA
+        self.produto.exibir_catalogo = True
+        self.produto.save(update_fields=[
+            'permite_venda', 'finalidade', 'exibir_catalogo', 'updated_at',
+        ])
+        request = self.factory.get('/pedir/catalogo-teste/')
+        request.user = AnonymousUser()
+
+        response = CatalogoPublicoView.as_view()(request, token=self.link.token)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('Café 500g', response.content.decode())
+
     @patch('apps.catalogo.views_publico.CepService.consultar')
     def test_consulta_cep_publica_preenche_endereco(self, consultar):
         consultar.return_value = {

@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.core.models import Empresa, Filial, Permissao, PerfilAcesso, Usuario
-from apps.produtos.models import Produto, UnidadeMedida
+from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida
 
 
 class FichaTecnicaFormViewsTests(TestCase):
@@ -30,7 +30,15 @@ class FichaTecnicaFormViewsTests(TestCase):
         cls.produto = Produto.objects.create(
             filial=cls.filial, unidade_medida=cls.unidade, descricao='Prato Teste',
             ncm='20089900', preco_custo=Decimal('1.00'),
+            finalidade=Produto.Finalidade.ACABADO,
         )
+        ProdutoFilial.objects.create(produto=cls.produto, filial=cls.filial)
+        cls.insumo = Produto.objects.create(
+            filial=cls.filial, unidade_medida=cls.unidade, descricao='Insumo Teste',
+            ncm='20089900', preco_custo=Decimal('0.50'),
+            finalidade=Produto.Finalidade.MATERIA_PRIMA, permite_venda=False,
+        )
+        ProdutoFilial.objects.create(produto=cls.insumo, filial=cls.filial)
 
     def setUp(self):
         self.client.force_login(self.usuario)
@@ -57,6 +65,38 @@ class FichaTecnicaFormViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse('produtos:produto-create'))
+
+    def test_cadastra_formula_com_insumo_editavel(self):
+        from apps.producao.models import FichaTecnica
+
+        response = self.client.post(reverse('producao:ficha-create'), {
+            'produto_acabado': self.produto.pk,
+            'codigo': 'FT-TESTE',
+            'descricao': 'Fórmula simples de teste',
+            'versao': '1.0',
+            'quantidade_produzida': '1.000',
+            'tempo_producao_minutos': '10',
+            'custo_mao_obra_padrao': '1.00',
+            'custo_indireto_padrao': '0.50',
+            'status': FichaTecnica.Status.ATIVA,
+            'observacao': '',
+            'itens-TOTAL_FORMS': '1',
+            'itens-INITIAL_FORMS': '0',
+            'itens-MIN_NUM_FORMS': '0',
+            'itens-MAX_NUM_FORMS': '1000',
+            'itens-0-materia_prima': self.insumo.pk,
+            'itens-0-quantidade': '0.1000',
+            'itens-0-perda_prevista': '0',
+            'itens-0-observacao': '100 g por unidade',
+        })
+
+        ficha = FichaTecnica.objects.get(codigo='FT-TESTE')
+        self.assertRedirects(
+            response, reverse('producao:ficha-update', args=[ficha.pk]),
+        )
+        item = ficha.itens.get()
+        self.assertEqual(item.materia_prima, self.insumo)
+        self.assertEqual(item.quantidade, Decimal('0.1000'))
 
     def test_usuario_sem_permissao_de_produtos_nao_ve_atalho(self):
         perfil_sem_permissao = PerfilAcesso.objects.create(
