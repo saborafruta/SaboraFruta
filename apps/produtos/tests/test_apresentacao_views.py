@@ -11,6 +11,7 @@ from apps.produtos.models import (
     Produto, ProdutoApresentacao, ProdutoApresentacaoFilial, ProdutoCodigoBarras,
     ProdutoFilial, UnidadeMedida,
 )
+from apps.produtos.forms import ProdutoApresentacaoForm
 from apps.produtos.views.produto import (
     ProdutoApresentacaoCreateView, ProdutoApresentacaoDeleteView, ProdutoApresentacaoUpdateView,
 )
@@ -69,6 +70,24 @@ class ProdutoApresentacaoViewsTests(TestCase):
         self.assertTrue(ProdutoApresentacaoFilial.objects.filter(
             apresentacao=apresentacao, filial=self.filial, ativo=True,
         ).exists())
+
+    def test_nova_apresentacao_inicia_com_descricao_do_produto(self):
+        form = ProdutoApresentacaoForm(
+            empresa=self.empresa,
+            produto=self.produto,
+        )
+
+        self.assertEqual(
+            form.fields['descricao'].initial,
+            self.produto.descricao,
+        )
+
+        form_vinculado = ProdutoApresentacaoForm(
+            {'descricao': 'Digitada pelo usuário'},
+            empresa=self.empresa,
+            produto=self.produto,
+        )
+        self.assertEqual(form_vinculado['descricao'].value(), 'Digitada pelo usuário')
 
     def test_criar_apresentacao_com_fator_invalido_nao_cria_nada(self):
         response = ProdutoApresentacaoCreateView.as_view()(

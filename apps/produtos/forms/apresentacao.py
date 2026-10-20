@@ -48,6 +48,12 @@ class ProdutoApresentacaoForm(forms.ModelForm):
         self.empresa = empresa
         self.produto = produto or getattr(self.instance, 'produto', None)
         self.fields['codigo_barras'].widget.attrs['id'] = 'id_apresentacao_codigo_barras'
+        self.fields['descricao'].help_text = (
+            'A descrição do produto já vem preenchida. Ajuste somente o complemento '
+            'da embalagem, por exemplo: " - Fardo com 10".'
+        )
+        if self.produto and not self.is_bound and not getattr(self.instance, 'pk', None):
+            self.fields['descricao'].initial = (self.produto.descricao or '')[:60]
         self._codigo_barras_instance = None
         if getattr(self.instance, 'pk', None):
             self._codigo_barras_instance = (
