@@ -89,6 +89,23 @@ class ProdutoFotoUrlTests(SimpleTestCase):
         with self.assertRaises(Http404):
             ProdutoImagemView.as_view()(self.factory.get('/produtos/1/foto/'), pk=1)
 
+    @patch.object(ProdutoImagemView, '_converter', return_value=io.BytesIO(b'otimizada'))
+    @patch('apps.produtos.views.produto.urlopen')
+    def test_imagem_externa_usa_identificacao_aceita_pelo_provedor(self, abrir_url, converter):
+        resposta = abrir_url.return_value.__enter__.return_value
+        resposta.read.return_value = b'imagem-original'
+        produto = Produto(foto_url='https://thumb.wikimedia.org/exemplo.jpg')
+
+        resultado = ProdutoImagemView._arquivo_otimizado(produto, 'thumb')
+
+        requisicao = abrir_url.call_args.args[0]
+        self.assertEqual(requisicao.full_url, produto.foto_url)
+        self.assertEqual(requisicao.get_header('Accept'), 'image/*')
+        self.assertEqual(requisicao.get_header('User-agent'), 'iTED/1.0 (+https://ited.app.br)')
+        abrir_url.assert_called_once_with(requisicao, timeout=20)
+        converter.assert_called_once()
+        self.assertEqual(resultado.getvalue(), b'otimizada')
+
     def test_variantes_limitam_pixels_decodificados_no_celular(self):
         original = io.BytesIO()
         Image.new('RGB', (4032, 3024), '#1d4ed8').save(original, format='JPEG')

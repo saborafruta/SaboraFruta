@@ -6,7 +6,7 @@ import logging
 import re
 import uuid
 from decimal import Decimal
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from django.contrib import messages
 from django.core.files.base import ContentFile
@@ -2444,7 +2444,14 @@ class ProdutoImagemView(View):
         destino = produto.foto_url_resolvida
         if not destino:
             raise Http404('Produto sem imagem cadastrada.')
-        with urlopen(destino, timeout=20) as resposta:
+        requisicao = Request(
+            destino,
+            headers={
+                'Accept': 'image/*',
+                'User-Agent': 'iTED/1.0 (+https://ited.app.br)',
+            },
+        )
+        with urlopen(requisicao, timeout=20) as resposta:
             return cls._converter(io.BytesIO(resposta.read()), variante)
 
     def get(self, request, pk):
