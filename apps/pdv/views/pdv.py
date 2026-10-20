@@ -1513,6 +1513,7 @@ def _serializar_item_rascunho(item):
     payload = {
         'produto_id': produto.pk,
         'descricao': produto.descricao_pdv or produto.descricao,
+        'descricao_identificacao': produto.descricao,
         'codigo_barras': produto.codigo_barras or '',
         'tipo_produto': produto.tipo_produto,
         'fracionavel': aceita_decimal,
@@ -1594,6 +1595,7 @@ def _serializa_produto_checkout(
         'produto_id': produto.pk,
         'item_key': f'{produto.pk}:{apresentacao_id or "base"}',
         'descricao': produto.descricao_pdv or produto.descricao,
+        'descricao_identificacao': produto.descricao,
         'codigo_barras': codigo_barras,
         'apresentacao_id': apresentacao_id,
         'apresentacao_descricao': apresentacao_descricao,

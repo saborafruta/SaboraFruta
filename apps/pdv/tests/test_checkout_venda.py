@@ -556,6 +556,16 @@ global.document = {getElementById: () => ({textContent: '[]'})};
 const checkout = checkoutVenda();
 checkout.$refs = {};
 checkout.$nextTick = (callback) => callback();
+assert.equal(checkout.descricaoApresentacao({
+  apresentacao_id: null,
+  descricao_identificacao: 'Copo descartável 180 ml branco - pacote',
+  apresentacao_descricao: 'Unidade (PCT)'
+}), 'Copo descartável 180 ml branco - pacote');
+assert.equal(checkout.descricaoApresentacao({
+  apresentacao_id: 91,
+  descricao_identificacao: 'Copo descartável 180 ml branco - pacote',
+  apresentacao_descricao: 'Copo descartável 180 ml branco - Caixa'
+}), 'Copo descartável 180 ml branco - Caixa');
 checkout.quantidadeEntrada = '3';
 checkout.adicionarProduto({
   id: 7, descricao: 'Produto', preco: 10, pode_vender: true,
@@ -867,6 +877,8 @@ assert.deepEqual(acoes, [
 
     def test_id_do_produto_lista_unidade_base_e_fardo(self):
         self.habilitar_checkout()
+        self.produto.descricao_pdv = 'Café Checkout'
+        self.produto.save(update_fields=['descricao_pdv'])
         fardo = self.criar_apresentacao_fardo()
 
         resposta = self.buscar(str(self.produto.pk))
@@ -876,8 +888,11 @@ assert.deepEqual(acoes, [
         self.assertEqual([item['item_key'] for item in opcoes], [
             f'{self.produto.pk}:base', f'{self.produto.pk}:{fardo.pk}',
         ])
+        self.assertEqual(opcoes[0]['descricao'], 'Café Checkout')
         self.assertEqual(opcoes[0]['apresentacao_descricao'], 'Unidade (UN)')
+        self.assertEqual(opcoes[0]['descricao_identificacao'], 'Café Especial Checkout')
         self.assertEqual(opcoes[1]['apresentacao_descricao'], 'Fardo com 10')
+        self.assertEqual(opcoes[1]['descricao_identificacao'], 'Café Especial Checkout')
         self.assertEqual(opcoes[1]['fator_conversao'], 10.0)
         self.assertEqual(opcoes[1]['preco'], 170.0)
 

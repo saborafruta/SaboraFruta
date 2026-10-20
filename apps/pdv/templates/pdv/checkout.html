@@ -641,7 +641,13 @@ function checkoutVenda() {
     get podeFinalizar(){ return !!(this.sessao && this.itens.length && (this.total<=0 || (this.formaPagamentoId && this.valorPagamento>=this.total && (!this.formaCartao || this.bandeiraPagamento)))); },
     formatarNumeroInput(valor){ return Number(valor||0).toFixed(2).replace('.',','); },
     formatarPercentual(valor){ return Number(valor||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2})+'%'; },
-    descricaoApresentacao(item){ return item?.apresentacao_descricao || item?.descricao || 'Produto'; },
+    descricaoApresentacao(item){
+      const apresentacaoId=item?.apresentacao_id;
+      const ehApresentacaoAdicional=apresentacaoId!==null && apresentacaoId!==undefined && apresentacaoId!=='';
+      return ehApresentacaoAdicional
+        ? (item?.apresentacao_descricao || item?.descricao_identificacao || item?.descricao || 'Produto')
+        : (item?.descricao_identificacao || item?.descricao || item?.apresentacao_descricao || 'Produto');
+    },
     focar(ref){ this.$nextTick(()=>{ const campo=this.$refs[ref]; if(campo){ campo.focus(); if(typeof campo.select==='function')campo.select(); } }); },
     focarProduto(){ this.focar('buscaProduto'); },
     focarQuantidade(){ this.focar('quantidadeProduto'); },
