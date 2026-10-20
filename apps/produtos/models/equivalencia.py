@@ -1,6 +1,7 @@
 """Codigos de barras e equivalencias de compra por fornecedor."""
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 
 from apps.core.models.base import TimestampedModel
 
@@ -50,12 +51,16 @@ class ProdutoCodigoBarras(TimestampedModel):
         super().clean()
         ean = (self.ean or '').strip()
         if self.ativo and ean and self.produto_id:
+            empresa_id = self.produto.filial.empresa_id
             duplicado = ProdutoCodigoBarras.objects.filter(
-                produto_id=self.produto_id, ean=ean, ativo=True,
-            ).exclude(pk=self.pk).exists()
+                ean=ean, ativo=True,
+            ).filter(
+                Q(produto__filial__empresa_id=empresa_id)
+                | Q(produto__filiais_vinculo__filial__empresa_id=empresa_id)
+            ).exclude(pk=self.pk).distinct().exists()
             if duplicado:
                 raise ValidationError({
-                    'ean': 'Ja existe um codigo de barras ativo igual para este produto.',
+                    'ean': 'Ja existe um codigo de barras ativo igual.',
                 })
 
 

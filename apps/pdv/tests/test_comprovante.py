@@ -175,6 +175,31 @@ class ComprovanteDadosTests(SimpleTestCase):
         self.assertEqual(automatico.count('window.print()'), 2)
         self.assertEqual(normal.count('window.print()'), 1)
 
+    def test_comprovante_exibe_quantidade_e_preco_da_apresentacao(self):
+        venda = self.venda()
+        item = SimpleNamespace(
+            produto=SimpleNamespace(descricao='Feijão Preto 1 kg'),
+            quantidade=Decimal('20'),
+            quantidade_comercial=Decimal('2'),
+            unidade_medida='UN',
+            apresentacao_fator_conversao=Decimal('10'),
+            apresentacao_descricao_snapshot='Fardo com 10',
+            apresentacao_unidade_snapshot='FD',
+            valor_unitario=Decimal('8.50'),
+            valor_total=Decimal('170.00'),
+            desconto_valor=Decimal('0'),
+            observacao='',
+        )
+        venda.itens = SimpleNamespace(all=lambda: [item])
+        venda.valor_total = Decimal('170.00')
+
+        cupom = dados_comprovante(venda)
+
+        self.assertEqual(cupom['itens'][0]['nome'], 'Feijão Preto 1 kg — Fardo com 10')
+        self.assertEqual(cupom['itens'][0]['quantidade'], '2')
+        self.assertEqual(cupom['itens'][0]['unidade'], 'FD')
+        self.assertEqual(cupom['itens'][0]['unitario'], '85,00')
+
     def test_telefone_no_pdf_publico(self):
         from reportlab.platypus import Paragraph
         for celular, telefone, esperado in [('84999990000', '', '84999990000'), ('', '8432220000', '8432220000'), (' ', '8432220000', '8432220000')]:

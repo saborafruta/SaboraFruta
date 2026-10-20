@@ -9,7 +9,8 @@ from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
 from apps.core.models import RegistroAuditoria
 from apps.estoque.models import Deposito, Estoque
 from apps.produtos.models import (
-    ItemTabelaPreco, Produto, ProdutoApresentacao, ProdutoFilial,
+    ItemTabelaPreco, Produto, ProdutoApresentacao, ProdutoApresentacaoFilial,
+    ProdutoCodigoBarras, ProdutoFilial,
     TabelaPreco, TabelaPrecoFilial, UnidadeMedida,
 )
 
@@ -218,6 +219,7 @@ class ApiCriarProdutoTests(ApiProdutosBase):
     def test_cria_produto_com_filial_ativa(self):
         response = self.client.post(reverse('produtos_api:produtos'), {
             'descricao': 'Produto Novo', 'codigo': '2001', 'ncm': '39235000',
+            'codigo_barras': '2900000002012',
             'unidade_medida': self.un.pk, 'preco_venda': '9.90',
         })
         self.assertEqual(response.status_code, 201, response.data)
@@ -265,15 +267,22 @@ class ApiApresentacoesTests(ApiProdutosBase):
         url = reverse('produtos_api:produto_apresentacoes', args=[self.produto.pk])
         response = self.client.post(url, {
             'unidade': self.cx.pk, 'descricao': 'Caixa 500', 'fator_conversao': '500',
+            'codigo_barras': '2900000002029',
         })
         self.assertEqual(response.status_code, 201, response.data)
         apresentacao = ProdutoApresentacao.objects.get(descricao='Caixa 500')
         self.assertEqual(apresentacao.produto, self.produto)
+        self.assertTrue(ProdutoApresentacaoFilial.objects.filter(
+            apresentacao=apresentacao,
+            filial=self.filial,
+            ativo=True,
+        ).exists())
 
     def test_criar_apresentacao_com_fator_invalido_e_rejeitada(self):
         url = reverse('produtos_api:produto_apresentacoes', args=[self.produto.pk])
         response = self.client.post(url, {
             'unidade': self.cx.pk, 'descricao': 'Caixa invalida', 'fator_conversao': '0',
+            'codigo_barras': '2900000002036',
         })
         self.assertEqual(response.status_code, 400)
 
@@ -313,6 +322,12 @@ class ApiPatchApresentacaoTests(ApiProdutosBase):
         self.assertIn('ativo', registro.objeto_descricao)
 
     def test_patch_fator_conversao_gera_auditoria(self):
+        codigo = ProdutoCodigoBarras.objects.create(
+            produto=self.produto,
+            apresentacao=self.apresentacao_cx,
+            ean='2900000002043',
+            quantidade_conversao=self.apresentacao_cx.fator_conversao,
+        )
         url = reverse('produtos_api:apresentacao_detalhe', args=[self.apresentacao_cx.pk])
         response = self.client.patch(url, {'fator_conversao': '1200'}, format='json')
         self.assertEqual(response.status_code, 200)
@@ -324,6 +339,8 @@ class ApiPatchApresentacaoTests(ApiProdutosBase):
         self.assertIn('fator_conversao', registro.objeto_descricao)
         self.assertEqual(registro.dados_anteriores['fator_conversao'], '1000.000000')
         self.assertEqual(registro.dados_novos['fator_conversao'], '1200.000000')
+        codigo.refresh_from_db()
+        self.assertEqual(codigo.quantidade_conversao, Decimal('1200'))
 
     def test_patch_editar_sem_permissao_retorna_403(self):
         self.client.force_login(self.usuario_sem_permissao)

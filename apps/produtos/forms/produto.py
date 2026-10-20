@@ -9,7 +9,10 @@ from apps.cadastros.models import Fornecedor
 from apps.produtos.models import (
     CategoriaProduto, ClasseFiscal, LinhaProducao, MarcaProduto, Produto, UnidadeMedida,
 )
-from apps.produtos.services.codigo_barras_service import codigo_barras_em_uso
+from apps.produtos.services.codigo_barras_service import (
+    codigo_barras_conflita_apresentacao,
+    codigo_barras_em_uso,
+)
 
 LIMITE_IMAGEM_PRODUTO_MB = 30
 LIMITE_IMAGEM_PRODUTO_BYTES = LIMITE_IMAGEM_PRODUTO_MB * 1024 * 1024
@@ -294,6 +297,7 @@ class ProdutoForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.empresa = empresa
         self.filial = filial
+        self.fields['codigo_barras'].required = True
         if estoque_atual is not None:
             self.fields['estoque_quantidade'].initial = estoque_atual
         self.fields['estoque_quantidade'].widget.attrs.update({
@@ -630,6 +634,10 @@ class ProdutoForm(forms.ModelForm):
                 codigo,
                 empresa=self.empresa,
                 produto_id=getattr(self.instance, 'pk', None),
+            ) or codigo_barras_conflita_apresentacao(
+                codigo,
+                produto=self.instance if getattr(self.instance, 'pk', None) else None,
+                empresa=self.empresa,
             ):
                 self.add_error(field_name, 'Este codigo de barras ja pertence a outro produto.')
 

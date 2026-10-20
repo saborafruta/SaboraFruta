@@ -206,6 +206,12 @@ class ItemVendaPDV(models.Model):
         max_digits=14, decimal_places=6, null=True, blank=True,
         help_text="Fator de conversao da apresentacao NO MOMENTO da venda -- nao o atual.",
     )
+    apresentacao_descricao_snapshot = models.CharField(max_length=60, blank=True, default='')
+    apresentacao_unidade_snapshot = models.CharField(max_length=10, blank=True, default='')
+    apresentacao_codigo_barras = models.CharField(
+        max_length=32, blank=True, default='',
+        help_text='Codigo de barras da apresentacao no momento da venda.',
+    )
     quantidade_comercial = models.DecimalField(
         max_digits=12, decimal_places=3, null=True, blank=True,
         help_text="Quantidade na unidade da apresentacao (ex: 2 caixas). "

@@ -9,6 +9,12 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.produtos.models import ItemTabelaPreco, Produto, ProdutoApresentacao, UnidadeMedida
+from apps.produtos.services.codigo_barras_service import (
+    codigo_barras_em_uso,
+    codigo_barras_apresentacao_em_uso,
+    codigo_barras_conflita_apresentacao,
+    salvar_codigo_barras_apresentacao,
+)
 
 
 class UnidadeMedidaLiteSerializer(serializers.ModelSerializer):
@@ -18,13 +24,14 @@ class UnidadeMedidaLiteSerializer(serializers.ModelSerializer):
 
 
 class ProdutoApresentacaoSerializer(serializers.ModelSerializer):
+    codigo_barras = serializers.CharField(required=False, allow_blank=False, max_length=32)
     unidade_detalhe = UnidadeMedidaLiteSerializer(source='unidade', read_only=True)
     cubagem = serializers.DecimalField(max_digits=14, decimal_places=6, read_only=True)
 
     class Meta:
         model = ProdutoApresentacao
         fields = [
-            'id', 'produto', 'unidade', 'unidade_detalhe', 'descricao', 'codigo',
+            'id', 'produto', 'unidade', 'unidade_detalhe', 'descricao', 'codigo', 'codigo_barras',
             'fator_conversao', 'preco_venda', 'preco_minimo',
             'peso_bruto', 'peso_liquido', 'largura', 'altura', 'profundidade', 'cubagem',
             'permite_venda', 'permite_compra', 'permite_estoque',
@@ -37,6 +44,59 @@ class ProdutoApresentacaoSerializer(serializers.ModelSerializer):
         if valor is not None and valor <= 0:
             raise serializers.ValidationError('O fator de conversao deve ser maior que zero.')
         return valor
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        codigo = str(attrs.get('codigo_barras') or '').strip()
+        if self.instance is None and not codigo:
+            raise serializers.ValidationError({
+                'codigo_barras': 'Informe ou gere o código de barras da apresentação.',
+            })
+        produto = getattr(self.instance, 'produto', None) or self.context.get('produto')
+        fator = attrs.get(
+            'fator_conversao', getattr(self.instance, 'fator_conversao', None),
+        )
+        if codigo and produto:
+            atual = None
+            if self.instance is not None:
+                atual = self.instance.codigos_barras.filter(ativo=True).order_by('pk').first()
+            if codigo_barras_apresentacao_em_uso(
+                codigo,
+                produto=produto,
+                registro_id=getattr(atual, 'pk', None),
+                permitir_codigo_produto=fator == 1,
+            ):
+                raise serializers.ValidationError({'codigo_barras': 'Este código de barras já está em uso.'})
+        return attrs
+
+    def create(self, validated_data):
+        codigo = validated_data.pop('codigo_barras')
+        apresentacao = super().create(validated_data)
+        salvar_codigo_barras_apresentacao(apresentacao, codigo)
+        return apresentacao
+
+    def update(self, instance, validated_data):
+        codigo = validated_data.pop('codigo_barras', None)
+        fator_alterado = 'fator_conversao' in validated_data
+        apresentacao = super().update(instance, validated_data)
+        if codigo:
+            salvar_codigo_barras_apresentacao(apresentacao, codigo)
+        elif fator_alterado:
+            codigo_atual = (
+                apresentacao.codigos_barras.filter(ativo=True)
+                .values_list('ean', flat=True).first()
+            )
+            if codigo_atual:
+                salvar_codigo_barras_apresentacao(apresentacao, codigo_atual)
+        return apresentacao
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['codigo_barras'] = (
+            instance.codigos_barras.filter(ativo=True)
+            .values_list('ean', flat=True).first() or ''
+        )
+        return data
 
 
 class ProdutoApresentacaoLiteSerializer(serializers.ModelSerializer):
@@ -72,6 +132,28 @@ class ProdutoSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         instance = self.instance
+        codigo_barras = str(
+            attrs.get('codigo_barras', getattr(instance, 'codigo_barras', '')) or ''
+        ).strip()
+        if (instance is None or 'codigo_barras' in attrs) and not codigo_barras:
+            raise serializers.ValidationError({
+                'codigo_barras': 'Informe ou gere o código de barras do produto.',
+            })
+        if codigo_barras:
+            unidade = attrs.get('unidade_medida') or getattr(instance, 'unidade_medida', None)
+            empresa = getattr(unidade, 'empresa', None)
+            if codigo_barras_em_uso(
+                codigo_barras,
+                empresa=empresa,
+                produto_id=getattr(instance, 'pk', None),
+            ) or codigo_barras_conflita_apresentacao(
+                codigo_barras,
+                produto=instance,
+                empresa=empresa,
+            ):
+                raise serializers.ValidationError({
+                    'codigo_barras': 'Este código de barras já está em uso.',
+                })
         tipo = attrs.get(
             'tipo_produto',
             getattr(instance, 'tipo_produto', Produto.TipoProduto.UNITARIO),

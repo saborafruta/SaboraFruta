@@ -442,11 +442,19 @@ def _montar_item_fiscal(
     unidade = item_venda.unidade_medida or (
         produto.unidade_medida.sigla if produto.unidade_medida_id else "UN"
     )
-    ean = _codigo_ean(produto)
+    ean_tributavel = _codigo_ean(produto)
+    fator_apresentacao = item_venda.apresentacao_fator_conversao or Decimal('1')
+    quantidade_comercial = item_venda.quantidade_comercial or quantidade
+    unidade_comercial = item_venda.apresentacao_unidade_snapshot or unidade
+    valor_unitario_comercial = valor_unitario * fator_apresentacao
+    ean_comercial = item_venda.apresentacao_codigo_barras or ean_tributavel
+    descricao = produto.descricao_pdv or produto.descricao or ""
+    if item_venda.apresentacao_descricao_snapshot:
+        descricao = f'{descricao} - {item_venda.apresentacao_descricao_snapshot}'
     item: Dict[str, Any] = {
         "numero_item": numero,
         "codigo_produto": produto.codigo or str(produto.pk),
-        "descricao": (produto.descricao_pdv or produto.descricao or "")[:120],
+        "descricao": descricao[:120],
         "codigo_ncm": (produto.ncm or "").replace(".", "").strip(),
         "cfop": (
             _cfop_bonificacao_destino(local_destino)
@@ -455,13 +463,13 @@ def _montar_item_fiscal(
             if venda_fora_estabelecimento
             else _cfop_item_destino(produto, local_destino)
         ),
-        "unidade_comercial": unidade,
-        "quantidade_comercial": float(quantidade),
-        "valor_unitario_comercial": float(valor_unitario),
+        "unidade_comercial": unidade_comercial,
+        "quantidade_comercial": float(quantidade_comercial),
+        "valor_unitario_comercial": float(valor_unitario_comercial),
         "valor_bruto": _float_dinheiro(valor_bruto),
         "valor_total": _float_dinheiro(base),
-        "codigo_barras_comercial": ean,
-        "codigo_barras_tributavel": ean,
+        "codigo_barras_comercial": ean_comercial,
+        "codigo_barras_tributavel": ean_tributavel,
         "unidade_tributavel": unidade,
         "quantidade_tributavel": float(quantidade),
         "valor_unitario_tributavel": float(valor_unitario),

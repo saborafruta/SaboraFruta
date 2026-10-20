@@ -1065,6 +1065,7 @@
                       <th>Descrição</th>
                       <th>Unidade</th>
                       <th>Fator</th>
+                      <th>Código de barras</th>
                       <th>Preço de venda</th>
                       <th>Uso</th>
                       <th>Ativa</th>
@@ -1081,6 +1082,7 @@
                         </td>
                         <td>{{ apresentacao.unidade.sigla }}</td>
                         <td>{{ apresentacao.fator_conversao|floatformat:4 }}</td>
+                        <td>{{ apresentacao.codigo_barras_checkout|default:"-" }}</td>
                         <td>R$ {{ apresentacao.preco_venda|floatformat:2 }}</td>
                         <td>
                           {% if apresentacao.permite_venda %}Venda{% endif %}
@@ -1114,7 +1116,7 @@
                   <div class="produto-vinculo-card">
                     <div>
                       <span class="produto-vinculo-main">{{ apresentacao.descricao }}</span>
-                      <span class="produto-vinculo-muted">{{ apresentacao.unidade.sigla }} · fator {{ apresentacao.fator_conversao|floatformat:4 }}</span>
+                      <span class="produto-vinculo-muted">{{ apresentacao.unidade.sigla }} · fator {{ apresentacao.fator_conversao|floatformat:4 }} · {{ apresentacao.codigo_barras_checkout|default:"sem código" }}</span>
                     </div>
                     <div class="produto-vinculo-muted">
                       {% if apresentacao.permite_venda %}Venda{% endif %}
@@ -1159,6 +1161,18 @@
                 <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=apresentacao_form.unidade required=True %}</div>
                 <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=apresentacao_form.fator_conversao required=True %}</div>
                 <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=apresentacao_form.codigo %}</div>
+                <div class="produto-field">
+                  <label for="{{ apresentacao_form.codigo_barras.id_for_label }}" class="produto-label">{{ apresentacao_form.codigo_barras.label }}</label>
+                  <div class="produto-barcode-row">
+                    {{ apresentacao_form.codigo_barras }}
+                    <button type="button" class="produto-btn secondary produto-barcode-generate" @click="generateBarcodeFor('id_apresentacao_codigo_barras')" :disabled="generatingBarcode">
+                      <span x-text="generatingBarcode ? 'Gerando...' : 'Gerar código'"></span>
+                    </button>
+                  </div>
+                  {% if apresentacao_form.codigo_barras.help_text %}<p class="produto-help">{{ apresentacao_form.codigo_barras.help_text }}</p>{% endif %}
+                  {% if apresentacao_form.codigo_barras.errors %}<p class="produto-error">{{ apresentacao_form.codigo_barras.errors|first }}</p>{% endif %}
+                  <p class="produto-help produto-barcode-status" :class="{ 'is-error': barcodeError }" x-show="barcodeMessage" x-text="barcodeMessage" x-cloak></p>
+                </div>
                 <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=apresentacao_form.preco_venda %}</div>
                 <div class="produto-field">{% include "produtos/produto/partials/_field.html" with field=apresentacao_form.preco_minimo %}</div>
                 <div class="produto-field md"><label class="produto-toggle-row">{{ apresentacao_form.permite_venda }} <span>Permite venda</span></label></div>
@@ -1534,8 +1548,11 @@
         });
       },
       async generateBarcode() {
+        return this.generateBarcodeFor('id_codigo_barras');
+      },
+      async generateBarcodeFor(fieldId) {
         if (this.generatingBarcode) return;
-        const field = document.getElementById('id_codigo_barras');
+        const field = document.getElementById(fieldId);
         const csrf = document.querySelector('input[name="csrfmiddlewaretoken"]');
         if (!field || !csrf) return;
         this.generatingBarcode = true;

@@ -14,6 +14,10 @@ from apps.produtos.models import (
     UnidadeMedida,
 )
 from apps.produtos.services.apresentacao_service import ApresentacaoService
+from apps.produtos.services.codigo_barras_service import (
+    codigo_barras_apresentacao_em_uso,
+    salvar_codigo_barras_apresentacao,
+)
 
 
 class ProdutoApresentacaoTestBase(TestCase):
@@ -206,6 +210,29 @@ class ProdutoApresentacaoModelTests(ProdutoApresentacaoTestBase):
 
 
 class ProdutoCodigoBarrasApresentacaoTests(ProdutoApresentacaoTestBase):
+    def test_apresentacao_base_reutiliza_registro_do_codigo_principal(self):
+        produto = self.criar_produto(codigo_barras='7890000000013')
+        registro = ProdutoCodigoBarras.objects.create(
+            produto=produto,
+            ean=produto.codigo_barras,
+        )
+        unidade = ProdutoApresentacao.objects.create(
+            produto=produto,
+            unidade=self.un,
+            descricao='Unidade',
+            fator_conversao=1,
+        )
+
+        self.assertFalse(codigo_barras_apresentacao_em_uso(
+            produto.codigo_barras,
+            produto=produto,
+            permitir_codigo_produto=True,
+        ))
+        salvo = salvar_codigo_barras_apresentacao(unidade, produto.codigo_barras)
+
+        self.assertEqual(salvo.pk, registro.pk)
+        self.assertEqual(salvo.apresentacao, unidade)
+
     def test_ean_ativo_duplicado_no_mesmo_produto_e_invalido(self):
         produto = self.criar_produto()
         caixa = ProdutoApresentacao.objects.create(
@@ -235,13 +262,47 @@ class ProdutoCodigoBarrasApresentacaoTests(ProdutoApresentacaoTestBase):
         novo = ProdutoCodigoBarras(produto=produto, apresentacao=pacote, ean='7890000000013')
         novo.full_clean()  # nao deve levantar
 
-    def test_mesmo_ean_em_produtos_diferentes_e_permitido(self):
+    def test_mesmo_ean_ativo_em_produtos_diferentes_e_bloqueado(self):
         produto_a = self.criar_produto(codigo='1001')
         produto_b = self.criar_produto(codigo='1002', descricao='Outro produto')
         ProdutoCodigoBarras.objects.create(produto=produto_a, ean='7890000000013')
 
         outro = ProdutoCodigoBarras(produto=produto_b, ean='7890000000013')
-        outro.full_clean()  # escopo e por produto, nao global
+        with self.assertRaises(ValidationError):
+            outro.full_clean()
+
+    def test_mesmo_ean_em_empresas_diferentes_e_permitido(self):
+        produto_a = self.criar_produto(codigo='1001')
+        ProdutoCodigoBarras.objects.create(produto=produto_a, ean='7890000000013')
+        outra_empresa = Empresa.objects.create(
+            razao_social='Outra Empresa Apresentacoes LTDA',
+            nome_fantasia='Outra Empresa Apresentacoes',
+            cnpj='71345678000272',
+            regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        outra_filial = Filial.objects.create(
+            empresa=outra_empresa,
+            razao_social='Outra Filial Apresentacoes',
+            nome_fantasia='Outra Filial Apresentacoes',
+            cnpj='71345678000273',
+            uf='RN',
+        )
+        outra_unidade = UnidadeMedida.objects.create(
+            empresa=outra_empresa,
+            sigla='UN',
+            descricao='Unidade',
+        )
+        produto_b = Produto.objects.create(
+            filial=outra_filial,
+            unidade_medida=outra_unidade,
+            descricao='Produto da outra empresa',
+            codigo='1001',
+            ncm='39235000',
+        )
+
+        outro = ProdutoCodigoBarras(produto=produto_b, ean='7890000000013')
+        outro.full_clean()
 
 
 class ApresentacaoServiceTests(ProdutoApresentacaoTestBase):

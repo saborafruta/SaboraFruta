@@ -27,7 +27,9 @@ class ItemVendaPDVSerializer(serializers.ModelSerializer):
         model = ItemVendaPDV
         fields = [
             'id', 'numero_item', 'produto', 'produto_descricao', 'quantidade', 'unidade_medida',
-            'apresentacao', 'apresentacao_descricao', 'apresentacao_fator_conversao', 'quantidade_comercial',
+            'apresentacao', 'apresentacao_descricao', 'apresentacao_fator_conversao',
+            'apresentacao_descricao_snapshot', 'apresentacao_unidade_snapshot',
+            'apresentacao_codigo_barras', 'quantidade_comercial',
             'valor_unitario', 'desconto_valor', 'valor_total', 'observacao',
         ]
 

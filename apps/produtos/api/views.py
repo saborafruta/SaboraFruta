@@ -29,7 +29,14 @@ from apps.core.services.auditoria import registrar_auditoria
 from apps.core.services.request_scope import empresa_operacional
 from apps.core.tenant_context import get_current_database_alias
 from apps.estoque.models import Estoque
-from apps.produtos.models import ItemTabelaPreco, Produto, ProdutoApresentacao, ProdutoCodigoBarras, TabelaPreco
+from apps.produtos.models import (
+    ItemTabelaPreco,
+    Produto,
+    ProdutoApresentacao,
+    ProdutoApresentacaoFilial,
+    ProdutoCodigoBarras,
+    TabelaPreco,
+)
 from apps.produtos.services.apresentacao_service import ApresentacaoService
 
 from .exceptions import erro_response as _erro
@@ -188,10 +195,24 @@ class ProdutoApresentacoesView(BaseProdutosAPIView):
         empresa = empresa_operacional(request)
         produto = get_object_or_404(Produto.objects.for_empresa(empresa), pk=pk)
 
-        serializer = ProdutoApresentacaoSerializer(data=request.data)
+        serializer = ProdutoApresentacaoSerializer(
+            data=request.data, context={'produto': produto, 'request': request},
+        )
         serializer.is_valid(raise_exception=True)
         with transaction.atomic():
             apresentacao = serializer.save(produto=produto)
+            ProdutoApresentacaoFilial.objects.bulk_create(
+                [
+                    ProdutoApresentacaoFilial(
+                        apresentacao=apresentacao,
+                        filial_id=filial_id,
+                        ativo=True,
+                    )
+                    for filial_id in produto.filiais_vinculo.filter(ativo=True)
+                    .values_list('filial_id', flat=True)
+                ],
+                ignore_conflicts=True,
+            )
         registrar_auditoria(
             request=request, modulo='produtos', acao='criar', objeto=apresentacao,
             descricao=str(apresentacao), relacionado=produto, depois=serializer.data,

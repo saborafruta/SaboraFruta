@@ -130,6 +130,38 @@ class NfePayloadBuilderTests(TestCase):
         dados.update(kwargs)
         return Cliente.objects.create(**dados)
 
+    def test_apresentacao_usa_embalagem_no_comercial_e_unidade_base_no_tributavel(self):
+        venda = self.criar_venda(None)
+        item_venda = venda.itens.get()
+        item_venda.produto.codigo_barras = '7891234567895'
+        item_venda.produto.save(update_fields=['codigo_barras'])
+        item_venda.quantidade = Decimal('20')
+        item_venda.quantidade_comercial = Decimal('2')
+        item_venda.apresentacao_fator_conversao = Decimal('10')
+        item_venda.apresentacao_descricao_snapshot = 'Fardo com 10'
+        item_venda.apresentacao_unidade_snapshot = 'FD'
+        item_venda.apresentacao_codigo_barras = '17891234567892'
+        item_venda.valor_unitario = Decimal('4')
+        item_venda.valor_total = Decimal('80')
+        item_venda.save()
+        venda.valor_subtotal = Decimal('80')
+        venda.valor_total = Decimal('80')
+        venda.valor_pago = Decimal('80')
+        venda.save(update_fields=['valor_subtotal', 'valor_total', 'valor_pago'])
+        venda.pagamentos.update(valor=Decimal('80'))
+
+        item = NfcePayloadBuilder.build(venda, numero=1, serie=1)['items'][0]
+
+        self.assertEqual(item['unidade_comercial'], 'FD')
+        self.assertEqual(item['quantidade_comercial'], 2.0)
+        self.assertEqual(item['valor_unitario_comercial'], 40.0)
+        self.assertEqual(item['codigo_barras_comercial'], '17891234567892')
+        self.assertEqual(item['unidade_tributavel'], 'UN')
+        self.assertEqual(item['quantidade_tributavel'], 20.0)
+        self.assertEqual(item['valor_unitario_tributavel'], 4.0)
+        self.assertEqual(item['codigo_barras_tributavel'], '7891234567895')
+        self.assertIn('Fardo com 10', item['descricao'])
+
     # ── indIEDest: a rejeicao 805 ────────────────────────────────────
     # "A SEFAZ do destinatario nao permite Contribuinte Isento de
     # Inscricao Estadual". O indIEDest=2 depende de a UF aceitar, e a

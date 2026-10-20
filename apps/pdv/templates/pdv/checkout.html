@@ -259,9 +259,9 @@
           <label><input type="checkbox" :checked="buscarPorNome" @change="solicitarBuscaPorNome($event)"> Permitir nome</label>
         </div>
         <div class="co-results" x-ref="resultadosProduto" x-show="resultados.length" x-cloak role="listbox">
-          <template x-for="produto in resultados" :key="produto.id">
-            <button type="button" class="co-result" :class="{'active':resultados[indiceProduto]?.id===produto.id}" @click="selecionarProduto(produto)" role="option" :aria-selected="resultados[indiceProduto]?.id===produto.id">
-              <span><strong x-text="produto.descricao"></strong><span class="co-result-code" x-text="'ID '+produto.id+(produto.codigo_barras?' · '+produto.codigo_barras:'')"></span></span>
+          <template x-for="produto in resultados" :key="produto.item_key">
+            <button type="button" class="co-result" :class="{'active':resultados[indiceProduto]?.item_key===produto.item_key}" @click="selecionarProduto(produto)" role="option" :aria-selected="resultados[indiceProduto]?.item_key===produto.item_key">
+              <span><strong x-text="produto.descricao+' — '+produto.apresentacao_descricao"></strong><span class="co-result-code" x-text="'ID '+produto.id+' · '+produto.unidade_comercial+(Number(produto.fator_conversao)!==1?' · equivale a '+formatarQuantidade(produto.fator_conversao)+' '+produto.unidade_base:'')+(produto.codigo_barras?' · '+produto.codigo_barras:'')"></span></span>
               <strong x-text="moeda(produto.preco)"></strong>
             </button>
           </template>
@@ -279,9 +279,9 @@
           <table class="co-table" data-columns="off">
             <thead><tr><th>Produto</th><th>Valor unitário</th><th>Quantidade</th><th>Desconto no item</th><th style="text-align:right">Total</th><th></th></tr></thead>
             <tbody>
-              <template x-for="item in itens" :key="item.id">
+              <template x-for="item in itens" :key="item.item_key">
                 <tr>
-                  <td class="co-item-product"><div class="co-product-name" x-text="item.descricao"></div><div class="co-product-code" x-text="item.codigo_barras || 'ID '+item.id"></div></td>
+                  <td class="co-item-product"><div class="co-product-name" x-text="item.descricao+' — '+item.apresentacao_descricao"></div><div class="co-product-code" x-text="'ID '+item.id+(item.codigo_barras?' · '+item.codigo_barras:'')"></div></td>
                   <td class="co-item-unit" x-text="moeda(item.preco)"></td>
                   <td class="co-item-qty">
                     <div class="co-qty">
@@ -291,11 +291,11 @@
                     </div>
                   </td>
                   <td class="co-item-discount">
-                    <div class="co-item-discount-wrap"><span class="co-item-discount-prefix">R$</span><input class="co-input co-item-discount-input co-discount-trigger" type="text" inputmode="decimal" :data-item-discount="item.id" x-model="item.descontoEntrada" readonly :aria-disabled="!!pedidoCatalogoInicial" @click="solicitarDescontoItem(item,$event)" @keydown.enter.prevent="solicitarDescontoItem(item,$event)" placeholder="0,00" aria-label="Abrir desconto deste item" aria-haspopup="dialog"></div>
+                    <div class="co-item-discount-wrap"><span class="co-item-discount-prefix">R$</span><input class="co-input co-item-discount-input co-discount-trigger" type="text" inputmode="decimal" :data-item-discount="item.item_key" x-model="item.descontoEntrada" readonly :aria-disabled="!!pedidoCatalogoInicial" @click="solicitarDescontoItem(item,$event)" @keydown.enter.prevent="solicitarDescontoItem(item,$event)" placeholder="0,00" aria-label="Abrir desconto deste item" aria-haspopup="dialog"></div>
                     <div class="co-item-discount-value" x-show="descontoItemValor(item)>0" x-text="'- '+moeda(descontoItemValor(item))" x-cloak></div>
                   </td>
                   <td class="co-item-total" style="text-align:right"><span class="co-item-old-total" x-show="descontoItemValor(item)>0" x-text="moeda(totalBrutoItem(item))" x-cloak></span><strong x-text="moeda(totalLiquidoItem(item))"></strong></td>
-                  <td class="co-item-remove"><button type="button" class="co-btn co-btn-danger" @click="removerItem(item.id)" aria-label="Remover item">×</button></td>
+                  <td class="co-item-remove"><button type="button" class="co-btn co-btn-danger" @click="removerItem(item.item_key)" aria-label="Remover item">×</button></td>
                 </tr>
               </template>
             </tbody>
@@ -556,7 +556,11 @@ function checkoutVenda() {
     formatarValorSemCifrao(valor){ return Number(valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); },
     formatarQuantidade(valor){ return Number(valor||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:3}); },
     arredondarMoeda(valor){ return Math.round((Number(valor||0)+Number.EPSILON)*100)/100; },
-    prepararItem(item){ return {...item,descontoEntrada:this.formatarNumeroInput(Number(item.desconto_valor||0))}; },
+    prepararItem(item){
+      const id=item.id??item.produto_id;
+      const apresentacaoId=item.apresentacao_id??null;
+      return {...item,id,produto_id:id,apresentacao_id:apresentacaoId,item_key:item.item_key||`${id}:${apresentacaoId||'base'}`,apresentacao_descricao:item.apresentacao_descricao||item.unidade_medida||'Unidade',unidade_comercial:item.unidade_comercial||item.unidade_medida||'UN',fator_conversao:Number(item.fator_conversao||1),descontoEntrada:this.formatarNumeroInput(Number(item.desconto_valor||0))};
+    },
     totalBrutoItem(item){ return this.arredondarMoeda(Number(item.preco||0)*Number(item.quantidade||0)); },
     descontoItemValor(item){ return Math.min(this.totalBrutoItem(item),Math.max(0,this.arredondarMoeda(this.numero(item.descontoEntrada)))); },
     totalLiquidoItem(item){ return this.arredondarMoeda(this.totalBrutoItem(item)-this.descontoItemValor(item)); },
@@ -564,7 +568,7 @@ function checkoutVenda() {
     get descontoItens(){ return this.arredondarMoeda(this.itens.reduce((s,i)=>s+this.descontoItemValor(i),0)); },
     get subtotal(){ return this.arredondarMoeda(this.subtotalBruto-this.descontoItens); },
     get desconto(){ return this.arredondarMoeda(Math.min(this.subtotal,Math.max(0,this.numero(this.descontoEntrada)))); },
-    get itemDescontoPendente(){ return this.itemDescontoPendenteId===null ? null : this.itens.find(item=>String(item.id)===String(this.itemDescontoPendenteId))||null; },
+    get itemDescontoPendente(){ return this.itemDescontoPendenteId===null ? null : this.itens.find(item=>String(item.item_key)===String(this.itemDescontoPendenteId))||null; },
     get descontoModalMaximo(){ return this.itemDescontoPendente ? this.totalBrutoItem(this.itemDescontoPendente) : this.subtotal; },
     get percentuaisDescontoRapido(){ return (this.configuracaoDescontos?.percentuais||[]).map(Number).filter(valor=>valor>0).sort((a,b)=>a-b); },
     get descontoPercentualMaximoLivre(){ return Math.max(0,...this.percentuaisDescontoRapido); },
@@ -706,7 +710,7 @@ function checkoutVenda() {
       this.abrirModalDesconto(item,evento);
     },
     abrirModalDesconto(item=null,evento=null){
-      evento?.target?.blur(); this.itemDescontoPendenteId=item?.id??null;
+      evento?.target?.blur(); this.itemDescontoPendenteId=item?.item_key??null;
       const valor=this.numero(item ? item.descontoEntrada : this.descontoEntrada);
       this.descontoModalEntrada=this.formatarNumeroInput(valor);
       this.descontoModalPercentual=this.formatarNumeroInput(this.descontoModalMaximo>0?valor/this.descontoModalMaximo*100:0);
@@ -767,9 +771,10 @@ function checkoutVenda() {
     adicionarProduto(produto){
       if(!produto.pode_vender){ this.erroBusca=(produto.bloqueios||[]).join(' ')||'Produto indisponível para venda.'; return; }
       const quantidade=this.quantidadeParaProduto(produto);
-      const atual=this.itens.find(i=>i.id===produto.id);
+      const itemKey=produto.item_key||`${produto.id}:${produto.apresentacao_id||'base'}`;
+      const atual=this.itens.find(i=>i.item_key===itemKey);
       if(atual) atual.quantidade=Number((Number(atual.quantidade)+quantidade).toFixed(atual.quantidade_decimais||0));
-      else this.itens.push(this.prepararItem({...produto,quantidade}));
+      else this.itens.push(this.prepararItem({...produto,item_key:itemKey,quantidade}));
       this.quantidadeEntrada='1'; this.busca=''; this.resultados=[]; this.indiceProduto=-1; this.erroBusca=''; this.mensagem=''; this.sincronizarValorPagamento(); this.focarProduto();
     },
     selecionarForma(forma){ this.formaPagamentoId=forma.id; this.bandeiraPagamento=''; this.parcelasPagamento=Math.max(1,Number(forma.minimo_parcelas||1)); this.sincronizarValorPagamento(true); },
@@ -792,7 +797,7 @@ function checkoutVenda() {
     selecionarFormaPorId(){ const forma=this.formaSelecionada; if(forma)this.selecionarForma(forma); },
     alterarQuantidade(item,delta){ this.definirQuantidade(item,Number(item.quantidade)+Number(delta)); },
     definirQuantidade(item,valor){ const min=Number(item.quantidade_step||1); const n=Math.max(min,Number(valor)||min); item.quantidade=Number(n.toFixed(item.quantidade_decimais||0)); if(this.numero(item.descontoEntrada)>this.totalBrutoItem(item))item.descontoEntrada=this.formatarNumeroInput(this.totalBrutoItem(item)); this.sincronizarValorPagamento(); },
-    removerItem(id){ this.itens=this.itens.filter(i=>i.id!==id); this.sincronizarValorPagamento(); },
+    removerItem(itemKey){ this.itens=this.itens.filter(i=>i.item_key!==itemKey); this.sincronizarValorPagamento(); },
     async buscarClientes(){
       const q=this.buscaCliente.trim(); if(q.length<2){this.clientes=[];this.indiceCliente=-1;return;}
       const r=await fetch('{% url "pdv:api_clientes" %}?q='+encodeURIComponent(q)); const d=await r.json(); this.clientes=d.clientes||[]; this.indiceCliente=this.clientes.length?0:-1;
@@ -802,9 +807,9 @@ function checkoutVenda() {
     async selecionarCliente(cliente){ this.cliente=cliente; this.clientes=[]; this.indiceCliente=-1; this.buscaCliente=''; await this.recalcularPrecos(); this.focarProduto(); },
     async recalcularPrecos(){
       if(!this.itens.length)return;
-      const r=await fetch('{% url "pdv:api_precos_cliente" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({cliente_id:this.cliente?.id||null,itens:this.itens.map(i=>({produto_id:i.id,quantidade:i.quantidade}))})});
+      const r=await fetch('{% url "pdv:api_precos_cliente" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify({cliente_id:this.cliente?.id||null,itens:this.itens.map(i=>({produto_id:i.id,apresentacao_id:i.apresentacao_id,quantidade_comercial:i.quantidade}))})});
       const d=await r.json(); if(!r.ok)return;
-      (d.precos||[]).forEach(p=>{const item=this.itens.find(i=>i.id===p.id);if(item)Object.assign(item,p);}); this.sincronizarValorPagamento();
+      (d.precos||[]).forEach(p=>{const item=this.itens.find(i=>i.item_key===p.item_key);if(item)Object.assign(item,p);}); this.sincronizarValorPagamento();
     },
     abrirCadastroCliente(){ this.modalCliente=true; this.erroCliente=''; this.focar('novoClienteNome'); },
     async criarCliente(){
@@ -828,7 +833,7 @@ function checkoutVenda() {
     async finalizar(){
       if(!this.podeFinalizar)return;this.finalizando=true;this.mensagem='';this.sucesso=false;
       const pagamentos=this.total>0?[{forma_id:this.formaPagamentoId,valor:this.valorPagamento,parcelas:this.parcelasPagamento,bandeira:this.formaCartao?this.bandeiraPagamento:''}]:[];
-      const payload={cliente_id:this.cliente?.id||null,desconto:this.desconto,acrescimo:Math.max(0,Number(this.acrescimoInicial)||0),delivery:!!this.pedidoCatalogoInicial?.delivery,endereco_entrega:this.pedidoCatalogoInicial?.endereco_entrega||{},observacao:this.pedidoCatalogoInicial?.observacao||'',pedido_catalogo_id:this.pedidoCatalogoInicial?.id||null,itens:this.itens.map(i=>({produto_id:i.id,quantidade:i.quantidade,valor_unitario:i.preco,preco_origem_tipo:i.preco_origem_tipo,preco_origem_detalhe:i.preco_origem_detalhe,desconto_valor:this.descontoItemValor(i)})),pagamentos};
+      const payload={cliente_id:this.cliente?.id||null,desconto:this.desconto,acrescimo:Math.max(0,Number(this.acrescimoInicial)||0),delivery:!!this.pedidoCatalogoInicial?.delivery,endereco_entrega:this.pedidoCatalogoInicial?.endereco_entrega||{},observacao:this.pedidoCatalogoInicial?.observacao||'',pedido_catalogo_id:this.pedidoCatalogoInicial?.id||null,itens:this.itens.map(i=>({produto_id:i.id,apresentacao_id:i.apresentacao_id,quantidade:Number((Number(i.quantidade)*Number(i.fator_conversao||1)).toFixed(6)),quantidade_comercial:i.quantidade,valor_unitario:Number(i.preco)/Number(i.fator_conversao||1),preco_origem_tipo:i.preco_origem_tipo,preco_origem_detalhe:i.preco_origem_detalhe,desconto_valor:this.descontoItemValor(i)})),pagamentos};
       try{
         const r=await fetch('{% url "pdv:api_checkout_venda_finalizar" %}',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':this.csrf()},body:JSON.stringify(payload)});
         const d=await r.json();

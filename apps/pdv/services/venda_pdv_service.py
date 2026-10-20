@@ -381,7 +381,9 @@ class VendaPDVService:
         apresentacao_id = item_dados.get("apresentacao_id")
         if apresentacao_id:
             from apps.produtos.models import ProdutoApresentacao
-            apresentacao = ProdutoApresentacao.objects.select_related("unidade").filter(
+            apresentacao = ProdutoApresentacao.objects.select_related("unidade").prefetch_related(
+                "filiais_vinculo",
+            ).filter(
                 pk=apresentacao_id, produto_id=produto.pk, ativo=True,
             ).first()
             if not apresentacao:
@@ -391,6 +393,13 @@ class VendaPDVService:
             if not apresentacao.permite_venda:
                 raise DadosInvalidosError(
                     f'A apresentacao "{apresentacao.descricao}" nao pode ser vendida.'
+                )
+            vinculos = list(apresentacao.filiais_vinculo.all())
+            if vinculos and not any(
+                vinculo.filial_id == filial.pk and vinculo.ativo for vinculo in vinculos
+            ):
+                raise DadosInvalidosError(
+                    f'A apresentacao "{apresentacao.descricao}" nao esta ativa nesta filial.'
                 )
 
         contrato = ProdutoVendavelService.consultar(
@@ -481,6 +490,13 @@ class VendaPDVService:
             unidade_medida=unidade,
             apresentacao=apresentacao,
             apresentacao_fator_conversao=apresentacao.fator_conversao if apresentacao else None,
+            apresentacao_descricao_snapshot=apresentacao.descricao if apresentacao else '',
+            apresentacao_unidade_snapshot=apresentacao.unidade.sigla if apresentacao else '',
+            apresentacao_codigo_barras=(
+                apresentacao.codigos_barras.filter(ativo=True)
+                .values_list('ean', flat=True).first()
+                if apresentacao else ''
+            ) or '',
             quantidade_comercial=apresentacao.converter_de_base(quantidade) if apresentacao else None,
             valor_unitario=valor_unitario,
             valor_unitario_tabela=(

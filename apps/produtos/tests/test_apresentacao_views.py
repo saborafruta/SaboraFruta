@@ -7,7 +7,10 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.test import RequestFactory, TestCase
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
-from apps.produtos.models import Produto, ProdutoApresentacao, ProdutoFilial, UnidadeMedida
+from apps.produtos.models import (
+    Produto, ProdutoApresentacao, ProdutoApresentacaoFilial, ProdutoCodigoBarras,
+    ProdutoFilial, UnidadeMedida,
+)
 from apps.produtos.views.produto import (
     ProdutoApresentacaoCreateView, ProdutoApresentacaoDeleteView, ProdutoApresentacaoUpdateView,
 )
@@ -51,6 +54,7 @@ class ProdutoApresentacaoViewsTests(TestCase):
         response = ProdutoApresentacaoCreateView.as_view()(
             self.request({
                 'descricao': 'Caixa 1.000', 'unidade': self.cx.pk, 'fator_conversao': '1000',
+                'codigo_barras': '2900000001015',
                 'preco_venda': '9000,00', 'preco_minimo': '0,00',
                 'permite_venda': 'on', 'permite_compra': 'on', 'permite_estoque': 'on',
                 'ativo': 'on',
@@ -61,6 +65,10 @@ class ProdutoApresentacaoViewsTests(TestCase):
         apresentacao = ProdutoApresentacao.objects.get(produto=self.produto, descricao='Caixa 1.000')
         self.assertEqual(apresentacao.fator_conversao, Decimal('1000.000000'))
         self.assertEqual(apresentacao.unidade, self.cx)
+        self.assertEqual(apresentacao.codigos_barras.get(ativo=True).ean, '2900000001015')
+        self.assertTrue(ProdutoApresentacaoFilial.objects.filter(
+            apresentacao=apresentacao, filial=self.filial, ativo=True,
+        ).exists())
 
     def test_criar_apresentacao_com_fator_invalido_nao_cria_nada(self):
         response = ProdutoApresentacaoCreateView.as_view()(
@@ -74,9 +82,13 @@ class ProdutoApresentacaoViewsTests(TestCase):
         apresentacao = ProdutoApresentacao.objects.create(
             produto=self.produto, unidade=self.cx, descricao='Caixa 500', fator_conversao=500,
         )
+        codigo = ProdutoCodigoBarras.objects.create(
+            produto=self.produto, apresentacao=apresentacao, ean='2900000001022', ativo=True,
+        )
         response = ProdutoApresentacaoUpdateView.as_view()(
             self.request({
                 'descricao': 'Caixa 600', 'unidade': self.cx.pk, 'fator_conversao': '600',
+                'codigo_barras': '2900000001039',
                 'preco_venda': '0,00', 'preco_minimo': '0,00',
                 'permite_venda': 'on', 'permite_compra': 'on', 'permite_estoque': 'on',
                 'ativo': 'on',
@@ -85,8 +97,23 @@ class ProdutoApresentacaoViewsTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         apresentacao.refresh_from_db()
+        codigo.refresh_from_db()
         self.assertEqual(apresentacao.descricao, 'Caixa 600')
         self.assertEqual(apresentacao.fator_conversao, Decimal('600.000000'))
+        self.assertFalse(codigo.ativo)
+        self.assertEqual(apresentacao.codigos_barras.get(ativo=True).ean, '2900000001039')
+
+    def test_codigo_de_barras_e_obrigatorio_na_apresentacao(self):
+        response = ProdutoApresentacaoCreateView.as_view()(
+            self.request({
+                'descricao': 'Fardo 10', 'unidade': self.cx.pk, 'fator_conversao': '10',
+                'preco_venda': '100,00', 'permite_venda': 'on', 'ativo': 'on',
+            }),
+            pk=self.produto.pk,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ProdutoApresentacao.objects.filter(descricao='Fardo 10').exists())
 
     def test_excluir_apresentacao(self):
         apresentacao = ProdutoApresentacao.objects.create(

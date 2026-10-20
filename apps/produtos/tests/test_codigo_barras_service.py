@@ -6,12 +6,14 @@ from apps.core.models import Empresa, Filial
 from apps.produtos.forms import ProdutoForm
 from apps.produtos.models import (
     Produto,
+    ProdutoApresentacao,
     ProdutoCodigoBarras,
     ProdutoFornecedorEquivalencia,
     UnidadeMedida,
 )
 from apps.produtos.services.codigo_barras_service import (
     calcular_digito_verificador_ean13,
+    codigo_barras_conflita_apresentacao,
     codigo_barras_em_uso,
     ean13_valido,
     gerar_codigo_barras_unico,
@@ -109,6 +111,40 @@ class CodigoBarrasProdutoTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn('ja pertence a outro produto', form.errors['codigo_barras'][0])
+
+    def test_codigo_principal_nao_pode_assumir_codigo_de_fardo(self):
+        produto = self.criar_produto(codigo_barras='2900000000018')
+        unidade = ProdutoApresentacao.objects.create(
+            produto=produto,
+            unidade=self.unidade,
+            descricao='Unidade',
+            fator_conversao=1,
+        )
+        fardo = ProdutoApresentacao.objects.create(
+            produto=produto,
+            unidade=self.unidade,
+            descricao='Fardo',
+            fator_conversao=10,
+        )
+        ProdutoCodigoBarras.objects.create(
+            produto=produto,
+            apresentacao=unidade,
+            ean=produto.codigo_barras,
+        )
+        ProdutoCodigoBarras.objects.create(
+            produto=produto,
+            apresentacao=fardo,
+            ean='2900000000025',
+        )
+
+        self.assertFalse(codigo_barras_conflita_apresentacao(
+            produto.codigo_barras,
+            produto=produto,
+        ))
+        self.assertTrue(codigo_barras_conflita_apresentacao(
+            '2900000000025',
+            produto=produto,
+        ))
 
     @patch(
         'apps.produtos.views.produto.gerar_codigo_barras_unico',

@@ -22,9 +22,12 @@ from apps.core.services.checkout import (
 )
 from apps.financeiro.constants.enums import TipoFormaPagamento
 from apps.financeiro.models import FormaPagamento
-from apps.pdv.models import Caixa, SessaoPDV, VendaPDV
+from apps.estoque.models import Deposito, Estoque
+from apps.pdv.models import Caixa, ItemVendaPDV, SessaoPDV, VendaPDV
 from apps.produtos.models import (
     Produto,
+    ProdutoApresentacao,
+    ProdutoApresentacaoFilial,
     ProdutoCodigoBarras,
     ProdutoFilial,
     UnidadeMedida,
@@ -825,6 +828,172 @@ assert.deepEqual(acoes, [
         self.assertEqual(self.buscar('Café Especial').json()['produtos'], [])
         self.assertEqual(self.buscar('CAF').json()['produtos'], [])
         self.assertEqual(self.buscar('SOMENTE-OUTRA-FILIAL').json()['produtos'], [])
+
+    def criar_apresentacao_fardo(self):
+        fardo = ProdutoApresentacao.objects.create(
+            produto=self.produto,
+            unidade=self.unidade,
+            descricao='Fardo com 10',
+            codigo='CAF-0007-FD',
+            fator_conversao=Decimal('10'),
+            preco_venda=Decimal('170.00'),
+            permite_venda=True,
+            ativo=True,
+        )
+        ProdutoApresentacaoFilial.objects.create(
+            apresentacao=fardo, filial=self.filial, ativo=True,
+        )
+        ProdutoCodigoBarras.objects.create(
+            produto=self.produto,
+            apresentacao=fardo,
+            ean='2900000001107',
+            tipo=ProdutoCodigoBarras.Tipo.CAIXA,
+            quantidade_conversao=Decimal('10'),
+            ativo=True,
+        )
+        return fardo
+
+    def test_id_do_produto_lista_unidade_base_e_fardo(self):
+        self.habilitar_checkout()
+        fardo = self.criar_apresentacao_fardo()
+
+        resposta = self.buscar(str(self.produto.pk))
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        opcoes = resposta.json()['produtos']
+        self.assertEqual([item['item_key'] for item in opcoes], [
+            f'{self.produto.pk}:base', f'{self.produto.pk}:{fardo.pk}',
+        ])
+        self.assertEqual(opcoes[0]['apresentacao_descricao'], 'Unidade (UN)')
+        self.assertEqual(opcoes[1]['apresentacao_descricao'], 'Fardo com 10')
+        self.assertEqual(opcoes[1]['fator_conversao'], 10.0)
+        self.assertEqual(opcoes[1]['preco'], 170.0)
+
+    def test_id_do_produto_tem_precedencia_sobre_codigo_de_barras_numerico(self):
+        self.habilitar_checkout()
+        fardo = self.criar_apresentacao_fardo()
+        produto_conflitante = Produto.objects.create(
+            filial=self.filial,
+            unidade_medida=self.unidade,
+            descricao='Produto com código numérico legado',
+            codigo='CODIGO-LEGADO',
+            ncm='09012100',
+            preco_venda=Decimal('5.00'),
+            permite_venda_sem_estoque=True,
+        )
+        ProdutoFilial.objects.create(produto=produto_conflitante, filial=self.filial)
+        ProdutoCodigoBarras.objects.create(
+            produto=produto_conflitante,
+            ean=str(self.produto.pk),
+        )
+
+        resposta = self.buscar(str(self.produto.pk))
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        self.assertEqual(
+            [item['item_key'] for item in resposta.json()['produtos']],
+            [f'{self.produto.pk}:base', f'{self.produto.pk}:{fardo.pk}'],
+        )
+
+    def test_codigo_de_barras_do_fardo_retorna_somente_o_fardo(self):
+        self.habilitar_checkout()
+        fardo = self.criar_apresentacao_fardo()
+
+        resposta = self.buscar('2900000001107')
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        opcoes = resposta.json()['produtos']
+        self.assertEqual(len(opcoes), 1)
+        self.assertEqual(opcoes[0]['apresentacao_id'], fardo.pk)
+        self.assertEqual(opcoes[0]['codigo_barras'], '2900000001107')
+
+    def test_recalculo_de_precos_preserva_unidade_e_fardo_do_mesmo_produto(self):
+        self.habilitar_checkout()
+        fardo = self.criar_apresentacao_fardo()
+
+        resposta = self.client.post(
+            reverse('pdv:api_precos_cliente'),
+            data={
+                'cliente_id': None,
+                'itens': [
+                    {
+                        'produto_id': self.produto.pk,
+                        'apresentacao_id': None,
+                        'quantidade_comercial': 3,
+                    },
+                    {
+                        'produto_id': self.produto.pk,
+                        'apresentacao_id': fardo.pk,
+                        'quantidade_comercial': 2,
+                    },
+                ],
+            },
+            content_type='application/json',
+        )
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        precos = resposta.json()['precos']
+        self.assertEqual(
+            [item['item_key'] for item in precos],
+            [f'{self.produto.pk}:base', f'{self.produto.pk}:{fardo.pk}'],
+        )
+        self.assertEqual([item['preco'] for item in precos], [18.9, 170.0])
+
+    def test_checkout_finaliza_fardo_e_grava_quantidade_base_e_snapshot(self):
+        self.habilitar_checkout()
+        fardo = self.criar_apresentacao_fardo()
+        estoque = Estoque.objects.create(
+            produto=self.produto,
+            filial=self.filial,
+            deposito_id=Deposito.venda_id(self.filial.pk),
+            quantidade_atual=Decimal('100'),
+            quantidade_disponivel=Decimal('100'),
+        )
+        caixa = Caixa.objects.create(filial=self.filial, numero=71, descricao='Checkout 71')
+        SessaoPDV.objects.create(
+            filial=self.filial,
+            caixa=caixa,
+            usuario=self.usuario,
+            valor_abertura=Decimal('0'),
+            status='aberto',
+        )
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            descricao='Dinheiro apresentação',
+            tipo=TipoFormaPagamento.DINHEIRO,
+        )
+        payload = {
+            'cliente_id': None,
+            'desconto': '0',
+            'acrescimo': 0,
+            'itens': [{
+                'produto_id': self.produto.pk,
+                'apresentacao_id': fardo.pk,
+                'quantidade': 20,
+                'quantidade_comercial': 2,
+                'desconto_valor': 0,
+            }],
+            'pagamentos': [{'forma_id': forma.pk, 'valor': '340.00'}],
+        }
+
+        resposta = self.client.post(
+            reverse('pdv:api_checkout_venda_finalizar'),
+            data=payload,
+            content_type='application/json',
+        )
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        item = ItemVendaPDV.objects.get(venda_pdv_id=resposta.json()['venda_id'])
+        self.assertEqual(item.quantidade, Decimal('20'))
+        self.assertEqual(item.quantidade_comercial, Decimal('2'))
+        self.assertEqual(item.apresentacao_fator_conversao, Decimal('10'))
+        self.assertEqual(item.apresentacao_descricao_snapshot, 'Fardo com 10')
+        self.assertEqual(item.apresentacao_unidade_snapshot, 'UN')
+        self.assertEqual(item.apresentacao_codigo_barras, '2900000001107')
+        self.assertEqual(item.valor_total, Decimal('340.00'))
+        estoque.refresh_from_db()
+        self.assertEqual(estoque.quantidade_atual, Decimal('80'))
+        self.assertEqual(estoque.quantidade_disponivel, Decimal('80'))
 
     def test_etiqueta_da_balanca_encontra_plu_e_informa_quantidade_no_checkout_e_pdv(self):
         self.habilitar_checkout()

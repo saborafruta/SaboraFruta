@@ -40,7 +40,8 @@ from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.produtos.forms import ProdutoApresentacaoForm, ProdutoForm
 from apps.produtos.forms.produto import LIMITE_IMAGEM_PRODUTO_BYTES, LIMITE_IMAGEM_PRODUTO_MB
 from apps.produtos.models import (
-    CategoriaProduto, ClasseFiscal, MarcaProduto, Produto, ProdutoApresentacao, ProdutoFilial,
+    CategoriaProduto, ClasseFiscal, MarcaProduto, Produto, ProdutoApresentacao,
+    ProdutoApresentacaoFilial, ProdutoCodigoBarras, ProdutoFilial,
     ProdutoFornecedorEquivalencia, UnidadeMedida,
 )
 from apps.produtos.services.codigo_barras_service import gerar_codigo_barras_unico
@@ -1779,12 +1780,19 @@ def _apresentacoes_produto(produto):
     if not produto or not produto.pk:
         return []
     try:
-        return list(
+        apresentacoes = list(
             ProdutoApresentacao.objects
             .select_related('unidade')
+            .prefetch_related('codigos_barras')
             .filter(produto=produto)
             .order_by('-ativo', 'fator_conversao')
         )
+        for apresentacao in apresentacoes:
+            apresentacao.codigo_barras_checkout = next(
+                (codigo.ean for codigo in apresentacao.codigos_barras.all() if codigo.ativo),
+                '',
+            )
+        return apresentacoes
     except Exception:  # noqa: BLE001 -- a tela abre de qualquer jeito
         logging.getLogger(__name__).exception(
             'Falha ao carregar apresentacoes do produto %s', produto.pk,
@@ -1877,7 +1885,9 @@ class ProdutoUpdateView(PermissaoRequiredMixin, View):
 
     def _apresentacao_form(self, request, produto):
         instancia = self._apresentacao_editando(request, produto)
-        return ProdutoApresentacaoForm(empresa=empresa_operacional(request), instance=instancia)
+        return ProdutoApresentacaoForm(
+            empresa=empresa_operacional(request), produto=produto, instance=instancia,
+        )
 
     @staticmethod
     def _popup(request):
@@ -2643,7 +2653,11 @@ class ProdutoApresentacaoCreateView(PermissaoRequiredMixin, View):
         produto = get_object_or_404(
             Produto, pk=pk, filial__empresa=empresa_operacional(request),
         )
-        form = ProdutoApresentacaoForm(request.POST, empresa=empresa_operacional(request))
+        form = ProdutoApresentacaoForm(
+            request.POST,
+            empresa=empresa_operacional(request),
+            produto=produto,
+        )
         if not form.is_valid():
             messages.error(request, 'Nao foi possivel salvar a apresentacao. Confira os campos.')
             return redirect(f"{reverse('produtos:produto-update', args=[produto.pk])}?step=8")
@@ -2652,6 +2666,19 @@ class ProdutoApresentacaoCreateView(PermissaoRequiredMixin, View):
                 apresentacao = form.save(commit=False)
                 apresentacao.produto = produto
                 apresentacao.save()
+                form.salvar_codigo_barras(apresentacao)
+                filiais_ids = ProdutoFilial.objects.filter(
+                    produto=produto, ativo=True,
+                ).values_list('filial_id', flat=True)
+                ProdutoApresentacaoFilial.objects.bulk_create(
+                    [
+                        ProdutoApresentacaoFilial(
+                            apresentacao=apresentacao, filial_id=filial_id, ativo=True,
+                        )
+                        for filial_id in filiais_ids
+                    ],
+                    ignore_conflicts=True,
+                )
         except IntegrityError:
             messages.error(
                 request,
@@ -2675,7 +2702,10 @@ class ProdutoApresentacaoUpdateView(PermissaoRequiredMixin, View):
         )
         apresentacao = get_object_or_404(ProdutoApresentacao, pk=apresentacao_pk, produto=produto)
         form = ProdutoApresentacaoForm(
-            request.POST, empresa=empresa_operacional(request), instance=apresentacao,
+            request.POST,
+            empresa=empresa_operacional(request),
+            produto=produto,
+            instance=apresentacao,
         )
         if not form.is_valid():
             messages.error(request, 'Nao foi possivel salvar a apresentacao. Confira os campos.')
@@ -2685,7 +2715,8 @@ class ProdutoApresentacaoUpdateView(PermissaoRequiredMixin, View):
             )
         try:
             with tenant_atomic():
-                form.save()
+                apresentacao = form.save()
+                form.salvar_codigo_barras(apresentacao)
         except IntegrityError:
             messages.error(
                 request,
@@ -2712,6 +2743,7 @@ class ProdutoApresentacaoDeleteView(PermissaoRequiredMixin, View):
         )
         apresentacao = get_object_or_404(ProdutoApresentacao, pk=apresentacao_pk, produto=produto)
         descricao = apresentacao.descricao
+        ProdutoCodigoBarras.objects.filter(apresentacao=apresentacao).update(ativo=False)
         apresentacao.delete()
         messages.success(request, f'Apresentacao "{descricao}" removida.')
         return redirect(f"{reverse('produtos:produto-update', args=[produto.pk])}?step=8")

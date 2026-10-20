@@ -9,7 +9,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.contrib import messages
 from django.core.cache import cache
-from django.db import IntegrityError, connections
+from django.db import IntegrityError
 from django.db.models import Avg, Count, Max, Min, Q, Sum
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
@@ -80,6 +80,7 @@ from apps.produtos.models import (
     KitProduto,
     LinhaProducao,
     Produto,
+    ProdutoApresentacao,
     ProdutoCodigoBarras,
     ProdutoFilial,
     PromocaoQuantidade,
@@ -123,6 +124,127 @@ def _cliente_precificacao(request, cliente_id=None):
         .filter(pk=cliente_id, ativo=True)
         .first()
     )
+
+
+def _apresentacoes_venda_checkout(produto, filial):
+    """Apresentações vendáveis na filial, com fallback para cadastros legados.
+
+    Apresentações antigas podem não possuir ainda a linha em
+    ProdutoApresentacaoFilial. Quando existem vínculos, a filial atual precisa
+    estar explicitamente ativa; quando não existe vínculo algum, a apresentação
+    global continua disponível para não retirar produtos já usados de operação.
+    """
+    candidatas = list(
+        ProdutoApresentacao.objects.filter(
+            produto=produto,
+            ativo=True,
+            permite_venda=True,
+        )
+        .select_related('unidade')
+        .prefetch_related('codigos_barras', 'filiais_vinculo')
+        .order_by('fator_conversao', 'pk')
+    )
+    apresentacoes = []
+    for apresentacao in candidatas:
+        vinculos = list(apresentacao.filiais_vinculo.all())
+        if vinculos and not any(
+            vinculo.filial_id == filial.pk and vinculo.ativo for vinculo in vinculos
+        ):
+            continue
+        apresentacoes.append(apresentacao)
+    return apresentacoes
+
+
+def _apresentacao_base_checkout(produto, filial):
+    return next(
+        (
+            apresentacao
+            for apresentacao in _apresentacoes_venda_checkout(produto, filial)
+            if apresentacao.fator_conversao == 1
+        ),
+        None,
+    )
+
+
+def _codigo_barras_apresentacao_checkout(produto, apresentacao):
+    if apresentacao is not None:
+        codigo = next(
+            (
+                registro.ean
+                for registro in apresentacao.codigos_barras.all()
+                if registro.ativo
+            ),
+            '',
+        )
+        if codigo:
+            return codigo
+        if apresentacao.fator_conversao != 1:
+            return ''
+    return produto.codigo_barras or ''
+
+
+def _opcoes_apresentacao_checkout(produto, filial):
+    apresentacoes = _apresentacoes_venda_checkout(produto, filial)
+    if any(apresentacao.fator_conversao == 1 for apresentacao in apresentacoes):
+        return apresentacoes
+    # Produtos antigos, ou ainda sem uma apresentação explícita de fator 1,
+    # preservam a unidade base como opção virtual.
+    return [None, *apresentacoes]
+
+
+def _apresentacao_exata_checkout(produtos_base, filial, termo):
+    """Resolve um código específico sem transformar ID/nome em escolha direta."""
+    registros = (
+        ProdutoCodigoBarras.objects.filter(
+            produto__in=produtos_base,
+            ean=termo,
+            ativo=True,
+        )
+        .select_related('produto__linha_producao', 'produto__unidade_medida', 'apresentacao__unidade')
+        .order_by('pk')
+    )
+    for registro in registros:
+        if registro.apresentacao_id:
+            permitidas = _apresentacoes_venda_checkout(registro.produto, filial)
+            if any(item.pk == registro.apresentacao_id for item in permitidas):
+                return registro.produto, registro.apresentacao
+            continue
+        return registro.produto, _apresentacao_base_checkout(registro.produto, filial)
+
+    apresentacao = (
+        ProdutoApresentacao.objects.filter(
+            produto__in=produtos_base,
+            codigo__iexact=termo,
+            ativo=True,
+            permite_venda=True,
+        )
+        .select_related('produto__linha_producao', 'produto__unidade_medida', 'unidade')
+        .first()
+    )
+    if apresentacao and any(
+        item.pk == apresentacao.pk
+        for item in _apresentacoes_venda_checkout(apresentacao.produto, filial)
+    ):
+        return apresentacao.produto, apresentacao
+
+    produto_codigo_barras = produtos_base.filter(codigo_barras=termo).select_related(
+        'linha_producao', 'unidade_medida',
+    ).first()
+    if produto_codigo_barras:
+        return produto_codigo_barras, _apresentacao_base_checkout(produto_codigo_barras, filial)
+
+    return None
+
+
+def _produto_por_codigo_extra_checkout(produtos_base, filial, termo):
+    # JSONField é consultado em Python para manter o mesmo comportamento em
+    # PostgreSQL e SQLite. Este fallback só roda depois de ID/código interno,
+    # evitando varrer o catálogo na busca normal por ID.
+    for produto in produtos_base.only('pk', 'codigos_barras_extras'):
+        if termo in {str(codigo).strip() for codigo in (produto.codigos_barras_extras or [])}:
+            produto = produtos_base.select_related('linha_producao', 'unidade_medida').get(pk=produto.pk)
+            return produto, _apresentacao_base_checkout(produto, filial)
+    return None
 
 
 def _resolver_etiqueta_balanca(request, produtos_base, codigo):
@@ -636,76 +758,75 @@ def checkout_buscar_produto(request):
     if not termo:
         return JsonResponse({'produtos': []})
 
-    produtos_base = Produto.objects.for_filial(request.filial_ativa).filter(ativo=True)
+    filial = request.filial_ativa
+    produtos_base = Produto.objects.for_filial(filial).filter(ativo=True)
     leitura_balanca = None
+    opcao_exata = None
     if por_nome:
         produtos = list(
             filter_queryset_by_terms(
                 produtos_base,
                 termo,
                 fields=('descricao_pdv', 'descricao'),
-            ).select_related('linha_producao')[:20]
+            ).select_related('linha_producao', 'unidade_medida')[:20]
         )
     else:
-        filtro = Q(codigo__iexact=termo) | Q(codigo_barras=termo)
+        # O ID digitado representa o produto-pai e, portanto, deve listar
+        # todas as apresentações. Códigos de barras continuam levando direto
+        # à apresentação correspondente.
+        produto_por_id = None
         if termo.isdigit():
-            filtro |= Q(pk=int(termo))
-        produtos = list(
-            produtos_base.filter(filtro)
-            .select_related('linha_producao')
-            .distinct()[:20]
-        )
-
-        ids_encontrados = {produto.pk for produto in produtos}
-        ids_alternativos = ProdutoCodigoBarras.objects.filter(
-            produto__in=produtos_base,
-            ean=termo,
-            ativo=True,
-        ).values_list('produto_id', flat=True)
-        # PostgreSQL consulta o JSON no banco; o fallback mantém os testes e
-        # instalações SQLite compatíveis sem ampliar a busca para descrições.
-        if connections[produtos_base.db].vendor == 'postgresql':
-            ids_extras = produtos_base.filter(
-                codigos_barras_extras__contains=[termo],
-            ).values_list('pk', flat=True)
-        else:
-            ids_extras = [
-                produto.pk
-                for produto in produtos_base.exclude(pk__in=ids_encontrados)
-                .only('pk', 'codigos_barras_extras')
-                if termo in {
-                    str(codigo).strip()
-                    for codigo in (produto.codigos_barras_extras or [])
-                }
-            ]
-        ids_complementares = list(ids_alternativos) + list(ids_extras)
-        if ids_complementares:
-            produtos.extend(
-                produtos_base.filter(pk__in=ids_complementares)
-                .exclude(pk__in=ids_encontrados)
-                .select_related('linha_producao')
-                [:20 - len(produtos)]
+            produto_por_id = (
+                produtos_base.filter(pk=int(termo))
+                .select_related('linha_producao', 'unidade_medida')
+                .first()
             )
+        if produto_por_id:
+            produtos = [produto_por_id]
+        else:
+            opcao_exata = _apresentacao_exata_checkout(produtos_base, filial, termo)
+            if opcao_exata:
+                produtos = [opcao_exata[0]]
+            else:
+                produtos = list(
+                    produtos_base.filter(codigo__iexact=termo)
+                    .select_related('linha_producao', 'unidade_medida')
+                    .distinct()[:20]
+                )
+                if not produtos:
+                    opcao_exata = _produto_por_codigo_extra_checkout(
+                        produtos_base, filial, termo,
+                    )
+                    if opcao_exata:
+                        produtos = [opcao_exata[0]]
         if not produtos:
             resolvida = _resolver_etiqueta_balanca(request, produtos_base, termo)
             if resolvida:
                 produto, leitura_balanca = resolvida
                 produtos = [produto]
+                opcao_exata = (produto, _apresentacao_base_checkout(produto, filial))
 
     cliente = _cliente_precificacao(request)
-    contexto = _preparar_contexto_ofertas(produtos, request.filial_ativa)
+    contexto = _preparar_contexto_ofertas(produtos, filial)
     produtos_serializados = []
     for produto in produtos:
-        payload = _serializa_produto(
-            produto,
-            request.filial_ativa,
-            cliente=cliente,
-            contexto_ofertas=contexto,
+        opcoes = (
+            [opcao_exata[1]]
+            if opcao_exata and opcao_exata[0].pk == produto.pk
+            else _opcoes_apresentacao_checkout(produto, filial)
         )
-        if leitura_balanca and produto.pk == produtos[0].pk:
-            payload['leitura_balanca'] = leitura_balanca
-            payload['quantidade_balanca'] = leitura_balanca['quantidade']
-        produtos_serializados.append(payload)
+        for apresentacao in opcoes:
+            payload = _serializa_produto_checkout(
+                produto,
+                filial,
+                apresentacao=apresentacao,
+                cliente=cliente,
+                contexto_ofertas=contexto,
+            )
+            if leitura_balanca and produto.pk == produtos[0].pk:
+                payload['leitura_balanca'] = leitura_balanca
+                payload['quantidade_balanca'] = leitura_balanca['quantidade']
+            produtos_serializados.append(payload)
     return JsonResponse({
         'produtos': produtos_serializados,
         'busca_por_nome': por_nome,
@@ -1422,6 +1543,96 @@ def _serializar_itens_rascunho(venda):
     return [dict(_serializar_item_rascunho(item), estoque_disponivel=float(saldos.get(item.produto_id, 0))) for item in itens]
 
 
+def _serializa_produto_checkout(
+    produto,
+    filial,
+    *,
+    apresentacao=None,
+    cliente=None,
+    quantidade_comercial=Decimal('1'),
+    contexto_ofertas=None,
+):
+    fator = apresentacao.fator_conversao if apresentacao else Decimal('1')
+    quantidade_base = Decimal(str(quantidade_comercial or '1')) * fator
+    contrato = ProdutoVendavelService.consultar(
+        produto=produto,
+        filial=filial,
+        quantidade=quantidade_base,
+        cliente=cliente,
+        apresentacao=apresentacao,
+        validar_promocoes=apresentacao is None,
+        incluir_promocoes_aplicaveis=False,
+    )
+    preco_unitario_base = Decimal(str(contrato['preco_aplicado'] or 0))
+    preco_apresentacao = (preco_unitario_base * fator).quantize(
+        Decimal('0.01'), rounding=ROUND_HALF_UP,
+    )
+    unidade_comercial = apresentacao.unidade if apresentacao else produto.unidade_medida
+    casas_decimais = max(0, int(getattr(unidade_comercial, 'casas_decimais', 0) or 0))
+    aceita_decimal = casas_decimais > 0 or (
+        apresentacao is None and _produto_aceita_quantidade_decimal(produto)
+    )
+    if aceita_decimal and casas_decimais == 0:
+        casas_decimais = 3
+    quantidade_step = float(Decimal('1').scaleb(-casas_decimais)) if casas_decimais else 1
+    codigo_barras = _codigo_barras_apresentacao_checkout(produto, apresentacao)
+    apresentacao_id = apresentacao.pk if apresentacao else None
+    apresentacao_descricao = (
+        apresentacao.descricao if apresentacao else f'Unidade ({produto.unidade_medida.sigla})'
+    )
+    ofertas = []
+    if apresentacao is None:
+        ofertas = _ofertas_produto(
+            produto,
+            filial,
+            cliente=cliente,
+            contrato=contrato,
+            contexto=contexto_ofertas,
+        )
+    return {
+        'id': produto.pk,
+        'produto_id': produto.pk,
+        'item_key': f'{produto.pk}:{apresentacao_id or "base"}',
+        'descricao': produto.descricao_pdv or produto.descricao,
+        'codigo_barras': codigo_barras,
+        'apresentacao_id': apresentacao_id,
+        'apresentacao_descricao': apresentacao_descricao,
+        'unidade_comercial': unidade_comercial.sigla,
+        'unidade_base': produto.unidade_medida.sigla,
+        'fator_conversao': float(fator),
+        'tipo_produto': produto.tipo_produto,
+        'fracionavel': aceita_decimal,
+        'quantidade_step': quantidade_step,
+        'quantidade_decimais': casas_decimais,
+        'preco': float(preco_apresentacao),
+        'preco_unitario_base': float(preco_unitario_base),
+        'preco_base': float((Decimal(str(produto.preco_venda or 0)) * fator).quantize(Decimal('0.01'))),
+        'preco_origem': contrato['preco_origem'],
+        'preco_origem_tipo': contrato['preco_origem_tipo'],
+        'preco_origem_detalhe': contrato['preco_origem_detalhe'],
+        'estoque_disponivel': float(contrato['saldo_disponivel']),
+        'estoque_apresentacao': float(Decimal(str(contrato['saldo_disponivel'])) / fator),
+        'custo_atual': float(contrato['custo_atual']),
+        'margem_percentual': float(contrato['margem_percentual']),
+        'status_comercial': contrato['status_comercial'],
+        'status_comercial_label': contrato['status_comercial_label'],
+        'lote_obrigatorio': contrato['lote_obrigatorio'],
+        'promocoes_aplicaveis': [
+            oferta for oferta in ofertas
+            if oferta.get('oferta_tipo') not in {'normal', 'tabela_cliente'}
+        ],
+        'bloqueios': contrato['bloqueios'],
+        'alertas': contrato['alertas'],
+        'pode_vender': contrato['pode_vender'],
+        'permite_venda_sem_estoque': produto.permite_venda_sem_estoque,
+        'linha_id': produto.linha_producao_id,
+        'linha': produto.linha_producao.nome if produto.linha_producao else None,
+        'icone': produto.linha_producao.icone if produto.linha_producao else None,
+        'cor': produto.linha_producao.cor_identificacao if produto.linha_producao else None,
+        **_produto_imagem_payload(produto),
+    }
+
+
 def _serializa_produto(
     p, filial, cliente=None, quantidade=Decimal("1"), contexto_ofertas=None,
 ):
@@ -1817,33 +2028,53 @@ def api_precos_cliente(request):
     if body.get('cliente_id') and not cliente:
         return JsonResponse({"erro": "Cliente nao encontrado na filial ativa."}, status=404)
 
+    itens_solicitados = []
     ids = []
-    quantidades = {}
     for item in body.get('itens') or []:
         try:
             produto_id = int(item.get('produto_id'))
-            quantidade = Decimal(str(item.get('quantidade') or '1'))
-        except (TypeError, ValueError):
+            quantidade_comercial = Decimal(str(
+                item.get('quantidade_comercial') or item.get('quantidade') or '1'
+            ))
+            apresentacao_id = (
+                int(item['apresentacao_id']) if item.get('apresentacao_id') else None
+            )
+        except (TypeError, ValueError, InvalidOperation):
             continue
         ids.append(produto_id)
-        quantidades[produto_id] = quantidade
+        itens_solicitados.append((produto_id, apresentacao_id, quantidade_comercial))
 
     produtos = {
         produto.pk: produto
         for produto in Produto.objects.for_filial(request.filial_ativa)
         .filter(pk__in=ids, ativo=True)
+        .select_related('linha_producao', 'unidade_medida')
     }
     contexto_ofertas = _preparar_contexto_ofertas(produtos.values(), request.filial_ativa)
     precos = []
-    for produto_id in ids:
+    for produto_id, apresentacao_id, quantidade_comercial in itens_solicitados:
         produto = produtos.get(produto_id)
         if not produto:
             continue
-        precos.append(_serializa_produto(
+        apresentacao = None
+        if apresentacao_id:
+            apresentacao = next(
+                (
+                    item for item in _apresentacoes_venda_checkout(
+                        produto, request.filial_ativa,
+                    )
+                    if item.pk == apresentacao_id
+                ),
+                None,
+            )
+            if apresentacao is None:
+                continue
+        precos.append(_serializa_produto_checkout(
             produto,
             request.filial_ativa,
+            apresentacao=apresentacao,
             cliente=cliente,
-            quantidade=quantidades[produto_id],
+            quantidade_comercial=quantidade_comercial,
             contexto_ofertas=contexto_ofertas,
         ))
     return JsonResponse({"precos": precos})

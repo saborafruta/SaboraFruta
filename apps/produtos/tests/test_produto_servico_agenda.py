@@ -45,6 +45,7 @@ class ProdutoServicoAgendaFormTests(TestCase):
     def dados_validos(self, **overrides):
         dados = {
             'descricao': 'Corte de cabelo',
+            'codigo_barras': '7890000000020',
             'categoria': self.categoria.pk,
             'tipo_produto': Produto.TipoProduto.SERVICO,
             'unidade_medida': self.unidade.pk,

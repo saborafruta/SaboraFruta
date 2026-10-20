@@ -35,9 +35,17 @@ def dados_comprovante(venda):
         desconto = min(base, max(Decimal(0), item.desconto_valor))
         bruto += base
         desconto_itens += desconto
+        fator = item.apresentacao_fator_conversao or Decimal('1')
+        quantidade_exibida = item.quantidade_comercial or item.quantidade
+        unidade_exibida = item.apresentacao_unidade_snapshot or item.unidade_medida
+        descricao_apresentacao = item.apresentacao_descricao_snapshot
+        nome = item.produto.descricao
+        if descricao_apresentacao:
+            nome = f'{nome} — {descricao_apresentacao}'
         itens.append({
-            'nome': item.produto.descricao, 'quantidade': format(item.quantidade.normalize(), 'f').replace('.', ','),
-            'unidade': item.unidade_medida, 'unitario': moeda(item.valor_unitario),
+            'nome': nome,
+            'quantidade': format(quantidade_exibida.normalize(), 'f').replace('.', ','),
+            'unidade': unidade_exibida, 'unitario': moeda(item.valor_unitario * fator),
             'total': moeda(item.valor_total), 'desconto': moeda(desconto),
             'tem_desconto': desconto > 0, 'percentual': moeda(percentual(desconto, base)),
             'observacao': item.observacao or '',
