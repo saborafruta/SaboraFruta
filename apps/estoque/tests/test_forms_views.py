@@ -32,7 +32,10 @@ from apps.estoque.views import (
     TransferenciaView,
 )
 from apps.estoque.views.inventario import _criar_itens_inventario
-from apps.produtos.models import Produto, ProdutoFilial, UnidadeMedida, UnidadeMedidaFilial
+from apps.produtos.models import (
+    Produto, ProdutoApresentacao, ProdutoApresentacaoFilial, ProdutoFilial,
+    UnidadeMedida, UnidadeMedidaFilial,
+)
 
 
 class EstoqueFormsViewsTests(TestCase):
@@ -1375,6 +1378,67 @@ class EstoqueFormsViewsTests(TestCase):
         self.assertIn('Estoque por filial', content)
         self.assertIn('Permissoes criticas', content)
         self.assertIn('Inventario relatorio', content)
+
+    def test_relatorio_estoque_mostra_apresentacoes_convertidas_somente_com_flag(self):
+        self.conceder(pode_ver=True)
+        produto = self.criar_produto(descricao='Feijao preto 1 kg')
+        unidade_fardo = UnidadeMedida.objects.create(
+            empresa=self.empresa,
+            sigla='FD',
+            descricao='Fardo',
+            tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        UnidadeMedidaFilial.objects.create(
+            unidade=unidade_fardo,
+            filial=self.filial,
+        )
+        apresentacao = ProdutoApresentacao.objects.create(
+            produto=produto,
+            unidade=unidade_fardo,
+            descricao='Fardo com 10 unidades',
+            fator_conversao=Decimal('10'),
+            permite_estoque=True,
+        )
+        ProdutoApresentacaoFilial.objects.create(
+            apresentacao=apresentacao,
+            filial=self.filial,
+        )
+        apresentacao_informativa = ProdutoApresentacao.objects.create(
+            produto=produto,
+            unidade=unidade_fardo,
+            descricao='Display informativo',
+            fator_conversao=Decimal('5'),
+            permite_estoque=False,
+        )
+        ProdutoApresentacaoFilial.objects.create(
+            apresentacao=apresentacao_informativa,
+            filial=self.filial,
+        )
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=produto.pk,
+            filial_id=self.filial.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('100'),
+            usuario_id=self.usuario.pk,
+        )
+
+        path = reverse('estoque:relatorio-list')
+        sem_apresentacoes = self.client.get(path)
+        com_apresentacoes = self.client.get(path, {'mostrar_apresentacoes': '1'})
+
+        self.assertNotContains(sem_apresentacoes, 'Fardo com 10 unidades')
+        self.assertContains(com_apresentacoes, 'Mostrar produtos por embalagem')
+        self.assertContains(com_apresentacoes, 'Fardo com 10 unidades')
+        self.assertContains(com_apresentacoes, '10 FD')
+        self.assertNotContains(com_apresentacoes, 'Display informativo')
+        self.assertContains(
+            com_apresentacoes,
+            'As embalagens são conversões do mesmo saldo base',
+        )
+        self.assertEqual(
+            com_apresentacoes.context['resumo']['quantidade_total'],
+            Decimal('100'),
+        )
 
     def test_fechar_inventario_exige_permissao_aprovar(self):
         self.conceder(pode_ver=True, pode_editar=True)

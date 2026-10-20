@@ -44,7 +44,9 @@ from apps.estoque.views.permissoes import (
     permissoes_estoque,
 )
 from apps.cadastros.models import Fornecedor
-from apps.produtos.models import CategoriaProduto, MarcaProduto, Produto
+from apps.produtos.models import (
+    CategoriaProduto, MarcaProduto, Produto, ProdutoApresentacao,
+)
 from apps.produtos.services.prontidao_comercial_service import (
     STATUS_PRONTO,
     anexar_prontidao_produtos,
@@ -53,6 +55,41 @@ from apps.produtos.services.prontidao_comercial_service import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def anexar_apresentacoes_estoque_relatorio(*, produtos, filial):
+    """Anexa equivalencias de saldo sem criar ou duplicar estoque fisico."""
+    produtos = list(produtos)
+    produtos_por_id = {produto.pk: produto for produto in produtos}
+    for produto in produtos:
+        produto.apresentacoes_estoque_relatorio = []
+
+    apresentacoes = (
+        ProdutoApresentacao.objects.for_filial(filial)
+        .filter(
+            produto_id__in=produtos_por_id,
+            permite_estoque=True,
+            fator_conversao__gt=0,
+        )
+        .select_related('unidade')
+        .order_by('produto_id', 'fator_conversao', 'descricao')
+    )
+    for apresentacao in apresentacoes:
+        produto = produtos_por_id[apresentacao.produto_id]
+        fator = apresentacao.fator_conversao
+        apresentacao.saldos_depositos = [
+            {
+                **saldo,
+                'atual': saldo['atual'] / fator,
+                'reservada': saldo['reservada'] / fator,
+                'disponivel': saldo['disponivel'] / fator,
+            }
+            for saldo in produto.saldos_depositos
+        ]
+        apresentacao.estoque_quantidade_disponivel = (
+            produto.estoque_quantidade_disponivel / fator
+        )
+        produto.apresentacoes_estoque_relatorio.append(apresentacao)
 
 
 def _auditar_estoque(request, acao, objeto, descricao='', justificativa='', antes=None, depois=None, relacionado=None, metadados=None):
@@ -1234,6 +1271,7 @@ class RelatorioEstoqueView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         filial = request.filial_ativa
+        mostrar_apresentacoes = request.GET.get('mostrar_apresentacoes') == '1'
         produtos = produtos_estoque_queryset(filial)
         depositos = list(
             Deposito.objects.filter(filial=filial, ativo=True)
@@ -1247,6 +1285,11 @@ class RelatorioEstoqueView(PermissaoRequiredMixin, View):
             filial=filial,
             depositos=depositos,
         )
+        if mostrar_apresentacoes:
+            anexar_apresentacoes_estoque_relatorio(
+                produtos=saldo_page.object_list,
+                filial=filial,
+            )
         valor_custo_expr = ExpressionWrapper(
             F('estoque_quantidade_atual') * F('estoque_custo_unitario'),
             output_field=DecimalField(max_digits=18, decimal_places=4),
@@ -1368,6 +1411,7 @@ class RelatorioEstoqueView(PermissaoRequiredMixin, View):
             'resumo': resumo,
             'depositos': depositos,
             'saldo_page': saldo_page,
+            'mostrar_apresentacoes': mostrar_apresentacoes,
             'lotes_vencidos': lotes_vencidos,
             'lotes_proximos': lotes_proximos,
             'divergencias': divergencias,

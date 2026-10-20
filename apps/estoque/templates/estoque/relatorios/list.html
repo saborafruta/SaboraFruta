@@ -46,9 +46,17 @@
     <div class="px-5 py-3 border-b border-transparent flex flex-wrap items-center justify-between gap-2">
       <div>
         <h3 class="font-semibold">Saldo por depósito</h3>
-        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cada coluna usa o nome cadastrado do depósito e mostra o saldo disponível.</p>
+        <p class="text-xs mt-0.5" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Cada coluna usa o nome cadastrado do depósito e mostra o saldo disponível.{% if mostrar_apresentacoes %} As embalagens são conversões do mesmo saldo base e não são somadas novamente.{% endif %}</p>
       </div>
-      <a href="{% url 'estoque:deposito-list' %}" class="text-sm text-blue-500">Gerenciar depósitos</a>
+      <div class="flex flex-wrap items-center gap-3">
+        <form method="get">
+          <label class="min-h-[38px] px-3 py-2 rounded-lg border border-gray-700 flex items-center gap-2 cursor-pointer select-none" :style="temaClaro ? 'background:#f8fafc;border-color:#d1d5db;color:#334155;' : 'background:#111827;color:#e5e7eb;'">
+            <input type="checkbox" name="mostrar_apresentacoes" value="1" class="h-4 w-4 accent-blue-600" {% if mostrar_apresentacoes %}checked{% endif %} onchange="this.form.submit()">
+            <span class="text-sm font-medium">Mostrar produtos por embalagem</span>
+          </label>
+        </form>
+        <a href="{% url 'estoque:deposito-list' %}" class="text-sm text-blue-500">Gerenciar depósitos</a>
+      </div>
     </div>
     <div class="overflow-x-auto">
       <table class="w-full text-sm min-w-[680px]">
@@ -71,6 +79,22 @@
               {% endfor %}
               <td class="px-4 py-3 text-right font-bold">{{ produto.estoque_quantidade_disponivel|quantidade_produto:produto }}</td>
             </tr>
+            {% if mostrar_apresentacoes %}
+              {% for apresentacao in produto.apresentacoes_estoque_relatorio %}
+                <tr class="table-row-hover" data-apresentacao-id="{{ apresentacao.pk }}" :style="temaClaro ? 'background:#f8fafc;' : 'background:rgba(37,99,235,.06);'">
+                  <td class="px-4 py-3">
+                    <div class="pl-4 border-l-2 border-blue-500">
+                      <div class="font-medium text-blue-500">{{ apresentacao.descricao }}</div>
+                      <div class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ produto.descricao }} · 1 {{ apresentacao.unidade.sigla }} = {{ apresentacao.fator_conversao|quantidade:3 }} {{ produto.unidade_medida.sigla }}</div>
+                    </div>
+                  </td>
+                  {% for saldo in apresentacao.saldos_depositos %}
+                    <td class="px-4 py-3 text-right font-semibold whitespace-nowrap" title="Equivalente ao saldo base disponível">{{ saldo.disponivel|quantidade:3 }} {{ apresentacao.unidade.sigla }}</td>
+                  {% endfor %}
+                  <td class="px-4 py-3 text-right font-bold whitespace-nowrap">{{ apresentacao.estoque_quantidade_disponivel|quantidade:3 }} {{ apresentacao.unidade.sigla }}</td>
+                </tr>
+              {% endfor %}
+            {% endif %}
           {% empty %}
             <tr><td colspan="99" class="px-4 py-8 text-center" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nenhum produto cadastrado.</td></tr>
           {% endfor %}
@@ -81,8 +105,8 @@
       <div class="px-5 py-3 flex items-center justify-between border-t border-transparent text-sm">
         <span :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Página {{ saldo_page.number }} de {{ saldo_page.paginator.num_pages }}</span>
         <div class="flex gap-2">
-          {% if saldo_page.has_previous %}<a class="btn-secondary" href="?saldo_page={{ saldo_page.previous_page_number }}">Anterior</a>{% endif %}
-          {% if saldo_page.has_next %}<a class="btn-secondary" href="?saldo_page={{ saldo_page.next_page_number }}">Próxima</a>{% endif %}
+          {% if saldo_page.has_previous %}<a class="btn-secondary" href="?saldo_page={{ saldo_page.previous_page_number }}{% if mostrar_apresentacoes %}&amp;mostrar_apresentacoes=1{% endif %}">Anterior</a>{% endif %}
+          {% if saldo_page.has_next %}<a class="btn-secondary" href="?saldo_page={{ saldo_page.next_page_number }}{% if mostrar_apresentacoes %}&amp;mostrar_apresentacoes=1{% endif %}">Próxima</a>{% endif %}
         </div>
       </div>
     {% endif %}
