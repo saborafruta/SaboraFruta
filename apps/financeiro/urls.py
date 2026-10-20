@@ -16,6 +16,10 @@ from apps.financeiro.views.posicao_diaria import (
 from apps.financeiro.views.conciliacao import (
     ExtratoListView, ExtratoLancarView, ExtratoConciliarView, ExtratoDesconciliarView,
 )
+from apps.financeiro.views.boletos import (
+    BoletoComunicacaoListView, BoletoRemessaGerarView, BoletoRetornoImportarView,
+    RemessaDownloadView, RetornoDetalheView,
+)
 
 app_name = "financeiro"
 
@@ -41,6 +45,13 @@ urlpatterns = [
     path("conciliacao/lancar/",             ExtratoLancarView.as_view(),       name="conciliacao_lancar"),
     path("conciliacao/<int:pk>/conciliar/", ExtratoConciliarView.as_view(),    name="conciliacao_conciliar"),
     path("conciliacao/<int:pk>/desconciliar/", ExtratoDesconciliarView.as_view(), name="conciliacao_desconciliar"),
+
+    # ── Boletos / comunicação bancária ───────────────────────────────────────
+    path("boletos/", BoletoComunicacaoListView.as_view(), name="boleto_comunicacao"),
+    path("boletos/remessas/gerar/", BoletoRemessaGerarView.as_view(), name="boleto_remessa_gerar"),
+    path("boletos/remessas/<int:pk>/arquivo/", RemessaDownloadView.as_view(), name="boleto_remessa_download"),
+    path("boletos/retornos/importar/", BoletoRetornoImportarView.as_view(), name="boleto_retorno_importar"),
+    path("boletos/retornos/<int:pk>/", RetornoDetalheView.as_view(), name="boleto_retorno_detalhe"),
 
     # ── Contas a Receber ──────────────────────────────────────────────────────
     path("receber/",                   receber_views.ContaReceberListView.as_view(),     name="receber_list"),

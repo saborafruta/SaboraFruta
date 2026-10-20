@@ -1,0 +1,39 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-5" x-data="{ aba: 'remessa' }">
+  <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+    <div><p class="text-sm mb-1 opacity-60">Gestão Financeira › Comunicação bancária</p><h2 class="text-2xl font-semibold">Remessa e retorno de boletos</h2><p class="text-sm mt-1 opacity-70">Fluxo de cobrança CNAB com rastreabilidade por título e ocorrência.</p></div>
+    <form method="get" class="flex gap-2 items-end">
+      <label class="text-xs font-semibold">Conta bancária<select name="conta_bancaria" class="form-input block mt-1 min-w-72" onchange="this.form.submit()">{% for conta in contas_bancarias %}<option value="{{ conta.pk }}" {% if conta_bancaria.pk == conta.pk %}selected{% endif %}>{{ conta }}</option>{% empty %}<option>Nenhuma conta cadastrada</option>{% endfor %}</select></label>
+    </form>
+  </div>
+
+  {% if conta_bancaria %}
+  <div class="card p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div><strong>{{ conta_bancaria.banco_nome|default:"Banco" }} · {{ conta_bancaria.banco_codigo }}</strong><p class="text-xs opacity-65">Ag. {{ conta_bancaria.agencia }} · Conta {{ conta_bancaria.conta }} · {{ conta_bancaria.get_layout_cobranca_display }}</p></div>
+    {% if conta_bancaria.remessa_homologada %}<span class="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">Layout homologado</span>{% else %}<span class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Homologação bancária pendente</span>{% endif %}
+  </div>
+
+  <div class="flex gap-2 border-b" style="border-color:rgba(148,163,184,.25)"><button class="px-4 py-3 text-sm font-semibold" :style="aba==='remessa'?'border-bottom:2px solid #2563eb;color:#2563eb':''" @click="aba='remessa'">Gerar remessa</button><button class="px-4 py-3 text-sm font-semibold" :style="aba==='retorno'?'border-bottom:2px solid #2563eb;color:#2563eb':''" @click="aba='retorno'">Importar retorno</button><button class="px-4 py-3 text-sm font-semibold" :style="aba==='historico'?'border-bottom:2px solid #2563eb;color:#2563eb':''" @click="aba='historico'">Histórico</button></div>
+
+  <section x-show="aba==='remessa'" class="space-y-4">
+    <div class="card p-4"><p class="text-sm"><strong>Antes do primeiro envio:</strong> gere um arquivo de teste e envie ao banco para homologação. O CNAB 240 possui variações por banco.</p></div>
+    <form method="post" action="{% url 'financeiro:boleto_remessa_gerar' %}" class="card overflow-hidden">{% csrf_token %}<input type="hidden" name="conta_bancaria" value="{{ conta_bancaria.pk }}">
+      <div class="p-4 flex items-center justify-between"><div><h3 class="font-semibold">Títulos disponíveis</h3><p class="text-xs opacity-60">Somente contas em aberto configuradas como boleto.</p></div><button class="btn-primary" type="submit">Gerar arquivo CNAB</button></div>
+      <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left text-xs uppercase bg-gray-50 text-gray-600"><th class="px-4 py-3"><input type="checkbox" onclick="document.querySelectorAll('[name=titulos]').forEach(e=>e.checked=this.checked)"></th><th class="px-4 py-3">Cliente</th><th class="px-4 py-3">Documento</th><th class="px-4 py-3">Vencimento</th><th class="px-4 py-3 text-right">Saldo</th></tr></thead><tbody class="divide-y">{% for titulo in titulos %}<tr><td class="px-4 py-3"><input type="checkbox" name="titulos" value="{{ titulo.pk }}"></td><td class="px-4 py-3">{{ titulo.cliente }}</td><td class="px-4 py-3">{{ titulo.documento_numero|default:titulo.pk }}</td><td class="px-4 py-3">{{ titulo.data_vencimento|date:"d/m/Y" }}</td><td class="px-4 py-3 text-right font-semibold">R$ {{ titulo.valor_saldo|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="5" class="px-4 py-8 text-center opacity-60">Nenhum título de boleto disponível para esta conta.</td></tr>{% endfor %}</tbody></table></div>
+    </form>
+  </section>
+
+  <section x-show="aba==='retorno'" x-cloak class="space-y-4">
+    <form method="post" enctype="multipart/form-data" action="{% url 'financeiro:boleto_retorno_importar' %}" class="card p-6 max-w-2xl">{% csrf_token %}<input type="hidden" name="conta_bancaria" value="{{ conta_bancaria.pk }}"><h3 class="font-semibold text-lg">Processar retorno CNAB 240</h3><p class="text-sm opacity-65 mt-1 mb-4">O arquivo é validado, não pode ser processado duas vezes e cada ocorrência fica registrada.</p><input type="file" name="arquivo" accept=".ret,.txt,.cnab" class="form-input w-full" required><button class="btn-primary mt-4" type="submit">Importar e processar</button></form>
+  </section>
+
+  <section x-show="aba==='historico'" x-cloak class="grid gap-5 xl:grid-cols-2">
+    <div class="card overflow-hidden"><h3 class="p-4 font-semibold">Remessas</h3><div class="divide-y">{% for item in remessas %}<div class="p-4 flex items-center justify-between gap-3"><div><strong>Remessa {{ item.numero_remessa }}</strong><p class="text-xs opacity-60">{{ item.created_at|date:"d/m/Y H:i" }} · {{ item.quantidade_boletos }} boleto(s) · R$ {{ item.valor_total|floatformat:2 }}</p></div><a class="btn-secondary text-xs" href="{% url 'financeiro:boleto_remessa_download' item.pk %}">Baixar</a></div>{% empty %}<p class="p-6 text-sm opacity-60">Nenhuma remessa.</p>{% endfor %}</div></div>
+    <div class="card overflow-hidden"><h3 class="p-4 font-semibold">Retornos</h3><div class="divide-y">{% for item in retornos %}<a class="p-4 flex items-center justify-between gap-3 hover:bg-gray-50" href="{% url 'financeiro:boleto_retorno_detalhe' item.pk %}"><div><strong>{{ item.arquivo_nome }}</strong><p class="text-xs opacity-60">{{ item.created_at|date:"d/m/Y H:i" }} · {{ item.quantidade_pagos }} pago(s) · {{ item.quantidade_rejeitados }} rejeitado(s)</p></div><span>›</span></a>{% empty %}<p class="p-6 text-sm opacity-60">Nenhum retorno.</p>{% endfor %}</div></div>
+  </section>
+  {% else %}<div class="card p-8 text-center"><h3 class="font-semibold">Cadastre uma conta bancária</h3><p class="text-sm opacity-65 mt-1">A comunicação de cobrança depende dos dados de agência, conta e convênio.</p><a href="{% url 'financeiro:contas_bancarias' %}" class="btn-primary inline-block mt-4">Ir para Contas Bancárias</a></div>{% endif %}
+</div>
+{% endblock %}

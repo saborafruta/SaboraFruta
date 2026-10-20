@@ -1049,6 +1049,7 @@
       {% url 'financeiro:dre' as dre_url %}
       {% url 'financeiro:contas_bancarias' as contas_bancarias_url %}
       {% url 'financeiro:conciliacao_list' as conciliacao_url %}
+      {% url 'financeiro:boleto_comunicacao' as boleto_comunicacao_url %}
       {% url 'produtos:tabela-list' as tabela_preco_url %}
       {% url 'logistica:romaneio-list' as romaneio_url %}
       {% url 'logistica:viagem-list' as viagem_url %}
@@ -1121,6 +1122,13 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
         Conciliação Bancária
+      </a>
+
+      <a href="{{ boleto_comunicacao_url }}" @click="mobileOpen = false"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :style="{% if '/financeiro/boletos' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}">
+        <span class="w-5 text-center text-base flex-shrink-0">⇄</span>
+        Remessa e Retorno
       </a>
 
       <a href="{{ financeiro_url }}" @click="mobileOpen = false"

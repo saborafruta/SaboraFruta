@@ -25,6 +25,11 @@ class ContaBancariaForm(forms.ModelForm):
             "saldo_inicial",
             "chave_pix",
             "tipo_chave_pix",
+            "layout_cobranca",
+            "carteira_cobranca",
+            "convenio",
+            "codigo_transmissao",
+            "remessa_homologada",
             "ativo",
         ]
         labels = {
@@ -39,6 +44,11 @@ class ContaBancariaForm(forms.ModelForm):
             "saldo_inicial": "Saldo inicial",
             "chave_pix": "Chave Pix",
             "tipo_chave_pix": "Tipo da chave Pix",
+            "layout_cobranca": "Layout de cobrança",
+            "carteira_cobranca": "Carteira",
+            "convenio": "Convênio",
+            "codigo_transmissao": "Código de transmissão",
+            "remessa_homologada": "Layout homologado pelo banco",
             "ativo": "Ativa",
         }
 
@@ -49,9 +59,14 @@ class ContaBancariaForm(forms.ModelForm):
         self.fields["banco_codigo"].required = False
         self.fields["saldo_inicial"].widget.attrs.setdefault("step", "0.01")
         self.fields["saldo_inicial"].widget.attrs.setdefault("inputmode", "decimal")
+        self.fields["layout_cobranca"].required = False
+        self.fields["remessa_homologada"].required = False
 
     def clean(self):
         cleaned = super().clean()
+        cleaned["layout_cobranca"] = (
+            cleaned.get("layout_cobranca") or ContaBancaria.LayoutCobranca.CNAB240
+        )
         agencia = (cleaned.get("agencia") or "").strip()
         conta = (cleaned.get("conta") or "").strip()
         banco_codigo = (cleaned.get("banco_codigo") or "").strip()

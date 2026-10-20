@@ -50,6 +50,8 @@ class RemessaBancaria(models.Model):
     quantidade_boletos = models.IntegerField(default=0)
     valor_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     status = models.CharField(max_length=20, default="gerado")
+    layout = models.CharField(max_length=10, default="cnab240")
+    arquivo_hash = models.CharField(max_length=64, blank=True, db_index=True)
     data_envio = models.DateTimeField(null=True, blank=True)
     usuario = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -70,11 +72,48 @@ class RetornoBancario(models.Model):
     quantidade_rejeitados = models.IntegerField(default=0)
     valor_total_pago = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     processado = models.BooleanField(default=False)
+    layout = models.CharField(max_length=10, blank=True)
+    arquivo_hash = models.CharField(max_length=64, db_index=True)
+    resumo_processamento = models.JSONField(default=dict, blank=True)
     usuario = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "retornos_bancarios"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["filial", "arquivo_hash"], name="fin_retorno_hash_filial_uniq",
+            ),
+        ]
+
+
+class RetornoBancarioItem(models.Model):
+    retorno = models.ForeignKey(
+        RetornoBancario, on_delete=models.CASCADE, related_name="itens",
+    )
+    boleto = models.ForeignKey(
+        "Boleto", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="ocorrencias_retorno",
+    )
+    numero_linha = models.PositiveIntegerField()
+    nosso_numero = models.CharField(max_length=30, blank=True)
+    codigo_ocorrencia = models.CharField(max_length=3, blank=True)
+    descricao_ocorrencia = models.CharField(max_length=120, blank=True)
+    data_ocorrencia = models.DateField(null=True, blank=True)
+    valor_titulo = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_pago = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    valor_tarifa = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    status = models.CharField(max_length=20, default="pendente")
+    mensagem = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        db_table = "retornos_bancarios_itens"
+        ordering = ["numero_linha"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["retorno", "numero_linha"], name="fin_retorno_item_linha_uniq",
+            ),
+        ]
 
 
 class Boleto(TimestampedModel):

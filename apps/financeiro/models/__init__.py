@@ -9,7 +9,9 @@ from .formas_pagamento import FormaPagamento, CondicaoPagamento, TaxaParcelament
 from .conta_bancaria import ContaBancaria, PlanoContas
 from .centro_custo import CentroCusto
 from .receber_pagar import ContaReceber, ContaPagar, PagamentoContaPagar, PagamentoContaReceber, MetaDespesaPessoal
-from .pix_boleto import PIXCobranca, Boleto, RemessaBancaria, RetornoBancario
+from .pix_boleto import (
+    PIXCobranca, Boleto, RemessaBancaria, RetornoBancario, RetornoBancarioItem,
+)
 from .extrato import ExtratoBancario, ConciliacaoBancaria, AgendaPagamento
 from .tef import TEFConfiguracao, TEFTransacao
 from .dre import DREConsolidado, DRECentroCusto
@@ -27,7 +29,7 @@ __all__ = [
     "FormaPagamento","CondicaoPagamento","TaxaParcelamento",
     "ContaBancaria","PlanoContas","CentroCusto",
     "ContaReceber","ContaPagar","PagamentoContaPagar","PagamentoContaReceber","MetaDespesaPessoal",
-    "PIXCobranca","Boleto","RemessaBancaria","RetornoBancario",
+    "PIXCobranca","Boleto","RemessaBancaria","RetornoBancario","RetornoBancarioItem",
     "ExtratoBancario","ConciliacaoBancaria","AgendaPagamento",
     "TEFConfiguracao","TEFTransacao",
     "DREConsolidado","DRECentroCusto",

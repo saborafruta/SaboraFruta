@@ -8,6 +8,10 @@ from apps.core.models.base import FilialManager as FilialAwareManager
 
 
 class ContaBancaria(TimestampedModel, ActiveModel):
+    class LayoutCobranca(models.TextChoices):
+        CNAB240 = "cnab240", "CNAB 240 (FEBRABAN)"
+        CNAB400 = "cnab400", "CNAB 400"
+
     filial = models.ForeignKey(Filial, on_delete=models.PROTECT, related_name="contas_bancarias")
     banco_codigo = models.CharField(max_length=5)
     banco_nome = models.CharField(max_length=80, blank=True)
@@ -30,6 +34,17 @@ class ContaBancaria(TimestampedModel, ActiveModel):
     carteira_cobranca = models.CharField(max_length=4, blank=True)
     convenio = models.CharField(max_length=10, blank=True)
     nosso_numero_atual = models.BigIntegerField(default=1)
+    layout_cobranca = models.CharField(
+        max_length=10, choices=LayoutCobranca.choices, default=LayoutCobranca.CNAB240,
+    )
+    codigo_transmissao = models.CharField(
+        max_length=20, blank=True,
+        help_text="Código do beneficiário/convênio usado no arquivo de cobrança.",
+    )
+    remessa_homologada = models.BooleanField(
+        default=False,
+        help_text="Marque somente depois que o banco homologar um arquivo gerado.",
+    )
 
     objects = FilialAwareManager()
 

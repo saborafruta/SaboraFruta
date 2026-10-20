@@ -205,6 +205,17 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3"><label class="block text-xs font-medium sm:col-span-2">Conta {{ conta_form.conta|add_class:"form-input mt-1" }}</label><label class="block text-xs font-medium">Dig. {{ conta_form.conta_digito|add_class:"form-input mt-1" }}</label></div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><label class="block text-xs font-medium">Tipo {{ conta_form.tipo_conta|add_class:"form-input mt-1" }}</label><label class="block text-xs font-medium">Saldo inicial {{ conta_form.saldo_inicial|add_class:"form-input mt-1" }}</label></div>
         <label class="block text-xs font-medium">Chave Pix {{ conta_form.chave_pix|add_class:"form-input mt-1" }}</label>
+        <div class="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+          <h4 class="text-sm font-semibold">Cobrança por boleto</h4>
+          <p class="mt-1 text-xs text-gray-500">Dados usados nos arquivos de remessa e retorno. Confirme-os com o banco.</p>
+          <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label class="block text-xs font-medium">Layout {{ conta_form.layout_cobranca|add_class:"form-input mt-1 w-full" }}</label>
+            <label class="block text-xs font-medium">Carteira {{ conta_form.carteira_cobranca|add_class:"form-input mt-1 w-full" }}</label>
+            <label class="block text-xs font-medium">Convênio {{ conta_form.convenio|add_class:"form-input mt-1 w-full" }}</label>
+            <label class="block text-xs font-medium">Código de transmissão {{ conta_form.codigo_transmissao|add_class:"form-input mt-1 w-full" }}</label>
+          </div>
+          <label class="mt-3 inline-flex items-center gap-2 text-sm">{{ conta_form.remessa_homologada }} Layout homologado pelo banco</label>
+        </div>
         <label class="inline-flex items-center gap-2 text-sm">{{ conta_form.ativo }} Conta ativa</label>
         <div class="flex justify-end gap-2 pt-1"><button type="button" @click="contaModal = false" class="btn-secondary">Cancelar</button><button type="submit" class="btn-primary">Salvar conta</button></div>
       </form>
