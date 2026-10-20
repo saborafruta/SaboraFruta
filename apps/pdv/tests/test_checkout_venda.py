@@ -231,6 +231,8 @@ class CheckoutVendaTests(TestCase):
         self.assertContains(resposta, 'Alt+P')
         self.assertContains(resposta, 'Alt+V')
         self.assertContains(resposta, 'Enter</kbd>')
+        self.assertContains(resposta, 'class="co-modal-action-key">Esc</kbd>', html=False)
+        self.assertContains(resposta, 'class="co-modal-action-key">Enter</kbd>', html=False)
         self.assertContains(resposta, 'margin-inline-start:8px')
         self.assertContains(resposta, 'descontoItemValor(item)')
         self.assertContains(resposta, 'descricaoApresentacao(produto)')

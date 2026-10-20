@@ -130,6 +130,8 @@
   .co-discount-shortcut { flex:0 0 auto; padding:2px 5px; border:1px solid var(--co-border); border-bottom-width:2px; border-radius:5px; background:var(--co-input); color:var(--co-muted); font-size:9px; font-weight:900; line-height:1.2; }
   .co-discount-field-label { display:flex!important; align-items:center; justify-content:space-between; gap:8px; }
   .co-modal-actions .co-btn { gap:7px; }
+  .co-modal-action { display:flex; flex-direction:column; align-items:flex-end; gap:5px; }
+  .co-modal-action-key { min-width:34px; padding:2px 6px; border:1px solid var(--co-border); border-bottom-width:2px; border-radius:5px; background:var(--co-input); color:var(--co-muted); font-size:9px; font-weight:900; line-height:1.2; text-align:center; }
   .co-discount-scope-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:14px; }
   .co-discount-scope { position:relative; min-height:104px; padding:14px 48px 14px 14px; display:flex; align-items:flex-start; gap:11px; border:1px solid var(--co-border); border-radius:12px; background:var(--co-panel); color:var(--co-text); text-align:left; cursor:pointer; }
   .co-discount-scope.active,.co-discount-scope:focus-visible,.co-discount-product.active,.co-discount-product:focus-visible { border-color:var(--co-blue); background:color-mix(in srgb,var(--co-blue) 16%,var(--co-card)); outline:none; box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--co-blue) 42%,transparent); }
@@ -510,7 +512,16 @@
       <div class="co-alert co-success" x-show="descontoLiberado" x-cloak style="margin-top:12px">Descontos já autorizados para esta venda.</div>
       <div class="co-alert" x-show="descontoModalRequerAutorizacao && !descontoLiberado && !usuariosAutorizadores.length" x-cloak style="margin-top:12px">Nenhum usuário desta filial possui a permissão PDV → Aprovar.</div>
       <div class="co-alert" x-show="erroSenhaDesconto" x-text="erroSenhaDesconto" x-cloak style="margin-top:12px"></div>
-      <div class="co-modal-actions"><button type="button" class="co-btn" @click="fecharSenhaDesconto()"><kbd class="co-discount-shortcut">Esc</kbd><span>Cancelar</span></button><button type="submit" class="co-btn co-btn-primary" :disabled="liberandoDesconto || (descontoModalRequerAutorizacao && !descontoLiberado && !usuariosAutorizadores.length)"><kbd class="co-discount-shortcut">Enter</kbd><span x-text="liberandoDesconto ? 'Autorizando e aplicando...' : (descontoModalRequerAutorizacao && !descontoLiberado ? 'Autorizar desconto' : 'Aplicar desconto')"></span></button></div>
+      <div class="co-modal-actions">
+        <div class="co-modal-action">
+          <kbd class="co-modal-action-key">Esc</kbd>
+          <button type="button" class="co-btn" @click="fecharSenhaDesconto()">Cancelar</button>
+        </div>
+        <div class="co-modal-action">
+          <kbd class="co-modal-action-key">Enter</kbd>
+          <button type="submit" class="co-btn co-btn-primary" :disabled="liberandoDesconto || (descontoModalRequerAutorizacao && !descontoLiberado && !usuariosAutorizadores.length)" x-text="liberandoDesconto ? 'Autorizando e aplicando...' : (descontoModalRequerAutorizacao && !descontoLiberado ? 'Autorizar desconto' : 'Aplicar desconto')"></button>
+        </div>
+      </div>
     </form>
   </div>
 
