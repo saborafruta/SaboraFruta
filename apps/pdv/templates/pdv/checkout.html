@@ -125,8 +125,11 @@
   .co-discount-modal-value .co-input { min-height:42px; padding:0; border:0; background:transparent; box-shadow:none; font-size:30px; font-weight:950; }
   .co-discount-limit { display:block; margin-top:5px; color:var(--co-muted); font-size:10px; }
   .co-discount-presets { display:flex; flex-wrap:wrap; gap:7px; margin-top:13px; }
-  .co-discount-preset { min-width:68px; min-height:39px; padding:7px 12px; border:1px solid var(--co-border); border-radius:9px; background:var(--co-panel); color:var(--co-text); font-weight:900; cursor:pointer; }
+  .co-discount-preset { min-width:76px; min-height:39px; padding:7px 9px; display:inline-flex; align-items:center; justify-content:space-between; gap:9px; border:1px solid var(--co-border); border-radius:9px; background:var(--co-panel); color:var(--co-text); font-weight:900; cursor:pointer; }
   .co-discount-preset:hover { border-color:var(--co-blue); }
+  .co-discount-shortcut { flex:0 0 auto; padding:2px 5px; border:1px solid var(--co-border); border-bottom-width:2px; border-radius:5px; background:var(--co-input); color:var(--co-muted); font-size:9px; font-weight:900; line-height:1.2; }
+  .co-discount-field-label { display:flex!important; align-items:center; justify-content:space-between; gap:8px; }
+  .co-modal-actions .co-btn { gap:7px; }
   .co-discount-scope-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:14px; }
   .co-discount-scope { position:relative; min-height:104px; padding:14px 48px 14px 14px; display:flex; align-items:flex-start; gap:11px; border:1px solid var(--co-border); border-radius:12px; background:var(--co-panel); color:var(--co-text); text-align:left; cursor:pointer; }
   .co-discount-scope.active,.co-discount-scope:focus-visible,.co-discount-product.active,.co-discount-product:focus-visible { border-color:var(--co-blue); background:color-mix(in srgb,var(--co-blue) 16%,var(--co-card)); outline:none; box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--co-blue) 42%,transparent); }
@@ -474,17 +477,17 @@
       <h3 id="checkout-senha-desconto-titulo" x-text="itemDescontoPendente ? 'Desconto no produto' : 'Desconto na venda'"></h3>
       <p class="co-sub" x-text="itemDescontoPendente ? descricaoApresentacao(itemDescontoPendente) : 'Aplique um desconto sobre o total da venda.'"></p>
       <div class="co-discount-presets" x-show="percentuaisDescontoRapido.length" x-cloak>
-        <template x-for="percentual in percentuaisDescontoRapido" :key="'desconto-'+percentual">
-          <button type="button" class="co-discount-preset" @click="selecionarDescontoRapido(percentual)" x-text="formatarPercentual(percentual)"></button>
+        <template x-for="(percentual, indice) in percentuaisDescontoRapido" :key="'desconto-'+percentual">
+          <button type="button" class="co-discount-preset" @click="selecionarDescontoRapido(percentual)"><span x-text="formatarPercentual(percentual)"></span><kbd class="co-discount-shortcut" x-text="atalhoDescontoRapido(indice)"></kbd></button>
         </template>
       </div>
       <div class="co-discount-inputs">
         <div class="co-field">
-          <label for="checkout-percentual-desconto">Desconto em porcentagem</label>
+          <label class="co-discount-field-label" for="checkout-percentual-desconto"><span>Desconto em porcentagem</span><kbd class="co-discount-shortcut">Alt+P</kbd></label>
           <div class="co-discount-modal-value"><input id="checkout-percentual-desconto" x-ref="percentualDescontoModal" class="co-input" type="text" inputmode="decimal" x-model="descontoModalPercentual" @input="sincronizarDescontoModalPorPercentual()" autocomplete="off" placeholder="0,00"><span>%</span></div>
         </div>
         <div class="co-field">
-          <label for="checkout-valor-desconto">Valor do desconto</label>
+          <label class="co-discount-field-label" for="checkout-valor-desconto"><span>Valor do desconto</span><kbd class="co-discount-shortcut">Alt+V</kbd></label>
           <div class="co-discount-modal-value"><span>R$</span><input id="checkout-valor-desconto" x-ref="valorDescontoModal" class="co-input" type="text" inputmode="decimal" x-model="descontoModalEntrada" @input="sincronizarDescontoModalPorValor()" autocomplete="off" placeholder="0,00"></div>
         </div>
       </div>
@@ -507,7 +510,7 @@
       <div class="co-alert co-success" x-show="descontoLiberado" x-cloak style="margin-top:12px">Descontos já autorizados para esta venda.</div>
       <div class="co-alert" x-show="descontoModalRequerAutorizacao && !descontoLiberado && !usuariosAutorizadores.length" x-cloak style="margin-top:12px">Nenhum usuário desta filial possui a permissão PDV → Aprovar.</div>
       <div class="co-alert" x-show="erroSenhaDesconto" x-text="erroSenhaDesconto" x-cloak style="margin-top:12px"></div>
-      <div class="co-modal-actions"><button type="button" class="co-btn" @click="fecharSenhaDesconto()">Cancelar</button><button type="submit" class="co-btn co-btn-primary" :disabled="liberandoDesconto || (descontoModalRequerAutorizacao && !descontoLiberado && !usuariosAutorizadores.length)" x-text="liberandoDesconto ? 'Autorizando e aplicando...' : (descontoModalRequerAutorizacao && !descontoLiberado ? 'Autorizar desconto' : 'Aplicar desconto')"></button></div>
+      <div class="co-modal-actions"><button type="button" class="co-btn" @click="fecharSenhaDesconto()"><kbd class="co-discount-shortcut">Esc</kbd><span>Cancelar</span></button><button type="submit" class="co-btn co-btn-primary" :disabled="liberandoDesconto || (descontoModalRequerAutorizacao && !descontoLiberado && !usuariosAutorizadores.length)"><kbd class="co-discount-shortcut">Enter</kbd><span x-text="liberandoDesconto ? 'Autorizando e aplicando...' : (descontoModalRequerAutorizacao && !descontoLiberado ? 'Autorizar desconto' : 'Aplicar desconto')"></span></button></div>
     </form>
   </div>
 
@@ -686,7 +689,8 @@ function checkoutVenda() {
       }
       if(this.modalPagamento){ this.atalhoPagamento(evento); return; }
       if(this.modalEscopoDesconto){ this.atalhoEscopoDesconto(evento); return; }
-      if(this.modalSenhaBuscaNome || this.modalSenhaDesconto)return;
+      if(this.modalSenhaDesconto){ this.atalhoModalDesconto(evento); return; }
+      if(this.modalSenhaBuscaNome)return;
       if(this.modalDocumento){ this.atalhoDocumento(evento); return; }
       if(this.modalCliente || !this.sessao || this.carregando)return;
       if(tecla==='F2'){ evento.preventDefault(); this.focarProduto(); }
@@ -812,6 +816,15 @@ function checkoutVenda() {
     sincronizarDescontoModalPorPercentual(){
       const percentual=Math.max(0,this.numero(this.descontoModalPercentual));
       this.descontoModalEntrada=this.formatarNumeroInput(this.descontoModalMaximo*percentual/100);this.erroSenhaDesconto='';
+    },
+    atalhoDescontoRapido(indice){return indice<9?'Alt+'+(indice+1):'';},
+    atalhoModalDesconto(evento){
+      if(evento.repeat||!evento.altKey)return;
+      const tecla=String(evento.key||'').toLowerCase();
+      if(tecla==='p'){evento.preventDefault();this.focar('percentualDescontoModal');return;}
+      if(tecla==='v'){evento.preventDefault();this.focar('valorDescontoModal');return;}
+      const indice=/^[1-9]$/.test(tecla)?Number(tecla)-1:-1;
+      if(indice>=0&&indice<this.percentuaisDescontoRapido.length){evento.preventDefault();this.selecionarDescontoRapido(this.percentuaisDescontoRapido[indice]);}
     },
     selecionarDescontoRapido(percentual){this.descontoModalPercentual=this.formatarNumeroInput(percentual);this.sincronizarDescontoModalPorPercentual();this.focar('percentualDescontoModal');},
     fecharSenhaDesconto(){this.modalSenhaDesconto=false;this.descontoModalEntrada='';this.descontoModalPercentual='';this.usuarioDescontoId='';this.senhaDesconto='';this.erroSenhaDesconto='';this.itemDescontoPendenteId=null;this.focarProduto();},

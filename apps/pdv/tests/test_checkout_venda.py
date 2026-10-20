@@ -227,6 +227,10 @@ class CheckoutVendaTests(TestCase):
         self.assertContains(resposta, 'Use 1 ou 2, as setas e Enter para escolher.')
         self.assertContains(resposta, 'atalhoEscopoDesconto(evento)')
         self.assertContains(resposta, 'atalhoProdutoDesconto(indice)')
+        self.assertContains(resposta, 'atalhoModalDesconto(evento)')
+        self.assertContains(resposta, 'Alt+P')
+        self.assertContains(resposta, 'Alt+V')
+        self.assertContains(resposta, 'Enter</kbd>')
         self.assertContains(resposta, 'margin-inline-start:8px')
         self.assertContains(resposta, 'descontoItemValor(item)')
         self.assertContains(resposta, 'descricaoApresentacao(produto)')
@@ -803,6 +807,51 @@ assert.equal(checkout.etapaEscopoDesconto, 'produto');
 tecla('1');
 assert.equal(checkout.itemDescontoPendenteId, '1:base');
 assert.ok(focos.length > 0);
+'''
+
+        resultado = subprocess.run(
+            [shutil.which('node')], input=script, text=True, encoding='utf-8',
+            capture_output=True, timeout=20,
+        )
+
+        self.assertEqual(resultado.returncode, 0, resultado.stdout + resultado.stderr)
+
+    @skipUnless(shutil.which('node'), 'Node.js necessário para validar o JavaScript do checkout')
+    def test_modal_de_desconto_tem_atalhos_sem_conflitar_com_digitacao(self):
+        self.habilitar_checkout()
+        resposta = self.client.get(reverse('pdv:checkout'))
+        html = resposta.content.decode('utf-8')
+        script = 'function checkoutVenda()' + html.split(
+            'function checkoutVenda()', 1,
+        )[1].split('</script>', 1)[0]
+        script += r'''
+const assert = require('node:assert/strict');
+global.document = {getElementById: () => ({textContent: '[]'})};
+const checkout = checkoutVenda();
+const focos = [];
+checkout.$refs = {
+  percentualDescontoModal: {focus: () => focos.push('percentual'), select: () => focos.push('percentual-selecionado')},
+  valorDescontoModal: {focus: () => focos.push('valor'), select: () => focos.push('valor-selecionado')}
+};
+checkout.$nextTick = (callback) => callback();
+checkout.modalSenhaDesconto = true;
+checkout.configuracaoDescontos = {percentuais: [3, 5, 10]};
+let percentualEscolhido = null;
+checkout.selecionarDescontoRapido = (percentual) => { percentualEscolhido = percentual; };
+function tecla(key, altKey = false) {
+  let prevenido = false;
+  checkout.atalhoTeclado({key, altKey, repeat: false, preventDefault: () => { prevenido = true; }});
+  return prevenido;
+}
+assert.equal(tecla('2'), false);
+assert.equal(percentualEscolhido, null);
+assert.equal(tecla('2', true), true);
+assert.equal(percentualEscolhido, 5);
+assert.equal(tecla('p', true), true);
+assert.equal(tecla('v', true), true);
+assert.deepEqual(focos, ['percentual', 'percentual-selecionado', 'valor', 'valor-selecionado']);
+assert.equal(checkout.atalhoDescontoRapido(0), 'Alt+1');
+assert.equal(checkout.atalhoDescontoRapido(8), 'Alt+9');
 '''
 
         resultado = subprocess.run(
