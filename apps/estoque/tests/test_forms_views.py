@@ -1722,6 +1722,7 @@ class EstoqueFormsViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Estoque por filial e depósito')
+        self.assertContains(response, 'data-sticky-stock-header="true"')
         self.assertContains(response, 'Reserva')
         self.assertContains(response, 'Fardo com 5 unidades')
         self.assertEqual(response.context['resumo']['atual'], Decimal('15'))

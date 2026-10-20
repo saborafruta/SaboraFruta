@@ -7,11 +7,21 @@
 {% block extra_head %}
 {{ block.super }}
 <style>
-  .stock-matrix-shell { border: 1px solid var(--border-color, #30343b); border-radius: 14px; overflow: hidden; }
+  .stock-matrix-shell {
+    position: relative;
+    max-height: min(72vh, 760px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    border: 1px solid var(--border-color, #30343b);
+    border-radius: 14px;
+  }
+  .stock-matrix-shell:focus-visible { outline: 2px solid #60a5fa; outline-offset: 3px; }
   .stock-matrix { border-collapse: separate; border-spacing: 0; min-width: 980px; width: 100%; }
   .stock-matrix th, .stock-matrix td { border-right: 1px solid rgba(148,163,184,.16); border-bottom: 1px solid rgba(148,163,184,.14); }
   .stock-matrix thead th { background: #172554; color: #dbeafe; position: sticky; top: 0; z-index: 3; }
-  .stock-matrix thead tr:nth-child(2) th { top: 39px; background: #1e3a8a; }
+  .stock-matrix thead tr:first-child th { height: 44px; }
+  .stock-matrix thead tr:nth-child(2) th { top: 44px; background: #1e3a8a; box-shadow: 0 2px 0 rgba(15,23,42,.9); }
   .stock-matrix .stock-product { position: sticky; left: 0; z-index: 2; background: #1d1d20; min-width: 250px; max-width: 320px; }
   .tema-claro .stock-matrix .stock-product { background: #fff; }
   .stock-matrix thead .stock-product { z-index: 5; background: #172554; }
@@ -75,7 +85,7 @@
       </div>
       {% if mostrar_apresentacoes %}<span class="soft-pill is-blue">Embalagens visíveis · sem somar nos KPIs</span>{% endif %}
     </div>
-    <div class="overflow-x-auto stock-matrix-shell">
+    <div class="stock-matrix-shell" data-sticky-stock-header="true" role="region" tabindex="0" aria-label="Estoque por filial e depósito">
       <table class="stock-matrix text-sm">
         <thead>
           <tr>
