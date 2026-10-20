@@ -13,10 +13,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
-from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.core.tenant_context import tenant_atomic
 from apps.core.services.exceptions import DomainError
 from apps.financeiro.constants.enums import StatusContaReceber, TipoFormaPagamento
 from apps.financeiro.models import (
@@ -83,7 +83,7 @@ class RemessaCNAB240Service:
             raise DomainError("Complete a conta bancária: " + ", ".join(faltantes) + ".")
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def gerar(cls, *, conta_bancaria: ContaBancaria, titulos, usuario) -> RemessaBancaria:
         conta = ContaBancaria.objects.select_for_update().select_related("filial").get(pk=conta_bancaria.pk)
         cls._validar_conta(conta)
@@ -281,7 +281,7 @@ class RetornoCNABService:
         return ocorrencias
 
     @classmethod
-    @transaction.atomic
+    @tenant_atomic
     def importar(cls, *, conta_bancaria, nome, dados: bytes, usuario):
         if len(dados) > 10 * 1024 * 1024:
             raise DomainError("O arquivo excede o limite de 10 MB.")

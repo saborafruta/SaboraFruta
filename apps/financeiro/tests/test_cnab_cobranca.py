@@ -1,7 +1,9 @@
+import ast
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from apps.cadastros.models import Cliente
@@ -12,6 +14,38 @@ from apps.financeiro.models import (
     Boleto, ContaBancaria, ContaReceber, FormaPagamento, RetornoBancarioItem,
 )
 from apps.financeiro.services.cnab_cobranca import RemessaCNAB240Service, RetornoCNABService
+
+
+class CnabTenantTransactionTests(SimpleTestCase):
+    """Impede que remessa/retorno abram transação no Banco Gerencial."""
+
+    def test_fluxos_cnab_usam_transacao_do_tenant(self):
+        caminho = Path(__file__).resolve().parents[1] / "services" / "cnab_cobranca.py"
+        arvore = ast.parse(caminho.read_text(encoding="utf-8"))
+
+        atomicos_padrao = [
+            no
+            for no in ast.walk(arvore)
+            if isinstance(no, ast.Attribute)
+            and isinstance(no.value, ast.Name)
+            and no.value.id == "transaction"
+            and no.attr == "atomic"
+        ]
+        atomicos_tenant = [
+            no
+            for no in ast.walk(arvore)
+            if isinstance(no, ast.Name) and no.id == "tenant_atomic"
+        ]
+        importa_tenant_atomic = any(
+            isinstance(no, ast.ImportFrom)
+            and no.module == "apps.core.tenant_context"
+            and any(nome.name == "tenant_atomic" for nome in no.names)
+            for no in ast.walk(arvore)
+        )
+
+        self.assertFalse(atomicos_padrao)
+        self.assertTrue(importa_tenant_atomic)
+        self.assertEqual(len(atomicos_tenant), 2)  # gerar e importar
 
 
 def linha_cnab(campos):
