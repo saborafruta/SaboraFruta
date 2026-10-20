@@ -291,6 +291,14 @@
     border-color: rgba(148,163,184,.16);
   }
   .estoque-filter-card { align-items: center; }
+  .estoque-presentation-row td { background: rgba(37,99,235,.055); border-top-color: rgba(96,165,250,.16); }
+  body.tema-claro .estoque-presentation-row td { background: #f8fafc; border-top-color: #dbeafe; }
+  .estoque-presentation-product { display:flex; align-items:center; gap:.55rem; padding-left:1.2rem; border-left:2px solid #3b82f6; min-width:0; }
+  .estoque-presentation-arrow { flex:0 0 auto; color:#60a5fa; font-size:1rem; font-weight:900; }
+  .estoque-presentation-name { color:#93c5fd; font-weight:800; }
+  body.tema-claro .estoque-presentation-name { color:#1d4ed8; }
+  .estoque-presentation-meta { color:#94a3b8; font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  body.tema-claro .estoque-presentation-meta { color:#64748b; }
   .estoque-filter-button,
   .estoque-filter-export { min-height: 40px; width: 100%; justify-content: center; white-space: nowrap; }
   @media (min-width: 1280px) {
@@ -457,6 +465,12 @@
     <input type="checkbox" name="com_estoque" value="1" {% if somente_com_estoque %}checked{% endif %}
            class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
     <span class="text-sm font-semibold">Somente com estoque</span>
+  </label>
+  <label class="md:col-span-3 flex items-center gap-2 px-3 min-h-10 rounded-lg cursor-pointer"
+         :style="temaClaro ? 'background:#f8fafc; border:1px solid #e2e8f0; color:#334155;' : 'background:#18181b; border:1px solid #3f3f46; color:#e2e8f0;'">
+    <input type="checkbox" name="mostrar_apresentacoes" value="1" {% if mostrar_apresentacoes %}checked{% endif %}
+           class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+    <span class="text-sm font-semibold">Mostrar produtos por embalagem</span>
   </label>
   <div class="md:col-span-1 estoque-filter-submit">
     <button type="submit" class="btn-secondary estoque-filter-button">Filtrar</button>
@@ -1061,6 +1075,36 @@
         <button type="button" class="estoque-kardex-btn" data-estoque-kardex-url="{% url 'estoque:estoque-kardex-produto' p.pk %}">Abrir</button>
       </td>
     </tr>
+    {% if mostrar_apresentacoes %}
+      {% for apresentacao in p.apresentacoes_estoque_relatorio %}
+        <tr class="table-row-hover estoque-presentation-row" data-apresentacao-id="{{ apresentacao.pk }}">
+          <td class="px-4 py-3">
+            <div class="estoque-presentation-product">
+              <span class="estoque-presentation-arrow" aria-hidden="true">↳</span>
+              <div class="min-w-0">
+                <div class="estoque-presentation-name truncate" title="{{ apresentacao.descricao }}">{{ apresentacao.descricao }}</div>
+                <div class="estoque-presentation-meta">{{ p.descricao }} · 1 {{ apresentacao.unidade.sigla }} = {{ apresentacao.fator_conversao|quantidade:3 }} {{ p.unidade_medida.sigla }}{% if apresentacao.codigo_barras_relatorio %} · {{ apresentacao.codigo_barras_relatorio }}{% endif %}</div>
+              </div>
+            </div>
+          </td>
+          <td class="px-4 py-3 text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ p.categoria.nome|default:"-" }}</td>
+          <td class="px-4 py-3 text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">{{ p.fornecedor|default:"-" }}</td>
+          <td class="px-4 py-3 text-sm font-semibold">{{ apresentacao.unidade.sigla }}</td>
+          {% if tem_varios_depositos and not deposito_id %}
+            {% for saldo in apresentacao.saldos_depositos %}
+              <td class="px-4 py-3 text-right whitespace-nowrap" title="Equivalente ao saldo base disponível em {{ saldo.nome }}">{{ saldo.disponivel|quantidade:3 }}</td>
+            {% endfor %}
+          {% endif %}
+          <td class="px-4 py-3 text-right font-semibold">{{ apresentacao.estoque_quantidade_atual|quantidade:3 }}</td>
+          <td class="px-4 py-3 text-right text-xs">{{ apresentacao.estoque_minimo_convertido|quantidade:3 }}</td>
+          <td class="px-4 py-3 text-right text-xs font-semibold" :style="temaClaro ? 'color:#b45309;' : 'color:#fcd34d;'">{% if apresentacao.sugestao_reposicao_convertida > 0 %}{{ apresentacao.sugestao_reposicao_convertida|quantidade:3 }}{% else %}-{% endif %}</td>
+          <td class="px-4 py-3 text-right font-medium">{{ apresentacao.preco_venda|moeda }}</td>
+          <td class="px-4 py-3 text-right text-sm">{{ apresentacao.estoque_custo_unitario_convertido|moeda }}</td>
+          <td class="px-4 py-3 text-right text-sm" title="O valor total pertence ao saldo base e não é repetido">-</td>
+          <td class="px-4 py-3 text-center"><span class="text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Mesmo estoque</span></td>
+        </tr>
+      {% endfor %}
+    {% endif %}
   {% empty %}
     <tr><td colspan="{{ tabela_colspan }}" class="text-center py-12" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Nenhum produto encontrado para a filial atual.</td></tr>
   {% endfor %}

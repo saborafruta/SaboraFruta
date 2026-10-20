@@ -395,6 +395,70 @@ class EstoqueFormsViewsTests(TestCase):
         self.assertIn('R$ 4,00', content)
         self.assertIn('R$ 8,00', content)
 
+    def test_lista_estoque_mostra_apresentacoes_convertidas_com_flag_e_exporta(self):
+        self.conceder(pode_ver=True, pode_exportar=True)
+        produto = self.criar_produto(descricao='Feijao preto 1 kg')
+        produto.estoque_minimo = Decimal('20')
+        produto.preco_custo = Decimal('4')
+        produto.save(update_fields=['estoque_minimo', 'preco_custo', 'updated_at'])
+        unidade_fardo = UnidadeMedida.objects.create(
+            empresa=self.empresa,
+            sigla='FD',
+            descricao='Fardo',
+            tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        UnidadeMedidaFilial.objects.create(unidade=unidade_fardo, filial=self.filial)
+        apresentacao = ProdutoApresentacao.objects.create(
+            produto=produto,
+            unidade=unidade_fardo,
+            descricao='Fardo com 10 unidades',
+            codigo='FD-10',
+            fator_conversao=Decimal('10'),
+            preco_venda=Decimal('55'),
+            permite_estoque=True,
+        )
+        ProdutoApresentacaoFilial.objects.create(
+            apresentacao=apresentacao,
+            filial=self.filial,
+        )
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=produto.pk,
+            filial_id=self.filial.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('100'),
+            usuario_id=self.usuario.pk,
+            valor_unitario=Decimal('4'),
+        )
+
+        path = reverse('estoque:estoque-list')
+        sem_apresentacoes = self.client.get(path)
+        com_apresentacoes = self.client.get(path, {'mostrar_apresentacoes': '1'})
+        exportacao = self.client.get(path, {
+            'mostrar_apresentacoes': '1',
+            'export': 'csv',
+        })
+        exportacao_pdf = self.client.get(path, {
+            'mostrar_apresentacoes': '1',
+            'export': 'pdf',
+        })
+
+        self.assertNotContains(sem_apresentacoes, 'Fardo com 10 unidades')
+        self.assertContains(com_apresentacoes, 'Mostrar produtos por embalagem')
+        self.assertContains(com_apresentacoes, 'Fardo com 10 unidades')
+        self.assertContains(com_apresentacoes, '10')
+        self.assertContains(com_apresentacoes, 'Mesmo estoque')
+        self.assertContains(com_apresentacoes, 'mostrar_apresentacoes=1')
+        self.assertContains(com_apresentacoes, 'export=csv')
+        self.assertEqual(
+            com_apresentacoes.context['resumo']['quantidade_total_filtrada'],
+            Decimal('100'),
+        )
+        csv_content = exportacao.content.decode('utf-8-sig')
+        self.assertIn('Feijao preto 1 kg - Fardo com 10 unidades', csv_content)
+        self.assertIn(';FD;10;', csv_content)
+        self.assertEqual(exportacao_pdf.status_code, 200)
+        self.assertEqual(exportacao_pdf['Content-Type'], 'application/pdf')
+
     def test_lista_estoque_filtra_saldo_positivo_e_totaliza_quantidade(self):
         self.conceder(pode_ver=True)
         positivo_a = self.criar_produto(descricao='Produto positivo A')

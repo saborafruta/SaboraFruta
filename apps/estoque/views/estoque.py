@@ -72,6 +72,7 @@ def anexar_apresentacoes_estoque_relatorio(*, produtos, filial):
             fator_conversao__gt=0,
         )
         .select_related('unidade')
+        .prefetch_related('codigos_barras')
         .order_by('produto_id', 'fator_conversao', 'descricao')
     )
     for apresentacao in apresentacoes:
@@ -84,10 +85,21 @@ def anexar_apresentacoes_estoque_relatorio(*, produtos, filial):
                 'reservada': saldo['reservada'] / fator,
                 'disponivel': saldo['disponivel'] / fator,
             }
-            for saldo in produto.saldos_depositos
+            for saldo in getattr(produto, 'saldos_depositos', [])
         ]
+        apresentacao.estoque_quantidade_atual = produto.estoque_quantidade_atual / fator
+        apresentacao.estoque_quantidade_reservada = produto.estoque_quantidade_reservada / fator
         apresentacao.estoque_quantidade_disponivel = (
             produto.estoque_quantidade_disponivel / fator
+        )
+        apresentacao.estoque_minimo_convertido = produto.estoque_minimo / fator
+        apresentacao.sugestao_reposicao_convertida = produto.sugestao_reposicao / fator
+        apresentacao.estoque_custo_unitario_convertido = (
+            produto.estoque_custo_unitario * fator
+        )
+        apresentacao.codigo_barras_relatorio = next(
+            (codigo.ean for codigo in apresentacao.codigos_barras.all() if codigo.ativo),
+            '',
         )
         produto.apresentacoes_estoque_relatorio.append(apresentacao)
 
@@ -233,6 +245,7 @@ class EstoqueListView(PermissaoRequiredMixin, View):
         fornecedor_id = request.GET.get('fornecedor', '')
         status = request.GET.get('status') or 'todos'
         somente_com_estoque = request.GET.get('com_estoque') == '1'
+        mostrar_apresentacoes = request.GET.get('mostrar_apresentacoes') == '1'
         ordem = request.GET.get('ordem', 'id')
 
         if busca:
@@ -354,10 +367,21 @@ class EstoqueListView(PermissaoRequiredMixin, View):
             bloqueio = bloquear_exportacao_sem_permissao(request)
             if bloqueio:
                 return bloqueio
-            qs_export = qs.order_by('descricao')
+            qs_export = list(qs.order_by('descricao'))
+            if mostrar_apresentacoes:
+                anexar_apresentacoes_estoque_relatorio(
+                    produtos=qs_export,
+                    filial=request.filial_ativa,
+                )
             if export == 'pdf':
-                return self._exportar_pdf(qs_export)
-            return self._exportar_csv(qs_export)
+                return self._exportar_pdf(
+                    qs_export,
+                    mostrar_apresentacoes=mostrar_apresentacoes,
+                )
+            return self._exportar_csv(
+                qs_export,
+                mostrar_apresentacoes=mostrar_apresentacoes,
+            )
 
         valor_custo_expr = ExpressionWrapper(
             F('estoque_quantidade_atual') * F('estoque_custo_unitario'),
@@ -419,6 +443,11 @@ class EstoqueListView(PermissaoRequiredMixin, View):
                 filial=request.filial_ativa,
                 depositos=depositos,
             )
+        if mostrar_apresentacoes:
+            anexar_apresentacoes_estoque_relatorio(
+                produtos=page_obj.object_list,
+                filial=request.filial_ativa,
+            )
         querydict = request.GET.copy()
         querydict.pop('page', None)
         querydict.pop('export', None)
@@ -448,6 +477,7 @@ class EstoqueListView(PermissaoRequiredMixin, View):
             'fornecedor_id': fornecedor_id,
             'status': status,
             'somente_com_estoque': somente_com_estoque,
+            'mostrar_apresentacoes': mostrar_apresentacoes,
             'ordem': ordem,
             'sort_urls': sort_urls,
             'depositos': depositos,
@@ -521,8 +551,8 @@ class EstoqueListView(PermissaoRequiredMixin, View):
             'page_querystring': querydict.urlencode(),
         })
 
-    @staticmethod
-    def _exportar_csv(qs):
+    @classmethod
+    def _exportar_csv(cls, qs, *, mostrar_apresentacoes=False):
         response = HttpResponse(content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = 'attachment; filename="estoque.csv"'
         response.write('\ufeff')
@@ -558,6 +588,23 @@ class EstoqueListView(PermissaoRequiredMixin, View):
                 produto.estoque_custo_unitario,
                 produto.estoque_valor_custo_total,
             ])
+            if mostrar_apresentacoes:
+                for apresentacao in produto.apresentacoes_estoque_relatorio:
+                    writer.writerow([
+                        produto.codigo_replicacao,
+                        apresentacao.codigo,
+                        apresentacao.codigo_barras_relatorio,
+                        f'{produto.descricao} - {apresentacao.descricao}',
+                        apresentacao.unidade.sigla,
+                        cls._formatar_quantidade(apresentacao.estoque_quantidade_atual),
+                        cls._formatar_quantidade(apresentacao.estoque_quantidade_reservada),
+                        cls._formatar_quantidade(apresentacao.estoque_quantidade_disponivel),
+                        cls._formatar_quantidade(apresentacao.estoque_minimo_convertido),
+                        cls._formatar_quantidade(apresentacao.sugestao_reposicao_convertida),
+                        apresentacao.preco_venda,
+                        apresentacao.estoque_custo_unitario_convertido,
+                        '',
+                    ])
         return response
 
     @staticmethod
@@ -577,7 +624,7 @@ class EstoqueListView(PermissaoRequiredMixin, View):
         return texto.rstrip('0').rstrip(',') if casas else texto
 
     @classmethod
-    def _exportar_pdf(cls, qs):
+    def _exportar_pdf(cls, qs, *, mostrar_apresentacoes=False):
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = 'attachment; filename="estoque.pdf"'
         doc = SimpleDocTemplate(
@@ -620,6 +667,18 @@ class EstoqueListView(PermissaoRequiredMixin, View):
                 cls._formatar_moeda(produto.estoque_valor_custo_total),
                 status,
             ])
+            if mostrar_apresentacoes:
+                for apresentacao in produto.apresentacoes_estoque_relatorio:
+                    data.append([
+                        f'  {apresentacao.descricao} ({apresentacao.unidade.sigla})',
+                        cls._formatar_quantidade(apresentacao.estoque_quantidade_atual),
+                        cls._formatar_quantidade(apresentacao.estoque_quantidade_disponivel),
+                        cls._formatar_quantidade(apresentacao.estoque_minimo_convertido),
+                        cls._formatar_moeda(apresentacao.preco_venda),
+                        cls._formatar_moeda(apresentacao.estoque_custo_unitario_convertido),
+                        '-',
+                        'Equivalencia',
+                    ])
         table = Table(data, repeatRows=1, colWidths=[190, 55, 65, 55, 75, 75, 80, 55])
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f2937')),
