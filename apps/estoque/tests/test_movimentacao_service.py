@@ -455,6 +455,52 @@ class MovimentacaoServiceTests(TestCase):
         self.assertEqual(lote_destino.quantidade_atual, Decimal('3.000'))
         self.assertEqual(lote_destino.status, LoteProduto.Status.ATIVO)
 
+    def test_transferencia_multipla_reverte_todas_as_linhas_quando_uma_falha(self):
+        produto_ok = self.criar_produto(controla_lote=False)
+        produto_destino_invalido = self.criar_produto(controla_lote=False)
+        ProdutoFilial.objects.create(produto=produto_ok, filial=self.filial_destino)
+        for produto in (produto_ok, produto_destino_invalido):
+            MovimentacaoService.registrar_movimentacao(
+                produto_id=produto.pk,
+                filial_id=self.filial.pk,
+                tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+                quantidade=Decimal('5'),
+                usuario_id=self.usuario.pk,
+            )
+
+        with self.assertRaisesMessage(DadosInvalidosError, 'filial de destino'):
+            MovimentacaoService.transferir_itens_entre_filiais(
+                itens=[
+                    {
+                        'produto': produto_ok,
+                        'apresentacao': None,
+                        'lote': None,
+                        'quantidade_base': Decimal('2'),
+                        'quantidade_comercial': Decimal('2'),
+                        'fator_conversao': Decimal('1'),
+                    },
+                    {
+                        'produto': produto_destino_invalido,
+                        'apresentacao': None,
+                        'lote': None,
+                        'quantidade_base': Decimal('1'),
+                        'quantidade_comercial': Decimal('1'),
+                        'fator_conversao': Decimal('1'),
+                    },
+                ],
+                filial_origem_id=self.filial.pk,
+                filial_destino_id=self.filial_destino.pk,
+                usuario_id=self.usuario.pk,
+                observacao='Teste atomico',
+            )
+
+        estoque = Estoque.objects.get(produto=produto_ok, filial=self.filial)
+        self.assertEqual(estoque.quantidade_atual, Decimal('5'))
+        self.assertFalse(MovimentacaoEstoque.objects.filter(
+            produto=produto_ok,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
+        ).exists())
+
     def test_reativar_transferencia_refaz_estoque_e_limpa_cancelamento(self):
         produto = self.criar_produto(controla_lote=False)
         ProdutoFilial.objects.create(produto=produto, filial=self.filial_destino)

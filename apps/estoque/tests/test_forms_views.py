@@ -9,7 +9,9 @@ from apps.cadastros.models import Fornecedor, FornecedorFilial
 from apps.compras.models import EntradaNF, ItemEntradaNF, PedidoCompra
 from apps.compras.services.entrada_custo_service import EntradaCustoService
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, RegistroAuditoria, Usuario
-from apps.estoque.forms import MovimentacaoManualForm, TransferenciaForm
+from apps.estoque.forms import (
+    MovimentacaoManualForm, TransferenciaForm, TransferenciaMultiplaForm,
+)
 from apps.estoque.models import Deposito, Estoque, Inventario, ItemInventario, LoteProduto, MovimentacaoEstoque
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.estoque.views import (
@@ -34,7 +36,8 @@ from apps.estoque.views import (
 )
 from apps.estoque.views.inventario import _criar_itens_inventario
 from apps.produtos.models import (
-    Produto, ProdutoApresentacao, ProdutoApresentacaoFilial, ProdutoFilial,
+    Produto, ProdutoApresentacao, ProdutoApresentacaoFilial, ProdutoCodigoBarras,
+    ProdutoFilial,
     UnidadeMedida, UnidadeMedidaFilial,
 )
 
@@ -203,10 +206,103 @@ class EstoqueFormsViewsTests(TestCase):
         response = self.client.get(reverse('estoque:transferencia'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Digite ID, código interno, código de barras ou descrição')
-        self.assertContains(response, 'type="hidden" name="produto" id="id_produto"', html=False)
-        self.assertContains(response, 'id="lot-field" class="hidden"', html=False)
+        self.assertContains(response, 'Transferência com vários itens')
+        self.assertContains(response, 'Produto ou embalagem')
+        self.assertContains(response, 'name="itens_json"', html=False)
+        self.assertContains(response, 'incluir_apresentacoes=1', html=False)
         self.assertContains(response, reverse('estoque:lote-search-json'))
+
+    def test_form_transferencia_multipla_converte_apresentacao_para_unidade_base(self):
+        produto = self.criar_produto(descricao='Feijao preto')
+        ProdutoFilial.objects.create(produto=produto, filial=self.filial_destino)
+        unidade = UnidadeMedida.objects.create(
+            empresa=self.empresa,
+            sigla='FD',
+            descricao='Fardo',
+            tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        apresentacao = ProdutoApresentacao.objects.create(
+            produto=produto,
+            unidade=unidade,
+            descricao='Fardo com 10',
+            fator_conversao=Decimal('10'),
+            permite_estoque=True,
+        )
+        ProdutoApresentacaoFilial.objects.create(apresentacao=apresentacao, filial=self.filial)
+        ProdutoApresentacaoFilial.objects.create(apresentacao=apresentacao, filial=self.filial_destino)
+        form = TransferenciaMultiplaForm(
+            data={
+                'filial_destino': self.filial_destino.pk,
+                'observacao': 'Reposicao',
+                'itens_json': json.dumps([{
+                    'produto_id': produto.pk,
+                    'apresentacao_id': apresentacao.pk,
+                    'quantidade': '2',
+                }]),
+            },
+            filial=self.filial,
+            empresa=self.empresa,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['itens'][0]['quantidade_base'], Decimal('20'))
+        self.assertEqual(form.cleaned_data['itens'][0]['quantidade_comercial'], Decimal('2'))
+
+    def test_transferencia_multipla_registra_produto_e_embalagem_no_mesmo_documento(self):
+        self.conceder(pode_ver=True, pode_aprovar=True)
+        produto = self.criar_produto(descricao='Feijao preto')
+        ProdutoFilial.objects.create(produto=produto, filial=self.filial_destino)
+        unidade = UnidadeMedida.objects.create(
+            empresa=self.empresa,
+            sigla='FD',
+            descricao='Fardo',
+            tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        apresentacao = ProdutoApresentacao.objects.create(
+            produto=produto,
+            unidade=unidade,
+            descricao='Fardo com 5',
+            fator_conversao=Decimal('5'),
+            permite_estoque=True,
+        )
+        ProdutoApresentacaoFilial.objects.create(apresentacao=apresentacao, filial=self.filial)
+        ProdutoApresentacaoFilial.objects.create(apresentacao=apresentacao, filial=self.filial_destino)
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=produto.pk,
+            filial_id=self.filial.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('10'),
+            usuario_id=self.usuario.pk,
+        )
+
+        response = self.client.post(reverse('estoque:transferencia'), {
+            'filial_destino': self.filial_destino.pk,
+            'observacao': 'Reposicao da loja',
+            'itens_json': json.dumps([
+                {'produto_id': produto.pk, 'quantidade': '2'},
+                {
+                    'produto_id': produto.pk,
+                    'apresentacao_id': apresentacao.pk,
+                    'quantidade': '1',
+                },
+            ]),
+        })
+
+        self.assertRedirects(response, reverse('estoque:movimentacao-list'))
+        saidas = list(MovimentacaoEstoque.objects.filter(
+            filial=self.filial,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.TRANSFERENCIA_SAIDA,
+        ).order_by('pk'))
+        self.assertEqual(len(saidas), 2)
+        self.assertEqual(saidas[0].documento_numero, saidas[1].documento_numero)
+        self.assertEqual(saidas[0].quantidade, Decimal('2'))
+        self.assertEqual(saidas[1].quantidade, Decimal('5'))
+        self.assertEqual(saidas[1].apresentacao_id, apresentacao.pk)
+        self.assertEqual(saidas[1].quantidade_comercial, Decimal('1'))
+        estoque_origem = Estoque.objects.get(produto=produto, filial=self.filial)
+        estoque_destino = Estoque.objects.get(produto=produto, filial=self.filial_destino)
+        self.assertEqual(estoque_origem.quantidade_atual, Decimal('3'))
+        self.assertEqual(estoque_destino.quantidade_atual, Decimal('7'))
 
     def test_catalogo_visual_transferencia_retorna_produtos_e_saldo(self):
         self.conceder(pode_ver=True)
@@ -232,6 +328,52 @@ class EstoqueFormsViewsTests(TestCase):
         )
         self.assertEqual(resultado['label'], 'Polpa para transferencia')
         self.assertEqual(resultado['estoque'], 12.5)
+
+    def test_catalogo_transferencia_inclui_apresentacoes_e_busca_codigo_da_embalagem(self):
+        self.conceder(pode_ver=True)
+        produto = self.criar_produto(descricao='Luva descartavel')
+        unidade = UnidadeMedida.objects.create(
+            empresa=self.empresa,
+            sigla='CX',
+            descricao='Caixa',
+            tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        apresentacao = ProdutoApresentacao.objects.create(
+            produto=produto,
+            unidade=unidade,
+            descricao='Caixa com 10 pacotes',
+            fator_conversao=Decimal('10'),
+            permite_estoque=True,
+        )
+        ProdutoApresentacaoFilial.objects.create(apresentacao=apresentacao, filial=self.filial)
+        ProdutoCodigoBarras.objects.create(
+            produto=produto,
+            apresentacao=apresentacao,
+            ean='2909999999999',
+            ativo=True,
+        )
+        MovimentacaoService.registrar_movimentacao(
+            produto_id=produto.pk,
+            filial_id=self.filial.pk,
+            tipo_operacao=MovimentacaoEstoque.TipoOperacao.ENTRADA,
+            quantidade=Decimal('30'),
+            usuario_id=self.usuario.pk,
+        )
+
+        response = self.client.get(reverse('estoque:produto-estoque-search-json'), {
+            'q': '2909999999999',
+            'incluir_apresentacoes': '1',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        resultado = next(
+            item for item in response.json()['results']
+            if item['apresentacao_id'] == apresentacao.pk
+        )
+        self.assertEqual(resultado['label'], 'Caixa com 10 pacotes')
+        self.assertEqual(resultado['produto_label'], 'Luva descartavel')
+        self.assertEqual(resultado['estoque'], 3.0)
+        self.assertEqual(resultado['codigo_barras'], '2909999999999')
 
     def test_a_busca_devolve_o_que_a_tela_precisa_para_calcular(self):
         """

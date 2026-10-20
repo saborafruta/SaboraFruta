@@ -32,7 +32,7 @@ from apps.estoque.services.peso_carga import calcular_peso_bruto, peso_unitario_
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.estoque.views.permissoes import permissoes_estoque
 from apps.financeiro.constants.enums import StatusDocumentoFiscal
-from apps.produtos.models import Produto, ProdutoFilial
+from apps.produtos.models import Produto, ProdutoApresentacao, ProdutoFilial
 from apps.pdv.models import DevolucaoPDV, ItemDevolucaoPDV, VendaPDV
 
 # CFOP fixos por tipo de operação
@@ -379,6 +379,7 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
         q = request.GET.get('q', '').strip()
         scope = request.GET.get('scope', 'filial')
         browse = request.GET.get('browse') == '1'
+        incluir_apresentacoes = request.GET.get('incluir_apresentacoes') == '1'
         # `prefixo=1`: quem digita num typeahead de produto espera que "a" traga
         # tudo que comeca com a. O padrao trata uma letra como palavra inteira,
         # porque na moda uma letra e' tamanho (P, M, G).
@@ -402,19 +403,31 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
                     | db_models.Q(codigo__icontains=term)
                     | db_models.Q(codigo_barras__icontains=term)
                 )
+                if incluir_apresentacoes:
+                    term_filter |= (
+                        db_models.Q(apresentacoes__descricao__icontains=term)
+                        | db_models.Q(apresentacoes__codigo__icontains=term)
+                        | db_models.Q(apresentacoes__codigos_barras__ean__icontains=term)
+                    ) & db_models.Q(
+                        apresentacoes__ativo=True,
+                        apresentacoes__permite_estoque=True,
+                        apresentacoes__filiais_vinculo__filial=filial,
+                        apresentacoes__filiais_vinculo__ativo=True,
+                    )
                 if term.isdigit():
                     term_filter |= db_models.Q(pk=int(term))
                 qs = qs.filter(term_filter)
 
-            ranked_ids = ranked_search_ids(
-                qs.values('pk', 'descricao', 'codigo', 'codigo_barras'),
-                q,
-                name_fields=('descricao',),
-                code_fields=('codigo', 'codigo_barras'),
-                limit=40,
-                single_char_prefix=prefixo,
-            )
-            qs = qs.filter(pk__in=ranked_ids)
+            if not incluir_apresentacoes:
+                ranked_ids = ranked_search_ids(
+                    qs.values('pk', 'descricao', 'codigo', 'codigo_barras'),
+                    q,
+                    name_fields=('descricao',),
+                    code_fields=('codigo', 'codigo_barras'),
+                    limit=40,
+                    single_char_prefix=prefixo,
+                )
+                qs = qs.filter(pk__in=ranked_ids)
         elif not browse:
             qs = qs.none()
 
@@ -439,12 +452,18 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
                 produto_id__in=[produto.pk for produto in produtos],
             ).values('produto_id').annotate(total=db_models.Sum('quantidade_atual'))
         }
-        resultados = [
+        resultados_base = [
             {
+                'key': f'produto:{p.pk}',
                 'id': p.pk,
+                'produto_id': p.pk,
+                'apresentacao_id': None,
+                'tipo': 'produto',
                 'label': p.descricao,
+                'produto_label': p.descricao,
                 'detalhe': p.codigo or '',
                 'unidade': str(p.unidade_medida) if p.unidade_medida_id else '',
+                'unidade_base': p.unidade_medida.sigla if p.unidade_medida_id else '',
                 'controla_lote': p.controla_lote,
                 'codigo_barras': p.codigo_barras or '',
                 'foto_url': (
@@ -468,6 +487,52 @@ class ProdutoEstoqueSearchJsonView(PermissaoRequiredMixin, View):
             }
             for p in produtos
         ]
+        if not incluir_apresentacoes:
+            return JsonResponse({'results': resultados_base})
+
+        apresentacoes_por_produto = {}
+        apresentacoes = (
+            ProdutoApresentacao.objects.for_filial(filial)
+            .filter(
+                produto_id__in=[produto.pk for produto in produtos],
+                permite_estoque=True,
+                fator_conversao__gt=0,
+            )
+            .select_related('unidade')
+            .prefetch_related('codigos_barras')
+            .order_by('produto_id', 'fator_conversao', 'descricao')
+        )
+        for apresentacao in apresentacoes:
+            apresentacoes_por_produto.setdefault(apresentacao.produto_id, []).append(apresentacao)
+
+        resultados = []
+        for base in resultados_base:
+            resultados.append(base)
+            for apresentacao in apresentacoes_por_produto.get(base['produto_id'], []):
+                codigo_barras = next(
+                    (codigo.ean for codigo in apresentacao.codigos_barras.all() if codigo.ativo),
+                    '',
+                )
+                fator = apresentacao.fator_conversao
+                resultados.append({
+                    'key': f'apresentacao:{apresentacao.pk}',
+                    'id': base['produto_id'],
+                    'produto_id': base['produto_id'],
+                    'apresentacao_id': apresentacao.pk,
+                    'tipo': 'apresentacao',
+                    'label': apresentacao.descricao,
+                    'produto_label': base['produto_label'],
+                    'detalhe': apresentacao.codigo or '',
+                    'unidade': apresentacao.unidade.sigla,
+                    'unidade_base': base['unidade_base'],
+                    'controla_lote': base['controla_lote'],
+                    'codigo_barras': codigo_barras,
+                    'foto_url': base['foto_url'],
+                    'estoque': base['estoque'] / float(fator),
+                    'estoque_base': base['estoque'],
+                    'fator_conversao': float(fator),
+                    'preco_venda': float(apresentacao.preco_venda or 0),
+                })
         return JsonResponse({'results': resultados})
 
 

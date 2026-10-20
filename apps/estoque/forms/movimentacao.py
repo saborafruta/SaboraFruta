@@ -1,3 +1,6 @@
+import json
+from decimal import Decimal, InvalidOperation
+
 from django import forms
 
 from apps.core.models import Filial
@@ -201,3 +204,142 @@ class TransferenciaForm(forms.Form):
 
     def clean(self):
         return _validar_lote_produto(super().clean())
+
+
+class TransferenciaMultiplaForm(forms.Form):
+    """Documento de transferencia com uma ou mais linhas de produto/apresentacao."""
+
+    filial_destino = forms.ModelChoiceField(
+        queryset=Filial.objects.none(),
+        label='Filial de destino',
+    )
+    itens_json = forms.CharField(widget=forms.HiddenInput())
+    observacao = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 3}),
+        required=True,
+        label='Justificativa',
+    )
+
+    def __init__(self, *args, filial=None, empresa=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.filial = filial
+        self.fields['filial_destino'].widget.attrs.update({'class': 'form-input'})
+        self.fields['observacao'].widget.attrs.update({
+            'class': 'form-input',
+            'placeholder': 'Informe o motivo da transferencia',
+        })
+        if empresa and filial:
+            self.fields['filial_destino'].queryset = Filial.objects.filter(
+                empresa=empresa,
+                ativo=True,
+            ).exclude(pk=filial.pk)
+
+    def clean_itens_json(self):
+        valor = self.cleaned_data['itens_json']
+        try:
+            itens = json.loads(valor)
+        except (TypeError, ValueError):
+            raise forms.ValidationError('A lista de produtos e invalida.')
+        if not isinstance(itens, list) or not itens:
+            raise forms.ValidationError('Adicione pelo menos um produto a transferencia.')
+        if len(itens) > 100:
+            raise forms.ValidationError('A transferencia aceita no maximo 100 itens por vez.')
+        return itens
+
+    def clean(self):
+        cleaned = super().clean()
+        itens = cleaned.get('itens_json')
+        destino = cleaned.get('filial_destino')
+        if not itens or not self.filial:
+            return cleaned
+
+        produtos_ids = set()
+        apresentacoes_ids = set()
+        lotes_ids = set()
+        for indice, item in enumerate(itens, start=1):
+            if not isinstance(item, dict):
+                raise forms.ValidationError(f'Item {indice}: formato invalido.')
+            try:
+                produtos_ids.add(int(item.get('produto_id')))
+                if item.get('apresentacao_id'):
+                    apresentacoes_ids.add(int(item['apresentacao_id']))
+                if item.get('lote_id'):
+                    lotes_ids.add(int(item['lote_id']))
+            except (TypeError, ValueError):
+                raise forms.ValidationError(f'Item {indice}: produto, apresentacao ou lote invalido.')
+
+        produtos = {
+            produto.pk: produto
+            for produto in Produto.objects.for_filial(self.filial).filter(
+                pk__in=produtos_ids,
+                ativo=True,
+            ).select_related('unidade_medida')
+        }
+        apresentacoes = {
+            apresentacao.pk: apresentacao
+            for apresentacao in ProdutoApresentacao.objects.for_filial(self.filial).filter(
+                pk__in=apresentacoes_ids,
+                permite_estoque=True,
+                fator_conversao__gt=0,
+            ).select_related('unidade')
+        }
+        lotes = {
+            lote.pk: lote
+            for lote in LoteProduto.objects.for_filial(self.filial).filter(
+                pk__in=lotes_ids,
+                status=LoteProduto.Status.ATIVO,
+            )
+        }
+
+        normalizados = []
+        for indice, item in enumerate(itens, start=1):
+            produto = produtos.get(int(item['produto_id']))
+            if not produto:
+                raise forms.ValidationError(f'Item {indice}: produto nao esta ativo na filial de origem.')
+            try:
+                quantidade_comercial = Decimal(str(item.get('quantidade', '')).replace(',', '.'))
+            except (InvalidOperation, TypeError, ValueError):
+                raise forms.ValidationError(f'Item {indice}: informe uma quantidade valida.')
+            if quantidade_comercial <= 0:
+                raise forms.ValidationError(f'Item {indice}: a quantidade deve ser positiva.')
+
+            apresentacao = None
+            fator = Decimal('1')
+            if item.get('apresentacao_id'):
+                apresentacao = apresentacoes.get(int(item['apresentacao_id']))
+                if not apresentacao or apresentacao.produto_id != produto.pk:
+                    raise forms.ValidationError(
+                        f'Item {indice}: apresentacao nao pertence ao produto ou nao permite estoque.'
+                    )
+                if destino and not apresentacao.filiais_vinculo.filter(
+                    filial=destino,
+                    ativo=True,
+                ).exists():
+                    raise forms.ValidationError(
+                        f'Item {indice}: a apresentacao "{apresentacao.descricao}" nao esta ativa na filial de destino.'
+                    )
+                fator = apresentacao.fator_conversao
+
+            lote = None
+            if item.get('lote_id'):
+                lote = lotes.get(int(item['lote_id']))
+                if not lote or lote.produto_id != produto.pk:
+                    raise forms.ValidationError(f'Item {indice}: lote nao pertence ao produto selecionado.')
+            if produto.controla_lote and not lote:
+                raise forms.ValidationError(
+                    f'Item {indice}: informe o lote de "{produto.descricao}".'
+                )
+
+            quantidade_base = quantidade_comercial * fator
+            if quantidade_base > Decimal('999999999.999'):
+                raise forms.ValidationError(f'Item {indice}: quantidade excede o limite permitido.')
+            normalizados.append({
+                'produto': produto,
+                'apresentacao': apresentacao,
+                'lote': lote,
+                'quantidade_comercial': quantidade_comercial,
+                'fator_conversao': fator,
+                'quantidade_base': quantidade_base,
+            })
+        cleaned['itens'] = normalizados
+        return cleaned

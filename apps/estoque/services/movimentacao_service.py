@@ -410,6 +410,9 @@ class MovimentacaoService:
         permitir_sem_lote: bool = False,
         vincular_destino: bool = False,
         documento_numero: str | None = None,
+        apresentacao_id: int | None = None,
+        apresentacao_fator_conversao: Decimal | None = None,
+        quantidade_comercial: Decimal | None = None,
     ) -> tuple[MovimentacaoEstoque, MovimentacaoEstoque]:
         """
         Cria DUAS movimentações (saída na origem + entrada no destino).
@@ -456,6 +459,9 @@ class MovimentacaoService:
             observacao=observacao or f'Transferência para filial {filial_destino_id}',
             filial_destino_id=filial_destino_id,
             permitir_sem_lote=permitir_sem_lote,
+            apresentacao_id=apresentacao_id,
+            apresentacao_fator_conversao=apresentacao_fator_conversao,
+            quantidade_comercial=quantidade_comercial,
         )
         documento_numero = documento_numero or f'TRF-{mov_saida.pk:06d}'
         mov_saida.documento_numero = documento_numero
@@ -494,6 +500,9 @@ class MovimentacaoService:
             documento_numero=documento_numero,
             observacao=f'Recebido de filial {filial_origem_id} — mov. saída #{mov_saida.pk}',
             permitir_sem_lote=permitir_sem_lote,
+            apresentacao_id=apresentacao_id,
+            apresentacao_fator_conversao=apresentacao_fator_conversao,
+            quantidade_comercial=quantidade_comercial,
         )
 
         mov_saida.documento_id = mov_entrada.pk
@@ -501,6 +510,72 @@ class MovimentacaoService:
         mov_saida.save(update_fields=['documento_id', 'documento_numero'])
 
         return mov_saida, mov_entrada
+
+    @classmethod
+    @tenant_atomic
+    def transferir_itens_entre_filiais(
+        cls,
+        *,
+        itens: list[dict],
+        filial_origem_id: int,
+        filial_destino_id: int,
+        usuario_id: int,
+        observacao: str = '',
+    ) -> list[tuple[MovimentacaoEstoque, MovimentacaoEstoque]]:
+        """Transfere varias linhas como um unico documento e uma unica transacao."""
+        if not itens:
+            raise DadosInvalidosError('Adicione pelo menos um produto a transferencia.')
+
+        # Produtos sem lote precisam ser conferidos em conjunto. Sem esta
+        # soma, duas linhas do mesmo item poderiam passar isoladamente e a
+        # segunda deixaria o estoque negativo.
+        totais_sem_lote = {}
+        for item in itens:
+            produto = item['produto']
+            if not produto.controla_lote:
+                totais_sem_lote[produto.pk] = (
+                    totais_sem_lote.get(produto.pk, Decimal('0'))
+                    + item['quantidade_base']
+                )
+        deposito_origem_id = Deposito.padrao_id(filial_origem_id)
+        for produto_id, quantidade in totais_sem_lote.items():
+            estoque = Estoque.objects.select_for_update().filter(
+                produto_id=produto_id,
+                filial_id=filial_origem_id,
+                deposito_id=deposito_origem_id,
+            ).first()
+            saldo = estoque.quantidade_atual if estoque else Decimal('0')
+            if saldo < quantidade:
+                raise cls._erro_estoque_produto(
+                    produto_id,
+                    f'Estoque insuficiente. Atual: {saldo}, solicitado: {quantidade}.',
+                )
+
+        movimentos = []
+        documento_numero = None
+        for item in itens:
+            apresentacao = item.get('apresentacao')
+            lote = item.get('lote')
+            par = cls.transferir_entre_filiais(
+                produto_id=item['produto'].pk,
+                filial_origem_id=filial_origem_id,
+                filial_destino_id=filial_destino_id,
+                quantidade=item['quantidade_base'],
+                usuario_id=usuario_id,
+                lote_id=lote.pk if lote else None,
+                observacao=observacao,
+                documento_numero=documento_numero,
+                apresentacao_id=apresentacao.pk if apresentacao else None,
+                apresentacao_fator_conversao=(
+                    item['fator_conversao'] if apresentacao else None
+                ),
+                quantidade_comercial=(
+                    item['quantidade_comercial'] if apresentacao else None
+                ),
+            )
+            documento_numero = documento_numero or par[0].documento_numero
+            movimentos.append(par)
+        return movimentos
 
     # ----------------------------------------------------------------------
     # Transferência interna entre depósitos da MESMA filial (sem NF-e)

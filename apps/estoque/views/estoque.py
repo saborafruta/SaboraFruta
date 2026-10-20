@@ -33,7 +33,9 @@ from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE, PermissaoRequiredMixin
 from apps.core.services.request_scope import empresa_operacional
 from apps.core.services.search import filter_queryset_by_terms
-from apps.estoque.forms import AjusteEstoqueForm, MovimentacaoManualForm, TransferenciaForm
+from apps.estoque.forms import (
+    AjusteEstoqueForm, MovimentacaoManualForm, TransferenciaMultiplaForm,
+)
 from apps.estoque.models import (
     Deposito, Estoque, Inventario, LoteProduto, MovimentacaoEstoque,
 )
@@ -2739,61 +2741,78 @@ class TransferenciaView(PermissaoRequiredMixin, View):
     permissao_acao = 'aprovar'
     template_name = 'estoque/movimentacao/transferencia.html'
 
-    def get(self, request):
-        return render(request, self.template_name, {
-            'form': TransferenciaForm(
-                filial=request.filial_ativa,
-                empresa=empresa_operacional(request),
-            ),
+    @staticmethod
+    def _contexto(request, form):
+        return {
+            'form': form,
             'title': 'Transferencia entre filiais',
             'cancel_url': reverse_lazy('estoque:estoque-list'),
-        })
+        }
+
+    def get(self, request):
+        form = TransferenciaMultiplaForm(
+            filial=request.filial_ativa,
+            empresa=empresa_operacional(request),
+            initial={'itens_json': '[]'},
+        )
+        return render(
+            request,
+            self.template_name,
+            self._contexto(request, form),
+        )
 
     def post(self, request):
-        form = TransferenciaForm(
+        form = TransferenciaMultiplaForm(
             request.POST,
             filial=request.filial_ativa,
             empresa=empresa_operacional(request),
         )
         if form.is_valid():
             try:
-                mov_saida, mov_entrada = MovimentacaoService.transferir_entre_filiais(
-                    produto_id=form.cleaned_data['produto'].pk,
+                movimentos = MovimentacaoService.transferir_itens_entre_filiais(
+                    itens=form.cleaned_data['itens'],
                     filial_origem_id=request.filial_ativa.pk,
                     filial_destino_id=form.cleaned_data['filial_destino'].pk,
-                    quantidade=form.cleaned_data['quantidade'],
                     usuario_id=request.user.pk,
-                    lote_id=form.cleaned_data['lote'].pk if form.cleaned_data.get('lote') else None,
                     observacao=form.cleaned_data.get('observacao', ''),
                 )
-                _auditar_estoque(
-                    request,
-                    'transferir',
-                    mov_saida,
-                    f'Transferencia de estoque #{mov_saida.pk}/{mov_entrada.pk}',
-                    justificativa=form.cleaned_data.get('observacao', ''),
-                    depois=snapshot_modelo(mov_saida),
-                    relacionado=mov_entrada,
-                    metadados={
-                        'produto_id': form.cleaned_data['produto'].pk,
-                        'filial_origem_id': request.filial_ativa.pk,
-                        'filial_destino_id': form.cleaned_data['filial_destino'].pk,
-                        'quantidade': str(form.cleaned_data['quantidade']),
-                        'movimento_entrada_id': mov_entrada.pk,
-                    },
-                )
+                for item, (mov_saida, mov_entrada) in zip(
+                    form.cleaned_data['itens'],
+                    movimentos,
+                ):
+                    apresentacao = item.get('apresentacao')
+                    _auditar_estoque(
+                        request,
+                        'transferir',
+                        mov_saida,
+                        f'Transferencia de estoque #{mov_saida.pk}/{mov_entrada.pk}',
+                        justificativa=form.cleaned_data.get('observacao', ''),
+                        depois=snapshot_modelo(mov_saida),
+                        relacionado=mov_entrada,
+                        metadados={
+                            'produto_id': item['produto'].pk,
+                            'apresentacao_id': apresentacao.pk if apresentacao else None,
+                            'filial_origem_id': request.filial_ativa.pk,
+                            'filial_destino_id': form.cleaned_data['filial_destino'].pk,
+                            'quantidade_base': str(item['quantidade_base']),
+                            'quantidade_comercial': str(item['quantidade_comercial']),
+                            'movimento_entrada_id': mov_entrada.pk,
+                            'documento_numero': mov_saida.documento_numero,
+                        },
+                    )
+                documento = movimentos[0][0].documento_numero
                 messages.success(
                     request,
-                    f'Transferencia efetuada. Saida #{mov_saida.pk} / Entrada #{mov_entrada.pk}.',
+                    f'Transferencia {documento} efetuada com {len(movimentos)} item(ns).',
                 )
                 return redirect('estoque:movimentacao-list')
             except DomainError as e:
                 messages.error(request, str(e))
-        return render(request, self.template_name, {
-            'form': form,
-            'title': 'Transferencia entre filiais',
-            'cancel_url': reverse_lazy('estoque:estoque-list'),
-        })
+        return render(
+            request,
+            self.template_name,
+            self._contexto(request, form),
+        )
 
 
 class MovimentacaoListView(PermissaoRequiredMixin, View):
