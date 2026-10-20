@@ -32,6 +32,12 @@ struct CredentialStore {
         return try? JSONDecoder().decode(UserSession.self, from: data)
     }
 
+    func updateTokens(_ tokens: AuthTokens) {
+        guard var session = load() else { return }
+        session.tokens = tokens
+        save(session)
+    }
+
     func clear() {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,

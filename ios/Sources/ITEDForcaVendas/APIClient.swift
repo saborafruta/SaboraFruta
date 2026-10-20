@@ -16,10 +16,34 @@ enum APIError: LocalizedError {
     }
 }
 
+private struct ContextResponse: Decodable {
+    struct Permissions: Decodable {
+        let pedidosCriar: Bool
+        let separacaoEditar: Bool
+        let checkoutVender: Bool
+    }
+
+    struct Context: Decodable {
+        let tenantAlias: String
+        let empresaId: Int
+        let empresaNome: String
+        let filialId: Int
+        let filialNome: String
+        let filialCnpj: String
+        let permissoes: Permissions
+    }
+
+    struct User: Decodable { let nome: String; let email: String }
+
+    let usuario: User
+    let contextos: [Context]
+}
+
 struct APIClient: Sendable {
     let baseURL: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private let tokenCoordinator = TokenCoordinator()
 
     init(baseURL: URL = URL(string: "https://ited.app.br/")!) {
         self.baseURL = baseURL
@@ -31,27 +55,28 @@ struct APIClient: Sendable {
 
     func login(email: String, password: String) async throws -> AuthTokens {
         struct Body: Encodable { let email: String; let password: String }
-        return try await request("api/v1/mobile/token/", method: "POST", body: Body(email: email, password: password))
+        let tokens: AuthTokens = try await request(
+            "api/v1/mobile/token/", method: "POST", body: Body(email: email, password: password)
+        )
+        await tokenCoordinator.configure(tokens)
+        return tokens
+    }
+
+    func clearTokens() async {
+        await tokenCoordinator.clear()
     }
 
     func contexts(accessToken: String) async throws -> (String, String, [WorkContext]) {
-        struct Permissions: Decodable {
-            let pedidosCriar: Bool
-            let separacaoEditar: Bool
-            let checkoutVender: Bool
-        }
-        struct ContextDTO: Decodable {
-            let tenantAlias: String
-            let empresaId: Int
-            let empresaNome: String
-            let filialId: Int
-            let filialNome: String
-            let filialCnpj: String
-            let permissoes: Permissions
-        }
-        struct UserDTO: Decodable { let nome: String; let email: String }
-        struct Response: Decodable { let usuario: UserDTO; let contextos: [ContextDTO] }
-        let response: Response = try await request("api/v1/mobile/contexto/", token: accessToken)
+        let response: ContextResponse = try await request("api/v1/mobile/contexto/", token: accessToken)
+        return Self.mapContexts(response)
+    }
+
+    func contexts(session: UserSession) async throws -> (String, String, [WorkContext]) {
+        let response: ContextResponse = try await authorized("api/v1/mobile/contexto/", session: session)
+        return Self.mapContexts(response)
+    }
+
+    private static func mapContexts(_ response: ContextResponse) -> (String, String, [WorkContext]) {
         let contexts = response.contextos.map {
             WorkContext(
                 tenantAlias: $0.tenantAlias,
@@ -376,10 +401,19 @@ struct APIClient: Sendable {
         session: UserSession,
         idempotencyKey: String? = nil
     ) async throws -> Response {
-        try await request(
-            path, method: method, token: session.tokens.access,
-            context: session.context, idempotencyKey: idempotencyKey
-        )
+        let tokens = await tokenCoordinator.tokens(fallback: session.tokens)
+        do {
+            return try await request(
+                path, method: method, token: tokens.access,
+                context: session.context, idempotencyKey: idempotencyKey
+            )
+        } catch APIError.http(let status, _) where status == 401 {
+            let renewed = try await renewTokens(afterRejectedAccess: tokens.access, fallback: session.tokens)
+            return try await request(
+                path, method: method, token: renewed.access,
+                context: session.context, idempotencyKey: idempotencyKey
+            )
+        }
     }
 
     private func authorized<Body: Encodable, Response: Decodable>(
@@ -389,9 +423,40 @@ struct APIClient: Sendable {
         body: Body,
         idempotencyKey: String? = nil
     ) async throws -> Response {
-        try await request(
-            path, method: method, body: body, token: session.tokens.access,
-            context: session.context, idempotencyKey: idempotencyKey
+        let tokens = await tokenCoordinator.tokens(fallback: session.tokens)
+        do {
+            return try await request(
+                path, method: method, body: body, token: tokens.access,
+                context: session.context, idempotencyKey: idempotencyKey
+            )
+        } catch APIError.http(let status, _) where status == 401 {
+            let renewed = try await renewTokens(afterRejectedAccess: tokens.access, fallback: session.tokens)
+            return try await request(
+                path, method: method, body: body, token: renewed.access,
+                context: session.context, idempotencyKey: idempotencyKey
+            )
+        }
+    }
+
+    private func renewTokens(afterRejectedAccess access: String, fallback: AuthTokens) async throws -> AuthTokens {
+        do {
+            return try await tokenCoordinator.renew(
+                afterRejectedAccess: access,
+                fallback: fallback
+            ) { refreshToken in
+                try await refreshTokens(refreshToken)
+            }
+        } catch APIError.http(let status, _) where status == 400 || status == 401 {
+            throw APIError.http(401, "Sua sessão expirou. Entre novamente para continuar.")
+        }
+    }
+
+    private func refreshTokens(_ refreshToken: String) async throws -> AuthTokens {
+        struct Body: Encodable { let refresh: String }
+        return try await request(
+            "api/v1/mobile/token/refresh/",
+            method: "POST",
+            body: Body(refresh: refreshToken)
         )
     }
 
@@ -463,6 +528,53 @@ struct APIClient: Sendable {
             return nil
         }
         return firstMessage(object) ?? "Não foi possível concluir a operação."
+    }
+}
+
+private actor TokenCoordinator {
+    private var currentTokens: AuthTokens?
+    private var refreshTask: Task<AuthTokens, Error>?
+
+    func configure(_ tokens: AuthTokens) {
+        currentTokens = tokens
+        refreshTask = nil
+    }
+
+    func clear() {
+        currentTokens = nil
+        refreshTask?.cancel()
+        refreshTask = nil
+    }
+
+    func tokens(fallback: AuthTokens) -> AuthTokens {
+        if let currentTokens { return currentTokens }
+        currentTokens = fallback
+        return fallback
+    }
+
+    func renew(
+        afterRejectedAccess rejectedAccess: String,
+        fallback: AuthTokens,
+        using operation: @escaping @Sendable (String) async throws -> AuthTokens
+    ) async throws -> AuthTokens {
+        let available = tokens(fallback: fallback)
+
+        // Outra requisição paralela já pode ter renovado o token enquanto esta recebia 401.
+        if available.access != rejectedAccess { return available }
+        if let refreshTask { return try await refreshTask.value }
+
+        let task = Task { try await operation(available.refresh) }
+        refreshTask = task
+        do {
+            let renewed = try await task.value
+            currentTokens = renewed
+            refreshTask = nil
+            CredentialStore().updateTokens(renewed)
+            return renewed
+        } catch {
+            refreshTask = nil
+            throw error
+        }
     }
 }
 

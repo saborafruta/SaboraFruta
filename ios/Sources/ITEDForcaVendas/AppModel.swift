@@ -77,6 +77,10 @@ final class AppModel {
 
     func selectContext(_ context: WorkContext, remember: Bool? = nil) {
         if var current = session {
+            if let persisted = credentials.load(),
+               persisted.usuarioEmail.caseInsensitiveCompare(current.usuarioEmail) == .orderedSame {
+                current.tokens = persisted.tokens
+            }
             current.context = context
             session = current
         } else if let tokens = pendingTokens {
@@ -93,7 +97,7 @@ final class AppModel {
     func switchContext() async {
         guard let session else { return }
         await perform {
-            let result = try await api.contexts(accessToken: session.tokens.access)
+            let result = try await api.contexts(session: session)
             contexts = result.2
             phase = .chooseContext
         }
@@ -228,6 +232,7 @@ final class AppModel {
 
     func logout() {
         credentials.clear()
+        Task { await api.clearTokens() }
         session = nil
         contexts = []
         phase = .login

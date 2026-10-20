@@ -172,6 +172,13 @@ private struct StockBalanceChips: View {
     }
 }
 
+private enum NewOrderField: Hashable {
+    case client
+    case product
+    case quantity(Int)
+    case notes
+}
+
 struct NewOrderView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -191,6 +198,7 @@ struct NewOrderView: View {
     @State private var notes = ""
     @State private var searchTask: Task<Void, Never>?
     @State private var removalCandidateID: Int?
+    @FocusState private var focusedField: NewOrderField?
 
     private var total: Decimal { lines.reduce(0) { $0 + $1.total } }
 
@@ -208,9 +216,16 @@ struct NewOrderView: View {
             .padding()
         }
         .scrollDismissesKeyboard(.interactively)
+        .dismissKeyboardOnBackgroundTap()
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Novo pedido")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Concluir") { focusedField = nil }
+            }
+        }
         .task { await loadOptions() }
         .confirmationDialog(
             "Remover produto do pedido?",
@@ -267,6 +282,7 @@ struct NewOrderView: View {
                 }
             } else {
                 TextField("Buscar por nome, CPF ou CNPJ", text: $clientQuery)
+                    .focused($focusedField, equals: .client)
                     .textFieldStyle(.roundedBorder)
                     .submitLabel(.search)
                     .onChange(of: clientQuery) { _, value in searchClients(value) }
@@ -342,6 +358,7 @@ struct NewOrderView: View {
                 .buttonStyle(.plain)
                 HStack(spacing: 8) {
                     TextField("Nome, código ou código de barras", text: $productQuery)
+                        .focused($focusedField, equals: .product)
                         .textFieldStyle(.roundedBorder)
                         .submitLabel(.search)
                         .onSubmit { Task { await searchProducts() } }
@@ -435,6 +452,7 @@ struct NewOrderView: View {
                                     value: quantityBinding(for: line.id),
                                     format: .number.precision(.fractionLength(0...3))
                                 )
+                                .focused($focusedField, equals: .quantity(line.id))
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.center)
                                 .textFieldStyle(.plain)
@@ -554,6 +572,7 @@ struct NewOrderView: View {
                 }
             }
             TextField("Observações", text: $notes, axis: .vertical)
+                .focused($focusedField, equals: .notes)
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(3...6)
                 .padding(.top, 6)

@@ -6,6 +6,7 @@ private enum CheckoutField: Hashable {
     case quantity
     case product
     case received
+    case lineQuantity(Int)
 }
 
 struct CheckoutView: View {
@@ -69,10 +70,8 @@ struct CheckoutView: View {
             .padding()
         }
         .scrollDismissesKeyboard(.interactively)
-        .background {
-            Color(.systemGroupedBackground)
-                .onTapGesture { dismissKeyboard() }
-        }
+        .dismissKeyboardOnBackgroundTap()
+        .background(Color(.systemGroupedBackground))
         .navigationTitle("Checkout de venda")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -314,6 +313,7 @@ struct CheckoutView: View {
                         HStack {
                             Button { line.quantity = max(0.001, line.quantity - 1) } label: { Image(systemName: "minus") }
                             TextField("Quantidade", value: $line.quantity, format: .number.precision(.fractionLength(0...3)))
+                                .focused($focusedField, equals: .lineQuantity(line.id))
                                 .keyboardType(.decimalPad).multilineTextAlignment(.center).frame(width: 88)
                             Button { line.quantity += 1 } label: { Image(systemName: "plus") }
                             Spacer()
