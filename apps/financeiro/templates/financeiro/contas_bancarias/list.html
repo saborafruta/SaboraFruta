@@ -65,9 +65,20 @@
     <section class="card overflow-hidden border border-amber-200">
       <div class="px-4 py-4 border-b flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between" :style="temaClaro ? 'border-color:#fde68a;' : 'border-color:#713f12;'">
         <div><h3 class="font-semibold text-amber-700">Movimentacoes sem conta definida</h3><p class="text-xs text-gray-500">Direcione cada item para a conta correta. Isso atualiza o saldo e fica registrado no log.</p></div>
-        <strong class="text-amber-700">R$ {{ sem_conta.total|floatformat:2 }}</strong>
+        <div class="text-right"><strong class="block text-amber-700">R$ {{ sem_conta.total|floatformat:2 }}</strong><span class="text-xs text-gray-500">{{ pendencias|length }} item{{ pendencias|length|pluralize }} pendente{{ pendencias|length|pluralize }}</span></div>
       </div>
-      <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'background:#fffbeb;color:#92400e;' : 'background:#2b2110;color:#fde68a;'"><th class="px-4 py-3">Data</th><th class="px-4 py-3">Origem</th><th class="px-4 py-3">Descricao</th><th class="px-4 py-3">Documento</th><th class="px-4 py-3 text-right">Valor</th><th class="px-4 py-3">Direcionar para</th></tr></thead><tbody class="divide-y" :style="temaClaro ? 'border-color:#fef3c7;' : 'border-color:#713f12;'">{% for item in pendencias %}<tr><td class="px-4 py-3 whitespace-nowrap">{{ item.data|date:"d/m/Y" }}</td><td class="px-4 py-3"><span class="soft-pill is-amber">{{ item.origem|title }}</span></td><td class="px-4 py-3">{{ item.descricao }}</td><td class="px-4 py-3 text-gray-500">{{ item.documento|default:"-" }}</td><td class="px-4 py-3 text-right font-semibold">R$ {{ item.valor|floatformat:2 }}</td><td class="px-4 py-3">{% if user_is_admin %}<form method="post" class="flex min-w-[250px] gap-2">{% csrf_token %}<input type="hidden" name="acao" value="direcionar_pendencia"><input type="hidden" name="origem_pendencia" value="{{ item.origem }}"><input type="hidden" name="registro_id" value="{{ item.registro_id }}">{{ direcionar_conta_form.conta_bancaria|add_class:"form-input flex-1" }}<button type="submit" class="btn-primary">Salvar</button></form>{% else %}<span class="text-xs text-gray-500">Somente administradores</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+      <div data-pending-scroll role="region" aria-label="Movimentações sem conta definida" tabindex="0" class="overflow-auto" style="max-height:min(55vh, 26rem);overscroll-behavior:contain;scrollbar-gutter:stable;">
+        <table class="w-full min-w-[980px] text-sm">
+          <thead class="sticky top-0 z-10">
+            <tr class="text-left text-xs uppercase tracking-wide" :style="temaClaro ? 'background:#fffbeb;color:#92400e;' : 'background:#2b2110;color:#fde68a;'">
+              <th class="px-4 py-3">Data</th><th class="px-4 py-3">Origem</th><th class="px-4 py-3">Descricao</th><th class="px-4 py-3">Documento</th><th class="px-4 py-3 text-right">Valor</th><th class="px-4 py-3">Direcionar para</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y" :style="temaClaro ? 'border-color:#fef3c7;' : 'border-color:#713f12;'">
+            {% for item in pendencias %}<tr><td class="px-4 py-3 whitespace-nowrap">{{ item.data|date:"d/m/Y" }}</td><td class="px-4 py-3"><span class="soft-pill is-amber">{{ item.origem|title }}</span></td><td class="px-4 py-3">{{ item.descricao }}</td><td class="px-4 py-3 text-gray-500">{{ item.documento|default:"-" }}</td><td class="px-4 py-3 text-right font-semibold">R$ {{ item.valor|floatformat:2 }}</td><td class="px-4 py-3">{% if user_is_admin %}<form method="post" class="flex min-w-[250px] gap-2">{% csrf_token %}<input type="hidden" name="acao" value="direcionar_pendencia"><input type="hidden" name="origem_pendencia" value="{{ item.origem }}"><input type="hidden" name="registro_id" value="{{ item.registro_id }}">{{ direcionar_conta_form.conta_bancaria|add_class:"form-input flex-1" }}<button type="submit" class="btn-primary">Salvar</button></form>{% else %}<span class="text-xs text-gray-500">Somente administradores</span>{% endif %}</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
     </section>
   {% endif %}
 

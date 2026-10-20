@@ -304,6 +304,36 @@ class ContasBancariasViewTests(TestCase):
             acao=RegistroAuditoria.Acao.VINCULAR, relacionado_id=conta.pk,
         ).exists())
 
+    def test_pendencias_sem_conta_ficam_em_regiao_limitada_com_scroll(self):
+        forma = FormaPagamento.objects.create(
+            empresa=self.empresa,
+            filial=self.filial,
+            descricao="Dinheiro pendente",
+            tipo=TipoFormaPagamento.DINHEIRO,
+        )
+        venda = VendaPDV.objects.create(
+            filial=self.filial,
+            numero_venda=20,
+            status="finalizada",
+            valor_total=Decimal("30.00"),
+            valor_pago=Decimal("30.00"),
+            usuario=self.usuario,
+            data_venda=timezone.datetime(2026, 10, 20, 12, 0, tzinfo=timezone.get_current_timezone()),
+        )
+        PagamentoVendaPDV.objects.create(
+            venda_pdv=venda,
+            forma_pagamento=forma,
+            valor=Decimal("30.00"),
+        )
+
+        response = self.client.get(reverse("financeiro:contas_bancarias"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-pending-scroll")
+        self.assertContains(response, "max-height:min(55vh, 26rem)")
+        self.assertContains(response, 'class="sticky top-0 z-10"')
+        self.assertContains(response, "1 item pendente")
+
     def test_admin_edita_apenas_movimento_manual_com_log(self):
         conta = ContaBancaria.objects.create(
             filial=self.filial, descricao="Conta Ajuste", banco_codigo="001", saldo_inicial=Decimal("0"),
