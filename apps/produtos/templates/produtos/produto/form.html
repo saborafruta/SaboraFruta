@@ -184,8 +184,7 @@
   }
   body.tema-claro .produto-alert.error-alert .pending-fields { color: #b91c1c; }
   .produto-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; }
-  .produto-apresentacoes-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr); gap: .75rem; align-items: start; }
-  @media (max-width: 1180px) { .produto-apresentacoes-layout { grid-template-columns: minmax(0, 1fr); } }
+  .produto-apresentacoes-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; align-items: start; }
   .produto-card {
     background: #242426; border: 1px solid rgba(148,163,184,.18); border-radius: 10px;
     padding: .82rem; box-shadow: 0 1px 3px rgba(0,0,0,.14);
@@ -295,6 +294,18 @@
   .produto-vinculos-copy { color: #94a3b8; font-size: .76rem; margin-top: .12rem; }
   body.tema-claro .produto-vinculos-copy { color: #64748b; }
   .produto-vinculos-table { font-size: .78rem; }
+  .produto-vinculos-desktop { width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+  .produto-apresentacoes-table { min-width: 820px; table-layout: fixed; }
+  .produto-apresentacoes-table th:nth-child(1) { width: 22%; }
+  .produto-apresentacoes-table th:nth-child(2) { width: 8%; }
+  .produto-apresentacoes-table th:nth-child(3) { width: 9%; }
+  .produto-apresentacoes-table th:nth-child(4) { width: 18%; }
+  .produto-apresentacoes-table th:nth-child(5) { width: 14%; }
+  .produto-apresentacoes-table th:nth-child(6) { width: 14%; }
+  .produto-apresentacoes-table th:nth-child(7) { width: 7%; }
+  .produto-apresentacoes-table th:nth-child(8) { width: 8%; }
+  .produto-apresentacoes-table td { overflow-wrap: anywhere; }
+  .produto-apresentacoes-actions { white-space: nowrap; }
   .produto-vinculos-table th { white-space: nowrap; }
   .produto-vinculos-table td { vertical-align: middle; }
   .produto-vinculo-main { font-weight: 800; color: #e2e8f0; }
@@ -1059,7 +1070,7 @@
             <h3 class="produto-card-title"><span>#</span> Apresentações cadastradas</h3>
             {% if apresentacoes %}
               <div class="produto-vinculos-desktop">
-                <table class="produto-table produto-vinculos-table">
+                <table class="produto-table produto-vinculos-table produto-apresentacoes-table" data-columns="off">
                   <thead>
                     <tr>
                       <th>Descrição</th>
@@ -1090,7 +1101,7 @@
                           {% if apresentacao.permite_estoque %} · Estoque{% endif %}
                         </td>
                         <td>{% if apresentacao.ativo %}Sim{% else %}Não{% endif %}</td>
-                        <td class="text-right">
+                        <td class="text-right produto-apresentacoes-actions">
                           <a
                             href="?step=8&editar_apresentacao={{ apresentacao.pk }}"
                             class="produto-vinculo-remove is-compact"

@@ -221,8 +221,14 @@ class CheckoutVendaTests(TestCase):
         self.assertContains(resposta, 'Tela cheia')
         self.assertContains(resposta, 'alternarTelaCheia()')
         self.assertContains(resposta, 'checkout-focus-mode')
-        self.assertContains(resposta, 'Desconto no item')
+        self.assertNotContains(resposta, 'Desconto no item')
+        self.assertContains(resposta, 'Desconto no produto')
+        self.assertContains(resposta, 'Selecionar produto')
         self.assertContains(resposta, 'descontoItemValor(item)')
+        self.assertContains(resposta, 'descricaoApresentacao(produto)')
+        self.assertContains(resposta, 'descricaoApresentacao(item)')
+        self.assertNotContains(resposta, "produto.descricao+' — '+produto.apresentacao_descricao")
+        self.assertNotContains(resposta, "item.descricao+' — '+item.apresentacao_descricao")
         self.assertContains(resposta, "formatarQuantidade(quantidadeItens)")
         self.assertContains(resposta, 'Forma de pagamento</strong>')
         self.assertContains(resposta, 'abrirModalPagamento()')
@@ -641,7 +647,11 @@ checkout.adicionarProduto({
   quantidade_step: 1, quantidade_decimais: 0
 });
 checkout.descontoLiberado = true;
-checkout.solicitarDescontoItem(checkout.itens[0], {target: {blur: () => {}}});
+checkout.solicitarAutorizacaoDesconto();
+assert.equal(checkout.modalEscopoDesconto, true);
+checkout.mostrarSelecaoProduto();
+assert.equal(checkout.etapaEscopoDesconto, 'produto');
+checkout.escolherProdutoDesconto(checkout.itens[0]);
 assert.equal(checkout.modalSenhaDesconto, true);
 assert.equal(checkout.itemDescontoPendente.descricao, 'Produto');
 assert.equal(checkout.descontoModalMaximo, 30);
@@ -650,6 +660,7 @@ await checkout.liberarDesconto();
 assert.equal(checkout.modalSenhaDesconto, false);
 assert.equal(checkout.itens[0].descontoEntrada, '4,50');
 checkout.solicitarAutorizacaoDesconto();
+checkout.escolherDescontoVenda();
 assert.equal(checkout.itemDescontoPendente, null);
 assert.equal(checkout.descontoModalMaximo, 25.5);
 checkout.descontoModalEntrada = '2,50';
@@ -696,6 +707,7 @@ checkout.configuracaoDescontos = {
   percentuais: [2, 3, 5], percentual_maximo: 5, arredondamento_maximo: 0
 };
 checkout.solicitarAutorizacaoDesconto();
+checkout.escolherDescontoVenda();
 checkout.selecionarDescontoRapido(3);
 assert.equal(checkout.descontoModalPercentual, '3,00');
 assert.equal(checkout.descontoModalEntrada, '0,57');

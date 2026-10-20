@@ -89,11 +89,6 @@
   .co-client-card { flex:0 0 auto; }
   .co-client-card .co-side-body { display:grid; grid-template-columns:minmax(220px,.65fr) minmax(260px,1fr); gap:9px; align-items:center; }
   .co-client-card .co-client-search { margin-top:0; }
-  .co-item-discount-wrap { display:flex; align-items:center; justify-content:flex-end; gap:5px; }
-  .co-item-discount-input { width:82px; min-height:34px; padding:5px 8px; text-align:right; font-size:13px; }
-  .co-discount-trigger { cursor:pointer; }
-  .co-item-discount-prefix { color:var(--co-muted); font-size:11px; }
-  .co-item-discount-value { margin-top:3px; color:#fb9b76; font-size:10px; text-align:right; }
   .co-item-old-total { display:block; color:var(--co-muted); font-size:10px; font-weight:500; text-decoration:line-through; }
   .co-payment-hero { padding:17px 16px 15px; border-bottom:1px solid var(--co-border); background:linear-gradient(145deg,color-mix(in srgb,var(--co-card) 82%,#2a3040),var(--co-card)); }
   .co-payment-label { color:var(--co-muted); font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
@@ -132,6 +127,17 @@
   .co-discount-presets { display:flex; flex-wrap:wrap; gap:7px; margin-top:13px; }
   .co-discount-preset { min-width:68px; min-height:39px; padding:7px 12px; border:1px solid var(--co-border); border-radius:9px; background:var(--co-panel); color:var(--co-text); font-weight:900; cursor:pointer; }
   .co-discount-preset:hover { border-color:var(--co-blue); }
+  .co-discount-scope-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:14px; }
+  .co-discount-scope { min-height:104px; padding:14px; display:flex; align-items:flex-start; gap:11px; border:1px solid var(--co-border); border-radius:12px; background:var(--co-panel); color:var(--co-text); text-align:left; cursor:pointer; }
+  .co-discount-scope-icon { width:36px; height:36px; flex:0 0 auto; display:grid; place-items:center; border-radius:10px; background:color-mix(in srgb,var(--co-blue) 17%,transparent); color:var(--co-blue); font-size:15px; font-weight:950; }
+  .co-discount-scope strong { display:block; font-size:14px; }
+  .co-discount-scope small { display:block; margin-top:4px; color:var(--co-muted); font-size:11px; line-height:1.35; }
+  .co-discount-products { display:grid; gap:7px; max-height:min(430px,55dvh); margin-top:13px; overflow:auto; overscroll-behavior:contain; }
+  .co-discount-product { width:100%; min-height:58px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center; gap:12px; border:1px solid var(--co-border); border-radius:10px; background:var(--co-panel); color:var(--co-text); text-align:left; cursor:pointer; }
+  .co-discount-product strong { display:block; }
+  .co-discount-product small { display:block; margin-top:3px; color:var(--co-muted); font-size:10px; }
+  .co-discount-product-value { flex:0 0 auto; text-align:right; }
+  .co-discount-product-value span { display:block; color:var(--co-muted); font-size:9px; }
   .co-summary { gap:8px; padding:11px 12px 12px; }
   .co-summary-breakdown { display:grid; gap:4px; padding-bottom:7px; border-bottom:1px solid var(--co-border); }
   .co-summary-row.discount strong { color:#fb9b76; }
@@ -152,7 +158,7 @@
     .co-btn:hover { border-color:var(--co-blue); }
     .co-result:hover { background:color-mix(in srgb,var(--co-blue) 15%,transparent); outline:1px solid color-mix(in srgb,var(--co-blue) 55%,transparent); }
     .co-doc-option:hover { border-color:var(--co-blue); background:color-mix(in srgb,var(--co-blue) 11%,transparent); }
-    .co-payment-method:hover,.co-quick-action:hover { border-color:color-mix(in srgb,var(--co-blue) 65%,var(--co-border)); }
+    .co-payment-method:hover,.co-quick-action:hover,.co-discount-scope:hover,.co-discount-product:hover { border-color:color-mix(in srgb,var(--co-blue) 65%,var(--co-border)); }
   }
   @media(pointer:coarse){ .co-input,select.co-input,textarea.co-input{font-size:16px}.co-btn{min-height:44px}.co-btn-danger{min-width:44px}.co-qty{grid-template-columns:42px 52px 42px}.co-qty button,.co-qty input{height:42px}.co-qty input{width:52px} }
   @media(max-height:760px) and (min-width:1181px){ .co-shortcut{padding:2px 5px}.co-sub{display:none}.co-side-body{padding:7px}.co-summary{padding:7px}.co-input{min-height:36px}.co-btn{min-height:35px}.co-payment-total{font-size:40px}.co-payment-hero{padding:12px}.co-quick-action{min-height:42px}.co-payment-value .co-input{font-size:24px} }
@@ -177,9 +183,9 @@
     html.checkout-route .app-content-frame{height:calc(100dvh - 3.5rem);padding:8px 10px max(8px,env(safe-area-inset-bottom))!important;overflow:hidden}
     .checkout-page{height:100%;min-height:0}.co-head{min-height:38px;align-items:center;gap:7px;margin-bottom:5px}.co-head>div:first-child{min-width:0}.co-title{font-size:17px}.co-sub{display:none}
     .co-head-actions{margin-left:auto;gap:5px}.co-head-actions>.co-count{font-size:10px}.co-fullscreen span{display:none}.co-fullscreen{width:40px;min-height:40px;padding:0;justify-content:center}
-    .co-layout{gap:6px}.co-main{gap:6px;overflow:hidden}.co-grid,.co-doc-list,.co-discount-inputs{grid-template-columns:1fr}.co-search{padding:6px}.co-search-row{grid-template-columns:60px minmax(0,1fr) 64px;gap:5px}.co-field-inline label{margin-bottom:2px;font-size:8px}.co-search-row .co-input{min-height:38px;padding:6px 8px}.co-search-row .co-btn{min-height:38px;padding:6px;font-size:11px}.co-search-input{font-size:16px}.co-results{top:53px;left:6px;right:6px}.co-shortcuts{display:none}.co-mode{margin-top:2px;font-size:8px}.co-mode label{gap:4px}
+    .co-layout{gap:6px}.co-main{gap:6px;overflow:hidden}.co-grid,.co-doc-list,.co-discount-inputs,.co-discount-scope-grid{grid-template-columns:1fr}.co-search{padding:6px}.co-search-row{grid-template-columns:60px minmax(0,1fr) 64px;gap:5px}.co-field-inline label{margin-bottom:2px;font-size:8px}.co-search-row .co-input{min-height:38px;padding:6px 8px}.co-search-row .co-btn{min-height:38px;padding:6px;font-size:11px}.co-search-input{font-size:16px}.co-results{top:53px;left:6px;right:6px}.co-shortcuts{display:none}.co-mode{margin-top:2px;font-size:8px}.co-mode label{gap:4px}
     .co-section-head{min-height:34px;padding:5px 8px}.co-section-head strong{font-size:12px}.co-count{font-size:9px}.co-client-card .co-side-body{grid-template-columns:minmax(108px,.72fr) minmax(0,1.28fr);gap:5px;padding:5px}.co-client-current{min-height:40px;padding:5px 7px;overflow:hidden}.co-client-current strong{display:block;overflow:hidden;font-size:12px;text-overflow:ellipsis;white-space:nowrap}.co-client-card .co-section-head small{display:none}.co-client-card .co-section-head .co-btn{min-height:34px;padding:4px 7px;font-size:10px}.co-client-current .co-product-code{display:none}.co-client-search .co-input{min-height:40px;padding:6px 8px}.co-cart-card{min-height:78px}.co-empty{padding:18px 10px;font-size:11px}
-    .co-table thead{display:none}.co-table,.co-table tbody{display:block}.co-table tr{display:grid;grid-template-columns:1fr auto;grid-template-areas:'product remove' 'unit total' 'qty discount';gap:9px 12px;padding:13px;border-bottom:1px solid var(--co-border)}.co-table td{padding:0;border:0}.co-item-product{grid-area:product}.co-item-unit{grid-area:unit;color:var(--co-muted);font-size:12px}.co-item-qty{grid-area:qty}.co-item-discount{grid-area:discount}.co-item-total{grid-area:total;text-align:right}.co-item-remove{grid-area:remove}.co-item-discount-input{width:92px}.co-cart-scroll{overflow:auto}
+    .co-table thead{display:none}.co-table,.co-table tbody{display:block}.co-table tr{display:grid;grid-template-columns:1fr auto;grid-template-areas:'product remove' 'unit total' 'qty qty';gap:9px 12px;padding:13px;border-bottom:1px solid var(--co-border)}.co-table td{padding:0;border:0}.co-item-product{grid-area:product}.co-item-unit{grid-area:unit;color:var(--co-muted);font-size:12px}.co-item-qty{grid-area:qty}.co-item-total{grid-area:total;text-align:right}.co-item-remove{grid-area:remove}.co-cart-scroll{overflow:auto}
     .co-summary-card>.co-section-head{display:none}.co-payment-hero{min-height:39px;padding:5px 8px}.co-payment-label{font-size:8px}.co-payment-total{font-size:25px}.co-payment-total small{margin-right:3px;font-size:12px;vertical-align:4px}.co-payment-body{grid-template-columns:minmax(0,2fr) minmax(86px,.8fr);gap:5px;padding:5px}.co-quick-actions{grid-column:1;gap:5px}.co-payment-value{grid-column:2;padding:4px 7px}.co-quick-action{min-height:46px;padding:5px 6px;gap:4px}.co-quick-action>span:first-child{gap:5px}.co-quick-icon{width:24px;height:24px;font-size:10px}.co-quick-action strong{font-size:10px;line-height:1.1}.co-quick-action small,.co-quick-action kbd{display:none}.co-payment-value label{font-size:8px;line-height:1.1}.co-payment-value label span:last-child{display:none}.co-payment-value .co-input{min-height:27px;font-size:19px;line-height:1}.co-card-options,.co-change-card{grid-column:1/-1}.co-card-options{grid-template-columns:1fr 1fr;gap:5px}.co-card-options .co-field label{display:none}.co-card-options .co-input{min-height:38px}.co-change-card{min-height:36px;padding:6px 9px}.co-change-card strong{font-size:17px}.co-summary{padding:5px}.co-finish{min-height:44px;font-size:13px}.co-finish small{display:none}.co-modal{padding:17px}.co-payment-modal .co-payment-methods{max-height:min(420px,55dvh)}.co-modal-actions{flex-direction:column-reverse}.co-modal-actions .co-btn{width:100%;justify-content:center;min-height:46px}
     .co-input,select.co-input,textarea.co-input{font-size:16px}
   }
@@ -261,7 +267,7 @@
         <div class="co-results" x-ref="resultadosProduto" x-show="resultados.length" x-cloak role="listbox">
           <template x-for="produto in resultados" :key="produto.item_key">
             <button type="button" class="co-result" :class="{'active':resultados[indiceProduto]?.item_key===produto.item_key}" @click="selecionarProduto(produto)" role="option" :aria-selected="resultados[indiceProduto]?.item_key===produto.item_key">
-              <span><strong x-text="produto.descricao+' — '+produto.apresentacao_descricao"></strong><span class="co-result-code" x-text="'ID '+produto.id+' · '+produto.unidade_comercial+(Number(produto.fator_conversao)!==1?' · equivale a '+formatarQuantidade(produto.fator_conversao)+' '+produto.unidade_base:'')+(produto.codigo_barras?' · '+produto.codigo_barras:'')"></span></span>
+              <span><strong x-text="descricaoApresentacao(produto)"></strong><span class="co-result-code" x-text="'ID '+produto.id+' · '+produto.unidade_comercial+(Number(produto.fator_conversao)!==1?' · equivale a '+formatarQuantidade(produto.fator_conversao)+' '+produto.unidade_base:'')+(produto.codigo_barras?' · '+produto.codigo_barras:'')"></span></span>
               <strong x-text="moeda(produto.preco)"></strong>
             </button>
           </template>
@@ -277,11 +283,11 @@
         <div class="co-empty" x-show="!itens.length">Bipe o primeiro produto para começar.</div>
         <div class="co-cart-scroll" x-show="itens.length" x-cloak>
           <table class="co-table" data-columns="off">
-            <thead><tr><th>Produto</th><th>Valor unitário</th><th>Quantidade</th><th>Desconto no item</th><th style="text-align:right">Total</th><th></th></tr></thead>
+            <thead><tr><th>Apresentação</th><th>Valor unitário</th><th>Quantidade</th><th style="text-align:right">Total</th><th></th></tr></thead>
             <tbody>
               <template x-for="item in itens" :key="item.item_key">
                 <tr>
-                  <td class="co-item-product"><div class="co-product-name" x-text="item.descricao+' — '+item.apresentacao_descricao"></div><div class="co-product-code" x-text="'ID '+item.id+(item.codigo_barras?' · '+item.codigo_barras:'')"></div></td>
+                  <td class="co-item-product"><div class="co-product-name" x-text="descricaoApresentacao(item)"></div><div class="co-product-code" x-text="'ID '+item.id+(item.codigo_barras?' · '+item.codigo_barras:'')"></div></td>
                   <td class="co-item-unit" x-text="moeda(item.preco)"></td>
                   <td class="co-item-qty">
                     <div class="co-qty">
@@ -289,10 +295,6 @@
                       <input type="number" :step="item.quantidade_step" :value="item.quantidade" @change="definirQuantidade(item,$event.target.value)">
                       <button type="button" @click="alterarQuantidade(item,item.quantidade_step)">+</button>
                     </div>
-                  </td>
-                  <td class="co-item-discount">
-                    <div class="co-item-discount-wrap"><span class="co-item-discount-prefix">R$</span><input class="co-input co-item-discount-input co-discount-trigger" type="text" inputmode="decimal" :data-item-discount="item.item_key" x-model="item.descontoEntrada" readonly :aria-disabled="!!pedidoCatalogoInicial" @click="solicitarDescontoItem(item,$event)" @keydown.enter.prevent="solicitarDescontoItem(item,$event)" placeholder="0,00" aria-label="Abrir desconto deste item" aria-haspopup="dialog"></div>
-                    <div class="co-item-discount-value" x-show="descontoItemValor(item)>0" x-text="'- '+moeda(descontoItemValor(item))" x-cloak></div>
                   </td>
                   <td class="co-item-total" style="text-align:right"><span class="co-item-old-total" x-show="descontoItemValor(item)>0" x-text="moeda(totalBrutoItem(item))" x-cloak></span><strong x-text="moeda(totalLiquidoItem(item))"></strong></td>
                   <td class="co-item-remove"><button type="button" class="co-btn co-btn-danger" @click="removerItem(item.item_key)" aria-label="Remover item">×</button></td>
@@ -421,10 +423,51 @@
     </form>
   </div>
 
+  <div class="co-backdrop" x-show="modalEscopoDesconto" x-cloak @click.self="fecharEscopoDesconto()">
+    <div class="co-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-escopo-desconto-titulo">
+      <template x-if="etapaEscopoDesconto === 'escopo'">
+        <div>
+          <h3 id="checkout-escopo-desconto-titulo">Aplicar desconto</h3>
+          <p class="co-sub">Escolha onde o desconto será aplicado.</p>
+          <div class="co-discount-scope-grid">
+            <button x-ref="descontoVenda" type="button" class="co-discount-scope" @click="escolherDescontoVenda()">
+              <span class="co-discount-scope-icon">%</span>
+              <span><strong>Desconto na venda</strong><small>Aplica o valor ou percentual sobre o total dos produtos.</small></span>
+            </button>
+            <button type="button" class="co-discount-scope" @click="mostrarSelecaoProduto()">
+              <span class="co-discount-scope-icon">1</span>
+              <span><strong>Desconto no produto</strong><small>Selecione um item da venda e desconte somente nele.</small></span>
+            </button>
+          </div>
+        </div>
+      </template>
+      <template x-if="etapaEscopoDesconto === 'produto'">
+        <div>
+          <h3>Selecionar produto</h3>
+          <p class="co-sub">Escolha a apresentação que receberá o desconto.</p>
+          <div class="co-discount-products">
+            <template x-for="item in itens" :key="'desconto-produto-'+item.item_key">
+              <button type="button" class="co-discount-product" @click="escolherProdutoDesconto(item)">
+                <span><strong x-text="descricaoApresentacao(item)"></strong><small x-text="formatarQuantidade(item.quantidade)+' × '+moeda(item.preco)+(descontoItemValor(item)>0?' · desconto atual '+moeda(descontoItemValor(item)):'')"></small></span>
+                <span class="co-discount-product-value"><span>Total do item</span><strong x-text="moeda(totalLiquidoItem(item))"></strong></span>
+              </button>
+            </template>
+          </div>
+          <div class="co-modal-actions">
+            <button type="button" class="co-btn" @click="etapaEscopoDesconto='escopo'; focar('descontoVenda')">Voltar</button>
+          </div>
+        </div>
+      </template>
+      <div class="co-modal-actions" x-show="etapaEscopoDesconto === 'escopo'">
+        <button type="button" class="co-btn" @click="fecharEscopoDesconto()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
   <div class="co-backdrop" x-show="modalSenhaDesconto" x-cloak @click.self="fecharSenhaDesconto()">
     <form class="co-modal" @submit.prevent="liberarDesconto()" role="dialog" aria-modal="true" aria-labelledby="checkout-senha-desconto-titulo">
       <h3 id="checkout-senha-desconto-titulo" x-text="itemDescontoPendente ? 'Desconto no produto' : 'Desconto na venda'"></h3>
-      <p class="co-sub" x-text="itemDescontoPendente ? itemDescontoPendente.descricao : 'Aplique um desconto sobre o total da venda.'"></p>
+      <p class="co-sub" x-text="itemDescontoPendente ? descricaoApresentacao(itemDescontoPendente) : 'Aplique um desconto sobre o total da venda.'"></p>
       <div class="co-discount-presets" x-show="percentuaisDescontoRapido.length" x-cloak>
         <template x-for="percentual in percentuaisDescontoRapido" :key="'desconto-'+percentual">
           <button type="button" class="co-discount-preset" @click="selecionarDescontoRapido(percentual)" x-text="formatarPercentual(percentual)"></button>
@@ -522,7 +565,7 @@ function checkoutVenda() {
     pedidoCatalogoInicial:JSON.parse(document.getElementById('checkout-pedido-catalogo').textContent), acrescimoInicial:0,
     busca:'', quantidadeEntrada:'1', buscarPorNome:false, buscando:false, resultados:[], indiceProduto:-1, erroBusca:'', itens:[],
     buscaNomeLiberada:false, modalSenhaBuscaNome:false, usuarioAutorizadorId:'', senhaBuscaNome:'', erroSenhaBuscaNome:'', liberandoBuscaNome:false,
-    descontoLiberado:false, modalSenhaDesconto:false, descontoModalEntrada:'', descontoModalPercentual:'', usuarioDescontoId:'', senhaDesconto:'', erroSenhaDesconto:'', liberandoDesconto:false, itemDescontoPendenteId:null,
+    descontoLiberado:false, modalEscopoDesconto:false, etapaEscopoDesconto:'escopo', modalSenhaDesconto:false, descontoModalEntrada:'', descontoModalPercentual:'', usuarioDescontoId:'', senhaDesconto:'', erroSenhaDesconto:'', liberandoDesconto:false, itemDescontoPendenteId:null,
     formasPagamento:[], formaPagamentoId:null, modalPagamento:false, bandeiraPagamento:'', parcelasPagamento:1, cliente:null, buscaCliente:'', clientes:[], indiceCliente:-1,
     descontoEntrada:'', valorPagamentoEntrada:'', valorPagamentoManual:false, mensagem:'', sucesso:false, finalizando:false,
     modalCliente:false, novoCliente:{razao_social:'',cpf_cnpj:'',celular:'',email:'',tipo_pessoa:'F'}, erroCliente:'', salvandoCliente:false,
@@ -598,6 +641,7 @@ function checkoutVenda() {
     get podeFinalizar(){ return !!(this.sessao && this.itens.length && (this.total<=0 || (this.formaPagamentoId && this.valorPagamento>=this.total && (!this.formaCartao || this.bandeiraPagamento)))); },
     formatarNumeroInput(valor){ return Number(valor||0).toFixed(2).replace('.',','); },
     formatarPercentual(valor){ return Number(valor||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2})+'%'; },
+    descricaoApresentacao(item){ return item?.apresentacao_descricao || item?.descricao || 'Produto'; },
     focar(ref){ this.$nextTick(()=>{ const campo=this.$refs[ref]; if(campo){ campo.focus(); if(typeof campo.select==='function')campo.select(); } }); },
     focarProduto(){ this.focar('buscaProduto'); },
     focarQuantidade(){ this.focar('quantidadeProduto'); },
@@ -623,13 +667,14 @@ function checkoutVenda() {
         evento.preventDefault();
         if(this.modalSenhaBuscaNome)this.fecharSenhaBuscaNome();
         else if(this.modalSenhaDesconto)this.fecharSenhaDesconto();
+        else if(this.modalEscopoDesconto)this.fecharEscopoDesconto();
         else if(this.modalPagamento)this.fecharModalPagamento();
         else if(this.modalDocumento)return;
         else this.fecharModais();
         return;
       }
       if(this.modalPagamento){ this.atalhoPagamento(evento); return; }
-      if(this.modalSenhaBuscaNome || this.modalSenhaDesconto)return;
+      if(this.modalSenhaBuscaNome || this.modalSenhaDesconto || this.modalEscopoDesconto)return;
       if(this.modalDocumento){ this.atalhoDocumento(evento); return; }
       if(this.modalCliente || !this.sessao || this.carregando)return;
       if(tecla==='F2'){ evento.preventDefault(); this.focarProduto(); }
@@ -704,11 +749,17 @@ function checkoutVenda() {
     async encerrarBuscaPorNome(){
       try{await fetch('{% url "pdv:api_checkout_encerrar_busca_nome" %}',{method:'POST',headers:{'X-CSRFToken':this.csrf()}});}catch(e){}
     },
-    solicitarAutorizacaoDesconto(){ this.abrirModalDesconto(); },
-    solicitarDescontoItem(item,evento){
-      if(this.pedidoCatalogoInicial){evento?.target?.blur();this.mensagem='O desconto dos itens de um pedido do catálogo deve ser alterado no próprio pedido.';return;}
-      this.abrirModalDesconto(item,evento);
+    solicitarAutorizacaoDesconto(){
+      if(!this.itens.length){this.mensagem='Adicione ao menos um produto antes de aplicar desconto.';this.focarProduto();return;}
+      this.modalEscopoDesconto=true;this.etapaEscopoDesconto='escopo';this.mensagem='';this.focar('descontoVenda');
     },
+    fecharEscopoDesconto(){this.modalEscopoDesconto=false;this.etapaEscopoDesconto='escopo';this.focarProduto();},
+    escolherDescontoVenda(){this.modalEscopoDesconto=false;this.abrirModalDesconto();},
+    mostrarSelecaoProduto(){
+      if(this.pedidoCatalogoInicial){this.modalEscopoDesconto=false;this.mensagem='O desconto dos itens de um pedido do catálogo deve ser alterado no próprio pedido.';this.focarProduto();return;}
+      this.etapaEscopoDesconto='produto';
+    },
+    escolherProdutoDesconto(item){this.modalEscopoDesconto=false;this.abrirModalDesconto(item);},
     abrirModalDesconto(item=null,evento=null){
       evento?.target?.blur(); this.itemDescontoPendenteId=item?.item_key??null;
       const valor=this.numero(item ? item.descontoEntrada : this.descontoEntrada);
