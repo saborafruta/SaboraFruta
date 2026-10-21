@@ -6,6 +6,7 @@ import logging
 import re
 import uuid
 from decimal import Decimal
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from django.contrib import messages
@@ -2453,13 +2454,34 @@ class ProdutoImagemView(View):
                 'User-Agent': 'iTED/1.0 (+https://ited.app.br)',
             },
         )
-        with urlopen(requisicao, timeout=20) as resposta:
-            return cls._converter(io.BytesIO(resposta.read()), variante)
+        try:
+            with urlopen(requisicao, timeout=20) as resposta:
+                conteudo = resposta.read()
+            return cls._converter(io.BytesIO(conteudo), variante)
+        except (HTTPError, URLError, TimeoutError, OSError) as exc:
+            # Uma origem externa pode negar acesso (403), estar fora do ar ou
+            # devolver um arquivo que não seja uma imagem. A foto fica
+            # indisponível, mas isso não deve virar erro interno (500).
+            raise Http404('Imagem externa indisponivel.') from exc
 
     def get(self, request, pk):
         produto = get_object_or_404(Produto.objects.all(), pk=pk)
         variante = 'thumb' if request.GET.get('v') == 'thumb' else 'zoom'
-        arquivo = self._arquivo_otimizado(produto, variante)
+        try:
+            arquivo = self._arquivo_otimizado(produto, variante)
+        except Http404:
+            accept = request.headers.get('Accept', '').lower()
+            aceita_html = any(
+                item.split(';', 1)[0].strip() == 'text/html'
+                for item in accept.split(',')
+            )
+            if aceita_html:
+                return render(
+                    request,
+                    'produtos/produto/imagem_indisponivel.html',
+                    status=404,
+                )
+            raise
         response = FileResponse(arquivo, content_type='image/jpeg')
         response['Cache-Control'] = 'private, no-store, max-age=0'
         response['Pragma'] = 'no-cache'
