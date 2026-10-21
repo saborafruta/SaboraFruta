@@ -3,6 +3,7 @@ import hashlib
 import re
 
 from django.apps import apps
+from django.db import models
 
 from apps.core.models import EmpresaBanco, TenantPublicLink
 from apps.core.tenant_registry import register_tenant_database
@@ -13,6 +14,7 @@ class TenantPublicLinkService:
         (re.compile(r'^/agendar/([^/]+)(?:/.*)?$'), 'agenda', 'agenda.AgendaLinkPublico', 'token'),
         (re.compile(r'^/pedir/([^/]+)(?:/.*)?$'), 'catalogo', 'catalogo.CatalogoLinkPublico', 'token'),
         (re.compile(r'^/comprovante/([^/]+)(?:/pdf/)?$'), 'pdv', 'pdv.VendaPDV', 'comprovante_token'),
+        (re.compile(r'^/boleto/([^/]+)(?:/pdf/)?$'), 'boleto', 'financeiro.Boleto', 'public_token'),
         (re.compile(r'^/cardapio/([^/]+)(?:/.*)?$'), 'cardapio', 'food_service.Mesa', 'qr_token'),
         (re.compile(r'^/entregas/([^/]+)(?:/.*)?$'), 'rota_delivery', 'pdv.RotaDelivery', 'token'),
         (re.compile(r'^/pedido/entrega/([^/]+)/?$'), 'entrega', 'moda.Expedicao', 'codigo'),
@@ -130,13 +132,12 @@ class TenantPublicLinkService:
         created = 0
         for _pattern, kind, model_label, field in cls.ROUTES:
             model = apps.get_model(model_label)
-            tokens = (
-                model._base_manager.using(banco.db_alias)
-                .exclude(**{f'{field}__isnull': True})
-                .exclude(**{field: ''})
-                .values_list(field, flat=True)
-                .iterator(chunk_size=1000)
+            queryset = model._base_manager.using(banco.db_alias).exclude(
+                **{f'{field}__isnull': True},
             )
+            if isinstance(model._meta.get_field(field), (models.CharField, models.TextField)):
+                queryset = queryset.exclude(**{field: ''})
+            tokens = queryset.values_list(field, flat=True).iterator(chunk_size=1000)
             for token in tokens:
                 TenantPublicLink.objects.using('default').update_or_create(
                     tipo=kind,

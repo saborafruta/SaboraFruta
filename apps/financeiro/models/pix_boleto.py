@@ -1,4 +1,6 @@
 """PIX, Boletos, Remessas, Retornos."""
+import uuid
+
 from django.db import models
 from apps.core.models import Filial, Usuario
 from apps.core.models.base import TimestampedModel
@@ -136,6 +138,7 @@ class Boleto(TimestampedModel):
     remessa = models.ForeignKey(RemessaBancaria, on_delete=models.SET_NULL, null=True, blank=True)
     retorno = models.ForeignKey(RetornoBancario, on_delete=models.SET_NULL, null=True, blank=True)
     url_boleto = models.URLField(max_length=500, blank=True)
+    public_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
     class Meta:
         db_table = "boletos"

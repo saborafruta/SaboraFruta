@@ -2,7 +2,7 @@
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Q
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
@@ -12,9 +12,10 @@ from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.tenant_context import get_current_database_alias
 from apps.financeiro.constants.enums import StatusContaReceber, TipoFormaPagamento
 from apps.financeiro.models import (
-    ContaBancaria, ContaReceber, RemessaBancaria, RetornoBancario,
+    Boleto, ContaBancaria, ContaReceber, RemessaBancaria, RetornoBancario,
 )
-from apps.financeiro.services.cnab_cobranca import RemessaCNAB240Service, RetornoCNABService
+from apps.financeiro.services.boleto_bradesco import gerar_pdf_boleto
+from apps.financeiro.services.cnab_cobranca import RemessaCobrancaService, RetornoCNABService
 from apps.whatsapp_agent.cobranca_service import agendar_cobrancas_manuais
 from apps.whatsapp_agent.models import EnvioCobrancaWhatsApp
 from apps.whatsapp_agent.notifications import configuracao_whatsapp_conectada
@@ -32,11 +33,28 @@ class BoletoComunicacaoListView(PermissaoRequiredMixin, View):
         conta = contas.filter(pk=conta_id).first() if conta_id else contas.first()
         titulos = ContaReceber.objects.none()
         if conta:
-            titulos = ContaReceber.objects.filter(
+            titulos = list(ContaReceber.objects.filter(
                 filial=filial,
                 status__in=[StatusContaReceber.ABERTO, StatusContaReceber.VENCIDO, StatusContaReceber.NEGOCIADO],
                 forma_pagamento__tipo=TipoFormaPagamento.BOLETO,
-            ).filter(Q(conta_bancaria=conta) | Q(conta_bancaria__isnull=True)).select_related("cliente").order_by("data_vencimento")[:300]
+            ).filter(Q(conta_bancaria=conta) | Q(conta_bancaria__isnull=True)).select_related("cliente").order_by("data_vencimento")[:300])
+            boletos = {}
+            for boleto in Boleto.objects.filter(
+                conta_receber_id__in=[titulo.pk for titulo in titulos],
+                conta_bancaria=conta,
+            ).order_by("conta_receber_id", "-created_at"):
+                boletos.setdefault(boleto.conta_receber_id, boleto)
+            for titulo in titulos:
+                titulo.boleto_ativo = boletos.get(titulo.pk)
+                if titulo.boleto_ativo:
+                    titulo.boleto_ativo.pdf_disponivel = bool(
+                        titulo.boleto_ativo.codigo_barras
+                        and titulo.boleto_ativo.linha_digitavel
+                        and str(titulo.boleto_ativo.conta_bancaria.banco_codigo).zfill(3)[-3:] == "237"
+                    )
+                    titulo.boleto_ativo.link_publico = request.build_absolute_uri(reverse(
+                        "boleto_publico:visualizar", args=[titulo.boleto_ativo.public_token],
+                    ))
         alias = get_current_database_alias()
         configuracao_whatsapp = configuracao_whatsapp_conectada(filial, alias)
         return render(request, self.template_name, {
@@ -134,7 +152,7 @@ class BoletoRemessaGerarView(PermissaoRequiredMixin, View):
         conta = get_object_or_404(ContaBancaria, pk=request.POST.get("conta_bancaria"), filial=filial, ativo=True)
         ids = request.POST.getlist("titulos")
         try:
-            remessa = RemessaCNAB240Service.gerar(conta_bancaria=conta, titulos=ids, usuario=request.user)
+            remessa = RemessaCobrancaService.gerar(conta_bancaria=conta, titulos=ids, usuario=request.user)
         except DomainError as exc:
             messages.error(request, str(exc))
         else:
@@ -176,6 +194,27 @@ class RemessaDownloadView(PermissaoRequiredMixin, View):
             raise Http404
         resposta = HttpResponse(remessa.arquivo_cnab.encode("ascii"), content_type="text/plain; charset=us-ascii")
         resposta["Content-Disposition"] = f'attachment; filename="{remessa.arquivo_nome}"'
+        return resposta
+
+
+class BoletoPdfInternoView(PermissaoRequiredMixin, View):
+    permissao_modulo = "financeiro"
+    permissao_acao = "ver"
+
+    def get(self, request, pk):
+        boleto = get_object_or_404(
+            Boleto.objects.select_related(
+                "filial__empresa", "conta_bancaria", "conta_receber__cliente",
+            ),
+            pk=pk, filial=request.filial_ativa,
+        )
+        try:
+            conteudo = gerar_pdf_boleto(boleto)
+        except DomainError as exc:
+            return HttpResponseBadRequest(str(exc))
+        resposta = HttpResponse(conteudo, content_type="application/pdf")
+        resposta["Content-Disposition"] = f'attachment; filename="boleto-{boleto.seu_numero or boleto.pk}.pdf"'
+        resposta["Cache-Control"] = "private, no-store"
         return resposta
 
 

@@ -17,7 +17,7 @@ from apps.financeiro.views.conciliacao import (
     ExtratoListView, ExtratoLancarView, ExtratoConciliarView, ExtratoDesconciliarView,
 )
 from apps.financeiro.views.boletos import (
-    BoletoComunicacaoListView, BoletoRemessaGerarView, BoletoRetornoImportarView,
+    BoletoComunicacaoListView, BoletoPdfInternoView, BoletoRemessaGerarView, BoletoRetornoImportarView,
     BoletoWhatsAppAgendarView, BoletoWhatsAppExcluirAgendamentoView,
     RemessaDownloadView, RetornoDetalheView,
 )
@@ -49,6 +49,7 @@ urlpatterns = [
 
     # ── Boletos / comunicação bancária ───────────────────────────────────────
     path("boletos/", BoletoComunicacaoListView.as_view(), name="boleto_comunicacao"),
+    path("boletos/<int:pk>/pdf/", BoletoPdfInternoView.as_view(), name="boleto_pdf"),
     path("boletos/remessas/gerar/", BoletoRemessaGerarView.as_view(), name="boleto_remessa_gerar"),
     path("boletos/remessas/<int:pk>/arquivo/", RemessaDownloadView.as_view(), name="boleto_remessa_download"),
     path("boletos/retornos/importar/", BoletoRetornoImportarView.as_view(), name="boleto_retorno_importar"),

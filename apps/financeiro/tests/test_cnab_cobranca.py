@@ -7,13 +7,18 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from apps.cadastros.models import Cliente
-from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
+from apps.core.models import Empresa, Filial, PerfilAcesso, TenantPublicLink, Usuario
 from apps.core.services.exceptions import DomainError
 from apps.financeiro.constants.enums import TipoFormaPagamento
 from apps.financeiro.models import (
     Boleto, ContaBancaria, ContaReceber, FormaPagamento, RetornoBancarioItem,
 )
-from apps.financeiro.services.cnab_cobranca import RemessaCNAB240Service, RetornoCNABService
+from apps.financeiro.services.boleto_bradesco import (
+    digito_nosso_numero, fator_vencimento,
+)
+from apps.financeiro.services.cnab_cobranca import (
+    RemessaCNAB240Service, RemessaCNAB400BradescoService, RetornoCNABService,
+)
 
 
 class CnabTenantTransactionTests(SimpleTestCase):
@@ -45,7 +50,7 @@ class CnabTenantTransactionTests(SimpleTestCase):
 
         self.assertFalse(atomicos_padrao)
         self.assertTrue(importa_tenant_atomic)
-        self.assertEqual(len(atomicos_tenant), 2)  # gerar e importar
+        self.assertEqual(len(atomicos_tenant), 3)  # duas remessas e um importador
 
 
 def linha_cnab(campos):
@@ -69,6 +74,26 @@ def retorno_pago(nosso_numero, valor="000000000012345", data="20102026"):
         ]),
         linha_cnab([(1, 3, "001"), (4, 7, "9999"), (8, 8, "9")]),
     ]) + "\r\n"
+
+
+def linha_cnab400(campos):
+    linha = list(" " * 400)
+    for inicio, fim, valor in campos:
+        texto = str(valor)
+        linha[inicio - 1:fim] = texto.ljust(fim - inicio + 1)[:fim - inicio + 1]
+    return "".join(linha)
+
+
+def retorno_bradesco_pago(nosso_numero, valor="0000000012345", data="211026"):
+    return "\r\n".join([
+        linha_cnab400([(1, 1, "0"), (2, 2, "2"), (77, 79, "237")]),
+        linha_cnab400([
+            (1, 1, "1"), (71, 82, str(nosso_numero).rjust(12, "0")),
+            (109, 110, "06"), (111, 116, data), (153, 165, valor),
+            (254, 266, valor), (296, 301, data),
+        ]),
+        linha_cnab400([(1, 1, "9")]),
+    ]) + "\r\n\x1a"
 
 
 class CnabCobrancaTests(TestCase):
@@ -110,6 +135,15 @@ class CnabCobrancaTests(TestCase):
             valor_original=valor, valor_final=valor, valor_saldo=valor,
             data_emissao=date(2026, 10, 20), data_vencimento=date(2026, 11, 20),
             forma_pagamento=self.forma, conta_bancaria=self.conta_bancaria,
+        )
+
+    def conta_bradesco(self):
+        return ContaBancaria.objects.create(
+            filial=self.filial, descricao="Cobrança Bradesco", banco_codigo="237",
+            banco_nome="Bradesco", agencia="1234", agencia_digito="0",
+            conta="1234567", conta_digito="8", convenio="12345678901234567890",
+            codigo_transmissao="12345678901234567890", carteira_cobranca="19",
+            layout_cobranca=ContaBancaria.LayoutCobranca.CNAB400,
         )
 
     def setUp(self):
@@ -167,5 +201,72 @@ class CnabCobrancaTests(TestCase):
             )
 
     def test_rejeita_arquivo_fora_do_tamanho_cnab(self):
-        with self.assertRaisesMessage(DomainError, "240 posições"):
+        with self.assertRaisesMessage(DomainError, "240 ou 400 posições"):
             RetornoCNABService.ler("arquivo invalido")
+
+    def test_digitos_bradesco_conferem_com_exemplos_do_manual(self):
+        self.assertEqual(digito_nosso_numero("19", "00000000002"), "8")
+        self.assertEqual(digito_nosso_numero("19", "00000000001"), "P")
+        self.assertEqual(digito_nosso_numero("19", "00000000006"), "0")
+        self.assertEqual(fator_vencimento(date(2025, 2, 21)), "9999")
+        self.assertEqual(fator_vencimento(date(2025, 2, 22)), "1000")
+
+    def test_gera_cnab400_bradesco_boleto_pdf_e_link_publico(self):
+        conta = self.conta_bradesco()
+        titulo = self.criar_titulo()
+        titulo.conta_bancaria = conta
+        titulo.save(update_fields=["conta_bancaria"])
+
+        remessa = RemessaCNAB400BradescoService.gerar(
+            conta_bancaria=conta, titulos=[titulo.pk], usuario=self.usuario,
+        )
+
+        linhas = remessa.arquivo_cnab.replace("\x1a", "").splitlines()
+        self.assertEqual(len(linhas), 3)
+        self.assertTrue(all(len(linha) == 400 for linha in linhas))
+        self.assertEqual(linhas[0][0:11], "01REMESSA01")
+        self.assertEqual(linhas[0][76:79], "237")
+        self.assertEqual(linhas[1][0], "1")
+        self.assertEqual(linhas[1][92], "2")
+        self.assertEqual(linhas[1][108:110], "01")
+        self.assertEqual(linhas[-1][0], "9")
+        self.assertEqual(remessa.layout, "cnab400")
+        self.assertTrue(remessa.arquivo_nome.endswith(".TST"))
+        boleto = Boleto.objects.get(remessa=remessa)
+        self.assertEqual(len(boleto.codigo_barras), 44)
+        self.assertEqual(len("".join(c for c in boleto.linha_digitavel if c.isdigit())), 47)
+        self.assertIn("/boleto/", boleto.url_boleto)
+        self.assertTrue(TenantPublicLink.objects.filter(tipo="boleto").exists())
+
+        pdf = self.client.get(reverse("financeiro:boleto_pdf", args=[boleto.pk]))
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf["Content-Type"], "application/pdf")
+        self.assertTrue(pdf.content.startswith(b"%PDF-"))
+        self.client.logout()
+        publico = self.client.get(reverse("boleto_publico:visualizar", args=[boleto.public_token]))
+        self.assertEqual(publico.status_code, 200)
+        pdf_publico = self.client.get(reverse("boleto_publico:pdf", args=[boleto.public_token]))
+        self.assertEqual(pdf_publico.status_code, 200)
+        self.assertTrue(pdf_publico.content.startswith(b"%PDF-"))
+
+    def test_importa_retorno_cnab400_bradesco_e_liquida_titulo(self):
+        conta = self.conta_bradesco()
+        titulo = self.criar_titulo()
+        titulo.conta_bancaria = conta
+        titulo.save(update_fields=["conta_bancaria"])
+        FormaPagamento.objects.filter(pk=self.forma.pk).update(conta_bancaria_padrao=conta)
+        remessa = RemessaCNAB400BradescoService.gerar(
+            conta_bancaria=conta, titulos=[titulo.pk], usuario=self.usuario,
+        )
+        boleto = Boleto.objects.get(remessa=remessa)
+
+        retorno = RetornoCNABService.importar(
+            conta_bancaria=conta, nome="CB211001.RET",
+            dados=retorno_bradesco_pago(boleto.nosso_numero).encode("ascii"),
+            usuario=self.usuario,
+        )
+
+        titulo.refresh_from_db(); boleto.refresh_from_db()
+        self.assertEqual(retorno.layout, "cnab400")
+        self.assertEqual(titulo.status, "pago")
+        self.assertEqual(boleto.status, "pago")

@@ -24,6 +24,9 @@ from apps.financeiro.models import (
     RetornoBancario, RetornoBancarioItem,
 )
 from apps.financeiro.services.receber_service import ContaReceberService
+from apps.financeiro.services.boleto_bradesco import (
+    digito_nosso_numero, preparar_boleto_bradesco,
+)
 
 
 OCORRENCIAS = {
@@ -37,6 +40,7 @@ OCORRENCIAS = {
     "28": "Tarifa",
 }
 OCORRENCIAS_PAGAS = {"06", "17"}
+OCORRENCIAS_REGISTRADAS = {"02"}
 OCORRENCIAS_REJEITADAS = {"03"}
 OCORRENCIAS_BAIXADAS = {"09"}
 
@@ -59,6 +63,10 @@ def _campo(linha: list[str], inicio: int, fim: int, valor, numerico=False):
 
 def _linha() -> list[str]:
     return list(" " * 240)
+
+
+def _linha_400() -> list[str]:
+    return list(" " * 400)
 
 
 def _valor_cnab(valor: Decimal, tamanho=15) -> str:
@@ -217,6 +225,174 @@ class RemessaCNAB240Service:
         return "\r\n".join(linhas) + "\r\n"
 
 
+class RemessaCNAB400BradescoService:
+    """Cobrança Bradesco 400P, versão Março/2023 do manual do banco."""
+
+    @staticmethod
+    def _validar_conta(conta: ContaBancaria):
+        if conta.layout_cobranca != ContaBancaria.LayoutCobranca.CNAB400:
+            raise DomainError("Selecione o layout CNAB 400 na conta bancária.")
+        if _digitos(conta.banco_codigo).zfill(3)[-3:] != "237":
+            raise DomainError("O layout CNAB 400 homologado nesta versão é específico do Bradesco (237).")
+        faltantes = [
+            rotulo for valor, rotulo in (
+                (conta.agencia, "agência"), (conta.conta, "conta"),
+                (conta.conta_digito, "dígito da conta"),
+                (conta.carteira_cobranca, "carteira"),
+                (conta.codigo_transmissao or conta.convenio, "código da empresa no Bradesco"),
+            ) if not str(valor or "").strip()
+        ]
+        if faltantes:
+            raise DomainError("Complete a conta bancária: " + ", ".join(faltantes) + ".")
+        limites = (
+            (conta.agencia, 4, "agência"), (conta.conta, 7, "conta"),
+            (conta.carteira_cobranca, 2, "carteira"),
+            (conta.codigo_transmissao or conta.convenio, 20, "código da empresa"),
+        )
+        for valor, limite, rotulo in limites:
+            if not _digitos(valor) or len(_digitos(valor)) > limite:
+                raise DomainError(f"No Bradesco, {rotulo} deve ser numérico e ter até {limite} dígitos.")
+
+    @classmethod
+    @tenant_atomic
+    def gerar(cls, *, conta_bancaria: ContaBancaria, titulos, usuario) -> RemessaBancaria:
+        conta = ContaBancaria.objects.select_for_update().select_related("filial").get(pk=conta_bancaria.pk)
+        cls._validar_conta(conta)
+        titulos = list(
+            ContaReceber.objects.select_for_update().select_related("cliente", "filial")
+            .filter(
+                pk__in=[t.pk if hasattr(t, "pk") else t for t in titulos],
+                filial=conta.filial,
+                status__in=[StatusContaReceber.ABERTO, StatusContaReceber.VENCIDO, StatusContaReceber.NEGOCIADO],
+            ).order_by("data_vencimento", "pk")
+        )
+        if not titulos:
+            raise DomainError("Selecione ao menos um título em aberto.")
+        ja_remetidos = Boleto.objects.filter(
+            conta_receber__in=titulos, remessa__isnull=False,
+        ).exclude(status__in=["rejeitado", "cancelado"]).values_list("conta_receber_id", flat=True)
+        if ja_remetidos:
+            raise DomainError("Há título selecionado que já pertence a uma remessa ativa.")
+
+        ultimo = RemessaBancaria.objects.filter(conta_bancaria=conta).order_by(
+            "-numero_remessa",
+        ).values_list("numero_remessa", flat=True).first() or 0
+        numero_remessa = ultimo + 1
+        boletos = []
+        for titulo in titulos:
+            cliente = titulo.cliente
+            faltantes = [
+                rotulo for valor, rotulo in (
+                    (cliente.cpf_cnpj, "CPF/CNPJ"), (cliente.razao_social, "nome"),
+                    (cliente.endereco, "endereço"), (cliente.cidade, "cidade"),
+                    (cliente.uf, "UF"), (cliente.cep, "CEP"),
+                ) if not str(valor or "").strip()
+            ]
+            if faltantes:
+                raise DomainError(f"Cliente {cliente}: complete " + ", ".join(faltantes) + ".")
+            boleto = Boleto.objects.filter(conta_receber=titulo).order_by("-pk").first()
+            if boleto and boleto.conta_bancaria_id != conta.pk:
+                raise DomainError(f"O título {titulo.pk} já possui boleto vinculado a outra conta bancária.")
+            if boleto is None:
+                nosso_numero = str(conta.nosso_numero_atual)
+                conta.nosso_numero_atual += 1
+                boleto = Boleto.objects.create(
+                    conta_receber=titulo, conta_bancaria=conta, filial=conta.filial,
+                    nosso_numero=nosso_numero, seu_numero=(titulo.documento_numero or str(titulo.pk))[:10],
+                    carteira=conta.carteira_cobranca, data_emissao=titulo.data_emissao,
+                    data_vencimento=titulo.data_vencimento, valor=titulo.valor_saldo,
+                    status="gerado",
+                )
+            preparar_boleto_bradesco(boleto)
+            boletos.append(boleto)
+        conta.save(update_fields=["nosso_numero_atual", "updated_at"])
+
+        conteudo = cls._montar(conta, boletos, numero_remessa)
+        agora = timezone.localtime()
+        extensao = "REM" if conta.remessa_homologada else "TST"
+        nome = f"CB{agora:%d%m}{numero_remessa % 100:02d}.{extensao}"
+        remessa = RemessaBancaria.objects.create(
+            conta_bancaria=conta, filial=conta.filial, numero_remessa=numero_remessa,
+            arquivo_nome=nome, arquivo_cnab=conteudo, quantidade_boletos=len(boletos),
+            valor_total=sum((b.valor for b in boletos), Decimal("0")), status="gerado",
+            layout="cnab400", arquivo_hash=hashlib.sha256(conteudo.encode("ascii")).hexdigest(),
+            usuario=usuario,
+        )
+        Boleto.objects.filter(pk__in=[b.pk for b in boletos]).update(remessa=remessa, status="remetido")
+        return remessa
+
+    @classmethod
+    def _montar(cls, conta, boletos, numero_remessa):
+        filial = conta.filial
+        agora = timezone.localtime()
+        codigo_empresa = conta.codigo_transmissao or conta.convenio
+        carteira_3 = _digitos(conta.carteira_cobranca).zfill(3)
+        agencia_5 = _digitos(conta.agencia).zfill(5)
+        conta_7 = _digitos(conta.conta).zfill(7)
+        identificacao = "0" + carteira_3 + agencia_5 + conta_7 + str(conta.conta_digito or "")[:1]
+        linhas = []
+        sequencia = 1
+
+        header = _linha_400()
+        _campo(header, 1, 1, 0, True); _campo(header, 2, 2, 1, True)
+        _campo(header, 3, 9, "REMESSA"); _campo(header, 10, 11, 1, True)
+        _campo(header, 12, 26, "COBRANCA"); _campo(header, 27, 46, codigo_empresa, True)
+        _campo(header, 47, 76, filial.razao_social); _campo(header, 77, 79, 237, True)
+        _campo(header, 80, 94, "BRADESCO"); _campo(header, 95, 100, agora.strftime("%d%m%y"), True)
+        _campo(header, 109, 110, "MX"); _campo(header, 111, 117, numero_remessa, True)
+        _campo(header, 395, 400, sequencia, True)
+        linhas.append("".join(header))
+
+        for boleto in boletos:
+            sequencia += 1
+            titulo = boleto.conta_receber
+            cliente = titulo.cliente
+            nosso = _digitos(boleto.nosso_numero).zfill(11)[-11:]
+            registro = _linha_400()
+            _campo(registro, 1, 1, 1, True)
+            _campo(registro, 21, 37, identificacao)
+            _campo(registro, 38, 62, boleto.seu_numero or titulo.pk)
+            _campo(registro, 63, 65, 0, True); _campo(registro, 66, 66, 0, True)
+            _campo(registro, 67, 70, 0, True); _campo(registro, 71, 81, nosso, True)
+            _campo(registro, 82, 82, digito_nosso_numero(conta.carteira_cobranca, nosso))
+            _campo(registro, 83, 92, 0, True); _campo(registro, 93, 93, 2, True)
+            _campo(registro, 94, 94, "N"); _campo(registro, 107, 108, 0, True)
+            _campo(registro, 109, 110, 1, True); _campo(registro, 111, 120, boleto.seu_numero or titulo.pk)
+            _campo(registro, 121, 126, boleto.data_vencimento.strftime("%d%m%y"), True)
+            _campo(registro, 127, 139, _valor_cnab(boleto.valor, 13), True)
+            _campo(registro, 140, 142, 0, True); _campo(registro, 143, 147, 0, True)
+            _campo(registro, 148, 149, 1, True); _campo(registro, 150, 150, "N")
+            _campo(registro, 151, 156, boleto.data_emissao.strftime("%d%m%y"), True)
+            _campo(registro, 157, 160, 0, True); _campo(registro, 161, 218, 0, True)
+            documento = _digitos(cliente.cpf_cnpj)
+            _campo(registro, 219, 220, 1 if len(documento) == 11 else 2, True)
+            _campo(registro, 221, 234, documento, True); _campo(registro, 235, 274, cliente.razao_social)
+            endereco = " ".join(filter(None, [cliente.endereco, cliente.numero, cliente.complemento, cliente.bairro]))
+            _campo(registro, 275, 314, endereco)
+            cep = _digitos(cliente.cep).zfill(8)[-8:]
+            _campo(registro, 327, 331, cep[:5], True); _campo(registro, 332, 334, cep[5:], True)
+            _campo(registro, 395, 400, sequencia, True)
+            linhas.append("".join(registro))
+
+        sequencia += 1
+        trailer = _linha_400()
+        _campo(trailer, 1, 1, 9, True); _campo(trailer, 395, 400, sequencia, True)
+        linhas.append("".join(trailer))
+        return "\r\n".join(linhas) + "\r\n\x1a"
+
+
+class RemessaCobrancaService:
+    @classmethod
+    def gerar(cls, *, conta_bancaria, titulos, usuario):
+        if conta_bancaria.layout_cobranca == ContaBancaria.LayoutCobranca.CNAB400:
+            return RemessaCNAB400BradescoService.gerar(
+                conta_bancaria=conta_bancaria, titulos=titulos, usuario=usuario,
+            )
+        return RemessaCNAB240Service.gerar(
+            conta_bancaria=conta_bancaria, titulos=titulos, usuario=usuario,
+        )
+
+
 @dataclass
 class OcorrenciaRetorno:
     numero_linha: int
@@ -236,21 +412,25 @@ class RetornoCNABService:
     @staticmethod
     def _data(texto):
         texto = _digitos(texto)
-        if len(texto) != 8 or texto == "00000000":
+        if len(texto) not in (6, 8) or not texto.strip("0"):
             return None
         try:
-            return datetime.strptime(texto, "%d%m%Y").date()
+            return datetime.strptime(texto, "%d%m%Y" if len(texto) == 8 else "%d%m%y").date()
         except ValueError:
             return None
 
     @classmethod
     def ler(cls, conteudo: str):
-        linhas = [linha.rstrip("\r") for linha in conteudo.splitlines() if linha.strip()]
+        linhas = [linha.rstrip("\r\x1a") for linha in conteudo.splitlines() if linha.strip(" \r\x1a")]
         tamanhos = {len(linha) for linha in linhas}
+        if tamanhos == {400}:
+            return cls._ler_400(linhas)
         if not linhas or tamanhos != {240}:
-            if tamanhos == {400}:
-                raise DomainError("CNAB 400 detectado. O layout precisa ser homologado por banco antes da importação.")
-            raise DomainError("Arquivo inválido: todas as linhas devem ter exatamente 240 posições.")
+            raise DomainError("Arquivo inválido: todas as linhas devem ter exatamente 240 ou 400 posições.")
+        return cls._ler_240(linhas)
+
+    @classmethod
+    def _ler_240(cls, linhas):
         if linhas[0][7:8] != "0" or linhas[-1][7:8] != "9":
             raise DomainError("Arquivo CNAB 240 sem header/trailer válidos.")
         ocorrencias = []
@@ -281,6 +461,29 @@ class RetornoCNABService:
         return ocorrencias
 
     @classmethod
+    def _ler_400(cls, linhas):
+        if linhas[0][0:1] != "0" or linhas[-1][0:1] != "9":
+            raise DomainError("Arquivo CNAB 400 sem header/trailer válidos.")
+        if linhas[0][76:79] != "237":
+            raise DomainError("O importador CNAB 400 homologado nesta versão é específico do Bradesco (237).")
+        ocorrencias = []
+        for numero, linha in enumerate(linhas, 1):
+            if linha[0:1] != "1":
+                continue
+            ocorrencias.append(OcorrenciaRetorno(
+                numero_linha=numero,
+                nosso_numero=linha[70:82].strip(),
+                codigo=linha[108:110],
+                data=cls._data(linha[295:301]) or cls._data(linha[110:116]),
+                valor_titulo=cls._decimal(linha[152:165]),
+                valor_pago=cls._decimal(linha[253:266]),
+                tarifa=cls._decimal(linha[175:188]),
+            ))
+        if not ocorrencias:
+            raise DomainError("Nenhuma ocorrência de cobrança (registro tipo 1) foi encontrada.")
+        return ocorrencias
+
+    @classmethod
     @tenant_atomic
     def importar(cls, *, conta_bancaria, nome, dados: bytes, usuario):
         if len(dados) > 10 * 1024 * 1024:
@@ -296,7 +499,12 @@ class RetornoCNABService:
         if RetornoBancario.objects.filter(filial=conta_bancaria.filial, arquivo_hash=arquivo_hash).exists():
             raise DomainError("Este arquivo de retorno já foi processado.")
         ocorrencias = cls.ler(conteudo)
-        banco_arquivo = _digitos(conteudo.splitlines()[0][:3]).zfill(3)
+        primeira_linha = conteudo.splitlines()[0]
+        layout = "cnab400" if len(primeira_linha.rstrip("\r\x1a")) == 400 else "cnab240"
+        banco_arquivo = (
+            primeira_linha[76:79] if layout == "cnab400"
+            else _digitos(primeira_linha[:3]).zfill(3)
+        )
         banco_conta = _digitos(conta_bancaria.banco_codigo).zfill(3)
         if banco_arquivo != banco_conta:
             raise DomainError(
@@ -305,7 +513,7 @@ class RetornoCNABService:
         retorno = RetornoBancario.objects.create(
             conta_bancaria=conta_bancaria, filial=conta_bancaria.filial,
             arquivo_nome=(nome or "retorno.ret")[:80], arquivo_cnab=conteudo,
-            arquivo_hash=arquivo_hash, layout="cnab240", quantidade_registros=len(ocorrencias),
+            arquivo_hash=arquivo_hash, layout=layout, quantidade_registros=len(ocorrencias),
             usuario=usuario,
         )
         totais = {"processados": 0, "pagos": 0, "baixados": 0, "rejeitados": 0, "nao_encontrados": 0, "ignorados": 0}
@@ -353,6 +561,11 @@ class RetornoCNABService:
                     mensagem = "Baixa aplicada ao Contas a Receber."
                     totais["pagos"] += 1
                     retorno.valor_total_pago += valor
+            elif boleto and ocorrencia.codigo in OCORRENCIAS_REGISTRADAS:
+                boleto.status = "registrado"; boleto.banco_codigo_retorno = ocorrencia.codigo; boleto.retorno = retorno
+                boleto.save(update_fields=["status", "banco_codigo_retorno", "retorno", "updated_at"])
+                status, mensagem = "registrado", "Entrada do boleto confirmada pelo banco."
+                totais["ignorados"] += 1
             elif boleto and ocorrencia.codigo in OCORRENCIAS_REJEITADAS:
                 boleto.status = "rejeitado"; boleto.banco_codigo_retorno = ocorrencia.codigo; boleto.retorno = retorno
                 boleto.save(update_fields=["status", "banco_codigo_retorno", "retorno", "updated_at"])
