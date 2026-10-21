@@ -16,13 +16,131 @@ STATUS_PEDIDO_NOTIFICACAO_CHOICES = (
 
 
 class ConfiguracaoWhatsAppForm(forms.ModelForm):
+    meta_access_token = forms.CharField(
+        label='Token permanente da Meta', required=False,
+        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'}, render_value=False),
+        help_text='Fica criptografado. Deixe vazio para manter o token atual.',
+    )
+    meta_verify_token = forms.CharField(
+        label='Token de verificação do webhook', required=False,
+        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'}, render_value=False),
+        help_text='Escolha um segredo e informe o mesmo ao cadastrar o webhook na Meta.',
+    )
+    meta_app_secret = forms.CharField(
+        label='Segredo do aplicativo Meta', required=False,
+        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'}, render_value=False),
+        help_text='Usado para validar a assinatura dos eventos recebidos.',
+    )
+    cobranca_dias_relativos = forms.MultipleChoiceField(
+        label='Quando enviar os avisos',
+        choices=(
+            ('-7', '7 dias antes'), ('-3', '3 dias antes'), ('-1', '1 dia antes'),
+            ('0', 'No vencimento'), ('1', '1 dia depois'), ('3', '3 dias depois'),
+            ('7', '7 dias depois'),
+        ),
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+    )
+
     class Meta:
         model = ConfiguracaoWhatsApp
-        fields = ['agente_ativo', 'ativo']
+        fields = [
+            'provedor',
+            'meta_phone_number_id', 'meta_business_account_id', 'meta_graph_version',
+            'meta_access_token', 'meta_verify_token', 'meta_app_secret',
+            'agente_ativo', 'ativo',
+            'cobranca_ativa', 'cobranca_exigir_consentimento',
+            'cobranca_horario_inicio', 'cobranca_horario_fim',
+            'cobranca_intervalo_minutos', 'cobranca_limite_diario',
+            'cobranca_max_tentativas', 'cobranca_dias_relativos',
+            'cobranca_mensagem', 'cobranca_template_meta', 'cobranca_template_idioma',
+        ]
         labels = {
+            'provedor': 'Provedor do WhatsApp',
+            'meta_phone_number_id': 'ID do número de telefone',
+            'meta_business_account_id': 'ID da conta WhatsApp Business',
+            'meta_graph_version': 'Versão da Graph API',
             'agente_ativo': 'Responder clientes automaticamente',
             'ativo': 'Integração ativa',
+            'cobranca_ativa': 'Ativar avisos automáticos de boletos',
+            'cobranca_exigir_consentimento': 'Exigir autorização registrada do cliente',
+            'cobranca_horario_inicio': 'Iniciar os envios às',
+            'cobranca_horario_fim': 'Encerrar os envios às',
+            'cobranca_intervalo_minutos': 'Intervalo mínimo entre mensagens (minutos)',
+            'cobranca_limite_diario': 'Limite diário por número',
+            'cobranca_max_tentativas': 'Máximo de tentativas',
+            'cobranca_mensagem': 'Mensagem para Evolution API',
+            'cobranca_template_meta': 'Nome do template aprovado na Meta',
+            'cobranca_template_idioma': 'Idioma do template',
         }
+        widgets = {
+            'meta_phone_number_id': forms.TextInput(attrs={'inputmode': 'numeric'}),
+            'meta_business_account_id': forms.TextInput(attrs={'inputmode': 'numeric'}),
+            'meta_graph_version': forms.TextInput(attrs={'placeholder': 'v23.0'}),
+            'cobranca_horario_inicio': forms.TimeInput(attrs={'type': 'time'}),
+            'cobranca_horario_fim': forms.TimeInput(attrs={'type': 'time'}),
+            'cobranca_intervalo_minutos': forms.NumberInput(attrs={'min': 1, 'max': 120}),
+            'cobranca_limite_diario': forms.NumberInput(attrs={'min': 1, 'max': 5000}),
+            'cobranca_max_tentativas': forms.NumberInput(attrs={'min': 1, 'max': 5}),
+            'cobranca_mensagem': forms.Textarea(attrs={'rows': 7}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and not self.is_bound:
+            self.initial['cobranca_dias_relativos'] = [
+                str(item) for item in (self.instance.cobranca_dias_relativos or [])
+            ]
+
+    def clean_cobranca_dias_relativos(self):
+        return sorted({int(item) for item in self.cleaned_data.get('cobranca_dias_relativos') or []})
+
+    def clean(self):
+        dados = super().clean()
+        if dados.get('cobranca_horario_inicio') and dados.get('cobranca_horario_fim'):
+            if dados['cobranca_horario_inicio'] >= dados['cobranca_horario_fim']:
+                self.add_error('cobranca_horario_fim', 'O fim deve ser posterior ao início.')
+        if dados.get('provedor') == ConfiguracaoWhatsApp.Provedor.META_CLOUD:
+            if not dados.get('meta_phone_number_id'):
+                self.add_error('meta_phone_number_id', 'Informe o ID do número da Meta.')
+            if not (
+                dados.get('meta_access_token')
+                or (self.instance and self.instance.obter_meta_access_token())
+            ):
+                self.add_error('meta_access_token', 'Informe o token permanente da Meta.')
+            if not (
+                dados.get('meta_verify_token')
+                or (self.instance and self.instance.obter_meta_verify_token())
+            ):
+                self.add_error('meta_verify_token', 'Informe o token de verificação do webhook.')
+            if not (
+                dados.get('meta_app_secret')
+                or (self.instance and self.instance.obter_meta_app_secret())
+            ):
+                self.add_error(
+                    'meta_app_secret',
+                    'Informe o segredo do aplicativo para validar os webhooks da Meta.',
+                )
+            if dados.get('cobranca_ativa') and not dados.get('cobranca_template_meta'):
+                self.add_error('cobranca_template_meta', 'Informe o template aprovado para cobranças.')
+            if dados.get('cobranca_ativa') and not dados.get('cobranca_exigir_consentimento'):
+                self.add_error(
+                    'cobranca_exigir_consentimento',
+                    'A API oficial exige autorização prévia registrada do destinatário.',
+                )
+        if dados.get('cobranca_ativa') and not dados.get('cobranca_dias_relativos'):
+            self.add_error('cobranca_dias_relativos', 'Selecione ao menos um momento de envio.')
+        return dados
+
+    def save(self, commit=True):
+        instancia = super().save(commit=False)
+        instancia.definir_meta_access_token(self.cleaned_data.get('meta_access_token'))
+        instancia.definir_meta_verify_token(self.cleaned_data.get('meta_verify_token'))
+        instancia.definir_meta_app_secret(self.cleaned_data.get('meta_app_secret'))
+        if commit:
+            instancia.save()
+            self.save_m2m()
+        return instancia
 
 
 class FluxoWhatsAppForm(forms.ModelForm):

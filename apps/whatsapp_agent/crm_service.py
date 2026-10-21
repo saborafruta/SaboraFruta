@@ -4,11 +4,19 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 
-from .gateway import EvolutionClient, GatewayWhatsAppError
+from .gateway import (
+    EvolutionClient, GatewayWhatsAppError, MetaCloudClient, identificador_envio,
+)
 from .models import ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp
 
 
 logger = logging.getLogger(__name__)
+
+
+def _cliente_whatsapp(configuracao):
+    if configuracao.provedor == ConfiguracaoWhatsApp.Provedor.META_CLOUD:
+        return MetaCloudClient(configuracao)
+    return EvolutionClient(configuracao)
 
 
 def _dentro_do_horario(configuracao, agora):
@@ -96,8 +104,8 @@ def recuperar_agendamentos_abandonados(*, configuracao=None, agora=None):
                     status='pendente',
                 )
                 try:
-                    retorno = EvolutionClient(config).enviar_texto(conversa.telefone, texto)
-                    saida.identificador_externo = str((retorno.get('key') or {}).get('id') or '')
+                    retorno = _cliente_whatsapp(config).enviar_texto(conversa.telefone, texto)
+                    saida.identificador_externo = identificador_envio(retorno)
                     saida.status = 'enviada'
                     enviados += 1
                 except GatewayWhatsAppError as exc:

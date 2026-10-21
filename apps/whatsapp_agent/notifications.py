@@ -7,11 +7,19 @@ from django.utils import timezone
 from apps.agenda.models import AgendamentoItem
 from apps.core.models import EmpresaBanco, Filial
 
-from .gateway import EvolutionClient, GatewayWhatsAppError
+from .gateway import (
+    EvolutionClient, GatewayWhatsAppError, MetaCloudClient, identificador_envio,
+)
 from .models import ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp
 
 
 logger = logging.getLogger(__name__)
+
+
+def _cliente_whatsapp(configuracao):
+    if configuracao.provedor == ConfiguracaoWhatsApp.Provedor.META_CLOUD:
+        return MetaCloudClient(configuracao)
+    return EvolutionClient(configuracao)
 
 
 def _numero_whatsapp(valor):
@@ -150,8 +158,8 @@ def _enviar_notificacao_agendamento(agendamento, *, db_alias, lembrete=False):
         status='pendente',
     )
     try:
-        retorno = EvolutionClient(configuracao).enviar_texto(telefone, texto)
-        saida.identificador_externo = str((retorno.get('key') or {}).get('id') or '')
+        retorno = _cliente_whatsapp(configuracao).enviar_texto(telefone, texto)
+        saida.identificador_externo = identificador_envio(retorno)
         saida.status = 'enviada'
         mensagem = 'Lembrete enviado pelo WhatsApp.' if lembrete else 'Confirmação enviada pelo WhatsApp.'
         enviado = True

@@ -27,6 +27,14 @@ app.conf.beat_schedule = {
         'task': 'apps.whatsapp_agent.tasks.processar_proximo_resumo',
         'schedule': crontab(minute='*'),
     },
+    'agendar-cobrancas-whatsapp': {
+        'task': 'apps.whatsapp_agent.tasks.agendar_cobrancas_automaticas',
+        'schedule': crontab(hour=7, minute=30),
+    },
+    'processar-fila-cobrancas-whatsapp': {
+        'task': 'apps.whatsapp_agent.tasks.processar_proxima_cobranca',
+        'schedule': crontab(minute='*'),
+    },
     'verificar-vencimentos-diario': {
         'task': 'apps.estoque.tasks.alertas.verificar_vencimentos',
         'schedule': crontab(hour=7, minute=0),

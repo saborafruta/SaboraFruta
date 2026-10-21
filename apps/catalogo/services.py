@@ -9,13 +9,21 @@ from django.utils import timezone
 
 from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import EmpresaBanco, Filial, Notificacao
-from apps.whatsapp_agent.gateway import EvolutionClient, GatewayWhatsAppError
+from apps.whatsapp_agent.gateway import (
+    EvolutionClient, GatewayWhatsAppError, MetaCloudClient, identificador_envio,
+)
 from apps.whatsapp_agent.models import ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp
 
 from .models import PedidoCatalogo
 
 
 logger = logging.getLogger(__name__)
+
+
+def _cliente_whatsapp(configuracao):
+    if configuracao.provedor == ConfiguracaoWhatsApp.Provedor.META_CLOUD:
+        return MetaCloudClient(configuracao)
+    return EvolutionClient(configuracao)
 
 
 def somente_digitos(valor):
@@ -176,8 +184,8 @@ def enviar_resumo_whatsapp(pedido, *, db_alias, conversa=None):
         texto=texto, tipo='resumo_pedido_catalogo', status='pendente',
     )
     try:
-        retorno = EvolutionClient(config).enviar_texto(telefone, texto)
-        saida.identificador_externo = str((retorno.get('key') or {}).get('id') or '')
+        retorno = _cliente_whatsapp(config).enviar_texto(telefone, texto)
+        saida.identificador_externo = identificador_envio(retorno)
         saida.status = 'enviada'
         ok, mensagem = True, 'Resumo enviado pelo WhatsApp.'
     except GatewayWhatsAppError as exc:
@@ -227,8 +235,8 @@ def enviar_atualizacao_whatsapp(pedido, *, db_alias):
         texto=texto, tipo='atualizacao_pedido_catalogo', status='pendente',
     )
     try:
-        retorno = EvolutionClient(config).enviar_texto(telefone, texto)
-        saida.identificador_externo = str((retorno.get('key') or {}).get('id') or '')
+        retorno = _cliente_whatsapp(config).enviar_texto(telefone, texto)
+        saida.identificador_externo = identificador_envio(retorno)
         saida.status = 'enviada'
         enviado = True
     except GatewayWhatsAppError as exc:

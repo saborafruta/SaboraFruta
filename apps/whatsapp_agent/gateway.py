@@ -11,6 +11,16 @@ class GatewayWhatsAppError(Exception):
     pass
 
 
+def identificador_envio(retorno):
+    """Normaliza o identificador devolvido pelos gateways suportados."""
+    if not isinstance(retorno, dict):
+        return ''
+    evolution_id = (retorno.get('key') or {}).get('id')
+    mensagens = retorno.get('messages') or []
+    meta_id = mensagens[0].get('id') if mensagens and isinstance(mensagens[0], dict) else ''
+    return str(evolution_id or meta_id or '')
+
+
 class EvolutionClient:
     EVENTOS = ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE']
 
@@ -142,6 +152,133 @@ class EvolutionClient:
             'base64': base64_midia,
             'mimetype': dados.get('mimetype') or dados.get('mimeType') or 'audio/ogg',
         }
+
+
+class MetaCloudClient:
+    """Cliente da API oficial WhatsApp Cloud da Meta."""
+
+    def __init__(self, configuracao):
+        self.configuracao = configuracao
+        self.phone_number_id = (configuracao.meta_phone_number_id or '').strip()
+        self.business_account_id = (configuracao.meta_business_account_id or '').strip()
+        self.access_token = configuracao.obter_meta_access_token()
+        self.graph_version = (configuracao.meta_graph_version or 'v23.0').strip()
+        self.base_url = f'https://graph.facebook.com/{self.graph_version}'
+        if not self.phone_number_id or not self.access_token:
+            raise GatewayWhatsAppError(
+                'Informe o ID do número e o token permanente da API oficial do WhatsApp.',
+            )
+
+    @property
+    def headers(self):
+        return {'Authorization': f'Bearer {self.access_token}'}
+
+    def _request(self, metodo, caminho, **kwargs):
+        headers = dict(self.headers)
+        if 'files' not in kwargs:
+            headers['Content-Type'] = 'application/json'
+        try:
+            resposta = requests.request(
+                metodo,
+                f'{self.base_url}{caminho}',
+                headers=headers,
+                timeout=30,
+                **kwargs,
+            )
+        except requests.RequestException as exc:
+            raise GatewayWhatsAppError('Não foi possível acessar a API oficial do WhatsApp.') from exc
+        if resposta.status_code >= 400:
+            try:
+                erro = resposta.json().get('error') or {}
+                detalhe = erro.get('error_user_msg') or erro.get('message')
+            except (ValueError, AttributeError):
+                detalhe = None
+            raise GatewayWhatsAppError(
+                str(detalhe or f'API oficial respondeu HTTP {resposta.status_code}.'),
+            )
+        try:
+            return resposta.json()
+        except ValueError as exc:
+            raise GatewayWhatsAppError('A API oficial retornou uma resposta inválida.') from exc
+
+    def detalhes(self):
+        return self._request(
+            'GET',
+            f'/{quote(self.phone_number_id)}?fields=display_phone_number,verified_name,quality_rating',
+        )
+
+    def enviar_texto(self, telefone, texto):
+        return self._request('POST', f'/{quote(self.phone_number_id)}/messages', json={
+            'messaging_product': 'whatsapp',
+            'recipient_type': 'individual',
+            'to': telefone,
+            'type': 'text',
+            'text': {'preview_url': False, 'body': texto},
+        })
+
+    def enviar_template(self, telefone, nome, idioma, parametros):
+        return self._request('POST', f'/{quote(self.phone_number_id)}/messages', json={
+            'messaging_product': 'whatsapp',
+            'recipient_type': 'individual',
+            'to': telefone,
+            'type': 'template',
+            'template': {
+                'name': nome,
+                'language': {'code': idioma or 'pt_BR'},
+                'components': [{
+                    'type': 'body',
+                    'parameters': [
+                        {'type': 'text', 'text': str(valor)} for valor in parametros
+                    ],
+                }],
+            },
+        })
+
+    def enviar_documento(self, telefone, conteudo, nome_arquivo, legenda=''):
+        midia = self._request(
+            'POST',
+            f'/{quote(self.phone_number_id)}/media',
+            data={'messaging_product': 'whatsapp', 'type': 'application/pdf'},
+            files={'file': (nome_arquivo, conteudo, 'application/pdf')},
+        )
+        media_id = midia.get('id')
+        if not media_id:
+            raise GatewayWhatsAppError('A API oficial não devolveu o ID do documento.')
+        return self._request('POST', f'/{quote(self.phone_number_id)}/messages', json={
+            'messaging_product': 'whatsapp',
+            'recipient_type': 'individual',
+            'to': telefone,
+            'type': 'document',
+            'document': {'id': media_id, 'filename': nome_arquivo, 'caption': legenda},
+        })
+
+    def obter_midia_base64(self, dados_mensagem):
+        media_id = str(
+            dados_mensagem.get('id')
+            or (dados_mensagem.get('audio') or {}).get('id')
+            or ''
+        )
+        if not media_id:
+            raise GatewayWhatsAppError('A mensagem oficial não informou o ID da mídia.')
+        metadados = self._request('GET', f'/{quote(media_id)}')
+        url = metadados.get('url')
+        if not url:
+            raise GatewayWhatsAppError('A API oficial não devolveu a URL da mídia.')
+        try:
+            resposta = requests.get(url, headers=self.headers, timeout=30)
+            resposta.raise_for_status()
+        except requests.RequestException as exc:
+            raise GatewayWhatsAppError('Não foi possível baixar a mídia recebida.') from exc
+        return {
+            'base64': base64.b64encode(resposta.content).decode('ascii'),
+            'mimetype': metadados.get('mime_type') or 'audio/ogg',
+        }
+
+
+def cliente_whatsapp(configuracao):
+    if configuracao.provedor == configuracao.Provedor.META_CLOUD:
+        return MetaCloudClient(configuracao)
+    return EvolutionClient(configuracao)
 
 
 def qr_data_url(dados):

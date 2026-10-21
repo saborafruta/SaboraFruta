@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import json
 import re
 
@@ -5,7 +7,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Count, OuterRef, Subquery, Sum
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -20,13 +22,16 @@ from apps.core.services.permissions import PermissaoRequiredMixin
 from .conversation_service import encerrar_conversa, encerrar_conversas_inativas
 from .flow import garantir_fluxo_padrao
 from .forms import ConfiguracaoWhatsAppForm, FluxoWhatsAppForm
-from .gateway import EvolutionClient, GatewayWhatsAppError, identidade_instancia, qr_data_url
+from .gateway import (
+    EvolutionClient, GatewayWhatsAppError, MetaCloudClient,
+    identidade_instancia, qr_data_url,
+)
 from .models import (
     ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp,
     MenuWhatsApp, OpcaoMenuWhatsApp,
     UsoIAWhatsApp,
 )
-from .webhook import receber_evento
+from .webhook import receber_evento, receber_evento_meta
 
 
 def _configuracao(request):
@@ -43,7 +48,9 @@ def _configuracao(request):
     return configuracao
 
 
-def _gateway_configurado():
+def _gateway_configurado(configuracao):
+    if configuracao.provedor == ConfiguracaoWhatsApp.Provedor.META_CLOUD:
+        return configuracao.meta_credenciais_configuradas
     return bool(
         getattr(settings, 'WHATSAPP_EVOLUTION_URL', '')
         and getattr(settings, 'WHATSAPP_EVOLUTION_API_KEY', '')
@@ -65,21 +72,34 @@ class ConfiguracaoView(PermissaoRequiredMixin, View):
         form = ConfiguracaoWhatsAppForm(instance=configuracao)
         return render(request, 'whatsapp_agent/configuracao.html', {
             'form': form, 'configuracao': configuracao,
-            'gateway_configurado': _gateway_configurado(),
+            'gateway_configurado': _gateway_configurado(configuracao),
+            'webhook_url': _webhook_url(request, configuracao),
         })
 
     def post(self, request):
         configuracao = _configuracao(request)
+        provedor_anterior = configuracao.provedor
+        phone_number_id_anterior = configuracao.meta_phone_number_id
         form = ConfiguracaoWhatsAppForm(request.POST, instance=configuracao)
         if form.is_valid():
             configuracao = form.save(commit=False)
             configuracao.filial = request.filial_ativa
+            credencial_meta_alterada = bool(
+                request.POST.get('meta_access_token')
+                or configuracao.meta_phone_number_id != phone_number_id_anterior
+            )
+            if configuracao.provedor != provedor_anterior or credencial_meta_alterada:
+                configuracao.status = ConfiguracaoWhatsApp.Status.NAO_CONFIGURADO
+                configuracao.numero_conectado = ''
+                configuracao.nome_conectado = ''
+                configuracao.ultimo_erro = ''
             configuracao.save()
             messages.success(request, 'Configuração do WhatsApp salva.')
             return redirect('whatsapp_agent:configuracao')
         return render(request, 'whatsapp_agent/configuracao.html', {
             'form': form, 'configuracao': configuracao,
-            'gateway_configurado': _gateway_configurado(),
+            'gateway_configurado': _gateway_configurado(configuracao),
+            'webhook_url': _webhook_url(request, configuracao),
         })
 
 
@@ -281,6 +301,24 @@ class ConectarView(PermissaoRequiredMixin, View):
             ConfiguracaoWhatsApp.objects.for_filial(request.filial_ativa), ativo=True,
         )
         try:
+            if configuracao.provedor == ConfiguracaoWhatsApp.Provedor.META_CLOUD:
+                dados = MetaCloudClient(configuracao).detalhes()
+                configuracao.status = ConfiguracaoWhatsApp.Status.CONECTADO
+                configuracao.numero_conectado = re.sub(
+                    r'\D', '', str(dados.get('display_phone_number') or ''),
+                )[:24]
+                configuracao.nome_conectado = str(dados.get('verified_name') or '')[:120]
+                configuracao.ultima_conexao_em = timezone.now()
+                configuracao.ultimo_erro = ''
+                configuracao.save(update_fields=[
+                    'status', 'numero_conectado', 'nome_conectado',
+                    'ultima_conexao_em', 'ultimo_erro', 'updated_at',
+                ])
+                messages.success(
+                    request,
+                    'API oficial validada. Cadastre a URL e o token de webhook exibidos nesta tela na Meta.',
+                )
+                return redirect('whatsapp_agent:configuracao')
             cliente = EvolutionClient(configuracao)
             webhook_url = _webhook_url(request, configuracao)
             try:
@@ -320,6 +358,24 @@ class StatusConexaoView(PermissaoRequiredMixin, View):
             ConfiguracaoWhatsApp.objects.for_filial(request.filial_ativa), ativo=True,
         )
         try:
+            if configuracao.provedor == ConfiguracaoWhatsApp.Provedor.META_CLOUD:
+                dados = MetaCloudClient(configuracao).detalhes()
+                configuracao.status = ConfiguracaoWhatsApp.Status.CONECTADO
+                configuracao.ultima_conexao_em = timezone.now()
+                configuracao.ultimo_erro = ''
+                configuracao.numero_conectado = re.sub(
+                    r'\D', '', str(dados.get('display_phone_number') or ''),
+                )[:24]
+                configuracao.nome_conectado = str(dados.get('verified_name') or '')[:120]
+                configuracao.save(update_fields=[
+                    'status', 'ultima_conexao_em', 'ultimo_erro',
+                    'numero_conectado', 'nome_conectado', 'updated_at',
+                ])
+                return JsonResponse({
+                    'conectado': True,
+                    'status': configuracao.get_status_display(),
+                    'oficial': True,
+                })
             cliente = EvolutionClient(configuracao)
             estado = cliente.estado()
             if estado == 'open':
@@ -507,22 +563,50 @@ class AlterarEtapaCRMView(PermissaoRequiredMixin, View):
 
 
 @csrf_exempt
-@require_POST
 def webhook(request, secret):
+    configuracao = ConfiguracaoWhatsApp.objects.filter(
+        webhook_secret=secret, ativo=True,
+    ).select_related('filial').first()
+    if not configuracao:
+        return JsonResponse({'erro': 'Webhook inválido.'}, status=404)
+    if request.method == 'GET':
+        if configuracao.provedor != ConfiguracaoWhatsApp.Provedor.META_CLOUD:
+            return JsonResponse({'erro': 'Método não permitido.'}, status=405)
+        token = request.GET.get('hub.verify_token', '')
+        desafio = request.GET.get('hub.challenge', '')
+        token_configurado = configuracao.obter_meta_verify_token()
+        if (
+            token_configurado
+            and request.GET.get('hub.mode') == 'subscribe'
+            and hmac.compare_digest(token, token_configurado)
+        ):
+            return HttpResponse(desafio, content_type='text/plain')
+        return JsonResponse({'erro': 'Verificação recusada.'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'erro': 'Método não permitido.'}, status=405)
     try:
         tamanho = int(request.META.get('CONTENT_LENGTH') or 0)
     except (TypeError, ValueError):
         tamanho = 0
     if tamanho > 1_000_000:
         return JsonResponse({'erro': 'Payload muito grande.'}, status=413)
-    configuracao = ConfiguracaoWhatsApp.objects.filter(
-        webhook_secret=secret, ativo=True,
-    ).select_related('filial').first()
-    if not configuracao:
-        return JsonResponse({'erro': 'Webhook inválido.'}, status=404)
+    if configuracao.provedor == ConfiguracaoWhatsApp.Provedor.META_CLOUD:
+        segredo = configuracao.obter_meta_app_secret()
+        assinatura = request.headers.get('X-Hub-Signature-256', '')
+        if not segredo:
+            return JsonResponse({'erro': 'Webhook oficial sem assinatura configurada.'}, status=403)
+        esperada = 'sha256=' + hmac.new(
+            segredo.encode('utf-8'), request.body, hashlib.sha256,
+        ).hexdigest()
+        if not hmac.compare_digest(assinatura, esperada):
+            return JsonResponse({'erro': 'Assinatura inválida.'}, status=403)
     try:
         payload = json.loads(request.body or b'{}')
     except (json.JSONDecodeError, UnicodeDecodeError):
         return JsonResponse({'erro': 'JSON inválido.'}, status=400)
-    resultado = receber_evento(configuracao, payload)
+    resultado = (
+        receber_evento_meta(configuracao, payload)
+        if configuracao.provedor == ConfiguracaoWhatsApp.Provedor.META_CLOUD
+        else receber_evento(configuracao, payload)
+    )
     return JsonResponse({'ok': True, 'resultado': resultado})

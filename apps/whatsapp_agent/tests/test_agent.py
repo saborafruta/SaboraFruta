@@ -3,6 +3,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from django import forms
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -27,7 +28,9 @@ from apps.whatsapp_agent.conversation_service import (
 )
 from apps.whatsapp_agent.crm_service import recuperar_agendamentos_abandonados
 from apps.whatsapp_agent.forms import ConfiguracaoWhatsAppForm, FluxoWhatsAppForm
-from apps.whatsapp_agent.gateway import EvolutionClient, GatewayWhatsAppError, qr_data_url
+from apps.whatsapp_agent.gateway import (
+    EvolutionClient, GatewayWhatsAppError, MetaCloudClient, qr_data_url,
+)
 from apps.whatsapp_agent.intelligent_agent import processar_com_ia
 from apps.whatsapp_agent.models import (
     ConfiguracaoWhatsApp,
@@ -1524,11 +1527,52 @@ class EvolutionClientTests(SimpleTestCase):
         self.assertEqual(cliente.base_url, 'https://gateway-central.example.com')
         self.assertEqual(cliente.api_key, 'chave-central')
 
-    def test_formulario_nao_expoe_credenciais_tecnicas(self):
-        self.assertEqual(
-            list(ConfiguracaoWhatsAppForm().fields),
-            ['agente_ativo', 'ativo'],
+    @patch('apps.whatsapp_agent.gateway.requests.request')
+    def test_api_oficial_envia_template_aprovado(self, requisicao):
+        resposta = Mock(status_code=200)
+        resposta.json.return_value = {'messages': [{'id': 'wamid.meta-1'}]}
+        requisicao.return_value = resposta
+        configuracao = Mock(
+            meta_phone_number_id='123456789',
+            meta_business_account_id='987654321',
+            meta_graph_version='v23.0',
         )
+        configuracao.obter_meta_access_token.return_value = 'token-meta'
+
+        retorno = MetaCloudClient(configuracao).enviar_template(
+            '5584999990000',
+            'aviso_vencimento_boleto',
+            'pt_BR',
+            ['Cliente', 'Empresa', 'DOC-1', 'R$ 10,00', '20/10/2026', 'https://boleto'],
+        )
+
+        self.assertEqual(retorno['messages'][0]['id'], 'wamid.meta-1')
+        self.assertEqual(
+            requisicao.call_args.args,
+            ('POST', 'https://graph.facebook.com/v23.0/123456789/messages'),
+        )
+        self.assertEqual(
+            requisicao.call_args.kwargs['headers']['Authorization'],
+            'Bearer token-meta',
+        )
+        payload = requisicao.call_args.kwargs['json']
+        self.assertEqual(payload['type'], 'template')
+        self.assertEqual(payload['template']['name'], 'aviso_vencimento_boleto')
+        self.assertEqual(len(payload['template']['components'][0]['parameters']), 6)
+
+    def test_formulario_expoe_escolha_do_provedor_sem_revelar_segredos_salvos(self):
+        campos = ConfiguracaoWhatsAppForm().fields
+
+        self.assertIn('provedor', campos)
+        self.assertIn('meta_phone_number_id', campos)
+        self.assertIn('meta_access_token', campos)
+        self.assertIn('meta_verify_token', campos)
+        self.assertIn('meta_app_secret', campos)
+        self.assertIn('cobranca_ativa', campos)
+        self.assertIn('cobranca_intervalo_minutos', campos)
+        self.assertNotIn('api_key_criptografada', campos)
+        self.assertNotIn('meta_access_token_criptografado', campos)
+        self.assertIsInstance(campos['meta_access_token'].widget, forms.PasswordInput)
 
     def test_fluxo_expoe_mensagens_da_agenda_para_personalizacao(self):
         campos = FluxoWhatsAppForm().fields

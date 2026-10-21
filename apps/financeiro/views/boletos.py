@@ -8,11 +8,15 @@ from django.views import View
 
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.tenant_context import get_current_database_alias
 from apps.financeiro.constants.enums import StatusContaReceber, TipoFormaPagamento
 from apps.financeiro.models import (
     ContaBancaria, ContaReceber, RemessaBancaria, RetornoBancario,
 )
 from apps.financeiro.services.cnab_cobranca import RemessaCNAB240Service, RetornoCNABService
+from apps.whatsapp_agent.cobranca_service import agendar_cobrancas_manuais
+from apps.whatsapp_agent.models import EnvioCobrancaWhatsApp
+from apps.whatsapp_agent.notifications import configuracao_whatsapp_conectada
 
 
 class BoletoComunicacaoListView(PermissaoRequiredMixin, View):
@@ -32,12 +36,67 @@ class BoletoComunicacaoListView(PermissaoRequiredMixin, View):
                 status__in=[StatusContaReceber.ABERTO, StatusContaReceber.VENCIDO, StatusContaReceber.NEGOCIADO],
                 forma_pagamento__tipo=TipoFormaPagamento.BOLETO,
             ).filter(Q(conta_bancaria=conta) | Q(conta_bancaria__isnull=True)).select_related("cliente").order_by("data_vencimento")[:300]
+        alias = get_current_database_alias()
+        configuracao_whatsapp = configuracao_whatsapp_conectada(filial, alias)
         return render(request, self.template_name, {
             "title": "Boletos · Remessa e Retorno", "contas_bancarias": contas,
             "conta_bancaria": conta, "titulos": titulos,
+            "aba_inicial": request.GET.get("aba") if request.GET.get("aba") in {
+                "remessa", "retorno", "historico", "whatsapp",
+            } else "remessa",
+            "configuracao_whatsapp": configuracao_whatsapp,
+            "envios_cobranca": EnvioCobrancaWhatsApp.objects.using('default').filter(
+                tenant_alias=alias, filial_cnpj=filial.cnpj,
+            ).order_by('-created_at')[:50],
             "remessas": RemessaBancaria.objects.filter(filial=filial).select_related("conta_bancaria", "usuario").order_by("-created_at")[:20],
             "retornos": RetornoBancario.objects.filter(filial=filial).select_related("conta_bancaria", "usuario").order_by("-created_at")[:20],
         })
+
+
+class BoletoWhatsAppAgendarView(PermissaoRequiredMixin, View):
+    permissao_modulo = "financeiro"
+    permissao_acao = "editar"
+
+    def post(self, request):
+        filial = request.filial_ativa
+        ids = request.POST.getlist('titulos')
+        conta_id = request.POST.get('conta_bancaria')
+        titulos = ContaReceber.objects.filter(
+            pk__in=ids,
+            filial=filial,
+            forma_pagamento__tipo=TipoFormaPagamento.BOLETO,
+            status__in=[
+                StatusContaReceber.ABERTO,
+                StatusContaReceber.PAGO_PARCIAL,
+                StatusContaReceber.VENCIDO,
+                StatusContaReceber.NEGOCIADO,
+            ],
+            valor_saldo__gt=0,
+        )
+        if conta_id:
+            titulos = titulos.filter(Q(conta_bancaria_id=conta_id) | Q(conta_bancaria__isnull=True))
+        if not ids:
+            messages.error(request, 'Selecione ao menos um boleto.')
+        else:
+            resultado = agendar_cobrancas_manuais(
+                titulos,
+                usuario=request.user,
+                registrar_autorizacao=request.POST.get('confirmar_consentimento') == 'on',
+            )
+            if resultado['criados']:
+                messages.success(
+                    request,
+                    f"{resultado['criados']} aviso(s) colocado(s) na fila do WhatsApp.",
+                )
+            if resultado['ignorados']:
+                messages.warning(
+                    request,
+                    f"{resultado['ignorados']} título(s) ignorado(s): confira telefone, consentimento, conexão ou duplicidade.",
+                )
+        destino = reverse('financeiro:boleto_comunicacao') + '?aba=whatsapp'
+        if conta_id:
+            destino += f'&conta_bancaria={conta_id}'
+        return redirect(destino)
 
 
 class BoletoRemessaGerarView(PermissaoRequiredMixin, View):

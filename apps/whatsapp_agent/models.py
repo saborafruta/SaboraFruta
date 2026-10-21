@@ -25,7 +25,15 @@ def status_pedido_notificados_padrao():
     ]
 
 
+def dias_aviso_boleto_padrao():
+    return [-3, -1, 0, 1, 3]
+
+
 class ConfiguracaoWhatsApp(FilialScopedModel):
+    class Provedor(models.TextChoices):
+        EVOLUTION = 'evolution', 'Evolution API (não oficial)'
+        META_CLOUD = 'meta_cloud', 'WhatsApp Cloud API (oficial)'
+
     class Status(models.TextChoices):
         NAO_CONFIGURADO = 'nao_configurado', 'Não configurado'
         DESCONECTADO = 'desconectado', 'Desconectado'
@@ -38,9 +46,19 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
         CATALOGO = 'catalogo', 'Somente catálogo e pedidos'
         AMBOS = 'ambos', 'Agendamento e catálogo'
 
-    provedor = models.CharField(max_length=30, default='evolution')
+    provedor = models.CharField(
+        max_length=30,
+        choices=Provedor.choices,
+        default=Provedor.EVOLUTION,
+    )
     gateway_url = models.URLField(max_length=300, blank=True)
     api_key_criptografada = models.TextField(blank=True)
+    meta_phone_number_id = models.CharField(max_length=40, blank=True)
+    meta_business_account_id = models.CharField(max_length=40, blank=True)
+    meta_graph_version = models.CharField(max_length=12, default='v23.0')
+    meta_access_token_criptografado = models.TextField(blank=True)
+    meta_verify_token_criptografado = models.TextField(blank=True)
+    meta_app_secret_criptografado = models.TextField(blank=True)
     instancia = models.SlugField(max_length=80)
     webhook_secret = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.NAO_CONFIGURADO)
@@ -188,6 +206,41 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
     pedido_resposta_confirmar = models.CharField(max_length=20, default='1')
     pedido_resposta_alterar = models.CharField(max_length=20, default='2')
     pedido_resposta_cancelar = models.CharField(max_length=20, default='3')
+    cobranca_ativa = models.BooleanField(default=False)
+    cobranca_exigir_consentimento = models.BooleanField(
+        default=True,
+        help_text='Envia somente para clientes com autorização registrada.',
+    )
+    cobranca_horario_inicio = models.TimeField(default=time(9, 0))
+    cobranca_horario_fim = models.TimeField(default=time(18, 0))
+    cobranca_intervalo_minutos = models.PositiveSmallIntegerField(
+        default=3,
+        validators=[MinValueValidator(1), MaxValueValidator(120)],
+    )
+    cobranca_limite_diario = models.PositiveIntegerField(
+        default=50,
+        validators=[MinValueValidator(1), MaxValueValidator(5000)],
+    )
+    cobranca_max_tentativas = models.PositiveSmallIntegerField(
+        default=2,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+    )
+    cobranca_dias_relativos = models.JSONField(default=dias_aviso_boleto_padrao, blank=True)
+    cobranca_mensagem = models.TextField(
+        default=(
+            'Olá, {nome}! Este é um lembrete da {empresa}.\n\n'
+            'O boleto {documento}, no valor de {valor}, vence em {vencimento}.\n'
+            '{link}\n\nCaso já tenha efetuado o pagamento, desconsidere esta mensagem.'
+        ),
+        help_text='Variáveis: {nome}, {empresa}, {documento}, {valor}, {vencimento} e {link}.',
+    )
+    cobranca_template_meta = models.SlugField(
+        max_length=512,
+        default='aviso_vencimento_boleto',
+        blank=True,
+    )
+    cobranca_template_idioma = models.CharField(max_length=12, default='pt_BR')
+    ultimo_envio_cobranca_em = models.DateTimeField(null=True, blank=True)
     recuperacao_agendamento_ativa = models.BooleanField(default=False)
     recuperacao_atraso_minutos = models.PositiveIntegerField(
         default=60,
@@ -258,6 +311,42 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
             return _fernet().decrypt(self.api_key_criptografada.encode('ascii')).decode('utf-8')
         except (InvalidToken, ValueError):
             return ''
+
+    def _definir_segredo(self, campo, valor):
+        valor = (valor or '').strip()
+        if valor:
+            setattr(self, campo, _fernet().encrypt(valor.encode('utf-8')).decode('ascii'))
+
+    def _obter_segredo(self, campo):
+        valor = getattr(self, campo, '')
+        if not valor:
+            return ''
+        try:
+            return _fernet().decrypt(valor.encode('ascii')).decode('utf-8')
+        except (InvalidToken, ValueError):
+            return ''
+
+    def definir_meta_access_token(self, valor):
+        self._definir_segredo('meta_access_token_criptografado', valor)
+
+    def obter_meta_access_token(self):
+        return self._obter_segredo('meta_access_token_criptografado')
+
+    def definir_meta_verify_token(self, valor):
+        self._definir_segredo('meta_verify_token_criptografado', valor)
+
+    def obter_meta_verify_token(self):
+        return self._obter_segredo('meta_verify_token_criptografado')
+
+    def definir_meta_app_secret(self, valor):
+        self._definir_segredo('meta_app_secret_criptografado', valor)
+
+    def obter_meta_app_secret(self):
+        return self._obter_segredo('meta_app_secret_criptografado')
+
+    @property
+    def meta_credenciais_configuradas(self):
+        return bool(self.meta_phone_number_id and self.obter_meta_access_token())
 
     @property
     def ia_api_key_configurada(self):
@@ -552,6 +641,84 @@ class MensagemWhatsApp(TimestampedModel):
                 condition=~models.Q(identificador_externo=''),
                 name='whatsapp_mensagem_externa_unica',
             ),
+        ]
+
+
+class ConsentimentoCobrancaWhatsApp(TimestampedModel):
+    tenant_alias = models.SlugField(max_length=80, default='default')
+    filial_cnpj = models.CharField(max_length=14)
+    cliente_id = models.BigIntegerField()
+    telefone = models.CharField(max_length=15)
+    autorizado = models.BooleanField(default=True)
+    autorizado_em = models.DateTimeField(null=True, blank=True)
+    revogado_em = models.DateTimeField(null=True, blank=True)
+    origem = models.CharField(max_length=30, default='financeiro')
+    registrado_por = models.ForeignKey(
+        'core.Usuario', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='+',
+    )
+
+    class Meta:
+        db_table = 'whatsapp_consentimentos_cobranca'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant_alias', 'filial_cnpj', 'cliente_id'],
+                name='whatsapp_consent_cobranca_cliente_uniq',
+            ),
+        ]
+
+
+class EnvioCobrancaWhatsApp(TimestampedModel):
+    class Status(models.TextChoices):
+        PENDENTE = 'pendente', 'Pendente'
+        ENVIANDO = 'enviando', 'Enviando'
+        ENVIADO = 'enviado', 'Enviado'
+        ERRO = 'erro', 'Erro'
+        CANCELADO = 'cancelado', 'Cancelado'
+
+    configuracao = models.ForeignKey(
+        ConfiguracaoWhatsApp,
+        on_delete=models.PROTECT,
+        related_name='envios_cobranca',
+    )
+    tenant_alias = models.SlugField(max_length=80, default='default')
+    filial_cnpj = models.CharField(max_length=14)
+    conta_receber_id = models.BigIntegerField()
+    boleto_id = models.BigIntegerField(null=True, blank=True)
+    cliente_id = models.BigIntegerField()
+    cliente_nome = models.CharField(max_length=150)
+    telefone = models.CharField(max_length=15)
+    documento = models.CharField(max_length=200, blank=True)
+    data_vencimento = models.DateField()
+    valor = models.DecimalField(max_digits=14, decimal_places=2)
+    evento = models.CharField(max_length=30)
+    mensagem = models.TextField()
+    parametros_template = models.JSONField(default=list, blank=True)
+    agendado_para = models.DateTimeField(db_index=True)
+    disparo_manual = models.BooleanField(default=False)
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDENTE,
+        db_index=True,
+    )
+    tentativas = models.PositiveSmallIntegerField(default=0)
+    enviado_em = models.DateTimeField(null=True, blank=True)
+    identificador_externo = models.CharField(max_length=200, blank=True)
+    ultimo_erro = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'whatsapp_envios_cobranca'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant_alias', 'conta_receber_id', 'evento', 'data_vencimento'],
+                name='whatsapp_cobranca_titulo_evento_uniq',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['status', 'agendado_para']),
+            models.Index(fields=['tenant_alias', 'filial_cnpj', 'data_vencimento']),
         ]
 
 

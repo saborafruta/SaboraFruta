@@ -1,6 +1,7 @@
 from celery import shared_task
 
 from .conversation_service import encerrar_conversas_inativas
+from .cobranca_service import agendar_cobrancas_automaticas, processar_proxima_cobranca
 from .crm_service import recuperar_agendamentos_abandonados
 from .resumo_service import preparar_resumos_diarios, processar_proximo_resumo
 
@@ -23,3 +24,13 @@ def preparar_resumos_diarios_task():
 @shared_task(name='apps.whatsapp_agent.tasks.processar_proximo_resumo')
 def processar_proximo_resumo_task():
     return processar_proximo_resumo()
+
+
+@shared_task(name='apps.whatsapp_agent.tasks.agendar_cobrancas_automaticas')
+def agendar_cobrancas_automaticas_task():
+    return agendar_cobrancas_automaticas()
+
+
+@shared_task(name='apps.whatsapp_agent.tasks.processar_proxima_cobranca')
+def processar_proxima_cobranca_task():
+    return processar_proxima_cobranca()

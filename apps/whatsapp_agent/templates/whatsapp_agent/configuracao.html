@@ -1,11 +1,39 @@
 {% extends '_base.html' %}
-{% block title %}Agente de WhatsApp{% endblock %}
+{% block title %}WhatsApp{% endblock %}
 {% block content %}
 {% include 'whatsapp_agent/_styles.html' %}
-<div class="wa-shell">
-  <div class="wa-head"><div><h1 class="wa-title">Agente de WhatsApp</h1><p class="wa-muted">Conecte o número do estabelecimento lendo o QR Code.</p></div><div class="wa-actions"><a class="wa-btn secondary" href="{% url 'whatsapp_agent:fluxo-configuracao' %}">Configuração do fluxo</a><a class="wa-btn secondary" href="{% url 'whatsapp_agent:conversa-list' %}">CRM do WhatsApp</a><a class="wa-btn secondary" href="{% url 'catalogo:painel' %}">Catálogo</a><a class="wa-btn secondary" href="{% url 'catalogo:painel' %}#cupons">Cupons</a><a class="wa-btn secondary" href="{% url 'catalogo:pedidos' %}">Pedidos</a><a class="wa-btn secondary" href="{% url 'agenda:agenda' %}">Agenda</a></div></div>
-  <div class="wa-warning"><strong>Atenção ao risco:</strong> esta conexão usa uma biblioteca não oficial do WhatsApp. O número pode sofrer desconexões ou bloqueio pela Meta. Evite disparos em massa e mantenha a opção oficial para clientes que não aceitem esse risco.</div>
-  <div class="wa-card" style="margin-bottom:1rem"><div class="wa-head" style="margin:0"><div><span class="wa-status">{{ configuracao.get_status_display }}</span><p class="wa-muted" style="margin-top:.45rem">{% if configuracao.agente_ativo %}Atendimento automático ativado{% else %}Atendimento automático pausado{% endif %}</p>{% if configuracao.ultimo_erro %}<p class="wa-errors">{{ configuracao.ultimo_erro }}</p>{% endif %}</div>{% if gateway_configurado %}<form method="post" action="{% url 'whatsapp_agent:conectar' %}">{% csrf_token %}<button class="wa-btn" type="submit">Conectar WhatsApp</button></form>{% else %}<span class="wa-errors">Servidor de conexão indisponível.</span>{% endif %}</div></div>
-  <form method="post" class="wa-card">{% csrf_token %}{% if form.non_field_errors %}<div class="wa-errors">{{ form.non_field_errors }}</div>{% endif %}<div class="wa-grid">{% for field in form %}<div class="wa-field {% if field.name == 'mensagem_saudacao' or field.name == 'mensagem_transferencia' %}full{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<div class="wa-help">{{ field.help_text }}</div>{% endif %}{% if field.errors %}<div class="wa-errors">{{ field.errors|first }}</div>{% endif %}</div>{% endfor %}</div><div class="wa-actions" style="margin-top:1rem"><button class="wa-btn" type="submit">Salvar configuração</button></div></form>
+<div class="wa-shell" x-data="{ provedor: '{{ form.provedor.value|default:'evolution' }}' }">
+  <div class="wa-head"><div><h1 class="wa-title">WhatsApp</h1><p class="wa-muted">Escolha a conexão da filial e configure os avisos de vencimento.</p></div><div class="wa-actions"><a class="wa-btn secondary" href="{% url 'whatsapp_agent:fluxo-configuracao' %}">Configuração do fluxo</a><a class="wa-btn secondary" href="{% url 'whatsapp_agent:conversa-list' %}">CRM do WhatsApp</a><a class="wa-btn secondary" href="{% url 'financeiro:boleto_comunicacao' %}?aba=whatsapp">Boletos</a></div></div>
+
+  <form method="post" class="wa-card">{% csrf_token %}
+    {% if form.non_field_errors %}<div class="wa-errors">{{ form.non_field_errors }}</div>{% endif %}
+    <h2 class="text-lg font-semibold mb-3">Provedor</h2>
+    <div class="wa-grid">
+      <div class="wa-field full"><label for="{{ form.provedor.id_for_label }}">{{ form.provedor.label }}</label><select name="provedor" id="{{ form.provedor.id_for_label }}" x-model="provedor">{% for valor,rotulo in form.provedor.field.choices %}<option value="{{ valor }}" {% if form.provedor.value == valor %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}</select>{% if form.provedor.errors %}<div class="wa-errors">{{ form.provedor.errors|first }}</div>{% endif %}</div>
+    </div>
+
+    <div x-show="provedor==='evolution'" class="wa-warning" style="margin-top:1rem"><strong>Evolution API — não oficial:</strong> conexão por QR Code. Intervalo e limites reduzem disparos agressivos, mas não eliminam o risco de desconexão ou bloqueio pela Meta.</div>
+    <div x-show="provedor==='meta_cloud'" x-cloak style="margin-top:1rem">
+      <div class="wa-warning"><strong>WhatsApp Cloud API — oficial:</strong> exige conta Business da Meta, número cadastrado, token permanente e template de cobrança aprovado.</div>
+      <div class="wa-grid" style="margin-top:1rem">
+        {% for field in form %}{% if field.name == 'meta_phone_number_id' or field.name == 'meta_business_account_id' or field.name == 'meta_graph_version' or field.name == 'meta_access_token' or field.name == 'meta_verify_token' or field.name == 'meta_app_secret' %}<div class="wa-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<div class="wa-help">{{ field.help_text }}</div>{% endif %}{% if field.errors %}<div class="wa-errors">{{ field.errors|first }}</div>{% endif %}</div>{% endif %}{% endfor %}
+      </div>
+      <div class="wa-field" style="margin-top:1rem"><label>URL do webhook</label><input value="{{ webhook_url }}" readonly onclick="this.select()"><div class="wa-help">Cadastre esta URL na Meta e assine os eventos de mensagens.</div></div>
+    </div>
+
+    <div class="wa-grid" style="margin-top:1rem">
+      <div class="wa-field"><label for="{{ form.agente_ativo.id_for_label }}">{{ form.agente_ativo.label }}</label>{{ form.agente_ativo }}</div>
+      <div class="wa-field"><label for="{{ form.ativo.id_for_label }}">{{ form.ativo.label }}</label>{{ form.ativo }}</div>
+    </div>
+
+    <hr style="margin:1.5rem 0;border-color:rgba(148,163,184,.25)">
+    <h2 class="text-lg font-semibold">Avisos de vencimento de boletos</h2>
+    <p class="wa-muted" style="margin:.25rem 0 1rem">As mensagens entram em fila, respeitam a janela, o intervalo e o limite diário, e são canceladas se o título for pago.</p>
+    <div class="wa-grid">
+      {% for field in form %}{% if field.name == 'cobranca_ativa' or field.name == 'cobranca_exigir_consentimento' or field.name == 'cobranca_horario_inicio' or field.name == 'cobranca_horario_fim' or field.name == 'cobranca_intervalo_minutos' or field.name == 'cobranca_limite_diario' or field.name == 'cobranca_max_tentativas' or field.name == 'cobranca_dias_relativos' or field.name == 'cobranca_mensagem' or field.name == 'cobranca_template_meta' or field.name == 'cobranca_template_idioma' %}<div class="wa-field {% if field.name == 'cobranca_dias_relativos' or field.name == 'cobranca_mensagem' %}full{% endif %}" {% if field.name == 'cobranca_template_meta' or field.name == 'cobranca_template_idioma' %}x-show="provedor==='meta_cloud'"{% endif %}><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<div class="wa-help">{{ field.help_text }}</div>{% endif %}{% if field.errors %}<div class="wa-errors">{{ field.errors|first }}</div>{% endif %}</div>{% endif %}{% endfor %}
+    </div>
+    <div x-show="provedor==='meta_cloud'" class="wa-help" style="margin-top:1rem">Ordem dos parâmetros do corpo do template oficial: nome, empresa, documento, valor, vencimento e link.</div>
+    <div class="wa-actions" style="margin-top:1rem"><button class="wa-btn" type="submit">Salvar configuração</button>{% if gateway_configurado %}<button class="wa-btn secondary" type="submit" formaction="{% url 'whatsapp_agent:conectar' %}">{% if configuracao.provedor == 'meta_cloud' %}Validar API oficial{% else %}Conectar por QR Code{% endif %}</button>{% endif %}</div>
+  </form>
 </div>
 {% endblock %}

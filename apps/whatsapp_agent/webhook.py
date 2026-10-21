@@ -5,13 +5,21 @@ from django.utils import timezone
 
 from .agent import localizar_cliente, processar_mensagem, somente_digitos
 from .conversation_service import encerrar_se_expirada
-from .gateway import EvolutionClient, GatewayWhatsAppError
+from .gateway import (
+    EvolutionClient, GatewayWhatsAppError, MetaCloudClient, identificador_envio,
+)
 from .ai_service import IAWhatsAppError, OpenAIWhatsAppClient
 from .intelligent_agent import processar_com_ia, resposta_fora_horario
-from .models import ConversaWhatsApp, MensagemWhatsApp
+from .models import ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp
 
 
 logger = logging.getLogger(__name__)
+
+
+def _cliente_whatsapp(configuracao):
+    if configuracao.provedor == ConfiguracaoWhatsApp.Provedor.META_CLOUD:
+        return MetaCloudClient(configuracao)
+    return EvolutionClient(configuracao)
 
 
 def _evento(payload):
@@ -64,7 +72,7 @@ def _dados_mensagem(payload):
         'texto': str(texto).strip(),
         'tipo': 'audio' if audio else 'texto',
         'mimetype': str(audio.get('mimetype') or 'audio/ogg'),
-        'dados_gateway': {
+        'dados_gateway': payload.get('_meta_media') or {
             'key': chave,
             'message': mensagem,
             'messageTimestamp': dados.get('messageTimestamp'),
@@ -184,7 +192,7 @@ def receber_evento(configuracao, payload):
             ) if configuracao.agente_ativo else None
         else:
             try:
-                midia = EvolutionClient(configuracao).obter_midia_base64(
+                midia = _cliente_whatsapp(configuracao).obter_midia_base64(
                     dados['dados_gateway'],
                 )
                 transcricao = OpenAIWhatsAppClient(configuracao).transcrever(
@@ -223,8 +231,8 @@ def receber_evento(configuracao, payload):
         texto=resposta, tipo='texto', status='pendente',
     )
     try:
-        retorno = EvolutionClient(configuracao).enviar_texto(telefone, resposta)
-        saida.identificador_externo = str((retorno.get('key') or {}).get('id') or '')
+        retorno = _cliente_whatsapp(configuracao).enviar_texto(telefone, resposta)
+        saida.identificador_externo = identificador_envio(retorno)
         saida.status = 'enviada'
     except GatewayWhatsAppError as exc:
         saida.status = 'erro'
@@ -232,3 +240,59 @@ def receber_evento(configuracao, payload):
         logger.warning('Falha ao responder WhatsApp: %s', exc)
     saida.save(update_fields=['identificador_externo', 'status', 'dados_evento', 'updated_at'])
     return saida.status
+
+
+def receber_evento_meta(configuracao, payload):
+    """Adapta webhooks oficiais ao fluxo único de conversa do iTED."""
+    resultados = []
+    for entrada in payload.get('entry') or []:
+        for alteracao in entrada.get('changes') or []:
+            valor = alteracao.get('value') or {}
+            phone_number_id = str((valor.get('metadata') or {}).get('phone_number_id') or '')
+            if phone_number_id and phone_number_id != configuracao.meta_phone_number_id:
+                continue
+            for status in valor.get('statuses') or []:
+                identificador = str(status.get('id') or '')
+                if identificador:
+                    MensagemWhatsApp.objects.filter(
+                        conversa__configuracao=configuracao,
+                        identificador_externo=identificador,
+                    ).update(
+                        status=str(status.get('status') or '')[:30],
+                        dados_evento={'meta_status': status},
+                    )
+                resultados.append('status_atualizado')
+            contatos = {
+                str(item.get('wa_id') or ''): str((item.get('profile') or {}).get('name') or '')
+                for item in (valor.get('contacts') or [])
+            }
+            for mensagem in valor.get('messages') or []:
+                telefone = str(mensagem.get('from') or '')
+                tipo = str(mensagem.get('type') or 'text')
+                texto = str((mensagem.get('text') or {}).get('body') or '')
+                audio = mensagem.get('audio') or {}
+                convertido = {
+                    'event': 'messages.upsert',
+                    'data': {
+                        'key': {
+                            'id': mensagem.get('id'),
+                            'fromMe': False,
+                            'remoteJid': f'{telefone}@s.whatsapp.net',
+                        },
+                        'pushName': contatos.get(telefone, ''),
+                        'messageTimestamp': mensagem.get('timestamp'),
+                        'message': (
+                            {'audioMessage': {
+                                'mimetype': audio.get('mime_type') or 'audio/ogg',
+                            }}
+                            if tipo == 'audio'
+                            else {'conversation': texto}
+                        ),
+                    },
+                    '_meta_media': {
+                        'id': audio.get('id'),
+                        'audio': audio,
+                    } if tipo == 'audio' else {},
+                }
+                resultados.append(receber_evento(configuracao, convertido))
+    return resultados[-1] if resultados else 'evento_registrado'

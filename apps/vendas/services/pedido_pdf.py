@@ -20,8 +20,10 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from apps.whatsapp_agent.gateway import EvolutionClient, GatewayWhatsAppError
-from apps.whatsapp_agent.models import ConversaWhatsApp, MensagemWhatsApp
+from apps.whatsapp_agent.gateway import (
+    EvolutionClient, GatewayWhatsAppError, MetaCloudClient, identificador_envio,
+)
+from apps.whatsapp_agent.models import ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp
 from apps.whatsapp_agent.notifications import (
     configuracao_whatsapp_conectada,
     numero_whatsapp,
@@ -29,6 +31,13 @@ from apps.whatsapp_agent.notifications import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def _cliente_whatsapp(configuracao):
+    if configuracao.provedor == ConfiguracaoWhatsApp.Provedor.META_CLOUD:
+        return MetaCloudClient(configuracao)
+    return EvolutionClient(configuracao)
+
 
 MARINHO = colors.HexColor('#102A43')
 AZUL = colors.HexColor('#2563EB')
@@ -401,13 +410,13 @@ def _enviar_pdf_pedido_whatsapp(pedido, *, db_alias):
         dados_evento={'pedido_id': pedido.pk, 'arquivo': nome_arquivo_pedido(pedido)},
     )
     try:
-        retorno = EvolutionClient(configuracao).enviar_documento(
+        retorno = _cliente_whatsapp(configuracao).enviar_documento(
             telefone,
             PedidoVendaPdfService.gerar(pedido),
             nome_arquivo_pedido(pedido),
             legenda,
         )
-        saida.identificador_externo = str((retorno.get('key') or {}).get('id') or '')
+        saida.identificador_externo = identificador_envio(retorno)
         saida.status = 'enviada'
         mensagem = f'PDF do pedido enviado para o WhatsApp do cliente ({telefone}).'
         enviado = True
