@@ -118,6 +118,51 @@ class CobrancaBoletoWhatsAppTests(TestCase):
         self._agendar_pela_tela()
         self.assertEqual(EnvioCobrancaWhatsApp.objects.count(), 1)
 
+    def test_exclui_agendamento_pendente_da_fila(self):
+        self._agendar_pela_tela()
+        envio = EnvioCobrancaWhatsApp.objects.get()
+
+        resposta = self.client.post(reverse(
+            'financeiro:boleto_whatsapp_excluir_agendamento',
+            kwargs={'pk': envio.pk},
+        ))
+
+        self.assertRedirects(
+            resposta,
+            reverse('financeiro:boleto_comunicacao') + '?aba=whatsapp',
+            fetch_redirect_response=False,
+        )
+        self.assertFalse(EnvioCobrancaWhatsApp.objects.filter(pk=envio.pk).exists())
+
+    def test_nao_exclui_aviso_que_ja_foi_enviado(self):
+        self._agendar_pela_tela()
+        envio = EnvioCobrancaWhatsApp.objects.get()
+        envio.status = EnvioCobrancaWhatsApp.Status.ENVIADO
+        envio.save(update_fields=['status'])
+
+        resposta = self.client.post(reverse(
+            'financeiro:boleto_whatsapp_excluir_agendamento',
+            kwargs={'pk': envio.pk},
+        ))
+
+        self.assertEqual(resposta.status_code, 302)
+        self.assertTrue(EnvioCobrancaWhatsApp.objects.filter(pk=envio.pk).exists())
+
+    def test_nao_exclui_agendamento_de_outra_filial(self):
+        self._agendar_pela_tela()
+        envio = EnvioCobrancaWhatsApp.objects.get()
+        EnvioCobrancaWhatsApp.objects.filter(pk=envio.pk).update(
+            filial_cnpj='00999999000100',
+        )
+
+        resposta = self.client.post(reverse(
+            'financeiro:boleto_whatsapp_excluir_agendamento',
+            kwargs={'pk': envio.pk},
+        ))
+
+        self.assertEqual(resposta.status_code, 404)
+        self.assertTrue(EnvioCobrancaWhatsApp.objects.filter(pk=envio.pk).exists())
+
     @patch('apps.whatsapp_agent.cobranca_service.cliente_whatsapp')
     def test_evolution_envia_texto_respeitando_a_fila(self, criar_cliente):
         self._agendar_pela_tela()

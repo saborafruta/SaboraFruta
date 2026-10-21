@@ -18,7 +18,8 @@ from apps.financeiro.views.conciliacao import (
 )
 from apps.financeiro.views.boletos import (
     BoletoComunicacaoListView, BoletoRemessaGerarView, BoletoRetornoImportarView,
-    BoletoWhatsAppAgendarView, RemessaDownloadView, RetornoDetalheView,
+    BoletoWhatsAppAgendarView, BoletoWhatsAppExcluirAgendamentoView,
+    RemessaDownloadView, RetornoDetalheView,
 )
 
 app_name = "financeiro"
@@ -53,6 +54,11 @@ urlpatterns = [
     path("boletos/retornos/importar/", BoletoRetornoImportarView.as_view(), name="boleto_retorno_importar"),
     path("boletos/retornos/<int:pk>/", RetornoDetalheView.as_view(), name="boleto_retorno_detalhe"),
     path("boletos/whatsapp/agendar/", BoletoWhatsAppAgendarView.as_view(), name="boleto_whatsapp_agendar"),
+    path(
+        "boletos/whatsapp/agendamentos/<int:pk>/excluir/",
+        BoletoWhatsAppExcluirAgendamentoView.as_view(),
+        name="boleto_whatsapp_excluir_agendamento",
+    ),
 
     # ── Contas a Receber ──────────────────────────────────────────────────────
     path("receber/",                   receber_views.ContaReceberListView.as_view(),     name="receber_list"),

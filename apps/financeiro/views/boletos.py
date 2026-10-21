@@ -1,5 +1,6 @@
 """Operação de remessa e retorno de boletos."""
 from django.contrib import messages
+from django.db import transaction
 from django.db.models import Q
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -97,6 +98,31 @@ class BoletoWhatsAppAgendarView(PermissaoRequiredMixin, View):
         if conta_id:
             destino += f'&conta_bancaria={conta_id}'
         return redirect(destino)
+
+
+class BoletoWhatsAppExcluirAgendamentoView(PermissaoRequiredMixin, View):
+    permissao_modulo = "financeiro"
+    permissao_acao = "editar"
+
+    def post(self, request, pk):
+        filial = request.filial_ativa
+        alias = get_current_database_alias()
+        with transaction.atomic(using='default'):
+            envio = get_object_or_404(
+                EnvioCobrancaWhatsApp.objects.using('default').select_for_update(),
+                pk=pk,
+                tenant_alias=alias,
+                filial_cnpj=filial.cnpj,
+            )
+            if envio.status != EnvioCobrancaWhatsApp.Status.PENDENTE:
+                messages.error(
+                    request,
+                    'Somente agendamentos pendentes podem ser excluídos.',
+                )
+            else:
+                envio.delete(using='default')
+                messages.success(request, 'Agendamento do WhatsApp excluído da fila.')
+        return redirect(reverse('financeiro:boleto_comunicacao') + '?aba=whatsapp')
 
 
 class BoletoRemessaGerarView(PermissaoRequiredMixin, View):
