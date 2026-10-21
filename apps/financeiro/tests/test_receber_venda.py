@@ -282,3 +282,29 @@ class ReceberVendaTests(TestCase):
                 self.assertContains(response, '#001014')
                 response, _ = self._get(view, data_ini='2026-08-17', data_fim='2026-08-17')
                 self.assertNotContains(response, '#001014')
+
+    def test_forma_pagamento_filtra_listagem_e_relatorio(self):
+        boleto = FormaPagamento.objects.create(
+            empresa=self.filial.empresa, filial=self.filial,
+            descricao='Boleto para filtro', tipo=TipoFormaPagamento.BOLETO,
+        )
+        vale = FormaPagamento.objects.create(
+            empresa=self.filial.empresa, filial=self.filial,
+            descricao='Vale para filtro', tipo=TipoFormaPagamento.VALE,
+        )
+        self.conta.forma_pagamento = boleto
+        self.conta.save(update_fields=['forma_pagamento'])
+        outra = ContaReceber.objects.create(
+            filial=self.filial, cliente=self.cliente, documento_numero='VALE-1',
+            valor_original=20, valor_final=20, valor_saldo=20,
+            data_emissao=date(2026, 8, 19), data_vencimento=date(2026, 8, 27),
+            forma_pagamento=vale, status='vencido',
+        )
+
+        for view in (ContaReceberListView, ContaReceberRelatorioView):
+            with self.subTest(view=view):
+                response, contexto = self._get(view, forma_pagamento=str(boleto.pk))
+                self.assertContains(response, 'DOC-DIFERENTE')
+                self.assertNotContains(response, outra.documento_numero)
+                if view is ContaReceberRelatorioView:
+                    self.assertEqual(contexto['forma_pagamento_label'], 'Boleto para filtro')

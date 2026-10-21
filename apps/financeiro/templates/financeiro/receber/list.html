@@ -264,7 +264,7 @@
 
   <!-- ── Filtros ── -->
   <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-    <div class="md:col-span-4">
+    <div class="md:col-span-3">
       <label for="receber-busca" class="block text-xs mb-1">Cliente ou documento</label>
       <input id="receber-busca" type="text" name="q" value="{{ q }}"
              placeholder="Cliente, documento ou pedido..."
@@ -277,6 +277,15 @@
         <option value="todos" {% if status_filtro == 'todos' %}selected{% endif %}>Todos os status</option>
         {% for val, label in status_choices %}
           <option value="{{ val }}" {% if status_filtro == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="md:col-span-2">
+      <label for="receber-forma-pagamento" class="block text-xs mb-1">Forma de pagamento</label>
+      <select id="receber-forma-pagamento" name="forma_pagamento" class="form-input">
+        <option value="">Todas as formas</option>
+        {% for forma in formas_pagamento %}
+          <option value="{{ forma.pk }}" {% if forma_pagamento_filtro == forma.pk|stringformat:'s' %}selected{% endif %}>{{ forma.descricao }}</option>
         {% endfor %}
       </select>
     </div>

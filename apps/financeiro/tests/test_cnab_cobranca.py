@@ -2,6 +2,7 @@ import ast
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import patch
 
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
@@ -158,6 +159,31 @@ class CnabCobrancaTests(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, "Remessa e retorno de boletos")
         self.assertContains(resposta, "Cliente Teste")
+
+    def test_tela_filtra_titulos_por_vencimento_e_oferece_atalhos(self):
+        vencido = self.criar_titulo()
+        vencido.documento_numero = "VENCIDO"
+        vencido.data_vencimento = date(2026, 10, 20)
+        vencido.save(update_fields=["documento_numero", "data_vencimento"])
+        futuro = self.criar_titulo()
+        futuro.documento_numero = "FUTURO"
+        futuro.data_vencimento = date(2026, 11, 20)
+        futuro.save(update_fields=["documento_numero", "data_vencimento"])
+
+        with patch("apps.financeiro.views.boletos.timezone.localdate", return_value=date(2026, 10, 21)):
+            resposta = self.client.get(reverse("financeiro:boleto_comunicacao"), {
+                "periodo": "vencidos",
+            })
+        self.assertContains(resposta, "VENCIDO")
+        self.assertNotContains(resposta, "FUTURO")
+        self.assertContains(resposta, "Vencem hoje")
+        self.assertContains(resposta, "Próximos 7 dias")
+
+        resposta = self.client.get(reverse("financeiro:boleto_comunicacao"), {
+            "data_ini": "2026-11-20", "data_fim": "2026-11-20",
+        })
+        self.assertContains(resposta, "FUTURO")
+        self.assertNotContains(resposta, "VENCIDO")
 
     def test_gera_remessa_cnab240_com_linhas_validas_e_vincula_boleto(self):
         titulo = self.criar_titulo()

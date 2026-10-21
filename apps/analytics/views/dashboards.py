@@ -9,10 +9,11 @@ from django.db.models import (
     Sum, Count, Avg, F, Q, Case, DecimalField, IntegerField, OuterRef,
     Subquery, Value, When,
 )
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, ExtractHour, ExtractIsoWeekDay
 from django.core.paginator import Paginator
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 
 from apps.core.services.permissions import requer_permissao
 from apps.financeiro.services.receita import ajuste_por_grupo, ajuste_total
@@ -70,6 +71,80 @@ def dashboard_operacional(request):
 @requer_permissao('relatorios', 'ver')
 def dashboard_comercial(request):
     return render(request, "analytics/comercial.html", {"title": "Dashboard Comercial"})
+
+
+@requer_permissao('relatorios', 'ver')
+def vendas_por_horario(request):
+    """Mapa de calor das vendas PDV finalizadas por dia da semana e hora local."""
+    hoje = timezone.localdate()
+    data_fim = parse_date(request.GET.get('data_fim', '')) or hoje
+    data_ini = parse_date(request.GET.get('data_ini', '')) or (data_fim - timedelta(days=29))
+    if data_ini > data_fim:
+        data_ini, data_fim = data_fim, data_ini
+
+    fuso = timezone.get_current_timezone()
+    agrupado = list(
+        VendaPDV.objects.for_filial(request.filial_ativa)
+        .filter(
+            status='finalizada', bonificacao=False,
+            data_venda__date__gte=data_ini, data_venda__date__lte=data_fim,
+        )
+        .annotate(
+            dia_semana=ExtractIsoWeekDay('data_venda', tzinfo=fuso),
+            hora=ExtractHour('data_venda', tzinfo=fuso),
+        )
+        .values('dia_semana', 'hora')
+        .annotate(qtd=Count('id'), total=Sum('valor_total'))
+        .order_by('dia_semana', 'hora')
+    )
+
+    por_chave = {
+        (int(item['dia_semana']), int(item['hora'])): item
+        for item in agrupado
+    }
+    maior_qtd = max((item['qtd'] for item in agrupado), default=0)
+    dias_nomes = ('Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo')
+    linhas = []
+    for dia_numero, dia_nome in enumerate(dias_nomes, 1):
+        celulas = []
+        for hora in range(24):
+            item = por_chave.get((dia_numero, hora), {})
+            qtd = item.get('qtd', 0)
+            total = item.get('total') or Decimal('0')
+            intensidade = (qtd / maior_qtd) if maior_qtd else 0
+            celulas.append({
+                'hora': hora,
+                'qtd': qtd,
+                'total': total,
+                'intensidade': f'{0.08 + (intensidade * 0.84):.2f}' if qtd else '0',
+            })
+        linhas.append({'nome': dia_nome, 'celulas': celulas})
+
+    resumo_horas = []
+    for hora in range(24):
+        itens = [item for item in agrupado if int(item['hora']) == hora]
+        resumo_horas.append({
+            'hora': hora,
+            'qtd': sum(item['qtd'] for item in itens),
+            'total': sum((item['total'] or Decimal('0') for item in itens), Decimal('0')),
+        })
+    ranking_horas = sorted(resumo_horas, key=lambda item: (-item['qtd'], -item['total'], item['hora']))
+    pico = ranking_horas[0] if ranking_horas and ranking_horas[0]['qtd'] else None
+    total_vendas = sum(item['qtd'] for item in agrupado)
+    faturamento = sum((item['total'] or Decimal('0') for item in agrupado), Decimal('0'))
+
+    return render(request, 'analytics/vendas_por_horario.html', {
+        'title': 'Vendas por horário',
+        'data_ini': data_ini,
+        'data_fim': data_fim,
+        'horas': range(24),
+        'linhas': linhas,
+        'ranking_horas': [item for item in ranking_horas if item['qtd']][:5],
+        'pico': pico,
+        'total_vendas': total_vendas,
+        'faturamento': faturamento,
+        'ticket_medio': faturamento / total_vendas if total_vendas else Decimal('0'),
+    })
 
 
 @requer_permissao('relatorios', 'ver')

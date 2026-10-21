@@ -1,10 +1,13 @@
 """Operação de remessa e retorno de boletos."""
+from datetime import timedelta
+
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views import View
 
 from apps.core.services.exceptions import DomainError
@@ -31,13 +34,34 @@ class BoletoComunicacaoListView(PermissaoRequiredMixin, View):
         contas = ContaBancaria.objects.filter(filial=filial, ativo=True).order_by("banco_nome", "descricao")
         conta_id = request.GET.get("conta_bancaria")
         conta = contas.filter(pk=conta_id).first() if conta_id else contas.first()
+        data_ini = request.GET.get("data_ini", "")
+        data_fim = request.GET.get("data_fim", "")
+        periodo = request.GET.get("periodo", "")
+        if periodo not in {"vencidos", "hoje", "proximos_7"}:
+            periodo = ""
         titulos = ContaReceber.objects.none()
         if conta:
-            titulos = list(ContaReceber.objects.filter(
+            titulos_qs = ContaReceber.objects.filter(
                 filial=filial,
                 status__in=[StatusContaReceber.ABERTO, StatusContaReceber.VENCIDO, StatusContaReceber.NEGOCIADO],
                 forma_pagamento__tipo=TipoFormaPagamento.BOLETO,
-            ).filter(Q(conta_bancaria=conta) | Q(conta_bancaria__isnull=True)).select_related("cliente").order_by("data_vencimento")[:300])
+            ).filter(Q(conta_bancaria=conta) | Q(conta_bancaria__isnull=True))
+            hoje = timezone.localdate()
+            if periodo == "vencidos":
+                titulos_qs = titulos_qs.filter(data_vencimento__lt=hoje)
+            elif periodo == "hoje":
+                titulos_qs = titulos_qs.filter(data_vencimento=hoje)
+            elif periodo == "proximos_7":
+                titulos_qs = titulos_qs.filter(
+                    data_vencimento__gte=hoje,
+                    data_vencimento__lte=hoje + timedelta(days=7),
+                )
+            else:
+                if data_ini:
+                    titulos_qs = titulos_qs.filter(data_vencimento__gte=data_ini)
+                if data_fim:
+                    titulos_qs = titulos_qs.filter(data_vencimento__lte=data_fim)
+            titulos = list(titulos_qs.select_related("cliente").order_by("data_vencimento")[:300])
             boletos = {}
             for boleto in Boleto.objects.filter(
                 conta_receber_id__in=[titulo.pk for titulo in titulos],
@@ -60,6 +84,7 @@ class BoletoComunicacaoListView(PermissaoRequiredMixin, View):
         return render(request, self.template_name, {
             "title": "Boletos · Remessa e Retorno", "contas_bancarias": contas,
             "conta_bancaria": conta, "titulos": titulos,
+            "data_ini": data_ini, "data_fim": data_fim, "periodo_filtro": periodo,
             "aba_inicial": request.GET.get("aba") if request.GET.get("aba") in {
                 "remessa", "retorno", "historico", "whatsapp",
             } else "remessa",

@@ -25,6 +25,11 @@ class RelatoriosHubView(PermissaoRequiredMixin, TemplateView):
                         'url_name': 'analytics:vendas',
                     },
                     {
+                        'nome': 'Vendas por Horário',
+                        'descricao': 'Mapa de calor do fluxo de vendas por dia da semana e faixa de horário.',
+                        'url_name': 'analytics:vendas-por-horario',
+                    },
+                    {
                         'nome': 'Curva ABC — Clientes',
                         'descricao': 'Classificação A/B/C dos clientes por receita, com período customizável.',
                         'url_name': 'core:dashboard-curva-abc-relatorio',

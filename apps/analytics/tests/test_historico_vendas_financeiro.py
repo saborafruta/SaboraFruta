@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from django.shortcuts import render
 from django.test import RequestFactory, TestCase, override_settings
+from django.utils import timezone
 
 from apps.analytics.views import dashboards
 from apps.cadastros.models import Cliente
@@ -224,3 +225,33 @@ class HistoricoVendasFinanceiroTests(TestCase):
         self.assertContains(response, 'Em aberto')
         self.assertContains(response, 'Total OP')
         self.assertContains(response, '>OP<')
+
+    def test_mapa_de_calor_identifica_horario_de_maior_fluxo(self):
+        VendaPDV.objects.create(
+            filial=self.filial, cliente=self.cliente, usuario=self.usuario,
+            numero_venda=12, status='finalizada', valor_total=Decimal('25.00'),
+            valor_pago=Decimal('25.00'),
+            data_venda=datetime(2026, 8, 31, 14, 30, tzinfo=dt_timezone.utc),
+        )
+        VendaPDV.objects.create(
+            filial=self.filial, cliente=self.cliente, usuario=self.usuario,
+            numero_venda=13, status='cancelada', valor_total=Decimal('999.00'),
+            data_venda=datetime(2026, 8, 31, 14, 45, tzinfo=dt_timezone.utc),
+        )
+        request = self.request(
+            '/analytics/vendas/por-horario/',
+            data_ini='2026-08-31', data_fim='2026-08-31',
+        )
+        with timezone.override('America/Sao_Paulo'), patch(
+            'apps.analytics.views.dashboards.render', wraps=render,
+        ) as rendering:
+            response = dashboards.vendas_por_horario(request)
+        contexto = rendering.call_args.args[2]
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(contexto['total_vendas'], 3)
+        self.assertEqual(contexto['faturamento'], Decimal('175.00'))
+        self.assertEqual(contexto['pico']['hora'], 11)
+        self.assertEqual(contexto['pico']['qtd'], 2)
+        self.assertContains(response, 'Mapa de calor')
+        self.assertContains(response, '11h–12h')

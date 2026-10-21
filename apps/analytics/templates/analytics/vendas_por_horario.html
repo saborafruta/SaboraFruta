@@ -1,0 +1,41 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+    <div>
+      <p class="text-sm opacity-60">Relatórios › Vendas</p>
+      <h2 class="text-2xl font-semibold">Fluxo de vendas por horário</h2>
+      <p class="text-sm mt-1 opacity-70">Vendas concluídas no PDV, agrupadas pela hora local em que aconteceram.</p>
+    </div>
+    <form method="get" class="card p-3 flex flex-wrap items-end gap-3">
+      <label class="text-xs font-semibold">Venda de<input type="date" name="data_ini" value="{{ data_ini|date:'Y-m-d' }}" class="form-input block mt-1"></label>
+      <label class="text-xs font-semibold">Venda até<input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}" class="form-input block mt-1"></label>
+      <button type="submit" class="btn-primary">Atualizar</button>
+    </form>
+  </div>
+
+  <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="card p-4"><span class="text-xs uppercase opacity-60">Vendas no período</span><strong class="block mt-1 text-2xl">{{ total_vendas }}</strong></div>
+    <div class="card p-4"><span class="text-xs uppercase opacity-60">Faturamento</span><strong class="block mt-1 text-2xl">R$ {{ faturamento|floatformat:2 }}</strong></div>
+    <div class="card p-4"><span class="text-xs uppercase opacity-60">Ticket médio</span><strong class="block mt-1 text-2xl">R$ {{ ticket_medio|floatformat:2 }}</strong></div>
+    <div class="card p-4"><span class="text-xs uppercase opacity-60">Horário de pico</span><strong class="block mt-1 text-2xl">{% if pico %}{{ pico.hora|stringformat:'02d' }}h–{{ pico.hora|add:1|stringformat:'02d' }}h{% else %}—{% endif %}</strong>{% if pico %}<small class="opacity-60">{{ pico.qtd }} venda{{ pico.qtd|pluralize }}</small>{% endif %}</div>
+  </div>
+
+  <div class="card p-4 overflow-x-auto">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-4"><div><h3 class="font-semibold">Mapa de calor</h3><p class="text-xs opacity-60">Quanto mais intensa a cor, maior o número de vendas naquela combinação.</p></div><div class="flex items-center gap-2 text-xs opacity-70"><span>Menor fluxo</span><span class="inline-block w-16 h-3 rounded" style="background:linear-gradient(90deg,rgba(37,99,235,.08),rgba(37,99,235,.92))"></span><span>Maior fluxo</span></div></div>
+    <table class="min-w-[1120px] w-full text-xs border-separate" style="border-spacing:3px">
+      <thead><tr><th class="text-left py-2 sticky left-0 z-10" :style="temaClaro ? 'background:#fff' : 'background:#171717'">Dia</th>{% for hora in horas %}<th class="text-center font-medium opacity-60">{{ hora|stringformat:'02d' }}h</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for linha in linhas %}<tr><th class="text-left pr-3 py-2 whitespace-nowrap sticky left-0 z-10" :style="temaClaro ? 'background:#fff' : 'background:#171717'">{{ linha.nome }}</th>{% for celula in linha.celulas %}<td class="h-12 min-w-10 rounded text-center align-middle" style="{% if celula.qtd %}background:rgba(37,99,235,{{ celula.intensidade }});color:{% if celula.intensidade >= '0.55' %}white{% else %}inherit{% endif %};{% else %}background:rgba(148,163,184,.08);{% endif %}" title="{{ linha.nome }}, {{ celula.hora|stringformat:'02d' }}h: {{ celula.qtd }} venda(s), R$ {{ celula.total|floatformat:2 }}"><strong>{% if celula.qtd %}{{ celula.qtd }}{% else %}·{% endif %}</strong></td>{% endfor %}</tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid gap-4 lg:grid-cols-2">
+    <div class="card p-4"><h3 class="font-semibold">Horários com maior fluxo</h3><div class="divide-y mt-3">{% for item in ranking_horas %}<div class="py-3 flex items-center justify-between gap-4"><div><strong>{{ item.hora|stringformat:'02d' }}h–{{ item.hora|add:1|stringformat:'02d' }}h</strong><p class="text-xs opacity-60">{{ item.qtd }} venda{{ item.qtd|pluralize }}</p></div><strong>R$ {{ item.total|floatformat:2 }}</strong></div>{% empty %}<p class="py-6 text-sm opacity-60">Nenhuma venda concluída no período.</p>{% endfor %}</div></div>
+    <div class="card p-4 text-sm"><h3 class="font-semibold">Como ler</h3><p class="mt-3 opacity-70">Cada célula mostra quantas vendas foram finalizadas naquele dia da semana e naquela hora. Passe o mouse para ver também o faturamento. Cancelamentos, bonificações e pedidos sem horário de venda não entram no cálculo.</p></div>
+  </div>
+</div>
+{% endblock %}

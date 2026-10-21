@@ -27,6 +27,7 @@ from apps.financeiro.forms.receber import (
     ReferenciaContaReceberForm,
 )
 from apps.financeiro.services.entrega_receber import entrega_receber_habilitada
+from apps.financeiro.models.formas_pagamento import FormaPagamento
 from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaReceber
 from apps.financeiro.services.receber_service import ContaReceberService
 from apps.financeiro.services.dashboard_contas_service import DashboardContasService
@@ -171,6 +172,7 @@ class ContaReceberListView(PermissaoRequiredMixin, View):
         data_ini = request.GET.get('data_ini', '')
         data_fim = request.GET.get('data_fim', '')
         categoria_id = request.GET.get('categoria', '').strip()
+        forma_pagamento_id = request.GET.get('forma_pagamento', '').strip()
 
         if status == 'pendentes':
             qs = qs.filter(status__in=[
@@ -192,6 +194,8 @@ class ContaReceberListView(PermissaoRequiredMixin, View):
             qs = qs.filter(data_vencimento__lte=data_fim)
         if categoria_id.isdigit():
             qs = qs.filter(plano_contas_id=int(categoria_id))
+        if forma_pagamento_id.isdigit():
+            qs = qs.filter(forma_pagamento_id=int(forma_pagamento_id))
 
         # Totais da seleção filtrada
         entrega = _contexto_entrega(request, filial)
@@ -228,6 +232,10 @@ class ContaReceberListView(PermissaoRequiredMixin, View):
             'data_ini': data_ini,
             'data_fim': data_fim,
             'categoria_filtro': categoria_id if categoria_id.isdigit() else '',
+            'formas_pagamento': FormaPagamento.objects.filter(
+                empresa=filial.empresa,
+            ).filter(Q(filial=filial) | Q(filial__isnull=True)).order_by('descricao'),
+            'forma_pagamento_filtro': forma_pagamento_id if forma_pagamento_id.isdigit() else '',
             'totais_filtro': totais_filtro,
             'page_querystring': page_querystring,
             'pill_status': PILL_STATUS,
@@ -254,6 +262,7 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
         data_ini = request.GET.get('data_ini', '')
         data_fim = request.GET.get('data_fim', '')
         categoria_id = request.GET.get('categoria', '').strip()
+        forma_pagamento_id = request.GET.get('forma_pagamento', '').strip()
 
         qs = (
             ContaReceber.objects.for_filial(filial)
@@ -281,6 +290,8 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
             qs = qs.filter(data_vencimento__lte=data_fim)
         if categoria_id.isdigit():
             qs = qs.filter(plano_contas_id=int(categoria_id))
+        if forma_pagamento_id.isdigit():
+            qs = qs.filter(forma_pagamento_id=int(forma_pagamento_id))
 
         entrega = _contexto_entrega(request, filial)
         if entrega['entrega_filtro']:
@@ -314,6 +325,13 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
             'data_ini': data_ini,
             'data_fim': data_fim,
             'categoria_filtro': categoria_id if categoria_id.isdigit() else '',
+            'forma_pagamento_filtro': forma_pagamento_id if forma_pagamento_id.isdigit() else '',
+            'forma_pagamento_label': FormaPagamento.objects.filter(
+                empresa=filial.empresa,
+                pk=int(forma_pagamento_id),
+            ).filter(Q(filial=filial) | Q(filial__isnull=True)).values_list(
+                'descricao', flat=True,
+            ).first() if forma_pagamento_id.isdigit() else '',
             'total_geral_saldo': totais['total_saldo'] or Decimal('0'),
             'total_geral_valor': totais['total_valor'] or Decimal('0'),
             'total_geral_pago': totais['total_pago'] or Decimal('0'),
