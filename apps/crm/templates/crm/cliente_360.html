@@ -1,0 +1,21 @@
+{% extends "_base.html" %}
+{% block title %}{{ cliente.nome_display }} · Visão 360°{% endblock %}
+{% block page_title %}Cliente 360°{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-5">
+  <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+    <div><h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">{{ cliente.nome_display }}</h2><p class="text-sm text-slate-400 mt-1">{{ cliente.cpf_cnpj|default:"Documento não informado" }} · {{ cliente.cidade }}{% if cliente.uf %}/{{ cliente.uf }}{% endif %}</p></div>
+    <div class="flex gap-2"><a href="{% url 'cadastros:cliente-update' cliente.pk %}" class="btn-secondary">Editar cadastro</a><a href="{% url 'crm:oportunidade-nova' %}?cliente={{ cliente.pk }}" class="btn-primary">+ Oportunidade</a></div>
+  </div>
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4"><p class="text-xs uppercase text-slate-500">Compras válidas</p><p class="text-2xl font-bold mt-1" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">{{ quantidade_pedidos }}</p></div>
+    <div class="card p-4"><p class="text-xs uppercase text-slate-500">Total comprado</p><p class="text-2xl font-bold mt-1 text-emerald-400">R$ {{ total_comprado|floatformat:2 }}</p></div>
+    <div class="card p-4"><p class="text-xs uppercase text-slate-500">Saldo devedor</p><p class="text-2xl font-bold mt-1 {% if cliente.saldo_devedor > 0 %}text-amber-400{% endif %}">R$ {{ cliente.saldo_devedor|floatformat:2 }}</p></div>
+    <div class="card p-4"><p class="text-xs uppercase text-slate-500">Próxima recompra</p><p class="text-lg font-bold mt-1" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">{% if recompra.proxima_compra_prevista %}{{ recompra.proxima_compra_prevista|date:"d/m/Y" }}{% else %}Sem previsão{% endif %}</p>{% if recompra %}<p class="text-xs text-slate-500">score {{ recompra.score }}/100</p>{% endif %}</div>
+  </div>
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+    <section class="card p-5"><div class="flex items-center justify-between mb-4"><h3 class="font-bold" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">Oportunidades</h3><a href="{% url 'crm:funil' %}" class="text-sm text-blue-400">Abrir funil</a></div><div class="space-y-3">{% for oportunidade in oportunidades %}<a href="{% url 'crm:oportunidade-detalhe' oportunidade.pk %}" class="block rounded-lg border p-3" style="border-color:#3f3f46;"><div class="flex justify-between gap-3"><strong :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">{{ oportunidade.titulo }}</strong><span class="text-emerald-400">R$ {{ oportunidade.valor_estimado|floatformat:2 }}</span></div><p class="text-xs text-slate-500 mt-1">{{ oportunidade.pipeline.nome }} · {{ oportunidade.etapa.nome }} · {{ oportunidade.responsavel.nome|default:"Sem responsável" }}</p></a>{% empty %}<p class="text-sm text-slate-500">Nenhuma oportunidade registrada.</p>{% endfor %}</div></section>
+    <section class="card p-5"><h3 class="font-bold mb-4" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">Últimos pedidos</h3><div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left text-xs text-slate-500"><th class="pb-2">Pedido</th><th class="pb-2">Data</th><th class="pb-2">Status</th><th class="pb-2 text-right">Valor</th></tr></thead><tbody>{% for pedido in pedidos %}<tr class="border-t" style="border-color:#34343b;"><td class="py-3">{{ pedido.numero_pedido }}</td><td class="py-3">{{ pedido.data_emissao|date:"d/m/Y" }}</td><td class="py-3">{{ pedido.get_status_display }}</td><td class="py-3 text-right">R$ {{ pedido.valor_total|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="4" class="py-6 text-center text-slate-500">Nenhum pedido registrado.</td></tr>{% endfor %}</tbody></table></div></section>
+  </div>
+</div>
+{% endblock %}

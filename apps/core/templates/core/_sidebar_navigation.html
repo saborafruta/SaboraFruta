@@ -755,6 +755,17 @@
         <span x-show="!collapsed">Cashback</span>
       </a>
 
+      <!-- CRM — Central Comercial -->
+      {% url 'crm:funil' as crm_funil_url %}
+      <a href="{{ crm_funil_url }}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
+         :class="collapsed ? 'justify-center' : ''"
+         :style="{% if request.path == crm_funil_url or '/crm/oportunidades/' in request.path or '/crm/clientes/' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
+         title="Central Comercial">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h10M4 18h7m8-4v6m-3-3h6"/></svg>
+        <span x-show="!collapsed">Central Comercial</span>
+      </a>
+
       <!-- CRM — Alertas de Recompra -->
       {% url 'crm:recompra' as crm_recompra_url %}
       <a href="{{ crm_recompra_url }}"

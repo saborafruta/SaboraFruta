@@ -1,0 +1,25 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-5">
+  <div class="flex items-center justify-between gap-3">
+    <div><h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">{{ title }}</h2><p class="text-sm text-slate-400 mt-1">Registre o negócio e acompanhe cada contato até o fechamento.</p></div>
+    <a href="{% url 'crm:funil' %}" class="btn-secondary">Voltar ao funil</a>
+  </div>
+  <form method="post" class="card p-6 space-y-5">{% csrf_token %}
+    {% if form.non_field_errors %}<div class="rounded-lg p-3 text-sm bg-red-500/10 text-red-400">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {% for field in form %}
+      <label class="block {% if field.name == 'descricao' or field.name == 'tags' or field.name == 'titulo' %}md:col-span-2{% endif %}">
+        <span class="block text-xs font-semibold mb-1 text-slate-400">{{ field.label }}</span>
+        {{ field }}
+        {% if field.help_text %}<span class="block text-xs mt-1 text-slate-500">{{ field.help_text }}</span>{% endif %}
+        {% if field.errors %}<span class="block text-xs mt-1 text-red-400">{{ field.errors|first }}</span>{% endif %}
+      </label>
+      {% endfor %}
+    </div>
+    <div class="flex justify-end gap-2"><a href="{% url 'crm:funil' %}" class="btn-secondary">Cancelar</a><button class="btn-primary">Criar oportunidade</button></div>
+  </form>
+</div>
+{% endblock %}

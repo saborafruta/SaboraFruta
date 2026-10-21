@@ -1,0 +1,24 @@
+{% extends "_base.html" %}
+{% block title %}{{ oportunidade.titulo }}{% endblock %}
+{% block page_title %}Oportunidade{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-5">
+  <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+    <div><p class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ oportunidade.pipeline.nome }} · {{ oportunidade.etapa.nome }}</p><h2 class="text-2xl font-semibold mt-1" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">{{ oportunidade.titulo }}</h2><a href="{% url 'crm:cliente-360' oportunidade.cliente_id %}" class="text-sm text-blue-400">{{ oportunidade.cliente.nome_display }} · abrir visão 360°</a></div>
+    <a href="{% url 'crm:funil' %}?pipeline={{ oportunidade.pipeline_id }}" class="btn-secondary">Voltar ao funil</a>
+  </div>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+    <form method="post" class="card p-5 lg:col-span-2 space-y-4">{% csrf_token %}
+      <h3 class="font-bold" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">Dados do negócio</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {% for field in form %}<label class="block {% if field.name == 'descricao' or field.name == 'tags' or field.name == 'titulo' %}md:col-span-2{% endif %}"><span class="block text-xs font-semibold mb-1 text-slate-400">{{ field.label }}</span>{{ field }}{% if field.errors %}<span class="block text-xs mt-1 text-red-400">{{ field.errors|first }}</span>{% endif %}</label>{% endfor %}
+      </div>
+      <div class="flex justify-end"><button class="btn-primary">Salvar alterações</button></div>
+    </form>
+    <div class="space-y-5">
+      <form method="post" action="{% url 'crm:oportunidade-nota' oportunidade.pk %}" class="card p-5 space-y-3">{% csrf_token %}<h3 class="font-bold" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">Registrar nota</h3><textarea name="nota" rows="4" class="form-input w-full" placeholder="Resumo da ligação, objeção ou próximo combinado..."></textarea><button class="btn-primary w-full">Adicionar ao histórico</button></form>
+      <section class="card p-5"><h3 class="font-bold mb-4" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">Histórico</h3><div class="space-y-4">{% for atividade in atividades %}<div class="border-l-2 pl-3" style="border-color:#475569;"><p class="text-sm" :style="temaClaro ? 'color:#334155' : 'color:#e2e8f0'">{{ atividade.descricao }}</p><p class="text-xs text-slate-500 mt-1">{{ atividade.created_at|date:"d/m/Y H:i" }} · {{ atividade.autor.nome|default:"Sistema" }}</p></div>{% empty %}<p class="text-sm text-slate-500">Nenhuma atividade registrada.</p>{% endfor %}</div></section>
+    </div>
+  </div>
+</div>
+{% endblock %}

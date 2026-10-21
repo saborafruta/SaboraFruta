@@ -91,9 +91,18 @@ class RecompraCliente(FilialScopedModel):
             ),
         ]
         indexes = [
-            models.Index(fields=['filial', 'status', '-score']),
-            models.Index(fields=['filial', 'proxima_compra_prevista']),
-            models.Index(fields=['filial', 'frequencia']),
+            models.Index(
+                fields=['filial', 'status', '-score'],
+                name='crm_recompr_filial__f3a1c2_idx',
+            ),
+            models.Index(
+                fields=['filial', 'proxima_compra_prevista'],
+                name='crm_recompr_filial__8b7e4d_idx',
+            ),
+            models.Index(
+                fields=['filial', 'frequencia'],
+                name='crm_recompr_filial__2d9a06_idx',
+            ),
         ]
 
     def __str__(self):
