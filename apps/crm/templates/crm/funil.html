@@ -1,0 +1,81 @@
+{% extends "_base.html" %}
+{% block title %}Central Comercial{% endblock %}
+{% block page_title %}Central Comercial{% endblock %}
+
+{% block content %}
+<div class="max-w-full mx-auto space-y-5">
+  <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+    <div>
+      <h2 class="text-2xl font-semibold" :style="temaClaro ? 'color:#111827' : 'color:#f8fafc'">Funil comercial</h2>
+      <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b' : 'color:#94a3b8'">
+        {{ total }} oportunidade{{ total|pluralize }} · R$ {{ valor_total|floatformat:2 }} em negociação
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'crm:recompra' %}" class="btn-secondary">Alertas de recompra</a>
+      <a href="{% url 'crm:oportunidade-nova' %}" class="btn-primary">+ Nova oportunidade</a>
+    </div>
+  </div>
+
+  <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+    <input class="form-input w-full" name="q" value="{{ filtros.q }}" placeholder="Cliente, negócio ou CPF/CNPJ">
+    <select class="form-input w-full" name="pipeline" onchange="this.form.submit()">
+      {% for item in pipelines %}<option value="{{ item.pk }}" {% if item.pk == pipeline.pk %}selected{% endif %}>{{ item.nome }}</option>{% endfor %}
+    </select>
+    <select class="form-input w-full" name="responsavel">
+      <option value="">Todos os responsáveis</option>
+      {% for item in responsaveis %}<option value="{{ item.pk }}" {% if filtros.responsavel == item.pk|stringformat:'s' %}selected{% endif %}>{{ item.nome }}</option>{% endfor %}
+    </select>
+    <div class="flex gap-2">
+      <select class="form-input w-full" name="prioridade">
+        <option value="">Todas as prioridades</option>
+        {% for valor, rotulo in prioridades %}<option value="{{ valor }}" {% if filtros.prioridade == valor %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+      </select>
+      <button class="btn-secondary">Filtrar</button>
+    </div>
+  </form>
+
+  <div class="flex gap-4 overflow-x-auto pb-4" style="scroll-snap-type:x proximity;">
+    {% for etapa in etapas %}
+    <section class="flex-shrink-0 w-[310px] rounded-xl border overflow-hidden"
+             style="border-color:#34343b;background:#1d1d20;scroll-snap-align:start;border-top:4px solid {{ etapa.cor }};">
+      <header class="px-4 py-3 flex items-center justify-between border-b" style="border-color:#34343b;">
+        <div>
+          <h3 class="text-sm font-bold text-slate-100">{{ etapa.nome }}</h3>
+          <p class="text-xs text-slate-400 mt-0.5">{{ etapa.get_tipo_display }} · {{ etapa.probabilidade }}%</p>
+        </div>
+        <span class="inline-flex items-center justify-center min-w-7 h-7 px-2 rounded-full text-xs font-bold" style="background:#34343b;color:#e2e8f0;">{{ etapa.oportunidades.all|length }}</span>
+      </header>
+      <div class="p-3 space-y-3 min-h-[420px] max-h-[68vh] overflow-y-auto">
+        {% for oportunidade in etapa.oportunidades.all %}
+        <article class="rounded-xl border p-3 shadow-sm" style="background:#27272a;border-color:#3f3f46;">
+          <div class="flex items-start justify-between gap-2">
+            <a href="{% url 'crm:oportunidade-detalhe' oportunidade.pk %}" class="font-bold text-sm text-slate-100 hover:text-blue-300">{{ oportunidade.titulo }}</a>
+            {% if oportunidade.prioridade == 'urgente' %}<span class="text-[10px] font-bold text-red-300">URGENTE</span>{% elif oportunidade.prioridade == 'alta' %}<span class="text-[10px] font-bold text-amber-300">ALTA</span>{% endif %}
+          </div>
+          <a href="{% url 'crm:cliente-360' oportunidade.cliente_id %}" class="block text-xs text-slate-400 mt-1 hover:text-blue-300">{{ oportunidade.cliente.nome_display }}</a>
+          <div class="flex flex-wrap gap-1 mt-2">
+            {% for tag in oportunidade.tags.all %}<span class="text-[10px] rounded-full px-2 py-0.5" style="background:{{ tag.cor }}22;color:{{ tag.cor }};border:1px solid {{ tag.cor }}66;">{{ tag.nome }}</span>{% endfor %}
+          </div>
+          <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
+            <strong class="text-emerald-300">R$ {{ oportunidade.valor_estimado|floatformat:2 }}</strong>
+            <span>{{ oportunidade.responsavel.nome|default:"Sem responsável" }}</span>
+          </div>
+          {% if oportunidade.proxima_acao %}<p class="text-xs text-amber-200 mt-2 line-clamp-2">Próxima: {{ oportunidade.proxima_acao }}</p>{% endif %}
+          <form method="post" action="{% url 'crm:oportunidade-mover' oportunidade.pk %}" class="mt-3 flex gap-2">
+            {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <select name="etapa" class="form-input min-w-0 flex-1 text-xs">
+              {% for destino in etapas %}<option value="{{ destino.pk }}" {% if destino.pk == etapa.pk %}selected{% endif %}>{{ destino.nome }}</option>{% endfor %}
+            </select>
+            <button class="btn-secondary text-xs">Mover</button>
+          </form>
+        </article>
+        {% empty %}
+        <div class="rounded-xl border border-dashed p-6 text-center text-xs text-slate-500" style="border-color:#3f3f46;">Nenhuma oportunidade nesta etapa.</div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

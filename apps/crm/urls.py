@@ -5,6 +5,21 @@ from . import views
 app_name = 'crm'
 
 urlpatterns = [
+    path('', views.FunilComercialView.as_view(), name='funil'),
+    path('oportunidades/nova/', views.OportunidadeCreateView.as_view(), name='oportunidade-nova'),
+    path(
+        'oportunidades/<int:pk>/', views.OportunidadeDetailView.as_view(),
+        name='oportunidade-detalhe',
+    ),
+    path(
+        'oportunidades/<int:pk>/mover/', views.OportunidadeMoverView.as_view(),
+        name='oportunidade-mover',
+    ),
+    path(
+        'oportunidades/<int:pk>/nota/', views.OportunidadeNotaView.as_view(),
+        name='oportunidade-nota',
+    ),
+    path('clientes/<int:cliente_id>/', views.Cliente360View.as_view(), name='cliente-360'),
     path('recompra/', views.AlertasRecompraView.as_view(), name='recompra'),
     path('recompra/recalcular/', views.RecompraRecalcularView.as_view(), name='recompra-recalcular'),
     path('recompra/faixas/', views.RecompraFaixasSalvarView.as_view(), name='recompra-faixas'),

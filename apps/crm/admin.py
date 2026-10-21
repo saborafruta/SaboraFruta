@@ -1,6 +1,42 @@
 from django.contrib import admin
 
-from .models import ConfiguracaoFaixasRecompra, RecompraCliente, RecompraControle
+from .models import (
+    AtividadeCRM, ConfiguracaoFaixasRecompra, EtapaPipelineCRM, OportunidadeCRM,
+    PipelineCRM, RecompraCliente, RecompraControle, TagCRM,
+)
+
+
+class EtapaPipelineInline(admin.TabularInline):
+    model = EtapaPipelineCRM
+    extra = 0
+
+
+@admin.register(PipelineCRM)
+class PipelineCRMAdmin(admin.ModelAdmin):
+    list_display = ('nome', 'filial', 'padrao', 'ativo')
+    list_filter = ('padrao', 'ativo', 'filial')
+    inlines = [EtapaPipelineInline]
+
+
+@admin.register(TagCRM)
+class TagCRMAdmin(admin.ModelAdmin):
+    list_display = ('nome', 'filial', 'cor', 'ativo')
+    list_filter = ('ativo', 'filial')
+
+
+@admin.register(OportunidadeCRM)
+class OportunidadeCRMAdmin(admin.ModelAdmin):
+    list_display = ('titulo', 'cliente', 'filial', 'etapa', 'responsavel', 'valor_estimado')
+    list_filter = ('filial', 'pipeline', 'etapa', 'prioridade', 'origem')
+    search_fields = ('titulo', 'cliente__razao_social', 'cliente__nome_fantasia')
+    filter_horizontal = ('tags',)
+
+
+@admin.register(AtividadeCRM)
+class AtividadeCRMAdmin(admin.ModelAdmin):
+    list_display = ('oportunidade', 'tipo', 'autor', 'created_at')
+    list_filter = ('tipo',)
+    readonly_fields = ('created_at', 'updated_at')
 
 
 @admin.register(ConfiguracaoFaixasRecompra)
