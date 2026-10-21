@@ -147,7 +147,7 @@ class ProdutoForm(forms.ModelForm):
             'preco_sugerido', 'saida_fefo', 'created_at', 'updated_at',
             'foto_url', 'preco_promocional', 'promocao_tipo_desconto',
             'promocao_valor_desconto', 'promocao_inicio', 'promocao_fim',
-            'promocao_dias_semana',
+            'promocao_dias_semana', 'localizacao_estoque',
         ]
         labels = {
             'descricao': 'Nome do produto',

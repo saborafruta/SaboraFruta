@@ -43,6 +43,7 @@ urlpatterns = [
         name='produto-apresentacao-delete',
     ),
     path('<int:pk>/', views.ProdutoUpdateView.as_view(), name='produto-update'),
+    path('<int:pk>/localizacoes/', views.ProdutoLocalizacoesUpdateView.as_view(), name='produto-localizacoes-update'),
     path('<int:pk>/log/exportar/csv/', views.ProdutoLogExportCsvView.as_view(), name='produto-log-export-csv'),
     path('<int:pk>/log/exportar/pdf/', views.ProdutoLogExportPdfView.as_view(), name='produto-log-export-pdf'),
     path('<int:pk>/log/registros/', views.ProdutoLogItemsView.as_view(), name='produto-log-items'),

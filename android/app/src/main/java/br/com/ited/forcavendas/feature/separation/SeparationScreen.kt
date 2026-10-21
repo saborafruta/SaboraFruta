@@ -319,6 +319,27 @@ private fun SeparationLineEditor(
                     label = { Text("${deposito.nome}: ${deposito.disponivel}") },
                 )
             }
+            val depositoAtual = line.depositos.firstOrNull { it.id == selectedDeposit }
+            Text("Onde buscar", fontWeight = FontWeight.SemiBold)
+            if (depositoAtual?.localizacoes.isNullOrEmpty()) {
+                Text(
+                    "Saldo ainda sem endereço cadastrado.",
+                    color = MaterialTheme.colorScheme.tertiary,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            } else {
+                depositoAtual.localizacoes.forEach { local ->
+                    Text(
+                        buildString {
+                            append(local.codigo)
+                            if (local.descricao.isNotBlank()) append(" · ${local.descricao}")
+                            append(" — ${local.quantidade} ${line.unidade}")
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
             if (line.controlaLote) {
                 Text("Lote de retirada", fontWeight = FontWeight.SemiBold)
                 if (line.lotesSugeridos.isEmpty()) {

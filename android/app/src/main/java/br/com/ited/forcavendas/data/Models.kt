@@ -261,6 +261,15 @@ data class SeparationDeposit(
     val nome: String,
     val disponivel: String,
     val padrao: Boolean,
+    val localizacoes: List<StockLocation>,
+)
+
+data class StockLocation(
+    val id: Long,
+    val codigo: String,
+    val descricao: String,
+    val quantidade: String,
+    val prioridade: Int,
 )
 
 data class SeparationLine(

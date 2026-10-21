@@ -1,8 +1,8 @@
 from django.contrib import admin
 
 from apps.estoque.models import (
-    AlertaVencimento, Deposito, Estoque, Inventario, ItemInventario,
-    LoteProduto, MovimentacaoEstoque,
+    AlertaVencimento, Deposito, EnderecoEstoque, Estoque, Inventario,
+    ItemInventario, LoteProduto, MovimentacaoEstoque, SaldoEndereco,
 )
 
 
@@ -15,6 +15,22 @@ class DepositoAdmin(admin.ModelAdmin):
     list_filter = ['filial', 'tipo', 'is_padrao', 'ativo']
     search_fields = ['nome', 'filial__razao_social', 'filial__nome_fantasia']
     autocomplete_fields = ['filial']
+
+
+@admin.register(EnderecoEstoque)
+class EnderecoEstoqueAdmin(admin.ModelAdmin):
+    list_display = ['codigo', 'descricao', 'deposito', 'filial', 'ativo']
+    list_filter = ['filial', 'deposito', 'ativo']
+    search_fields = ['codigo', 'descricao', 'deposito__nome']
+    autocomplete_fields = ['deposito', 'filial']
+
+
+@admin.register(SaldoEndereco)
+class SaldoEnderecoAdmin(admin.ModelAdmin):
+    list_display = ['estoque', 'endereco', 'quantidade', 'prioridade_separacao', 'updated_at']
+    list_filter = ['endereco__filial', 'endereco__deposito']
+    search_fields = ['estoque__produto__descricao', 'endereco__codigo']
+    autocomplete_fields = ['estoque', 'endereco']
 
 
 @admin.register(LoteProduto)

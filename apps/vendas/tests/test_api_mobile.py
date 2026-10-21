@@ -7,7 +7,14 @@ from django.urls import reverse
 
 from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import Empresa, Filial, ParametrosSistema, PerfilAcesso, Usuario
-from apps.estoque.models import Deposito, LoteProduto, MovimentacaoEstoque
+from apps.estoque.models import (
+    Deposito,
+    EnderecoEstoque,
+    Estoque,
+    LoteProduto,
+    MovimentacaoEstoque,
+    SaldoEndereco,
+)
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.financeiro.constants.enums import TipoFormaPagamento
 from apps.financeiro.models import CondicaoPagamento, FormaPagamento
@@ -729,6 +736,22 @@ class ForcaVendasMobileApiTests(TestCase):
             usuario_id=self.usuario.pk,
             valor_unitario=Decimal('5'),
         )
+        estoque = Estoque.objects.get(
+            produto=self.produto,
+            filial=self.filial,
+            deposito_id=Deposito.padrao_id(self.filial.pk),
+        )
+        endereco = EnderecoEstoque.objects.create(
+            filial=self.filial,
+            deposito=estoque.deposito,
+            codigo='RUA-MOB-01',
+        )
+        SaldoEndereco.objects.create(
+            estoque=estoque,
+            endereco=endereco,
+            quantidade=Decimal('8'),
+            prioridade_separacao=5,
+        )
         criado = self.client.post(
             reverse('forca_vendas_mobile_api:pedidos'),
             data=self._payload_pedido(),
@@ -746,6 +769,12 @@ class ForcaVendasMobileApiTests(TestCase):
         self.assertEqual(fila.status_code, 200, fila.content)
         item = fila.json()['pedidos'][0]['itens'][0]
         deposito_id = Deposito.padrao_id(self.filial.pk)
+        deposito = next(
+            item_deposito for item_deposito in item['depositos']
+            if item_deposito['id'] == deposito_id
+        )
+        self.assertEqual(deposito['localizacoes'][0]['codigo'], 'RUA-MOB-01')
+        self.assertEqual(deposito['localizacoes'][0]['quantidade'], '8.000')
         payload = {
             'observacao': 'Conferido pelo Android.',
             'itens': [{
@@ -764,6 +793,8 @@ class ForcaVendasMobileApiTests(TestCase):
             **self.headers,
         )
         self.assertEqual(primeira.status_code, 201, primeira.content)
+        saldo_endereco = SaldoEndereco.objects.get(estoque=estoque)
+        self.assertEqual(saldo_endereco.quantidade, Decimal('6'))
         pedido.refresh_from_db()
         self.assertEqual(pedido.status, PedidoVenda.Status.EM_SEPARACAO)
 

@@ -55,6 +55,25 @@ private struct SeparationDetailView: View {
                             Text("\(deposit.nome) — \(deposit.disponivel)").tag(deposit.id)
                         }
                     }
+                    let selectedDeposit = draft.line.depositos.first(where: { $0.id == draft.depositID })
+                    let locations = selectedDeposit?.localizacoes ?? []
+                    if !locations.isEmpty {
+                        LabeledContent("Onde buscar") {
+                            VStack(alignment: .trailing, spacing: 3) {
+                                ForEach(locations) { location in
+                                    Text(
+                                        "\(location.codigo)\(location.descricao.isEmpty ? "" : " · \(location.descricao)") — \(location.quantidade) \(draft.line.unidade)"
+                                    )
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.tint)
+                                }
+                            }
+                        }
+                    } else {
+                        Label("Saldo ainda sem endereço cadastrado", systemImage: "mappin.slash")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                     TextField("Quantidade separada", value: $draft.quantity, format: .number.precision(.fractionLength(0...3))).keyboardType(.decimalPad)
                     if draft.line.controlaLote {
                         Picker("Lote", selection: $draft.batchID) {

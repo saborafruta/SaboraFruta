@@ -36,7 +36,10 @@ from apps.core.services.request_scope import empresa_operacional
 from apps.core.services.search import filter_queryset_by_terms
 from apps.cadastros.models import Fornecedor
 from apps.core.models import Filial, LogSistema
-from apps.estoque.models import Estoque, LoteProduto, MovimentacaoEstoque
+from apps.estoque.models import (
+    Deposito, EnderecoEstoque, Estoque, LoteProduto, MovimentacaoEstoque,
+    SaldoEndereco,
+)
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.produtos.forms import ProdutoApresentacaoForm, ProdutoForm
 from apps.produtos.forms.produto import LIMITE_IMAGEM_PRODUTO_BYTES, LIMITE_IMAGEM_PRODUTO_MB
@@ -1803,6 +1806,52 @@ def _apresentacoes_produto(produto):
         return []
 
 
+def _localizacoes_produto(produto, filial):
+    depositos = list(
+        Deposito.objects.filter(filial=filial, ativo=True)
+        .order_by('-is_padrao', 'nome', 'pk')
+    )
+    estoques = {
+        estoque.deposito_id: estoque
+        for estoque in Estoque.objects.filter(produto=produto, filial=filial)
+    }
+    saldos = list(
+        SaldoEndereco.objects.filter(
+            estoque__produto=produto,
+            estoque__filial=filial,
+            endereco__ativo=True,
+        ).select_related('estoque', 'endereco').order_by(
+            'estoque__deposito_id', 'prioridade_separacao', 'endereco__codigo',
+        )
+    )
+    por_deposito = {}
+    for saldo in saldos:
+        por_deposito.setdefault(saldo.estoque.deposito_id, []).append(saldo)
+    return [
+        {
+            'id': deposito.pk,
+            'nome': deposito.nome,
+            'saldo': str(estoques.get(deposito.pk).quantidade_atual if estoques.get(deposito.pk) else 0),
+            'enderecado': str(sum(
+                (item.quantidade for item in por_deposito.get(deposito.pk, [])),
+                Decimal('0'),
+            )),
+            'localizacoes': [
+                {
+                    'id': item.pk,
+                    'endereco_id': item.endereco_id,
+                    'codigo': item.endereco.codigo,
+                    'descricao': item.endereco.descricao,
+                    'quantidade': str(item.quantidade),
+                    'prioridade': item.prioridade_separacao,
+                }
+                for item in por_deposito.get(deposito.pk, [])
+            ],
+        }
+        for deposito in depositos
+    ]
+
+
 def _campo_do_erro_de_banco(erro):
     """
     Traduz `null value in column "aliquota_cbs"` no rotulo que o usuario ve.
@@ -1875,6 +1924,9 @@ class ProdutoUpdateView(PermissaoRequiredMixin, View):
             'apresentacoes': _apresentacoes_produto(produto),
             'apresentacao_form': self._apresentacao_form(request, produto),
             'apresentacao_editando': self._apresentacao_editando(request, produto),
+            'localizacoes_estoque': _localizacoes_produto(
+                produto, request.filial_ativa,
+            ),
         }
         context.update(_produto_log_context(produto, usuario_padrao=request.user))
         return context
@@ -2022,6 +2074,131 @@ class ProdutoUpdateView(PermissaoRequiredMixin, View):
         return render(
             request, self.template_name, self.get_context(request, form, produto),
         )
+
+
+class ProdutoLocalizacoesUpdateView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'produtos'
+    permissao_acao = 'editar'
+
+    def post(self, request, pk):
+        produto = get_object_or_404(
+            _produtos_filial_qs(request, incluir_inativos=True), pk=pk,
+        )
+        try:
+            payload = json.loads(request.body.decode('utf-8'))
+            linhas = payload.get('localizacoes', [])
+        except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+            return JsonResponse({'ok': False, 'error': 'Dados de localizacao invalidos.'}, status=400)
+        if not isinstance(linhas, list) or len(linhas) > 200:
+            return JsonResponse({'ok': False, 'error': 'Lista de localizacoes invalida.'}, status=400)
+
+        depositos = {
+            deposito.pk: deposito
+            for deposito in Deposito.objects.filter(
+                filial=request.filial_ativa, ativo=True,
+            )
+        }
+        normalizadas = []
+        somas = {}
+        chaves = set()
+        try:
+            for indice, linha in enumerate(linhas, start=1):
+                if not isinstance(linha, dict):
+                    raise ValueError(f'Localizacao invalida na linha {indice}.')
+                deposito_id = int(linha.get('deposito_id'))
+                codigo = str(linha.get('codigo') or '').strip().upper()
+                descricao = str(linha.get('descricao') or '').strip()
+                quantidade = Decimal(str(linha.get('quantidade') or '0').replace(',', '.'))
+                prioridade = int(linha.get('prioridade') or 100)
+                if deposito_id not in depositos:
+                    raise ValueError(f'Deposito invalido na linha {indice}.')
+                if not codigo:
+                    raise ValueError(f'Informe o endereco na linha {indice}.')
+                if len(codigo) > 80 or len(descricao) > 160:
+                    raise ValueError(f'Endereco ou descricao muito longo na linha {indice}.')
+                if quantidade < 0:
+                    raise ValueError(f'A quantidade da linha {indice} nao pode ser negativa.')
+                if (
+                    not quantidade.is_finite()
+                    or quantidade > Decimal('999999999.999')
+                    or quantidade != quantidade.quantize(Decimal('0.001'))
+                ):
+                    raise ValueError(
+                        f'A quantidade da linha {indice} deve ter no maximo '
+                        '9 inteiros e 3 casas decimais.'
+                    )
+                if prioridade < 1 or prioridade > 9999:
+                    raise ValueError(f'A prioridade da linha {indice} deve ficar entre 1 e 9999.')
+                chave = (deposito_id, codigo.casefold())
+                if chave in chaves:
+                    raise ValueError(f'O endereco {codigo} foi repetido no mesmo deposito.')
+                chaves.add(chave)
+                somas[deposito_id] = somas.get(deposito_id, Decimal('0')) + quantidade
+                normalizadas.append((deposito_id, codigo, descricao, quantidade, prioridade))
+        except (TypeError, ValueError, ArithmeticError) as erro:
+            return JsonResponse({'ok': False, 'error': str(erro)}, status=400)
+
+        estoques = {
+            estoque.deposito_id: estoque
+            for estoque in Estoque.objects.filter(
+                produto=produto, filial=request.filial_ativa,
+            )
+        }
+        for deposito_id, total in somas.items():
+            disponivel = max(
+                Decimal('0'),
+                estoques.get(deposito_id).quantidade_atual if estoques.get(deposito_id) else Decimal('0'),
+            )
+            if total > disponivel:
+                return JsonResponse({
+                    'ok': False,
+                    'error': (
+                        f'A soma enderecada em {depositos[deposito_id].nome} '
+                        f'({total}) supera o saldo do deposito ({disponivel}).'
+                    ),
+                }, status=400)
+
+        mantidos = []
+        with tenant_atomic():
+            for deposito_id, codigo, descricao, quantidade, prioridade in normalizadas:
+                estoque = estoques.get(deposito_id)
+                if estoque is None:
+                    estoque = Estoque.objects.create(
+                        produto=produto,
+                        filial=request.filial_ativa,
+                        deposito_id=deposito_id,
+                    )
+                    estoques[deposito_id] = estoque
+                endereco, _ = EnderecoEstoque.objects.update_or_create(
+                    deposito_id=deposito_id,
+                    codigo=codigo,
+                    defaults={
+                        'filial': request.filial_ativa,
+                        'descricao': descricao,
+                        'ativo': True,
+                    },
+                )
+                saldo, _ = SaldoEndereco.objects.update_or_create(
+                    estoque=estoque,
+                    endereco=endereco,
+                    defaults={
+                        'quantidade': quantidade,
+                        'prioridade_separacao': prioridade,
+                    },
+                )
+                mantidos.append(saldo.pk)
+            SaldoEndereco.objects.filter(
+                estoque__produto=produto,
+                estoque__filial=request.filial_ativa,
+            ).exclude(pk__in=mantidos).delete()
+            primeira = normalizadas[0][1][:30] if normalizadas else ''
+            Produto.objects.filter(pk=produto.pk).update(localizacao_estoque=primeira)
+
+        return JsonResponse({
+            'ok': True,
+            'message': 'Localizacoes do produto atualizadas.',
+            'depositos': _localizacoes_produto(produto, request.filial_ativa),
+        })
 
 
 class ProdutoDeleteView(PermissaoRequiredMixin, View):

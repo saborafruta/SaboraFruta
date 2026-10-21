@@ -13,6 +13,7 @@
       <p class="text-sm mt-1" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Valoracao, criticidade, lotes, inventarios e permissoes do caminho de estoque.</p>
     </div>
     <div class="flex flex-wrap gap-2">
+      <a href="{% url 'estoque:relatorio-localizacoes' %}" class="btn-primary">Estoque por localizacao</a>
       <a href="{% url 'estoque:produtos-sem-giro' %}" class="btn-primary">Produtos sem giro</a>
       <a href="{% url 'estoque:relatorio-filiais' %}" class="btn-primary">Estoque por filial</a>
       <a href="{% url 'estoque:entrada-custos-list' %}" class="btn-secondary">Custos de entrada</a>

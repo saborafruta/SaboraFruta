@@ -249,6 +249,10 @@ class MovimentacaoService:
             estoque.ultima_saida = timezone.now()
         estoque.save()
 
+        if not eh_entrada:
+            from apps.estoque.services.enderecamento import baixar_saldos_enderecados
+            baixar_saldos_enderecados(estoque=estoque, quantidade=quantidade)
+
         # Atualiza custo médio no Produto também (denormalizado para consultas rápidas)
         if eh_entrada and valor_unitario:
             Produto.objects.filter(pk=produto_id).update(

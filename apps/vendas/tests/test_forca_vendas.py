@@ -14,7 +14,13 @@ from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
 from apps.core.services.exceptions import EstoqueInsuficienteError
 from apps.core.services.modulos import modulo_da_url, modulos_ativos
-from apps.estoque.models import Deposito, Estoque, MovimentacaoEstoque
+from apps.estoque.models import (
+    Deposito,
+    EnderecoEstoque,
+    Estoque,
+    MovimentacaoEstoque,
+    SaldoEndereco,
+)
 from apps.estoque.services.movimentacao_service import MovimentacaoService
 from apps.pdv.models import VendaPDV
 from apps.financeiro.constants.enums import StatusContaReceber, TipoFormaPagamento
@@ -634,6 +640,23 @@ assert.equal(pedido.buscaProdutoExecutada, false);
             valor_unitario=Decimal('4'),
             deposito_id=galpao.pk,
         )
+        estoque_enderecado = Estoque.objects.get(
+            produto=self.produto,
+            filial=self.filial,
+            deposito=galpao,
+        )
+        endereco = EnderecoEstoque.objects.create(
+            filial=self.filial,
+            deposito=galpao,
+            codigo='RUA-G-02',
+            descricao='Estante 4',
+        )
+        SaldoEndereco.objects.create(
+            estoque=estoque_enderecado,
+            endereco=endereco,
+            quantidade=Decimal('9'),
+            prioridade_separacao=1,
+        )
         pedido = PedidoVenda.objects.get(
             pk=self.criar_pedido_pela_tela().json()['pedido_id'],
         )
@@ -645,6 +668,8 @@ assert.equal(pedido.buscaProdutoExecutada, false);
         self.assertContains(fila, 'Estoque de retirada')
         self.assertContains(fila, 'Estoque Geral')
         self.assertContains(fila, 'Galpão de revenda')
+        self.assertContains(fila, 'Onde buscar')
+        self.assertContains(fila, 'RUA-G-02')
         resposta = self.client.post(
             reverse('vendas:pedido-separar', args=[pedido.pk]),
             {
@@ -674,6 +699,8 @@ assert.equal(pedido.buscaProdutoExecutada, false);
         self.assertEqual(estoque_geral.quantidade_atual, Decimal('20.000'))
         self.assertEqual(estoque_geral.quantidade_reservada, Decimal('0.000'))
         self.assertEqual(estoque_galpao.quantidade_atual, Decimal('7.000'))
+        saldo_endereco = SaldoEndereco.objects.get(estoque=estoque_galpao)
+        self.assertEqual(saldo_endereco.quantidade, Decimal('7'))
         self.assertTrue(MovimentacaoEstoque.objects.filter(
             documento_tipo=MovimentacaoEstoque.DocumentoTipo.PEDIDO_VENDA,
             documento_id=pedido.pk,

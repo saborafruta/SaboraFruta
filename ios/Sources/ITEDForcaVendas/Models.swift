@@ -161,6 +161,15 @@ struct SeparationDeposit: Codable, Identifiable, Hashable, Sendable {
     let nome: String
     let disponivel: String
     let padrao: Bool
+    let localizacoes: [StockLocation]?
+}
+
+struct StockLocation: Codable, Identifiable, Hashable, Sendable {
+    let id: Int
+    let codigo: String
+    let descricao: String
+    let quantidade: String
+    let prioridade: Int
 }
 
 struct BatchSuggestion: Codable, Identifiable, Hashable, Sendable {

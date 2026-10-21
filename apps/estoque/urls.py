@@ -12,6 +12,7 @@ urlpatterns = [
     path('custos-entrada/', views.EntradaCustoEstoqueListView.as_view(), name='entrada-custos-list'),
     path('relatorios/', views.RelatorioEstoqueView.as_view(), name='relatorio-list'),
     path('relatorios/filiais/', views.RelatorioEstoqueFiliaisView.as_view(), name='relatorio-filiais'),
+    path('relatorios/localizacoes/', views.RelatorioEstoqueLocalizacaoView.as_view(), name='relatorio-localizacoes'),
     path('relatorios/produtos-sem-giro/', views.ProdutosSemGiroRelatorioView.as_view(), name='produtos-sem-giro'),
     path('reposicao/', views.ReposicaoListView.as_view(), name='reposicao-list'),
     path('sugestao-compras/', views.SugestaoComprasView.as_view(), name='sugestao-compras'),

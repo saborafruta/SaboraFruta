@@ -544,6 +544,15 @@ class ItedRepository(private val store: SessionStore) {
                                 nome = deposito.getString("nome"),
                                 disponivel = deposito.getString("disponivel"),
                                 padrao = deposito.optBoolean("padrao"),
+                                localizacoes = deposito.optJSONArray("localizacoes")?.mapObjects { local ->
+                                    StockLocation(
+                                        id = local.getLong("id"),
+                                        codigo = local.getString("codigo"),
+                                        descricao = local.optString("descricao"),
+                                        quantidade = local.getString("quantidade"),
+                                        prioridade = local.optInt("prioridade", 100),
+                                    )
+                                } ?: emptyList(),
                             )
                         },
                     )

@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from apps.estoque.models import Deposito, Estoque
+from apps.estoque.services.enderecamento import localizacoes_por_produto_deposito
 
 
 ZERO = Decimal('0')
@@ -32,6 +33,9 @@ def anexar_saldos_por_deposito(*, produtos, filial, depositos=None):
     }
 
     deposito_venda_id = Deposito.venda_id(filial.pk) if depositos else None
+    localizacoes = localizacoes_por_produto_deposito(
+        produto_ids=produto_ids, filial=filial,
+    )
     for produto in produtos:
         produto.saldos_depositos = []
         for deposito in depositos:
@@ -44,5 +48,6 @@ def anexar_saldos_por_deposito(*, produtos, filial, depositos=None):
                 'disponivel': saldo.get('quantidade_disponivel', ZERO),
                 'permite_venda': deposito.permite_venda,
                 'origem_pedido': deposito.pk == deposito_venda_id,
+                'localizacoes': localizacoes.get((produto.pk, deposito.pk), []),
             })
     return depositos

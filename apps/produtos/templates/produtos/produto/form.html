@@ -424,6 +424,18 @@
     .produto-head-actions { width: 100%; justify-content: flex-start; }
     .produto-duplicate-btn, .produto-log-btn { width: 100%; justify-content: center; min-height: 40px; }
   }
+  .produto-location-head { display:flex; align-items:flex-start; justify-content:space-between; gap:.8rem; margin-bottom:.8rem; }
+  .produto-location-list { display:grid; gap:.65rem; }
+  .produto-location-row { display:grid; grid-template-columns:minmax(150px,.8fr) minmax(190px,1fr) minmax(170px,1fr) 110px 88px 42px; gap:.55rem; align-items:end; padding:.7rem; border:1px solid rgba(148,163,184,.18); border-radius:10px; background:rgba(15,23,42,.18); }
+  body.tema-claro .produto-location-row { background:#f8fafc; border-color:#e2e8f0; }
+  .produto-location-summary { display:flex; flex-wrap:wrap; gap:.45rem; margin:.7rem 0; }
+  .produto-location-summary span { border-radius:999px; padding:.28rem .55rem; font-size:.72rem; font-weight:750; background:rgba(59,130,246,.12); color:#bfdbfe; }
+  body.tema-claro .produto-location-summary span { background:#eff6ff; color:#1d4ed8; }
+  .produto-location-status { min-height:1.25rem; font-size:.78rem; margin-top:.55rem; color:#94a3b8; }
+  .produto-location-status.is-error { color:#f87171; }
+  .produto-location-status.is-ok { color:#34d399; }
+  @media(max-width:980px){.produto-location-row{grid-template-columns:repeat(2,minmax(0,1fr))}.produto-location-row .produto-location-wide{grid-column:1/-1}}
+  @media(max-width:560px){.produto-location-row{grid-template-columns:1fr}.produto-location-row .produto-location-wide{grid-column:auto}}
 </style>
 
 <div class="produto-page produto-shell {% if popup_mode %}produto-popup-mode{% endif %}" x-data="produtoWizard()" x-init="init()">
@@ -928,11 +940,48 @@
           <div class="produto-field sm">{% include "produtos/produto/partials/_field.html" with field=form.ponto_reposicao required=True %}</div>
           <div class="produto-field sm">{% include "produtos/produto/partials/_field.html" with field=form.estoque_seguranca %}</div>
           <div class="produto-field md">{% include "produtos/produto/partials/_field.html" with field=form.lead_time_reposicao_dias %}</div>
-          <div class="produto-field md">{% include "produtos/produto/partials/_field.html" with field=form.localizacao_estoque %}</div>
           <div class="produto-field md">{% include "produtos/produto/partials/_field.html" with field=form.metodo_saida required=True %}</div>
           <div class="produto-field md">{% include "produtos/produto/partials/_field.html" with field=form.dias_aviso_vencimento %}</div>
           <div class="produto-field md"><label class="produto-toggle-row">{{ form.permite_venda_sem_estoque }} <span>Permite venda sem estoque</span></label></div>
         </div>
+      </div>
+
+      {{ localizacoes_estoque|json_script:"produto-localizacoes-data" }}
+      <div class="produto-card" x-data="produtoLocalizacoes({% if produto %}'{% url 'produtos:produto-localizacoes-update' produto.pk %}'{% else %}''{% endif %}, JSON.parse(document.getElementById('produto-localizacoes-data').textContent))">
+        <div class="produto-location-head">
+          <div>
+            <h3 class="produto-card-title"><span>#</span> Localizacao por deposito</h3>
+            <p class="produto-help">Cadastre um ou mais enderecos fisicos em cada deposito. A prioridade menor aparece primeiro para o estoquista.</p>
+          </div>
+          {% if produto %}<button type="button" class="produto-btn secondary" @click="adicionar()">+ Localizacao</button>{% endif %}
+        </div>
+        {% if not produto %}
+          <div class="produto-empty-state">Salve o produto primeiro para cadastrar os enderecos por deposito.</div>
+        {% else %}
+          <div class="produto-location-summary">
+            <template x-for="deposito in depositos" :key="deposito.id">
+              <span x-text="deposito.nome + ': ' + formatar(total(deposito.id)) + ' de ' + formatar(numero(deposito.saldo)) + ' enderecado'"></span>
+            </template>
+          </div>
+          <div class="produto-location-list">
+            <template x-for="(linha, indice) in linhas" :key="linha.chave">
+              <div class="produto-location-row">
+                <label><span class="produto-label">Deposito</span><select class="product-input" x-model.number="linha.deposito_id" @keydown.enter.prevent><template x-for="deposito in depositos" :key="deposito.id"><option :value="deposito.id" x-text="deposito.nome"></option></template></select></label>
+                <label><span class="produto-label">Endereco *</span><input class="product-input" maxlength="80" x-model="linha.codigo" @keydown.enter.prevent placeholder="RUA-A / EST-03 / PRAT-02"></label>
+                <label class="produto-location-wide"><span class="produto-label">Descricao</span><input class="product-input" maxlength="160" x-model="linha.descricao" @keydown.enter.prevent placeholder="Opcional"></label>
+                <label><span class="produto-label">Quantidade</span><input class="product-input" inputmode="decimal" x-model="linha.quantidade" @keydown.enter.prevent placeholder="0,000"></label>
+                <label><span class="produto-label">Prioridade</span><input class="product-input" type="number" min="1" max="9999" x-model="linha.prioridade" @keydown.enter.prevent></label>
+                <button type="button" class="produto-btn danger" @click="remover(indice)" aria-label="Remover localizacao">x</button>
+              </div>
+            </template>
+            <div class="produto-empty-state" x-show="!linhas.length">Nenhuma localizacao cadastrada. O saldo continua disponivel como nao enderecado.</div>
+          </div>
+          <div class="flex flex-wrap items-center justify-between gap-2 mt-3">
+            <p class="produto-help">A soma por deposito nao pode ultrapassar o saldo atual. Entradas novas ficam nao enderecadas ate voce distribui-las.</p>
+            <button type="button" class="produto-btn primary" @click="salvar()" :disabled="salvando" x-text="salvando ? 'Salvando...' : 'Salvar localizacoes'"></button>
+          </div>
+          <div class="produto-location-status" :class="{'is-error': erro, 'is-ok': sucesso}" x-text="erro || sucesso"></div>
+        {% endif %}
       </div>
 
       {% if produto %}
@@ -1744,6 +1793,74 @@
         if (this.step > 1) {
           this.step -= 1;
           this.$nextTick(() => this.scrollTop());
+        }
+      },
+    };
+  }
+
+  function produtoLocalizacoes(url, depositosIniciais) {
+    const normalizar = (valor) => {
+      const texto = String(valor ?? '').trim();
+      if (texto.includes(',')) return texto.replace(/\./g, '').replace(',', '.');
+      return texto;
+    };
+    return {
+      url,
+      depositos: Array.isArray(depositosIniciais) ? depositosIniciais : [],
+      linhas: [],
+      salvando: false,
+      erro: '',
+      sucesso: '',
+      init() {
+        this.recarregarLinhas();
+      },
+      recarregarLinhas() {
+        this.linhas = this.depositos.flatMap((deposito) => (deposito.localizacoes || []).map((item) => ({
+          chave: `existente-${item.id}`,
+          deposito_id: Number(deposito.id),
+          codigo: item.codigo || '',
+          descricao: item.descricao || '',
+          quantidade: String(item.quantidade || '0').replace('.', ','),
+          prioridade: Number(item.prioridade || 100),
+        })));
+      },
+      numero(valor) {
+        const parsed = Number.parseFloat(normalizar(valor));
+        return Number.isFinite(parsed) ? parsed : 0;
+      },
+      formatar(valor) {
+        return this.numero(valor).toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 3});
+      },
+      total(depositoId) {
+        return this.linhas.filter((linha) => Number(linha.deposito_id) === Number(depositoId)).reduce((soma, linha) => soma + this.numero(linha.quantidade), 0);
+      },
+      adicionar() {
+        const deposito = this.depositos[0];
+        if (!deposito) return;
+        this.linhas.push({chave: `novo-${Date.now()}-${this.linhas.length}`, deposito_id: Number(deposito.id), codigo: '', descricao: '', quantidade: '0', prioridade: 100});
+      },
+      remover(indice) {
+        this.linhas.splice(indice, 1);
+      },
+      async salvar() {
+        this.erro = '';
+        this.sucesso = '';
+        this.salvando = true;
+        try {
+          const resposta = await fetch(this.url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''},
+            body: JSON.stringify({localizacoes: this.linhas.map((linha) => ({...linha, quantidade: normalizar(linha.quantidade)}))}),
+          });
+          const dados = await resposta.json();
+          if (!resposta.ok || !dados.ok) throw new Error(dados.error || 'Nao foi possivel salvar as localizacoes.');
+          this.depositos = dados.depositos || this.depositos;
+          this.recarregarLinhas();
+          this.sucesso = dados.message || 'Localizacoes atualizadas.';
+        } catch (erro) {
+          this.erro = erro.message || 'Nao foi possivel salvar as localizacoes.';
+        } finally {
+          this.salvando = false;
         }
       },
     };

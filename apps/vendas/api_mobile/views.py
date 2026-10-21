@@ -1135,6 +1135,18 @@ class SeparacoesMobileView(MobileTenantAPIView):
                                 3,
                             ),
                             'padrao': deposito.is_padrao,
+                            'localizacoes': [
+                                {
+                                    'id': local['id'],
+                                    'codigo': local['codigo'],
+                                    'descricao': local['descricao'],
+                                    'quantidade': _decimal(local['quantidade'], 3),
+                                    'prioridade': local['prioridade'],
+                                }
+                                for local in saldo_produto.get(deposito.pk, {}).get(
+                                    'localizacoes', []
+                                )
+                            ],
                         }
                         for deposito in depositos
                     ],

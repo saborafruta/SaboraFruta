@@ -6,6 +6,7 @@ from .produto import (
     ProdutoFornecedorVinculoDeleteView, ProdutoGerarCodigoBarrasView,
     ProdutoApresentacaoCreateView, ProdutoApresentacaoUpdateView, ProdutoApresentacaoDeleteView,
     ProdutoBalancaExportView, ProdutoBalancaDownloadView,
+    ProdutoLocalizacoesUpdateView,
 )
 from .categoria import (
     CategoriaListView, CategoriaCreateView, CategoriaUpdateView,
@@ -37,6 +38,7 @@ __all__ = [
     'ProdutoLogItemsView', 'ProdutoInlineEditView', 'ProdutoImagemUpdateView', 'ProdutoImagemView',
     'ProdutoGerarCodigoBarrasView',
     'ProdutoBalancaExportView', 'ProdutoBalancaDownloadView',
+    'ProdutoLocalizacoesUpdateView',
     'CategoriaListView', 'CategoriaCreateView', 'CategoriaUpdateView',
     'MarcaListView', 'MarcaCreateView', 'MarcaUpdateView',
     'UnidadeListView', 'UnidadeCreateView', 'UnidadeUpdateView',

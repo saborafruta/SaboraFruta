@@ -1,0 +1,57 @@
+{% extends "_base.html" %}
+{% load erp_extras %}
+
+{% block title %}Estoque por localizacao{% endblock %}
+{% block page_title %}Estoque por localizacao{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <header class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
+    <div>
+      <a href="{% url 'estoque:relatorio-list' %}" class="text-sm text-blue-500">Relatorios de estoque</a>
+      <h2 class="text-2xl font-semibold mt-1">Estoque por localizacao</h2>
+      <p class="text-sm opacity-70 mt-1">Posicao fisica de cada produto por deposito, na ordem usada pela separacao.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a class="btn-secondary" href="?{{ filtros_query }}{% if filtros_query %}&amp;{% endif %}export=csv">Exportar CSV</a>
+      <a class="btn-secondary" href="?{{ filtros_query }}{% if filtros_query %}&amp;{% endif %}export=pdf">Exportar PDF</a>
+    </div>
+  </header>
+
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <div class="card p-4"><div class="text-xs uppercase opacity-60">Saldo total</div><strong class="text-2xl">{{ total_estoque|quantidade:3 }}</strong></div>
+    <div class="card p-4"><div class="text-xs uppercase opacity-60">Enderecado</div><strong class="text-2xl text-emerald-500">{{ total_enderecado|quantidade:3 }}</strong></div>
+    <div class="card p-4"><div class="text-xs uppercase opacity-60">Sem endereco</div><strong class="text-2xl {% if total_nao_enderecado > 0 %}text-amber-500{% endif %}">{{ total_nao_enderecado|quantidade:3 }}</strong></div>
+  </div>
+
+  <form method="get" class="card p-4 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+    <label class="md:col-span-5"><span class="form-label">Produto ou localizacao</span><input class="form-input w-full" type="search" name="q" value="{{ busca }}" placeholder="Nome, codigo, corredor ou prateleira"></label>
+    <label class="md:col-span-3"><span class="form-label">Deposito</span><select class="form-input w-full" name="deposito"><option value="">Todos</option>{% for deposito in depositos %}<option value="{{ deposito.pk }}" {% if deposito_id == deposito.pk|stringformat:'s' %}selected{% endif %}>{{ deposito.nome }}</option>{% endfor %}</select></label>
+    <label class="md:col-span-2 min-h-[42px] flex items-center gap-2"><input type="hidden" name="com_saldo" value="0"><input type="checkbox" name="com_saldo" value="1" {% if somente_com_saldo %}checked{% endif %}><span class="text-sm">Somente com saldo</span></label>
+    <div class="md:col-span-2 flex gap-2"><button class="btn-primary flex-1">Filtrar</button><a class="btn-secondary" href="{% url 'estoque:relatorio-localizacoes' %}">Limpar</a></div>
+  </form>
+
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm min-w-[860px]">
+        <thead><tr class="text-left text-xs uppercase opacity-70">
+          <th class="px-4 py-3">Produto</th><th class="px-4 py-3">Deposito</th><th class="px-4 py-3">Localizacao</th><th class="px-4 py-3">Descricao</th><th class="px-4 py-3 text-center">Prior.</th><th class="px-4 py-3 text-right">Quantidade</th>
+        </tr></thead>
+        <tbody>
+          {% for linha in page_obj %}
+            <tr class="table-row-hover {% if linha.nao_enderecado %}bg-amber-500/5{% endif %}">
+              <td class="px-4 py-3"><a class="font-semibold text-blue-500" href="{% url 'produtos:produto-update' linha.produto.pk %}">{{ linha.produto.descricao }}</a><small class="block opacity-60">{{ linha.produto.codigo|default:linha.produto.codigo_barras|default:linha.produto.pk }}</small></td>
+              <td class="px-4 py-3">{{ linha.deposito.nome }}</td>
+              <td class="px-4 py-3"><strong class="{% if linha.nao_enderecado %}text-amber-500{% else %}text-emerald-500{% endif %}">{{ linha.codigo }}</strong></td>
+              <td class="px-4 py-3 opacity-75">{{ linha.descricao|default:"-" }}</td>
+              <td class="px-4 py-3 text-center">{{ linha.prioridade|default:"-" }}</td>
+              <td class="px-4 py-3 text-right font-bold">{{ linha.quantidade|quantidade:3 }} {{ linha.produto.unidade_medida.sigla }}</td>
+            </tr>
+          {% empty %}<tr><td colspan="6" class="px-4 py-10 text-center opacity-60">Nenhum saldo encontrado para os filtros informados.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj.paginator.num_pages > 1 %}<div class="p-4 flex justify-between text-sm"><span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span><div class="flex gap-2">{% if page_obj.has_previous %}<a class="btn-secondary" href="?{{ filtros_query }}&amp;page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}{% if page_obj.has_next %}<a class="btn-secondary" href="?{{ filtros_query }}&amp;page={{ page_obj.next_page_number }}">Proxima</a>{% endif %}</div></div>{% endif %}
+  </div>
+</div>
+{% endblock %}
