@@ -15,6 +15,14 @@
     .eq-warning { background:#fef3c7; color:#92400e; }
     .eq-critical { background:#fee2e2; color:#b91c1c; }
     .eq-good { background:#dcfce7; color:#166534; }
+    .eq-explanation { position:relative; display:inline-block; text-align:left; }
+    .eq-explanation summary { list-style:none; cursor:pointer; }
+    .eq-explanation summary::-webkit-details-marker { display:none; }
+    .eq-info-button { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border:1px solid rgba(37,99,235,.35); border-radius:999px; color:#2563eb; font:700 14px/1 Georgia,serif; background:rgba(37,99,235,.08); }
+    .eq-info-button:hover, .eq-explanation[open] .eq-info-button { background:#2563eb; color:#fff; }
+    .eq-explanation-panel { position:absolute; z-index:20; right:0; top:calc(100% + .55rem); width:min(430px,calc(100vw - 2rem)); padding:1rem; border:1px solid rgba(59,130,246,.28); border-radius:12px; background:#fff; box-shadow:0 16px 40px rgba(15,23,42,.18); color:#334155; }
+    body:not(.tema-claro) .eq-explanation-panel { background:#172033; border-color:rgba(96,165,250,.3); color:#cbd5e1; }
+    .eq-calculation { margin-top:.65rem; padding:.65rem; border-radius:9px; background:rgba(148,163,184,.12); }
     body:not(.tema-claro) .eq-branch { border-color:rgba(148,163,184,.16); }
     body:not(.tema-claro) .eq-arrow { background:#1e3a5f; color:#93c5fd; }
     @media (max-width:720px) {
@@ -119,8 +127,47 @@
           </div>
 
           <div class="xl:w-52 xl:text-right">
-            <div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Transferir</div>
-            <div class="text-2xl font-bold" style="color:#2563eb;">{{ item.quantidade|floatformat:3 }} {{ item.produto.unidade_medida.sigla }}</div>
+            <div class="flex items-center justify-start xl:justify-end gap-2">
+              <div>
+                <div class="text-xs uppercase" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">Transferir</div>
+                <div class="text-2xl font-bold" style="color:#2563eb;">{{ item.quantidade|floatformat:3 }} {{ item.produto.unidade_medida.sigla }}</div>
+              </div>
+              <details class="eq-explanation">
+                <summary aria-label="Entenda por que esta transferência foi sugerida" title="Entenda esta sugestão">
+                  <span class="eq-info-button" aria-hidden="true">i</span>
+                </summary>
+                <div class="eq-explanation-panel text-sm">
+                  <div class="font-semibold text-base" :style="temaClaro ? 'color:#1e3a8a;' : 'color:#bfdbfe;'">Por que o sistema sugeriu isso?</div>
+                  <p class="mt-2">
+                    {% if item.motivo == 'destino_sem_estoque' %}
+                      A loja de destino está sem este produto e abaixo da meta calculada para ela.
+                    {% elif item.motivo == 'parado_na_origem' %}
+                      Este produto vendeu {{ item.destino_vendido|floatformat:3 }} {{ item.produto.unidade_medida.sigla }} no destino, mas não teve venda na origem nos últimos {{ dias_analise }} dias.
+                    {% elif item.motivo == 'maior_giro_no_destino' %}
+                      O giro diário no destino ({{ item.destino_demanda_diaria|floatformat:3 }}) é maior que na origem ({{ item.origem_demanda_diaria|floatformat:3 }}).
+                    {% else %}
+                      O destino está abaixo da meta de estoque, enquanto a origem possui excedente que pode ceder.
+                    {% endif %}
+                  </p>
+                  <p class="mt-2">
+                    No destino, a cobertura passa de
+                    {% if item.destino_cobertura_antes is not None %}{{ item.destino_cobertura_antes }} dias{% else %}sem giro calculável{% endif %}
+                    para
+                    {% if item.destino_cobertura_depois is not None %}{{ item.destino_cobertura_depois }} dias{% else %}sem giro calculável{% endif %}
+                    com esta sugestão.
+                  </p>
+                  <div class="eq-calculation">
+                    <div class="font-semibold">Como chegou a {{ item.quantidade|floatformat:3 }} {{ item.produto.unidade_medida.sigla }}?</div>
+                    <p class="mt-1">
+                      Faltam {{ item.necessidade_destino|floatformat:3 }} para o destino atingir a meta de {{ item.destino_meta|floatformat:3 }}, e a origem pode ceder até {{ item.excedente_origem|floatformat:3 }} sem ficar abaixo da própria meta de {{ item.origem_meta|floatformat:3 }}. O sistema usa o menor desses dois valores.
+                    </p>
+                  </div>
+                  <p class="text-xs mt-2" :style="temaClaro ? 'color:#64748b;' : 'color:#94a3b8;'">
+                    Depois da transferência, a origem fica com {{ item.saldo_origem_depois|floatformat:3 }} e o destino com {{ item.saldo_destino_depois|floatformat:3 }} {{ item.produto.unidade_medida.sigla }}.
+                  </p>
+                </div>
+              </details>
+            </div>
             {% if permissoes_estoque.pode_criar and filial_ativa_id == item.origem.pk %}
               <a class="btn-primary mt-2 inline-flex" href="{% url 'estoque:transferencia-lojas-create' %}?destino={{ item.destino.pk }}&produto={{ item.produto.pk }}&quantidade={{ item.quantidade|stringformat:'s' }}&origem=equilibrio">Criar transferência</a>
             {% elif filial_ativa_id != item.origem.pk %}

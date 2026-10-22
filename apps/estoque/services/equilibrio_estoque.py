@@ -144,13 +144,27 @@ def calcular_equilibrio(
                     continue
                 if filial_destino_id and destino["filial_id"] != filial_destino_id:
                     continue
-                quantidade = _quantidade(produto, min(restante, origem["excedente"]))
+                necessidade_destino = restante
+                excedente_origem = origem["excedente"]
+                saldo_origem_antes = origem["meta"] + excedente_origem
+                saldo_destino_antes = destino["meta"] - necessidade_destino
+                quantidade = _quantidade(produto, min(necessidade_destino, excedente_origem))
                 if quantidade <= ZERO:
                     continue
                 origem["excedente"] -= quantidade
                 restante -= quantidade
+                saldo_origem_depois = saldo_origem_antes - quantidade
+                saldo_destino_depois = saldo_destino_antes + quantidade
                 origem_filial = filial_por_id[origem["filial_id"]]
                 destino_filial = filial_por_id[destino["filial_id"]]
+                if destino["saldo"] <= ZERO:
+                    motivo = "destino_sem_estoque"
+                elif origem["vendido"] == ZERO and destino["vendido"] > ZERO:
+                    motivo = "parado_na_origem"
+                elif destino["demanda_diaria"] > origem["demanda_diaria"]:
+                    motivo = "maior_giro_no_destino"
+                else:
+                    motivo = "destino_abaixo_da_meta"
                 sugestoes.append({
                     "produto": produto,
                     "origem": origem_filial,
@@ -162,7 +176,24 @@ def calcular_equilibrio(
                     "destino_vendido": destino["vendido"],
                     "origem_cobertura": _cobertura(origem["saldo"], origem["demanda_diaria"]),
                     "destino_cobertura": _cobertura(destino["saldo"], destino["demanda_diaria"]),
+                    "destino_cobertura_antes": _cobertura(
+                        saldo_destino_antes, destino["demanda_diaria"],
+                    ),
+                    "origem_cobertura_depois": _cobertura(
+                        saldo_origem_depois, origem["demanda_diaria"],
+                    ),
+                    "destino_cobertura_depois": _cobertura(
+                        saldo_destino_depois, destino["demanda_diaria"],
+                    ),
+                    "origem_demanda_diaria": origem["demanda_diaria"],
+                    "destino_demanda_diaria": destino["demanda_diaria"],
+                    "origem_meta": origem["meta"].quantize(Decimal("0.001")),
                     "destino_meta": destino["meta"].quantize(Decimal("0.001")),
+                    "necessidade_destino": necessidade_destino.quantize(Decimal("0.001")),
+                    "excedente_origem": excedente_origem.quantize(Decimal("0.001")),
+                    "saldo_origem_depois": saldo_origem_depois,
+                    "saldo_destino_depois": saldo_destino_depois,
+                    "motivo": motivo,
                     "produto_parado_origem": origem["vendido"] == ZERO,
                     "destino_sem_estoque": destino["saldo"] <= ZERO,
                 })

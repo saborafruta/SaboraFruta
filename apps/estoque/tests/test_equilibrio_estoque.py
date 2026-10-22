@@ -73,6 +73,12 @@ class EquilibrioEstoqueTests(TestCase):
         self.assertEqual(sugestao["destino"], self.loja_a)
         self.assertEqual(sugestao["quantidade"], Decimal("35"))
         self.assertTrue(sugestao["produto_parado_origem"])
+        self.assertEqual(sugestao["motivo"], "parado_na_origem")
+        self.assertEqual(sugestao["necessidade_destino"], Decimal("35.000"))
+        self.assertEqual(sugestao["excedente_origem"], Decimal("35.000"))
+        self.assertEqual(sugestao["saldo_origem_depois"], Decimal("5"))
+        self.assertEqual(sugestao["saldo_destino_depois"], Decimal("37"))
+        self.assertEqual(sugestao["destino_cobertura_depois"], Decimal("37.0"))
         self.assertEqual(Estoque.objects.get(filial=self.loja_b).quantidade_disponivel, Decimal("40"))
 
     def test_tela_exibe_sugestao_e_link_para_transferencia_quando_origem_ativa(self):
@@ -88,6 +94,9 @@ class EquilibrioEstoqueTests(TestCase):
         self.assertContains(response, "Produto de alto giro")
         self.assertContains(response, "Criar transferência")
         self.assertContains(response, f"destino={self.loja_a.pk}")
+        self.assertContains(response, "Por que o sistema sugeriu isso?")
+        self.assertContains(response, "Como chegou a 35,000 UN?")
+        self.assertContains(response, "O sistema usa o menor desses dois valores.")
 
     def test_produto_vinculado_a_uma_unica_filial_nao_e_comparado(self):
         ProdutoFilial.objects.filter(produto=self.produto, filial=self.loja_b).update(ativo=False)
