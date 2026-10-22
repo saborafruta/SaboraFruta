@@ -7,6 +7,7 @@ import re
 import uuid
 from decimal import Decimal
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from django.contrib import messages
@@ -2658,6 +2659,19 @@ class ProdutoImagemView(View):
                     'produtos/produto/imagem_indisponivel.html',
                     status=404,
                 )
+            destino = produto.foto_url_resolvida
+            destino_url = urlsplit(destino)
+            host_atual = urlsplit(f'//{request.get_host()}').hostname
+            if (
+                destino_url.scheme in {'http', 'https'}
+                and destino_url.hostname
+                and destino_url.hostname.lower() != (host_atual or '').lower()
+            ):
+                # Se a origem bloquear o acesso do servidor, deixe o navegador
+                # tentar a URL original em vez de quebrar a foto em todas as telas.
+                response = redirect(destino)
+                response['Cache-Control'] = 'no-store'
+                return response
             raise
         response = FileResponse(arquivo, content_type='image/jpeg')
         response['Cache-Control'] = 'private, no-store, max-age=0'

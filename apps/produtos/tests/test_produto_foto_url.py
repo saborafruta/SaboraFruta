@@ -147,18 +147,25 @@ class ProdutoFotoUrlTests(SimpleTestCase):
         self.assertEqual(response.status_code, 404)
         self.assertContains(response, 'Voltar ao sistema', status_code=404)
 
+    @patch('apps.produtos.views.produto.urlopen')
     @patch('apps.produtos.views.produto.get_object_or_404')
-    @patch.object(ProdutoImagemView, '_arquivo_otimizado', side_effect=Http404)
-    def test_falha_de_foto_embutida_nao_devolve_pagina_html(
+    def test_falha_de_foto_externa_embutida_redireciona_para_url_original(
         self,
-        otimizar,
         get_object,
+        abrir_url,
     ):
-        get_object.return_value = SimpleNamespace()
+        produto = Produto(foto_url='https://cdn.example/produto.jpg')
+        get_object.return_value = produto
+        abrir_url.side_effect = HTTPError(
+            produto.foto_url, 403, 'Forbidden', {}, None,
+        )
         request = self.factory.get('/produtos/1/foto/?v=thumb', HTTP_ACCEPT='image/*,*/*;q=0.8')
 
-        with self.assertRaises(Http404):
-            ProdutoImagemView.as_view()(request, pk=1)
+        response = ProdutoImagemView.as_view()(request, pk=1)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], produto.foto_url)
+        self.assertEqual(response['Cache-Control'], 'no-store')
 
     def test_variantes_limitam_pixels_decodificados_no_celular(self):
         original = io.BytesIO()
