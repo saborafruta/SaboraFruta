@@ -57,6 +57,11 @@ class RelatoriosHubView(PermissaoRequiredMixin, TemplateView):
                 'titulo': 'Financeiro',
                 'itens': [
                     {
+                        'nome': 'Contas Recebidas',
+                        'descricao': 'Histórico das baixas realizadas, filtrado por cliente e data do recebimento.',
+                        'url_name': 'financeiro:receber_recebidas_relatorio',
+                    },
+                    {
                         'nome': 'Contas a Receber',
                         'descricao': 'Títulos a receber agrupados por cliente, com a venda vinculada.',
                         'url_name': 'financeiro:receber_relatorio',

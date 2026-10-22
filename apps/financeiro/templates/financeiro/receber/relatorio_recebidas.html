@@ -1,0 +1,88 @@
+{% extends "_base.html" %}
+{% block title %}Relatório de Contas Recebidas{% endblock %}
+{% block page_title %}Relatório de Contas Recebidas{% endblock %}
+
+{% block extra_head %}
+<style>
+  .rr-filter { display:grid; grid-template-columns:minmax(220px,2fr) repeat(2,minmax(150px,1fr)) auto auto; gap:.75rem; align-items:end; }
+  .rr-table { min-width:980px; }
+  .rr-table th { font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; }
+  .rr-table th,.rr-table td { padding:.7rem .75rem; border-bottom:1px solid rgba(148,163,184,.2); }
+  @media(max-width:900px){.rr-filter{grid-template-columns:1fr 1fr}.rr-filter .rr-client{grid-column:1/-1}}
+  @media(max-width:560px){.rr-filter{grid-template-columns:1fr}.rr-filter .rr-client{grid-column:auto}}
+  @media print {
+    nav,header,aside,.no-print,.app-back-link{display:none!important}
+    html,body,main,.app-content-frame{background:#fff!important;color:#111!important;margin:0!important;padding:0!important}
+    .app-content-frame{max-width:none!important}.card{box-shadow:none!important;border-color:#d1d5db!important}
+    .rr-table{min-width:0;font-size:9px}.rr-table th,.rr-table td{padding:4px!important}
+    @page{size:A4 landscape;margin:9mm}
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <div>
+      <p class="text-sm opacity-60">Relatórios › Financeiro</p>
+      <h2 class="text-2xl font-semibold">Contas recebidas</h2>
+      <p class="text-sm mt-1 opacity-70">Histórico das baixas de títulos quitados, usando a data em que cada valor foi recebido.</p>
+    </div>
+    <div class="no-print flex gap-2">
+      <a href="{% url 'financeiro:receber_list' %}" class="btn-secondary">Contas a receber</a>
+      <button type="button" class="btn-primary" onclick="window.print()">Imprimir / Salvar PDF</button>
+    </div>
+  </div>
+
+  <form method="get" class="card p-4 rr-filter no-print">
+    <label class="rr-client text-xs font-semibold">Cliente
+      <input class="form-input block mt-1 w-full" name="cliente" value="{{ cliente }}" placeholder="Nome, razão social ou CPF/CNPJ">
+    </label>
+    <label class="text-xs font-semibold">Recebido de
+      <input class="form-input block mt-1 w-full" type="date" name="data_ini" value="{{ data_ini|date:'Y-m-d' }}">
+    </label>
+    <label class="text-xs font-semibold">Recebido até
+      <input class="form-input block mt-1 w-full" type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}">
+    </label>
+    <a href="{% url 'financeiro:receber_recebidas_relatorio' %}" class="btn-secondary justify-center">Limpar</a>
+    <button class="btn-primary" type="submit">Filtrar</button>
+  </form>
+
+  <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <div class="card p-4"><span class="text-xs uppercase opacity-60">Total recebido</span><strong class="block mt-1 text-xl text-emerald-600">R$ {{ total_recebido|floatformat:2 }}</strong></div>
+    <div class="card p-4"><span class="text-xs uppercase opacity-60">Líquido</span><strong class="block mt-1 text-xl">R$ {{ total_liquido|floatformat:2 }}</strong></div>
+    <div class="card p-4"><span class="text-xs uppercase opacity-60">Juros e multas</span><strong class="block mt-1 text-xl">R$ {{ total_juros|add:total_multa|floatformat:2 }}</strong></div>
+    <div class="card p-4"><span class="text-xs uppercase opacity-60">Descontos e taxas</span><strong class="block mt-1 text-xl">R$ {{ total_desconto|add:total_taxa|floatformat:2 }}</strong></div>
+    <div class="card p-4"><span class="text-xs uppercase opacity-60">Recebimentos</span><strong class="block mt-1 text-xl">{{ total_recebimentos }}</strong></div>
+  </div>
+
+  {% if cliente or data_ini or data_fim %}
+  <p class="text-xs opacity-70">Filtros: {% if cliente %}cliente “{{ cliente }}”{% endif %}{% if data_ini or data_fim %}{% if cliente %} · {% endif %}período de {{ data_ini|date:'d/m/Y'|default:'início' }} até {{ data_fim|date:'d/m/Y'|default:'hoje' }}{% endif %}</p>
+  {% endif %}
+  {% if truncado %}<div class="rounded-lg border border-amber-400 bg-amber-50 p-3 text-sm text-amber-800">Exibindo os {{ limite }} primeiros recebimentos de {{ total_recebimentos }}. Reduza o período para visualizar todos.</div>{% endif %}
+
+  <div class="card overflow-x-auto">
+    <table class="rr-table w-full text-sm">
+      <thead><tr>
+        <th class="text-left">Recebimento</th><th class="text-left">Cliente</th><th class="text-left">Título / documento</th>
+        <th class="text-left">Forma / conta</th><th class="text-right">Recebido</th><th class="text-right">Líquido</th>
+      </tr></thead>
+      <tbody>
+      {% for pagamento in recebimentos %}
+        <tr>
+          <td class="whitespace-nowrap font-semibold">{{ pagamento.data_pagamento|date:'d/m/Y' }}<div class="text-xs opacity-60">{{ pagamento.created_at|date:'H:i' }}</div></td>
+          <td><div class="font-semibold">{{ pagamento.conta_receber.cliente.nome_display }}</div><div class="text-xs opacity-60">{{ pagamento.conta_receber.cliente.cpf_cnpj|default:'Sem documento' }}</div></td>
+          <td><a class="text-blue-600 font-semibold no-print" href="{% url 'financeiro:receber_detail' pagamento.conta_receber_id %}">Título #{{ pagamento.conta_receber_id }}</a><span class="hidden print:inline font-semibold">Título #{{ pagamento.conta_receber_id }}</span><div class="text-xs opacity-60">{% if pagamento.conta_receber.documento_numero %}Doc. {{ pagamento.conta_receber.documento_numero }} · {% endif %}Parcela {{ pagamento.conta_receber.parcela }}/{{ pagamento.conta_receber.total_parcelas }}</div></td>
+          <td>{{ pagamento.forma_pagamento|default:'Não informada' }}{% if pagamento.conta_bancaria %}<div class="text-xs opacity-60">{{ pagamento.conta_bancaria }}</div>{% endif %}</td>
+          <td class="text-right whitespace-nowrap font-bold text-emerald-600">R$ {{ pagamento.valor_pago|floatformat:2 }}</td>
+          <td class="text-right whitespace-nowrap">R$ {{ pagamento.valor_liquido|floatformat:2 }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="p-10 text-center opacity-60">Nenhum recebimento encontrado para os filtros informados.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-center text-xs opacity-50">{{ filial.nome_fantasia|default:filial.razao_social }} · Gerado em {{ gerado_em|date:'d/m/Y H:i' }}</p>
+</div>
+{% endblock %}

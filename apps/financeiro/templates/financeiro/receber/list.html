@@ -164,6 +164,7 @@
     </div>
     <div class="flex gap-2 flex-wrap">
       {% include "financeiro/_dashboard_contas_modal.html" %}
+      <a href="{% url 'financeiro:receber_recebidas_relatorio' %}" class="btn-secondary">Contas recebidas</a>
       {% if pode_criar %}
         <button type="button" class="btn-primary" @click="criarAberto=true">+ Novo título</button>
       {% endif %}

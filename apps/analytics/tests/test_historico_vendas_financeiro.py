@@ -171,6 +171,34 @@ class HistoricoVendasFinanceiroTests(TestCase):
         self.assertEqual(contexto['valor_totalizador'], Decimal('500.00'))
         self.assertContains(response, 'Não se aplica à OP')
 
+    def test_filtro_por_id_do_cliente_nao_mistura_homonimos(self):
+        homonimo = Cliente.objects.create(
+            filial=self.filial, razao_social='Cliente A', cpf_cnpj='98765432100',
+        )
+        venda_homonimo = VendaPDV.objects.create(
+            filial=self.filial, cliente=homonimo, usuario=self.usuario,
+            numero_venda=99, status='finalizada', valor_total=Decimal('999.00'),
+            data_venda=datetime(2026, 8, 31, 16, 0, tzinfo=dt_timezone.utc),
+        )
+
+        response, contexto = self.contexto_lista(cliente_id=str(self.cliente.pk))
+
+        ids = {(item.origem_historico, item.pk) for item in contexto['page_obj']}
+        self.assertNotIn(('pdv', venda_homonimo.pk), ids)
+        self.assertEqual(contexto['cliente_selecionado'], self.cliente)
+        self.assertContains(response, f'name="cliente_id" value="{self.cliente.pk}"')
+        self.assertContains(response, 'Cliente selecionado pelo cadastro')
+
+    def test_atalho_do_cadastro_abre_todo_o_historico_sem_limitar_ao_dia(self):
+        request = self.request(cliente_id=str(self.cliente.pk))
+        with patch('apps.analytics.views.dashboards.render', wraps=render) as rendering:
+            dashboards.historico_vendas(request)
+        contexto = rendering.call_args.args[2]
+
+        self.assertEqual(contexto['filtros']['data_ini'], '')
+        self.assertEqual(contexto['filtros']['data_fim'], '')
+        self.assertEqual(len(contexto['page_obj']), 3)
+
     def test_op_so_aparece_depois_do_clique_em_gerar_financeiro(self):
         self.pedido_op.financeiro_gerado_em = None
         self.pedido_op.save(update_fields=['financeiro_gerado_em'])
@@ -255,3 +283,19 @@ class HistoricoVendasFinanceiroTests(TestCase):
         self.assertEqual(contexto['pico']['qtd'], 2)
         self.assertContains(response, 'Mapa de calor')
         self.assertContains(response, '11h–12h')
+        segunda = contexto['linhas'][0]['celulas']
+        self.assertEqual(segunda[11]['cor'], '#dc2626')
+        self.assertEqual(segunda[12]['cor'], '#f97316')
+        self.assertEqual(segunda[0]['cor'], '#dcfce7')
+        self.assertContains(response, '7 dias')
+        self.assertContains(response, '30 dias')
+        self.assertContains(response, '1 ano')
+
+    def test_atalho_semanal_define_sete_dias_incluindo_hoje(self):
+        request = self.request('/analytics/vendas/por-horario/', periodo='semana')
+        with patch('apps.analytics.views.dashboards.render', wraps=render) as rendering:
+            dashboards.vendas_por_horario(request)
+        contexto = rendering.call_args.args[2]
+
+        self.assertEqual(contexto['periodo'], 'semana')
+        self.assertEqual((contexto['data_fim'] - contexto['data_ini']).days, 6)

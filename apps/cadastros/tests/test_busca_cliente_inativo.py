@@ -92,3 +92,14 @@ class BuscaClienteInativoTests(TestCase):
     def test_busca_sem_inativo_correspondente_nao_avisa(self):
         resp = self._buscar('inexistente-xyz')
         self.assertEqual(resp.context['inativos_na_busca'], 0)
+
+    def test_lista_e_edicao_oferecem_historico_exato_do_cliente(self):
+        historico_url = f"{reverse('analytics:vendas')}?cliente_id={self.ativo.pk}"
+
+        lista = self.client.get(reverse('cadastros:cliente-list'))
+        edicao = self.client.get(reverse('cadastros:cliente-update', args=[self.ativo.pk]))
+
+        self.assertContains(lista, historico_url)
+        self.assertContains(lista, 'Histórico de compras')
+        self.assertContains(edicao, historico_url)
+        self.assertContains(edicao, 'Histórico de compras')

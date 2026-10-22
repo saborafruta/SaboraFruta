@@ -269,6 +269,7 @@ class ClienteListView(PermissaoRequiredMixin, View):
             'inativos_na_busca': _inativos_na_busca(request),
             'pode_exportar': _usuario_pode_exportar(request),
             'pode_editar': request.user.tem_permissao('cadastros', 'editar'),
+            'pode_ver_relatorios': request.user.tem_permissao('relatorios', 'ver'),
         })
 
 
@@ -391,6 +392,7 @@ class ClienteUpdateView(PermissaoRequiredMixin, View):
             'title': f'Editar Cliente — {cliente.nome_display}',
             'cancel_url': next_url or reverse_lazy('cadastros:cliente-list'),
             'next_url': next_url or '',
+            'pode_ver_relatorios': request.user.tem_permissao('relatorios', 'ver'),
         })
 
     def post(self, request, pk):
@@ -417,6 +419,7 @@ class ClienteUpdateView(PermissaoRequiredMixin, View):
             'title': f'Editar Cliente — {cliente.nome_display}',
             'cancel_url': next_url or reverse_lazy('cadastros:cliente-list'),
             'next_url': next_url or '',
+            'pode_ver_relatorios': request.user.tem_permissao('relatorios', 'ver'),
         })
 
 

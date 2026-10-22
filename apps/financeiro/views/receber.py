@@ -343,6 +343,74 @@ class ContaReceberRelatorioView(PermissaoRequiredMixin, View):
         })
 
 
+class ContaRecebidaRelatorioView(PermissaoRequiredMixin, View):
+    """Histórico das baixas de títulos quitados, pela data efetiva do recebimento."""
+
+    permissao_modulo = 'financeiro'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        filial = _filial(request)
+        cliente = request.GET.get('cliente', '').strip()
+        data_ini = parse_date(request.GET.get('data_ini', ''))
+        data_fim = parse_date(request.GET.get('data_fim', ''))
+        if data_ini and data_fim and data_ini > data_fim:
+            data_ini, data_fim = data_fim, data_ini
+
+        qs = (
+            PagamentoContaReceber.objects.for_filial(filial)
+            .filter(
+                conta_receber__excluido_em__isnull=True,
+                conta_receber__status=StatusContaReceber.PAGO,
+            )
+            .select_related(
+                'conta_receber', 'conta_receber__cliente', 'forma_pagamento',
+                'conta_bancaria', 'usuario',
+            )
+            .order_by('-data_pagamento', '-created_at')
+        )
+        if cliente:
+            qs = qs.filter(
+                Q(conta_receber__cliente__razao_social__icontains=cliente)
+                | Q(conta_receber__cliente__nome_fantasia__icontains=cliente)
+                | Q(conta_receber__cliente__cpf_cnpj__icontains=cliente)
+            )
+        if data_ini:
+            qs = qs.filter(data_pagamento__gte=data_ini)
+        if data_fim:
+            qs = qs.filter(data_pagamento__lte=data_fim)
+
+        totais = qs.aggregate(
+            total_recebido=Sum('valor_pago'),
+            total_juros=Sum('valor_juros'),
+            total_multa=Sum('valor_multa'),
+            total_desconto=Sum('valor_desconto'),
+            total_taxa=Sum('valor_taxa'),
+            total_liquido=Sum('valor_liquido'),
+        )
+        limite = 2000
+        total_encontrado = qs.count()
+        recebimentos = list(qs[:limite])
+        return render(request, 'financeiro/receber/relatorio_recebidas.html', {
+            'title': 'Relatório de Contas Recebidas',
+            'filial': filial,
+            'recebimentos': recebimentos,
+            'cliente': cliente,
+            'data_ini': data_ini,
+            'data_fim': data_fim,
+            'total_recebido': totais['total_recebido'] or Decimal('0'),
+            'total_juros': totais['total_juros'] or Decimal('0'),
+            'total_multa': totais['total_multa'] or Decimal('0'),
+            'total_desconto': totais['total_desconto'] or Decimal('0'),
+            'total_taxa': totais['total_taxa'] or Decimal('0'),
+            'total_liquido': totais['total_liquido'] or Decimal('0'),
+            'total_recebimentos': total_encontrado,
+            'truncado': total_encontrado > limite,
+            'limite': limite,
+            'gerado_em': timezone.localtime(),
+        })
+
+
 @method_decorator(xframe_options_sameorigin, name='dispatch')
 class ContaReceberCreateView(PermissaoRequiredMixin, View):
     permissao_modulo = 'financeiro'

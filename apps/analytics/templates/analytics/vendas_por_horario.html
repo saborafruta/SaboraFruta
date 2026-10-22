@@ -10,6 +10,11 @@
       <p class="text-sm mt-1 opacity-70">Vendas concluídas no PDV, agrupadas pela hora local em que aconteceram.</p>
     </div>
     <form method="get" class="card p-3 flex flex-wrap items-end gap-3">
+      <div class="flex flex-wrap gap-2 w-full">
+        <a href="?periodo=semana" class="{% if periodo == 'semana' %}btn-primary{% else %}btn-secondary{% endif %} text-xs">7 dias</a>
+        <a href="?periodo=mes" class="{% if periodo == 'mes' %}btn-primary{% else %}btn-secondary{% endif %} text-xs">30 dias</a>
+        <a href="?periodo=ano" class="{% if periodo == 'ano' %}btn-primary{% else %}btn-secondary{% endif %} text-xs">1 ano</a>
+      </div>
       <label class="text-xs font-semibold">Venda de<input type="date" name="data_ini" value="{{ data_ini|date:'Y-m-d' }}" class="form-input block mt-1"></label>
       <label class="text-xs font-semibold">Venda até<input type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}" class="form-input block mt-1"></label>
       <button type="submit" class="btn-primary">Atualizar</button>
@@ -24,11 +29,11 @@
   </div>
 
   <div class="card p-4 overflow-x-auto">
-    <div class="flex flex-wrap items-center justify-between gap-2 mb-4"><div><h3 class="font-semibold">Mapa de calor</h3><p class="text-xs opacity-60">Quanto mais intensa a cor, maior o número de vendas naquela combinação.</p></div><div class="flex items-center gap-2 text-xs opacity-70"><span>Menor fluxo</span><span class="inline-block w-16 h-3 rounded" style="background:linear-gradient(90deg,rgba(37,99,235,.08),rgba(37,99,235,.92))"></span><span>Maior fluxo</span></div></div>
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-4"><div><h3 class="font-semibold">Mapa de calor</h3><p class="text-xs opacity-60">Verde indica ausência de fluxo; amarelo, pouco movimento; laranja, fluxo médio; vermelho, os horários mais movimentados.</p></div><div class="flex items-center gap-2 text-xs opacity-70"><span>Sem fluxo</span><span class="inline-block w-24 h-3 rounded" style="background:linear-gradient(90deg,#22c55e,#facc15,#f97316,#dc2626)"></span><span>Maior fluxo</span></div></div>
     <table class="min-w-[1120px] w-full text-xs border-separate" style="border-spacing:3px">
       <thead><tr><th class="text-left py-2 sticky left-0 z-10" :style="temaClaro ? 'background:#fff' : 'background:#171717'">Dia</th>{% for hora in horas %}<th class="text-center font-medium opacity-60">{{ hora|stringformat:'02d' }}h</th>{% endfor %}</tr></thead>
       <tbody>
-        {% for linha in linhas %}<tr><th class="text-left pr-3 py-2 whitespace-nowrap sticky left-0 z-10" :style="temaClaro ? 'background:#fff' : 'background:#171717'">{{ linha.nome }}</th>{% for celula in linha.celulas %}<td class="h-12 min-w-10 rounded text-center align-middle" style="{% if celula.qtd %}background:rgba(37,99,235,{{ celula.intensidade }});color:{% if celula.intensidade >= '0.55' %}white{% else %}inherit{% endif %};{% else %}background:rgba(148,163,184,.08);{% endif %}" title="{{ linha.nome }}, {{ celula.hora|stringformat:'02d' }}h: {{ celula.qtd }} venda(s), R$ {{ celula.total|floatformat:2 }}"><strong>{% if celula.qtd %}{{ celula.qtd }}{% else %}·{% endif %}</strong></td>{% endfor %}</tr>{% endfor %}
+        {% for linha in linhas %}<tr><th class="text-left pr-3 py-2 whitespace-nowrap sticky left-0 z-10" :style="temaClaro ? 'background:#fff' : 'background:#171717'">{{ linha.nome }}</th>{% for celula in linha.celulas %}<td class="h-12 min-w-10 rounded text-center align-middle" style="background:{{ celula.cor }};color:{{ celula.cor_texto }};" title="{{ linha.nome }}, {{ celula.hora|stringformat:'02d' }}h: {{ celula.faixa }} — {{ celula.qtd }} venda(s), R$ {{ celula.total|floatformat:2 }}"><strong>{% if celula.qtd %}{{ celula.qtd }}{% else %}·{% endif %}</strong></td>{% endfor %}</tr>{% endfor %}
       </tbody>
     </table>
   </div>

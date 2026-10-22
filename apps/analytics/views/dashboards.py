@@ -16,6 +16,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 
 from apps.core.services.permissions import requer_permissao
+from apps.cadastros.models import Cliente
 from apps.financeiro.services.receita import ajuste_por_grupo, ajuste_total
 from apps.estoque.models import Estoque, AlertaVencimento
 from apps.producao.models import OrdemProducao
@@ -77,8 +78,15 @@ def dashboard_comercial(request):
 def vendas_por_horario(request):
     """Mapa de calor das vendas PDV finalizadas por dia da semana e hora local."""
     hoje = timezone.localdate()
-    data_fim = parse_date(request.GET.get('data_fim', '')) or hoje
-    data_ini = parse_date(request.GET.get('data_ini', '')) or (data_fim - timedelta(days=29))
+    periodo = request.GET.get('periodo', '')
+    dias_por_periodo = {'semana': 7, 'mes': 30, 'ano': 365}
+    if periodo in dias_por_periodo:
+        data_fim = hoje
+        data_ini = hoje - timedelta(days=dias_por_periodo[periodo] - 1)
+    else:
+        data_fim = parse_date(request.GET.get('data_fim', '')) or hoje
+        data_ini = parse_date(request.GET.get('data_ini', '')) or (data_fim - timedelta(days=29))
+        periodo = 'personalizado' if request.GET.get('data_ini') or request.GET.get('data_fim') else 'mes'
     if data_ini > data_fim:
         data_ini, data_fim = data_fim, data_ini
 
@@ -112,11 +120,21 @@ def vendas_por_horario(request):
             qtd = item.get('qtd', 0)
             total = item.get('total') or Decimal('0')
             intensidade = (qtd / maior_qtd) if maior_qtd else 0
+            if not qtd:
+                cor, cor_texto, faixa = '#dcfce7', '#166534', 'Sem fluxo'
+            elif intensidade >= 0.67:
+                cor, cor_texto, faixa = '#dc2626', '#ffffff', 'Fluxo alto'
+            elif intensidade >= 0.34:
+                cor, cor_texto, faixa = '#f97316', '#ffffff', 'Fluxo médio'
+            else:
+                cor, cor_texto, faixa = '#facc15', '#713f12', 'Fluxo baixo'
             celulas.append({
                 'hora': hora,
                 'qtd': qtd,
                 'total': total,
-                'intensidade': f'{0.08 + (intensidade * 0.84):.2f}' if qtd else '0',
+                'cor': cor,
+                'cor_texto': cor_texto,
+                'faixa': faixa,
             })
         linhas.append({'nome': dia_nome, 'celulas': celulas})
 
@@ -137,6 +155,7 @@ def vendas_por_horario(request):
         'title': 'Vendas por horário',
         'data_ini': data_ini,
         'data_fim': data_fim,
+        'periodo': periodo,
         'horas': range(24),
         'linhas': linhas,
         'ranking_horas': [item for item in ranking_horas if item['qtd']][:5],
@@ -171,6 +190,7 @@ def _filtros_historico_vendas(request):
     f = {
         'pedido': request.GET.get('pedido', '').strip(),
         'cliente': request.GET.get('cliente', '').strip(),
+        'cliente_id': request.GET.get('cliente_id', '').strip(),
         'data_ini': request.GET.get('data_ini', ''),
         'data_fim': request.GET.get('data_fim', ''),
         # emitidas | nfce | nfe | nao_fiscal | cancelada
@@ -182,7 +202,10 @@ def _filtros_historico_vendas(request):
     }
     if f['tipo_venda'] not in ('balcao', 'delivery', 'op'):
         f['tipo_venda'] = ''
-    if not f['data_ini'] and not f['data_fim'] and not f['tipo_fiscal'] and not f['tipo_venda']:
+    if (
+        not f['data_ini'] and not f['data_fim'] and not f['tipo_fiscal']
+        and not f['tipo_venda'] and not f['cliente_id']
+    ):
         hoje = timezone.localdate().isoformat()
         f['data_ini'] = hoje
         f['data_fim'] = hoje
@@ -264,9 +287,12 @@ def _queryset_historico_vendas(request, f):
         except ValueError:
             qs = qs.none()
 
-    if f['cliente']:
+    if f['cliente_id'].isdigit():
+        qs = qs.filter(cliente_id=int(f['cliente_id']))
+    elif f['cliente']:
         qs = qs.filter(
             Q(cliente__razao_social__icontains=f['cliente']) |
+            Q(cliente__nome_fantasia__icontains=f['cliente']) |
             Q(cliente__cpf_cnpj__icontains=f['cliente'])
         )
 
@@ -337,9 +363,12 @@ def _queryset_ops_historico(request, f):
             qs = qs.filter(numero=int(f['pedido']))
         except ValueError:
             qs = qs.none()
-    if f['cliente']:
+    if f['cliente_id'].isdigit():
+        qs = qs.filter(cliente_id=int(f['cliente_id']))
+    elif f['cliente']:
         qs = qs.filter(
             Q(cliente__razao_social__icontains=f['cliente']) |
+            Q(cliente__nome_fantasia__icontains=f['cliente']) |
             Q(cliente__cpf_cnpj__icontains=f['cliente'])
         )
     if f['data_ini']:
@@ -492,6 +521,15 @@ def historico_vendas(request):
     f = _filtros_historico_vendas(request)
     pedido_q = f['pedido']
     cliente_q = f['cliente']
+    cliente_selecionado = None
+    if f['cliente_id'].isdigit():
+        cliente_selecionado = Cliente.objects.for_filial(request.filial_ativa).filter(
+            pk=int(f['cliente_id']),
+        ).first()
+        if cliente_selecionado:
+            cliente_q = cliente_selecionado.nome_display
+        else:
+            f['cliente_id'] = ''
     data_ini = f['data_ini']
     data_fim = f['data_fim']
     tipo_fiscal = f['tipo_fiscal']
@@ -616,12 +654,14 @@ def historico_vendas(request):
         'filtros': {
             'pedido': pedido_q,
             'cliente': cliente_q,
+            'cliente_id': f['cliente_id'],
             'data_ini': data_ini,
             'data_fim': data_fim,
             'tipo_fiscal': tipo_fiscal,
             'tipo_venda': f['tipo_venda'],
             'desconsiderar_canceladas': desconsiderar_canceladas,
         },
+        'cliente_selecionado': cliente_selecionado,
     })
 
 
@@ -703,6 +743,14 @@ def historico_vendas_relatorio(request):
     sem paginação — o relatório traz todos os registros do período.
     """
     f = _filtros_historico_vendas(request)
+    if f['cliente_id'].isdigit():
+        cliente_selecionado = Cliente.objects.for_filial(request.filial_ativa).filter(
+            pk=int(f['cliente_id']),
+        ).first()
+        if cliente_selecionado:
+            f['cliente'] = cliente_selecionado.nome_display
+        else:
+            f['cliente_id'] = ''
     qs_pdv = _aplicar_tipo_fiscal(
         _queryset_historico_vendas(request, f),
         f['tipo_fiscal'],

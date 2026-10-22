@@ -277,13 +277,14 @@ html.tema-claro .hv-header-actions .hv-action-warning { background:#fffbeb !impo
   <!-- Filtros -->
   <form method="get" class="hv-filter-bar">
     <input type="hidden" name="ordem" value="{{ ordem }}">
+    {% if filtros.cliente_id %}<input type="hidden" name="cliente_id" value="{{ filtros.cliente_id }}">{% endif %}
     <div class="hv-filter-group">
       <label class="hv-filter-label">Pedido</label>
       <input class="hv-input" name="pedido" value="{{ filtros.pedido }}" placeholder="Nº" style="width:90px;">
     </div>
     <div class="hv-filter-group" style="flex:1;min-width:180px;">
-      <label class="hv-filter-label">Nome</label>
-      <input class="hv-input" name="cliente" value="{{ filtros.cliente }}" placeholder="Nome do cliente" style="width:100%;">
+      <label class="hv-filter-label">Cliente</label>
+      <input class="hv-input" name="cliente" value="{{ filtros.cliente }}" placeholder="Nome ou CPF/CNPJ" style="width:100%;" {% if filtros.cliente_id %}readonly title="Cliente selecionado pelo cadastro"{% endif %}>
     </div>
     <div class="hv-filter-group">
       <label class="hv-filter-label">Data início</label>

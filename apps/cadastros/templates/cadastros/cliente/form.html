@@ -526,6 +526,9 @@ html.tema-escuro body { background: var(--cliente-bg) !important; }
 
     <div class="form-actions">
       <a href="{% url 'cadastros:cliente-list' %}" class="erp-btn-cancel">Cancelar</a>
+      {% if cliente.pk and pode_ver_relatorios %}
+        <a href="{% url 'analytics:vendas' %}?cliente_id={{ cliente.pk }}" class="erp-btn-cancel">Histórico de compras</a>
+      {% endif %}
       <button type="submit" class="erp-btn-save">Salvar cliente</button>
     </div>
 

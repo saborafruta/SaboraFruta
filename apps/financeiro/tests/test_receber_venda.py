@@ -13,10 +13,11 @@ from apps.core.services.exceptions import DomainError
 from apps.financeiro.constants.enums import TipoFormaPagamento
 from apps.financeiro.models import FormaPagamento
 from apps.financeiro.models.conta_bancaria import PlanoContas
-from apps.financeiro.models.receber_pagar import ContaReceber
+from apps.financeiro.models.receber_pagar import ContaReceber, PagamentoContaReceber
 from apps.financeiro.services.receber_service import ContaReceberService
 from apps.financeiro.views.receber import (
-    ContaReceberDetailView, ContaReceberListView, ContaReceberRelatorioView, _vincular_vendas,
+    ContaReceberDetailView, ContaReceberListView, ContaReceberRelatorioView,
+    ContaRecebidaRelatorioView, _vincular_vendas,
 )
 from apps.moda.models import PedidoProducao
 from apps.pdv.models import VendaPDV
@@ -93,6 +94,45 @@ class ReceberVendaTests(TestCase):
             'class="app-content-frame erp-list-content w-full max-w-none mx-auto',
         )
         self.assertContains(response, 'class="space-y-5 erp-list-page"')
+
+    def test_relatorio_de_recebidas_filtra_por_cliente_e_data_da_baixa(self):
+        ContaReceber.objects.filter(pk=self.conta.pk).update(
+            status='pago', valor_pago=Decimal('41.00'), valor_saldo=Decimal('0.00'),
+            data_pagamento=date(2026, 9, 3),
+        )
+        PagamentoContaReceber.objects.create(
+            filial=self.filial, conta_receber=self.conta,
+            data_pagamento=date(2026, 9, 3), valor_pago=Decimal('25.00'),
+            valor_liquido=Decimal('24.00'), usuario=self.usuario,
+        )
+        parcial = ContaReceber.objects.create(
+            filial=self.filial, cliente=self.cliente, valor_original=50,
+            valor_final=50, valor_pago=10, valor_saldo=40,
+            data_emissao=date(2026, 9, 1), data_vencimento=date(2026, 9, 20),
+            status='pago_parcial',
+        )
+        PagamentoContaReceber.objects.create(
+            filial=self.filial, conta_receber=parcial,
+            data_pagamento=date(2026, 9, 4), valor_pago=Decimal('10.00'),
+            valor_liquido=Decimal('10.00'), usuario=self.usuario,
+        )
+        response, context = self._get(
+            ContaRecebidaRelatorioView,
+            cliente='Cliente Teste', data_ini='2026-09-01', data_fim='2026-09-30',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(context['total_recebimentos'], 1)
+        self.assertEqual(context['total_recebido'], Decimal('25'))
+        self.assertContains(response, 'Contas recebidas')
+        self.assertContains(response, '03/09/2026')
+        self.assertContains(response, 'R$ 25,00')
+
+        _, fora_periodo = self._get(
+            ContaRecebidaRelatorioView,
+            cliente='Cliente Teste', data_ini='2026-10-01', data_fim='2026-10-31',
+        )
+        self.assertEqual(fora_periodo['total_recebimentos'], 0)
 
     def test_listagem_exibe_apenas_nome_na_coluna_cliente(self):
         response, _ = self._get(ContaReceberListView)

@@ -64,6 +64,7 @@ urlpatterns = [
     # ── Contas a Receber ──────────────────────────────────────────────────────
     path("receber/",                   receber_views.ContaReceberListView.as_view(),     name="receber_list"),
     path("receber/relatorio/",         receber_views.ContaReceberRelatorioView.as_view(), name="receber_relatorio"),
+    path("receber/recebidas/relatorio/", receber_views.ContaRecebidaRelatorioView.as_view(), name="receber_recebidas_relatorio"),
     path("receber/novo/",              receber_views.ContaReceberCreateView.as_view(),   name="receber_criar"),
     path("receber/<int:pk>/",          receber_views.ContaReceberDetailView.as_view(),   name="receber_detail"),
     path("receber/<int:pk>/editar/",   receber_views.ContaReceberEditView.as_view(),     name="receber_editar"),
