@@ -17,6 +17,7 @@ NÃO SUBSTITUI a personalização: quando a arte vira aplicação numa peça, el
 from django.conf import settings
 from django.core.validators import FileExtensionValidator
 from django.db import models
+from botocore.exceptions import BotoCoreError, ClientError
 
 # Aberto de propósito: aqui entra o que o cliente mandou, e o cliente manda
 # o que tem. Restringir demais faria a pessoa renomear a extensão para
@@ -123,8 +124,11 @@ class ArquivoPedido(models.Model):
         """
         try:
             bytes_ = self.arquivo.size
-        except (OSError, ValueError):
-            return ''
+        except (BotoCoreError, ClientError, OSError, ValueError):
+            # O storage pode negar a leitura de metadados (HeadObject) mesmo
+            # com o registro válido. O tamanho é apenas informativo e não deve
+            # impedir a abertura da tela do pedido/OP.
+            return 'Tamanho indisponível'
         if bytes_ < 1024:
             return f'{bytes_} B'
         if bytes_ < 1024 * 1024:

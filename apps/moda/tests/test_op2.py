@@ -14,6 +14,7 @@ from django.test import TestCase
 from django.http import QueryDict
 from django.urls import reverse
 from django.utils import timezone
+from botocore.exceptions import ClientError
 
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
@@ -868,6 +869,13 @@ class Op2Tests(TestCase):
         self.assertIn('/op-2/', reverse('moda:op2-detail', args=[self.pedido.pk]))
         get_template('moda/op2_create.html')
         get_template('moda/op2_detail.html')
+
+    def test_erro_de_permissao_no_storage_nao_quebra_tamanho_do_anexo(self):
+        anexo = ArquivoPedido(arquivo='moda/pedidos/token/arte.png')
+        erro = ClientError({'Error': {'Code': '403', 'Message': 'Forbidden'}}, 'HeadObject')
+
+        with patch.object(anexo.arquivo.storage, 'size', side_effect=erro):
+            self.assertEqual(anexo.tamanho_legivel, 'Tamanho indisponível')
 
     def test_kanban_nao_oferece_coluna_aguardando_material(self):
         self.assertNotIn('material', [coluna.chave for coluna in COLUNAS])
