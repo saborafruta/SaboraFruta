@@ -9,6 +9,8 @@ import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -895,6 +897,7 @@ class ItedRepository(private val store: SessionStore) {
 
 private class ItedApiClient(private val store: SessionStore) {
     private val baseUrl = BuildConfig.ITED_API_BASE_URL.trimEnd('/') + "/"
+    private val refreshMutex = Mutex()
 
     suspend fun publicPost(path: String, body: JSONObject): JSONObject = request(
         method = "POST",
@@ -921,16 +924,37 @@ private class ItedApiClient(private val store: SessionStore) {
             request(method, path, body, currentTokens.access, context, idempotencyKey)
         } catch (unauthorized: ApiException) {
             if (unauthorized.statusCode != HttpURLConnection.HTTP_UNAUTHORIZED) throw unauthorized
-            val refreshed = request(
-                "POST",
-                "api/v1/mobile/token/refresh/",
-                JSONObject().put("refresh", currentTokens.refresh),
-            )
-            val tokens = AuthTokens(
-                access = refreshed.getString("access"),
-                refresh = refreshed.optString("refresh", currentTokens.refresh),
-            )
-            store.updateTokens(tokens)
+            val tokens = refreshMutex.withLock {
+                val latestTokens = store.currentTokens(session.tokens)
+
+                // Outra chamada da sincronização pode ter renovado enquanto esta recebia 401.
+                if (latestTokens.access != currentTokens.access) {
+                    latestTokens
+                } else {
+                    try {
+                        val refreshed = request(
+                            "POST",
+                            "api/v1/mobile/token/refresh/",
+                            JSONObject().put("refresh", latestTokens.refresh),
+                        )
+                        AuthTokens(
+                            access = refreshed.getString("access"),
+                            refresh = refreshed.optString("refresh", latestTokens.refresh),
+                        ).also(store::updateTokens)
+                    } catch (refreshError: ApiException) {
+                        if (
+                            refreshError.statusCode == HttpURLConnection.HTTP_BAD_REQUEST ||
+                            refreshError.statusCode == HttpURLConnection.HTTP_UNAUTHORIZED
+                        ) {
+                            throw ApiException(
+                                HttpURLConnection.HTTP_UNAUTHORIZED,
+                                "Sua sessão expirou. Entre novamente para continuar.",
+                            )
+                        }
+                        throw refreshError
+                    }
+                }
+            }
             request(method, path, body, tokens.access, context, idempotencyKey)
         }
     }
