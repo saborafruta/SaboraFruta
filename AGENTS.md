@@ -91,6 +91,18 @@ Ao alterar uma área específica, rode também os testes correspondentes. Depois
 um deploy, acompanhe o serviço até um estado terminal de sucesso antes de dizer
 ao usuário que a publicação terminou.
 
+## Produtos e embalagens
+
+Toda busca, autocomplete ou seleção de produto deve considerar o produto-base e
+suas apresentações/embalagens ativas. Quando um produto possui caixa, pacote,
+fardo ou outra apresentação, a interface deve permitir distinguir e selecionar
+cada opção, incluindo busca pelos códigos internos e códigos de barras da
+apresentação. Não reduza silenciosamente várias apresentações a uma única opção.
+
+O backend deve receber `produto_id` e, quando aplicável, o
+`apresentacao_id`. Respeite sempre os vínculos ativos da filial e o fallback de
+apresentações legadas já adotado pelo sistema.
+
 ## Eficiência
 
 Trabalhar com arquivos locais não é, por si só, mais lento nem consome mais

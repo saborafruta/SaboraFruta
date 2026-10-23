@@ -14,8 +14,9 @@
   <form id="kardex-form" class="card p-4 flex flex-wrap gap-3 items-end no-print">
     <div id="kardex-search-box" class="kd-search">
       <label class="text-xs" for="kardex-search">Produto</label>
-      <input id="kardex-search" class="form-input block mt-1 w-full" name="q" value="{% if produto %}{{ produto.codigo }} · {{ produto.descricao }}{% else %}{{ busca }}{% endif %}" placeholder="Digite o código, código de barras ou nome" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="kardex-results" aria-expanded="false">
+      <input id="kardex-search" class="form-input block mt-1 w-full" name="q" value="{% if apresentacao %}{% if apresentacao.codigo %}{{ apresentacao.codigo }} · {% endif %}{{ produto.descricao }} — {{ apresentacao.descricao }}{% elif produto %}{% if produto.codigo %}{{ produto.codigo }} · {% endif %}{{ produto.descricao }}{% else %}{{ busca }}{% endif %}" placeholder="Digite o produto ou a embalagem por nome, código ou barras" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="kardex-results" aria-expanded="false">
       <input id="kardex-product-id" type="hidden" name="produto" value="{{ produto.pk|default:'' }}">
+      <input id="kardex-presentation-id" type="hidden" name="apresentacao" value="{{ apresentacao.pk|default:'' }}">
       <div id="kardex-results" class="kd-results" role="listbox" hidden></div>
     </div>
     <label class="text-xs">De<input class="form-input block mt-1" type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}"></label>
@@ -23,9 +24,9 @@
     <button class="btn-primary">Consultar</button>
   </form>
   {% if produto %}
-    <div class="card p-4"><strong>{{ produto.codigo }} · {{ produto.descricao }}</strong><div class="text-xs text-gray-500 mt-1">{{ produto.unidade_medida.sigla }}{% if produto.codigo_barras %} · EAN {{ produto.codigo_barras }}{% endif %}</div></div>
+    <div class="card p-4"><strong>{{ produto.codigo }} · {{ produto.descricao }}</strong><div class="text-xs text-gray-500 mt-1">Unidade-base: {{ produto.unidade_medida.sigla }}{% if produto.codigo_barras %} · EAN {{ produto.codigo_barras }}{% endif %}</div>{% if apresentacao %}<div class="text-sm mt-2"><strong>Embalagem selecionada:</strong> {{ apresentacao.descricao }}{% if apresentacao.codigo %} · {{ apresentacao.codigo }}{% endif %} · 1 {{ apresentacao.unidade.sigla }} = {{ apresentacao.fator_conversao|quantidade:3 }} {{ produto.unidade_medida.sigla }}</div><div class="text-xs text-gray-500 mt-1">O Kardex continua consolidando todas as movimentações do produto, pois o saldo físico é mantido na unidade-base.</div>{% endif %}</div>
     <div class="grid gap-3 sm:grid-cols-5"><div class="card p-3"><small>Movimentos</small><div class="text-xl font-semibold">{{ resumo.movimentos }}</div></div><div class="card p-3"><small>Saldo inicial*</small><div class="text-xl font-semibold">{{ resumo.saldo_inicial|quantidade:3 }}</div></div><div class="card p-3"><small>Entradas</small><div class="text-xl font-semibold kd-in">{{ resumo.entradas|quantidade:3 }}</div></div><div class="card p-3"><small>Saídas</small><div class="text-xl font-semibold kd-out">{{ resumo.saidas|quantidade:3 }}</div></div><div class="card p-3"><small>Saldo após último movimento*</small><div class="text-xl font-semibold">{{ resumo.saldo_final|quantidade:3 }}</div></div></div>
-    <div class="card overflow-x-auto"><table class="kd-table"><thead><tr><th>Data</th><th>Operação</th><th>Depósito</th><th>Documento</th><th>Lote</th><th>Cliente/destino</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Antes</th><th class="num">Depois</th><th class="num">Custo médio</th><th>Usuário / observação</th></tr></thead><tbody>{% for m in movimentos %}<tr><td>{{ m.data_movimentacao|date:'d/m/Y H:i' }}</td><td>{{ m.get_tipo_operacao_display }}</td><td>{{ m.deposito.nome }}</td><td>{{ m.documento_numero|default:m.get_documento_tipo_display }}</td><td>{% if m.lote_id %}{{ m.lote.numero_lote }}{% else %}—{% endif %}</td><td>{% if m.cliente_id %}{{ m.cliente }}{% elif m.filial_destino_id %}{{ m.filial_destino }}{% else %}—{% endif %}</td><td class="num kd-in">{% if m.eh_entrada %}{{ m.quantidade_kardex|quantidade:3 }}{% else %}—{% endif %}</td><td class="num kd-out">{% if m.eh_saida %}{{ m.quantidade_kardex|quantidade:3 }}{% else %}—{% endif %}</td><td class="num">{{ m.quantidade_anterior|quantidade:3 }}</td><td class="num"><strong>{{ m.quantidade_posterior|quantidade:3 }}</strong></td><td class="num">{{ m.custo_medio_display }}</td><td>{{ m.usuario.nome|default:'—' }}{% if m.observacao %}<div class="text-xs text-gray-500">{{ m.observacao }}</div>{% endif %}</td></tr>{% empty %}<tr><td colspan="12">Nenhuma movimentação no período.</td></tr>{% endfor %}</tbody></table></div>
+    <div class="card overflow-x-auto"><table class="kd-table"><thead><tr><th>Data</th><th>Operação / embalagem</th><th>Depósito</th><th>Documento</th><th>Lote</th><th>Cliente/destino</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Antes</th><th class="num">Depois</th><th class="num">Custo médio</th><th>Usuário / observação</th></tr></thead><tbody>{% for m in movimentos %}<tr><td>{{ m.data_movimentacao|date:'d/m/Y H:i' }}</td><td>{{ m.get_tipo_operacao_display }}{% if m.apresentacao_id %}<div class="text-xs text-gray-500">{{ m.apresentacao.descricao }}{% if m.quantidade_comercial %} · {{ m.quantidade_comercial|quantidade:3 }} {{ m.apresentacao.unidade.sigla }}{% endif %}</div>{% else %}<div class="text-xs text-gray-500">Unidade-base</div>{% endif %}</td><td>{{ m.deposito.nome }}</td><td>{{ m.documento_numero|default:m.get_documento_tipo_display }}</td><td>{% if m.lote_id %}{{ m.lote.numero_lote }}{% else %}—{% endif %}</td><td>{% if m.cliente_id %}{{ m.cliente }}{% elif m.filial_destino_id %}{{ m.filial_destino }}{% else %}—{% endif %}</td><td class="num kd-in">{% if m.eh_entrada %}{{ m.quantidade_kardex|quantidade:3 }}{% else %}—{% endif %}</td><td class="num kd-out">{% if m.eh_saida %}{{ m.quantidade_kardex|quantidade:3 }}{% else %}—{% endif %}</td><td class="num">{{ m.quantidade_anterior|quantidade:3 }}</td><td class="num"><strong>{{ m.quantidade_posterior|quantidade:3 }}</strong></td><td class="num">{{ m.custo_medio_display }}</td><td>{{ m.usuario.nome|default:'—' }}{% if m.observacao %}<div class="text-xs text-gray-500">{{ m.observacao }}</div>{% endif %}</td></tr>{% empty %}<tr><td colspan="12">Nenhuma movimentação no período.</td></tr>{% endfor %}</tbody></table></div>
     <p class="text-xs text-gray-500">* Os saldos “antes/depois” pertencem ao depósito de cada movimento. Quando o produto usa mais de um depósito, eles não representam o saldo consolidado da filial.</p>
   {% else %}
     <div class="card p-8 text-center"><strong>Selecione um produto para abrir sua ficha de movimentação.</strong><p class="text-sm text-gray-500 mt-2">Digite parte do código ou nome e escolha uma opção da lista.</p></div>
@@ -38,6 +39,7 @@
   const box = document.getElementById('kardex-search-box');
   const search = document.getElementById('kardex-search');
   const productId = document.getElementById('kardex-product-id');
+  const presentationId = document.getElementById('kardex-presentation-id');
   const results = document.getElementById('kardex-results');
   let options = [], activeIndex = -1, timer = null, requestNumber = 0;
 
@@ -45,7 +47,8 @@
   function closeResults() { results.hidden = true; search.setAttribute('aria-expanded', 'false'); activeIndex = -1; }
   function paintActive() { results.querySelectorAll('[role="option"]').forEach((node, index) => node.classList.toggle('is-active', index === activeIndex)); }
   function selectProduct(product) {
-    productId.value = product.id;
+    productId.value = product.produto_id;
+    presentationId.value = product.apresentacao_id || '';
     search.value = `${product.codigo ? product.codigo + ' · ' : ''}${product.label}`;
     closeResults();
     form.submit();
@@ -56,7 +59,8 @@
     list.forEach((product, index) => {
       const button = document.createElement('button');
       button.type = 'button'; button.className = 'kd-option'; button.setAttribute('role', 'option');
-      button.innerHTML = `<span><strong>${escapeHtml(product.label)}</strong><small>${escapeHtml(product.codigo || 'Sem código')}${product.codigo_barras ? ' · EAN ' + escapeHtml(product.codigo_barras) : ''}</small></span><small>${escapeHtml(product.unidade || '')}</small>`;
+      const tipo = product.tipo === 'apresentacao' ? `Embalagem · 1 ${product.unidade} = ${Number(product.fator_conversao).toLocaleString('pt-BR', {maximumFractionDigits: 3})} ${product.unidade_base}` : 'Produto-base';
+      button.innerHTML = `<span><strong>${escapeHtml(product.label)}</strong><small>${escapeHtml(product.codigo || 'Sem código')}${product.codigo_barras ? ' · EAN ' + escapeHtml(product.codigo_barras) : ''}</small></span><small>${escapeHtml(tipo)}</small>`;
       button.addEventListener('click', () => selectProduct(product));
       button.addEventListener('mouseenter', () => { activeIndex = index; paintActive(); });
       results.appendChild(button);
@@ -76,7 +80,7 @@
       if (currentRequest === requestNumber) { options = []; results.innerHTML = '<div class="p-4 text-sm text-red-600">Não foi possível buscar os produtos.</div>'; results.hidden = false; }
     }
   }
-  search.addEventListener('input', () => { productId.value = ''; clearTimeout(timer); timer = setTimeout(runSearch, 220); });
+  search.addEventListener('input', () => { productId.value = ''; presentationId.value = ''; clearTimeout(timer); timer = setTimeout(runSearch, 220); });
   search.addEventListener('focus', () => { if (search.value.trim() && !productId.value) runSearch(); });
   search.addEventListener('keydown', event => {
     if (event.key === 'ArrowDown') { event.preventDefault(); activeIndex = Math.min(activeIndex + 1, options.length - 1); paintActive(); }

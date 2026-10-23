@@ -987,14 +987,37 @@ class KardexRelatorioView(PermissaoRequiredMixin, View):
         if data_fim < data_inicio:
             data_inicio, data_fim = data_fim, data_inicio
         produto_id = (request.GET.get('produto') or '').strip()
+        apresentacao_id = (request.GET.get('apresentacao') or '').strip()
         busca = (request.GET.get('q') or '').strip()
         produtos = Produto.objects.for_filial(request.filial_ativa).filter(ativo=True)
         produto = produtos.filter(pk=produto_id).first() if produto_id.isdigit() else None
+        apresentacao = None
         if produto is None and busca:
             produto = produtos.filter(
                 Q(codigo__iexact=busca) | Q(codigo_barras__iexact=busca) |
                 Q(descricao__icontains=busca)
             ).order_by('descricao').first()
+        if produto is None and busca:
+            apresentacao = (
+                ProdutoApresentacao.objects.for_filial_com_fallback_legado(request.filial_ativa)
+                .filter(produto__in=produtos)
+                .filter(
+                    Q(codigo__iexact=busca) |
+                    Q(codigos_barras__ean__iexact=busca, codigos_barras__ativo=True) |
+                    Q(descricao__icontains=busca)
+                )
+                .select_related('produto', 'unidade')
+                .order_by('produto__descricao', 'fator_conversao')
+                .first()
+            )
+            produto = apresentacao.produto if apresentacao else None
+        if produto and apresentacao_id.isdigit():
+            apresentacao = (
+                ProdutoApresentacao.objects.for_filial_com_fallback_legado(request.filial_ativa)
+                .filter(pk=apresentacao_id, produto=produto)
+                .select_related('unidade')
+                .first()
+            )
 
         movimentos = MovimentacaoEstoque.objects.none()
         resumo = None
@@ -1002,7 +1025,10 @@ class KardexRelatorioView(PermissaoRequiredMixin, View):
             movimentos = (
                 MovimentacaoEstoque.objects.for_filial(request.filial_ativa)
                 .filter(produto=produto, data_movimentacao__date__range=(data_inicio, data_fim))
-                .select_related('deposito', 'lote', 'usuario', 'cliente', 'filial_destino')
+                .select_related(
+                    'deposito', 'lote', 'usuario', 'cliente', 'filial_destino',
+                    'apresentacao', 'apresentacao__unidade',
+                )
                 .order_by('data_movimentacao', 'pk')
             )
             lista = list(movimentos)
@@ -1024,6 +1050,7 @@ class KardexRelatorioView(PermissaoRequiredMixin, View):
 
         return render(request, self.template_name, {
             'title': 'Kardex / Auditoria de Produto', 'produto': produto,
+            'apresentacao': apresentacao,
             'data_inicio': data_inicio, 'data_fim': data_fim, 'busca': busca,
             'movimentos': movimentos, 'resumo': resumo,
         })
@@ -1041,16 +1068,26 @@ class KardexProdutoSearchJsonView(PermissaoRequiredMixin, View):
             return JsonResponse({'results': []})
 
         produtos = Produto.objects.for_filial(request.filial_ativa).filter(ativo=True)
+        apresentacoes = (
+            ProdutoApresentacao.objects.for_filial_com_fallback_legado(request.filial_ativa)
+            .filter(produto__in=produtos)
+        )
+        apresentacoes_encontradas = apresentacoes
         for termo in normalize_search_text(busca).split():
-            filtro = (
+            filtro_produto = (
                 Q(descricao__icontains=termo) | Q(codigo__icontains=termo) |
                 Q(codigo_barras__icontains=termo)
             )
             if termo.isdigit():
-                filtro |= Q(pk=int(termo))
-            produtos = produtos.filter(filtro)
+                filtro_produto |= Q(pk=int(termo))
+            produtos = produtos.filter(filtro_produto)
+            apresentacoes_encontradas = apresentacoes_encontradas.filter(
+                Q(produto__descricao__icontains=termo) | Q(produto__codigo__icontains=termo) |
+                Q(descricao__icontains=termo) | Q(codigo__icontains=termo) |
+                Q(codigos_barras__ean__icontains=termo, codigos_barras__ativo=True)
+            )
 
-        ids = ranked_search_ids(
+        ids_produto = ranked_search_ids(
             produtos.values('pk', 'descricao', 'codigo', 'codigo_barras'),
             busca,
             name_fields=('descricao',),
@@ -1058,21 +1095,51 @@ class KardexProdutoSearchJsonView(PermissaoRequiredMixin, View):
             limit=20,
             single_char_prefix=True,
         )
+        ids_apresentacao = list(
+            apresentacoes_encontradas.order_by('produto_id')
+            .values_list('produto_id', flat=True).distinct()[:20]
+        )
+        ids = list(dict.fromkeys([*ids_produto, *ids_apresentacao]))[:20]
         por_id = {
             produto.pk: produto
-            for produto in produtos.filter(pk__in=ids).select_related('unidade_medida')
+            for produto in Produto.objects.for_filial(request.filial_ativa)
+            .filter(pk__in=ids, ativo=True).select_related('unidade_medida')
         }
-        return JsonResponse({'results': [
-            {
-                'id': produto.pk,
-                'label': produto.descricao,
-                'codigo': produto.codigo or '',
-                'codigo_barras': produto.codigo_barras or '',
-                'unidade': produto.unidade_medida.sigla if produto.unidade_medida_id else '',
-            }
-            for produto_id in ids
-            if (produto := por_id.get(produto_id)) is not None
-        ]})
+        apresentacoes_por_produto = {}
+        for item in (
+            apresentacoes.filter(produto_id__in=ids)
+            .select_related('unidade').prefetch_related('codigos_barras')
+            .order_by('produto_id', 'fator_conversao', 'descricao')
+        ):
+            apresentacoes_por_produto.setdefault(item.produto_id, []).append(item)
+
+        resultados = []
+        for produto_id in ids:
+            produto = por_id.get(produto_id)
+            if produto is None:
+                continue
+            unidade_base = produto.unidade_medida.sigla if produto.unidade_medida_id else ''
+            resultados.append({
+                'key': f'produto:{produto.pk}', 'tipo': 'produto',
+                'produto_id': produto.pk, 'apresentacao_id': None,
+                'label': produto.descricao, 'codigo': produto.codigo or '',
+                'codigo_barras': produto.codigo_barras or '', 'unidade': unidade_base,
+                'fator_conversao': 1,
+            })
+            for item in apresentacoes_por_produto.get(produto.pk, []):
+                codigo_barras = next(
+                    (codigo.ean for codigo in item.codigos_barras.all() if codigo.ativo),
+                    '',
+                )
+                resultados.append({
+                    'key': f'apresentacao:{item.pk}', 'tipo': 'apresentacao',
+                    'produto_id': produto.pk, 'apresentacao_id': item.pk,
+                    'label': f'{produto.descricao} — {item.descricao}',
+                    'codigo': item.codigo or '', 'codigo_barras': codigo_barras,
+                    'unidade': item.unidade.sigla, 'unidade_base': unidade_base,
+                    'fator_conversao': float(item.fator_conversao),
+                })
+        return JsonResponse({'results': resultados[:60]})
 
 
 class EstoqueInlineEditView(PermissaoRequiredMixin, View):
