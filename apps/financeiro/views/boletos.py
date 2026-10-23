@@ -1,5 +1,6 @@
 """Operação de remessa e retorno de boletos."""
 from datetime import timedelta
+from urllib.parse import quote
 
 from django.contrib import messages
 from django.db import transaction
@@ -12,6 +13,7 @@ from django.views import View
 
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.tenant_public_link_service import TenantPublicLinkService
 from apps.core.tenant_context import get_current_database_alias
 from apps.financeiro.constants.enums import StatusContaReceber, TipoFormaPagamento
 from apps.financeiro.models import (
@@ -21,7 +23,7 @@ from apps.financeiro.services.boleto_pdf import gerar_pdf_boleto, validar_pdf_bo
 from apps.financeiro.services.cnab_cobranca import RemessaCobrancaService, RetornoCNABService
 from apps.whatsapp_agent.cobranca_service import agendar_cobrancas_manuais
 from apps.whatsapp_agent.models import EnvioCobrancaWhatsApp
-from apps.whatsapp_agent.notifications import configuracao_whatsapp_conectada
+from apps.whatsapp_agent.notifications import configuracao_whatsapp_conectada, numero_whatsapp
 
 
 def _boleto_pdf_disponivel(boleto):
@@ -260,6 +262,41 @@ class BoletoPdfInternoView(PermissaoRequiredMixin, View):
         resposta["Content-Disposition"] = f'attachment; filename="boleto-{boleto.seu_numero or boleto.pk}.pdf"'
         resposta["Cache-Control"] = "private, no-store"
         return resposta
+
+
+class BoletoWhatsAppCompartilharView(PermissaoRequiredMixin, View):
+    permissao_modulo = "financeiro"
+    permissao_acao = "ver"
+
+    def get(self, request, pk):
+        boleto = get_object_or_404(
+            Boleto.objects.select_related("conta_bancaria", "conta_receber__cliente"),
+            pk=pk,
+            filial=request.filial_ativa,
+        )
+        disponivel, motivo = validar_pdf_boleto(boleto)
+        if not disponivel:
+            return HttpResponseBadRequest(motivo)
+
+        TenantPublicLinkService.register(
+            kind="boleto",
+            token=str(boleto.public_token),
+            db_alias=get_current_database_alias(),
+        )
+        link_publico = request.build_absolute_uri(reverse(
+            "boleto_publico:visualizar", args=[boleto.public_token],
+        ))
+        cliente = boleto.conta_receber.cliente
+        telefone = numero_whatsapp(cliente.celular or cliente.telefone)
+        valor = f"{boleto.valor:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+        documento = boleto.seu_numero or boleto.conta_receber.documento_numero or boleto.pk
+        mensagem = (
+            f"Olá, {cliente.razao_social}. Segue a segunda via do boleto {documento}, "
+            f"no valor de R$ {valor}, com vencimento em {boleto.data_vencimento:%d/%m/%Y}.\n\n"
+            f"Acesse e baixe o PDF: {link_publico}"
+        )
+        destino = f"https://wa.me/{telefone}" if telefone else "https://wa.me/"
+        return redirect(f"{destino}?text={quote(mensagem)}")
 
 
 class RetornoDetalheView(PermissaoRequiredMixin, View):

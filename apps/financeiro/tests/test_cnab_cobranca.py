@@ -311,6 +311,12 @@ class CnabCobrancaTests(TestCase):
         self.assertContains(tela, reverse("financeiro:boleto_pdf", args=[boleto.pk]))
         self.assertContains(tela, "Baixar PDF")
         self.assertNotContains(tela, "Copiar link")
+        self.assertContains(tela, "Enviar boleto pelo WhatsApp")
+        compartilhar = self.client.get(reverse(
+            "financeiro:boleto_whatsapp_compartilhar", args=[boleto.pk],
+        ))
+        self.assertEqual(compartilhar.status_code, 302)
+        self.assertTrue(compartilhar["Location"].startswith("https://wa.me/?text="))
 
         pdf = self.client.get(reverse("financeiro:boleto_pdf", args=[boleto.pk]))
         self.assertEqual(pdf.status_code, 200)
@@ -320,7 +326,8 @@ class CnabCobrancaTests(TestCase):
     def test_boleto_banco_nordeste_oferece_pdf_multibanco(self):
         conta = self.conta_banco_nordeste()
         self.cliente.cpf_cnpj = "52998224725"
-        self.cliente.save(update_fields=["cpf_cnpj"])
+        self.cliente.celular = "(84) 99988-7766"
+        self.cliente.save(update_fields=["cpf_cnpj", "celular"])
         titulo = self.criar_titulo(Decimal("127.50"))
         titulo.conta_bancaria = conta
         titulo.save(update_fields=["conta_bancaria"])
@@ -335,6 +342,14 @@ class CnabCobrancaTests(TestCase):
         })
         self.assertContains(tela, reverse("financeiro:boleto_pdf", args=[boleto.pk]))
         self.assertContains(tela, "Baixar PDF")
+        self.assertContains(tela, "Enviar boleto pelo WhatsApp")
+        compartilhar = self.client.get(reverse(
+            "financeiro:boleto_whatsapp_compartilhar", args=[boleto.pk],
+        ))
+        self.assertEqual(compartilhar.status_code, 302)
+        self.assertTrue(compartilhar["Location"].startswith("https://wa.me/5584999887766?text="))
+        self.assertIn("Acesse%20e%20baixe%20o%20PDF", compartilhar["Location"])
+        self.assertTrue(TenantPublicLink.objects.filter(tipo="boleto").exists())
 
         pdf = self.client.get(reverse("financeiro:boleto_pdf", args=[boleto.pk]))
         self.assertEqual(pdf.status_code, 200)
