@@ -1,11 +1,90 @@
-{% extends "_base.html" %}{% load erp_extras %}{% block title %}Kardex / Auditoria de Produto{% endblock %}{% block page_title %}Kardex / Auditoria de Produto{% endblock %}
+{% extends "_base.html" %}
+{% load erp_extras %}
+{% block title %}Kardex / Auditoria de Produto{% endblock %}
+{% block page_title %}Kardex / Auditoria de Produto{% endblock %}
 {% block content %}
-<style>.kd-table{width:100%;border-collapse:collapse;font-size:12px}.kd-table th,.kd-table td{padding:9px 10px;border-top:1px solid #e5e7eb}.tema-escuro .kd-table th,.tema-escuro .kd-table td{border-color:#303036}.kd-table th{text-align:left;color:#64748b}.kd-table .num{text-align:right;white-space:nowrap}.kd-in{color:#15803d}.kd-out{color:#b91c1c}@media print{nav,aside,header,.no-print{display:none!important}.app-content-frame{max-width:none!important}}</style>
-<div class="space-y-5"><div class="flex justify-between gap-3"><div><h2 class="text-2xl font-semibold">Kardex / Auditoria de Produto</h2><p class="text-sm text-gray-500">Histórico cronológico que explica cada alteração do saldo e do custo.</p></div>{% if produto %}<button onclick="window.print()" class="btn-secondary no-print">Imprimir</button>{% endif %}</div>
-<form class="card p-4 flex flex-wrap gap-3 items-end no-print"><label class="text-xs" style="min-width:280px">Produto<input class="form-input block mt-1 w-full" name="q" value="{{ busca }}" placeholder="Código, código de barras ou descrição"></label><label class="text-xs">De<input class="form-input block mt-1" type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}"></label><label class="text-xs">Até<input class="form-input block mt-1" type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}"></label><button class="btn-primary">Consultar</button></form>
-{% if produto %}<div class="card p-4"><strong>{{ produto.codigo }} · {{ produto.descricao }}</strong><div class="text-xs text-gray-500 mt-1">{{ produto.unidade_medida.sigla }}{% if produto.codigo_barras %} · EAN {{ produto.codigo_barras }}{% endif %}</div></div>
-<div class="grid gap-3 sm:grid-cols-5"><div class="card p-3"><small>Movimentos</small><div class="text-xl font-semibold">{{ resumo.movimentos }}</div></div><div class="card p-3"><small>Saldo inicial*</small><div class="text-xl font-semibold">{{ resumo.saldo_inicial|quantidade:3 }}</div></div><div class="card p-3"><small>Entradas</small><div class="text-xl font-semibold kd-in">{{ resumo.entradas|quantidade:3 }}</div></div><div class="card p-3"><small>Saídas</small><div class="text-xl font-semibold kd-out">{{ resumo.saidas|quantidade:3 }}</div></div><div class="card p-3"><small>Saldo após último movimento*</small><div class="text-xl font-semibold">{{ resumo.saldo_final|quantidade:3 }}</div></div></div>
-<div class="card overflow-x-auto"><table class="kd-table"><thead><tr><th>Data</th><th>Operação</th><th>Depósito</th><th>Documento</th><th>Lote</th><th>Cliente/destino</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Antes</th><th class="num">Depois</th><th class="num">Custo médio</th><th>Usuário / observação</th></tr></thead><tbody>{% for m in movimentos %}<tr><td>{{ m.data_movimentacao|date:'d/m/Y H:i' }}</td><td>{{ m.get_tipo_operacao_display }}</td><td>{{ m.deposito.nome }}</td><td>{{ m.documento_numero|default:m.get_documento_tipo_display }}</td><td>{% if m.lote_id %}{{ m.lote.numero_lote }}{% else %}—{% endif %}</td><td>{% if m.cliente_id %}{{ m.cliente }}{% elif m.filial_destino_id %}{{ m.filial_destino }}{% else %}—{% endif %}</td><td class="num kd-in">{% if m.eh_entrada %}{{ m.quantidade_kardex|quantidade:3 }}{% else %}—{% endif %}</td><td class="num kd-out">{% if m.eh_saida %}{{ m.quantidade_kardex|quantidade:3 }}{% else %}—{% endif %}</td><td class="num">{{ m.quantidade_anterior|quantidade:3 }}</td><td class="num"><strong>{{ m.quantidade_posterior|quantidade:3 }}</strong></td><td class="num">{{ m.custo_medio_display }}</td><td>{{ m.usuario.nome|default:'—' }}{% if m.observacao %}<div class="text-xs text-gray-500">{{ m.observacao }}</div>{% endif %}</td></tr>{% empty %}<tr><td colspan="12">Nenhuma movimentação no período.</td></tr>{% endfor %}</tbody></table></div>
-<p class="text-xs text-gray-500">* Os saldos “antes/depois” pertencem ao depósito de cada movimento. Quando o produto usa mais de um depósito, eles não representam o saldo consolidado da filial.</p>
-{% else %}<div class="card p-8 text-center"><strong>Informe um produto para abrir sua ficha de movimentação.</strong><p class="text-sm text-gray-500 mt-2">A busca aceita código interno, código de barras ou parte da descrição.</p></div>{% endif %}</div>
+<style>
+  .kd-search{position:relative;min-width:320px;flex:1 1 360px}.kd-results{position:absolute;z-index:30;top:100%;left:0;right:0;max-height:300px;overflow:auto;margin-top:4px;border:1px solid #dbe2ea;border-radius:10px;background:#fff;box-shadow:0 14px 32px rgba(15,23,42,.16)}.tema-escuro .kd-results{border-color:#3f3f46;background:#18181b}.kd-results[hidden]{display:none}.kd-option{display:flex;width:100%;justify-content:space-between;gap:16px;padding:11px 13px;text-align:left;border-bottom:1px solid #eef2f7}.tema-escuro .kd-option{border-color:#303036}.kd-option:hover,.kd-option.is-active{background:#eff6ff}.tema-escuro .kd-option:hover,.tema-escuro .kd-option.is-active{background:#27272a}.kd-option small{display:block;color:#64748b;margin-top:2px}.kd-table{width:100%;border-collapse:collapse;font-size:12px}.kd-table th,.kd-table td{padding:9px 10px;border-top:1px solid #e5e7eb}.tema-escuro .kd-table th,.tema-escuro .kd-table td{border-color:#303036}.kd-table th{text-align:left;color:#64748b}.kd-table .num{text-align:right;white-space:nowrap}.kd-in{color:#15803d}.kd-out{color:#b91c1c}@media print{nav,aside,header,.no-print{display:none!important}.app-content-frame{max-width:none!important}}
+</style>
+<div class="space-y-5">
+  <div class="flex justify-between gap-3">
+    <div><h2 class="text-2xl font-semibold">Kardex / Auditoria de Produto</h2><p class="text-sm text-gray-500">Histórico cronológico que explica cada alteração do saldo e do custo.</p></div>
+    {% if produto %}<button onclick="window.print()" class="btn-secondary no-print">Imprimir</button>{% endif %}
+  </div>
+  <form id="kardex-form" class="card p-4 flex flex-wrap gap-3 items-end no-print">
+    <div id="kardex-search-box" class="kd-search">
+      <label class="text-xs" for="kardex-search">Produto</label>
+      <input id="kardex-search" class="form-input block mt-1 w-full" name="q" value="{% if produto %}{{ produto.codigo }} · {{ produto.descricao }}{% else %}{{ busca }}{% endif %}" placeholder="Digite o código, código de barras ou nome" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="kardex-results" aria-expanded="false">
+      <input id="kardex-product-id" type="hidden" name="produto" value="{{ produto.pk|default:'' }}">
+      <div id="kardex-results" class="kd-results" role="listbox" hidden></div>
+    </div>
+    <label class="text-xs">De<input class="form-input block mt-1" type="date" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}"></label>
+    <label class="text-xs">Até<input class="form-input block mt-1" type="date" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}"></label>
+    <button class="btn-primary">Consultar</button>
+  </form>
+  {% if produto %}
+    <div class="card p-4"><strong>{{ produto.codigo }} · {{ produto.descricao }}</strong><div class="text-xs text-gray-500 mt-1">{{ produto.unidade_medida.sigla }}{% if produto.codigo_barras %} · EAN {{ produto.codigo_barras }}{% endif %}</div></div>
+    <div class="grid gap-3 sm:grid-cols-5"><div class="card p-3"><small>Movimentos</small><div class="text-xl font-semibold">{{ resumo.movimentos }}</div></div><div class="card p-3"><small>Saldo inicial*</small><div class="text-xl font-semibold">{{ resumo.saldo_inicial|quantidade:3 }}</div></div><div class="card p-3"><small>Entradas</small><div class="text-xl font-semibold kd-in">{{ resumo.entradas|quantidade:3 }}</div></div><div class="card p-3"><small>Saídas</small><div class="text-xl font-semibold kd-out">{{ resumo.saidas|quantidade:3 }}</div></div><div class="card p-3"><small>Saldo após último movimento*</small><div class="text-xl font-semibold">{{ resumo.saldo_final|quantidade:3 }}</div></div></div>
+    <div class="card overflow-x-auto"><table class="kd-table"><thead><tr><th>Data</th><th>Operação</th><th>Depósito</th><th>Documento</th><th>Lote</th><th>Cliente/destino</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Antes</th><th class="num">Depois</th><th class="num">Custo médio</th><th>Usuário / observação</th></tr></thead><tbody>{% for m in movimentos %}<tr><td>{{ m.data_movimentacao|date:'d/m/Y H:i' }}</td><td>{{ m.get_tipo_operacao_display }}</td><td>{{ m.deposito.nome }}</td><td>{{ m.documento_numero|default:m.get_documento_tipo_display }}</td><td>{% if m.lote_id %}{{ m.lote.numero_lote }}{% else %}—{% endif %}</td><td>{% if m.cliente_id %}{{ m.cliente }}{% elif m.filial_destino_id %}{{ m.filial_destino }}{% else %}—{% endif %}</td><td class="num kd-in">{% if m.eh_entrada %}{{ m.quantidade_kardex|quantidade:3 }}{% else %}—{% endif %}</td><td class="num kd-out">{% if m.eh_saida %}{{ m.quantidade_kardex|quantidade:3 }}{% else %}—{% endif %}</td><td class="num">{{ m.quantidade_anterior|quantidade:3 }}</td><td class="num"><strong>{{ m.quantidade_posterior|quantidade:3 }}</strong></td><td class="num">{{ m.custo_medio_display }}</td><td>{{ m.usuario.nome|default:'—' }}{% if m.observacao %}<div class="text-xs text-gray-500">{{ m.observacao }}</div>{% endif %}</td></tr>{% empty %}<tr><td colspan="12">Nenhuma movimentação no período.</td></tr>{% endfor %}</tbody></table></div>
+    <p class="text-xs text-gray-500">* Os saldos “antes/depois” pertencem ao depósito de cada movimento. Quando o produto usa mais de um depósito, eles não representam o saldo consolidado da filial.</p>
+  {% else %}
+    <div class="card p-8 text-center"><strong>Selecione um produto para abrir sua ficha de movimentação.</strong><p class="text-sm text-gray-500 mt-2">Digite parte do código ou nome e escolha uma opção da lista.</p></div>
+  {% endif %}
+</div>
+<script>
+(() => {
+  const endpoint = '{% url "estoque:relatorio-kardex-produtos" %}';
+  const form = document.getElementById('kardex-form');
+  const box = document.getElementById('kardex-search-box');
+  const search = document.getElementById('kardex-search');
+  const productId = document.getElementById('kardex-product-id');
+  const results = document.getElementById('kardex-results');
+  let options = [], activeIndex = -1, timer = null, requestNumber = 0;
+
+  function escapeHtml(value) { const span = document.createElement('span'); span.textContent = value == null ? '' : String(value); return span.innerHTML; }
+  function closeResults() { results.hidden = true; search.setAttribute('aria-expanded', 'false'); activeIndex = -1; }
+  function paintActive() { results.querySelectorAll('[role="option"]').forEach((node, index) => node.classList.toggle('is-active', index === activeIndex)); }
+  function selectProduct(product) {
+    productId.value = product.id;
+    search.value = `${product.codigo ? product.codigo + ' · ' : ''}${product.label}`;
+    closeResults();
+    form.submit();
+  }
+  function render(list) {
+    options = list; activeIndex = -1; results.innerHTML = '';
+    if (!list.length) results.innerHTML = '<div class="p-4 text-sm text-gray-500">Nenhum produto encontrado.</div>';
+    list.forEach((product, index) => {
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'kd-option'; button.setAttribute('role', 'option');
+      button.innerHTML = `<span><strong>${escapeHtml(product.label)}</strong><small>${escapeHtml(product.codigo || 'Sem código')}${product.codigo_barras ? ' · EAN ' + escapeHtml(product.codigo_barras) : ''}</small></span><small>${escapeHtml(product.unidade || '')}</small>`;
+      button.addEventListener('click', () => selectProduct(product));
+      button.addEventListener('mouseenter', () => { activeIndex = index; paintActive(); });
+      results.appendChild(button);
+    });
+    results.hidden = false; search.setAttribute('aria-expanded', 'true');
+  }
+  async function runSearch() {
+    const query = search.value.trim();
+    if (!query) { options = []; closeResults(); return; }
+    const currentRequest = ++requestNumber;
+    try {
+      const response = await fetch(`${endpoint}?q=${encodeURIComponent(query)}`, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+      if (!response.ok) throw new Error('search_failed');
+      const payload = await response.json();
+      if (currentRequest === requestNumber) render(payload.results || []);
+    } catch (_) {
+      if (currentRequest === requestNumber) { options = []; results.innerHTML = '<div class="p-4 text-sm text-red-600">Não foi possível buscar os produtos.</div>'; results.hidden = false; }
+    }
+  }
+  search.addEventListener('input', () => { productId.value = ''; clearTimeout(timer); timer = setTimeout(runSearch, 220); });
+  search.addEventListener('focus', () => { if (search.value.trim() && !productId.value) runSearch(); });
+  search.addEventListener('keydown', event => {
+    if (event.key === 'ArrowDown') { event.preventDefault(); activeIndex = Math.min(activeIndex + 1, options.length - 1); paintActive(); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); activeIndex = Math.max(activeIndex - 1, 0); paintActive(); }
+    else if (event.key === 'Enter' && activeIndex >= 0 && options[activeIndex]) { event.preventDefault(); selectProduct(options[activeIndex]); }
+    else if (event.key === 'Escape') closeResults();
+  });
+  document.addEventListener('click', event => { if (!box.contains(event.target)) closeResults(); });
+})();
+</script>
 {% endblock %}

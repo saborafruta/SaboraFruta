@@ -32,7 +32,9 @@ from apps.core.services.auditoria import auditoria_para_objeto, auditoria_relaci
 from apps.core.services.exceptions import DomainError
 from apps.core.services.permissions import PERMISSION_DENIED_MESSAGE, PermissaoRequiredMixin
 from apps.core.services.request_scope import empresa_operacional
-from apps.core.services.search import filter_queryset_by_terms
+from apps.core.services.search import (
+    filter_queryset_by_terms, normalize_search_text, ranked_search_ids,
+)
 from apps.estoque.forms import (
     AjusteEstoqueForm, MovimentacaoManualForm, TransferenciaMultiplaForm,
 )
@@ -1025,6 +1027,52 @@ class KardexRelatorioView(PermissaoRequiredMixin, View):
             'data_inicio': data_inicio, 'data_fim': data_fim, 'busca': busca,
             'movimentos': movimentos, 'resumo': resumo,
         })
+
+
+class KardexProdutoSearchJsonView(PermissaoRequiredMixin, View):
+    """Autocomplete de produtos acessível pela permissão do relatório."""
+
+    permissao_modulo = 'relatorios'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        busca = (request.GET.get('q') or '').strip()
+        if not busca:
+            return JsonResponse({'results': []})
+
+        produtos = Produto.objects.for_filial(request.filial_ativa).filter(ativo=True)
+        for termo in normalize_search_text(busca).split():
+            filtro = (
+                Q(descricao__icontains=termo) | Q(codigo__icontains=termo) |
+                Q(codigo_barras__icontains=termo)
+            )
+            if termo.isdigit():
+                filtro |= Q(pk=int(termo))
+            produtos = produtos.filter(filtro)
+
+        ids = ranked_search_ids(
+            produtos.values('pk', 'descricao', 'codigo', 'codigo_barras'),
+            busca,
+            name_fields=('descricao',),
+            code_fields=('codigo', 'codigo_barras'),
+            limit=20,
+            single_char_prefix=True,
+        )
+        por_id = {
+            produto.pk: produto
+            for produto in produtos.filter(pk__in=ids).select_related('unidade_medida')
+        }
+        return JsonResponse({'results': [
+            {
+                'id': produto.pk,
+                'label': produto.descricao,
+                'codigo': produto.codigo or '',
+                'codigo_barras': produto.codigo_barras or '',
+                'unidade': produto.unidade_medida.sigla if produto.unidade_medida_id else '',
+            }
+            for produto_id in ids
+            if (produto := por_id.get(produto_id)) is not None
+        ]})
 
 
 class EstoqueInlineEditView(PermissaoRequiredMixin, View):
