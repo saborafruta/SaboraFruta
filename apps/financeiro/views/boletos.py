@@ -17,7 +17,7 @@ from apps.financeiro.constants.enums import StatusContaReceber, TipoFormaPagamen
 from apps.financeiro.models import (
     Boleto, ContaBancaria, ContaReceber, RemessaBancaria, RetornoBancario,
 )
-from apps.financeiro.services.boleto_bradesco import gerar_pdf_boleto
+from apps.financeiro.services.boleto_bradesco import dados_bancarios_bradesco, gerar_pdf_boleto
 from apps.financeiro.services.cnab_cobranca import RemessaCobrancaService, RetornoCNABService
 from apps.whatsapp_agent.cobranca_service import agendar_cobrancas_manuais
 from apps.whatsapp_agent.models import EnvioCobrancaWhatsApp
@@ -25,14 +25,19 @@ from apps.whatsapp_agent.notifications import configuracao_whatsapp_conectada
 
 
 def _boleto_pdf_disponivel(boleto):
-    """Indica se o boleto possui os dados exigidos pelo gerador de PDF atual."""
+    """Valida se o PDF pode ser calculado, inclusive para boletos Bradesco antigos."""
     if not boleto:
         return False
-    return bool(
-        boleto.codigo_barras
-        and boleto.linha_digitavel
-        and str(boleto.conta_bancaria.banco_codigo).zfill(3)[-3:] == "237"
-    )
+    try:
+        dados_bancarios_bradesco(
+            conta=boleto.conta_bancaria,
+            nosso_numero=boleto.nosso_numero,
+            vencimento=boleto.data_vencimento,
+            valor=boleto.valor,
+        )
+    except DomainError:
+        return False
+    return True
 
 
 class BoletoComunicacaoListView(PermissaoRequiredMixin, View):
@@ -83,9 +88,11 @@ class BoletoComunicacaoListView(PermissaoRequiredMixin, View):
                 titulo.boleto_ativo = boletos.get(titulo.pk)
                 if titulo.boleto_ativo:
                     titulo.boleto_ativo.pdf_disponivel = _boleto_pdf_disponivel(titulo.boleto_ativo)
-                    titulo.boleto_ativo.link_publico = request.build_absolute_uri(reverse(
-                        "boleto_publico:visualizar", args=[titulo.boleto_ativo.public_token],
-                    ))
+                    titulo.boleto_ativo.link_publico = ""
+                    if titulo.boleto_ativo.url_boleto:
+                        titulo.boleto_ativo.link_publico = request.build_absolute_uri(reverse(
+                            "boleto_publico:visualizar", args=[titulo.boleto_ativo.public_token],
+                        ))
         remessas = list(
             RemessaBancaria.objects.filter(filial=filial)
             .select_related("conta_bancaria", "usuario")

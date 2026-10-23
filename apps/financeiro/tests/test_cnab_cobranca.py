@@ -280,6 +280,33 @@ class CnabCobrancaTests(TestCase):
         self.assertEqual(pdf_publico.status_code, 200)
         self.assertTrue(pdf_publico.content.startswith(b"%PDF-"))
 
+    def test_boleto_bradesco_antigo_sem_codigo_salvo_oferece_pdf_interno(self):
+        conta = self.conta_bradesco()
+        conta.layout_cobranca = ContaBancaria.LayoutCobranca.CNAB240
+        conta.save(update_fields=["layout_cobranca"])
+        titulo = self.criar_titulo()
+        titulo.conta_bancaria = conta
+        titulo.save(update_fields=["conta_bancaria"])
+
+        remessa = RemessaCNAB240Service.gerar(
+            conta_bancaria=conta, titulos=[titulo.pk], usuario=self.usuario,
+        )
+        boleto = Boleto.objects.get(remessa=remessa)
+        self.assertEqual(boleto.codigo_barras, "")
+        self.assertEqual(boleto.url_boleto, "")
+
+        tela = self.client.get(reverse("financeiro:boleto_comunicacao"), {
+            "conta_bancaria": conta.pk,
+        })
+        self.assertContains(tela, reverse("financeiro:boleto_pdf", args=[boleto.pk]))
+        self.assertContains(tela, "Baixar PDF")
+        self.assertNotContains(tela, "Copiar link")
+
+        pdf = self.client.get(reverse("financeiro:boleto_pdf", args=[boleto.pk]))
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf["Content-Type"], "application/pdf")
+        self.assertTrue(pdf.content.startswith(b"%PDF-"))
+
     def test_importa_retorno_cnab400_bradesco_e_liquida_titulo(self):
         conta = self.conta_bradesco()
         titulo = self.criar_titulo()
