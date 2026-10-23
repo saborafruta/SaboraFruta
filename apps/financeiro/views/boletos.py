@@ -17,7 +17,7 @@ from apps.financeiro.constants.enums import StatusContaReceber, TipoFormaPagamen
 from apps.financeiro.models import (
     Boleto, ContaBancaria, ContaReceber, RemessaBancaria, RetornoBancario,
 )
-from apps.financeiro.services.boleto_bradesco import dados_bancarios_bradesco, gerar_pdf_boleto
+from apps.financeiro.services.boleto_pdf import gerar_pdf_boleto, validar_pdf_boleto
 from apps.financeiro.services.cnab_cobranca import RemessaCobrancaService, RetornoCNABService
 from apps.whatsapp_agent.cobranca_service import agendar_cobrancas_manuais
 from apps.whatsapp_agent.models import EnvioCobrancaWhatsApp
@@ -25,19 +25,8 @@ from apps.whatsapp_agent.notifications import configuracao_whatsapp_conectada
 
 
 def _boleto_pdf_disponivel(boleto):
-    """Valida se o PDF pode ser calculado, inclusive para boletos Bradesco antigos."""
-    if not boleto:
-        return False
-    try:
-        dados_bancarios_bradesco(
-            conta=boleto.conta_bancaria,
-            nosso_numero=boleto.nosso_numero,
-            vencimento=boleto.data_vencimento,
-            valor=boleto.valor,
-        )
-    except DomainError:
-        return False
-    return True
+    disponivel, _motivo = validar_pdf_boleto(boleto)
+    return disponivel
 
 
 class BoletoComunicacaoListView(PermissaoRequiredMixin, View):
@@ -87,7 +76,9 @@ class BoletoComunicacaoListView(PermissaoRequiredMixin, View):
             for titulo in titulos:
                 titulo.boleto_ativo = boletos.get(titulo.pk)
                 if titulo.boleto_ativo:
-                    titulo.boleto_ativo.pdf_disponivel = _boleto_pdf_disponivel(titulo.boleto_ativo)
+                    disponivel, motivo = validar_pdf_boleto(titulo.boleto_ativo)
+                    titulo.boleto_ativo.pdf_disponivel = disponivel
+                    titulo.boleto_ativo.pdf_indisponivel_motivo = motivo
                     titulo.boleto_ativo.link_publico = ""
                     if titulo.boleto_ativo.url_boleto:
                         titulo.boleto_ativo.link_publico = request.build_absolute_uri(reverse(

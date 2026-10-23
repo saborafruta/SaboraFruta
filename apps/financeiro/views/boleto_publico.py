@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_GET
 
 from apps.financeiro.models import Boleto
-from apps.financeiro.services.boleto_bradesco import gerar_pdf_boleto
+from apps.financeiro.services.boleto_pdf import gerar_pdf_boleto
 
 
 def _privado(response):

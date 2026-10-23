@@ -147,6 +147,15 @@ class CnabCobrancaTests(TestCase):
             layout_cobranca=ContaBancaria.LayoutCobranca.CNAB400,
         )
 
+    def conta_banco_nordeste(self):
+        return ContaBancaria.objects.create(
+            filial=self.filial, descricao="Cobrança BNB", banco_codigo="004",
+            banco_nome="Banco do Nordeste", agencia="0123", agencia_digito="0",
+            conta="0012345", conta_digito="6", convenio="1234567",
+            codigo_transmissao="1234567", carteira_cobranca="21",
+            layout_cobranca=ContaBancaria.LayoutCobranca.CNAB240,
+        )
+
     def setUp(self):
         self.client.force_login(self.usuario)
         session = self.client.session
@@ -301,6 +310,30 @@ class CnabCobrancaTests(TestCase):
         self.assertContains(tela, reverse("financeiro:boleto_pdf", args=[boleto.pk]))
         self.assertContains(tela, "Baixar PDF")
         self.assertNotContains(tela, "Copiar link")
+
+        pdf = self.client.get(reverse("financeiro:boleto_pdf", args=[boleto.pk]))
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf["Content-Type"], "application/pdf")
+        self.assertTrue(pdf.content.startswith(b"%PDF-"))
+
+    def test_boleto_banco_nordeste_oferece_pdf_multibanco(self):
+        conta = self.conta_banco_nordeste()
+        self.cliente.cpf_cnpj = "52998224725"
+        self.cliente.save(update_fields=["cpf_cnpj"])
+        titulo = self.criar_titulo(Decimal("127.50"))
+        titulo.conta_bancaria = conta
+        titulo.save(update_fields=["conta_bancaria"])
+
+        remessa = RemessaCNAB240Service.gerar(
+            conta_bancaria=conta, titulos=[titulo.pk], usuario=self.usuario,
+        )
+        boleto = Boleto.objects.get(remessa=remessa)
+
+        tela = self.client.get(reverse("financeiro:boleto_comunicacao"), {
+            "conta_bancaria": conta.pk,
+        })
+        self.assertContains(tela, reverse("financeiro:boleto_pdf", args=[boleto.pk]))
+        self.assertContains(tela, "Baixar PDF")
 
         pdf = self.client.get(reverse("financeiro:boleto_pdf", args=[boleto.pk]))
         self.assertEqual(pdf.status_code, 200)
