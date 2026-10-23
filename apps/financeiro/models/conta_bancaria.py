@@ -32,7 +32,14 @@ class ContaBancaria(TimestampedModel, ActiveModel):
     certificado_mtls_path = models.CharField(max_length=500, blank=True)
     ambiente_api = models.CharField(max_length=20, default="sandbox")
     carteira_cobranca = models.CharField(max_length=4, blank=True)
-    convenio = models.CharField(max_length=10, blank=True)
+    convenio = models.CharField(max_length=20, blank=True)
+    digito_convenio = models.CharField(max_length=2, blank=True)
+    variacao_carteira = models.CharField(max_length=2, blank=True)
+    posto_cobranca = models.CharField(max_length=2, blank=True)
+    byte_identificacao = models.CharField(max_length=1, blank=True)
+    portfolio_cobranca = models.CharField(max_length=3, blank=True)
+    incremento_cobranca = models.CharField(max_length=3, blank=True)
+    numero_contrato_cobranca = models.CharField(max_length=7, blank=True)
     nosso_numero_atual = models.BigIntegerField(default=1)
     layout_cobranca = models.CharField(
         max_length=10, choices=LayoutCobranca.choices, default=LayoutCobranca.CNAB240,

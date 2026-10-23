@@ -225,6 +225,19 @@
             <label class="block text-xs font-medium">Convênio {{ conta_form.convenio|add_class:"form-input mt-1 w-full" }}</label>
             <label class="block text-xs font-medium">Código de transmissão {{ conta_form.codigo_transmissao|add_class:"form-input mt-1 w-full" }}</label>
           </div>
+          <details class="mt-3 rounded-md border border-slate-200 p-3 dark:border-slate-700">
+            <summary class="cursor-pointer text-xs font-semibold">Campos específicos do banco</summary>
+            <p class="mt-2 text-[11px] text-gray-500">Preencha somente os campos indicados pelo seu banco para a carteira contratada.</p>
+            <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label class="block text-xs font-medium">Dígito do convênio <span class="font-normal text-gray-500">(Banrisul)</span>{{ conta_form.digito_convenio|add_class:"form-input mt-1 w-full" }}</label>
+              <label class="block text-xs font-medium">Variação <span class="font-normal text-gray-500">(Banestes/Sicoob)</span>{{ conta_form.variacao_carteira|add_class:"form-input mt-1 w-full" }}</label>
+              <label class="block text-xs font-medium">Posto <span class="font-normal text-gray-500">(Sicredi)</span>{{ conta_form.posto_cobranca|add_class:"form-input mt-1 w-full" }}</label>
+              <label class="block text-xs font-medium">Byte de identificação <span class="font-normal text-gray-500">(Sicredi)</span>{{ conta_form.byte_identificacao|add_class:"form-input mt-1 w-full" }}</label>
+              <label class="block text-xs font-medium">Portfólio <span class="font-normal text-gray-500">(Citibank)</span>{{ conta_form.portfolio_cobranca|add_class:"form-input mt-1 w-full" }}</label>
+              <label class="block text-xs font-medium">Incremento <span class="font-normal text-gray-500">(BRB)</span>{{ conta_form.incremento_cobranca|add_class:"form-input mt-1 w-full" }}</label>
+              <label class="block text-xs font-medium">Número do contrato <span class="font-normal text-gray-500">(Sicoob)</span>{{ conta_form.numero_contrato_cobranca|add_class:"form-input mt-1 w-full" }}</label>
+            </div>
+          </details>
           <label class="mt-3 inline-flex items-center gap-2 text-sm">{{ conta_form.remessa_homologada }} Layout homologado pelo banco</label>
         </div>
         <label class="inline-flex items-center gap-2 text-sm">{{ conta_form.ativo }} Conta ativa</label>

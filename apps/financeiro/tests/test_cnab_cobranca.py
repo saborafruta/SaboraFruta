@@ -17,6 +17,7 @@ from apps.financeiro.models import (
 from apps.financeiro.services.boleto_bradesco import (
     digito_nosso_numero, fator_vencimento,
 )
+from apps.financeiro.services.boleto_pdf import gerar_pdf_boleto, validar_pdf_boleto
 from apps.financeiro.services.cnab_cobranca import (
     RemessaCNAB240Service, RemessaCNAB400BradescoService, RetornoCNABService,
 )
@@ -339,6 +340,64 @@ class CnabCobrancaTests(TestCase):
         self.assertEqual(pdf.status_code, 200)
         self.assertEqual(pdf["Content-Type"], "application/pdf")
         self.assertTrue(pdf.content.startswith(b"%PDF-"))
+
+    def test_gera_pdf_para_todos_os_bancos_suportados(self):
+        self.cliente.cpf_cnpj = "52998224725"
+        self.cliente.save(update_fields=["cpf_cnpj"])
+        configuracoes = [
+            ("001", "Banco do Brasil", {"agencia": "1234", "conta": "56789", "convenio": "1234567", "carteira_cobranca": "18"}, "123"),
+            ("004", "Banco do Nordeste", {"agencia": "0016", "conta": "0001193", "conta_digito": "2", "carteira_cobranca": "21"}, "0000053"),
+            ("021", "Banestes", {"agencia": "0274", "conta": "0009206981", "conta_digito": "9", "carteira_cobranca": "11", "variacao_carteira": "2"}, "90002720"),
+            ("033", "Santander", {"convenio": "3300123", "carteira_cobranca": "101"}, "1234567"),
+            ("041", "Banrisul", {"agencia": "1102", "conta": "12345678", "convenio": "9000150", "digito_convenio": "46", "carteira_cobranca": "2"}, "22832563"),
+            ("070", "BRB", {"agencia": "082", "conta": "0000528", "incremento_cobranca": "100", "carteira_cobranca": "2"}, "000403"),
+            ("077", "Inter", {"agencia": "0001", "conta": "123456", "convenio": "1234567", "carteira_cobranca": "110"}, "0004309540"),
+            ("085", "Ailos", {"agencia": "0001", "conta": "1234567", "convenio": "123456", "carteira_cobranca": "01"}, "12345678"),
+            ("097", "CrediSIS", {"agencia": "0001", "conta": "0000002", "convenio": "000527", "carteira_cobranca": "18"}, "000001"),
+            ("104", "Caixa", {"agencia": "1234", "convenio": "123456", "carteira_cobranca": "14"}, "123"),
+            ("136", "Unicred", {"agencia": "1234", "conta": "123456789", "conta_digito": "1", "carteira_cobranca": "21"}, "12345"),
+            ("237", "Bradesco", {"agencia": "1234", "agencia_digito": "0", "conta": "1234567", "conta_digito": "8", "carteira_cobranca": "06"}, "00000000002"),
+            ("336", "C6", {"agencia": "0001", "conta": "1234567", "convenio": "123456789012", "carteira_cobranca": "20"}, "1234567890"),
+            ("341", "Itaú", {"agencia": "0057", "conta": "12345", "carteira_cobranca": "109"}, "12345678"),
+            ("399", "HSBC", {"agencia": "4321", "conta": "1122334", "carteira_cobranca": "CNR"}, "12345678"),
+            ("422", "Safra", {"agencia": "0811", "agencia_digito": "1", "conta": "00053678", "conta_digito": "8", "carteira_cobranca": "2"}, "12345678"),
+            ("745", "Citibank", {"agencia": "0123", "conta": "1234567", "portfolio_cobranca": "172", "convenio": "0006247107", "carteira_cobranca": "3"}, "01099994022"),
+            ("748", "Sicredi", {"agencia": "0165", "conta": "00623", "posto_cobranca": "05", "convenio": "00623", "byte_identificacao": "2", "carteira_cobranca": "3"}, "12345"),
+            ("756", "Sicoob", {"agencia": "3007", "conta": "12345678", "convenio": "229385", "variacao_carteira": "01", "carteira_cobranca": "1"}, "246"),
+        ]
+
+        for codigo, nome, dados_conta, nosso_numero in configuracoes:
+            with self.subTest(banco=codigo):
+                conta = ContaBancaria.objects.create(
+                    filial=self.filial,
+                    descricao=f"Cobrança {nome}",
+                    banco_codigo=codigo,
+                    banco_nome=nome,
+                    **dados_conta,
+                )
+                titulo = self.criar_titulo(Decimal("127.50"))
+                titulo.conta_bancaria = conta
+                titulo.documento_numero = f"DOC-{codigo}"
+                titulo.data_emissao = date(2026, 7, 23)
+                titulo.data_vencimento = date(2026, 8, 15)
+                titulo.save(update_fields=[
+                    "conta_bancaria", "documento_numero", "data_emissao", "data_vencimento",
+                ])
+                boleto = Boleto.objects.create(
+                    conta_receber=titulo,
+                    conta_bancaria=conta,
+                    filial=self.filial,
+                    nosso_numero=nosso_numero,
+                    seu_numero=f"DOC-{codigo}",
+                    carteira=conta.carteira_cobranca,
+                    data_emissao=titulo.data_emissao,
+                    data_vencimento=titulo.data_vencimento,
+                    valor=titulo.valor_final,
+                )
+
+                disponivel, motivo = validar_pdf_boleto(boleto)
+                self.assertTrue(disponivel, motivo)
+                self.assertTrue(gerar_pdf_boleto(boleto).startswith(b"%PDF-"))
 
     def test_importa_retorno_cnab400_bradesco_e_liquida_titulo(self):
         conta = self.conta_bradesco()

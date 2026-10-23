@@ -58,6 +58,13 @@ def _montar_boleto_multibanco(boleto, *, incluir_logo=True):
             instrucoes=[linha for linha in (boleto.instrucoes or "").splitlines() if linha.strip()],
             digito_agencia=conta.agencia_digito,
             digito_conta=conta.conta_digito,
+            digito_convenio=conta.digito_convenio,
+            variacao=conta.variacao_carteira,
+            posto=conta.posto_cobranca,
+            byte_idt=conta.byte_identificacao,
+            portfolio=conta.portfolio_cobranca,
+            incremento=conta.incremento_cobranca,
+            numero_contrato=conta.numero_contrato_cobranca,
             logo=logo_do_banco(codigo) if incluir_logo else None,
         )
     except PyCobrancaError as exc:
