@@ -1,3 +1,4 @@
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -5,6 +6,7 @@ from django.test import SimpleTestCase
 
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.estoque.services.transferencia_nfe import (
+    _ItemTransfAdapter,
     _validar_cancelamento_sem_mdfe_ativo,
     construir_payload_transferencia,
 )
@@ -12,6 +14,22 @@ from apps.logistica.models import MDFe
 
 
 class TransferenciaNFePayloadTests(SimpleTestCase):
+    def test_adapter_fornece_snapshot_comercial_esperado_pelo_montador_fiscal(self):
+        produto = SimpleNamespace(
+            unidade_medida=SimpleNamespace(sigla="KG"),
+            unidade_medida_id=1,
+            descricao_pdv="MANGA",
+            descricao="MANGA",
+        )
+
+        item = _ItemTransfAdapter(produto, Decimal("2"), Decimal("5.50"))
+
+        self.assertEqual(item.apresentacao_fator_conversao, Decimal("1"))
+        self.assertEqual(item.quantidade_comercial, Decimal("2"))
+        self.assertEqual(item.apresentacao_unidade_snapshot, None)
+        self.assertEqual(item.apresentacao_codigo_barras, None)
+        self.assertEqual(item.apresentacao_descricao_snapshot, None)
+
     @patch("apps.estoque.services.transferencia_nfe._validar_regras_mei")
     @patch("apps.estoque.services.transferencia_nfe._montar_item_fiscal")
     def test_payload_inclui_identificacao_e_endereco_do_destinatario(

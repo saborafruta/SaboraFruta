@@ -47,6 +47,15 @@ class _ItemTransfAdapter:
         self.valor_unitario = valor_unitario
         self.desconto_valor = Decimal("0")
         self.acrescimo_valor = Decimal("0")
+        # `_montar_item_fiscal` também é usado por itens de venda, que guardam
+        # um snapshot da apresentação comercial. Transferências usam sempre
+        # a unidade base do produto, então preenchemos a mesma interface com
+        # valores equivalentes a um produto sem apresentação alternativa.
+        self.apresentacao_fator_conversao = Decimal("1")
+        self.quantidade_comercial = quantidade
+        self.apresentacao_unidade_snapshot = None
+        self.apresentacao_codigo_barras = None
+        self.apresentacao_descricao_snapshot = None
         unidade = produto.unidade_medida.sigla if produto.unidade_medida_id else "UN"
         descricao = (produto.descricao_pdv or produto.descricao or "").upper()
         if unidade.upper() == "G" and re.search(r"\b\d+\s*G\b", descricao):
