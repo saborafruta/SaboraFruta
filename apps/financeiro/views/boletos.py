@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -22,6 +22,17 @@ from apps.financeiro.services.cnab_cobranca import RemessaCobrancaService, Retor
 from apps.whatsapp_agent.cobranca_service import agendar_cobrancas_manuais
 from apps.whatsapp_agent.models import EnvioCobrancaWhatsApp
 from apps.whatsapp_agent.notifications import configuracao_whatsapp_conectada
+
+
+def _boleto_pdf_disponivel(boleto):
+    """Indica se o boleto possui os dados exigidos pelo gerador de PDF atual."""
+    if not boleto:
+        return False
+    return bool(
+        boleto.codigo_barras
+        and boleto.linha_digitavel
+        and str(boleto.conta_bancaria.banco_codigo).zfill(3)[-3:] == "237"
+    )
 
 
 class BoletoComunicacaoListView(PermissaoRequiredMixin, View):
@@ -71,14 +82,24 @@ class BoletoComunicacaoListView(PermissaoRequiredMixin, View):
             for titulo in titulos:
                 titulo.boleto_ativo = boletos.get(titulo.pk)
                 if titulo.boleto_ativo:
-                    titulo.boleto_ativo.pdf_disponivel = bool(
-                        titulo.boleto_ativo.codigo_barras
-                        and titulo.boleto_ativo.linha_digitavel
-                        and str(titulo.boleto_ativo.conta_bancaria.banco_codigo).zfill(3)[-3:] == "237"
-                    )
+                    titulo.boleto_ativo.pdf_disponivel = _boleto_pdf_disponivel(titulo.boleto_ativo)
                     titulo.boleto_ativo.link_publico = request.build_absolute_uri(reverse(
                         "boleto_publico:visualizar", args=[titulo.boleto_ativo.public_token],
                     ))
+        remessas = list(
+            RemessaBancaria.objects.filter(filial=filial)
+            .select_related("conta_bancaria", "usuario")
+            .prefetch_related(Prefetch(
+                "boleto_set",
+                queryset=Boleto.objects.select_related("conta_bancaria", "conta_receber").order_by("pk"),
+                to_attr="boletos_historico",
+            ))
+            .order_by("-created_at")[:20]
+        )
+        for remessa in remessas:
+            remessa.boletos_pdf = [
+                boleto for boleto in remessa.boletos_historico if _boleto_pdf_disponivel(boleto)
+            ]
         alias = get_current_database_alias()
         configuracao_whatsapp = configuracao_whatsapp_conectada(filial, alias)
         return render(request, self.template_name, {
@@ -92,7 +113,7 @@ class BoletoComunicacaoListView(PermissaoRequiredMixin, View):
             "envios_cobranca": EnvioCobrancaWhatsApp.objects.using('default').filter(
                 tenant_alias=alias, filial_cnpj=filial.cnpj,
             ).order_by('-created_at')[:50],
-            "remessas": RemessaBancaria.objects.filter(filial=filial).select_related("conta_bancaria", "usuario").order_by("-created_at")[:20],
+            "remessas": remessas,
             "retornos": RetornoBancario.objects.filter(filial=filial).select_related("conta_bancaria", "usuario").order_by("-created_at")[:20],
         })
 
@@ -251,7 +272,12 @@ class RetornoDetalheView(PermissaoRequiredMixin, View):
         retorno = get_object_or_404(
             RetornoBancario.objects.select_related("conta_bancaria"), pk=pk, filial=request.filial_ativa,
         )
+        itens = list(retorno.itens.select_related(
+            "boleto", "boleto__conta_bancaria", "boleto__conta_receber", "boleto__conta_receber__cliente",
+        ))
+        for item in itens:
+            item.pdf_disponivel = _boleto_pdf_disponivel(item.boleto)
         return render(request, "financeiro/boletos/retorno_detalhe.html", {
             "title": f"Retorno {retorno.arquivo_nome}", "retorno": retorno,
-            "itens": retorno.itens.select_related("boleto", "boleto__conta_receber", "boleto__conta_receber__cliente"),
+            "itens": itens,
         })

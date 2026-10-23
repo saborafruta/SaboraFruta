@@ -268,6 +268,11 @@ class CnabCobrancaTests(TestCase):
         self.assertEqual(pdf.status_code, 200)
         self.assertEqual(pdf["Content-Type"], "application/pdf")
         self.assertTrue(pdf.content.startswith(b"%PDF-"))
+        historico = self.client.get(reverse("financeiro:boleto_comunicacao"), {
+            "aba": "historico", "conta_bancaria": conta.pk,
+        })
+        self.assertContains(historico, reverse("financeiro:boleto_pdf", args=[boleto.pk]))
+        self.assertContains(historico, "Baixar CNAB")
         self.client.logout()
         publico = self.client.get(reverse("boleto_publico:visualizar", args=[boleto.public_token]))
         self.assertEqual(publico.status_code, 200)
@@ -296,3 +301,6 @@ class CnabCobrancaTests(TestCase):
         self.assertEqual(retorno.layout, "cnab400")
         self.assertEqual(titulo.status, "pago")
         self.assertEqual(boleto.status, "pago")
+        detalhe = self.client.get(reverse("financeiro:boleto_retorno_detalhe", args=[retorno.pk]))
+        self.assertContains(detalhe, reverse("financeiro:boleto_pdf", args=[boleto.pk]))
+        self.assertContains(detalhe, "Baixar PDF")
