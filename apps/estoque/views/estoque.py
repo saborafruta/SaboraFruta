@@ -971,6 +971,62 @@ class EstoqueKardexProdutoView(PermissaoRequiredMixin, View):
         })
 
 
+class KardexRelatorioView(PermissaoRequiredMixin, View):
+    """Ficha cronológica auditável do produto, por depósito e documento."""
+
+    permissao_modulo = 'relatorios'
+    permissao_acao = 'ver'
+    template_name = 'estoque/relatorios/kardex.html'
+
+    def get(self, request):
+        hoje = timezone.localdate()
+        data_fim = parse_date(request.GET.get('data_fim', '')) or hoje
+        data_inicio = parse_date(request.GET.get('data_inicio', '')) or (data_fim - timedelta(days=89))
+        if data_fim < data_inicio:
+            data_inicio, data_fim = data_fim, data_inicio
+        produto_id = (request.GET.get('produto') or '').strip()
+        busca = (request.GET.get('q') or '').strip()
+        produtos = Produto.objects.for_filial(request.filial_ativa).filter(ativo=True)
+        produto = produtos.filter(pk=produto_id).first() if produto_id.isdigit() else None
+        if produto is None and busca:
+            produto = produtos.filter(
+                Q(codigo__iexact=busca) | Q(codigo_barras__iexact=busca) |
+                Q(descricao__icontains=busca)
+            ).order_by('descricao').first()
+
+        movimentos = MovimentacaoEstoque.objects.none()
+        resumo = None
+        if produto:
+            movimentos = (
+                MovimentacaoEstoque.objects.for_filial(request.filial_ativa)
+                .filter(produto=produto, data_movimentacao__date__range=(data_inicio, data_fim))
+                .select_related('deposito', 'lote', 'usuario', 'cliente', 'filial_destino')
+                .order_by('data_movimentacao', 'pk')
+            )
+            lista = list(movimentos)
+            for mov in lista:
+                delta = (mov.quantidade_posterior or Decimal('0')) - (mov.quantidade_anterior or Decimal('0'))
+                mov.eh_saida = delta < 0
+                mov.eh_entrada = delta > 0
+                mov.quantidade_kardex = abs(delta)
+                for chave, valor in EstoqueKardexProdutoView._dados_custo_movimento(mov).items():
+                    setattr(mov, chave, valor)
+            total_entradas = sum((m.quantidade_kardex for m in lista if m.eh_entrada), Decimal('0'))
+            total_saidas = sum((m.quantidade_kardex for m in lista if m.eh_saida), Decimal('0'))
+            resumo = {
+                'movimentos': len(lista), 'entradas': total_entradas, 'saidas': total_saidas,
+                'saldo_inicial': lista[0].quantidade_anterior if lista else Decimal('0'),
+                'saldo_final': lista[-1].quantidade_posterior if lista else Decimal('0'),
+            }
+            movimentos = lista
+
+        return render(request, self.template_name, {
+            'title': 'Kardex / Auditoria de Produto', 'produto': produto,
+            'data_inicio': data_inicio, 'data_fim': data_fim, 'busca': busca,
+            'movimentos': movimentos, 'resumo': resumo,
+        })
+
+
 class EstoqueInlineEditView(PermissaoRequiredMixin, View):
     """Edicao rapida dos campos principais do produto na listagem de estoque."""
 

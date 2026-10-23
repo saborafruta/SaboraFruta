@@ -16,8 +16,10 @@ class FluxoCaixaView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         hoje = timezone.localdate()
-        data_inicio = parse_date(request.GET.get('data_inicio', '')) or hoje.replace(day=1)
+        data_inicio = parse_date(request.GET.get('data_inicio', '')) or hoje.replace(month=1, day=1)
         data_fim = parse_date(request.GET.get('data_fim', '')) or hoje
+        if data_fim < data_inicio:
+            data_inicio, data_fim = data_fim, data_inicio
 
         resumo = FluxoCaixaService.apurar(request.filial_ativa, data_inicio, data_fim)
 
@@ -26,4 +28,5 @@ class FluxoCaixaView(PermissaoRequiredMixin, View):
             'data_inicio': data_inicio,
             'data_fim': data_fim,
             'resumo': resumo,
+            'visao': request.GET.get('visao') if request.GET.get('visao') in {'diaria', 'mensal'} else 'mensal',
         })

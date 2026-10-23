@@ -57,6 +57,16 @@ class RelatoriosHubView(PermissaoRequiredMixin, TemplateView):
                 'titulo': 'Financeiro',
                 'itens': [
                     {
+                        'nome': 'Fluxo de Caixa — Previsto × Realizado',
+                        'descricao': 'Entradas, saídas e saldo comparados dia a dia ou mês a mês.',
+                        'url_name': 'financeiro:fluxo_caixa',
+                    },
+                    {
+                        'nome': 'DRE Comparativa Mensal',
+                        'descricao': 'Receitas, despesas, resultado e margem dos últimos seis meses lado a lado.',
+                        'url_name': 'financeiro:dre',
+                    },
+                    {
                         'nome': 'Contas Recebidas',
                         'descricao': 'Histórico das baixas realizadas, filtrado por cliente e data do recebimento.',
                         'url_name': 'financeiro:receber_recebidas_relatorio',
@@ -87,9 +97,29 @@ class RelatoriosHubView(PermissaoRequiredMixin, TemplateView):
                         'url_name': 'estoque:produtos-sem-giro',
                     },
                     {
+                        'nome': 'Kardex / Auditoria de Produto',
+                        'descricao': 'Ficha cronológica de entradas, saídas, saldos, documentos, lotes e custo médio.',
+                        'url_name': 'estoque:relatorio-kardex',
+                    },
+                    {
                         'nome': 'Dashboard Operacional',
                         'descricao': 'OPs em andamento, alertas de vencimento e rendimento por linha de produção.',
                         'url_name': 'analytics:operacional',
+                    },
+                ],
+            },
+            {
+                'titulo': 'Análise Comercial',
+                'itens': [
+                    {
+                        'nome': 'Margem e Rentabilidade',
+                        'descricao': 'Faturamento, custo e margem por produto e por cliente.',
+                        'url_name': 'analytics:rentabilidade',
+                    },
+                    {
+                        'nome': 'Cancelamentos, Devoluções e Descontos',
+                        'descricao': 'Ocorrências do PDV e dos pedidos, com motivo, responsável e valor.',
+                        'url_name': 'analytics:ocorrencias-comerciais',
                     },
                 ],
             },

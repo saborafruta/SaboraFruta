@@ -29,6 +29,9 @@ from apps.financeiro.models.receber_pagar import ContaReceber
 from apps.pdv.models import PagamentoVendaPDV, VendaPDV
 from apps.moda.models import PedidoProducao
 from apps.moda.services.financeiro import FinanceiroPedidoService
+from apps.analytics.services.relatorios_comerciais import (
+    OcorrenciasComerciaisService, RentabilidadeService,
+)
 
 
 ORDENACAO_HISTORICO_VENDAS = {
@@ -42,6 +45,32 @@ ORDENACAO_HISTORICO_VENDAS = {
     'fiscal': 'documento_fiscal__status',
     'nnf': 'documento_fiscal__numero',
 }
+
+
+def _periodo_relatorio(request, dias_padrao=90):
+    hoje = timezone.localdate()
+    fim = parse_date(request.GET.get('data_fim', '')) or hoje
+    inicio = parse_date(request.GET.get('data_inicio', '')) or (fim - timedelta(days=dias_padrao - 1))
+    return (fim, inicio) if fim < inicio else (inicio, fim)
+
+
+@requer_permissao('relatorios', 'ver')
+def rentabilidade(request):
+    inicio, fim = _periodo_relatorio(request)
+    return render(request, 'analytics/rentabilidade.html', {
+        'title': 'Margem e Rentabilidade', 'data_inicio': inicio, 'data_fim': fim,
+        **RentabilidadeService.apurar(request.filial_ativa, inicio, fim),
+    })
+
+
+@requer_permissao('relatorios', 'ver')
+def ocorrencias_comerciais(request):
+    inicio, fim = _periodo_relatorio(request)
+    return render(request, 'analytics/ocorrencias_comerciais.html', {
+        'title': 'Cancelamentos, Devoluções e Descontos',
+        'data_inicio': inicio, 'data_fim': fim,
+        **OcorrenciasComerciaisService.apurar(request.filial_ativa, inicio, fim),
+    })
 
 
 @requer_permissao('relatorios', 'ver')

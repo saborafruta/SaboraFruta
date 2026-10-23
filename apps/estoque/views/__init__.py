@@ -1,5 +1,6 @@
 from .estoque import (
     EntradaCustoEstoqueListView, EstoqueInlineEditView, EstoqueKardexProdutoView, EstoqueListView,
+    KardexRelatorioView,
     MovimentacaoManualView, AjusteEstoqueView, AjusteRapidoEstoqueAtualizarView,
     AjusteRapidoEstoqueLimparView, AjusteRapidoEstoqueLogView, AjusteRapidoEstoquePdfView,
     AjusteRapidoEstoqueView,
@@ -37,6 +38,7 @@ from .outras_movimentacoes import (
 
 __all__ = [
     'EntradaCustoEstoqueListView', 'EstoqueInlineEditView', 'EstoqueKardexProdutoView', 'EstoqueListView',
+    'KardexRelatorioView',
     'MovimentacaoManualView', 'AjusteEstoqueView', 'AjusteRapidoEstoqueAtualizarView',
     'AjusteRapidoEstoqueLimparView', 'AjusteRapidoEstoqueLogView', 'AjusteRapidoEstoquePdfView',
     'AjusteRapidoEstoqueView',

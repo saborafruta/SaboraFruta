@@ -134,6 +134,9 @@ class DREService:
             'linhas': linhas,
             'resumo': cls._resumo(mes, anterior, ano),
             'grafico_despesas': cls._grafico_despesas(mes['despesa']),
+            'comparativo_mensal': cls._comparativo_mensal(
+                filial, competencia, regime, arvore, quantidade=6,
+            ),
             'categorias_disponiveis': {
                 tipo: sum(
                     1 for conta in arvore['contas'].values()
@@ -148,6 +151,51 @@ class DREService:
             'vazio': not any(
                 b['linhas'] or b['sem_categoria']['tem'] for b in linhas
             ),
+        }
+
+    @classmethod
+    def _comparativo_mensal(cls, filial, competencia, regime, arvore, quantidade=6):
+        """DRE horizontal por grupo para os últimos meses."""
+        referencias = [competencia]
+        for _ in range(max(1, quantidade) - 1):
+            referencias.append(mes_anterior(referencias[-1]))
+        referencias.reverse()
+        periodos = [
+            cls._periodo(
+                filial, referencia, proximo_mes(referencia), regime, arvore,
+            )
+            for referencia in referencias
+        ]
+        blocos = []
+        for chave, rotulo in (('receita', 'Receitas'), ('despesa', 'Despesas')):
+            grupos_ids = set().union(*(periodo[chave]['grupos'] for periodo in periodos))
+            linhas = []
+            for grupo_id in grupos_ids:
+                referencia = next(
+                    periodo[chave]['grupos'][grupo_id]
+                    for periodo in periodos if grupo_id in periodo[chave]['grupos']
+                )
+                linhas.append({
+                    'codigo': referencia['codigo'], 'descricao': referencia['descricao'],
+                    'valores': [
+                        periodo[chave]['grupos'].get(grupo_id, {}).get('total', ZERO)
+                        for periodo in periodos
+                    ],
+                })
+            linhas.sort(key=lambda linha: (linha['codigo'] or '', linha['descricao']))
+            sem_categoria = [periodo[chave]['sem_categoria'] for periodo in periodos]
+            blocos.append({
+                'chave': chave, 'rotulo': rotulo, 'linhas': linhas,
+                'sem_categoria': sem_categoria,
+                'tem_sem_categoria': any(sem_categoria),
+                'totais': [periodo[chave]['total'] for periodo in periodos],
+            })
+        receitas = [periodo['receita']['total'] for periodo in periodos]
+        despesas = [periodo['despesa']['total'] for periodo in periodos]
+        resultados = [receita - despesa for receita, despesa in zip(receitas, despesas)]
+        return {
+            'colunas': referencias, 'blocos': blocos, 'resultados': resultados,
+            'margens': [_pct(resultado, receita) for resultado, receita in zip(resultados, receitas)],
         }
 
     # ── A árvore de categorias ───────────────────────────────────────────

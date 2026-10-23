@@ -14,6 +14,7 @@ urlpatterns = [
     path('relatorios/filiais/', views.RelatorioEstoqueFiliaisView.as_view(), name='relatorio-filiais'),
     path('relatorios/localizacoes/', views.RelatorioEstoqueLocalizacaoView.as_view(), name='relatorio-localizacoes'),
     path('relatorios/produtos-sem-giro/', views.ProdutosSemGiroRelatorioView.as_view(), name='produtos-sem-giro'),
+    path('relatorios/kardex/', views.KardexRelatorioView.as_view(), name='relatorio-kardex'),
     path('reposicao/', views.ReposicaoListView.as_view(), name='reposicao-list'),
     path('sugestao-compras/', views.SugestaoComprasView.as_view(), name='sugestao-compras'),
     path('equilibrio/', views.EquilibrioEstoqueView.as_view(), name='equilibrio-estoque'),

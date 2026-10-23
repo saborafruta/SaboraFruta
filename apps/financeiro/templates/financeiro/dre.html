@@ -162,6 +162,26 @@
     </div>
   </div>
 
+  {# Comparação horizontal inspirada na leitura mês a mês do TOTVS. #}
+  <div class="dre-card" style="overflow-x:auto;">
+    <div style="padding:14px 14px 4px;">
+      <h3 class="font-semibold dre-forte">DRE comparativa — últimos 6 meses</h3>
+      <p class="text-xs dre-rotulo mt-1">Mesma filial e mesmo regime selecionado, lado a lado.</p>
+    </div>
+    <table class="dre-tabela">
+      <thead><tr><th class="nome">Grupo e categoria</th>{% for mes in comparativo_mensal.colunas %}<th class="valor">{{ mes|date:"M/y" }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for bloco in comparativo_mensal.blocos %}
+          <tr class="dre-total"><td class="nome dre-forte">{{ bloco.rotulo }}</td>{% for valor in bloco.totais %}<td class="valor">{{ valor|floatformat:2 }}</td>{% endfor %}</tr>
+          {% for linha in bloco.linhas %}<tr class="dre-linha"><td class="nome dre-rotulo">{{ linha.codigo }} · {{ linha.descricao }}</td>{% for valor in linha.valores %}<td class="valor">{{ valor|floatformat:2 }}</td>{% endfor %}</tr>{% endfor %}
+          {% if bloco.tem_sem_categoria %}<tr class="dre-linha"><td class="nome dre-rotulo">Sem categoria</td>{% for valor in bloco.sem_categoria %}<td class="valor">{{ valor|floatformat:2 }}</td>{% endfor %}</tr>{% endif %}
+        {% endfor %}
+        <tr class="dre-total"><td class="nome dre-forte">Resultado</td>{% for valor in comparativo_mensal.resultados %}<td class="valor {% if valor < 0 %}dre-negativo{% else %}dre-positivo{% endif %}">{{ valor|floatformat:2 }}</td>{% endfor %}</tr>
+        <tr class="dre-linha"><td class="nome dre-rotulo">Margem</td>{% for valor in comparativo_mensal.margens %}<td class="valor dre-rotulo">{% if valor is not None %}{{ valor }}%{% else %}—{% endif %}</td>{% endfor %}</tr>
+      </tbody>
+    </table>
+  </div>
+
   {% comment %}
     A REGRA MAIS IMPORTANTE DESTA TELA. Um DRE que descarta em silêncio o
     que não foi classificado fecha bonito e está errado — e o erro cresce
