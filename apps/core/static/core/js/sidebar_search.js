@@ -28,15 +28,49 @@
     return text || (anchor.getAttribute('title') || '').trim();
   }
 
+  function moduleRecordFor(button) {
+    var labelElement = button.querySelector('.sidebar-module-label');
+    var label = labelElement ? labelElement.textContent.replace(/\s+/g, ' ').trim() : '';
+    var sibling = button.nextElementSibling;
+
+    while (sibling && !sibling.matches('.sidebar-module-button')) {
+      if (sibling.matches('[data-sidebar-page-group]')) {
+        var firstAnchor = sibling.querySelector('a[href]');
+        var path = firstAnchor ? pathFor(firstAnchor) : '';
+        if (label && path) {
+          return {
+            path: path,
+            label: label,
+            search: normalize(label + ' ' + (button.getAttribute('data-sidebar-search-terms') || ''))
+          };
+        }
+        return null;
+      }
+      sibling = sibling.nextElementSibling;
+    }
+    return null;
+  }
+
   function recordsFor(nav) {
     var seen = new Set();
     var records = [];
+
+    Array.prototype.slice.call(nav.querySelectorAll('.sidebar-module-button')).forEach(function (button) {
+      var record = moduleRecordFor(button);
+      if (!record) return;
+      var key = record.path + '\n' + normalize(record.label);
+      if (seen.has(key)) return;
+      seen.add(key);
+      records.push(record);
+    });
+
     Array.prototype.slice.call(nav.querySelectorAll('a[href]')).forEach(function (anchor) {
       if (anchor.closest('[data-sidebar-search-results]') || anchor.closest('.sidebar-favorites-panel')) return;
       var path = pathFor(anchor);
       var label = labelFor(anchor);
-      if (!path || !label || seen.has(path)) return;
-      seen.add(path);
+      var key = path + '\n' + normalize(label);
+      if (!path || !label || seen.has(key)) return;
+      seen.add(key);
       var extraTerms = anchor.getAttribute('data-sidebar-search-terms') || '';
       records.push({
         path: path,

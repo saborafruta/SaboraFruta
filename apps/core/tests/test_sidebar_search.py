@@ -34,6 +34,33 @@ class SidebarSearchTemplateTests(SimpleTestCase):
         self.assertIn("logo.insertAdjacentElement('afterend', box)", script)
         self.assertIn("nav.addEventListener('scroll'", script)
         self.assertIn("classList.toggle('is-stuck'", script)
+        self.assertIn("nav.querySelectorAll('.sidebar-module-button')", script)
+        self.assertIn("sibling.matches('[data-sidebar-page-group]')", script)
+        self.assertIn("labelElement.textContent", script)
+
+    def test_titulos_dos_modulos_entram_na_busca_desktop_e_mobile(self):
+        raiz = Path(__file__).resolve().parents[1]
+        sidebar = (raiz / "templates" / "core" / "_sidebar.html").read_text(encoding="utf-8")
+        navegacao = (raiz / "templates" / "core" / "_sidebar_navigation.html").read_text(encoding="utf-8")
+        modulos = {
+            "cadastros": "Cadastros",
+            "operacoes": "Operações",
+            "forca_vendas": "Força de Vendas",
+            "financeiro": "Financeiro",
+            "logistica": "Logistica",
+            "avancado": "Avançado",
+            "food_service": "Food Service",
+            "moda": "Moda e Confecção",
+            "polpa": "Polpa de Frutas",
+        }
+
+        for template in (sidebar, navegacao):
+            self.assertIn("sidebar-module-button", template)
+            for chave, titulo in modulos.items():
+                self.assertIn(f'data-sidebar-page-group="{chave}"', template)
+                self.assertIn(titulo, template)
+
+        self.assertIn("?v=20261024-1", sidebar)
 
     def test_busca_sticky_tem_prateleira_e_foco_integrados(self):
         raiz = Path(__file__).resolve().parents[1]
@@ -66,7 +93,7 @@ class SidebarSearchTemplateTests(SimpleTestCase):
         self.assertIn('?v=20260917-5', sidebar)
         self.assertIn('core/js/sidebar_search.js', template)
         self.assertIn('sidebar_favorites.js', template)
-        self.assertIn('v=20261020-1', template)
+        self.assertIn('v=20261024-1', template)
 
     def test_boletos_aparecem_no_menu_e_aceitam_termos_de_pesquisa(self):
         raiz = Path(__file__).resolve().parents[1]
