@@ -80,8 +80,8 @@
       </div>
     </section>
 
-    <section class="mt-5 grid gap-4 xl:grid-cols-[minmax(330px,0.72fr)_minmax(0,1.45fr)]">
-      <aside class="selecao-card flex min-h-[570px] flex-col rounded-2xl border p-4"
+    <section class="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-8">
+      <aside class="selecao-card flex min-h-[570px] flex-col rounded-2xl border p-4 xl:col-span-3"
              :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#202024; border-color:#2f3542;'">
         <div>
           <h2 class="text-xl font-bold" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">Empresas</h2>
@@ -131,7 +131,7 @@
         {% endif %}
       </aside>
 
-      <section class="selecao-card flex min-h-[570px] min-w-0 flex-col rounded-2xl border p-4"
+      <section class="selecao-card flex min-h-[570px] min-w-0 flex-col rounded-2xl border p-4 xl:col-span-5"
                :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#202024; border-color:#2f3542;'">
         {% if empresa_selecionada %}
           <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -141,28 +141,30 @@
             </div>
           </div>
 
-          <div class="mt-4 grid gap-2 lg:grid-cols-[minmax(210px,1fr)_auto_auto_auto]">
-            <form method="get" class="contents">
+          <div class="mt-4 flex flex-col gap-2 lg:flex-row lg:items-center">
+            <form method="get" class="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row">
               <input type="hidden" name="empresa" value="{{ empresa_selecionada.pk }}">
               {% if busca_empresa %}<input type="hidden" name="empresa_busca" value="{{ busca_empresa }}">{% endif %}
               {% if somente_favoritas %}<input type="hidden" name="favoritas" value="1">{% endif %}
               <input type="search" name="filial_busca" value="{{ busca_filial }}"
-                     class="h-11 min-w-0 rounded-lg border px-4 text-sm outline-none focus:border-blue-500"
+                     class="h-11 min-w-0 flex-1 rounded-lg border px-4 text-sm outline-none focus:border-blue-500"
                      placeholder="Buscar filial ou cidade..."
                      :style="temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#0f172a;' : 'background:#18181b; border-color:#3f3f46; color:#f4f4f5;'">
-              <select name="ordenacao" onchange="this.form.submit()" class="h-11 rounded-lg border px-3 text-sm font-semibold outline-none"
+              <select name="ordenacao" onchange="this.form.submit()" class="h-11 rounded-lg border px-3 text-sm font-semibold outline-none sm:w-40"
                       :style="temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#0f172a;' : 'background:#18181b; border-color:#3f3f46; color:#f4f4f5;'">
                 <option value="nome" {% if ordenacao == 'nome' %}selected{% endif %}>Nome (A-Z)</option>
                 <option value="cidade" {% if ordenacao == 'cidade' %}selected{% endif %}>Cidade</option>
               </select>
             </form>
-            <a href="?empresa={{ empresa_selecionada.pk }}{% if busca_empresa %}&empresa_busca={{ busca_empresa|urlencode }}{% endif %}{% if busca_filial %}&filial_busca={{ busca_filial|urlencode }}{% endif %}&ordenacao={{ ordenacao }}{% if not somente_favoritas %}&favoritas=1{% endif %}"
-               class="grid h-11 w-11 place-items-center rounded-lg border" title="Somente favoritas"
-               :style="{% if somente_favoritas %}'background:#fffbeb; border-color:#f59e0b; color:#d97706;'{% else %}(temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#64748b;' : 'background:#18181b; border-color:#3f3f46; color:#a1a1aa;'){% endif %}">☆</a>
-            <button type="button" @click="modo = 'list'" class="grid h-11 w-11 place-items-center rounded-lg border"
-                    :style="modo === 'list' ? 'background:#2563eb; border-color:#2563eb; color:#fff;' : (temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#64748b;' : 'background:#18181b; border-color:#3f3f46; color:#a1a1aa;')">☰</button>
-            <button type="button" @click="modo = 'grid'" class="grid h-11 w-11 place-items-center rounded-lg border"
-                    :style="modo === 'grid' ? 'background:#2563eb; border-color:#2563eb; color:#fff;' : (temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#64748b;' : 'background:#18181b; border-color:#3f3f46; color:#a1a1aa;')">▦</button>
+            <div class="flex shrink-0 items-center gap-2">
+              <a href="?empresa={{ empresa_selecionada.pk }}{% if busca_empresa %}&empresa_busca={{ busca_empresa|urlencode }}{% endif %}{% if busca_filial %}&filial_busca={{ busca_filial|urlencode }}{% endif %}&ordenacao={{ ordenacao }}{% if not somente_favoritas %}&favoritas=1{% endif %}"
+                 class="grid h-11 w-11 place-items-center rounded-lg border" title="Somente favoritas"
+                 :style="{% if somente_favoritas %}'background:#fffbeb; border-color:#f59e0b; color:#d97706;'{% else %}(temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#64748b;' : 'background:#18181b; border-color:#3f3f46; color:#a1a1aa;'){% endif %}">☆</a>
+              <button type="button" @click="modo = 'list'" class="grid h-11 w-11 place-items-center rounded-lg border"
+                      :style="modo === 'list' ? 'background:#2563eb; border-color:#2563eb; color:#fff;' : (temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#64748b;' : 'background:#18181b; border-color:#3f3f46; color:#a1a1aa;')">☰</button>
+              <button type="button" @click="modo = 'grid'" class="grid h-11 w-11 place-items-center rounded-lg border"
+                      :style="modo === 'grid' ? 'background:#2563eb; border-color:#2563eb; color:#fff;' : (temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#64748b;' : 'background:#18181b; border-color:#3f3f46; color:#a1a1aa;')">▦</button>
+            </div>
           </div>
 
           <p x-show="erroFavorito" x-cloak x-text="erroFavorito" class="mt-3 text-sm font-medium text-red-500"></p>
