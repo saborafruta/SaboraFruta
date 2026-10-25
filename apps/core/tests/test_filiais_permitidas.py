@@ -16,6 +16,9 @@ O QUE ESTES TESTES CERCAM:
     existir -- sem nenhuma linha de acesso -- continua enxergando a empresa
     inteira.
 """
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
@@ -214,6 +217,51 @@ class FiliaisPermitidasTests(FiliaisBase):
         contexto = filial_context(request)
 
         self.assertFalse(contexto['pode_trocar_empresa'])
+
+    def test_contexto_do_tenant_nao_expoe_filial_orfa_do_banco_local(self):
+        """A lista local nunca pode sobrepor o diretorio gerencial."""
+        outra_empresa = Empresa.objects.create(
+            razao_social='Empresa Orfa LTDA', nome_fantasia='Empresa Orfa',
+            cnpj='94345678000191',
+            regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        filial_orfa = Filial.objects.create(
+            empresa=outra_empresa, razao_social='Filial Orfa',
+            nome_fantasia='FILIAL ORFA', cnpj='94345678000272', uf='RN',
+        )
+        from apps.core.models import EmpresaBanco
+
+        banco = EmpresaBanco.objects.create(
+            empresa=self.empresa,
+            slug='grupo-tres',
+            db_alias='empresa_grupo_tres',
+            status=EmpresaBanco.Status.ATIVO,
+        )
+        # Simula a lista poluida de um banco operacional. A filial orfa esta
+        # fora da empresa associada ao alias e precisa desaparecer do menu.
+        usuario_local = MagicMock(
+            is_authenticated=True,
+            is_superuser=True,
+            filiais_permitidas=MagicMock(
+                return_value=Filial.objects.filter(ativo=True),
+            ),
+            _state=SimpleNamespace(db=banco.db_alias),
+        )
+        request = RequestFactory().get('/dashboard/')
+        request.user = usuario_local
+        request.filial_ativa = self.matriz
+        request.selected_tenant_db_alias = banco.db_alias
+
+        contexto = filial_context(request)
+
+        self.assertEqual(
+            {filial.cnpj for filial in contexto['filiais_disponiveis']},
+            {self.matriz.cnpj, self.filial.cnpj, self.polpa.cnpj},
+        )
+        self.assertNotIn(filial_orfa.cnpj, {
+            filial.cnpj for filial in contexto['filiais_disponiveis']
+        })
 
 
 class TelaDeEscolhaTests(FiliaisBase):

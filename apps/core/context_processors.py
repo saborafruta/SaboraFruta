@@ -88,10 +88,47 @@ def filial_context(request):
         # `Usuario.filiais_permitidas`. O seletor do cabecalho oferecendo
         # mais que a tela de escolha e' a mesma falha por outra porta.
         qs = user.filiais_permitidas()
+
+        # O banco operacional pode manter linhas historicas que ja nao
+        # existem no diretorio gerencial. Elas nao podem aparecer no seletor
+        # apenas porque o usuario local e' superusuario: o CNPJ confirmado
+        # pela Central e' a fronteira tambem para a lista do cabecalho.
+        #
+        # Isso e' particularmente importante depois da separacao de bancos:
+        # PKs e ate empresas antigas do tenant nao sao autoridade para
+        # oferecer uma filial. A troca em si ja valida esse mapeamento no
+        # middleware; aqui evitamos oferecer uma opcao que inevitavelmente
+        # sera recusada.
+        tenant_alias = getattr(request, 'selected_tenant_db_alias', None)
+        if tenant_alias and user._state.db != 'default':
+            from apps.core.models import EmpresaBanco, Filial
+
+            banco = EmpresaBanco.objects.using('default').filter(
+                db_alias=tenant_alias,
+                ativo=True,
+                status=EmpresaBanco.Status.ATIVO,
+            ).first()
+            if banco is None:
+                qs = qs.none()
+            else:
+                cnpjs_validos = list(
+                    Filial.objects.using('default').filter(
+                        empresa_id=banco.empresa_id,
+                        empresa__ativo=True,
+                        ativo=True,
+                    ).values_list('cnpj', flat=True)
+                )
+                qs = qs.filter(cnpj__in=cnpjs_validos)
         if user.is_superuser and ctx['filial_ativa']:
             # Superuser troca dentro da empresa em que esta; a Central e' o
             # caminho para pular de empresa.
-            qs = qs.filter(empresa_id=ctx['filial_ativa'].empresa_id)
+            # Em uma request de tenant, `filial_ativa` e' a copia do
+            # diretorio central e seu `empresa_id` nao e' um PK seguro para
+            # filtrar tabelas locais. O filtro por CNPJ acima ja delimita a
+            # empresa correta; no gerencial, o PK pertence ao mesmo banco e
+            # continua sendo seguro.
+            if not (tenant_alias and user._state.db != 'default'):
+                qs = qs.filter(empresa_id=ctx['filial_ativa'].empresa_id)
         ctx['filiais_disponiveis'] = list(qs.order_by('nome_fantasia', 'razao_social'))
 
         # Nas rotas operacionais ``request.user`` e a identidade local do
