@@ -129,6 +129,14 @@ class HistoricoVendasFinanceiroTests(TestCase):
             response = dashboards.historico_vendas(request)
         return response, rendering.call_args.args[2]
 
+    def test_dashboard_dre_usa_filial_ativa_do_middleware(self):
+        request = self.request('/analytics/dre/')
+        del request.filial
+
+        response = dashboards.dashboard_dre(request)
+
+        self.assertEqual(response.status_code, 200)
+
     def test_lista_exibe_status_saldo_e_todos_os_cabecalhos_ordenaveis(self):
         response, contexto = self.contexto_lista()
         self.assertContains(response, 'Status')

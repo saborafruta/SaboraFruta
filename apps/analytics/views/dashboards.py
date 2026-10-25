@@ -80,18 +80,18 @@ def dashboard_operacional(request):
     blocos = []
     for linha in linhas:
         # A OP chega à linha PELO PRODUTO — ela não tem `linha_producao`.
-        ops_abertas = OrdemProducao.objects.for_filial(request.filial).filter(
+        ops_abertas = OrdemProducao.objects.for_filial(request.filial_ativa).filter(
             produto_acabado__linha_producao=linha,
             status__in=[StatusOP.ABERTA, StatusOP.EM_PRODUCAO],
         ).count()
-        alertas = AlertaVencimento.objects.for_filial(request.filial).filter(
+        alertas = AlertaVencimento.objects.for_filial(request.filial_ativa).filter(
             linha_producao=linha, resolvido=False,
         ).count()
         blocos.append({
             "linha": linha,
             "ops_abertas": ops_abertas,
             "alertas": alertas,
-            "rendimento": RendimentoService.rendimento_medio(linha, request.filial),
+            "rendimento": RendimentoService.rendimento_medio(linha, request.filial_ativa),
         })
     return render(request, "analytics/operacional.html", {
         "title": "Dashboard Operacional", "blocos": blocos,
@@ -202,7 +202,7 @@ def dashboard_producao(request):
 
 @requer_permissao('relatorios', 'ver')
 def dashboard_dre(request):
-    qs = DREConsolidado.objects.for_filial(request.filial).order_by(
+    qs = DREConsolidado.objects.for_filial(request.filial_ativa).order_by(
         "-competencia", "linha_producao",
     )[:36]
     return render(request, "analytics/dre.html", {
