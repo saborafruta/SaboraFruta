@@ -238,13 +238,49 @@ class FiliaisPermitidasTests(FiliaisBase):
             db_alias='empresa_grupo_tres',
             status=EmpresaBanco.Status.ATIVO,
         )
-        # Simula a lista poluida de um banco operacional. A filial orfa esta
-        # fora da empresa associada ao alias e precisa desaparecer do menu.
+
+        class FiliaisLocais:
+            """Queryset minimo: o tenant pode reutilizar PKs do gerencial."""
+
+            def __init__(self, filiais):
+                self.filiais = filiais
+
+            def filter(self, **kwargs):
+                cnpjs = kwargs.get('cnpj__in')
+                if cnpjs is not None:
+                    return FiliaisLocais([
+                        filial for filial in self.filiais if filial.cnpj in cnpjs
+                    ])
+                return self
+
+            def none(self):
+                return FiliaisLocais([])
+
+            def order_by(self, *_args):
+                return self.filiais
+
+        # Simula a lista poluida de um banco operacional. Os PKs locais 901
+        # e 902 poderiam apontar para qualquer outra filial no gerencial;
+        # por isso o menu deve usar o PK central obtido pelo CNPJ.
+        filial_local_valida = SimpleNamespace(
+            pk=901,
+            cnpj=self.matriz.cnpj,
+            nome_fantasia=self.matriz.nome_fantasia,
+            razao_social=self.matriz.razao_social,
+        )
+        filial_local_orfa = SimpleNamespace(
+            pk=902,
+            cnpj=filial_orfa.cnpj,
+            nome_fantasia=filial_orfa.nome_fantasia,
+            razao_social=filial_orfa.razao_social,
+        )
         usuario_local = MagicMock(
             is_authenticated=True,
             is_superuser=True,
             filiais_permitidas=MagicMock(
-                return_value=Filial.objects.filter(ativo=True),
+                return_value=FiliaisLocais([
+                    filial_local_valida, filial_local_orfa,
+                ]),
             ),
             _state=SimpleNamespace(db=banco.db_alias),
         )
@@ -255,13 +291,9 @@ class FiliaisPermitidasTests(FiliaisBase):
 
         contexto = filial_context(request)
 
-        self.assertEqual(
-            {filial.cnpj for filial in contexto['filiais_disponiveis']},
-            {self.matriz.cnpj, self.filial.cnpj, self.polpa.cnpj},
-        )
-        self.assertNotIn(filial_orfa.cnpj, {
-            filial.cnpj for filial in contexto['filiais_disponiveis']
-        })
+        self.assertEqual(contexto['filiais_disponiveis'], [filial_local_valida])
+        self.assertEqual(filial_local_valida.id_troca, self.matriz.pk)
+        self.assertNotEqual(filial_local_valida.id_troca, filial_local_valida.pk)
 
 
 class TelaDeEscolhaTests(FiliaisBase):

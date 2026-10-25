@@ -88,6 +88,7 @@ def filial_context(request):
         # `Usuario.filiais_permitidas`. O seletor do cabecalho oferecendo
         # mais que a tela de escolha e' a mesma falha por outra porta.
         qs = user.filiais_permitidas()
+        ids_centrais_por_cnpj = {}
 
         # O banco operacional pode manter linhas historicas que ja nao
         # existem no diretorio gerencial. Elas nao podem aparecer no seletor
@@ -111,13 +112,17 @@ def filial_context(request):
             if banco is None:
                 qs = qs.none()
             else:
-                cnpjs_validos = list(
+                filiais_centrais = list(
                     Filial.objects.using('default').filter(
                         empresa_id=banco.empresa_id,
                         empresa__ativo=True,
                         ativo=True,
-                    ).values_list('cnpj', flat=True)
+                    ).values('pk', 'cnpj')
                 )
+                ids_centrais_por_cnpj = {
+                    filial['cnpj']: filial['pk'] for filial in filiais_centrais
+                }
+                cnpjs_validos = list(ids_centrais_por_cnpj)
                 qs = qs.filter(cnpj__in=cnpjs_validos)
         if user.is_superuser and ctx['filial_ativa']:
             # Superuser troca dentro da empresa em que esta; a Central e' o
@@ -129,7 +134,14 @@ def filial_context(request):
             # continua sendo seguro.
             if not (tenant_alias and user._state.db != 'default'):
                 qs = qs.filter(empresa_id=ctx['filial_ativa'].empresa_id)
-        ctx['filiais_disponiveis'] = list(qs.order_by('nome_fantasia', 'razao_social'))
+        filiais_disponiveis = list(qs.order_by('nome_fantasia', 'razao_social'))
+        for filial in filiais_disponiveis:
+            # O link de troca sempre recebe um PK do diretorio gerencial.
+            # Em bancos dedicados, o PK local pode ser igual ao de uma
+            # filial completamente diferente no gerencial; usar esse valor
+            # fazia um clique em uma filial da Sabor a Fruta abrir a iTed.
+            filial.id_troca = ids_centrais_por_cnpj.get(filial.cnpj, filial.pk)
+        ctx['filiais_disponiveis'] = filiais_disponiveis
 
         # Nas rotas operacionais ``request.user`` e a identidade local do
         # tenant. A autorizacao para atravessar empresas, porem, pertence ao

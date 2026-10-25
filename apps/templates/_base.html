@@ -718,7 +718,7 @@
                ? 'background:#fff; border:1px solid #e5e5e5; box-shadow:0 8px 24px rgba(0,0,0,0.1);'
                : 'background:#242426; border:1px solid #2a2a2e; box-shadow:0 12px 32px rgba(0,0,0,0.5);'">
           {% for f in filiais_disponiveis %}
-            <a href="{% url 'core:trocar-filial' f.id %}"
+            <a href="{% url 'core:trocar-filial' f.id_troca %}"
                class="flex items-center justify-between gap-3 px-4 py-2.5 text-sm transition-all"
                :style="temaClaro ? 'color:#334155; font-weight:500;' : 'color:#d4d4d8;'">
               <span class="min-w-0">
