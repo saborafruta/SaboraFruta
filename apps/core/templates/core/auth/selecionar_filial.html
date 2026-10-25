@@ -1,6 +1,6 @@
 {% extends "_base.html" %}
 
-{% block title %}Escolher acesso - ERP iNoovaTed{% endblock %}
+{% block title %}{% if is_global_selection %}Selecionar contexto de acesso{% else %}Escolher acesso{% endif %} - ERP iNoovaTed{% endblock %}
 
 {% block extra_head %}
 {{ block.super }}
@@ -63,6 +63,9 @@
 
 {% block full_content %}
 {{ filiais_favoritas_ids|json_script:"filiais-favoritas-data" }}
+{% if is_global_selection %}
+  {% include "core/auth/_selecionar_filial_global.html" %}
+{% else %}
 <div class="min-h-screen selecao-acesso-page"
      x-data="{
        busca: '',
@@ -371,4 +374,5 @@
     </p>
   </main>
 </div>
+{% endif %}
 {% endblock %}

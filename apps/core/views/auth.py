@@ -2,6 +2,8 @@
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
+from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
@@ -172,12 +174,29 @@ class SelecionarFilialView(View):
 
         filiais = filiais.select_related('empresa')
         usuario_central = _usuario_central(request)
+
+        contexto_global = {}
+        if request.user.is_superuser:
+            contexto_global = self._contexto_global(
+                request=request,
+                empresas=empresas,
+                filiais=filiais,
+                usuario_central=usuario_central,
+            )
+
         favoritas_cnpjs = set()
         if usuario_central:
             # Querysets de tenant e do gerencial nao podem compor uma subquery
             # entre bancos. CNPJ e o identificador estavel da filial nos dois
             # diretorios; materializamos apenas esses valores para reconciliar.
-            filiais_cnpjs = list(filiais.values_list('cnpj', flat=True))
+            filiais_para_favoritas = contexto_global.get(
+                'filiais_exibidas', filiais,
+            )
+            filiais_cnpjs = list(
+                filiais_para_favoritas.values_list('cnpj', flat=True)
+                if hasattr(filiais_para_favoritas, 'values_list')
+                else (filial.cnpj for filial in filiais_para_favoritas)
+            )
             favoritas_cnpjs = set(
                 FilialFavorita.objects.using('default').filter(
                     usuario_id=usuario_central.pk,
@@ -185,7 +204,7 @@ class SelecionarFilialView(View):
                 ).values_list('filial__cnpj', flat=True)
             )
 
-        return render(request, self.template_name, {
+        contexto = {
             'filiais': filiais,
             'empresas': empresas,
             'is_global_selection': request.user.is_superuser,
@@ -193,7 +212,97 @@ class SelecionarFilialView(View):
             'filiais_favoritas_ids': list(
                 filiais.filter(cnpj__in=favoritas_cnpjs).values_list('pk', flat=True)
             ),
-        })
+        }
+        contexto.update(contexto_global)
+        return render(request, self.template_name, contexto)
+
+    @staticmethod
+    def _contexto_global(*, request, empresas, filiais, usuario_central):
+        """Monta o master-detail global sem materializar todo o diretorio."""
+        busca_empresa = request.GET.get('empresa_busca', '').strip()
+        busca_filial = request.GET.get('filial_busca', '').strip()
+        ordenacao = request.GET.get('ordenacao', 'nome')
+        somente_favoritas = request.GET.get('favoritas') == '1'
+
+        empresas_listagem = empresas.annotate(
+            total_filiais=Count(
+                'filiais',
+                filter=Q(filiais__in=filiais.values('pk')),
+                distinct=True,
+            ),
+        )
+        if busca_empresa:
+            empresas_listagem = empresas_listagem.filter(
+                Q(nome_fantasia__icontains=busca_empresa)
+                | Q(razao_social__icontains=busca_empresa)
+                | Q(cnpj__icontains=busca_empresa)
+            )
+
+        empresas_page = Paginator(empresas_listagem, 8).get_page(
+            request.GET.get('empresas_page', 1),
+        )
+
+        empresa_id = request.GET.get('empresa')
+        if not empresa_id or not empresa_id.isdigit():
+            empresa_id = None
+        empresa_selecionada = empresas_listagem.filter(pk=empresa_id).first()
+        if empresa_selecionada is None and empresas_page.object_list:
+            empresa_selecionada = empresas_page.object_list[0]
+
+        filiais_empresa = filiais.none()
+        total_filiais_empresa = 0
+        if empresa_selecionada is not None:
+            filiais_empresa = filiais.filter(
+                empresa_id=empresa_selecionada.pk,
+            )
+            total_filiais_empresa = filiais_empresa.count()
+
+        if busca_filial:
+            filiais_empresa = filiais_empresa.filter(
+                Q(nome_fantasia__icontains=busca_filial)
+                | Q(razao_social__icontains=busca_filial)
+                | Q(cidade__icontains=busca_filial)
+                | Q(uf__icontains=busca_filial)
+                | Q(cnpj__icontains=busca_filial)
+            )
+
+        if somente_favoritas:
+            if usuario_central is None:
+                filiais_empresa = filiais_empresa.none()
+            else:
+                cnpjs_favoritos = FilialFavorita.objects.using('default').filter(
+                    usuario_id=usuario_central.pk,
+                ).values('filial__cnpj')
+                filiais_empresa = filiais_empresa.filter(
+                    cnpj__in=cnpjs_favoritos,
+                )
+
+        if ordenacao == 'cidade':
+            filiais_empresa = filiais_empresa.order_by(
+                'cidade', 'uf', 'nome_fantasia', 'razao_social',
+            )
+        else:
+            ordenacao = 'nome'
+            filiais_empresa = filiais_empresa.order_by(
+                'nome_fantasia', 'razao_social',
+            )
+
+        filiais_page = Paginator(filiais_empresa, 6).get_page(
+            request.GET.get('filiais_page', 1),
+        )
+
+        return {
+            'busca_empresa': busca_empresa,
+            'busca_filial': busca_filial,
+            'empresas_page': empresas_page,
+            'empresa_selecionada': empresa_selecionada,
+            'empresas_total': empresas.count(),
+            'filiais_page': filiais_page,
+            'filiais_exibidas': filiais_page.object_list,
+            'total_filiais_empresa': total_filiais_empresa,
+            'ordenacao': ordenacao,
+            'somente_favoritas': somente_favoritas,
+        }
 
 
 @login_required

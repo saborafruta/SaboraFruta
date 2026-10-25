@@ -1,0 +1,43 @@
+<article class="rounded-xl border p-3 selecao-card {% if grade %}flex min-h-[188px] flex-col{% else %}flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between{% endif %}"
+         :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#202024; border-color:#2f3542;'">
+  <div class="flex min-w-0 items-center gap-3">
+    <div class="selecao-filial-logo selecao-filial-logo--lista">
+      {% if f.imagem %}
+        <img src="{{ f.imagem.url }}" alt="{{ f.nome_fantasia|default:f.razao_social }}" onerror="this.remove();">
+      {% else %}
+        <span class="text-lg font-black italic text-blue-600">{{ f.nome_fantasia|default:f.razao_social|first|upper }}</span>
+      {% endif %}
+    </div>
+    <div class="min-w-0">
+      {% if f.is_matriz %}
+        <span class="inline-flex rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">Matriz</span>
+      {% endif %}
+      <h3 class="{% if f.is_matriz %}mt-1.5{% endif %} truncate text-sm font-bold"
+          :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">
+        {{ f.nome_fantasia|default:f.razao_social }}
+      </h3>
+      <p class="mt-1 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">
+        {{ f.cidade|default:"Cidade não informada" }}{% if f.uf %}/{{ f.uf }}{% endif %}
+        <span class="mx-1">•</span> CNPJ {{ f.cnpj }}
+      </p>
+    </div>
+  </div>
+
+  <div class="flex items-center justify-end gap-2 {% if grade %}mt-auto border-t pt-3{% endif %}"
+       {% if grade %}:style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#2f3542;'"{% endif %}>
+    <form method="post" action="{% url 'core:alternar-filial-favorita' f.id %}"
+          @submit.prevent="toggleFavorita({{ f.id }}, $el)">
+      {% csrf_token %}
+      <button type="submit" class="grid h-10 w-10 place-items-center rounded-lg border transition"
+              :disabled="salvandoFavorito === {{ f.id }}"
+              :title="isFavorita({{ f.id }}) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'"
+              :aria-label="isFavorita({{ f.id }}) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'"
+              :style="isFavorita({{ f.id }}) ? 'background:#fffbeb; border-color:#f59e0b; color:#d97706;' : (temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#64748b;' : 'background:#202024; border-color:#3f3f46; color:#a1a1aa;')">
+        <svg class="h-5 w-5" :fill="isFavorita({{ f.id }}) ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z"/>
+        </svg>
+      </button>
+    </form>
+    <a href="{% url 'core:trocar-filial' f.id %}" class="btn-primary h-10 min-w-[100px] justify-center">Acessar</a>
+  </div>
+</article>

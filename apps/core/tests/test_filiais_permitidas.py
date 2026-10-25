@@ -215,6 +215,69 @@ class TelaDeEscolhaTests(FiliaisBase):
         self.assertContains(resposta, "modo: 'list'")
         self.assertContains(resposta, 'grid-cols-1 gap-3 lg:grid-cols-2')
 
+    def test_superusuario_seleciona_empresa_antes_de_ver_as_filiais(self):
+        outra_empresa = Empresa.objects.create(
+            razao_social='Outra Empresa LTDA', nome_fantasia='Outra Empresa',
+            cnpj='12345678000195',
+            regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        outra_filial = Filial.objects.create(
+            empresa=outra_empresa, razao_social='Outra Matriz',
+            nome_fantasia='OUTRA MATRIZ', cnpj='12345678000276', uf='RN',
+            cidade='Mossoro', is_matriz=True,
+        )
+        admin = Usuario.objects.create_superuser(
+            email='global@ited.local', nome='Admin Global', password='x' * 12,
+            empresa=self.empresa, filial=self.matriz, perfil=self.perfil_admin,
+        )
+        self.client.force_login(admin)
+
+        resposta = self.client.get(
+            reverse('core:selecionar-filial'),
+            {'empresa': self.empresa.pk},
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Selecionar contexto de acesso')
+        self.assertContains(resposta, 'Filiais de Grupo Tres')
+        self.assertEqual(resposta.context['empresas_total'], 2)
+        self.assertEqual(
+            {filial.pk for filial in resposta.context['filiais_page']},
+            {self.matriz.pk, self.filial.pk, self.polpa.pk},
+        )
+        self.assertNotContains(resposta, outra_filial.nome_fantasia)
+
+    def test_superusuario_filtra_e_pagina_filiais_no_servidor(self):
+        admin = Usuario.objects.create_superuser(
+            email='escala@ited.local', nome='Admin Escala', password='x' * 12,
+            empresa=self.empresa, filial=self.matriz, perfil=self.perfil_admin,
+        )
+        for indice in range(5):
+            Filial.objects.create(
+                empresa=self.empresa,
+                razao_social=f'Unidade {indice}',
+                nome_fantasia=f'UNIDADE {indice}',
+                cnpj=f'82345678000{indice + 10:03d}',
+                uf='RN',
+                cidade='Natal' if indice < 4 else 'Caico',
+            )
+        self.client.force_login(admin)
+
+        paginada = self.client.get(
+            reverse('core:selecionar-filial'),
+            {'empresa': self.empresa.pk},
+        )
+        filtrada = self.client.get(
+            reverse('core:selecionar-filial'),
+            {'empresa': self.empresa.pk, 'filial_busca': 'Caico'},
+        )
+
+        self.assertEqual(paginada.context['filiais_page'].paginator.count, 8)
+        self.assertEqual(paginada.context['filiais_page'].paginator.num_pages, 2)
+        self.assertEqual(len(filtrada.context['filiais_page']), 1)
+        self.assertEqual(filtrada.context['filiais_page'][0].cidade, 'Caico')
+
     def test_usuario_pode_favoritar_e_desfavoritar_filial_permitida(self):
         lucas = self._usuario(
             'lucas-alterna-favorita@grupo.local', self.perfil_admin, self.polpa,
