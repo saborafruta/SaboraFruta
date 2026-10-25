@@ -558,7 +558,7 @@ class MultitenancyFoundationTests(TestCase):
         self.assertTrue(primeiro.perfil.is_admin)
         self.assertTrue(primeiro.is_superuser)
         self.assertFalse(primeiro.has_usable_password())
-        self.assertEqual(primeiro.foto.name, 'usuarios/fotos/global.jpg')
+        self.assertFalse(primeiro.foto.name)
         self.assertEqual(
             primeiro.menu_favoritos,
             ['financeiro:posicao-diaria'],
@@ -568,6 +568,10 @@ class MultitenancyFoundationTests(TestCase):
             {'produtos': {'colunas': ['nome']}},
         )
 
+        primeiro.foto = (
+            'tenant-media/empresa_teste/usuarios/fotos/local.jpg'
+        )
+        primeiro.save(update_fields=['foto'])
         usuario_central.foto = 'usuarios/fotos/global-atualizada.jpg'
         atualizado = TenantUserService.resolver_superusuario(
             alias='default',
@@ -577,7 +581,7 @@ class MultitenancyFoundationTests(TestCase):
 
         self.assertEqual(
             atualizado.foto.name,
-            'usuarios/fotos/global-atualizada.jpg',
+            'tenant-media/empresa_teste/usuarios/fotos/local.jpg',
         )
 
     def test_selecao_global_consulta_filiais_no_banco_gerencial(self):
