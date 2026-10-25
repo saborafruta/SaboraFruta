@@ -627,6 +627,24 @@ class MultitenancyFoundationTests(TestCase):
         self.assertNotIn(inativa, context['empresas'])
         self.assertEqual(context['total_empresas'], 1)
 
+    def test_central_assume_empresa_e_filial_ativas_da_sessao(self):
+        self.usuario.is_superuser = True
+        self.usuario.is_staff = True
+        self.usuario.save(update_fields=['is_superuser', 'is_staff'])
+        request = RequestFactory().get('/gestao/central/')
+        request.session = {'filial_ativa_id': self.filial.pk}
+        request.user = self.usuario
+
+        with patch(
+            'apps.core.views.admin_area.render', side_effect=lambda _r, _t, c: c,
+        ):
+            context = central_administrativa(request)
+
+        self.assertEqual(context['empresa_selecionada'], self.empresa)
+        self.assertEqual(context['filial_selecionada'], self.filial)
+        self.assertEqual(context['empresa_inicial'], self.empresa.nome_fantasia)
+        self.assertEqual(context['filial_inicial'], self.filial.nome_fantasia)
+
     @override_settings(TENANT_DATABASE_ROUTING_ENABLED=True)
     def test_troca_global_falha_sem_misturar_tenant_novo_com_filial_antiga(self):
         self.usuario.is_superuser = True

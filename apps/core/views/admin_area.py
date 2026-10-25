@@ -395,6 +395,62 @@ def _active_filial(request):
     return getattr(request, 'filial_ativa', None)
 
 
+def _filial_central_do_contexto_atual(request):
+    """Recupera no gerencial a filial que estava ativa antes da Central.
+
+    A Central nao recebe ``request.filial_ativa`` pelo middleware, pois ela
+    nao pertence a uma loja. Em sessao multibanco, o ID salvo e' do tenant e
+    nao pode ser consultado diretamente no gerencial: mapeamos pelo CNPJ,
+    sempre dentro da empresa vinculada ao alias.
+    """
+    filial_ativa = getattr(request, 'filial_ativa', None)
+    if filial_ativa is not None and filial_ativa._state.db == 'default':
+        return filial_ativa
+
+    sessao = getattr(request, 'session', {})
+    alias = (
+        getattr(request, 'selected_tenant_db_alias', None)
+        or sessao.get('tenant_db_alias')
+    )
+    filial_id = sessao.get('filial_ativa_id')
+    if alias:
+        banco = EmpresaBanco.objects.using('default').filter(
+            db_alias=alias,
+            ativo=True,
+            status=EmpresaBanco.Status.ATIVO,
+        ).first()
+        if banco is None or not filial_id or not register_tenant_database(banco):
+            return None
+        try:
+            filial_tenant = Filial.objects.using(alias).filter(
+                pk=filial_id,
+                ativo=True,
+            ).only('cnpj').first()
+        except Exception:
+            logger.warning(
+                'Nao foi possivel recuperar a filial ativa do tenant %s para a Central.',
+                alias,
+                exc_info=True,
+            )
+            return None
+        if filial_tenant is None:
+            return None
+        return Filial.objects.using('default').select_related('empresa').filter(
+            empresa_id=banco.empresa_id,
+            cnpj=filial_tenant.cnpj,
+            ativo=True,
+            empresa__ativo=True,
+        ).first()
+
+    if filial_id:
+        return Filial.objects.select_related('empresa').filter(
+            pk=filial_id,
+            ativo=True,
+            empresa__ativo=True,
+        ).first()
+    return None
+
+
 def _is_central_global(request):
     return request.user.is_superuser and request.GET.get('central') == '1'
 
@@ -475,7 +531,12 @@ def central_administrativa(request):
         .filter(ativo=True, empresa__ativo=True)
         .order_by('empresa__razao_social', 'razao_social')
     )
-    empresa_selecionada = None
+    contexto_anterior = None
+    if not empresa_busca and not filial_busca:
+        contexto_anterior = _filial_central_do_contexto_atual(request)
+    empresa_selecionada = (
+        contexto_anterior.empresa if contexto_anterior is not None else None
+    )
 
     if empresa_busca:
         empresas_filtradas = empresas.filter(
@@ -507,7 +568,7 @@ def central_administrativa(request):
         )
         filiais = filiais_filtradas
 
-    filial_selecionada = None
+    filial_selecionada = contexto_anterior
     if filial_busca:
         filial_selecionada = filiais.filter(
             Q(razao_social__iexact=filial_busca)
@@ -542,11 +603,25 @@ def central_administrativa(request):
                 'Confirme se as migrations ja rodaram no Railway.',
             )
 
+    empresa_inicial = empresa_busca
+    filial_inicial = filial_busca
+    if contexto_anterior is not None:
+        empresa_inicial = empresa_inicial or (
+            contexto_anterior.empresa.nome_fantasia
+            or contexto_anterior.empresa.razao_social
+        )
+        filial_inicial = filial_inicial or (
+            contexto_anterior.nome_fantasia
+            or contexto_anterior.razao_social
+        )
+
     return render(request, 'core/admin/central.html', {
         'empresas': empresas,
         'filiais': filiais,
         'empresa_busca': empresa_busca,
         'filial_busca': filial_busca,
+        'empresa_inicial': empresa_inicial,
+        'filial_inicial': filial_inicial,
         'empresa_selecionada': empresa_selecionada,
         'empresa_contexto': empresa_contexto,
         'politica_form': politica_form,

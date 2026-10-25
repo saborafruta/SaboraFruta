@@ -146,7 +146,7 @@
   <form method="get"
         class="card p-6 lg:p-7"
         data-central-pickers
-        x-data="centralAdminPickers('{{ empresa_busca|escapejs }}', '{{ filial_busca|escapejs }}')">
+        x-data="centralAdminPickers('{{ empresa_inicial|escapejs }}', '{{ filial_inicial|escapejs }}')">
     <div class="flex items-start gap-4 mb-6">
       <div class="w-11 h-11 rounded-xl hidden sm:flex items-center justify-center shrink-0"
            :style="temaClaro ? 'background:#eef4ff; color:#2563eb;' : 'background:rgba(37,99,235,0.16); color:#93c5fd;'">

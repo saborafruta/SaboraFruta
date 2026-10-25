@@ -6,6 +6,71 @@
        erroFavorito: '',
        empresaSelecionada: {{ empresa_selecionada.pk|default:'null' }},
        carregandoEmpresa: false,
+       buscaEmpresa: '{{ busca_empresa|escapejs }}',
+       buscaFilial: '{{ busca_filial|escapejs }}',
+       temporizadorBusca: null,
+       buscaEmAndamento: null,
+       agendarBusca(campo) {
+         window.clearTimeout(this.temporizadorBusca);
+         this.temporizadorBusca = window.setTimeout(() => {
+           const url = new URL(window.location.href);
+           url.searchParams.delete('empresas_page');
+           url.searchParams.delete('filiais_page');
+           const ordenacao = this.$el.querySelector('[name="ordenacao"]');
+           if (ordenacao) url.searchParams.set('ordenacao', ordenacao.value);
+           if (campo === 'empresa') {
+             this.buscaEmpresa
+               ? url.searchParams.set('empresa_busca', this.buscaEmpresa)
+               : url.searchParams.delete('empresa_busca');
+           } else {
+             this.buscaFilial
+               ? url.searchParams.set('filial_busca', this.buscaFilial)
+               : url.searchParams.delete('filial_busca');
+           }
+           this.atualizarBusca(url, campo);
+         }, 220);
+       },
+       async atualizarBusca(url, campo) {
+         if (this.buscaEmAndamento) this.buscaEmAndamento.abort();
+         const controller = new AbortController();
+         this.buscaEmAndamento = controller;
+         try {
+           const response = await fetch(url, {
+             headers: {'X-Requested-With': 'XMLHttpRequest'},
+             signal: controller.signal,
+           });
+           if (!response.ok) throw new Error('Falha ao pesquisar.');
+           const pagina = new DOMParser().parseFromString(await response.text(), 'text/html');
+           const novasEmpresas = pagina.querySelector('[data-empresas-panel]');
+           const novasFiliais = pagina.querySelector('[data-filiais-panel]');
+           const empresasAtuais = this.$el.querySelector('[data-empresas-panel]');
+           const filiaisAtuais = this.$el.querySelector('[data-filiais-panel]');
+           if (!novasEmpresas || !novasFiliais || !empresasAtuais || !filiaisAtuais) {
+             throw new Error('Resultado indisponível.');
+           }
+           empresasAtuais.replaceWith(novasEmpresas);
+           filiaisAtuais.replaceWith(novasFiliais);
+           if (window.Alpine) {
+             window.Alpine.initTree(novasEmpresas);
+             window.Alpine.initTree(novasFiliais);
+           }
+           const favoritas = pagina.querySelector('#filiais-favoritas-data');
+           if (favoritas) this.favoritas = JSON.parse(favoritas.textContent);
+           this.empresaSelecionada = Number(novasEmpresas.dataset.empresaSelecionada) || null;
+           window.history.replaceState({}, '', url);
+           this.$nextTick(() => {
+             const input = this.$el.querySelector(`[data-busca="${campo}"]`);
+             if (input) {
+               input.focus();
+               input.setSelectionRange(input.value.length, input.value.length);
+             }
+           });
+         } catch (error) {
+           if (error.name !== 'AbortError') window.location.assign(url);
+         } finally {
+           if (this.buscaEmAndamento === controller) this.buscaEmAndamento = null;
+         }
+       },
        async selecionarEmpresa(url, empresaId) {
          if (this.carregandoEmpresa) return;
          this.carregandoEmpresa = true;
@@ -21,6 +86,7 @@
            painelAtual.replaceWith(novoPainel);
            if (window.Alpine) window.Alpine.initTree(novoPainel);
            this.empresaSelecionada = empresaId;
+           this.buscaFilial = '';
            window.history.pushState({}, '', url);
          } catch (error) {
            window.location.assign(url);
@@ -105,18 +171,20 @@
     </section>
 
     <section class="selecao-global-layout mt-5">
-      <aside class="selecao-global-empresas selecao-card flex min-h-[570px] flex-col rounded-2xl border p-4"
+      <aside data-empresas-panel data-empresa-selecionada="{{ empresa_selecionada.pk|default:'' }}"
+             class="selecao-global-empresas selecao-card flex min-h-[570px] flex-col rounded-2xl border p-4"
              :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#202024; border-color:#2f3542;'">
         <div>
           <h2 class="text-xl font-bold" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">Empresas</h2>
           <p class="mt-1 text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">{{ empresas_total }} empresa{{ empresas_total|pluralize }}</p>
         </div>
 
-        <form method="get" class="mt-4">
+        <form method="get" class="mt-4" @submit.prevent="agendarBusca('empresa')">
           {% if empresa_selecionada %}<input type="hidden" name="empresa" value="{{ empresa_selecionada.pk }}">{% endif %}
           <label class="relative block">
             <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
             <input type="search" name="empresa_busca" value="{{ busca_empresa }}"
+                   data-busca="empresa" x-model="buscaEmpresa" @input="agendarBusca('empresa')"
                    class="h-11 w-full rounded-lg border py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-500"
                    placeholder="Buscar por empresa ou CNPJ..."
                    :style="temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#0f172a;' : 'background:#18181b; border-color:#3f3f46; color:#f4f4f5;'">
@@ -167,15 +235,16 @@
           </div>
 
           <div class="selecao-global-toolbar mt-4">
-            <form method="get">
+            <form method="get" @submit.prevent="agendarBusca('filial')">
               <input type="hidden" name="empresa" value="{{ empresa_selecionada.pk }}">
               {% if busca_empresa %}<input type="hidden" name="empresa_busca" value="{{ busca_empresa }}">{% endif %}
               {% if somente_favoritas %}<input type="hidden" name="favoritas" value="1">{% endif %}
               <input type="search" name="filial_busca" value="{{ busca_filial }}"
+                     data-busca="filial" x-model="buscaFilial" @input="agendarBusca('filial')"
                      class="h-11 min-w-0 flex-1 rounded-lg border px-4 text-sm outline-none focus:border-blue-500"
                      placeholder="Buscar filial ou cidade..."
                      :style="temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#0f172a;' : 'background:#18181b; border-color:#3f3f46; color:#f4f4f5;'">
-              <select name="ordenacao" onchange="this.form.submit()" class="h-11 rounded-lg border px-3 text-sm font-semibold outline-none sm:w-40"
+              <select name="ordenacao" @change="$el.form.submit()" class="h-11 rounded-lg border px-3 text-sm font-semibold outline-none sm:w-40"
                       :style="temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#0f172a;' : 'background:#18181b; border-color:#3f3f46; color:#f4f4f5;'">
                 <option value="nome" {% if ordenacao == 'nome' %}selected{% endif %}>Nome (A-Z)</option>
                 <option value="cidade" {% if ordenacao == 'cidade' %}selected{% endif %}>Cidade</option>
