@@ -24,6 +24,13 @@ class TenantS3Storage(S3Storage):
         digest = hashlib.sha256(old_name.encode('utf-8')).hexdigest()[:32]
         return f'{cls._tenant_prefix(alias)}objects/{digest}{extension}'
 
+    @classmethod
+    def isolated_name(cls, alias, name):
+        """Return an existing tenant key unchanged, or a stable migration key."""
+        if name.startswith(cls._tenant_prefix(alias)):
+            return name
+        return cls.migrated_name(alias, name)
+
     def _namespace_upload(self, name, max_length=None):
         alias = get_current_tenant_db()
         if not alias:

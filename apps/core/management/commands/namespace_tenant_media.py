@@ -102,7 +102,7 @@ class Command(BaseCommand):
 
         unique = {}
         for alias, _label, _field, _pk, _old_value, storage_name in refs:
-            unique[(alias, storage_name)] = TenantS3Storage.migrated_name(
+            unique[(alias, storage_name)] = TenantS3Storage.isolated_name(
                 alias, storage_name,
             )
         byte_count = 0
@@ -121,7 +121,9 @@ class Command(BaseCommand):
 
         self.stdout.write(
             f'Tenants: {len(bancos)} | referências: {len(refs)} | '
-            f'objetos por tenant: {len(unique)} | bytes: {byte_count}'
+            f'objetos por tenant: {len(unique)} | '
+            f'cópias necessárias: {sum(source != target for (alias, source), target in unique.items())} '
+            f'| bytes referenciados: {byte_count}'
         )
         if not options['apply']:
             self.stdout.write('Prévia somente leitura. Use --apply para executar.')
@@ -129,6 +131,8 @@ class Command(BaseCommand):
 
         # Make copies first. Old objects stay in place for recovery and rollback.
         for (alias, storage_name), new_name in unique.items():
+            if new_name == storage_name:
+                continue
             with tenant_db(alias):
                 source_digest = self._sha256(storage_name)
                 if default_storage.exists(new_name):
