@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "_base.html" %}
 {% block title %}Vendas PDV{% endblock %}
 {% block content %}
 <h2 class="text-xl font-bold mb-4">Vendas PDV</h2>
@@ -22,5 +22,17 @@
     </tbody>
   </table>
 </div>
-{% include "components/pagination.html" with page=page %}
+{% if page.paginator.num_pages > 1 %}
+<div class="mt-4 flex items-center justify-between gap-3 text-sm">
+  <span>Página {{ page.number }} de {{ page.paginator.num_pages }}</span>
+  <div class="flex gap-2">
+    {% if page.has_previous %}
+      <a class="btn-secondary" href="?page={{ page.previous_page_number }}">Anterior</a>
+    {% endif %}
+    {% if page.has_next %}
+      <a class="btn-secondary" href="?page={{ page.next_page_number }}">Próxima</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 {% endblock %}
