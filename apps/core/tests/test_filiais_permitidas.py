@@ -375,6 +375,8 @@ class TelaDeEscolhaTests(FiliaisBase):
             {filial.pk for filial in resposta.context['filiais_page']},
             {self.matriz.pk, self.filial.pk, self.polpa.pk},
         )
+        self.assertContains(resposta, 'selecionarEmpresa')
+        self.assertContains(resposta, 'data-filiais-panel')
         self.assertNotContains(resposta, outra_filial.nome_fantasia)
 
     def test_superusuario_filtra_e_pagina_filiais_no_servidor(self):

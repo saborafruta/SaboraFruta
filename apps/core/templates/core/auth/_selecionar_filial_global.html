@@ -4,6 +4,30 @@
        favoritas: JSON.parse(document.getElementById('filiais-favoritas-data').textContent),
        salvandoFavorito: null,
        erroFavorito: '',
+       empresaSelecionada: {{ empresa_selecionada.pk|default:'null' }},
+       carregandoEmpresa: false,
+       async selecionarEmpresa(url, empresaId) {
+         if (this.carregandoEmpresa) return;
+         this.carregandoEmpresa = true;
+         try {
+           const response = await fetch(url, {
+             headers: {'X-Requested-With': 'XMLHttpRequest'},
+           });
+           if (!response.ok) throw new Error('Falha ao carregar filiais.');
+           const pagina = new DOMParser().parseFromString(await response.text(), 'text/html');
+           const novoPainel = pagina.querySelector('[data-filiais-panel]');
+           const painelAtual = this.$el.querySelector('[data-filiais-panel]');
+           if (!novoPainel || !painelAtual) throw new Error('Painel indisponível.');
+           painelAtual.replaceWith(novoPainel);
+           if (window.Alpine) window.Alpine.initTree(novoPainel);
+           this.empresaSelecionada = empresaId;
+           window.history.pushState({}, '', url);
+         } catch (error) {
+           window.location.assign(url);
+         } finally {
+           this.carregandoEmpresa = false;
+         }
+       },
        isFavorita(id) { return this.favoritas.includes(id); },
        async toggleFavorita(id, form) {
          if (this.salvandoFavorito === id) return;
@@ -102,12 +126,11 @@
         <div class="mt-4 space-y-2">
           {% for emp in empresas_page %}
             <a href="?empresa={{ emp.pk }}{% if busca_empresa %}&empresa_busca={{ busca_empresa|urlencode }}{% endif %}"
+               @click.prevent="selecionarEmpresa($event.currentTarget.href, {{ emp.pk }})"
                class="flex items-center gap-3 rounded-xl border p-3 transition hover:border-blue-500"
-               {% if empresa_selecionada and emp.pk == empresa_selecionada.pk %}
-                 :style="temaClaro ? 'background:#eff6ff; border-color:#2563eb;' : 'background:#172554; border-color:#3b82f6;'"
-               {% else %}
-                 :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#1b1b1f; border-color:#303038;'"
-               {% endif %}>
+               :style="empresaSelecionada === {{ emp.pk }}
+                 ? (temaClaro ? 'background:#eff6ff; border-color:#2563eb;' : 'background:#172554; border-color:#3b82f6;')
+                 : (temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#1b1b1f; border-color:#303038;')">
               <span class="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border bg-white text-sm font-black text-blue-700">
                 {% if emp.logo_selecao_url %}<img src="{{ emp.logo_selecao_url }}" alt="Logo de {{ emp.nome_fantasia|default:emp.razao_social }}" class="h-full w-full object-contain" onerror="this.remove();">{% else %}{{ emp.nome_fantasia|default:emp.razao_social|first|upper }}{% endif %}
               </span>
@@ -131,7 +154,9 @@
         {% endif %}
       </aside>
 
-      <section class="selecao-global-filiais selecao-card flex min-h-[570px] min-w-0 flex-col rounded-2xl border p-4"
+      <section data-filiais-panel
+               class="selecao-global-filiais selecao-card flex min-h-[570px] min-w-0 flex-col rounded-2xl border p-4 transition-opacity"
+               :class="carregandoEmpresa ? 'opacity-55 pointer-events-none' : 'opacity-100'"
                :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#202024; border-color:#2f3542;'">
         {% if empresa_selecionada %}
           <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">

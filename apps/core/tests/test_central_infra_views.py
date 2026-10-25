@@ -114,6 +114,16 @@ class CentralInfraViewsTests(TestCase):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 200)
 
+    def test_central_abre_selecao_global_sem_listar_filiais_no_cabecalho(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('core:admin_central'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Selecionar filial')
+        self.assertContains(response, reverse('core:selecionar-filial'))
+        self.assertNotContains(response, 'title="Trocar empresa ou filial"')
+
     @override_settings(TENANT_DATABASE_DELETION_MASTER_PASSWORD='senha-teste')
     @patch('apps.core.views.admin_area.EmpresaBancoService.excluir_banco_com_backup')
     def test_exclusao_de_banco_exige_razao_social_completa(self, excluir):

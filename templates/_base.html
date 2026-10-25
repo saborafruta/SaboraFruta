@@ -689,7 +689,19 @@
     </button>
 
     <!-- SELETOR DE FILIAL -->
-    {% if filiais_disponiveis|length > 1 or pode_trocar_empresa %}
+    {% if request.GET.central_filial or request.GET.central or '/gestao/central/' in request.path or '/gestao/empresas/' in request.path or '/gestao/filiais/' in request.path %}
+      <a href="{% url 'core:selecionar-filial' %}"
+         class="header-location-button relative z-20 flex h-9 w-9 min-w-0 max-w-none md:h-auto md:w-auto items-center justify-center md:justify-start gap-2 px-2 md:px-3 py-1.5 rounded-lg text-sm transition-all"
+         :style="temaClaro
+           ? 'color:#fff; border:1px solid rgba(255,255,255,0.35); background:rgba(255,255,255,0.18); font-weight:500;'
+           : 'color:#e5e7eb; border:1px solid #2a2a2e; background:#242426;'"
+         title="Selecionar empresa e filial">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M7 7h10m0 0-3-3m3 3-3 3M17 17H7m0 0 3 3m-3-3 3-3"/>
+        </svg>
+        <span class="hidden md:block font-medium truncate" :style="temaClaro ? 'color:#fff;' : 'color:#e5e5e5;'">Selecionar filial</span>
+      </a>
+    {% elif filiais_disponiveis|length > 1 or pode_trocar_empresa %}
       <details class="relative dropdown-nativo">
         <summary class="header-location-button relative z-20 flex h-9 w-9 min-w-0 max-w-none md:h-auto md:w-auto items-center justify-center md:justify-start gap-2 px-2 md:px-3 py-1.5 rounded-lg text-sm cursor-pointer list-none transition-all"
                  :style="temaClaro
@@ -699,13 +711,7 @@
           <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M7 7h10m0 0-3-3m3 3-3 3M17 17H7m0 0 3 3m-3-3 3-3"/>
           </svg>
-          <span class="hidden md:block font-medium truncate flex-1 text-left" :style="temaClaro ? 'color:#fff;' : 'color:#e5e5e5;'">
-            {% if request.GET.central_filial or request.GET.central or '/gestao/central/' in request.path or '/gestao/empresas/' in request.path or '/gestao/filiais/' in request.path %}
-              Selecionar empresa
-            {% else %}
-              {% firstof filial_ativa.nome_fantasia filial_ativa.razao_social filial_ativa '' %}
-            {% endif %}
-          </span>
+          <span class="hidden md:block font-medium truncate flex-1 text-left" :style="temaClaro ? 'color:#fff;' : 'color:#e5e5e5;'">{% firstof filial_ativa.nome_fantasia filial_ativa.razao_social filial_ativa '' %}</span>
           <svg class="w-3 h-3 hidden sm:block shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
           </svg>
