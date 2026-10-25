@@ -174,8 +174,17 @@
       <aside data-empresas-panel data-empresa-selecionada="{{ empresa_selecionada.pk|default:'' }}"
              class="selecao-global-empresas selecao-card flex min-h-[570px] flex-col rounded-2xl border p-4"
              :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#202024; border-color:#2f3542;'">
-        <div>
+        <div class="flex items-center justify-between gap-3">
           <h2 class="text-xl font-bold" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">Empresas</h2>
+          <a href="?todas=1{% if busca_empresa %}&empresa_busca={{ busca_empresa|urlencode }}{% endif %}"
+             @click.prevent="selecionarEmpresa($event.currentTarget.href, null)"
+             class="inline-flex h-8 items-center rounded-lg border px-2.5 text-xs font-semibold transition hover:border-blue-500"
+             :style="empresaSelecionada === null
+               ? (temaClaro ? 'background:#eff6ff; border-color:#2563eb; color:#1d4ed8;' : 'background:#172554; border-color:#3b82f6; color:#bfdbfe;')
+               : (temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#475569;' : 'background:#18181b; border-color:#3f3f46; color:#d4d4d8;')"
+             title="Pesquisar filiais em todas as empresas">Todas</a>
+        </div>
+        <div>
           <p class="mt-1 text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">{{ empresas_total }} empresa{{ empresas_total|pluralize }}</p>
         </div>
 
@@ -193,19 +202,6 @@
         </form>
 
         <div class="mt-4 space-y-2">
-          <a href="?todas=1{% if busca_empresa %}&empresa_busca={{ busca_empresa|urlencode }}{% endif %}"
-             @click.prevent="selecionarEmpresa($event.currentTarget.href, null)"
-             class="flex items-center gap-3 rounded-xl border p-3 transition hover:border-blue-500"
-             :style="empresaSelecionada === null
-               ? (temaClaro ? 'background:#eff6ff; border-color:#2563eb;' : 'background:#172554; border-color:#3b82f6;')
-               : (temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#1b1b1f; border-color:#303038;')">
-            <span class="grid h-12 w-12 shrink-0 place-items-center rounded-xl border text-xl font-black text-blue-600"
-                  :style="temaClaro ? 'background:#eff6ff; border-color:#bfdbfe;' : 'background:#172554; border-color:#1d4ed8;'">∞</span>
-            <span class="min-w-0 flex-1">
-              <span class="block truncate text-sm font-bold" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">Todas as empresas</span>
-              <span class="mt-0.5 block truncate text-xs" :style="temaClaro ? 'color:#475569;' : 'color:#d4d4d8;'">Pesquisar em todas as filiais liberadas</span>
-            </span>
-          </a>
           {% for emp in empresas_page %}
             <a href="?empresa={{ emp.pk }}{% if busca_empresa %}&empresa_busca={{ busca_empresa|urlencode }}{% endif %}"
                @click.prevent="selecionarEmpresa($event.currentTarget.href, {{ emp.pk }})"

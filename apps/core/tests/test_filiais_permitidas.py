@@ -441,7 +441,7 @@ class TelaDeEscolhaTests(FiliaisBase):
         self.assertIsNone(resposta.context['empresa_selecionada'])
         self.assertEqual(list(resposta.context['filiais_page']), [filial_outra])
         self.assertContains(resposta, 'Filiais de todas as empresas')
-        self.assertContains(resposta, 'Todas as empresas')
+        self.assertContains(resposta, 'Pesquisar filiais em todas as empresas')
         self.assertContains(resposta, outra_empresa.nome_fantasia)
 
     def test_empresa_sem_logo_usa_imagem_da_primeira_filial(self):
