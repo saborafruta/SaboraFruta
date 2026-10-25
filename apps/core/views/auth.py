@@ -2,6 +2,7 @@
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
+from django.core.files.base import ContentFile
 from django.core.paginator import Paginator
 from django.db.models import Count, Prefetch, Q, prefetch_related_objects
 from django.http import JsonResponse
@@ -15,6 +16,7 @@ from apps.core.models import Empresa, Filial, FilialFavorita, Usuario
 from apps.core.services.auth_service import AuthService
 from apps.core.services.exceptions import DomainError
 from apps.core.services.home import nome_rota_inicial
+from apps.core.tenant_context import tenant_db
 
 
 class LoginView(View):
@@ -97,26 +99,24 @@ def atualizar_minha_foto(request):
     remover = request.POST.get('remover_foto') == '1'
     voltar_para = request.META.get('HTTP_REFERER') or reverse_lazy('core:dashboard')
 
-    def sincronizar_usuario_contextual():
-        banco_contextual = usuario_contextual._state.db or 'default'
-        banco_central = user._state.db or 'default'
-        if banco_contextual == banco_central:
-            return
-        usuario_contextual.foto = user.foto.name if user.foto else None
-        usuario_contextual.save(
-            using=banco_contextual,
-            update_fields=['foto', 'updated_at'],
-        )
-
     if remover:
         if user.foto:
-            user.foto.delete(save=False)
-            user.foto = None
-            user.save(
-                using=user._state.db or 'default',
-                update_fields=['foto', 'updated_at'],
-            )
-            sincronizar_usuario_contextual()
+            with tenant_db(None):
+                user.foto.delete(save=False)
+                user.foto = None
+                user.save(
+                    using=user._state.db or 'default',
+                    update_fields=['foto', 'updated_at'],
+                )
+            banco_contextual = usuario_contextual._state.db or 'default'
+            banco_central = user._state.db or 'default'
+            if banco_contextual != banco_central and usuario_contextual.foto:
+                usuario_contextual.foto.delete(save=False)
+                usuario_contextual.foto = None
+                usuario_contextual.save(
+                    using=banco_contextual,
+                    update_fields=['foto', 'updated_at'],
+                )
             messages.success(request, 'Foto removida.')
         return redirect(voltar_para)
 
@@ -134,14 +134,31 @@ def atualizar_minha_foto(request):
 
     foto_antiga = user.foto.name if user.foto else ''
     user.foto = foto
-    user.save(
-        using=user._state.db or 'default',
-        update_fields=['foto', 'updated_at'],
-    )
-    sincronizar_usuario_contextual()
+    with tenant_db(None):
+        user.save(
+            using=user._state.db or 'default',
+            update_fields=['foto', 'updated_at'],
+        )
+        with user.foto.open('rb') as arquivo:
+            foto_contextual = arquivo.read()
+
+    banco_contextual = usuario_contextual._state.db or 'default'
+    banco_central = user._state.db or 'default'
+    if banco_contextual != banco_central:
+        nome_foto = user.foto.name.rsplit('/', 1)[-1]
+        usuario_contextual.foto.save(
+            nome_foto,
+            ContentFile(foto_contextual),
+            save=False,
+        )
+        usuario_contextual.save(
+            using=banco_contextual,
+            update_fields=['foto', 'updated_at'],
+        )
 
     if foto_antiga and foto_antiga != user.foto.name:
-        user.foto.storage.delete(foto_antiga)
+        with tenant_db(None):
+            user.foto.storage.delete(foto_antiga)
 
     messages.success(request, 'Foto atualizada.')
     return redirect(voltar_para)

@@ -45,7 +45,7 @@ class UsuarioFotoTests(SimpleTestCase):
 
     @patch('apps.core.views.auth.messages.success')
     @patch('apps.core.views.auth._usuario_central')
-    def test_foto_de_sessao_legada_atualiza_usuario_central_e_local(
+    def test_foto_de_sessao_legada_gera_copia_isolada_no_tenant(
         self,
         usuario_central,
         _mensagem,
@@ -71,7 +71,19 @@ class UsuarioFotoTests(SimpleTestCase):
         request.user = local
         request.session = {}
 
-        response = atualizar_minha_foto(request)
+        with (
+            patch.object(
+                central.foto.storage,
+                'open',
+                return_value=BytesIO(b'foto otimizada'),
+            ),
+            patch.object(
+                local.foto.storage,
+                'save',
+                return_value='tenant-media/empresa_teste/usuarios/fotos/perfil.jpg',
+            ),
+        ):
+            response = atualizar_minha_foto(request)
 
         self.assertEqual(response.status_code, 302)
         central.save.assert_called_once_with(
@@ -82,5 +94,5 @@ class UsuarioFotoTests(SimpleTestCase):
             using='empresa_teste',
             update_fields=['foto', 'updated_at'],
         )
-        self.assertEqual(local.foto.name, central.foto.name)
+        self.assertNotEqual(local.foto.name, central.foto.name)
 
