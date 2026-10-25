@@ -30,9 +30,33 @@ def normalizar_caminho_favorito(valor):
 
 
 class MenuFavoritosView(LoginRequiredMixin, View):
+    @staticmethod
+    def _preparar_filial_ativa(request):
+        """Disponibiliza a filial sem submeter esta API ao redirect do middleware.
+
+        A rota continua isenta no ``FilialMiddleware`` porque uma filial antiga
+        na sessão não pode ser removida durante o carregamento assíncrono dos
+        favoritos. Para montar o menu, porém, precisamos do contexto da filial
+        válida e dos módulos que ela realmente possui.
+        """
+        if getattr(request, 'filial_ativa', None) is not None:
+            return
+        filial_id = request.session.get('filial_ativa_id') or request.user.filial_id
+        if not filial_id:
+            return
+        filial = (
+            request.user.filiais_permitidas()
+            .select_related('empresa')
+            .filter(pk=filial_id, ativo=True)
+            .first()
+        )
+        if filial is not None:
+            request.filial_ativa = filial
+
     def get(self, request):
         # Use the full, permission-filtered menu as the label/URL source. The
         # compact PDV menu intentionally does not contain every submenu link.
+        self._preparar_filial_ativa(request)
         itens = resolver_favoritos(
             request.user.menu_favoritos,
             render_to_string('core/_sidebar.html', request=request),

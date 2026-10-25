@@ -5470,14 +5470,18 @@ function pdv() {
       }
       const total=this.arredondarDesconto(numero);
       const subtotal=this.arredondarDesconto(Number(this.venda.subtotal||0));
-      if(total>subtotal) {
-        this.venda.desconto=0;
-        this.venda.acrescimo=this.arredondarDesconto(total-subtotal);
-      } else {
-        this.venda.acrescimo=0;
-        this.venda.desconto=this.limitarDesconto(subtotal-total,subtotal);
+      const acrescimo=this.arredondarDesconto(Number(this.venda.acrescimo||0));
+      if(total<acrescimo||total>subtotal+acrescimo) {
+        this.toast_('O total informado não pode criar nem descontar acréscimos.','erro');return;
       }
+      this.venda.desconto=this.limitarDesconto(subtotal+acrescimo-total,subtotal);
       this.recalcularTotais();
+      this.sincronizarDesconto(
+        this.descontoGeralRascunho,
+        'valor',
+        this.limitarDesconto(this.venda.desconto,this.venda.subtotal).toFixed(2).replace('.',','),
+        this.venda.subtotal
+      );
     },
     abrirDescontoItem(item) {
       this.itemEditando=item;

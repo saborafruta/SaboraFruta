@@ -1,6 +1,6 @@
 # Contexto e runbook do multibanco no Railway
 
-> Atualizado em 08/09/2026. Este documento registra o estado deixado em
+> Atualizado em 25/10/2026. Este documento registra o estado deixado em
 > produção, as decisões tomadas e o caminho de recuperação. Antes de qualquer
 > alteração relacionada a Railway, bancos por empresa, Central Administrativa,
 > domínios ou armazenamento, leia este arquivo inteiro e confirme o estado ao
@@ -21,8 +21,8 @@ Dev Edu:
 - Redis para tarefas e cache;
 - Central Administrativa para empresas, filiais, usuários, perfis e bancos;
 - provisionamento automático de novos bancos pelo Railway;
-- Sabor a Fruta usando o mesmo código, mas permanecendo isolado em outro
-  projeto, banco e bucket.
+- Sabor a Fruta incorporada ao diretório e ao domínio canônico do iTed, com
+  PostgreSQL operacional próprio como qualquer outro tenant.
 
 O trabalho foi feito primeiro em stage e depois levado à produção. Bancos
 originais não foram apagados.
@@ -52,8 +52,8 @@ Os aplicativos usam o mesmo repositório GitHub:
 - repositório: `saborafruta/SaboraFruta`;
 - branch de produção: `main`;
 - a `origin/main` é sempre a fonte da verdade;
-- um push em `main` pode disparar deploy no app central do iTed e no Sabor a
-  Fruta.
+- um push em `main` dispara deploy no app central do iTed; os antigos serviços
+  web e worker exclusivos da Sabor a Fruta estão parados.
 
 Commits importantes deste trabalho:
 
@@ -86,6 +86,7 @@ Serviços:
 | Banco operacional da iTed | `Banco iTed` | `1e1a0552-ac7e-4907-b8c6-e489f1f64c19` |
 | Banco Gerencial | `Banco Gerencial` | `5e7f91de-3710-4c88-bb2b-6af43c324490` |
 | Banco operacional da L&R Sports/Eureka | `Banco LR Sports` | `89221c0e-ad62-4e89-82fb-626ccab14a81` |
+| Banco operacional da Sabor a Fruta | banco tenant Sabor a Fruta | `282aa406-857e-461e-9b3a-f2b8dbd2c3fd` |
 | Redis | `Redis` | `f1955f60-1129-497f-8eb5-2e0f9d427761` |
 | Gateway não oficial do WhatsApp | `Evolution-API` | `84e38a7b-9ce0-4637-9517-61851c114d1d` |
 | Banco exclusivo do gateway WhatsApp | `Postgres` | `05b5c172-309a-4625-8f6a-4fc4776bf8c8` |
@@ -105,8 +106,8 @@ isolado `ited_evolution`. A chave global está selada nas variáveis Railway; n�
 deve ser impressa, copiada para o Git ou solicitada ao cliente final.
 
 Os apps recebem apenas `WHATSAPP_EVOLUTION_URL` e
-`WHATSAPP_EVOLUTION_API_KEY`. A mesma conexão central também atende o app
-separado Sabor a Fruta pela URL pública, sem compartilhar os bancos comerciais.
+`WHATSAPP_EVOLUTION_API_KEY`. A mesma conexão central atende todos os tenants,
+sem compartilhar os bancos comerciais.
 Cada estabelecimento ganha uma instância própria e o usuário conecta o número
 somente pela leitura do QR Code.
 
@@ -116,10 +117,11 @@ Empresas ativas no diretório central:
 |---|---|---|---:|
 | iTed | `06722483000114` | `empresa_ited_06722483000114` | 3 |
 | L&R SPORTS / Eureka | `50649395000126` | `empresa_eureka_50649395000126` | 1 |
+| Sabor a Fruta | `14004764000240` | `empresa_saborafruta_14004764000240` | 2 |
 
-Na validação final havia dois Super Admins ativos no Banco Gerencial e dois
-registros `EmpresaBanco` ativos. Não fixe esses números como regra: eles podem
-mudar com novos cadastros.
+As contagens registradas em 08/09/2026 ficaram obsoletas com a entrada da Sabor
+a Fruta. Não fixe quantidade de Super Admins ou de registros `EmpresaBanco`
+como regra: consulte sempre o diretório central atual.
 
 ## Domínios
 
@@ -150,7 +152,9 @@ referência no Railway; nunca imprima segredos:
 - `TENANT_DATABASE_URL_ITED_06722483000114` -> `${{Banco iTed.DATABASE_URL}}`;
 - `TENANT_DATABASE_URL_EUREKA_50649395000126` ->
   `${{Banco LR Sports.DATABASE_URL}}`;
-- `TENANT_DATABASES_JSON` com os aliases da iTed e Eureka;
+- `TENANT_DATABASE_URL_SABORAFRUTA_14004764000240` -> banco operacional da
+  Sabor a Fruta;
+- `TENANT_DATABASES_JSON` com os aliases da iTed, Eureka e Sabor a Fruta;
 - `CELERY_BROKER_URL` -> `${{Redis.REDIS_URL}}`;
 - `TENANT_DATABASE_ROUTING_ENABLED=True`;
 - `TENANT_PUBLIC_LINK_ROUTING_READY=True`;
@@ -176,7 +180,7 @@ localizou o `Banco Gerencial`.
 - O Super Admin permanece autenticado no gerencial e escolhe qualquer empresa
   e filial ativa.
 - Consultas e gravações operacionais usam o banco do tenant selecionado.
-- Não existe replicação operacional contínua entre iTed e Eureka.
+- Não existe replicação operacional contínua entre os bancos dos tenants.
 - O importador de diretório copia apenas empresa, filiais, perfis, permissões,
   usuários, acessos e políticas necessárias para autenticação e gestão.
 
@@ -273,22 +277,26 @@ atende `ited.app.br`. O provisionador grava a variável do novo tenant nesse
 serviço, identificado por `RAILWAY_SERVICE_ID`. Depois de criar um tenant,
 valide o banco, o login e a seleção de empresa pelo domínio canônico.
 
-## Sabor a Fruta permanece separado
+## Sabor a Fruta migrada para o iTed (25/10/2026)
 
-Projeto Railway:
+A Sabor a Fruta agora é um tenant do aplicativo central e deve ser acessada por
+`https://ited.app.br`. Estado ativo:
 
-- nome: `SaboraFruta`;
-- project ID: `32ec3314-c815-4c24-a63c-0f3bb249a84e`;
-- environment ID: `d8db136f-064d-4125-bc0f-3708ac9cf7c7`;
-- app service ID: `6d6dc6a9-f00b-48b5-b760-5454cbe94352`;
-- PostgreSQL service ID: `b106f4fd-2e6b-4db3-a649-cf0e42136009`;
-- bucket exclusivo: `saborafruta-media`;
-- bucket ID: `39fe2d63-9c56-4b63-babc-66e46fb4967e`;
-- URL: `https://saborafruta-production.up.railway.app`.
+- alias Django: `empresa_saborafruta_14004764000240`;
+- banco no projeto iTed: service ID
+  `282aa406-857e-461e-9b3a-f2b8dbd2c3fd`;
+- duas filiais e nove usuários próprios migrados;
+- hashes de senha conferidos entre diretório e tenant para os nove usuários;
+- conflitos de e-mail resolvidos conforme decisão do responsável: o Super
+  Admin global foi mantido como identidade única e os quatro usuários inativos
+  do iTed foram substituídos pelas identidades ativas da Sabor a Fruta;
+- antigos app e worker exclusivos estão parados; o PostgreSQL antigo permanece
+  preservado para rollback e não deve ser apagado sem nova autorização.
 
-Mesmo usando o mesmo repositório, o Sabor a Fruta não é um tenant do
-`ited.app.br`. Não a cadastre no Banco Gerencial e não aponte `DATABASE_URL`,
-Redis ou bucket dela para recursos do projeto iTed sem nova decisão explícita.
+O projeto Railway antigo `SaboraFruta`
+(`32ec3314-c815-4c24-a63c-0f3bb249a84e`) é somente origem de rollback. Não
+religue seus serviços web/worker junto com o tenant ativo: isso criaria dois
+pontos de escrita concorrentes.
 
 ## Arquivos, imagens, PDFs e certificados
 
@@ -305,25 +313,22 @@ fora da Railway:
 
 ### Sabor a Fruta
 
-O volume `/app/media` estava vazio. O banco continha 8 referências de arquivos
-antigas, mas nenhuma delas estava acessível antes da migração. Uma imagem ainda
-existia no bucket histórico compartilhado e foi recuperada para o bucket
-exclusivo `saborafruta-media`.
-
-Resultado:
-
-- 1 objeto recuperado, com 25.796 bytes;
-- 7 referências continuaram ausentes porque os arquivos já não existiam antes
-  do trabalho;
-- 2 certificados armazenados em campo `certificado_base64` permaneceram nos
-  dumps dos bancos;
-- não houve nova perda de arquivo causada pela migração.
+Na migração de 25/10/2026, as referências recuperáveis foram localizadas e
+copiadas para o armazenamento usado pelo app central. A validação abriu e leu
+seis objetos associados ao tenant: duas variantes da logo, uma foto de usuário,
+um certificado fiscal e dois certificados de sistema. Os certificados em campo
+de banco também foram preservados. A tela não deve depender do antigo volume
+`/app/media` nem do domínio antigo.
 
 ## Backups locais de rollback
 
 Diretório fora do repositório:
 
 `C:\Users\Windows 10\Documents\Railway-Backups\pre-multibanco-2026-09-07`
+
+Backup imediatamente anterior à entrada da Sabor a Fruta no iTed:
+
+`C:\Users\Windows 10\Documents\Railway-Backups\pre-sabor-ited-2026-10-25`
 
 Arquivos principais:
 
@@ -444,6 +449,19 @@ curl.exe https://saborafruta-production.up.railway.app/health/
   dos tenants iTed/Eureka e respondeu 200 em `/health/`; o Sabor a Fruta também
   aplicou a migration e respondeu 200, permanecendo em infraestrutura separada.
 
+Validação da migração da Sabor a Fruta em 25/10/2026:
+
+- 94 telas críticas responderam HTTP 200 nas duas filiais, sem HTTP 500;
+- os 16 contextos válidos de usuário/filial foram exercitados;
+- uma venda real controlada de R$ 10,00 foi criada, reconsultada e cancelada;
+  estoque e caixa voltaram exatamente aos saldos anteriores e o registro
+  cancelado foi mantido para auditoria;
+- prontidão fiscal e pré-visualização de NFC-e responderam corretamente, sem
+  emitir documento fiscal real;
+- os seis objetos de armazenamento foram abertos e lidos;
+- os 500 encontrados em `/pdv/vendas/` e `/analytics/dre/` foram corrigidos e
+  cobertos por testes antes da liberação.
+
 ## Central visual de infraestrutura (08/09/2026)
 
 A administração cotidiana não deve mais depender das telas cruas do Django
@@ -561,7 +579,8 @@ Antes de agir:
 - [ ] confirmar flags de roteamento e provisionamento;
 - [ ] confirmar os registros `EmpresaBanco` ativos;
 - [ ] confirmar conexão dos aliases com `check_tenant_databases`;
-- [ ] confirmar que Sabor a Fruta continua em projeto, banco e bucket separados;
+- [ ] confirmar que o alias `empresa_saborafruta_14004764000240` está ativo no
+  app central e que os serviços web/worker antigos continuam parados;
 - [ ] confirmar backups antes de qualquer operação destrutiva;
 - [ ] nunca apagar os bancos e serviços antigos sem autorização explícita;
 - [ ] depois de qualquer deploy, aguardar o deployment exato chegar a
