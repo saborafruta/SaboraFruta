@@ -16,9 +16,10 @@ O QUE ESTES TESTES CERCAM:
     existir -- sem nenhuma linha de acesso -- continua enxergando a empresa
     inteira.
 """
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
+from apps.core.context_processors import filial_context
 from apps.core.models import (
     Empresa, Filial, FilialFavorita, PerfilAcesso, Usuario,
     UsuarioFilialAcesso,
@@ -165,6 +166,54 @@ class FiliaisPermitidasTests(FiliaisBase):
             {self.filial, outra_filial},
         )
         self.assertTrue(lucas.pode_acessar_filial(outra_filial))
+
+    def test_contexto_oferece_troca_para_usuario_com_mais_de_uma_empresa(self):
+        outra = Empresa.objects.create(
+            razao_social='Outra LTDA', nome_fantasia='Outra',
+            cnpj='94345678000191',
+            regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        outra_filial = Filial.objects.create(
+            empresa=outra, razao_social='Outra Filial',
+            cnpj='94345678000272', uf='RN',
+        )
+        outro_perfil = PerfilAcesso.objects.create(
+            empresa=outra, nome='Gestor', is_admin=True,
+        )
+        usuario_central = self._usuario(
+            'suporte-central@grupo.local', self.perfil_admin, self.matriz,
+            acessos=[self.matriz],
+        )
+        UsuarioFilialAcesso.objects.create(
+            usuario=usuario_central, filial=outra_filial, perfil=outro_perfil,
+            ativo=True,
+        )
+        usuario_contextual = self._usuario(
+            'suporte-tenant@grupo.local', self.perfil_admin, self.matriz,
+            acessos=[self.matriz, self.filial],
+        )
+        request = RequestFactory().get('/dashboard/')
+        request.user = usuario_contextual
+        request._central_authenticated_user = usuario_central
+        request.filial_ativa = self.matriz
+
+        contexto = filial_context(request)
+
+        self.assertTrue(contexto['pode_trocar_empresa'])
+
+    def test_contexto_nao_oferece_troca_com_acessos_em_uma_empresa(self):
+        usuario = self._usuario(
+            'suporte-local@grupo.local', self.perfil_admin, self.matriz,
+            acessos=[self.matriz, self.filial],
+        )
+        request = RequestFactory().get('/dashboard/')
+        request.user = usuario
+        request.filial_ativa = self.matriz
+
+        contexto = filial_context(request)
+
+        self.assertFalse(contexto['pode_trocar_empresa'])
 
 
 class TelaDeEscolhaTests(FiliaisBase):

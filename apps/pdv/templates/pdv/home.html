@@ -1449,7 +1449,7 @@
       </button>
       <div x-show="showFilialMenu" x-cloak x-transition.opacity.duration.120ms class="pdv-popover right">
         {% for filial in filiais_disponiveis %}<a class="pdv-menu-item" href="{% url 'core:trocar-filial' filial.pk %}"><span style="width:8px;height:8px;border-radius:50%;background:{% if filial_ativa and filial.pk == filial_ativa.pk %}#22c55e{% else %}#71717a{% endif %};"></span>{{ filial.nome_fantasia|default:filial.razao_social }}</a>{% empty %}<span class="pdv-menu-item">Nenhuma filial disponível</span>{% endfor %}
-        {% if user.is_superuser %}<a class="pdv-menu-item" href="{% url 'core:selecionar-filial' %}">Trocar empresa</a>{% endif %}
+        {% if pode_trocar_empresa %}<a class="pdv-menu-item" href="{% url 'core:selecionar-filial' %}">Trocar empresa</a>{% endif %}
       </div>
     </div>
 

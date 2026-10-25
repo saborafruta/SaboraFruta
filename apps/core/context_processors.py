@@ -73,6 +73,7 @@ def filial_context(request):
     ctx = {
         'filial_ativa': getattr(request, 'filial_ativa', None),
         'filiais_disponiveis': [],
+        'pode_trocar_empresa': False,
         # Chaves dos módulos que esta filial enxerga. O sidebar testa
         # `'chave' in modulos_ativos` -- mesma resposta que o middleware usa
         # para barrar a URL, então menu e acesso nunca discordam.
@@ -92,6 +93,24 @@ def filial_context(request):
             # caminho para pular de empresa.
             qs = qs.filter(empresa_id=ctx['filial_ativa'].empresa_id)
         ctx['filiais_disponiveis'] = list(qs.order_by('nome_fantasia', 'razao_social'))
+
+        # Nas rotas operacionais ``request.user`` e a identidade local do
+        # tenant. A autorizacao para atravessar empresas, porem, pertence ao
+        # diretorio central. Consultar apenas o usuario local escondia o link
+        # de retorno justamente de usuarios comuns com vinculos em mais de
+        # uma empresa (o caso do login de suporte da iTed/Sabor a Fruta).
+        usuario_central = getattr(request, '_central_authenticated_user', None)
+        if usuario_central is None and user._state.db == 'default':
+            usuario_central = user
+        if usuario_central is not None:
+            ctx['pode_trocar_empresa'] = (
+                usuario_central.is_superuser
+                or usuario_central.filiais_permitidas()
+                .filter(empresa__ativo=True)
+                .values('empresa_id')
+                .distinct()
+                .count() > 1
+            )
     except Exception:
         pass
     return ctx

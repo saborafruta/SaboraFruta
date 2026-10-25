@@ -36,7 +36,7 @@
               : 'color:#f9fafb; border:1px solid rgba(255,255,255,0.12); background:#111827; font-weight:700;'">
         Central Administrativa
       </span>
-    {% elif filiais_disponiveis|length > 1 %}
+    {% elif filiais_disponiveis|length > 1 or pode_trocar_empresa %}
       <div x-data="{ openFilial: false }" class="relative">
         <button @click="openFilial = !openFilial"
                 class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all"
@@ -78,7 +78,7 @@
               {% endif %}
             </a>
           {% endfor %}
-          {% if user.is_superuser %}
+          {% if pode_trocar_empresa %}
             <div class="mx-4 my-1" :style="temaClaro ? 'border-top:1px solid #e5e7eb;' : 'border-top:1px solid #2a2a2e;'"></div>
             <a href="{% url 'core:selecionar-filial' %}"
                class="mx-3 my-2 flex items-center justify-center px-4 py-2.5 rounded-lg text-sm transition-all"
@@ -98,7 +98,7 @@
         </svg>
         <span class="truncate max-w-[220px]">{{ filial_ativa }}</span>
       </span>
-      {% if user.is_superuser %}
+      {% if pode_trocar_empresa %}
         <a href="{% url 'core:selecionar-filial' %}"
            class="hidden md:inline-flex items-center px-2.5 py-1 rounded-md text-xs transition-all"
            :style="temaClaro ? 'background:rgba(37,99,235,0.95); color:#fff; font-weight:700; box-shadow:0 4px 10px rgba(37,99,235,0.16);' : 'background:#2563eb; color:#fff; font-weight:700;'">
