@@ -80,8 +80,8 @@
       </div>
     </section>
 
-    <section class="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-8">
-      <aside class="selecao-card flex min-h-[570px] flex-col rounded-2xl border p-4 xl:col-span-3"
+    <section class="selecao-global-layout mt-5">
+      <aside class="selecao-global-empresas selecao-card flex min-h-[570px] flex-col rounded-2xl border p-4"
              :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#202024; border-color:#2f3542;'">
         <div>
           <h2 class="text-xl font-bold" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">Empresas</h2>
@@ -131,7 +131,7 @@
         {% endif %}
       </aside>
 
-      <section class="selecao-card flex min-h-[570px] min-w-0 flex-col rounded-2xl border p-4 xl:col-span-5"
+      <section class="selecao-global-filiais selecao-card flex min-h-[570px] min-w-0 flex-col rounded-2xl border p-4"
                :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#202024; border-color:#2f3542;'">
         {% if empresa_selecionada %}
           <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -141,8 +141,8 @@
             </div>
           </div>
 
-          <div class="mt-4 flex flex-col gap-2 lg:flex-row lg:items-center">
-            <form method="get" class="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row">
+          <div class="selecao-global-toolbar mt-4">
+            <form method="get">
               <input type="hidden" name="empresa" value="{{ empresa_selecionada.pk }}">
               {% if busca_empresa %}<input type="hidden" name="empresa_busca" value="{{ busca_empresa }}">{% endif %}
               {% if somente_favoritas %}<input type="hidden" name="favoritas" value="1">{% endif %}
@@ -156,7 +156,7 @@
                 <option value="cidade" {% if ordenacao == 'cidade' %}selected{% endif %}>Cidade</option>
               </select>
             </form>
-            <div class="flex shrink-0 items-center gap-2">
+            <div class="selecao-global-toolbar-actions">
               <a href="?empresa={{ empresa_selecionada.pk }}{% if busca_empresa %}&empresa_busca={{ busca_empresa|urlencode }}{% endif %}{% if busca_filial %}&filial_busca={{ busca_filial|urlencode }}{% endif %}&ordenacao={{ ordenacao }}{% if not somente_favoritas %}&favoritas=1{% endif %}"
                  class="grid h-11 w-11 place-items-center rounded-lg border" title="Somente favoritas"
                  :style="{% if somente_favoritas %}'background:#fffbeb; border-color:#f59e0b; color:#d97706;'{% else %}(temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#64748b;' : 'background:#18181b; border-color:#3f3f46; color:#a1a1aa;'){% endif %}">☆</a>

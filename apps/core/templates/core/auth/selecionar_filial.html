@@ -27,6 +27,57 @@
   body:not(.tema-claro) .selecao-card {
     border-color: rgba(59,130,246,0.20) !important;
   }
+  .selecao-global-layout {
+    display: grid;
+    grid-template-columns: minmax(340px, 0.72fr) minmax(0, 1.45fr);
+    gap: 1rem;
+    align-items: stretch;
+  }
+  .selecao-global-empresas,
+  .selecao-global-filiais {
+    min-width: 0;
+  }
+  .selecao-global-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .selecao-global-toolbar form {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    gap: 0.5rem;
+  }
+  .selecao-global-toolbar input[type="search"] {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .selecao-global-toolbar select {
+    flex: 0 0 10rem;
+    width: 10rem;
+  }
+  .selecao-global-toolbar-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  @media (max-width: 1100px) {
+    .selecao-global-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 720px) {
+    .selecao-global-toolbar,
+    .selecao-global-toolbar form {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .selecao-global-toolbar select {
+      flex-basis: auto;
+      width: 100%;
+    }
+  }
   .selecao-filial-logo {
     width: 76px;
     height: 54px;

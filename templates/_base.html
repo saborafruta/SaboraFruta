@@ -760,7 +760,7 @@
       </svg>
     </a>
 
-    {% if orla_widget.enabled %}
+    {% if orla_widget.enabled and request.resolver_match.url_name != 'selecionar-filial' %}
       <button id="orla-support-topbar" type="button" hidden
               class="orla-support-topbar flex items-center justify-center w-9 h-9 rounded-lg transition-all"
               :style="temaClaro
@@ -1686,7 +1686,7 @@
     }
   </script>
 
-  {% if orla_widget.enabled %}
+  {% if orla_widget.enabled and request.resolver_match.url_name != 'selecionar-filial' %}
     <script
       id="orla-widget-script"
       src="{{ orla_widget.script_url }}"
