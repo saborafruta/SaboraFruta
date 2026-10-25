@@ -278,6 +278,43 @@ class TelaDeEscolhaTests(FiliaisBase):
         self.assertEqual(len(filtrada.context['filiais_page']), 1)
         self.assertEqual(filtrada.context['filiais_page'][0].cidade, 'Caico')
 
+    def test_empresa_sem_logo_usa_imagem_da_primeira_filial(self):
+        self.matriz.imagem = 'filiais/imagens/logo-matriz.png'
+        self.matriz.save(update_fields=['imagem'])
+        self.filial.imagem = 'filiais/imagens/logo-filial.png'
+        self.filial.save(update_fields=['imagem'])
+        admin = Usuario.objects.create_superuser(
+            email='logos@ited.local', nome='Admin Logos', password='x' * 12,
+            empresa=self.empresa, filial=self.matriz, perfil=self.perfil_admin,
+        )
+        self.client.force_login(admin)
+
+        resposta = self.client.get(reverse('core:selecionar-filial'))
+
+        empresa = resposta.context['empresas_page'][0]
+        self.assertTrue(empresa.logo_selecao_url.endswith('logo-matriz.png'))
+        self.assertContains(resposta, 'logo-matriz.png')
+
+    def test_logo_da_empresa_tem_prioridade_sobre_a_primeira_filial(self):
+        self.empresa.logo_url = 'https://cdn.example.com/logo-empresa.png'
+        self.empresa.save(update_fields=['logo_url'])
+        self.matriz.imagem = 'filiais/imagens/logo-matriz.png'
+        self.matriz.save(update_fields=['imagem'])
+        admin = Usuario.objects.create_superuser(
+            email='logo-empresa@ited.local', nome='Admin Logo', password='x' * 12,
+            empresa=self.empresa, filial=self.matriz, perfil=self.perfil_admin,
+        )
+        self.client.force_login(admin)
+
+        resposta = self.client.get(reverse('core:selecionar-filial'))
+
+        empresa = resposta.context['empresas_page'][0]
+        self.assertEqual(
+            empresa.logo_selecao_url,
+            'https://cdn.example.com/logo-empresa.png',
+        )
+        self.assertContains(resposta, 'https://cdn.example.com/logo-empresa.png')
+
     def test_usuario_pode_favoritar_e_desfavoritar_filial_permitida(self):
         lucas = self._usuario(
             'lucas-alterna-favorita@grupo.local', self.perfil_admin, self.polpa,

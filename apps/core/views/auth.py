@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q, prefetch_related_objects
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
@@ -241,6 +241,23 @@ class SelecionarFilialView(View):
         empresas_page = Paginator(empresas_listagem, 8).get_page(
             request.GET.get('empresas_page', 1),
         )
+        empresas_page.object_list = list(empresas_page.object_list)
+        prefetch_related_objects(
+            empresas_page.object_list,
+            Prefetch(
+                'filiais',
+                queryset=filiais.order_by('created_at', 'pk').only(
+                    'pk', 'empresa_id', 'imagem', 'created_at',
+                ),
+                to_attr='filiais_para_logo',
+            ),
+        )
+        for empresa in empresas_page.object_list:
+            empresa.logo_selecao_url = empresa.logo_url
+            if not empresa.logo_selecao_url and empresa.filiais_para_logo:
+                primeira_filial = empresa.filiais_para_logo[0]
+                if primeira_filial.imagem:
+                    empresa.logo_selecao_url = primeira_filial.imagem.url
 
         empresa_id = request.GET.get('empresa')
         if not empresa_id or not empresa_id.isdigit():

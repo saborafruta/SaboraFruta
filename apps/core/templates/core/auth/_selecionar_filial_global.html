@@ -109,7 +109,7 @@
                  :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#1b1b1f; border-color:#303038;'"
                {% endif %}>
               <span class="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border bg-white text-sm font-black text-blue-700">
-                {% if emp.logo_url %}<img src="{{ emp.logo_url }}" alt="" class="h-full w-full object-contain" onerror="this.remove();">{% else %}{{ emp.nome_fantasia|default:emp.razao_social|first|upper }}{% endif %}
+                {% if emp.logo_selecao_url %}<img src="{{ emp.logo_selecao_url }}" alt="Logo de {{ emp.nome_fantasia|default:emp.razao_social }}" class="h-full w-full object-contain" onerror="this.remove();">{% else %}{{ emp.nome_fantasia|default:emp.razao_social|first|upper }}{% endif %}
               </span>
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-sm font-bold" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">{{ emp.nome_fantasia|default:emp.razao_social }}</span>
