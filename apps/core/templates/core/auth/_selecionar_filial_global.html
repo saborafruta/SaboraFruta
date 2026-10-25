@@ -16,7 +16,7 @@
            const url = new URL(window.location.href);
            url.searchParams.delete('empresas_page');
            url.searchParams.delete('filiais_page');
-           const ordenacao = this.$el.querySelector('[name="ordenacao"]');
+           const ordenacao = this.$el.querySelector('[name=ordenacao]');
            if (ordenacao) url.searchParams.set('ordenacao', ordenacao.value);
            if (campo === 'empresa') {
              this.buscaEmpresa
@@ -59,7 +59,7 @@
            this.empresaSelecionada = Number(novasEmpresas.dataset.empresaSelecionada) || null;
            window.history.replaceState({}, '', url);
            this.$nextTick(() => {
-             const input = this.$el.querySelector(`[data-busca="${campo}"]`);
+             const input = this.$el.querySelector('[data-busca=' + campo + ']');
              if (input) {
                input.focus();
                input.setSelectionRange(input.value.length, input.value.length);
