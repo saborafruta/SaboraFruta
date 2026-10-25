@@ -279,12 +279,19 @@ class SelecionarFilialView(View):
         empresa_id = request.GET.get('empresa')
         if not empresa_id or not empresa_id.isdigit():
             empresa_id = None
-        empresa_selecionada = empresas_listagem.filter(pk=empresa_id).first()
-        if empresa_selecionada is None and empresas_page.object_list:
+        todas_empresas = request.GET.get('todas') == '1'
+        empresa_selecionada = None
+        if not todas_empresas:
+            empresa_selecionada = empresas_listagem.filter(pk=empresa_id).first()
+        if (
+            not todas_empresas
+            and empresa_selecionada is None
+            and empresas_page.object_list
+        ):
             empresa_selecionada = empresas_page.object_list[0]
 
-        filiais_empresa = filiais.none()
-        total_filiais_empresa = 0
+        filiais_empresa = filiais
+        total_filiais_empresa = filiais.count()
         if empresa_selecionada is not None:
             filiais_empresa = filiais.filter(
                 empresa_id=empresa_selecionada.pk,
@@ -334,6 +341,7 @@ class SelecionarFilialView(View):
             'filiais_page': filiais_page,
             'filiais_exibidas': filiais_page.object_list,
             'total_filiais_empresa': total_filiais_empresa,
+            'todas_empresas': todas_empresas,
             'ordenacao': ordenacao,
             'somente_favoritas': somente_favoritas,
         }

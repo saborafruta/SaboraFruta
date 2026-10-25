@@ -16,6 +16,11 @@
           :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">
         {{ f.nome_fantasia|default:f.razao_social }}
       </h3>
+      {% if todas_empresas %}
+        <p class="mt-0.5 truncate text-xs font-medium" :style="temaClaro ? 'color:#475569;' : 'color:#d4d4d8;'">
+          {{ f.empresa.nome_fantasia|default:f.empresa.razao_social }}
+        </p>
+      {% endif %}
       <p class="mt-1 text-xs" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">
         {{ f.cidade|default:"Cidade não informada" }}{% if f.uf %}/{{ f.uf }}{% endif %}
         <span class="mx-1">•</span> CNPJ {{ f.cnpj }}

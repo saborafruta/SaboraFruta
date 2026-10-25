@@ -413,6 +413,37 @@ class TelaDeEscolhaTests(FiliaisBase):
         self.assertEqual(len(filtrada.context['filiais_page']), 1)
         self.assertEqual(filtrada.context['filiais_page'][0].cidade, 'Caico')
 
+    def test_superusuario_pesquisa_filial_em_todas_as_empresas(self):
+        outra_empresa = Empresa.objects.create(
+            razao_social='Outra Empresa LTDA', nome_fantasia='Outra Empresa',
+            cnpj='22345678000195',
+            regime_tributario=Empresa.RegimeTributario.SIMPLES_NACIONAL,
+            codigo_regime_tributario=1,
+        )
+        filial_outra = Filial.objects.create(
+            empresa=outra_empresa, razao_social='Filial Encontrada LTDA',
+            nome_fantasia='FILIAL ENCONTRADA', cnpj='22345678000276',
+            uf='RN', cidade='Mossoro',
+        )
+        admin = Usuario.objects.create_superuser(
+            email='todas-empresas@ited.local', nome='Admin Global', password='x' * 12,
+            empresa=self.empresa, filial=self.matriz, perfil=self.perfil_admin,
+        )
+        self.client.force_login(admin)
+
+        resposta = self.client.get(
+            reverse('core:selecionar-filial'),
+            {'todas': '1', 'filial_busca': 'encontrada'},
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertTrue(resposta.context['todas_empresas'])
+        self.assertIsNone(resposta.context['empresa_selecionada'])
+        self.assertEqual(list(resposta.context['filiais_page']), [filial_outra])
+        self.assertContains(resposta, 'Filiais de todas as empresas')
+        self.assertContains(resposta, 'Todas as empresas')
+        self.assertContains(resposta, outra_empresa.nome_fantasia)
+
     def test_empresa_sem_logo_usa_imagem_da_primeira_filial(self):
         self.matriz.imagem = 'filiais/imagens/logo-matriz.png'
         self.matriz.save(update_fields=['imagem'])

@@ -181,6 +181,7 @@
 
         <form method="get" class="mt-4" @submit.prevent="agendarBusca('empresa')">
           {% if empresa_selecionada %}<input type="hidden" name="empresa" value="{{ empresa_selecionada.pk }}">{% endif %}
+          {% if todas_empresas %}<input type="hidden" name="todas" value="1">{% endif %}
           <label class="relative block">
             <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
             <input type="search" name="empresa_busca" value="{{ busca_empresa }}"
@@ -192,6 +193,19 @@
         </form>
 
         <div class="mt-4 space-y-2">
+          <a href="?todas=1{% if busca_empresa %}&empresa_busca={{ busca_empresa|urlencode }}{% endif %}"
+             @click.prevent="selecionarEmpresa($event.currentTarget.href, null)"
+             class="flex items-center gap-3 rounded-xl border p-3 transition hover:border-blue-500"
+             :style="empresaSelecionada === null
+               ? (temaClaro ? 'background:#eff6ff; border-color:#2563eb;' : 'background:#172554; border-color:#3b82f6;')
+               : (temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#1b1b1f; border-color:#303038;')">
+            <span class="grid h-12 w-12 shrink-0 place-items-center rounded-xl border text-xl font-black text-blue-600"
+                  :style="temaClaro ? 'background:#eff6ff; border-color:#bfdbfe;' : 'background:#172554; border-color:#1d4ed8;'">∞</span>
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-sm font-bold" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">Todas as empresas</span>
+              <span class="mt-0.5 block truncate text-xs" :style="temaClaro ? 'color:#475569;' : 'color:#d4d4d8;'">Pesquisar em todas as filiais liberadas</span>
+            </span>
+          </a>
           {% for emp in empresas_page %}
             <a href="?empresa={{ emp.pk }}{% if busca_empresa %}&empresa_busca={{ busca_empresa|urlencode }}{% endif %}"
                @click.prevent="selecionarEmpresa($event.currentTarget.href, {{ emp.pk }})"
@@ -227,17 +241,18 @@
                class="selecao-global-filiais selecao-card flex min-h-[570px] min-w-0 flex-col rounded-2xl border p-4 transition-opacity"
                :class="carregandoEmpresa ? 'opacity-55 pointer-events-none' : 'opacity-100'"
                :style="temaClaro ? 'background:#fff; border-color:#e5e7eb;' : 'background:#202024; border-color:#2f3542;'">
-        {% if empresa_selecionada %}
+        {% if empresa_selecionada or todas_empresas %}
           <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div class="min-w-0">
-              <h2 class="truncate text-xl font-bold" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">Filiais de {{ empresa_selecionada.nome_fantasia|default:empresa_selecionada.razao_social }}</h2>
+              <h2 class="truncate text-xl font-bold" :style="temaClaro ? 'color:#0f172a;' : 'color:#f8fafc;'">{% if todas_empresas %}Filiais de todas as empresas{% else %}Filiais de {{ empresa_selecionada.nome_fantasia|default:empresa_selecionada.razao_social }}{% endif %}</h2>
               <p class="mt-1 text-sm" :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">{{ total_filiais_empresa }} {% if total_filiais_empresa == 1 %}unidade disponível{% else %}unidades disponíveis{% endif %}</p>
             </div>
           </div>
 
           <div class="selecao-global-toolbar mt-4">
             <form method="get" @submit.prevent="agendarBusca('filial')">
-              <input type="hidden" name="empresa" value="{{ empresa_selecionada.pk }}">
+              {% if empresa_selecionada %}<input type="hidden" name="empresa" value="{{ empresa_selecionada.pk }}">{% endif %}
+              {% if todas_empresas %}<input type="hidden" name="todas" value="1">{% endif %}
               {% if busca_empresa %}<input type="hidden" name="empresa_busca" value="{{ busca_empresa }}">{% endif %}
               {% if somente_favoritas %}<input type="hidden" name="favoritas" value="1">{% endif %}
               <input type="search" name="filial_busca" value="{{ busca_filial }}"
@@ -252,7 +267,7 @@
               </select>
             </form>
             <div class="selecao-global-toolbar-actions">
-              <a href="?empresa={{ empresa_selecionada.pk }}{% if busca_empresa %}&empresa_busca={{ busca_empresa|urlencode }}{% endif %}{% if busca_filial %}&filial_busca={{ busca_filial|urlencode }}{% endif %}&ordenacao={{ ordenacao }}{% if not somente_favoritas %}&favoritas=1{% endif %}"
+              <a href="?{% if empresa_selecionada %}empresa={{ empresa_selecionada.pk }}{% else %}todas=1{% endif %}{% if busca_empresa %}&empresa_busca={{ busca_empresa|urlencode }}{% endif %}{% if busca_filial %}&filial_busca={{ busca_filial|urlencode }}{% endif %}&ordenacao={{ ordenacao }}{% if not somente_favoritas %}&favoritas=1{% endif %}"
                  class="grid h-11 w-11 place-items-center rounded-lg border" title="Somente favoritas"
                  :style="{% if somente_favoritas %}'background:#fffbeb; border-color:#f59e0b; color:#d97706;'{% else %}(temaClaro ? 'background:#fff; border-color:#cbd5e1; color:#64748b;' : 'background:#18181b; border-color:#3f3f46; color:#a1a1aa;'){% endif %}">☆</a>
               <button type="button" @click="modo = 'list'" class="grid h-11 w-11 place-items-center rounded-lg border"
@@ -282,9 +297,9 @@
 
           {% if filiais_page.paginator.num_pages > 1 %}
             <nav class="mt-auto flex items-center justify-between border-t pt-4 text-sm" :style="temaClaro ? 'border-color:#e5e7eb;' : 'border-color:#2f3542;'" aria-label="Paginação de filiais">
-              {% if filiais_page.has_previous %}<a class="rounded-lg border px-3 py-2" href="?empresa={{ empresa_selecionada.pk }}&filiais_page={{ filiais_page.previous_page_number }}{% if busca_empresa %}&empresa_busca={{ busca_empresa|urlencode }}{% endif %}{% if busca_filial %}&filial_busca={{ busca_filial|urlencode }}{% endif %}&ordenacao={{ ordenacao }}{% if somente_favoritas %}&favoritas=1{% endif %}">Anterior</a>{% else %}<span></span>{% endif %}
+              {% if filiais_page.has_previous %}<a class="rounded-lg border px-3 py-2" href="?{% if empresa_selecionada %}empresa={{ empresa_selecionada.pk }}{% else %}todas=1{% endif %}&filiais_page={{ filiais_page.previous_page_number }}{% if busca_empresa %}&empresa_busca={{ busca_empresa|urlencode }}{% endif %}{% if busca_filial %}&filial_busca={{ busca_filial|urlencode }}{% endif %}&ordenacao={{ ordenacao }}{% if somente_favoritas %}&favoritas=1{% endif %}">Anterior</a>{% else %}<span></span>{% endif %}
               <span :style="temaClaro ? 'color:#64748b;' : 'color:#a1a1aa;'">Página {{ filiais_page.number }} de {{ filiais_page.paginator.num_pages }}</span>
-              {% if filiais_page.has_next %}<a class="rounded-lg border px-3 py-2" href="?empresa={{ empresa_selecionada.pk }}&filiais_page={{ filiais_page.next_page_number }}{% if busca_empresa %}&empresa_busca={{ busca_empresa|urlencode }}{% endif %}{% if busca_filial %}&filial_busca={{ busca_filial|urlencode }}{% endif %}&ordenacao={{ ordenacao }}{% if somente_favoritas %}&favoritas=1{% endif %}">Próxima</a>{% else %}<span></span>{% endif %}
+              {% if filiais_page.has_next %}<a class="rounded-lg border px-3 py-2" href="?{% if empresa_selecionada %}empresa={{ empresa_selecionada.pk }}{% else %}todas=1{% endif %}&filiais_page={{ filiais_page.next_page_number }}{% if busca_empresa %}&empresa_busca={{ busca_empresa|urlencode }}{% endif %}{% if busca_filial %}&filial_busca={{ busca_filial|urlencode }}{% endif %}&ordenacao={{ ordenacao }}{% if somente_favoritas %}&favoritas=1{% endif %}">Próxima</a>{% else %}<span></span>{% endif %}
             </nav>
           {% endif %}
         {% else %}
