@@ -6,9 +6,7 @@ import logging
 import re
 import uuid
 from decimal import Decimal
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
 
 from django.contrib import messages
 from django.core.files.base import ContentFile
@@ -2625,22 +2623,9 @@ class ProdutoImagemView(View):
         destino = produto.foto_url_resolvida
         if not destino:
             raise Http404('Produto sem imagem cadastrada.')
-        requisicao = Request(
-            destino,
-            headers={
-                'Accept': 'image/*',
-                'User-Agent': 'iTED/1.0 (+https://ited.app.br)',
-            },
-        )
-        try:
-            with urlopen(requisicao, timeout=20) as resposta:
-                conteudo = resposta.read()
-            return cls._converter(io.BytesIO(conteudo), variante)
-        except (HTTPError, URLError, TimeoutError, OSError) as exc:
-            # Uma origem externa pode negar acesso (403), estar fora do ar ou
-            # devolver um arquivo que não seja uma imagem. A foto fica
-            # indisponível, mas isso não deve virar erro interno (500).
-            raise Http404('Imagem externa indisponivel.') from exc
+        # URLs externas são carregadas pelo navegador. Fazer fetch no servidor
+        # permitiria SSRF por uma URL de produto controlada por usuário.
+        raise Http404('Imagem externa carregada diretamente pelo navegador.')
 
     def get(self, request, pk):
         produto = get_object_or_404(Produto.objects.all(), pk=pk)

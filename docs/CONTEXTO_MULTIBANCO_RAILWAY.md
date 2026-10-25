@@ -543,11 +543,21 @@ No worker, `RAILWAY_CONTROL_SERVICE_ID` deve apontar para o app web canônico,
 não para o próprio worker. Antes de cada tarefa, ele consulta esse app e carrega
 as URLs atuais dos tenants, inclusive bancos criados depois do último deploy.
 
-Os pacotes de backup não ficam no disco efêmero do container: são enviados ao
-`default_storage`. No iTed isso significa o bucket `media`, compartilhado pelo
-app web e pelo worker. Os campos `backup_path` guardam a chave do objeto, e o
-download da Central abre o arquivo pelo storage. Não troque isso por um caminho
-local em produção.
+Os arquivos não ficam dentro do PostgreSQL nem no disco efêmero do container.
+O iTed usa o bucket privado `media`, compartilhado pelo app web e pelo worker;
+os links de leitura são assinados e expiram em 15 minutos. Uploads feitos durante
+uma operação tenant recebem o prefixo `tenant-media/<hash-do-alias>/`, e o
+storage recusa ler ou assinar links para o prefixo de outro tenant. Chaves
+legadas sem prefixo não são apagadas por operações tenant, pois podem ter sido
+compartilhadas antes do isolamento.
+
+O comando `namespace_tenant_media` copia as referências de arquivos e imagens
+de produtos de cada tenant para seu prefixo, compara SHA-256 e atualiza os
+caminhos no banco. Sem argumentos ele só mostra uma prévia; `--apply` executa e
+guarda um manifesto no bucket, que pode ser passado a `--rollback` para restaurar
+as referências. Os objetos antigos são preservados para recuperação. Os campos
+`backup_path` da Central também continuam usando `default_storage`; não troque
+isso por um caminho local em produção.
 
 Não existe separação silenciosa: nenhum botão inicia a operação final antes da
 simulação e da confirmação. Ainda assim, antes de usar em empresa real,

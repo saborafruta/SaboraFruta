@@ -1,7 +1,6 @@
 import io
 from pathlib import Path
 from types import SimpleNamespace
-from urllib.error import HTTPError
 from unittest.mock import patch
 
 from django.contrib.auth.models import AnonymousUser
@@ -91,39 +90,8 @@ class ProdutoFotoUrlTests(SimpleTestCase):
         with self.assertRaises(Http404):
             ProdutoImagemView.as_view()(self.factory.get('/produtos/1/foto/'), pk=1)
 
-    @patch.object(ProdutoImagemView, '_converter', return_value=io.BytesIO(b'otimizada'))
-    @patch('apps.produtos.views.produto.urlopen')
-    def test_imagem_externa_usa_identificacao_aceita_pelo_provedor(self, abrir_url, converter):
-        resposta = abrir_url.return_value.__enter__.return_value
-        resposta.read.return_value = b'imagem-original'
+    def test_imagem_externa_nao_e_buscada_pelo_servidor(self):
         produto = Produto(foto_url='https://thumb.wikimedia.org/exemplo.jpg')
-
-        resultado = ProdutoImagemView._arquivo_otimizado(produto, 'thumb')
-
-        requisicao = abrir_url.call_args.args[0]
-        self.assertEqual(requisicao.full_url, produto.foto_url)
-        self.assertEqual(requisicao.get_header('Accept'), 'image/*')
-        self.assertEqual(requisicao.get_header('User-agent'), 'iTED/1.0 (+https://ited.app.br)')
-        abrir_url.assert_called_once_with(requisicao, timeout=20)
-        converter.assert_called_once()
-        self.assertEqual(resultado.getvalue(), b'otimizada')
-
-    @patch('apps.produtos.views.produto.urlopen')
-    def test_imagem_externa_negada_retorna_404_em_vez_de_erro_500(self, abrir_url):
-        abrir_url.side_effect = HTTPError(
-            'https://cdn.example/produto.jpg', 403, 'Forbidden', {}, None,
-        )
-        produto = Produto(foto_url='https://cdn.example/produto.jpg')
-
-        with self.assertRaises(Http404):
-            ProdutoImagemView._arquivo_otimizado(produto, 'thumb')
-
-    @patch.object(ProdutoImagemView, '_converter', side_effect=OSError('arquivo invalido'))
-    @patch('apps.produtos.views.produto.urlopen')
-    def test_imagem_externa_invalida_retorna_404(self, abrir_url, converter):
-        resposta = abrir_url.return_value.__enter__.return_value
-        resposta.read.return_value = b'nao e uma imagem'
-        produto = Produto(foto_url='https://cdn.example/produto.jpg')
 
         with self.assertRaises(Http404):
             ProdutoImagemView._arquivo_otimizado(produto, 'thumb')
@@ -147,18 +115,13 @@ class ProdutoFotoUrlTests(SimpleTestCase):
         self.assertEqual(response.status_code, 404)
         self.assertContains(response, 'Voltar ao sistema', status_code=404)
 
-    @patch('apps.produtos.views.produto.urlopen')
     @patch('apps.produtos.views.produto.get_object_or_404')
     def test_falha_de_foto_externa_embutida_redireciona_para_url_original(
         self,
         get_object,
-        abrir_url,
     ):
         produto = Produto(foto_url='https://cdn.example/produto.jpg')
         get_object.return_value = produto
-        abrir_url.side_effect = HTTPError(
-            produto.foto_url, 403, 'Forbidden', {}, None,
-        )
         request = self.factory.get('/produtos/1/foto/?v=thumb', HTTP_ACCEPT='image/*,*/*;q=0.8')
 
         response = ProdutoImagemView.as_view()(request, pk=1)

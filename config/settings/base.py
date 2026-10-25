@@ -269,7 +269,9 @@ if AWS_STORAGE_BUCKET_NAME and AWS_S3_ENDPOINT_URL:
     AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME', default='auto')
     AWS_S3_ADDRESSING_STYLE = env('AWS_S3_ADDRESSING_STYLE', default='virtual')
     AWS_S3_SIGNATURE_VERSION = env('AWS_S3_SIGNATURE_VERSION', default='s3v4')
-    AWS_QUERYSTRING_AUTH = env.bool('AWS_QUERYSTRING_AUTH', default=True)
+    # Arquivos de mídia ficam privados; somente URLs assinadas de curta duração.
+    AWS_QUERYSTRING_AUTH = True
+    AWS_QUERYSTRING_EXPIRE = env.int('AWS_QUERYSTRING_EXPIRE', default=900)
     AWS_S3_FILE_OVERWRITE = False
     AWS_DEFAULT_ACL = None
     AWS_S3_OBJECT_PARAMETERS = {
@@ -277,7 +279,7 @@ if AWS_STORAGE_BUCKET_NAME and AWS_S3_ENDPOINT_URL:
     }
     STORAGES = {
         'default': {
-            'BACKEND': 'storages.backends.s3.S3Storage',
+            'BACKEND': 'apps.core.storage.TenantS3Storage',
         },
         'staticfiles': {
             'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',

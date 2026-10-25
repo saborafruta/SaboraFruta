@@ -473,6 +473,10 @@ class Produto(FilialScopedModel):
             return valor
         try:
             return default_storage.url(nome_arquivo)
+        except OSError:
+            # Uma chave pertencente a outro tenant é tratada como ausente,
+            # sem expor URL assinada nem derrubar a tela com erro 500.
+            return ''
         except (NotImplementedError, ValueError):
             return valor
 
