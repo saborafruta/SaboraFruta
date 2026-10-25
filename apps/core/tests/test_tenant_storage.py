@@ -36,6 +36,15 @@ class TenantS3StorageTests(SimpleTestCase):
         self.assertLessEqual(len(key), 100)
         self.assertTrue(key.endswith('.jpg'))
 
+    def test_migration_target_is_stable_when_key_is_already_isolated(self):
+        alias = 'empresa_saborafruta_14004764000240'
+        existing = self.storage._tenant_prefix(alias) + 'objects/abc123.jpg'
+        self.assertEqual(TenantS3Storage.isolated_name(alias, existing), existing)
+        self.assertEqual(
+            TenantS3Storage.isolated_name(alias, 'usuarios/fotos/perfil.jpg'),
+            TenantS3Storage.migrated_name(alias, 'usuarios/fotos/perfil.jpg'),
+        )
+
     def test_central_upload_keeps_existing_key_layout(self):
         with tenant_db(None):
             self.assertEqual(
