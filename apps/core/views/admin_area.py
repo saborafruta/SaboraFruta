@@ -389,7 +389,9 @@ def _active_filial(request):
     if request.user.is_superuser:
         central_filial = request.GET.get('central_filial') or request.POST.get('central_filial')
         if central_filial and central_filial.isdigit():
-            filial = Filial.objects.filter(pk=int(central_filial)).select_related('empresa').first()
+            filial = Filial.objects.using('default').filter(
+                pk=int(central_filial),
+            ).select_related('empresa').first()
             if filial:
                 return filial
     return getattr(request, 'filial_ativa', None)
@@ -443,7 +445,7 @@ def _filial_central_do_contexto_atual(request):
         ).first()
 
     if filial_id:
-        return Filial.objects.select_related('empresa').filter(
+        return Filial.objects.using('default').select_related('empresa').filter(
             pk=filial_id,
             ativo=True,
             empresa__ativo=True,
@@ -525,9 +527,12 @@ def central_administrativa(request):
     # Este bloco escolhe contexto de trabalho, portanto cadastros inativos nao
     # devem aparecer como uma segunda empresa selecionavel. Eles continuam
     # disponiveis em "Listar empresas" para consulta e eventual reativacao.
-    empresas = Empresa.objects.filter(ativo=True).order_by('razao_social')
+    # A Central é um diretório administrativo. Mesmo quando o superusuário
+    # veio de um tenant, estes dados precisam vir do banco gerencial: a cópia
+    # local da empresa pode ter o mesmo nome e um segmento desatualizado.
+    empresas = Empresa.objects.using('default').filter(ativo=True).order_by('razao_social')
     filiais = (
-        Filial.objects.select_related('empresa')
+        Filial.objects.using('default').select_related('empresa')
         .filter(ativo=True, empresa__ativo=True)
         .order_by('empresa__razao_social', 'razao_social')
     )
@@ -628,11 +633,11 @@ def central_administrativa(request):
         'politica_filial_origem': politica_filial_origem,
         'replicacao_bloqueada': replicacao_bloqueada,
         'filial_selecionada': filial_selecionada,
-        'total_empresas': Empresa.objects.filter(ativo=True).count(),
-        'total_filiais': Filial.objects.filter(
+        'total_empresas': Empresa.objects.using('default').filter(ativo=True).count(),
+        'total_filiais': Filial.objects.using('default').filter(
             ativo=True, empresa__ativo=True,
         ).count(),
-        'total_super_admins': Usuario.objects.filter(is_superuser=True).count(),
+        'total_super_admins': Usuario.objects.using('default').filter(is_superuser=True).count(),
         # Só os módulos que a empresa da filial pode ter -- um módulo de
         # outro vertical não aparece nem desmarcado, porque marcá-lo não
         # bastaria: quem concede é o segmento.
@@ -1267,7 +1272,7 @@ def segmento_update(request, empresa_id):
     """Define o vertical da empresa — é o que libera os módulos especializados."""
     from apps.core.constants.segmentos import LABEL_POR_SEGMENTO
 
-    empresa = get_object_or_404(Empresa, pk=empresa_id)
+    empresa = get_object_or_404(Empresa.objects.using('default'), pk=empresa_id)
     voltar_para = request.META.get('HTTP_REFERER') or reverse('core:admin_central')
 
     segmento = (request.POST.get('segmento') or '').strip()
@@ -1286,7 +1291,7 @@ def segmento_update(request, empresa_id):
     )
 
     empresa.segmento = segmento
-    empresa.save(update_fields=['segmento', 'modulos_extras'])
+    empresa.save(using='default', update_fields=['segmento', 'modulos_extras'])
 
     nome = empresa.nome_fantasia or empresa.razao_social
     if segmento:
@@ -1309,7 +1314,9 @@ def modulos_update(request, filial_id):
     """Liga/desliga secoes inteiras do menu (Cadastros, Operacoes,
     Financeiro, Logistica, Avancado, Food Service) para uma filial --
     escondidas no sidebar e bloqueadas no FilialMiddleware."""
-    filial = get_object_or_404(Filial, pk=filial_id)
+    filial = get_object_or_404(
+        Filial.objects.using('default').select_related('empresa'), pk=filial_id,
+    )
     voltar_para = request.META.get('HTTP_REFERER') or reverse('core:admin_central')
 
     # Só desliga o que a empresa poderia ter: assim um módulo indisponível
@@ -1318,7 +1325,7 @@ def modulos_update(request, filial_id):
     disponiveis = modulos_disponiveis(filial.empresa)
     ativos = set(request.POST.getlist('modulo'))
     filial.modulos_desativados = sorted(disponiveis - ativos)
-    filial.save(update_fields=['modulos_desativados'])
+    filial.save(using='default', update_fields=['modulos_desativados'])
     messages.success(request, f'Modulos atualizados para {filial.nome_fantasia or filial.razao_social}.')
     return redirect(voltar_para)
 

@@ -26,7 +26,9 @@ from apps.core.services.tenant_task_service import TenantTaskService
 from apps.core.services.tenant_user_service import TenantUserService
 from apps.core.tenant_context import get_current_tenant_db, tenant_atomic, tenant_db
 from apps.core.views.auth import SelecionarFilialView
-from apps.core.views.admin_area import central_administrativa
+from apps.core.views.admin_area import (
+    central_administrativa, modulos_update, segmento_update,
+)
 from apps.pdv.models import TesteContingenciaPDV
 
 
@@ -644,6 +646,64 @@ class MultitenancyFoundationTests(TestCase):
         self.assertEqual(context['filial_selecionada'], self.filial)
         self.assertEqual(context['empresa_inicial'], self.empresa.nome_fantasia)
         self.assertEqual(context['filial_inicial'], self.filial.nome_fantasia)
+
+    @override_settings(
+        TENANT_DATABASE_ROUTING_ENABLED=True,
+        TENANT_DATABASE_ALIASES=['empresa_tenant_99888777000166'],
+    )
+    def test_central_le_e_grava_segmento_no_diretorio_com_tenant_ativo(self):
+        """A Central não pode mostrar a cópia local da empresa do tenant."""
+        self.usuario.is_superuser = True
+        self.usuario.is_staff = True
+        self.usuario.save(update_fields=['is_superuser', 'is_staff'])
+
+        request = RequestFactory().get('/gestao/central/')
+        request.session = {}
+        request.user = self.usuario
+        with (
+            tenant_db(self.banco.db_alias),
+            patch('apps.core.views.admin_area.render', side_effect=lambda _r, _t, c: c),
+        ):
+            context = central_administrativa(request)
+
+        self.assertEqual(context['empresas']._db, 'default')
+        self.assertEqual(context['filiais']._db, 'default')
+        self.assertEqual(list(context['empresas']), [self.empresa])
+
+        request = RequestFactory().post(
+            f'/gestao/central/empresas/{self.empresa.pk}/segmento/',
+            {'segmento': 'moda_confeccao'},
+            HTTP_REFERER='/gestao/central/',
+        )
+        request.session = {}
+        request.user = self.usuario
+        with (
+            tenant_db(self.banco.db_alias),
+            patch('apps.core.views.admin_area.messages.success'),
+        ):
+            response = segmento_update(request, self.empresa.pk)
+
+        self.assertEqual(response.status_code, 302)
+        self.empresa.refresh_from_db(using='default')
+        self.assertEqual(self.empresa.segmento, 'moda_confeccao')
+
+        request = RequestFactory().post(
+            f'/gestao/central/filiais/{self.filial.pk}/modulos/',
+            {'modulo': ['moda']},
+            HTTP_REFERER='/gestao/central/',
+        )
+        request.session = {}
+        request.user = self.usuario
+        with (
+            tenant_db(self.banco.db_alias),
+            patch('apps.core.views.admin_area.messages.success'),
+        ):
+            response = modulos_update(request, self.filial.pk)
+
+        self.assertEqual(response.status_code, 302)
+        self.filial.refresh_from_db(using='default')
+        self.assertNotIn('moda', self.filial.modulos_desativados)
+        self.assertIn('cadastros', self.filial.modulos_desativados)
 
     @override_settings(TENANT_DATABASE_ROUTING_ENABLED=True)
     def test_troca_global_falha_sem_misturar_tenant_novo_com_filial_antiga(self):
