@@ -16,7 +16,9 @@ from apps.core.models import (
     DestinatarioResumoWhatsApp, Empresa, Filial, ParametrosSistema,
 )
 from apps.whatsapp_agent.models import ConfiguracaoWhatsAppCentral, EnvioResumoWhatsApp
-from apps.whatsapp_agent.central_views import central_instancias
+from apps.whatsapp_agent.central_views import (
+    _data_referencia_solicitada, central_instancias,
+)
 from apps.whatsapp_agent.resumo_service import (
     _metricas_filial, diagnosticar_resumos_diarios, preparar_resumos_diarios,
     processar_proximo_resumo,
@@ -218,6 +220,30 @@ class ResumoDiarioWhatsAppTests(TestCase):
         })
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data['telefone'], '5584999990000')
+
+    def test_data_referencia_manual_usa_ontem_quando_campo_vazio(self):
+        request = RequestFactory().post('/', {'data_referencia': ''})
+
+        self.assertEqual(
+            _data_referencia_solicitada(request),
+            timezone.localdate() - datetime.timedelta(days=1),
+        )
+
+    def test_data_referencia_manual_aceita_dia_escolhido(self):
+        data_referencia = timezone.localdate() - datetime.timedelta(days=7)
+        request = RequestFactory().post(
+            '/', {'data_referencia': data_referencia.isoformat()},
+        )
+
+        self.assertEqual(_data_referencia_solicitada(request), data_referencia)
+
+    def test_data_referencia_manual_rejeita_data_futura_ou_invalida(self):
+        futura = timezone.localdate() + datetime.timedelta(days=1)
+
+        for valor in (futura.isoformat(), '31/12/2025'):
+            with self.subTest(valor=valor):
+                request = RequestFactory().post('/', {'data_referencia': valor})
+                self.assertIsNone(_data_referencia_solicitada(request))
 
     def test_migracao_corrige_apenas_resumo_pendente_com_rotulo_antigo(self):
         envio = EnvioResumoWhatsApp.objects.create(

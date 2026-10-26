@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 
@@ -21,6 +22,21 @@ from .tasks import processar_proximo_resumo_task
 
 
 logger = logging.getLogger(__name__)
+
+
+def _data_referencia_solicitada(request):
+    """Usa ontem por padrão e aceita uma data explícita até o dia atual."""
+    hoje = timezone.localdate()
+    valor = request.POST.get('data_referencia', '').strip()
+    if not valor:
+        return hoje - datetime.timedelta(days=1)
+    try:
+        data_referencia = datetime.date.fromisoformat(valor)
+    except ValueError:
+        return None
+    if data_referencia > hoje:
+        return None
+    return data_referencia
 
 
 def _webhook_url(request, configuracao):
@@ -114,6 +130,7 @@ def central_instancias(request):
         'contagens': contagens,
         'capacidade_janela': capacidade_janela,
         'envios_recentes': envios_recentes,
+        'data_maxima_resumo': hoje,
     })
 
 
@@ -237,7 +254,14 @@ def atualizar_status_instancia(request, pk):
 @require_POST
 @superuser_required
 def preparar_fila(request):
-    criados = preparar_resumos_diarios(disparo_manual=True)
+    data_referencia = _data_referencia_solicitada(request)
+    if data_referencia is None:
+        messages.error(request, 'Escolha uma data válida, igual ou anterior a hoje.')
+        return redirect('core:admin_whatsapp_central')
+    criados = preparar_resumos_diarios(
+        data_referencia=data_referencia,
+        disparo_manual=True,
+    )
     if criados:
         try:
             processar_proximo_resumo_task.delay()
@@ -247,10 +271,11 @@ def preparar_fila(request):
             logger.exception('Não foi possível antecipar o processamento do resumo manual.')
         messages.success(
             request,
-            f'{criados} resumo(s) liberado(s) para envio manual e sequencial.',
+            f'{criados} resumo(s) de {data_referencia:%d/%m/%Y} '
+            'liberado(s) para envio manual e sequencial.',
         )
     else:
-        diagnostico = diagnosticar_resumos_diarios()
+        diagnostico = diagnosticar_resumos_diarios(data_referencia=data_referencia)
         if not diagnostico['filiais_ativas']:
             detalhe = (
                 'Nenhuma filial está habilitada. Selecione a filial, abra Parâmetros do Sistema '
@@ -276,6 +301,10 @@ def preparar_fila(request):
 @require_POST
 @superuser_required
 def preparar_fila_filial(request, filial_id):
+    data_referencia = _data_referencia_solicitada(request)
+    if data_referencia is None:
+        messages.error(request, 'Escolha uma data válida, igual ou anterior a hoje.')
+        return redirect('core:admin_whatsapp_central')
     filial = get_object_or_404(
         Filial.objects.using('default').select_related('empresa'),
         pk=filial_id,
@@ -289,6 +318,7 @@ def preparar_fila_filial(request, filial_id):
     ).first()
     tenant_alias = banco.db_alias if banco else 'default'
     criados = preparar_resumos_diarios(
+        data_referencia=data_referencia,
         disparo_manual=True,
         tenant_alias=tenant_alias,
         filial_cnpj=filial.cnpj,
@@ -302,10 +332,12 @@ def preparar_fila_filial(request, filial_id):
             logger.exception('Não foi possível antecipar o resumo manual da filial.')
         messages.success(
             request,
-            f'{criados} resumo(s) de {nome_filial} liberado(s) para envio sequencial.',
+            f'{criados} resumo(s) de {nome_filial}, referente(s) a '
+            f'{data_referencia:%d/%m/%Y}, liberado(s) para envio sequencial.',
         )
     else:
         diagnostico = diagnosticar_resumos_diarios(
+            data_referencia=data_referencia,
             tenant_alias=tenant_alias,
             filial_cnpj=filial.cnpj,
             exigir_habilitacao=False,
