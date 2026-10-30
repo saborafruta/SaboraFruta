@@ -1,7 +1,7 @@
 import base64
 import hashlib
 import uuid
-from datetime import time
+from datetime import time, timedelta
 from decimal import Decimal
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -9,6 +9,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils import timezone
 
 from apps.core.models.base import FilialScopedModel, TimestampedModel
 
@@ -404,6 +405,13 @@ class ConexaoWhatsAppVendedor(TimestampedModel):
     numero_conectado = models.CharField(max_length=24, blank=True)
     nome_conectado = models.CharField(max_length=120, blank=True)
     coexistencia_ativa = models.BooleanField(default=True)
+    somente_atendimento_humano = models.BooleanField(
+        default=True,
+        help_text=(
+            'Envia somente textos digitados por pessoas e nunca usa modelos '
+            'aprovados ou automações para iniciar uma conversa.'
+        ),
+    )
     status = models.CharField(
         max_length=24, choices=Status.choices, default=Status.NAO_CONFIGURADO,
         db_index=True,
@@ -722,6 +730,9 @@ class ConversaWhatsApp(FilialScopedModel):
     atendimento_humano = models.BooleanField(default=False)
     ativa = models.BooleanField(default=True)
     ultima_mensagem_em = models.DateTimeField(null=True, blank=True)
+    ultima_mensagem_cliente_em = models.DateTimeField(
+        null=True, blank=True, db_index=True,
+    )
     agendamento_iniciado_em = models.DateTimeField(null=True, blank=True)
     acompanhamento_enviado_em = models.DateTimeField(null=True, blank=True)
     agendamento_confirmado_em = models.DateTimeField(null=True, blank=True)
@@ -752,6 +763,17 @@ class ConversaWhatsApp(FilialScopedModel):
 
     def __str__(self):
         return self.nome_contato or self.telefone
+
+    @property
+    def janela_atendimento_expira_em(self):
+        if not self.ultima_mensagem_cliente_em:
+            return None
+        return self.ultima_mensagem_cliente_em + timedelta(hours=24)
+
+    @property
+    def janela_atendimento_ativa(self):
+        expira_em = self.janela_atendimento_expira_em
+        return bool(expira_em and timezone.now() <= expira_em)
 
 
 class MensagemWhatsApp(TimestampedModel):

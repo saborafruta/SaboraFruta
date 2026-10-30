@@ -295,8 +295,10 @@ def receber_evento(configuracao, payload):
         elif dados['nome'] and not conversa.nome_contato:
             conversa.nome_contato = dados['nome']
         conversa.ultima_mensagem_em = agora
+        conversa.ultima_mensagem_cliente_em = agora
         conversa.save(update_fields=[
-            'nome_contato', 'etapa_crm', 'ultima_mensagem_em', 'updated_at',
+            'nome_contato', 'etapa_crm', 'ultima_mensagem_em',
+            'ultima_mensagem_cliente_em', 'updated_at',
         ])
         padrao_mensagem = {
                 'direcao': MensagemWhatsApp.Direcao.ENTRADA,

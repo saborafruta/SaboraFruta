@@ -60,6 +60,11 @@ class ModulosPorSegmentoTests(TestCase):
 
         self.assertNotIn('food_service', disponiveis)
         self.assertIn('cadastros', disponiveis)
+        self.assertIn('crm', disponiveis)
+
+    def test_url_do_whatsapp_crm_pertence_ao_modulo_crm(self):
+        self.assertEqual(modulo_da_url('/whatsapp/crm/'), 'crm')
+        self.assertEqual(modulo_da_url('/whatsapp/crm/numeros/'), 'crm')
 
     def test_liberacao_manual_continua_valendo(self):
         """

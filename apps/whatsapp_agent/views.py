@@ -17,12 +17,17 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from apps.core.models import Empresa
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.crm.services import CarteiraService
 
 from .conversation_service import encerrar_conversa, encerrar_conversas_inativas
 from .flow import garantir_fluxo_padrao
-from .forms import ConfiguracaoWhatsAppForm, FluxoWhatsAppForm
+from .forms import (
+    ConexaoWhatsAppVendedorForm,
+    ConfiguracaoWhatsAppForm,
+    FluxoWhatsAppForm,
+)
 from .gateway import (
     EvolutionClient, GatewayWhatsAppError, MetaCloudClient,
     identidade_instancia, qr_data_url,
@@ -75,6 +80,21 @@ def _conversas_crm_permitidas(request):
         conexao_vendedor__vendedor__email__iexact=request.user.email,
         fora_carteira=False,
     )
+
+
+def _empresa_gerencial(request):
+    return get_object_or_404(
+        Empresa.objects.using('default'), cnpj=request.filial_ativa.empresa.cnpj,
+    )
+
+
+def _conexoes_crm_permitidas(request):
+    queryset = ConexaoWhatsAppVendedor.objects.using('default').filter(
+        empresa__cnpj=request.filial_ativa.empresa.cnpj,
+    ).select_related('empresa', 'filial_padrao', 'vendedor')
+    if CarteiraService.pode_supervisionar(request.user):
+        return queryset
+    return queryset.filter(vendedor__email__iexact=request.user.email)
 
 
 class ConfiguracaoView(PermissaoRequiredMixin, View):
@@ -421,6 +441,82 @@ class StatusConexaoView(PermissaoRequiredMixin, View):
             return JsonResponse({'conectado': False, 'erro': str(exc)}, status=502)
 
 
+class CRMWhatsAppConexoesView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'crm'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        return render(request, 'whatsapp_agent/crm_conexoes.html', {
+            'conexoes': _conexoes_crm_permitidas(request),
+            'pode_supervisionar': CarteiraService.pode_supervisionar(request.user),
+        })
+
+
+class CRMWhatsAppConexaoFormView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'crm'
+    permissao_acao = 'aprovar'
+
+    def _instance(self, request, pk):
+        if pk is None:
+            return None
+        return get_object_or_404(_conexoes_crm_permitidas(request), pk=pk)
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and not CarteiraService.pode_supervisionar(request.user):
+            messages.error(request, 'Somente gestores podem cadastrar números comerciais.')
+            return redirect('whatsapp_agent:crm-conexoes')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, pk=None):
+        empresa = _empresa_gerencial(request)
+        instancia = self._instance(request, pk)
+        return render(request, 'whatsapp_agent/crm_conexao_form.html', {
+            'form': ConexaoWhatsAppVendedorForm(
+                empresa=empresa, instance=instancia,
+            ),
+            'conexao': instancia,
+        })
+
+    def post(self, request, pk=None):
+        empresa = _empresa_gerencial(request)
+        instancia = self._instance(request, pk)
+        form = ConexaoWhatsAppVendedorForm(
+            request.POST, empresa=empresa, instance=instancia,
+        )
+        if form.is_valid():
+            conexao = form.save()
+            messages.success(request, 'Número comercial salvo. Continue pela conexão oficial.')
+            return redirect('whatsapp_agent:crm-conexao-onboarding', pk=conexao.pk)
+        return render(request, 'whatsapp_agent/crm_conexao_form.html', {
+            'form': form, 'conexao': instancia,
+        })
+
+
+class CRMWhatsAppConexaoOnboardingView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'crm'
+    permissao_acao = 'ver'
+
+    def get(self, request, pk):
+        conexao = get_object_or_404(_conexoes_crm_permitidas(request), pk=pk)
+        webhook_url = request.build_absolute_uri(
+            reverse('whatsapp_agent:webhook', kwargs={'secret': conexao.webhook_secret}),
+        )
+        return render(request, 'whatsapp_agent/crm_conexao_onboarding.html', {
+            'conexao': conexao,
+            'webhook_url': webhook_url,
+            'verify_token': (
+                conexao.obter_meta_verify_token()
+                if CarteiraService.pode_supervisionar(request.user)
+                else ''
+            ),
+            'pode_supervisionar': CarteiraService.pode_supervisionar(request.user),
+            'embedded_signup_disponivel': bool(
+                getattr(settings, 'WHATSAPP_META_APP_ID', '')
+                and getattr(settings, 'WHATSAPP_META_EMBEDDED_SIGNUP_CONFIG_ID', '')
+            ),
+        })
+
+
 class CRMWhatsAppInboxView(PermissaoRequiredMixin, View):
     permissao_modulo = 'crm'
     permissao_acao = 'ver'
@@ -483,6 +579,13 @@ class CRMWhatsAppEnviarView(PermissaoRequiredMixin, View):
         conexao = conversa.conexao_vendedor
         if not conexao or not conexao.meta_credenciais_configuradas:
             messages.error(request, 'A conexão oficial deste vendedor não está configurada.')
+            return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
+        if not conversa.janela_atendimento_ativa:
+            messages.error(
+                request,
+                'A janela de 24 horas terminou. Nenhuma mensagem ou modelo será '
+                'enviado; aguarde o cliente escrever novamente.',
+            )
             return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
 
         mensagem = MensagemWhatsApp.objects.create(

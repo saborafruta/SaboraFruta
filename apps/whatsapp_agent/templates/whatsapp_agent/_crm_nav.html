@@ -1,0 +1,10 @@
+<nav class="crm-tabs" aria-label="Navegação do CRM">
+  <a href="{% url 'whatsapp_agent:crm-inbox' %}" {% if '/whatsapp/crm/' in request.path and '/numeros/' not in request.path %}aria-current="page"{% endif %}>Conversas</a>
+  <a href="{% url 'crm:funil' %}" {% if request.path == '/crm/' or '/crm/oportunidades/' in request.path %}aria-current="page"{% endif %}>Funil</a>
+  {% if pode_supervisionar %}<a href="{% url 'crm:carteiras' %}" {% if '/crm/carteiras/' in request.path %}aria-current="page"{% endif %}>Carteiras</a>{% endif %}
+  <a href="{% url 'whatsapp_agent:crm-conexoes' %}" {% if '/whatsapp/crm/numeros/' in request.path %}aria-current="page"{% endif %}>Números</a>
+  <a href="{% url 'crm:recompra' %}" {% if '/crm/recompra/' in request.path %}aria-current="page"{% endif %}>Recompra</a>
+</nav>
+<style>
+  .crm-tabs{display:flex;gap:.35rem;margin:0 0 1rem;padding:.3rem;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:none;border:1px solid #34343b;border-radius:.85rem;background:#1d1d20}.crm-tabs::-webkit-scrollbar{display:none}.crm-tabs a{flex:0 0 auto;min-height:40px;padding:.62rem .9rem;border-radius:.62rem;color:#a1a1aa;text-decoration:none;font-size:.78rem;font-weight:750;touch-action:manipulation;user-select:none;-webkit-user-select:none;transition:transform 140ms cubic-bezier(.23,1,.32,1),background-color 160ms ease,color 160ms ease}.crm-tabs a:active{transform:scale(.97)}.crm-tabs a[aria-current="page"]{background:#0f766e;color:#ecfdf5;box-shadow:0 5px 14px rgba(15,118,110,.2)}body.tema-claro .crm-tabs{border-color:#e2e8f0;background:#fff}body.tema-claro .crm-tabs a{color:#64748b}body.tema-claro .crm-tabs a[aria-current="page"]{color:#fff}@media(hover:hover) and (pointer:fine){.crm-tabs a:hover{background:#2a2a2e;color:#f4f4f5}body.tema-claro .crm-tabs a:hover{background:#f1f5f9;color:#0f172a}.crm-tabs a[aria-current="page"]:hover{background:#0f766e;color:#fff}}@media(pointer:coarse){.crm-tabs a{font-size:16px}}
+</style>

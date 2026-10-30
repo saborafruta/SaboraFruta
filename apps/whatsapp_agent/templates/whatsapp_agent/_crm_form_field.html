@@ -1,0 +1,6 @@
+<div class="crm-field{% if field.field.widget.input_type == 'checkbox' %} crm-field-check{% endif %}">
+  <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+  {{ field }}
+  {% if field.help_text %}<span class="crm-field-help">{{ field.help_text }}</span>{% endif %}
+  {% for error in field.errors %}<span class="crm-field-error">{{ error }}</span>{% endfor %}
+</div>

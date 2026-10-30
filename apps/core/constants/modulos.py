@@ -59,6 +59,11 @@ MODULOS = [
         prefixos=('/vendas/',),
     ),
     Modulo(
+        'crm', 'CRM',
+        'Conversas de vendedores, carteiras, funil e relacionamento comercial.',
+        prefixos=('/crm/', '/whatsapp/crm/'),
+    ),
+    Modulo(
         'financeiro', 'Financeiro',
         'Contas a pagar/receber, fluxo de caixa, conciliação e DRE.',
         prefixos=('/financeiro/',),

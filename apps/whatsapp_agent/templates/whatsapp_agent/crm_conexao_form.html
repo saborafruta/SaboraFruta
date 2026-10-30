@@ -1,0 +1,41 @@
+{% extends '_base.html' %}
+{% block title %}{% if conexao %}Editar número{% else %}Cadastrar número{% endif %} do CRM{% endblock %}
+{% block content %}
+<div class="crm-settings-shell">
+  {% include 'whatsapp_agent/_crm_nav.html' %}
+  <header class="crm-settings-head"><div><span class="crm-eyebrow">Cadastro comercial</span><h1>{% if conexao %}Editar número{% else %}Novo número de vendedor{% endif %}</h1><p>Associe o número da empresa ao vendedor antes de iniciar a conexão oficial.</p></div></header>
+  <form method="post" class="crm-form-card" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="crm-form-alert">{{ form.non_field_errors }}</div>{% endif %}
+    <section class="crm-form-section">
+      <h2>Responsabilidade comercial</h2><p>Define quem poderá conversar com os clientes desta carteira.</p>
+      <div class="crm-form-grid">
+        {% include 'whatsapp_agent/_crm_form_field.html' with field=form.vendedor %}
+        {% include 'whatsapp_agent/_crm_form_field.html' with field=form.filial_padrao %}
+        {% include 'whatsapp_agent/_crm_form_field.html' with field=form.numero_conectado %}
+        {% include 'whatsapp_agent/_crm_form_field.html' with field=form.nome_conectado %}
+      </div>
+    </section>
+    <section class="crm-form-section">
+      <h2>Conta oficial da Meta</h2><p>Esses identificadores são obtidos durante o Embedded Signup. Podem ficar vazios até a conexão.</p>
+      <div class="crm-form-grid">
+        {% include 'whatsapp_agent/_crm_form_field.html' with field=form.meta_business_account_id %}
+        {% include 'whatsapp_agent/_crm_form_field.html' with field=form.meta_phone_number_id %}
+        {% include 'whatsapp_agent/_crm_form_field.html' with field=form.meta_graph_version %}
+        {% include 'whatsapp_agent/_crm_form_field.html' with field=form.ativo %}
+      </div>
+    </section>
+    <details class="crm-technical">
+      <summary>Credenciais técnicas <span>acesso restrito</span></summary>
+      <div class="crm-form-grid">
+        {% include 'whatsapp_agent/_crm_form_field.html' with field=form.meta_access_token %}
+        {% include 'whatsapp_agent/_crm_form_field.html' with field=form.meta_verify_token %}
+        {% include 'whatsapp_agent/_crm_form_field.html' with field=form.meta_app_secret %}
+      </div>
+    </details>
+    <div class="crm-form-actions"><a class="crm-secondary" href="{% url 'whatsapp_agent:crm-conexoes' %}">Cancelar</a><button class="crm-primary" type="submit">Salvar e conectar</button></div>
+  </form>
+</div>
+{% include 'whatsapp_agent/_crm_settings_styles.html' %}
+<style>.crm-form-alert{margin-bottom:1rem;padding:.75rem;border:1px solid #b91c1c;border-radius:.7rem;background:rgba(185,28,28,.1);color:#fecaca}.crm-technical{margin:1rem 0;border:1px solid #34343b;border-radius:.8rem;background:#18181b}.crm-technical summary{display:flex;justify-content:space-between;padding:.85rem 1rem;cursor:pointer;font-size:.78rem;font-weight:800;user-select:none}.crm-technical summary span{color:#71717a;font-size:.66rem}.crm-technical[open] summary{border-bottom:1px solid #34343b}.crm-technical .crm-form-grid{padding:1rem}body.tema-claro .crm-technical{border-color:#e2e8f0;background:#f8fafc}body.tema-claro .crm-technical[open] summary{border-color:#e2e8f0}</style>
+{% endblock %}

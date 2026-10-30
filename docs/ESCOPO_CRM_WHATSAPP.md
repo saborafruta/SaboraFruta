@@ -123,7 +123,7 @@ A Meta Cloud API em modo de coexistência é a alternativa preferencial para os 
 - receber estados oficiais de envio, entrega e leitura;
 - reduzir o risco operacional de integrações baseadas em sessão e QR Code não oficial.
 
-Na cobrança atual da Plataforma do WhatsApp Business, mensagens de serviço enviadas dentro da janela de 24 horas aberta pela mensagem do cliente não são cobradas. Isso atende à maior parte do atendimento humano receptivo previsto para o CRM. Mensagens iniciadas pela empresa fora dessa janela exigem modelo aprovado e podem ser cobradas por mensagem entregue, conforme categoria e país. Portanto, “ser humano e não automático” não torna todo envio gratuito; o que define regra e custo é principalmente a janela, a categoria e o ponto de entrada da conversa.
+Na cobrança atual da Plataforma do WhatsApp Business, mensagens de serviço enviadas dentro da janela de 24 horas aberta pela mensagem do cliente não são cobradas. Isso atende à maior parte do atendimento humano receptivo previsto para o CRM. Mensagens iniciadas pela empresa fora dessa janela exigiriam modelo aprovado e poderiam ser cobradas por mensagem entregue, conforme categoria e país. Por decisão comercial, o CRM de vendedores não utilizará esses modelos: depois de 24 horas, o envio ficará bloqueado até o cliente escrever novamente.
 
 O número geral da filial não precisa ser migrado junto com os números dos vendedores. Cada canal terá conexão, credenciais, estado e estratégia de migração próprios.
 
@@ -295,11 +295,13 @@ A tela principal do vendedor deve adotar o padrão de interação do WhatsApp We
 
 1. O vendedor escreve a mensagem.
 2. O backend valida empresa, número, vendedor e carteira.
-3. O backend verifica a janela de atendimento e o tipo de mensagem permitido.
+3. O backend confirma que a última mensagem do cliente ocorreu há no máximo 24 horas.
 4. A mensagem é persistida como pendente.
 5. A Meta Cloud API realiza o envio.
 6. O identificador oficial e os estados posteriores são armazenados.
 7. A mensagem aparece também no WhatsApp Business em coexistência.
+
+Se a janela de 24 horas estiver encerrada, nenhuma mensagem será criada ou enviada. O iTED não substituirá o texto por modelo aprovado, não cobrará o envio e não tentará iniciar uma nova conversa automaticamente. O campo de resposta permanecerá bloqueado até uma nova mensagem recebida do cliente reabrir a janela.
 
 ### 7.4 Edição e exclusão
 
@@ -633,6 +635,7 @@ Esses itens podem ser incorporados depois que o fluxo humano de atendimento e ve
 6. O mesmo `PedidoVenda` será convertido de orçamento em pedido e seguirá para a força de vendas.
 7. O pedido terá origem `WHATSAPP` e vínculo com a conversa.
 8. Não haverá mensagens automáticas por mudança de status no primeiro momento.
+9. O CRM dos vendedores enviará somente mensagens digitadas por pessoas; não usará modelos aprovados nem automações para contornar a janela de 24 horas.
 
 ### 15.2 Decisões que não impedem o início
 

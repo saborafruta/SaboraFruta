@@ -500,6 +500,8 @@
       </div>
       {% endif %}
 
+      {% include 'core/_sidebar_crm_section.html' with crm_desktop=True %}
+
       <!-- FINANCEIRO -->
       {% if 'financeiro' in modulos_ativos %}
       <button type="button" @click="!collapsed && (window.expandirSecaoAtualSidebar($root, 'financeiro') || toggleSecao('financeiro'))" class="sidebar-module-button w-full flex items-center justify-between pt-4 pb-1 px-3" x-show="!collapsed" style="background:none;border:none;cursor:pointer;">
@@ -753,31 +755,6 @@
           <circle cx="14" cy="15" r="2" stroke-width="1.5"/>
         </svg>
         <span x-show="!collapsed">Cashback</span>
-      </a>
-
-      <!-- CRM — Central Comercial -->
-      {% url 'crm:funil' as crm_funil_url %}
-      <a href="{{ crm_funil_url }}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
-         :class="collapsed ? 'justify-center' : ''"
-         :style="{% if request.path == crm_funil_url or '/crm/oportunidades/' in request.path or '/crm/clientes/' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
-         title="Central Comercial">
-        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h10M4 18h7m8-4v6m-3-3h6"/></svg>
-        <span x-show="!collapsed">Central Comercial</span>
-      </a>
-
-      <!-- CRM — Alertas de Recompra -->
-      {% url 'crm:recompra' as crm_recompra_url %}
-      <a href="{{ crm_recompra_url }}"
-         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150"
-         :class="collapsed ? 'justify-center' : ''"
-         :style="{% if '/crm' in request.path %}temaClaro ? 'background:#dbeafe; color:#1d4ed8; font-weight:600;' : 'background:#1e2a3a; color:#f8fafc;'{% else %}temaClaro ? 'color:#1f2937;' : 'color:#f8fafc;'{% endif %}"
-         {% if '/crm' not in request.path %}@mouseenter="$el.style.background=temaClaro?'#eff6ff':'#242426'; $el.style.color=temaClaro?'#1d4ed8':'#d4d4d4';" @mouseleave="$el.style.background='transparent'; $el.style.color=temaClaro?'#1f2937':'#f8fafc'; $el.style.fontWeight='';"{% endif %}
-         title="CRM — Alertas de Recompra">
-        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-        </svg>
-        <span x-show="!collapsed">Alertas de Recompra</span>
       </a>
 
       <!-- Tabela de Preço -->

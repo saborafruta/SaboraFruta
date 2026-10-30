@@ -1,6 +1,12 @@
 from django import forms
 
-from .models import ConfiguracaoWhatsApp, ConfiguracaoWhatsAppCentral
+from apps.core.models import Filial, Usuario
+
+from .models import (
+    ConexaoWhatsAppVendedor,
+    ConfiguracaoWhatsApp,
+    ConfiguracaoWhatsAppCentral,
+)
 
 
 STATUS_PEDIDO_NOTIFICACAO_CHOICES = (
@@ -13,6 +19,98 @@ STATUS_PEDIDO_NOTIFICACAO_CHOICES = (
     ('entregue', 'Pedido entregue'),
     ('cancelado', 'Pedido cancelado'),
 )
+
+
+class ConexaoWhatsAppVendedorForm(forms.ModelForm):
+    meta_access_token = forms.CharField(
+        label='Token permanente da Meta', required=False,
+        widget=forms.PasswordInput(
+            attrs={'autocomplete': 'new-password'}, render_value=False,
+        ),
+        help_text='Deixe vazio para manter o token já salvo.',
+    )
+    meta_verify_token = forms.CharField(
+        label='Token de verificação do webhook', required=False,
+        widget=forms.PasswordInput(
+            attrs={'autocomplete': 'new-password'}, render_value=False,
+        ),
+        help_text='Se ficar vazio no primeiro cadastro, o iTED gera um token seguro.',
+    )
+    meta_app_secret = forms.CharField(
+        label='Segredo do aplicativo Meta', required=False,
+        widget=forms.PasswordInput(
+            attrs={'autocomplete': 'new-password'}, render_value=False,
+        ),
+        help_text='Usado somente no servidor para validar eventos da Meta.',
+    )
+
+    class Meta:
+        model = ConexaoWhatsAppVendedor
+        fields = [
+            'vendedor', 'filial_padrao', 'numero_conectado', 'nome_conectado',
+            'meta_phone_number_id', 'meta_business_account_id', 'meta_graph_version',
+            'meta_access_token', 'meta_verify_token', 'meta_app_secret', 'ativo',
+        ]
+        labels = {
+            'vendedor': 'Vendedor responsável',
+            'filial_padrao': 'Filial padrão',
+            'numero_conectado': 'Número comercial',
+            'nome_conectado': 'Nome exibido no WhatsApp',
+            'meta_phone_number_id': 'ID do número na Meta',
+            'meta_business_account_id': 'ID da conta WhatsApp Business',
+            'meta_graph_version': 'Versão da Graph API',
+            'ativo': 'Conexão ativa',
+        }
+        widgets = {
+            'numero_conectado': forms.TextInput(attrs={
+                'type': 'tel', 'inputmode': 'tel', 'placeholder': '5584999999999',
+            }),
+            'meta_phone_number_id': forms.TextInput(attrs={'inputmode': 'numeric'}),
+            'meta_business_account_id': forms.TextInput(attrs={'inputmode': 'numeric'}),
+            'meta_graph_version': forms.TextInput(attrs={'placeholder': 'v23.0'}),
+        }
+
+    def __init__(self, *args, empresa, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.empresa = empresa
+        self.fields['vendedor'].queryset = Usuario.objects.using('default').filter(
+            empresa=empresa, ativo=True,
+        ).order_by('nome')
+        self.fields['filial_padrao'].queryset = Filial.objects.using('default').filter(
+            empresa=empresa,
+        ).order_by('nome_fantasia', 'razao_social')
+        for campo in self.fields.values():
+            classes = campo.widget.attrs.get('class', '')
+            campo.widget.attrs['class'] = f'{classes} crm-control'.strip()
+
+    def clean(self):
+        dados = super().clean()
+        vendedor = dados.get('vendedor')
+        filial = dados.get('filial_padrao')
+        if vendedor and vendedor.empresa_id != self.empresa.pk:
+            self.add_error('vendedor', 'O vendedor pertence a outra empresa.')
+        if filial and filial.empresa_id != self.empresa.pk:
+            self.add_error('filial_padrao', 'A filial pertence a outra empresa.')
+        return dados
+
+    def save(self, commit=True):
+        import secrets
+
+        conexao = super().save(commit=False)
+        conexao.empresa = self.empresa
+        conexao.somente_atendimento_humano = True
+        conexao.definir_meta_access_token(self.cleaned_data.get('meta_access_token'))
+        verify_token = self.cleaned_data.get('meta_verify_token')
+        if not verify_token and not conexao.obter_meta_verify_token():
+            verify_token = secrets.token_urlsafe(32)
+        conexao.definir_meta_verify_token(verify_token)
+        conexao.definir_meta_app_secret(self.cleaned_data.get('meta_app_secret'))
+        if conexao.status == ConexaoWhatsAppVendedor.Status.NAO_CONFIGURADO:
+            conexao.status = ConexaoWhatsAppVendedor.Status.PENDENTE
+        if commit:
+            conexao.full_clean()
+            conexao.save()
+        return conexao
 
 
 class ConfiguracaoWhatsAppForm(forms.ModelForm):

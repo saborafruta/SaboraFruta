@@ -307,6 +307,7 @@ class CarteiraClientesView(PermissaoRequiredMixin, View):
             ).order_by('nome'),
             'busca': busca,
             'form': form or CarteiraClienteForm(empresa=empresa),
+            'pode_supervisionar': True,
         }
 
     def get(self, request):

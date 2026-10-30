@@ -1,11 +1,13 @@
 import hashlib
 import hmac
 import json
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
 from apps.whatsapp_agent.models import (
@@ -61,6 +63,71 @@ class ConexaoWhatsAppVendedorTests(TestCase):
         self.assertEqual(conexao.obter_meta_access_token(), 'token-secreto')
         self.assertEqual(conexao.obter_meta_verify_token(), 'verify-secreto')
         self.assertEqual(conexao.obter_meta_app_secret(), 'app-secreto')
+        self.assertTrue(conexao.somente_atendimento_humano)
+
+    def test_gestor_cadastra_numero_e_segue_para_conexao_oficial(self):
+        self.client.force_login(self.gestor)
+
+        resposta = self.client.post(
+            reverse('whatsapp_agent:crm-conexao-nova'),
+            {
+                'vendedor': self.vendedor.pk,
+                'filial_padrao': self.filial.pk,
+                'numero_conectado': '5584999994444',
+                'nome_conectado': 'Vendas WhatsApp',
+                'meta_graph_version': 'v23.0',
+                'ativo': 'on',
+            },
+        )
+
+        conexao = ConexaoWhatsAppVendedor.objects.get(
+            numero_conectado='5584999994444',
+        )
+        self.assertRedirects(
+            resposta,
+            reverse(
+                'whatsapp_agent:crm-conexao-onboarding',
+                kwargs={'pk': conexao.pk},
+            ),
+        )
+        self.assertEqual(conexao.status, ConexaoWhatsAppVendedor.Status.PENDENTE)
+        self.assertTrue(conexao.somente_atendimento_humano)
+        self.assertTrue(conexao.obter_meta_verify_token())
+
+    def test_vendedor_visualiza_seu_numero_mas_nao_abre_cadastro(self):
+        conexao = self._conexao_meta()
+        self.client.force_login(self.vendedor)
+
+        lista = self.client.get(reverse('whatsapp_agent:crm-conexoes'))
+        cadastro = self.client.get(reverse('whatsapp_agent:crm-conexao-nova'))
+        onboarding = self.client.get(
+            reverse(
+                'whatsapp_agent:crm-conexao-onboarding',
+                kwargs={'pk': conexao.pk},
+            ),
+        )
+
+        self.assertEqual(lista.status_code, 200)
+        self.assertContains(lista, '5584999990000')
+        self.assertRedirects(cadastro, reverse('whatsapp_agent:crm-conexoes'))
+        self.assertEqual(onboarding.status_code, 200)
+        self.assertContains(onboarding, 'Leia o QR Code da Meta')
+        self.assertNotContains(onboarding, 'Verify token')
+
+    def test_gestor_visualiza_dados_tecnicos_do_onboarding(self):
+        conexao = self._conexao_meta()
+        self.client.force_login(self.gestor)
+
+        resposta = self.client.get(
+            reverse(
+                'whatsapp_agent:crm-conexao-onboarding',
+                kwargs={'pk': conexao.pk},
+            ),
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Dados técnicos do webhook')
+        self.assertContains(resposta, 'verify-secreto')
 
     def test_conexao_recusa_vendedor_de_outra_empresa(self):
         outra = Empresa.objects.create(
@@ -147,6 +214,7 @@ class ConexaoWhatsAppVendedorTests(TestCase):
         self.assertEqual(conversa.conexao_vendedor, conexao)
         self.assertIsNone(conversa.configuracao)
         self.assertTrue(conversa.fora_carteira)
+        self.assertTrue(conversa.janela_atendimento_ativa)
         mensagem = conversa.mensagens.get()
         self.assertEqual(mensagem.origem, MensagemWhatsApp.Origem.CLIENTE)
         self.assertEqual(mensagem.texto_original, 'Quero um orçamento')
@@ -195,6 +263,7 @@ class ConexaoWhatsAppVendedorTests(TestCase):
             telefone='5584999991111',
             nome_contato='Cliente CRM',
             fora_carteira=False,
+            ultima_mensagem_cliente_em=timezone.now(),
         )
         self.client.force_login(self.vendedor)
 
@@ -220,6 +289,41 @@ class ConexaoWhatsAppVendedorTests(TestCase):
         self.assertEqual(mensagem.origem, MensagemWhatsApp.Origem.CRM)
         self.assertEqual(mensagem.autor_email, self.vendedor.email)
         self.assertEqual(mensagem.identificador_externo, 'wamid.crm-1')
+
+    @patch('apps.whatsapp_agent.gateway.MetaCloudClient.enviar_template')
+    @patch('apps.whatsapp_agent.views.MetaCloudClient.enviar_texto')
+    def test_crm_bloqueia_envio_apos_24_horas_sem_usar_modelo(
+        self, enviar_texto, enviar_template,
+    ):
+        conexao = self._conexao_meta()
+        conversa = ConversaWhatsApp.objects.create(
+            conexao_vendedor=conexao,
+            filial=self.filial,
+            remote_jid='5584999993333@s.whatsapp.net',
+            telefone='5584999993333',
+            nome_contato='Cliente com janela encerrada',
+            fora_carteira=False,
+            ultima_mensagem_cliente_em=timezone.now() - timedelta(hours=25),
+        )
+        self.client.force_login(self.vendedor)
+
+        pagina = self.client.get(
+            reverse('whatsapp_agent:crm-inbox-detail', kwargs={'pk': conversa.pk}),
+        )
+        resposta = self.client.post(
+            reverse('whatsapp_agent:crm-enviar', kwargs={'pk': conversa.pk}),
+            {'mensagem': 'Esta mensagem não pode sair'},
+        )
+
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, 'Envio bloqueado após 24 horas')
+        self.assertRedirects(
+            resposta,
+            reverse('whatsapp_agent:crm-inbox-detail', kwargs={'pk': conversa.pk}),
+        )
+        enviar_texto.assert_not_called()
+        enviar_template.assert_not_called()
+        self.assertFalse(MensagemWhatsApp.objects.exists())
 
     def test_vendedor_nao_acessa_conversa_fora_da_carteira(self):
         conexao = self._conexao_meta()

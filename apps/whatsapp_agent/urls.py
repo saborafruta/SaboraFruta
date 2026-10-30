@@ -13,6 +13,23 @@ urlpatterns = [
     path('api/status/', views.StatusConexaoView.as_view(), name='status'),
     path('crm/', views.CRMWhatsAppInboxView.as_view(), name='crm-inbox'),
     path(
+        'crm/numeros/', views.CRMWhatsAppConexoesView.as_view(),
+        name='crm-conexoes',
+    ),
+    path(
+        'crm/numeros/novo/', views.CRMWhatsAppConexaoFormView.as_view(),
+        name='crm-conexao-nova',
+    ),
+    path(
+        'crm/numeros/<int:pk>/editar/', views.CRMWhatsAppConexaoFormView.as_view(),
+        name='crm-conexao-editar',
+    ),
+    path(
+        'crm/numeros/<int:pk>/conectar/',
+        views.CRMWhatsAppConexaoOnboardingView.as_view(),
+        name='crm-conexao-onboarding',
+    ),
+    path(
         'crm/<int:pk>/', views.CRMWhatsAppInboxView.as_view(),
         name='crm-inbox-detail',
     ),

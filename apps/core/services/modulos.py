@@ -49,10 +49,13 @@ def modulos_ativos(filial) -> set[str]:
 
 def modulo_da_url(caminho: str) -> str | None:
     """Chave do módulo que cobre esse caminho, ou None se não for de nenhum."""
-    for modulo in MODULOS:
-        if any(caminho.startswith(p) for p in modulo.prefixos):
-            return modulo.chave
-    return None
+    correspondencias = (
+        (len(prefixo), modulo.chave)
+        for modulo in MODULOS
+        for prefixo in modulo.prefixos
+        if caminho.startswith(prefixo)
+    )
+    return max(correspondencias, default=(0, None))[1]
 
 
 def modulos_para_admin(empresa) -> list[dict]:
