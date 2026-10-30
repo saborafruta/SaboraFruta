@@ -1,8 +1,10 @@
 from django import forms
+from django.core.exceptions import ValidationError
 
 from apps.cadastros.models import Cliente
 from apps.core.models import Usuario
 from apps.crm.models import EtapaPipelineCRM, OportunidadeCRM, PipelineCRM, TagCRM
+from apps.crm.services.carteira_service import CarteiraService
 
 
 class OportunidadeCRMForm(forms.ModelForm):
@@ -20,18 +22,23 @@ class OportunidadeCRMForm(forms.ModelForm):
             'tags': forms.CheckboxSelectMultiple(),
         }
 
-    def __init__(self, *args, filial, **kwargs):
+    def __init__(self, *args, filial, usuario, **kwargs):
         super().__init__(*args, **kwargs)
         self.filial = filial
-        self.fields['cliente'].queryset = Cliente.objects.for_filial(filial).filter(
-            ativo=True,
+        self.usuario = usuario
+        self.fields['cliente'].queryset = CarteiraService.clientes_disponiveis_na_filial(
+            filial=filial, usuario=usuario,
         ).order_by('razao_social')
         self.fields['pipeline'].queryset = PipelineCRM.objects.filter(
             filial=filial, ativo=True,
         ).order_by('nome')
-        self.fields['responsavel'].queryset = Usuario.objects.filter(
+        responsaveis = Usuario.objects.filter(
             empresa=filial.empresa, ativo=True,
-        ).order_by('nome')
+        )
+        if not CarteiraService.pode_supervisionar(usuario):
+            responsaveis = responsaveis.filter(pk=usuario.pk)
+            self.initial.setdefault('responsavel', usuario)
+        self.fields['responsavel'].queryset = responsaveis.order_by('nome')
         self.fields['tags'].queryset = TagCRM.objects.filter(
             filial=filial, ativo=True,
         ).order_by('nome')
@@ -67,8 +74,40 @@ class OportunidadeCRMForm(forms.ModelForm):
             self.add_error('pipeline', 'O funil selecionado pertence a outra filial.')
         if etapa and pipeline and etapa.pipeline_id != pipeline.pk:
             self.add_error('etapa', 'A etapa selecionada não pertence a este funil.')
-        if cliente and not Cliente.objects.for_filial(self.filial).filter(pk=cliente.pk).exists():
-            self.add_error('cliente', 'O cliente não está disponível nesta filial.')
+        if cliente and not self.fields['cliente'].queryset.filter(pk=cliente.pk).exists():
+            self.add_error('cliente', 'O cliente não está disponível na sua carteira.')
         if responsavel and responsavel.empresa_id != self.filial.empresa_id:
             self.add_error('responsavel', 'O responsável pertence a outra empresa.')
+        if cliente and 'cliente' not in self.errors:
+            try:
+                dados['responsavel'] = CarteiraService.validar_responsavel(
+                    cliente=cliente, responsavel=responsavel, usuario=self.usuario,
+                )
+            except ValidationError as exc:
+                self.add_error('responsavel', exc)
+        return dados
+
+
+class CarteiraClienteForm(forms.Form):
+    cliente = forms.ModelChoiceField(queryset=Cliente.objects.none())
+    vendedor = forms.ModelChoiceField(queryset=Usuario.objects.none())
+
+    def __init__(self, *args, empresa, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.empresa = empresa
+        self.fields['cliente'].queryset = Cliente.objects.for_empresa(empresa).filter(
+            ativo=True,
+        ).select_related('filial').order_by('razao_social', 'pk')
+        self.fields['vendedor'].queryset = Usuario.objects.filter(
+            empresa=empresa, ativo=True,
+        ).order_by('nome')
+
+    def clean(self):
+        dados = super().clean()
+        cliente = dados.get('cliente')
+        vendedor = dados.get('vendedor')
+        if cliente and cliente.filial.empresa_id != self.empresa.pk:
+            self.add_error('cliente', 'O cliente pertence a outra empresa.')
+        if vendedor and vendedor.empresa_id != self.empresa.pk:
+            self.add_error('vendedor', 'O vendedor pertence a outra empresa.')
         return dados

@@ -4,6 +4,7 @@ from django.utils import timezone
 
 from apps.core.tenant_context import tenant_atomic
 from apps.crm.models import AtividadeCRM, EtapaPipelineCRM, OportunidadeCRM, PipelineCRM
+from apps.crm.services.carteira_service import CarteiraService
 
 
 ETAPAS_PADRAO = (
@@ -45,6 +46,12 @@ class ComercialService:
     @classmethod
     @tenant_atomic
     def criar_oportunidade(cls, *, filial, usuario, dados, tags=None):
+        dados = dict(dados)
+        dados['responsavel'] = CarteiraService.validar_responsavel(
+            cliente=dados['cliente'],
+            responsavel=dados.get('responsavel'),
+            usuario=usuario,
+        )
         oportunidade = OportunidadeCRM(filial=filial, criado_por=usuario, **dados)
         oportunidade.full_clean(exclude=['tags'])
         oportunidade.save()

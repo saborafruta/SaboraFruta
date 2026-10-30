@@ -1,5 +1,5 @@
 from .comercial import (
-    Cliente360View, FunilComercialView, OportunidadeCreateView,
+    CarteiraClientesView, Cliente360View, FunilComercialView, OportunidadeCreateView,
     OportunidadeDetailView, OportunidadeMoverView, OportunidadeNotaView,
 )
 from .recompra import (
@@ -12,7 +12,7 @@ from .recompra import (
 )
 
 __all__ = [
-    'Cliente360View', 'FunilComercialView', 'OportunidadeCreateView',
+    'CarteiraClientesView', 'Cliente360View', 'FunilComercialView', 'OportunidadeCreateView',
     'OportunidadeDetailView', 'OportunidadeMoverView', 'OportunidadeNotaView',
     'AlertasRecompraView',
     'RecompraBuscarClienteView',

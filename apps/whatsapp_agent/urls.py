@@ -11,6 +11,15 @@ urlpatterns = [
     path('conectar/', views.ConectarView.as_view(), name='conectar'),
     path('conexao/', views.ConexaoView.as_view(), name='conexao'),
     path('api/status/', views.StatusConexaoView.as_view(), name='status'),
+    path('crm/', views.CRMWhatsAppInboxView.as_view(), name='crm-inbox'),
+    path(
+        'crm/<int:pk>/', views.CRMWhatsAppInboxView.as_view(),
+        name='crm-inbox-detail',
+    ),
+    path(
+        'crm/<int:pk>/enviar/', views.CRMWhatsAppEnviarView.as_view(),
+        name='crm-enviar',
+    ),
     path('conversas/', views.ConversaListView.as_view(), name='conversa-list'),
     path('conversas/<int:pk>/', views.ConversaDetailView.as_view(), name='conversa-detail'),
     path('conversas/<int:pk>/retomar/', views.RetomarAgenteView.as_view(), name='retomar-agente'),

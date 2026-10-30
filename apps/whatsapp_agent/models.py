@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
@@ -370,6 +371,119 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
         return getattr(settings, 'OPENAI_API_KEY', '')
 
 
+class ConexaoWhatsAppVendedor(TimestampedModel):
+    """Número comercial oficial de um vendedor, separado do número geral da filial."""
+
+    class Status(models.TextChoices):
+        NAO_CONFIGURADO = 'nao_configurado', 'Não configurado'
+        PENDENTE = 'pendente', 'Pendente de conexão'
+        CONECTADO = 'conectado', 'Conectado'
+        DESCONECTADO = 'desconectado', 'Desconectado'
+        ERRO = 'erro', 'Erro'
+
+    empresa = models.ForeignKey(
+        'core.Empresa', on_delete=models.PROTECT,
+        related_name='conexoes_whatsapp_vendedores',
+    )
+    filial_padrao = models.ForeignKey(
+        'core.Filial', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='conexoes_whatsapp_vendedores',
+        help_text='Filial operacional sugerida ao abrir o CRM deste número.',
+    )
+    vendedor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='conexoes_whatsapp_crm',
+    )
+    meta_phone_number_id = models.CharField(max_length=40, blank=True)
+    meta_business_account_id = models.CharField(max_length=40, blank=True)
+    meta_graph_version = models.CharField(max_length=12, default='v23.0')
+    meta_access_token_criptografado = models.TextField(blank=True)
+    meta_verify_token_criptografado = models.TextField(blank=True)
+    meta_app_secret_criptografado = models.TextField(blank=True)
+    webhook_secret = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    numero_conectado = models.CharField(max_length=24, blank=True)
+    nome_conectado = models.CharField(max_length=120, blank=True)
+    coexistencia_ativa = models.BooleanField(default=True)
+    status = models.CharField(
+        max_length=24, choices=Status.choices, default=Status.NAO_CONFIGURADO,
+        db_index=True,
+    )
+    ultimo_evento_em = models.DateTimeField(null=True, blank=True)
+    ultimo_erro = models.TextField(blank=True)
+    ativo = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        db_table = 'whatsapp_conexoes_vendedores'
+        ordering = ['vendedor__nome']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['empresa', 'vendedor'], condition=models.Q(ativo=True),
+                name='whatsapp_conexao_vendedor_ativa_unica',
+            ),
+            models.UniqueConstraint(
+                fields=['meta_phone_number_id'],
+                condition=~models.Q(meta_phone_number_id=''),
+                name='whatsapp_conexao_phone_number_unico',
+            ),
+            models.UniqueConstraint(
+                fields=['numero_conectado'], condition=~models.Q(numero_conectado=''),
+                name='whatsapp_conexao_numero_unico',
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        erros = {}
+        if self.vendedor_id and self.empresa_id:
+            if self.vendedor.empresa_id != self.empresa_id:
+                erros['vendedor'] = 'O vendedor pertence a outra empresa.'
+        if self.filial_padrao_id and self.empresa_id:
+            if self.filial_padrao.empresa_id != self.empresa_id:
+                erros['filial_padrao'] = 'A filial padrão pertence a outra empresa.'
+        if erros:
+            raise ValidationError(erros)
+
+    def _definir_segredo(self, campo, valor):
+        valor = (valor or '').strip()
+        if valor:
+            setattr(self, campo, _fernet().encrypt(valor.encode('utf-8')).decode('ascii'))
+
+    def _obter_segredo(self, campo):
+        valor = getattr(self, campo, '')
+        if not valor:
+            return ''
+        try:
+            return _fernet().decrypt(valor.encode('ascii')).decode('utf-8')
+        except (InvalidToken, ValueError):
+            return ''
+
+    def definir_meta_access_token(self, valor):
+        self._definir_segredo('meta_access_token_criptografado', valor)
+
+    def obter_meta_access_token(self):
+        return self._obter_segredo('meta_access_token_criptografado')
+
+    def definir_meta_verify_token(self, valor):
+        self._definir_segredo('meta_verify_token_criptografado', valor)
+
+    def obter_meta_verify_token(self):
+        return self._obter_segredo('meta_verify_token_criptografado')
+
+    def definir_meta_app_secret(self, valor):
+        self._definir_segredo('meta_app_secret_criptografado', valor)
+
+    def obter_meta_app_secret(self):
+        return self._obter_segredo('meta_app_secret_criptografado')
+
+    @property
+    def meta_credenciais_configuradas(self):
+        return bool(self.meta_phone_number_id and self.obter_meta_access_token())
+
+    def __str__(self):
+        numero = self.numero_conectado or 'número pendente'
+        return f'{self.vendedor} — {numero}'
+
+
 class ConfiguracaoWhatsAppCentral(TimestampedModel):
     """Número institucional do iTED, usado somente para mensagens gerenciais."""
 
@@ -579,7 +693,12 @@ class ConversaWhatsApp(FilialScopedModel):
         NAO_CONVERTIDO = 'nao_convertido', 'Não convertidos'
 
     configuracao = models.ForeignKey(
-        ConfiguracaoWhatsApp, on_delete=models.CASCADE, related_name='conversas',
+        ConfiguracaoWhatsApp, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='conversas',
+    )
+    conexao_vendedor = models.ForeignKey(
+        ConexaoWhatsAppVendedor, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='conversas',
     )
     cliente = models.ForeignKey(
         'cadastros.Cliente', on_delete=models.SET_NULL, null=True, blank=True,
@@ -588,6 +707,10 @@ class ConversaWhatsApp(FilialScopedModel):
     remote_jid = models.CharField(max_length=100)
     telefone = models.CharField(max_length=24, db_index=True)
     nome_contato = models.CharField(max_length=150, blank=True)
+    tenant_alias = models.SlugField(max_length=80, blank=True)
+    cliente_operacional_id = models.PositiveBigIntegerField(null=True, blank=True, db_index=True)
+    cliente_grupo_replicacao = models.UUIDField(null=True, blank=True, db_index=True)
+    fora_carteira = models.BooleanField(default=False, db_index=True)
     etapa = models.CharField(max_length=40, default='inicio')
     etapa_crm = models.CharField(
         max_length=32,
@@ -610,8 +733,20 @@ class ConversaWhatsApp(FilialScopedModel):
         constraints = [
             models.UniqueConstraint(
                 fields=['configuracao', 'remote_jid'],
-                condition=models.Q(ativa=True),
+                condition=models.Q(ativa=True, configuracao__isnull=False),
                 name='whatsapp_conversa_remota_ativa_unica',
+            ),
+            models.UniqueConstraint(
+                fields=['conexao_vendedor', 'remote_jid'],
+                condition=models.Q(ativa=True, conexao_vendedor__isnull=False),
+                name='whatsapp_conversa_vendedor_remota_ativa_unica',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(configuracao__isnull=False, conexao_vendedor__isnull=True)
+                    | models.Q(configuracao__isnull=True, conexao_vendedor__isnull=False)
+                ),
+                name='whatsapp_conversa_canal_unico',
             ),
         ]
 
@@ -624,13 +759,28 @@ class MensagemWhatsApp(TimestampedModel):
         ENTRADA = 'entrada', 'Recebida'
         SAIDA = 'saida', 'Enviada'
 
+    class Origem(models.TextChoices):
+        CLIENTE = 'cliente', 'Cliente'
+        CELULAR = 'celular', 'WhatsApp Business no celular'
+        CRM = 'crm', 'CRM do iTED'
+        AUTOMACAO = 'automacao', 'Automação'
+        SISTEMA = 'sistema', 'Sistema'
+
     conversa = models.ForeignKey(ConversaWhatsApp, on_delete=models.CASCADE, related_name='mensagens')
     direcao = models.CharField(max_length=10, choices=Direcao.choices)
     identificador_externo = models.CharField(max_length=160, blank=True)
     tipo = models.CharField(max_length=30, default='texto')
     texto = models.TextField(blank=True)
+    texto_original = models.TextField(blank=True)
+    origem = models.CharField(
+        max_length=16, choices=Origem.choices, default=Origem.SISTEMA, db_index=True,
+    )
+    autor_nome = models.CharField(max_length=120, blank=True)
+    autor_email = models.EmailField(blank=True)
     status = models.CharField(max_length=30, blank=True)
     dados_evento = models.JSONField(default=dict, blank=True)
+    editada_em = models.DateTimeField(null=True, blank=True)
+    apagada_em = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'whatsapp_mensagens'

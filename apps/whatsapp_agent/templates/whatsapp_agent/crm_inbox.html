@@ -1,0 +1,70 @@
+{% extends '_base.html' %}
+{% block title %}CRM de vendedores no WhatsApp{% endblock %}
+{% block content %}
+{% include 'whatsapp_agent/_styles.html' %}
+<div class="crm-wa-page">
+  <header class="crm-wa-header">
+    <div>
+      <h1>Conversas dos vendedores</h1>
+      <p>{% if pode_supervisionar %}Visão da empresa: acompanhe e responda por qualquer vendedor.{% else %}Seu número comercial e os clientes da sua carteira.{% endif %}</p>
+    </div>
+    <div class="wa-actions">
+      {% if pode_supervisionar %}<a class="wa-btn secondary" href="{% url 'crm:carteiras' %}">Gerenciar carteiras</a>{% endif %}
+      <a class="wa-btn secondary" href="{% url 'crm:funil' %}">Funil comercial</a>
+    </div>
+  </header>
+
+  <section class="crm-wa-app">
+    <aside class="crm-wa-sidebar">
+      <div class="crm-wa-search">Conversas recentes <span>{{ conversas|length }}</span></div>
+      <div class="crm-wa-contacts">
+        {% for conversa in conversas %}
+          <a href="{% url 'whatsapp_agent:crm-inbox-detail' conversa.pk %}" class="crm-wa-contact {% if conversa_selecionada.pk == conversa.pk %}active{% endif %}">
+            <span class="crm-wa-avatar">{{ conversa.nome_contato|default:conversa.telefone|first|upper }}</span>
+            <span class="crm-wa-contact-copy">
+              <span class="crm-wa-contact-top"><strong>{{ conversa.nome_contato|default:conversa.telefone }}</strong><time>{{ conversa.ultima_mensagem_em|date:'H:i' }}</time></span>
+              <span class="crm-wa-preview">{% if conversa.ultima_mensagem_direcao == 'saida' %}Você: {% endif %}{{ conversa.ultima_mensagem_texto|default:'Sem mensagens'|truncatechars:58 }}</span>
+              {% if pode_supervisionar %}<small>{{ conversa.conexao_vendedor.vendedor.nome }}</small>{% endif %}
+            </span>
+          </a>
+        {% empty %}
+          <div class="crm-wa-empty">Nenhuma conversa disponível. As mensagens recebidas pelo número oficial aparecerão aqui.</div>
+        {% endfor %}
+      </div>
+    </aside>
+
+    <main class="crm-wa-chat">
+      {% if conversa_selecionada %}
+        <div class="crm-wa-chat-head">
+          <span class="crm-wa-avatar">{{ conversa_selecionada.nome_contato|default:conversa_selecionada.telefone|first|upper }}</span>
+          <div><strong>{{ conversa_selecionada.nome_contato|default:conversa_selecionada.telefone }}</strong><small>{{ conversa_selecionada.telefone }} · vendedor {{ conversa_selecionada.conexao_vendedor.vendedor.nome }}</small></div>
+          {% if conversa_selecionada.fora_carteira %}<span class="crm-wa-alert">Fora da carteira</span>{% endif %}
+        </div>
+        <div class="crm-wa-messages">
+          {% for mensagem in conversa_selecionada.mensagens.all %}
+            <article class="crm-wa-bubble {% if mensagem.direcao == 'saida' %}out{% endif %} {% if mensagem.apagada_em %}deleted{% endif %}">
+              {% if mensagem.apagada_em %}<div class="crm-wa-deleted">Mensagem apagada no WhatsApp · conteúdo preservado</div>{% endif %}
+              <div>{{ mensagem.texto|linebreaksbr }}</div>
+              <footer>
+                {% if mensagem.autor_nome %}{{ mensagem.autor_nome }} · {% endif %}{{ mensagem.get_origem_display }} · {{ mensagem.created_at|date:'d/m H:i' }}
+                {% if mensagem.status %} · {{ mensagem.status }}{% endif %}
+              </footer>
+            </article>
+          {% empty %}<div class="crm-wa-empty">Nenhuma mensagem registrada.</div>{% endfor %}
+        </div>
+        <form class="crm-wa-compose" method="post" action="{% url 'whatsapp_agent:crm-enviar' conversa_selecionada.pk %}">
+          {% csrf_token %}
+          <textarea name="mensagem" maxlength="4096" rows="1" placeholder="Digite uma mensagem" required></textarea>
+          <button type="submit" aria-label="Enviar mensagem">Enviar</button>
+        </form>
+      {% else %}
+        <div class="crm-wa-welcome"><strong>CRM do WhatsApp</strong><span>Selecione uma conversa para visualizar o histórico.</span></div>
+      {% endif %}
+    </main>
+  </section>
+</div>
+
+<style>
+  .crm-wa-page{max-width:1440px;margin:0 auto;color:#e5e7eb}.crm-wa-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem}.crm-wa-header h1{margin:0;font-size:1.45rem}.crm-wa-header p{margin:.25rem 0 0;color:#a1a1aa;font-size:.82rem}.crm-wa-app{display:grid;grid-template-columns:360px minmax(0,1fr);height:calc(100vh - 190px);min-height:560px;overflow:hidden;border:1px solid #343438;border-radius:1rem;background:#111b21;box-shadow:0 18px 45px rgba(0,0,0,.2)}.crm-wa-sidebar{display:flex;min-width:0;flex-direction:column;border-right:1px solid #343438;background:#202c33}.crm-wa-search{display:flex;justify-content:space-between;padding:1rem;border-bottom:1px solid #343438;color:#d4d4d8;font-size:.78rem;font-weight:800}.crm-wa-search span{padding:.1rem .45rem;border-radius:99px;background:#374248}.crm-wa-contacts{overflow:auto}.crm-wa-contact{display:grid;grid-template-columns:46px minmax(0,1fr);gap:.75rem;padding:.8rem 1rem;color:inherit;text-decoration:none;border-bottom:1px solid rgba(63,63,70,.65)}.crm-wa-contact:hover,.crm-wa-contact.active{background:#2a3942}.crm-wa-avatar{display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;border-radius:50%;background:#00a884;color:#fff;font-weight:900}.crm-wa-contact-copy{display:grid;min-width:0;gap:.18rem}.crm-wa-contact-top{display:flex;justify-content:space-between;gap:.5rem}.crm-wa-contact-top strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.88rem}.crm-wa-contact-top time,.crm-wa-preview,.crm-wa-contact-copy small{color:#8696a0;font-size:.7rem}.crm-wa-preview{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.crm-wa-contact-copy small{color:#53bdeb}.crm-wa-chat{display:flex;min-width:0;flex-direction:column;background-color:#0b141a;background-image:linear-gradient(rgba(11,20,26,.93),rgba(11,20,26,.93)),radial-gradient(#33434d 1px,transparent 1px);background-size:auto,22px 22px}.crm-wa-chat-head{display:flex;align-items:center;gap:.75rem;padding:.7rem 1rem;background:#202c33;border-bottom:1px solid #343438}.crm-wa-chat-head div{display:grid;min-width:0}.crm-wa-chat-head small{color:#8696a0;font-size:.7rem}.crm-wa-alert{margin-left:auto;padding:.25rem .55rem;border-radius:999px;background:#713f12;color:#fde68a;font-size:.68rem;font-weight:800}.crm-wa-messages{display:flex;flex:1;overflow:auto;flex-direction:column;gap:.4rem;padding:1rem 6%}.crm-wa-bubble{align-self:flex-start;max-width:min(72%,720px);padding:.55rem .7rem;border-radius:.6rem;background:#202c33;font-size:.86rem;line-height:1.45;box-shadow:0 1px 2px rgba(0,0,0,.25)}.crm-wa-bubble.out{align-self:flex-end;background:#005c4b}.crm-wa-bubble.deleted{border:1px dashed #a16207}.crm-wa-bubble footer{margin-top:.25rem;color:#9fb0b9;font-size:.62rem;text-align:right}.crm-wa-deleted{margin-bottom:.3rem;color:#fbbf24;font-size:.65rem;font-style:italic}.crm-wa-compose{display:grid;grid-template-columns:1fr auto;gap:.65rem;padding:.7rem 1rem;background:#202c33}.crm-wa-compose textarea{min-height:42px;max-height:140px;resize:vertical;padding:.7rem .9rem;border:0;border-radius:.65rem;background:#2a3942;color:#f4f4f5;font:inherit}.crm-wa-compose button{padding:0 1.2rem;border:0;border-radius:.65rem;background:#00a884;color:#fff;font-weight:850;cursor:pointer}.crm-wa-empty,.crm-wa-welcome{padding:1.2rem;color:#8696a0;font-size:.8rem}.crm-wa-welcome{display:grid;place-items:center;align-content:center;flex:1;gap:.35rem;text-align:center}.crm-wa-welcome strong{color:#e5e7eb;font-size:1.1rem}body.tema-claro .crm-wa-page{color:#111827}body.tema-claro .crm-wa-app{border-color:#d1d5db}body.tema-claro .crm-wa-sidebar,body.tema-claro .crm-wa-chat-head,body.tema-claro .crm-wa-compose{background:#f0f2f5}body.tema-claro .crm-wa-contact:hover,body.tema-claro .crm-wa-contact.active{background:#e9edef}body.tema-claro .crm-wa-chat{background-color:#efeae2;background-image:linear-gradient(rgba(239,234,226,.9),rgba(239,234,226,.9)),radial-gradient(#c9c2b6 1px,transparent 1px)}body.tema-claro .crm-wa-bubble{background:#fff}body.tema-claro .crm-wa-bubble.out{background:#d9fdd3}body.tema-claro .crm-wa-compose textarea{background:#fff;color:#111827}body.tema-claro .crm-wa-welcome strong{color:#111827}@media(max-width:800px){.crm-wa-header{align-items:stretch;flex-direction:column}.crm-wa-app{grid-template-columns:1fr;height:auto;min-height:0}.crm-wa-sidebar{max-height:300px;border-right:0;border-bottom:1px solid #343438}.crm-wa-chat{min-height:620px}.crm-wa-bubble{max-width:88%}}@media(max-width:520px){.crm-wa-messages{padding:.8rem}.crm-wa-chat-head{align-items:flex-start}.crm-wa-alert{font-size:.58rem}.crm-wa-compose{grid-template-columns:1fr}.crm-wa-compose button{min-height:42px}}
+</style>
+{% endblock %}

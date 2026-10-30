@@ -1,10 +1,71 @@
 """Fundação do CRM comercial: funis, oportunidades, tags e histórico auditável."""
+import uuid
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 
 from apps.core.models.base import FilialScopedModel, TimestampedModel
+
+
+class CarteiraCliente(TimestampedModel):
+    """Vincula um cliente da empresa ao vendedor responsável por atendê-lo."""
+
+    empresa = models.ForeignKey(
+        'core.Empresa', on_delete=models.CASCADE, related_name='carteiras_clientes',
+    )
+    cliente = models.OneToOneField(
+        'cadastros.Cliente', on_delete=models.CASCADE, related_name='carteira_crm',
+    )
+    grupo_cliente = models.UUIDField(default=uuid.uuid4, editable=False, db_index=True)
+    vendedor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='clientes_carteira_crm',
+    )
+    atribuido_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='atribuicoes_carteira_crm',
+    )
+
+    class Meta:
+        db_table = 'crm_carteiras_clientes'
+        ordering = ['cliente__razao_social']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['empresa', 'grupo_cliente'],
+                name='crm_carteira_empresa_grupo_cliente_unico',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['empresa', 'vendedor']),
+        ]
+
+    def clean(self):
+        super().clean()
+        erros = {}
+        if self.cliente_id:
+            empresa_cliente_id = self.cliente.filial.empresa_id
+            if self.empresa_id and empresa_cliente_id != self.empresa_id:
+                erros['cliente'] = 'O cliente pertence a outra empresa.'
+        if self.vendedor_id and self.empresa_id:
+            if self.vendedor.empresa_id != self.empresa_id:
+                erros['vendedor'] = 'O vendedor pertence a outra empresa.'
+        if self.atribuido_por_id and self.empresa_id:
+            if self.atribuido_por.empresa_id != self.empresa_id:
+                erros['atribuido_por'] = 'O responsável pela atribuição pertence a outra empresa.'
+        if erros:
+            raise ValidationError(erros)
+
+    def save(self, *args, **kwargs):
+        if self.cliente_id:
+            self.empresa_id = self.cliente.filial.empresa_id
+            self.grupo_cliente = self.cliente.grupo_replicacao
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.cliente} — {self.vendedor}'
 
 
 class PipelineCRM(FilialScopedModel):

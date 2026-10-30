@@ -12,19 +12,24 @@ from django.views import View
 from apps.cadastros.models import Cliente
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.tenant_context import tenant_atomic
-from apps.crm.forms import OportunidadeCRMForm
+from apps.crm.forms import CarteiraClienteForm, OportunidadeCRMForm
 from apps.crm.models import (
-    AtividadeCRM, EtapaPipelineCRM, OportunidadeCRM, PipelineCRM, RecompraCliente,
+    AtividadeCRM, CarteiraCliente, EtapaPipelineCRM, OportunidadeCRM, PipelineCRM,
+    RecompraCliente,
 )
-from apps.crm.services import ComercialService
+from apps.crm.services import CarteiraService, ComercialService
 from apps.vendas.models import PedidoVenda
 
 
 def _oportunidade_no_escopo(request, pk):
+    queryset = OportunidadeCRM.objects.select_related(
+        'cliente', 'cliente__filial', 'pipeline', 'etapa', 'responsavel', 'filial',
+    ).prefetch_related('tags')
+    queryset = CarteiraService.filtrar_oportunidades(
+        queryset, usuario=request.user, empresa=request.filial_ativa.empresa,
+    )
     return get_object_or_404(
-        OportunidadeCRM.objects.select_related(
-            'cliente', 'pipeline', 'etapa', 'responsavel', 'filial',
-        ).prefetch_related('tags'),
+        queryset,
         pk=pk, filial=request.filial_ativa,
     )
 
@@ -54,6 +59,9 @@ class FunilComercialView(PermissaoRequiredMixin, View):
         oportunidades = OportunidadeCRM.objects.filter(
             filial=filial, pipeline=pipeline,
         ).select_related('cliente', 'responsavel', 'etapa').prefetch_related('tags')
+        oportunidades = CarteiraService.filtrar_oportunidades(
+            oportunidades, usuario=request.user, empresa=filial.empresa,
+        )
         responsavel = request.GET.get('responsavel', '').strip()
         prioridade = request.GET.get('prioridade', '').strip()
         busca = request.GET.get('q', '').strip()
@@ -79,10 +87,13 @@ class FunilComercialView(PermissaoRequiredMixin, View):
             'total': resumo['total'] or 0,
             'valor_total': resumo['valor'] or Decimal('0'),
             'filtros': {'responsavel': responsavel, 'prioridade': prioridade, 'q': busca},
-            'responsaveis': request.user.__class__.objects.filter(
-                empresa=filial.empresa, ativo=True,
+            'responsaveis': (
+                request.user.__class__.objects.filter(empresa=filial.empresa, ativo=True)
+                if CarteiraService.pode_supervisionar(request.user)
+                else request.user.__class__.objects.filter(pk=request.user.pk)
             ).order_by('nome'),
             'prioridades': OportunidadeCRM.Prioridade.choices,
+            'pode_supervisionar': CarteiraService.pode_supervisionar(request.user),
         })
 
 
@@ -93,7 +104,9 @@ class OportunidadeCreateView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         pipeline = ComercialService.obter_pipeline_padrao(request.filial_ativa)
-        cliente = Cliente.objects.for_filial(request.filial_ativa).filter(
+        cliente = CarteiraService.clientes_disponiveis_na_filial(
+            filial=request.filial_ativa, usuario=request.user,
+        ).filter(
             pk=request.GET.get('cliente'), ativo=True,
         ).first()
         origem = request.GET.get('origem')
@@ -116,12 +129,16 @@ class OportunidadeCreateView(PermissaoRequiredMixin, View):
                 'proxima_acao': 'Entrar em contato sobre a próxima compra',
             })
         return render(request, self.template_name, {
-            'form': OportunidadeCRMForm(filial=request.filial_ativa, initial=inicial),
+            'form': OportunidadeCRMForm(
+                filial=request.filial_ativa, usuario=request.user, initial=inicial,
+            ),
             'title': 'Nova oportunidade',
         })
 
     def post(self, request):
-        form = OportunidadeCRMForm(request.POST, filial=request.filial_ativa)
+        form = OportunidadeCRMForm(
+            request.POST, filial=request.filial_ativa, usuario=request.user,
+        )
         if form.is_valid():
             dados = {
                 campo: form.cleaned_data[campo]
@@ -146,7 +163,7 @@ class OportunidadeDetailView(PermissaoRequiredMixin, View):
         return render(request, self.template_name, {
             'oportunidade': oportunidade,
             'form': _form_edicao_oportunidade(
-                instance=oportunidade, filial=request.filial_ativa,
+                instance=oportunidade, filial=request.filial_ativa, usuario=request.user,
             ),
             'atividades': oportunidade.atividades.select_related('autor')[:100],
         })
@@ -159,6 +176,7 @@ class OportunidadeDetailView(PermissaoRequiredMixin, View):
         oportunidade = _oportunidade_no_escopo(request, pk)
         form = _form_edicao_oportunidade(
             request.POST, instance=oportunidade, filial=request.filial_ativa,
+            usuario=request.user,
         )
         if form.is_valid():
             oportunidade = form.save()
@@ -223,7 +241,10 @@ class Cliente360View(PermissaoRequiredMixin, View):
 
     def get(self, request, cliente_id):
         filial = request.filial_ativa
-        cliente = get_object_or_404(Cliente.objects.for_filial(filial), pk=cliente_id)
+        clientes = CarteiraService.clientes_disponiveis_na_filial(
+            filial=filial, usuario=request.user,
+        )
+        cliente = get_object_or_404(clientes, pk=cliente_id)
         oportunidades = OportunidadeCRM.objects.filter(
             filial=filial, cliente=cliente,
         ).select_related('etapa', 'responsavel', 'pipeline').prefetch_related('tags')
@@ -242,3 +263,71 @@ class Cliente360View(PermissaoRequiredMixin, View):
             'quantidade_pedidos': totais['quantidade'] or 0,
             'recompra': recompra,
         })
+
+
+class CarteiraClientesView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'crm'
+    permissao_acao = 'ver'
+    template_name = 'crm/carteira_clientes.html'
+
+    def _autorizar(self, request):
+        if CarteiraService.pode_supervisionar(request.user):
+            return True
+        messages.error(request, 'Somente gestores podem organizar as carteiras de clientes.')
+        return False
+
+    def _contexto(self, request, form=None):
+        empresa = request.filial_ativa.empresa
+        busca = (request.GET.get('q') or '').strip()
+        queryset = Cliente.objects.for_empresa(empresa).filter(ativo=True).select_related('filial')
+        if busca:
+            queryset = queryset.filter(
+                models.Q(razao_social__icontains=busca)
+                | models.Q(nome_fantasia__icontains=busca)
+                | models.Q(cpf_cnpj__icontains=busca)
+            )
+        atribuicoes = {
+            item.grupo_cliente: item
+            for item in CarteiraCliente.objects.filter(empresa=empresa).select_related('vendedor')
+        }
+        clientes = []
+        vistos = set()
+        for cliente in queryset.order_by('razao_social', 'pk'):
+            if cliente.grupo_replicacao in vistos:
+                continue
+            vistos.add(cliente.grupo_replicacao)
+            clientes.append({
+                'cliente': cliente,
+                'atribuicao': atribuicoes.get(cliente.grupo_replicacao),
+            })
+        return {
+            'clientes': clientes,
+            'vendedores': request.user.__class__.objects.filter(
+                empresa=empresa, ativo=True,
+            ).order_by('nome'),
+            'busca': busca,
+            'form': form or CarteiraClienteForm(empresa=empresa),
+        }
+
+    def get(self, request):
+        if not self._autorizar(request):
+            return redirect('crm:funil')
+        return render(request, self.template_name, self._contexto(request))
+
+    def post(self, request):
+        if not self._autorizar(request):
+            return redirect('crm:funil')
+        form = CarteiraClienteForm(request.POST, empresa=request.filial_ativa.empresa)
+        if form.is_valid():
+            carteira, criada = CarteiraService.atribuir(
+                cliente=form.cleaned_data['cliente'],
+                vendedor=form.cleaned_data['vendedor'],
+                atribuido_por=request.user,
+            )
+            acao = 'incluído na' if criada else 'reatribuído dentro da'
+            messages.success(
+                request,
+                f'{carteira.cliente.nome_display} foi {acao} carteira de {carteira.vendedor.nome}.',
+            )
+            return redirect('crm:carteiras')
+        return render(request, self.template_name, self._contexto(request, form=form))

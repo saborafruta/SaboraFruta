@@ -6,6 +6,7 @@ app_name = 'crm'
 
 urlpatterns = [
     path('', views.FunilComercialView.as_view(), name='funil'),
+    path('carteiras/', views.CarteiraClientesView.as_view(), name='carteiras'),
     path('oportunidades/nova/', views.OportunidadeCreateView.as_view(), name='oportunidade-nova'),
     path(
         'oportunidades/<int:pk>/', views.OportunidadeDetailView.as_view(),

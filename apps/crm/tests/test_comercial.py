@@ -6,7 +6,9 @@ from django.test import TestCase
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, PerfilAcesso, Usuario
 from apps.crm.forms import OportunidadeCRMForm
-from apps.crm.models import AtividadeCRM, EtapaPipelineCRM, OportunidadeCRM, PipelineCRM
+from apps.crm.models import (
+    AtividadeCRM, CarteiraCliente, EtapaPipelineCRM, OportunidadeCRM, PipelineCRM,
+)
 from apps.crm.services import ComercialService
 
 
@@ -30,6 +32,12 @@ class ComercialServiceTests(TestCase):
         self.cliente = Cliente.objects.create(
             filial=self.filial, razao_social='Cliente CRM', cpf_cnpj='12345678901',
             tipo_pessoa='F', ativo=True,
+        )
+        CarteiraCliente.objects.create(
+            empresa=self.empresa,
+            cliente=self.cliente,
+            vendedor=self.usuario,
+            atribuido_por=self.usuario,
         )
 
     def _criar_oportunidade(self):
@@ -122,7 +130,7 @@ class ComercialServiceTests(TestCase):
             'valor_estimado': '100.00',
             'prioridade': OportunidadeCRM.Prioridade.NORMAL,
             'origem': OportunidadeCRM.Origem.MANUAL,
-        }, filial=self.filial)
+        }, filial=self.filial, usuario=self.usuario)
 
         self.assertFalse(form.is_valid())
         self.assertIn('cliente', form.errors)

@@ -12,7 +12,9 @@
       </p>
     </div>
     <div class="flex flex-wrap gap-2">
+      <a href="{% url 'whatsapp_agent:crm-inbox' %}" class="btn-secondary">Conversas do WhatsApp</a>
       <a href="{% url 'crm:recompra' %}" class="btn-secondary">Alertas de recompra</a>
+      {% if pode_supervisionar %}<a href="{% url 'crm:carteiras' %}" class="btn-secondary">Carteiras</a>{% endif %}
       <a href="{% url 'crm:oportunidade-nova' %}" class="btn-primary">+ Nova oportunidade</a>
     </div>
   </div>

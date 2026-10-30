@@ -1,9 +1,19 @@
 from django.contrib import admin
 
 from .models import (
-    AtividadeCRM, ConfiguracaoFaixasRecompra, EtapaPipelineCRM, OportunidadeCRM,
+    AtividadeCRM, CarteiraCliente, ConfiguracaoFaixasRecompra, EtapaPipelineCRM, OportunidadeCRM,
     PipelineCRM, RecompraCliente, RecompraControle, TagCRM,
 )
+
+
+@admin.register(CarteiraCliente)
+class CarteiraClienteAdmin(admin.ModelAdmin):
+    list_display = ('cliente', 'empresa', 'vendedor', 'atribuido_por', 'updated_at')
+    list_filter = ('empresa', 'vendedor')
+    search_fields = (
+        'cliente__razao_social', 'cliente__nome_fantasia', 'cliente__cpf_cnpj',
+        'vendedor__nome',
+    )
 
 
 class EtapaPipelineInline(admin.TabularInline):

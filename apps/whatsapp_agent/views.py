@@ -18,6 +18,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.crm.services import CarteiraService
 
 from .conversation_service import encerrar_conversa, encerrar_conversas_inativas
 from .flow import garantir_fluxo_padrao
@@ -27,7 +28,7 @@ from .gateway import (
     identidade_instancia, qr_data_url,
 )
 from .models import (
-    ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp,
+    ConexaoWhatsAppVendedor, ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp,
     MenuWhatsApp, OpcaoMenuWhatsApp,
     UsoIAWhatsApp,
 )
@@ -60,6 +61,19 @@ def _gateway_configurado(configuracao):
 def _webhook_url(request, configuracao):
     return request.build_absolute_uri(
         reverse('whatsapp_agent:webhook', kwargs={'secret': configuracao.webhook_secret}),
+    )
+
+
+def _conversas_crm_permitidas(request):
+    """Isola conversas por empresa e, para vendedor, pelo próprio número/carteira."""
+    queryset = ConversaWhatsApp.objects.filter(
+        conexao_vendedor__empresa__cnpj=request.filial_ativa.empresa.cnpj,
+    )
+    if CarteiraService.pode_supervisionar(request.user):
+        return queryset
+    return queryset.filter(
+        conexao_vendedor__vendedor__email__iexact=request.user.email,
+        fora_carteira=False,
     )
 
 
@@ -407,6 +421,100 @@ class StatusConexaoView(PermissaoRequiredMixin, View):
             return JsonResponse({'conectado': False, 'erro': str(exc)}, status=502)
 
 
+class CRMWhatsAppInboxView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'crm'
+    permissao_acao = 'ver'
+
+    def get(self, request, pk=None):
+        ultima_mensagem = MensagemWhatsApp.objects.filter(
+            conversa_id=OuterRef('pk'),
+        ).order_by('-created_at')
+        conversas = list(
+            _conversas_crm_permitidas(request)
+            .select_related('conexao_vendedor', 'conexao_vendedor__vendedor')
+            .annotate(
+                ultima_mensagem_texto=Subquery(ultima_mensagem.values('texto')[:1]),
+                ultima_mensagem_direcao=Subquery(ultima_mensagem.values('direcao')[:1]),
+            )
+            .order_by('-ultima_mensagem_em', '-created_at')[:200]
+        )
+        selecionada = None
+        if pk is not None:
+            selecionada = get_object_or_404(
+                _conversas_crm_permitidas(request)
+                .select_related('conexao_vendedor', 'conexao_vendedor__vendedor')
+                .prefetch_related('mensagens'),
+                pk=pk,
+            )
+        elif conversas:
+            selecionada = conversas[0]
+            selecionada = (
+                _conversas_crm_permitidas(request)
+                .select_related('conexao_vendedor', 'conexao_vendedor__vendedor')
+                .prefetch_related('mensagens')
+                .get(pk=selecionada.pk)
+            )
+        return render(request, 'whatsapp_agent/crm_inbox.html', {
+            'conversas': conversas,
+            'conversa_selecionada': selecionada,
+            'pode_supervisionar': CarteiraService.pode_supervisionar(request.user),
+        })
+
+
+@method_decorator(require_POST, name='dispatch')
+class CRMWhatsAppEnviarView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'crm'
+    permissao_acao = 'criar'
+
+    def post(self, request, pk):
+        conversa = get_object_or_404(
+            _conversas_crm_permitidas(request).select_related(
+                'conexao_vendedor', 'conexao_vendedor__vendedor',
+            ),
+            pk=pk,
+        )
+        texto = (request.POST.get('mensagem') or '').strip()
+        if not texto:
+            messages.error(request, 'Digite uma mensagem antes de enviar.')
+            return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
+        if len(texto) > 4096:
+            messages.error(request, 'A mensagem deve ter no máximo 4.096 caracteres.')
+            return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
+        conexao = conversa.conexao_vendedor
+        if not conexao or not conexao.meta_credenciais_configuradas:
+            messages.error(request, 'A conexão oficial deste vendedor não está configurada.')
+            return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
+
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa,
+            direcao=MensagemWhatsApp.Direcao.SAIDA,
+            origem=MensagemWhatsApp.Origem.CRM,
+            autor_nome=request.user.nome,
+            autor_email=request.user.email,
+            texto=texto,
+            texto_original=texto,
+            tipo='texto',
+            status='pendente',
+        )
+        try:
+            retorno = MetaCloudClient(conexao).enviar_texto(conversa.telefone, texto)
+            mensagem.identificador_externo = (
+                (retorno.get('messages') or [{}])[0].get('id') or ''
+            )
+            mensagem.status = 'enviada'
+            conversa.ultima_mensagem_em = timezone.now()
+            conversa.save(update_fields=['ultima_mensagem_em', 'updated_at'])
+            messages.success(request, 'Mensagem enviada pelo CRM.')
+        except GatewayWhatsAppError as exc:
+            mensagem.status = 'erro'
+            mensagem.dados_evento = {'erro': str(exc)}
+            messages.error(request, f'Não foi possível enviar a mensagem: {exc}')
+        mensagem.save(update_fields=[
+            'identificador_externo', 'status', 'dados_evento', 'updated_at',
+        ])
+        return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
+
+
 class ConversaListView(PermissaoRequiredMixin, View):
     permissao_modulo = 'cadastros'
     permissao_acao = 'ver'
@@ -568,9 +676,17 @@ def webhook(request, secret):
         webhook_secret=secret, ativo=True,
     ).select_related('filial').first()
     if not configuracao:
+        configuracao = ConexaoWhatsAppVendedor.objects.filter(
+            webhook_secret=secret, ativo=True,
+        ).select_related('empresa', 'filial_padrao', 'vendedor').first()
+    if not configuracao:
         return JsonResponse({'erro': 'Webhook inválido.'}, status=404)
+    usa_meta = (
+        isinstance(configuracao, ConexaoWhatsAppVendedor)
+        or configuracao.provedor == ConfiguracaoWhatsApp.Provedor.META_CLOUD
+    )
     if request.method == 'GET':
-        if configuracao.provedor != ConfiguracaoWhatsApp.Provedor.META_CLOUD:
+        if not usa_meta:
             return JsonResponse({'erro': 'Método não permitido.'}, status=405)
         token = request.GET.get('hub.verify_token', '')
         desafio = request.GET.get('hub.challenge', '')
@@ -590,7 +706,7 @@ def webhook(request, secret):
         tamanho = 0
     if tamanho > 1_000_000:
         return JsonResponse({'erro': 'Payload muito grande.'}, status=413)
-    if configuracao.provedor == ConfiguracaoWhatsApp.Provedor.META_CLOUD:
+    if usa_meta:
         segredo = configuracao.obter_meta_app_secret()
         assinatura = request.headers.get('X-Hub-Signature-256', '')
         if not segredo:
@@ -606,7 +722,7 @@ def webhook(request, secret):
         return JsonResponse({'erro': 'JSON inválido.'}, status=400)
     resultado = (
         receber_evento_meta(configuracao, payload)
-        if configuracao.provedor == ConfiguracaoWhatsApp.Provedor.META_CLOUD
+        if usa_meta
         else receber_evento(configuracao, payload)
     )
     return JsonResponse({'ok': True, 'resultado': resultado})

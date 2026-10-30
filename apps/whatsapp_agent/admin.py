@@ -1,13 +1,13 @@
 from django.contrib import admin
 
 from .models import (
-    ConfiguracaoWhatsApp, ConfiguracaoWhatsAppCentral, ConversaWhatsApp,
+    ConexaoWhatsAppVendedor, ConfiguracaoWhatsApp, ConfiguracaoWhatsAppCentral, ConversaWhatsApp,
     EnvioResumoWhatsApp, MensagemWhatsApp,
     UsoIAWhatsApp,
 )
 
 admin.site.register([
-    ConfiguracaoWhatsApp, ConfiguracaoWhatsAppCentral, ConversaWhatsApp,
+    ConexaoWhatsAppVendedor, ConfiguracaoWhatsApp, ConfiguracaoWhatsAppCentral, ConversaWhatsApp,
     EnvioResumoWhatsApp, MensagemWhatsApp,
     UsoIAWhatsApp,
 ])
