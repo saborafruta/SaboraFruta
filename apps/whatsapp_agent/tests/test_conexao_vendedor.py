@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
+from apps.whatsapp_agent.forms import ConexaoWhatsAppVendedorForm
 from apps.whatsapp_agent.models import (
     ConexaoWhatsAppVendedor,
     ConversaWhatsApp,
@@ -105,6 +106,23 @@ class ConexaoWhatsAppVendedorTests(TestCase):
         self.assertNotContains(resposta, 'Conta oficial da Meta')
         self.assertNotContains(resposta, 'ID do número na Meta')
         self.assertNotContains(resposta, 'Credenciais técnicas')
+
+    @patch('django.db.router.db_for_read', return_value='tenant_operacional')
+    def test_formulario_valida_fks_no_banco_gerencial(self, db_for_read):
+        form = ConexaoWhatsAppVendedorForm(
+            data={
+                'vendedor': self.vendedor.pk,
+                'filial_padrao': self.filial.pk,
+                'numero_conectado': '5584999995555',
+                'nome_conectado': 'Vendas Gerencial',
+            },
+            empresa=self.empresa,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        conexao = form.save()
+        self.assertEqual(conexao._state.db, 'default')
+        self.assertEqual(conexao.vendedor.email, self.vendedor.email)
 
     @patch('apps.whatsapp_agent.views.EvolutionClient.configurar_webhook')
     @patch('apps.whatsapp_agent.views.EvolutionClient.estado', return_value='close')

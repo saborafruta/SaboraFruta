@@ -62,6 +62,12 @@ class ConexaoWhatsAppVendedorForm(forms.ModelForm):
             self.add_error('filial_padrao', 'A filial pertence a outra empresa.')
         return dados
 
+    def _get_validation_exclusions(self):
+        """Evita revalidar FKs centrais no banco operacional ativo."""
+        exclusoes = super()._get_validation_exclusions()
+        exclusoes.update({'vendedor', 'filial_padrao'})
+        return exclusoes
+
     def save(self, commit=True):
         conexao = super().save(commit=False)
         conexao.empresa = self.empresa
@@ -70,8 +76,8 @@ class ConexaoWhatsAppVendedorForm(forms.ModelForm):
         if conexao.status == ConexaoWhatsAppVendedor.Status.NAO_CONFIGURADO:
             conexao.status = ConexaoWhatsAppVendedor.Status.PENDENTE
         if commit:
-            conexao.full_clean()
-            conexao.save()
+            conexao.clean()
+            conexao.save(using='default')
         return conexao
 
 
