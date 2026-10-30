@@ -30,7 +30,7 @@ from .forms import (
 )
 from .gateway import (
     EvolutionClient, GatewayWhatsAppError, MetaCloudClient,
-    identidade_instancia, qr_data_url,
+    identidade_instancia, identificador_envio, qr_data_url,
 )
 from .models import (
     ConexaoWhatsAppVendedor, ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp,
@@ -501,20 +501,74 @@ class CRMWhatsAppConexaoOnboardingView(PermissaoRequiredMixin, View):
         webhook_url = request.build_absolute_uri(
             reverse('whatsapp_agent:webhook', kwargs={'secret': conexao.webhook_secret}),
         )
+        erro_conexao = ''
+        try:
+            cliente = EvolutionClient(conexao)
+            try:
+                cliente.estado()
+            except GatewayWhatsAppError:
+                cliente.criar_instancia(webhook_url)
+            cliente.configurar_webhook(webhook_url)
+            if conexao.status == ConexaoWhatsAppVendedor.Status.NAO_CONFIGURADO:
+                conexao.status = ConexaoWhatsAppVendedor.Status.PENDENTE
+                conexao.ultimo_erro = ''
+                conexao.save(update_fields=['status', 'ultimo_erro', 'updated_at'])
+        except GatewayWhatsAppError as exc:
+            erro_conexao = str(exc)
+            conexao.status = ConexaoWhatsAppVendedor.Status.ERRO
+            conexao.ultimo_erro = erro_conexao
+            conexao.save(update_fields=['status', 'ultimo_erro', 'updated_at'])
         return render(request, 'whatsapp_agent/crm_conexao_onboarding.html', {
             'conexao': conexao,
-            'webhook_url': webhook_url,
-            'verify_token': (
-                conexao.obter_meta_verify_token()
-                if CarteiraService.pode_supervisionar(request.user)
-                else ''
-            ),
             'pode_supervisionar': CarteiraService.pode_supervisionar(request.user),
-            'embedded_signup_disponivel': bool(
-                getattr(settings, 'WHATSAPP_META_APP_ID', '')
-                and getattr(settings, 'WHATSAPP_META_EMBEDDED_SIGNUP_CONFIG_ID', '')
+            'status_url': reverse(
+                'whatsapp_agent:crm-conexao-status', kwargs={'pk': conexao.pk},
             ),
+            'erro_conexao': erro_conexao,
         })
+
+
+class CRMWhatsAppConexaoStatusView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'crm'
+    permissao_acao = 'ver'
+
+    def get(self, request, pk):
+        conexao = get_object_or_404(_conexoes_crm_permitidas(request), pk=pk)
+        try:
+            cliente = EvolutionClient(conexao)
+            estado = cliente.estado()
+            if estado == 'open':
+                conexao.status = ConexaoWhatsAppVendedor.Status.CONECTADO
+                conexao.ultimo_erro = ''
+                try:
+                    numero, nome = identidade_instancia(cliente.detalhes())
+                    conexao.numero_conectado = numero or conexao.numero_conectado
+                    conexao.nome_conectado = nome or conexao.nome_conectado
+                except GatewayWhatsAppError:
+                    pass
+                conexao.save(update_fields=[
+                    'status', 'numero_conectado', 'nome_conectado',
+                    'ultimo_erro', 'updated_at',
+                ])
+                return JsonResponse({
+                    'conectado': True,
+                    'status': conexao.get_status_display(),
+                })
+            dados_qr = cliente.conectar()
+            conexao.status = ConexaoWhatsAppVendedor.Status.PENDENTE
+            conexao.ultimo_erro = ''
+            conexao.save(update_fields=['status', 'ultimo_erro', 'updated_at'])
+            return JsonResponse({
+                'conectado': False,
+                'status': 'Aguardando leitura do QR Code',
+                'qr_code': qr_data_url(dados_qr),
+                'pairing_code': dados_qr.get('pairingCode', ''),
+            })
+        except GatewayWhatsAppError as exc:
+            conexao.status = ConexaoWhatsAppVendedor.Status.ERRO
+            conexao.ultimo_erro = str(exc)
+            conexao.save(update_fields=['status', 'ultimo_erro', 'updated_at'])
+            return JsonResponse({'conectado': False, 'erro': str(exc)}, status=502)
 
 
 class CRMWhatsAppInboxView(PermissaoRequiredMixin, View):
@@ -577,8 +631,8 @@ class CRMWhatsAppEnviarView(PermissaoRequiredMixin, View):
             messages.error(request, 'A mensagem deve ter no máximo 4.096 caracteres.')
             return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
         conexao = conversa.conexao_vendedor
-        if not conexao or not conexao.meta_credenciais_configuradas:
-            messages.error(request, 'A conexão oficial deste vendedor não está configurada.')
+        if not conexao:
+            messages.error(request, 'A conexão deste vendedor não está configurada.')
             return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
         if not conversa.janela_atendimento_ativa:
             messages.error(
@@ -600,10 +654,8 @@ class CRMWhatsAppEnviarView(PermissaoRequiredMixin, View):
             status='pendente',
         )
         try:
-            retorno = MetaCloudClient(conexao).enviar_texto(conversa.telefone, texto)
-            mensagem.identificador_externo = (
-                (retorno.get('messages') or [{}])[0].get('id') or ''
-            )
+            retorno = EvolutionClient(conexao).enviar_texto(conversa.telefone, texto)
+            mensagem.identificador_externo = identificador_envio(retorno)
             mensagem.status = 'enviada'
             conversa.ultima_mensagem_em = timezone.now()
             conversa.save(update_fields=['ultima_mensagem_em', 'updated_at'])
@@ -785,8 +837,8 @@ def webhook(request, secret):
     if not configuracao:
         return JsonResponse({'erro': 'Webhook inválido.'}, status=404)
     usa_meta = (
-        isinstance(configuracao, ConexaoWhatsAppVendedor)
-        or configuracao.provedor == ConfiguracaoWhatsApp.Provedor.META_CLOUD
+        isinstance(configuracao, ConfiguracaoWhatsApp)
+        and configuracao.provedor == ConfiguracaoWhatsApp.Provedor.META_CLOUD
     )
     if request.method == 'GET':
         if not usa_meta:

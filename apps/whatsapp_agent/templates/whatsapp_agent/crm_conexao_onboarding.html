@@ -1,31 +1,65 @@
 {% extends '_base.html' %}
-{% block title %}Conectar número do CRM{% endblock %}
+{% block title %}Conectar WhatsApp do vendedor{% endblock %}
 {% block content %}
-<div class="crm-settings-shell">
+<div class="crm-settings-shell" id="crm-qr-connect" data-status-url="{{ status_url }}">
   {% include 'whatsapp_agent/_crm_nav.html' %}
-  <header class="crm-settings-head"><div><span class="crm-eyebrow">Meta · Coexistência oficial</span><h1>Conectar {{ conexao.vendedor.nome }}</h1><p>{{ conexao.numero_conectado|default:'Número comercial pendente' }} · o celular continuará funcionando normalmente.</p></div><span class="crm-state {{ conexao.status }}">{{ conexao.get_status_display }}</span></header>
+  <header class="crm-settings-head">
+    <div><span class="crm-eyebrow">Conexão por QR Code</span><h1>Conectar WhatsApp</h1><p>{{ conexao.vendedor.nome }} · {{ conexao.numero_conectado|default:'número comercial' }}</p></div>
+    <span class="crm-state {{ conexao.status }}" id="crm-qr-state">{{ conexao.get_status_display }}</span>
+  </header>
 
-  <section class="crm-onboarding-layout">
-    <div class="crm-onboarding-card">
-      <div class="crm-step"><span>1</span><div><strong>Abra o fluxo oficial</strong><p>Entre com a conta Facebook que administra o portfólio empresarial e escolha “Conectar um WhatsApp Business existente”.</p></div></div>
-      <div class="crm-step"><span>2</span><div><strong>Confirme no celular</strong><p>O WhatsApp Business receberá uma mensagem oficial da Meta. Toque em <b>Conectar à Plataforma Business</b>.</p></div></div>
-      <div class="crm-step"><span>3</span><div><strong>Leia o QR Code da Meta</strong><p>O QR aparecerá na janela oficial. No celular, escolha compartilhar o histórico e use a câmera aberta pelo próprio WhatsApp Business.</p></div></div>
-      <div class="crm-step"><span>4</span><div><strong>Aguarde a sincronização</strong><p>Mensagens novas do celular e do CRM passarão a formar um único histórico no iTED.</p></div></div>
-      {% if embedded_signup_disponivel %}
-        <div class="crm-pending-meta"><strong>Aplicativo Meta localizado</strong><p>As credenciais do Embedded Signup estão configuradas. A abertura do QR permanecerá indisponível até o callback seguro de ativação ser publicado e validado pela Meta.</p></div>
-      {% else %}
-        <div class="crm-pending-meta"><strong>Preparação da Meta necessária</strong><p>O cadastro e o webhook estão prontos. Falta configurar no ambiente o App ID, a configuração do Embedded Signup e aprovar o aplicativo como Tech Provider. O iTED não exibirá QR falso ou da API não oficial.</p></div>
-      {% endif %}
+  <section class="crm-qr-layout">
+    <div class="crm-qr-card">
+      <div class="crm-qr-frame" id="crm-qr-frame">
+        <div class="crm-qr-loader"><span></span><p>Gerando QR Code...</p></div>
+      </div>
+      <p class="crm-pairing" id="crm-pairing"></p>
+      <p class="crm-qr-error" id="crm-qr-error">{{ erro_conexao }}</p>
     </div>
-    <aside class="crm-onboarding-side">
-      <div class="crm-phone-preview"><div class="crm-phone-notch"></div><span class="crm-meta-mark">f</span><strong>Facebook Business</strong><p>Conecte seu WhatsApp Business à Plataforma Business</p><span class="crm-fake-action">Ler QR Code</span></div>
-      <div class="crm-checklist"><strong>Antes de começar</strong><label>✓ WhatsApp Business atualizado</label><label>✓ Número ativo no celular</label><label>✓ Acesso ao portfólio Meta</label><label>✓ Câmera disponível no celular</label></div>
+
+    <aside class="crm-qr-help">
+      <span class="crm-help-kicker">No celular do vendedor</span>
+      <h2>Leia como no WhatsApp Web</h2>
+      <ol>
+        <li><span>1</span><div><strong>Abra o WhatsApp</strong><p>Use o número comercial cadastrado para este vendedor.</p></div></li>
+        <li><span>2</span><div><strong>Acesse Aparelhos conectados</strong><p>No Android, abra o menu ⋮. No iPhone, abra Configurações.</p></div></li>
+        <li><span>3</span><div><strong>Toque em Conectar aparelho</strong><p>Aponte a câmera para o QR Code exibido ao lado.</p></div></li>
+      </ol>
+      <div class="crm-human-note"><strong>Atendimento somente humano</strong><p>O iTED não enviará mensagens automáticas nem modelos após 24 horas.</p></div>
     </aside>
   </section>
 
-  {% if pode_supervisionar %}<details class="crm-technical crm-webhook-details"><summary>Dados técnicos do webhook <span>somente gestor</span></summary><dl><div><dt>Callback</dt><dd>{{ webhook_url }}</dd></div><div><dt>Verify token</dt><dd>{{ verify_token }}</dd></div><div><dt>Phone number ID</dt><dd>{{ conexao.meta_phone_number_id|default:'Pendente' }}</dd></div></dl></details>{% endif %}
   <div class="crm-form-actions"><a class="crm-secondary" href="{% url 'whatsapp_agent:crm-conexoes' %}">Voltar aos números</a>{% if pode_supervisionar %}<a class="crm-primary" href="{% url 'whatsapp_agent:crm-conexao-editar' conexao.pk %}">Editar cadastro</a>{% endif %}</div>
 </div>
 {% include 'whatsapp_agent/_crm_settings_styles.html' %}
-<style>.crm-onboarding-layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,.7fr);gap:1rem}.crm-onboarding-card,.crm-onboarding-side>div{padding:1.1rem;border:1px solid #34343b;border-radius:1rem;background:#202023}.crm-onboarding-card{display:grid;gap:.4rem}.crm-step{display:grid;grid-template-columns:auto 1fr;gap:.75rem;padding:.75rem;border-radius:.75rem}.crm-step>span{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#0f766e;color:#fff;font-size:.72rem;font-weight:900}.crm-step strong{font-size:.82rem}.crm-step p{margin:.18rem 0 0;color:#a1a1aa;font-size:.74rem;line-height:1.5}.crm-connect-button{width:100%;margin-top:.5rem}.crm-connect-button:disabled{cursor:not-allowed;opacity:.55}.crm-pending-meta{margin-top:.5rem;padding:.8rem;border:1px solid #a16207;border-radius:.75rem;background:rgba(161,98,7,.1)}.crm-pending-meta strong{color:#fde68a;font-size:.78rem}.crm-pending-meta p{margin:.25rem 0 0;color:#d4d4d8;font-size:.7rem;line-height:1.45}.crm-onboarding-side{display:grid;align-content:start;gap:1rem}.crm-phone-preview{position:relative;min-height:340px;display:flex;align-items:center;flex-direction:column;padding-top:3.5rem!important;text-align:center;background:linear-gradient(160deg,#111b21,#202c33)!important}.crm-phone-notch{position:absolute;top:.7rem;width:80px;height:18px;border-radius:999px;background:#09090b}.crm-meta-mark{display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:#1877f2;color:#fff;font:900 1.5rem Arial}.crm-phone-preview strong{margin-top:.8rem}.crm-phone-preview p{max-width:210px;color:#a1a1aa;font-size:.72rem;line-height:1.5}.crm-fake-action{margin-top:1rem;padding:.55rem .8rem;border-radius:.55rem;background:#0f766e;color:#fff;font-size:.72rem;font-weight:800}.crm-checklist{display:grid;gap:.55rem}.crm-checklist strong{margin-bottom:.25rem}.crm-checklist label{color:#a1a1aa;font-size:.72rem}.crm-technical{margin-top:1rem;border:1px solid #34343b;border-radius:.8rem;background:#18181b}.crm-technical summary{display:flex;justify-content:space-between;padding:.85rem 1rem;cursor:pointer;font-size:.78rem;font-weight:800}.crm-technical summary span{color:#71717a;font-size:.66rem}.crm-webhook-details dl{display:grid;gap:.55rem;padding:0 1rem 1rem}.crm-webhook-details dl div{display:grid;grid-template-columns:130px minmax(0,1fr);gap:1rem}.crm-webhook-details dt{color:#71717a;font-size:.7rem}.crm-webhook-details dd{overflow-wrap:anywhere;margin:0;font-family:ui-monospace,monospace;font-size:.7rem}body.tema-claro .crm-onboarding-card,body.tema-claro .crm-onboarding-side>div{border-color:#e2e8f0;background:#fff}body.tema-claro .crm-technical{border-color:#e2e8f0;background:#f8fafc}@media(max-width:760px){.crm-onboarding-layout{grid-template-columns:1fr}.crm-phone-preview{min-height:280px}.crm-webhook-details dl div{grid-template-columns:1fr;gap:.15rem}}@media(pointer:coarse){.crm-step p,.crm-checklist label{font-size:.85rem}}</style>
+<style>
+  .crm-qr-layout{display:grid;grid-template-columns:minmax(320px,.85fr) minmax(340px,1.15fr);gap:1rem}.crm-qr-card,.crm-qr-help{border:1px solid #34343b;border-radius:1rem;background:#202023}.crm-qr-card{display:grid;place-items:center;align-content:center;min-height:470px;padding:1.25rem}.crm-qr-frame{display:grid;place-items:center;width:min(100%,330px);aspect-ratio:1;padding:1rem;border-radius:1rem;background:#fff;box-shadow:0 16px 45px rgba(0,0,0,.22)}.crm-qr-frame img{display:block;width:100%;height:100%;object-fit:contain}.crm-qr-loader{display:grid;place-items:center;gap:.75rem;color:#64748b;text-align:center}.crm-qr-loader span{width:34px;height:34px;border:3px solid #cbd5e1;border-top-color:#0f766e;border-radius:50%;animation:crm-spin .8s linear infinite}.crm-qr-loader p{margin:0;font-size:.78rem}.crm-pairing{min-height:1.2rem;margin:.9rem 0 0;color:#a1a1aa;font-size:.72rem;text-align:center}.crm-qr-error{max-width:360px;margin:.25rem 0 0;color:#fca5a5;font-size:.74rem;text-align:center}.crm-qr-success{display:grid;place-items:center;gap:.8rem;color:#166534;text-align:center}.crm-qr-success span{display:grid;place-items:center;width:74px;height:74px;border-radius:50%;background:#dcfce7;font-size:2.6rem}.crm-qr-success strong{font-size:1rem}.crm-qr-help{padding:1.3rem}.crm-help-kicker{color:#2dd4bf;font-size:.66rem;font-weight:850;letter-spacing:.12em;text-transform:uppercase}.crm-qr-help h2{margin:.3rem 0 1.2rem;font-size:1.25rem}.crm-qr-help ol{display:grid;gap:.45rem;margin:0;padding:0;list-style:none}.crm-qr-help li{display:grid;grid-template-columns:auto 1fr;gap:.75rem;padding:.8rem;border-radius:.8rem}.crm-qr-help li>span{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#0f766e;color:#fff;font-size:.72rem;font-weight:900}.crm-qr-help strong{font-size:.82rem}.crm-qr-help li p,.crm-human-note p{margin:.18rem 0 0;color:#a1a1aa;font-size:.74rem;line-height:1.5}.crm-human-note{margin-top:1rem;padding:.9rem;border:1px solid rgba(45,212,191,.25);border-radius:.8rem;background:rgba(15,118,110,.1)}body.tema-claro .crm-qr-card,body.tema-claro .crm-qr-help{border-color:#e2e8f0;background:#fff}@keyframes crm-spin{to{transform:rotate(360deg)}}@media(max-width:760px){.crm-qr-layout{grid-template-columns:1fr}.crm-qr-card{min-height:390px}.crm-qr-frame{width:min(100%,290px)}}@media(prefers-reduced-motion:reduce){.crm-qr-loader span{animation-duration:1.6s}}
+</style>
+<script>
+(() => {
+  const root=document.getElementById('crm-qr-connect');
+  const frame=document.getElementById('crm-qr-frame');
+  const state=document.getElementById('crm-qr-state');
+  const error=document.getElementById('crm-qr-error');
+  const pairing=document.getElementById('crm-pairing');
+  let timer=null;
+  async function refresh(){
+    try{
+      const response=await fetch(root.dataset.statusUrl,{headers:{Accept:'application/json'}});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.erro||'Não foi possível gerar o QR Code.');
+      state.textContent=data.status;error.textContent='';
+      if(data.conectado){
+        frame.innerHTML='<div class="crm-qr-success"><span>✓</span><strong>WhatsApp conectado</strong></div>';
+        pairing.textContent='As novas mensagens já podem ser sincronizadas com o CRM.';
+        if(timer)clearInterval(timer);
+        return;
+      }
+      if(data.qr_code)frame.innerHTML=`<img src="${data.qr_code}" alt="QR Code para conectar o WhatsApp do vendedor">`;
+      pairing.textContent=data.pairing_code?`Código alternativo: ${data.pairing_code}`:'O QR Code é renovado automaticamente.';
+    }catch(exc){error.textContent=exc.message;}
+  }
+  refresh();timer=setInterval(refresh,5000);
+})();
+</script>
 {% endblock %}

@@ -373,7 +373,7 @@ class ConfiguracaoWhatsApp(FilialScopedModel):
 
 
 class ConexaoWhatsAppVendedor(TimestampedModel):
-    """Número comercial oficial de um vendedor, separado do número geral da filial."""
+    """Número comercial de um vendedor, conectado ao CRM por QR Code."""
 
     class Status(models.TextChoices):
         NAO_CONFIGURADO = 'nao_configurado', 'Não configurado'
@@ -486,6 +486,11 @@ class ConexaoWhatsAppVendedor(TimestampedModel):
     @property
     def meta_credenciais_configuradas(self):
         return bool(self.meta_phone_number_id and self.obter_meta_access_token())
+
+    @property
+    def instancia(self):
+        """Nome estável e isolado da sessão do vendedor no gateway de QR Code."""
+        return f'ited-crm-{self.webhook_secret.hex}'
 
     def __str__(self):
         numero = self.numero_conectado or 'número pendente'

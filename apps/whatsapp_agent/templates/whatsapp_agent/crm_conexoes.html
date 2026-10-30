@@ -4,7 +4,7 @@
 <div class="crm-settings-shell">
   {% include 'whatsapp_agent/_crm_nav.html' %}
   <header class="crm-settings-head">
-    <div><span class="crm-eyebrow">WhatsApp oficial</span><h1>Números comerciais</h1><p>Um número da empresa para cada vendedor, separado do WhatsApp geral da filial.</p></div>
+    <div><span class="crm-eyebrow">WhatsApp dos vendedores</span><h1>Números comerciais</h1><p>Um número da empresa para cada vendedor, conectado ao CRM pela leitura de QR Code.</p></div>
     {% if pode_supervisionar %}<a class="crm-primary" href="{% url 'whatsapp_agent:crm-conexao-nova' %}"><span>＋</span> Cadastrar número</a>{% endif %}
   </header>
 
@@ -23,16 +23,16 @@
         </div>
         <dl>
           <div><dt>Filial</dt><dd>{{ conexao.filial_padrao.nome_fantasia|default:conexao.filial_padrao.razao_social|default:'Não definida' }}</dd></div>
-          <div><dt>Conta Meta</dt><dd>{% if conexao.meta_business_account_id %}Configurada{% else %}Pendente{% endif %}</dd></div>
-          <div><dt>Coexistência</dt><dd>{% if conexao.coexistencia_ativa %}Celular + CRM{% else %}Somente API{% endif %}</dd></div>
+          <div><dt>Conexão</dt><dd>WhatsApp Web</dd></div>
+          <div><dt>Atendimento</dt><dd>Somente humano</dd></div>
         </dl>
         <div class="crm-card-actions">
-          <a class="crm-primary small" href="{% url 'whatsapp_agent:crm-conexao-onboarding' conexao.pk %}">{% if conexao.status == 'conectado' %}Ver conexão{% else %}Conectar com a Meta{% endif %}</a>
+          <a class="crm-primary small" href="{% url 'whatsapp_agent:crm-conexao-onboarding' conexao.pk %}">{% if conexao.status == 'conectado' %}Ver conexão{% else %}Gerar QR Code{% endif %}</a>
           {% if pode_supervisionar %}<a class="crm-secondary small" href="{% url 'whatsapp_agent:crm-conexao-editar' conexao.pk %}">Editar cadastro</a>{% endif %}
         </div>
       </article>
     {% empty %}
-      <div class="crm-empty-state"><span>◎</span><h2>Nenhum número cadastrado</h2><p>{% if pode_supervisionar %}Cadastre o primeiro vendedor e prepare a conexão oficial da Meta.{% else %}Peça ao gestor para associar seu número comercial ao CRM.{% endif %}</p></div>
+      <div class="crm-empty-state"><span>◎</span><h2>Nenhum número cadastrado</h2><p>{% if pode_supervisionar %}Cadastre o primeiro vendedor para gerar o QR Code de conexão.{% else %}Peça ao gestor para associar seu número comercial ao CRM.{% endif %}</p></div>
     {% endfor %}
   </section>
 </div>

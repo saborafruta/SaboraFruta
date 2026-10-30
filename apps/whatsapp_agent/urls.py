@@ -30,6 +30,11 @@ urlpatterns = [
         name='crm-conexao-onboarding',
     ),
     path(
+        'crm/numeros/<int:pk>/status/',
+        views.CRMWhatsAppConexaoStatusView.as_view(),
+        name='crm-conexao-status',
+    ),
+    path(
         'crm/<int:pk>/', views.CRMWhatsAppInboxView.as_view(),
         name='crm-inbox-detail',
     ),

@@ -24,7 +24,7 @@ O CRM deve preservar a experiência familiar do WhatsApp Web para reduzir a curv
 5. O iTED deve armazenar as mensagens recebidas e enviadas por ambos os canais.
 6. O vendedor visualiza e atende somente clientes da própria carteira.
 7. O gestor visualiza todos os números dos vendedores, conversas e resultados da equipe.
-8. O atendimento comercial utilizará preferencialmente a API oficial da Meta em modo de coexistência.
+8. Os números dos vendedores serão conectados por QR Code, no mesmo fluxo de `Aparelhos conectados` do WhatsApp Web.
 9. O CRM será construído sobre o módulo já existente em `/crm/`.
 10. O orçamento aprovado deve alimentar o fluxo já existente da força de vendas.
 
@@ -46,7 +46,7 @@ O iTED passará a reconhecer duas finalidades diferentes de conexão:
 - cada vendedor acessa somente o próprio número e a própria carteira;
 - o gestor acessa todos os números comerciais da equipe;
 - as conversas alimentam oportunidades, orçamentos, pedidos e indicadores do CRM;
-- cada conexão pode operar em coexistência entre WhatsApp Business no celular e Meta Cloud API no iTED.
+- cada vendedor possui uma sessão isolada no gateway de QR Code, mantendo o uso do WhatsApp no celular e no iTED.
 
 Arquitetura esperada:
 
@@ -113,29 +113,31 @@ O iTED já possui:
 
 A configuração atual permite um número geral por filial. Essa regra atende ao canal institucional e deve ser preservada. Os números comerciais dos vendedores deverão usar uma estrutura separada, permitindo vários números na mesma empresa ou filial sem alterar a finalidade da configuração geral existente.
 
-### 3.4 Estratégia para a API oficial da Meta
+### 3.4 Estratégia de conexão por QR Code
 
-A Meta Cloud API em modo de coexistência é a alternativa preferencial para os números dos vendedores porque permite, quando o número for elegível:
+Por decisão de experiência operacional, os números dos vendedores usarão conexão por QR Code, semelhante ao WhatsApp Web. O vendedor não informará conta Meta, identificadores ou credenciais técnicas. O fluxo será:
 
-- manter o WhatsApp Business no celular;
-- receber no iTED as mensagens enviadas pelo vendedor no aplicativo;
-- enviar mensagens pelo CRM e sincronizá-las com o aplicativo;
-- receber estados oficiais de envio, entrega e leitura;
-- reduzir o risco operacional de integrações baseadas em sessão e QR Code não oficial.
+- o gestor associa o número comercial ao vendedor;
+- o iTED cria uma sessão exclusiva para esse vendedor;
+- o vendedor abre `WhatsApp > Aparelhos conectados > Conectar aparelho`;
+- o vendedor lê o QR Code exibido pelo iTED;
+- mensagens novas do celular e do CRM passam a compor o histórico comercial.
 
-Na cobrança atual da Plataforma do WhatsApp Business, mensagens de serviço enviadas dentro da janela de 24 horas aberta pela mensagem do cliente não são cobradas. Isso atende à maior parte do atendimento humano receptivo previsto para o CRM. Mensagens iniciadas pela empresa fora dessa janela exigiriam modelo aprovado e poderiam ser cobradas por mensagem entregue, conforme categoria e país. Por decisão comercial, o CRM de vendedores não utilizará esses modelos: depois de 24 horas, o envio ficará bloqueado até o cliente escrever novamente.
+Essa modalidade utiliza uma sessão do WhatsApp Web por meio do gateway Evolution e não equivale à Cloud API oficial da Meta. Ela exige monitoramento de conexão e pode depender de nova leitura de QR Code quando a sessão for encerrada pelo WhatsApp. A chave do gateway permanece somente no servidor e não aparece para vendedores ou gestores.
+
+Mesmo sem a exigência técnica da janela oficial da Cloud API, o CRM manterá a regra comercial definida: depois de 24 horas sem mensagem do cliente, o envio humano pelo iTED ficará bloqueado até o cliente escrever novamente. Não haverá templates nem automações.
 
 O número geral da filial não precisa ser migrado junto com os números dos vendedores. Cada canal terá conexão, credenciais, estado e estratégia de migração próprios.
 
 Antes da expansão, o piloto deverá confirmar:
 
-1. elegibilidade do número comercial para coexistência;
-2. vinculação ao portfólio empresarial e à conta de WhatsApp Business correta;
+1. estabilidade da sessão individual do vendedor;
+2. geração, renovação e leitura do QR Code;
 3. funcionamento dos webhooks de mensagens, ecos e estados;
 4. sincronização de texto, imagem, áudio e documentos;
 5. comportamento de edição e exclusão;
 6. histórico disponibilizado durante o onboarding;
-7. janela de atendimento, templates e cobrança;
+7. bloqueio comercial da janela de 24 horas;
 8. continuidade do uso no celular;
 9. ausência de impacto no número geral da filial.
 
@@ -184,7 +186,7 @@ Pode, além das ações do gestor:
 
 - conectar e desconectar números;
 - associar números a vendedores;
-- configurar a conta Meta, webhooks e modelos de mensagem;
+- acompanhar sessões, QR Codes, webhooks e falhas de conexão;
 - configurar permissões e alçadas;
 - definir políticas de retenção e acesso;
 - consultar falhas técnicas e custos de mensageria.
@@ -222,7 +224,7 @@ O WhatsApp Business não permite ao iTED impedir previamente que o vendedor digi
 
 Quando isso ocorrer, o iTED deverá:
 
-1. receber o eco da mensagem pelo webhook de coexistência;
+1. receber a mensagem enviada pelo celular no webhook da sessão;
 2. armazenar a mensagem normalmente;
 3. verificar a titularidade do cliente;
 4. registrar uma ocorrência de contato fora da carteira;
@@ -273,10 +275,10 @@ A tela principal do vendedor deve adotar o padrão de interação do WhatsApp We
 
 ### 7.1 Mensagem recebida do cliente
 
-1. A Meta envia o webhook ao iTED.
-2. O iTED valida a assinatura do evento.
+1. O gateway da sessão envia o webhook ao iTED.
+2. O iTED valida a URL secreta da conexão.
 3. O evento bruto é armazenado para auditoria.
-4. A mensagem é deduplicada pelo identificador oficial.
+4. A mensagem é deduplicada pelo identificador externo.
 5. O número comercial e o cliente são identificados.
 6. A conversa é criada ou atualizada.
 7. A mensagem aparece em tempo real no CRM.
@@ -285,7 +287,7 @@ A tela principal do vendedor deve adotar o padrão de interação do WhatsApp We
 ### 7.2 Mensagem enviada pelo celular
 
 1. O vendedor envia pelo WhatsApp Business.
-2. A Meta envia um evento de eco ao iTED.
+2. O gateway envia o evento da mensagem ao iTED.
 3. O iTED armazena a mensagem como saída com origem `celular`.
 4. A autorização de carteira é conferida.
 5. A tela do CRM é atualizada em tempo real.
@@ -297,17 +299,17 @@ A tela principal do vendedor deve adotar o padrão de interação do WhatsApp We
 2. O backend valida empresa, número, vendedor e carteira.
 3. O backend confirma que a última mensagem do cliente ocorreu há no máximo 24 horas.
 4. A mensagem é persistida como pendente.
-5. A Meta Cloud API realiza o envio.
-6. O identificador oficial e os estados posteriores são armazenados.
-7. A mensagem aparece também no WhatsApp Business em coexistência.
+5. O gateway da sessão realiza o envio.
+6. O identificador externo e os estados posteriores são armazenados.
+7. A mensagem aparece também no WhatsApp conectado ao celular.
 
 Se a janela de 24 horas estiver encerrada, nenhuma mensagem será criada ou enviada. O iTED não substituirá o texto por modelo aprovado, não cobrará o envio e não tentará iniciar uma nova conversa automaticamente. O campo de resposta permanecerá bloqueado até uma nova mensagem recebida do cliente reabrir a janela.
 
 ### 7.4 Edição e exclusão
 
-O conteúdo originalmente recebido deve permanecer preservado no histórico de auditoria. Quando a Meta fornecer evento de edição ou revogação, o CRM deve apresentar a situação atual sem eliminar o conteúdo original do registro auditável.
+O conteúdo originalmente recebido deve permanecer preservado no histórico de auditoria. Quando o gateway fornecer evento de edição ou revogação, o CRM deve apresentar a situação atual sem eliminar o conteúdo original do registro auditável.
 
-Há uma limitação externa importante: o webhook documentado de coexistência garante o eco das novas mensagens enviadas pelo aplicativo, mas a disponibilidade de eventos de edição e exclusão precisa ser confirmada no piloto para cada tipo de mensagem e dispositivo. O iTED preservará e sinalizará o conteúdo quando receber esse evento; não deve prometer detectar uma exclusão que a Meta não notifique ao webhook.
+Há uma limitação externa importante: a disponibilidade de eventos de edição e exclusão precisa ser confirmada no piloto para cada tipo de mensagem e dispositivo. O iTED preservará e sinalizará o conteúdo quando receber esses eventos; não deve prometer detectar uma exclusão que o WhatsApp ou o gateway não notifique.
 
 ## 8. Fluxo comercial: conversa, orçamento e pedido
 
@@ -471,12 +473,11 @@ Essa separação evita que uma evolução do CRM altere o funcionamento do Whats
 - empresa e filial;
 - número comercial;
 - vendedor responsável;
-- conta WhatsApp Business e identificador do número na Meta;
 - situação da conexão;
-- modo de coexistência;
+- identificador isolado da sessão de QR Code;
 - data da última sincronização;
 - permissões de supervisão;
-- configuração de templates e janela de atendimento.
+- janela de atendimento humano.
 
 As conversas deverão identificar explicitamente se pertencem ao canal geral ou ao CRM comercial. Indicadores individuais de vendedor considerarão somente as conexões comerciais, salvo filtro explícito do gestor.
 
@@ -521,8 +522,8 @@ Como as conversas vivem no Banco Gerencial e os pedidos vivem no banco operacion
 
 ## 11. Segurança e auditoria
 
-- validação de assinatura dos webhooks da Meta;
-- criptografia dos tokens de acesso;
+- URL de webhook secreta e exclusiva por conexão;
+- chave do gateway armazenada somente no ambiente do servidor;
 - autorização no backend em todas as ações;
 - segregação por empresa e filial;
 - deduplicação de webhooks e envios;
@@ -540,7 +541,7 @@ Como as conversas vivem no Banco Gerencial e os pedidos vivem no banco operacion
 
 - preservar e testar o funcionamento do número geral da filial antes de qualquer mudança;
 - escolher um número comercial de vendedor para o piloto do CRM;
-- habilitar coexistência oficial;
+- habilitar a sessão isolada e o QR Code do vendedor;
 - criar a estrutura separada de conexões comerciais, permitindo múltiplos números por filial;
 - associar número a vendedor;
 - receber mensagens, ecos e estados;

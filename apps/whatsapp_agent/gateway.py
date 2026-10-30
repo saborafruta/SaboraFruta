@@ -22,15 +22,21 @@ def identificador_envio(retorno):
 
 
 class EvolutionClient:
-    EVENTOS = ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE']
+    EVENTOS = [
+        'QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT',
+        'MESSAGES_UPDATE', 'MESSAGES_EDITED', 'MESSAGES_DELETE',
+    ]
 
     def __init__(self, configuracao):
         self.configuracao = configuracao
         self.base_url = (
-            getattr(settings, 'WHATSAPP_EVOLUTION_URL', '') or configuracao.gateway_url
+            getattr(settings, 'WHATSAPP_EVOLUTION_URL', '')
+            or getattr(configuracao, 'gateway_url', '')
         ).rstrip('/')
+        obter_api_key = getattr(configuracao, 'obter_api_key', None)
         self.api_key = (
-            getattr(settings, 'WHATSAPP_EVOLUTION_API_KEY', '') or configuracao.obter_api_key()
+            getattr(settings, 'WHATSAPP_EVOLUTION_API_KEY', '')
+            or (obter_api_key() if obter_api_key else '')
         )
         if not self.base_url or not self.api_key:
             raise GatewayWhatsAppError('O servidor de conexão do WhatsApp ainda não está configurado.')

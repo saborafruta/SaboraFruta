@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 def _cliente_whatsapp(configuracao):
     if isinstance(configuracao, ConexaoWhatsAppVendedor):
-        return MetaCloudClient(configuracao)
+        return EvolutionClient(configuracao)
     if configuracao.provedor == ConfiguracaoWhatsApp.Provedor.META_CLOUD:
         return MetaCloudClient(configuracao)
     return EvolutionClient(configuracao)
@@ -166,6 +166,19 @@ def _dados_mensagem(payload):
     }
 
 
+def _identificador_mensagem_apagada(payload):
+    dados = payload.get('data') or {}
+    chave = dados.get('key') or dados
+    if _evento(payload) == 'MESSAGES_DELETE':
+        return str(chave.get('id') or dados.get('id') or '')
+    mensagem = _conteudo_mensagem(dados.get('message') or {})
+    protocolo = mensagem.get('protocolMessage') or {}
+    tipo = str(protocolo.get('type') or '').upper()
+    if tipo in {'0', 'REVOKE'}:
+        return str((protocolo.get('key') or {}).get('id') or '')
+    return ''
+
+
 def receber_evento(configuracao, payload):
     evento = _evento(payload)
     if (
@@ -187,6 +200,16 @@ def receber_evento(configuracao, payload):
         return 'conexao_atualizada'
 
     configuracao.save(update_fields=['ultimo_evento_em', 'updated_at'])
+    identificador_apagado = _identificador_mensagem_apagada(payload)
+    if identificador_apagado:
+        atualizadas = MensagemWhatsApp.objects.filter(
+            **_filtro_canal(configuracao, prefixo='conversa__'),
+            identificador_externo=identificador_apagado,
+        ).update(
+            status='apagada', apagada_em=timezone.now(),
+            dados_evento={'evolution_delete': payload.get('data') or {}},
+        )
+        return 'mensagem_apagada' if atualizadas else 'mensagem_nao_localizada'
     if evento != 'MESSAGES_UPSERT':
         return 'evento_registrado'
 

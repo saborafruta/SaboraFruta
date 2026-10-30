@@ -38,7 +38,7 @@
                   <option value="">Selecione...</option>
                   {% for vendedor in vendedores %}<option value="{{ vendedor.pk }}" {% if item.atribuicao.vendedor_id == vendedor.pk %}selected{% endif %}>{{ vendedor.nome }}</option>{% endfor %}
                 </select>
-                <button class="btn-primary">{% if item.atribuicao %}Atualizar{% else %}Atribuir{% endif %}</button>
+                <button class="btn-primary min-w-[104px] flex-none whitespace-nowrap">{% if item.atribuicao %}Atualizar{% else %}Atribuir{% endif %}</button>
               </form>
             </td>
             <td class="p-4 text-right text-xs text-slate-500">{% if item.atribuicao %}Atualizado em {{ item.atribuicao.updated_at|date:"d/m/Y H:i" }}{% else %}Sem carteira{% endif %}</td>
