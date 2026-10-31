@@ -13,6 +13,14 @@ urlpatterns = [
     path('api/status/', views.StatusConexaoView.as_view(), name='status'),
     path('crm/', views.CRMWhatsAppInboxView.as_view(), name='crm-inbox'),
     path(
+        'crm/nova-conversa/', views.CRMNovaConversaDadosView.as_view(),
+        name='crm-nova-conversa-dados',
+    ),
+    path(
+        'crm/nova-conversa/iniciar/', views.CRMNovaConversaIniciarView.as_view(),
+        name='crm-nova-conversa-iniciar',
+    ),
+    path(
         'crm/numeros/', views.CRMWhatsAppConexoesView.as_view(),
         name='crm-conexoes',
     ),

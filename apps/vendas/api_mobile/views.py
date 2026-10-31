@@ -497,6 +497,10 @@ class CheckoutClientesMobileView(MobileTenantAPIView):
                 filial=request.filial_ativa,
                 ativo=True,
             )
+            from apps.crm.services import CarteiraService
+            CarteiraService.registrar_cliente_criado(
+                cliente=cliente, criado_por=request.user,
+            )
         return Response(
             {'cliente': _serializar_cliente_checkout(cliente), 'existente': False},
             status=status.HTTP_201_CREATED,

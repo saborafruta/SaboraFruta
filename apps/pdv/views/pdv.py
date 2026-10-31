@@ -3245,6 +3245,10 @@ def api_cliente_criar(request):
                 filial=request.filial_ativa,
                 ativo=True,
             )
+            from apps.crm.services import CarteiraService
+            CarteiraService.registrar_cliente_criado(
+                cliente=cliente, criado_por=request.user,
+            )
     except Exception as exc:
         return JsonResponse({"erro": str(exc)}, status=500)
 

@@ -6,7 +6,7 @@ import re
 from django.conf import settings
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Count, OuterRef, Subquery, Sum
+from django.db.models import Count, OuterRef, Q, Subquery, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -17,7 +17,8 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from apps.core.models import Empresa
+from apps.cadastros.models import Cliente
+from apps.core.models import Empresa, Filial, Usuario
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.services.tenant_public_link_service import TenantPublicLinkService
@@ -41,8 +42,8 @@ from .models import (
     UsoIAWhatsApp,
 )
 from .orcamento_service import (
-    buscar_produtos, dados_editor, resumo_para_whatsapp, salvar_orcamento,
-    serializar_orcamento,
+    buscar_produtos, dados_editor, pedido_do_orcamento, resumo_para_whatsapp,
+    salvar_orcamento, serializar_orcamento,
 )
 from .webhook import receber_evento, receber_evento_meta
 
@@ -102,6 +103,57 @@ def _conexoes_crm_permitidas(request):
     if CarteiraService.pode_supervisionar(request.user):
         return queryset
     return queryset.filter(vendedor__email__iexact=request.user.email)
+
+
+def _vendedor_operacional_da_conexao(conexao):
+    return Usuario.objects.using(get_current_database_alias()).filter(
+        email__iexact=conexao.vendedor.email,
+        empresa__cnpj=conexao.empresa.cnpj,
+        ativo=True,
+    ).first()
+
+
+def _telefone_whatsapp_cliente(cliente):
+    digitos = re.sub(r'\D', '', cliente.celular or cliente.telefone or '')
+    if len(digitos) in (10, 11):
+        digitos = f'55{digitos}'
+    return digitos if 12 <= len(digitos) <= 15 else ''
+
+
+def _clientes_da_carteira_da_conexao(request, conexao, busca=''):
+    vendedor = _vendedor_operacional_da_conexao(conexao)
+    if not vendedor:
+        return [], None
+    queryset = Cliente.objects.for_empresa(request.filial_ativa.empresa).filter(ativo=True)
+    queryset = CarteiraService.filtrar_clientes_do_vendedor(
+        queryset, vendedor=vendedor, empresa=request.filial_ativa.empresa,
+    )
+    busca = (busca or '').strip()
+    if busca:
+        queryset = queryset.filter(
+            Q(razao_social__icontains=busca)
+            | Q(nome_fantasia__icontains=busca)
+            | Q(cpf_cnpj__icontains=busca)
+            | Q(celular__icontains=busca)
+            | Q(telefone__icontains=busca)
+        )
+    clientes, grupos = [], set()
+    for cliente in queryset.select_related('filial').order_by('razao_social', 'pk')[:100]:
+        if cliente.grupo_replicacao in grupos:
+            continue
+        grupos.add(cliente.grupo_replicacao)
+        telefone = _telefone_whatsapp_cliente(cliente)
+        clientes.append({
+            'id': cliente.pk,
+            'nome': cliente.nome_display,
+            'documento': cliente.cpf_cnpj,
+            'telefone': telefone,
+            'telefone_exibicao': cliente.celular or cliente.telefone,
+            'pode_iniciar': bool(telefone),
+        })
+        if len(clientes) >= 30:
+            break
+    return clientes, vendedor
 
 
 class ConfiguracaoView(PermissaoRequiredMixin, View):
@@ -618,6 +670,127 @@ class CRMWhatsAppInboxView(PermissaoRequiredMixin, View):
         })
 
 
+class CRMNovaConversaDadosView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'crm'
+    permissao_acao = 'ver'
+
+    def get(self, request):
+        conexoes = list(_conexoes_crm_permitidas(request).filter(ativo=True))
+        conexao_id = request.GET.get('conexao')
+        conexao = next(
+            (item for item in conexoes if str(item.pk) == str(conexao_id)),
+            next(
+                (
+                    item for item in conexoes
+                    if item.status == ConexaoWhatsAppVendedor.Status.CONECTADO
+                ),
+                conexoes[0] if conexoes else None,
+            ),
+        )
+        clientes = []
+        if conexao and (request.GET.get('q') or '').strip():
+            clientes, _vendedor = _clientes_da_carteira_da_conexao(
+                request, conexao, request.GET.get('q'),
+            )
+        return JsonResponse({
+            'conexoes': [
+                {
+                    'id': item.pk,
+                    'vendedor': item.vendedor.nome,
+                    'numero': item.numero_conectado,
+                    'status': item.status,
+                    'conectada': item.status == ConexaoWhatsAppVendedor.Status.CONECTADO,
+                }
+                for item in conexoes
+            ],
+            'conexao_selecionada': conexao.pk if conexao else None,
+            'clientes': clientes,
+            'pode_supervisionar': CarteiraService.pode_supervisionar(request.user),
+        })
+
+
+@method_decorator(require_POST, name='dispatch')
+class CRMNovaConversaIniciarView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'crm'
+    permissao_acao = 'criar'
+
+    def post(self, request):
+        try:
+            payload = json.loads(request.body or b'{}')
+        except json.JSONDecodeError as exc:
+            return JsonResponse({'erro': str(exc)}, status=400)
+        conexao = get_object_or_404(
+            _conexoes_crm_permitidas(request).filter(ativo=True),
+            pk=payload.get('conexao_id'),
+        )
+        if conexao.status != ConexaoWhatsAppVendedor.Status.CONECTADO:
+            return JsonResponse({'erro': 'Conecte o número do vendedor antes de iniciar.'}, status=400)
+        vendedor = _vendedor_operacional_da_conexao(conexao)
+        if not vendedor:
+            return JsonResponse({'erro': 'O vendedor não foi localizado no banco da empresa.'}, status=400)
+        cliente = Cliente.objects.for_empresa(request.filial_ativa.empresa).filter(
+            pk=payload.get('cliente_id'), ativo=True,
+        ).first()
+        if not cliente or not CarteiraService.usuario_pode_acessar_cliente(
+            usuario=vendedor, cliente=cliente,
+        ):
+            return JsonResponse({'erro': 'Este cliente não pertence à carteira do vendedor.'}, status=403)
+        telefone = _telefone_whatsapp_cliente(cliente)
+        if not telefone:
+            return JsonResponse({
+                'erro': 'Cadastre um celular ou telefone válido no cliente antes de iniciar.',
+            }, status=400)
+
+        filial_central = conexao.filial_padrao or Filial.objects.using('default').filter(
+            empresa_id=conexao.empresa_id, ativo=True,
+        ).order_by('-is_matriz', 'pk').first()
+        if not filial_central:
+            return JsonResponse({'erro': 'A filial central da conexão não foi localizada.'}, status=400)
+        remote_jid = f'{telefone}@s.whatsapp.net'
+        conversa = ConversaWhatsApp.objects.using('default').filter(
+            conexao_vendedor_id=conexao.pk, remote_jid=remote_jid, ativa=True,
+        ).first()
+        if conversa and (
+            conversa.cliente_grupo_replicacao
+            and conversa.cliente_grupo_replicacao != cliente.grupo_replicacao
+        ):
+            return JsonResponse({
+                'erro': 'Este telefone já está ligado a outro cliente nesta conexão.',
+            }, status=409)
+        if not conversa:
+            conversa = ConversaWhatsApp.objects.using('default').create(
+                filial_id=filial_central.pk,
+                conexao_vendedor_id=conexao.pk,
+                remote_jid=remote_jid,
+                telefone=telefone,
+                nome_contato=cliente.nome_display,
+                tenant_alias=(
+                    getattr(request, 'tenant_db_alias', None)
+                    or get_current_database_alias()
+                ),
+                cliente_operacional_id=cliente.pk,
+                cliente_grupo_replicacao=cliente.grupo_replicacao,
+                fora_carteira=False,
+                atendimento_humano=True,
+                etapa_crm=ConversaWhatsApp.EtapaCRM.NOVA,
+            )
+        else:
+            conversa.nome_contato = cliente.nome_display
+            conversa.cliente_operacional_id = cliente.pk
+            conversa.cliente_grupo_replicacao = cliente.grupo_replicacao
+            conversa.fora_carteira = False
+            conversa.atendimento_humano = True
+            conversa.save(using='default', update_fields=[
+                'nome_contato', 'cliente_operacional_id',
+                'cliente_grupo_replicacao', 'fora_carteira',
+                'atendimento_humano', 'updated_at',
+            ])
+        return JsonResponse({
+            'ok': True,
+            'url': reverse('whatsapp_agent:crm-inbox-detail', args=[conversa.pk]),
+        })
+
+
 def _enviar_texto_humano_crm(conversa, texto, usuario):
     conexao = conversa.conexao_vendedor
     mensagem = MensagemWhatsApp.objects.create(
@@ -719,19 +892,11 @@ class CRMOrcamentoEnviarView(PermissaoRequiredMixin, View):
             pk=pk,
         )
         orcamento = get_object_or_404(
-            conversa.orcamentos.select_related(
-                'pedido__cliente', 'pedido__forma_pagamento',
-                'pedido__condicao_pagamento',
-            ).prefetch_related('pedido__itens__produto'),
+            conversa.orcamentos.using('default'),
             pk=orcamento_pk, status=OrcamentoWhatsApp.Status.RASCUNHO,
         )
-        if not conversa.janela_atendimento_ativa:
-            return JsonResponse({
-                'erro': (
-                    'A janela de 24 horas terminou. O iTED não enviará modelo; '
-                    'aguarde o cliente escrever novamente.'
-                ),
-            }, status=400)
+        if orcamento.tenant_alias != get_current_database_alias():
+            return JsonResponse({'erro': 'O orçamento pertence a outro banco operacional.'}, status=400)
         if not conversa.conexao_vendedor:
             return JsonResponse({'erro': 'A conexão do vendedor não está configurada.'}, status=400)
 
@@ -752,7 +917,7 @@ class CRMOrcamentoEnviarView(PermissaoRequiredMixin, View):
         orcamento.status = OrcamentoWhatsApp.Status.ENVIADO
         orcamento.enviado_em = timezone.now()
         orcamento.save(update_fields=['status', 'enviado_em', 'updated_at'])
-        pedido = orcamento.pedido
+        pedido = pedido_do_orcamento(orcamento)
         pedido.status = pedido.Status.AGUARDANDO_APROVACAO
         pedido.save(update_fields=['status', 'updated_at'])
         return JsonResponse({'ok': True, 'mensagem': 'Orçamento enviado para o cliente.'})
@@ -781,14 +946,6 @@ class CRMWhatsAppEnviarView(PermissaoRequiredMixin, View):
         if not conexao:
             messages.error(request, 'A conexão deste vendedor não está configurada.')
             return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
-        if not conversa.janela_atendimento_ativa:
-            messages.error(
-                request,
-                'A janela de 24 horas terminou. Nenhuma mensagem ou modelo será '
-                'enviado; aguarde o cliente escrever novamente.',
-            )
-            return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
-
         try:
             _enviar_texto_humano_crm(conversa, texto, request.user)
             messages.success(request, 'Mensagem enviada pelo CRM.')

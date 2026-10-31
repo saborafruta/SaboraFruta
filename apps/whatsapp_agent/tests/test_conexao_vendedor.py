@@ -7,7 +7,10 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.cadastros.models import Cliente
+from apps.cadastros.services.cliente_service import ClienteService
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
+from apps.crm.services import CarteiraService
 from apps.whatsapp_agent.forms import ConexaoWhatsAppVendedorForm
 from apps.whatsapp_agent.models import (
     ConexaoWhatsAppVendedor,
@@ -305,9 +308,10 @@ class ConexaoWhatsAppVendedorTests(TestCase):
 
     @patch('apps.whatsapp_agent.gateway.MetaCloudClient.enviar_template')
     @patch('apps.whatsapp_agent.views.EvolutionClient.enviar_texto')
-    def test_crm_bloqueia_envio_apos_24_horas_sem_usar_modelo(
+    def test_crm_permite_envio_humano_apos_24_horas_sem_usar_modelo(
         self, enviar_texto, enviar_template,
     ):
+        enviar_texto.return_value = {'key': {'id': 'manual-apos-24h'}}
         conexao = self._conexao_qr()
         conversa = ConversaWhatsApp.objects.create(
             conexao_vendedor=conexao,
@@ -325,18 +329,70 @@ class ConexaoWhatsAppVendedorTests(TestCase):
         )
         resposta = self.client.post(
             reverse('whatsapp_agent:crm-enviar', kwargs={'pk': conversa.pk}),
-            {'mensagem': 'Esta mensagem não pode sair'},
+            {'mensagem': 'Contato manual do vendedor'},
         )
 
         self.assertEqual(pagina.status_code, 200)
-        self.assertContains(pagina, 'Envio bloqueado após 24 horas')
+        self.assertContains(pagina, 'Envio somente manual')
         self.assertRedirects(
             resposta,
             reverse('whatsapp_agent:crm-inbox-detail', kwargs={'pk': conversa.pk}),
         )
-        enviar_texto.assert_not_called()
+        enviar_texto.assert_called_once_with(
+            '5584999993333', 'Contato manual do vendedor',
+        )
         enviar_template.assert_not_called()
-        self.assertFalse(MensagemWhatsApp.objects.exists())
+        self.assertTrue(MensagemWhatsApp.objects.filter(origem='crm').exists())
+
+    def test_nova_conversa_busca_apenas_na_carteira_do_vendedor(self):
+        conexao = self._conexao_qr()
+        cliente_carteira = ClienteService.criar(
+            {
+                'razao_social': 'Cliente da minha carteira',
+                'cpf_cnpj': '12345678901', 'celular': '84999991111',
+                'tipo_pessoa': 'F',
+            },
+            usuario=self.vendedor,
+            filial=self.filial,
+        )
+        cliente_alheio = Cliente.objects.create(
+            filial=self.filial, razao_social='Cliente de outro vendedor',
+            cpf_cnpj='10987654321', celular='84999992222', tipo_pessoa='F', ativo=True,
+        )
+        outro_vendedor = Usuario.objects.create_user(
+            email='outro-vendedor@example.com', nome='Outro vendedor', password='teste1234',
+            empresa=self.empresa, filial=self.filial, perfil=self.perfil,
+        )
+        CarteiraService.atribuir(
+            cliente=cliente_alheio, vendedor=outro_vendedor, atribuido_por=self.gestor,
+        )
+        self.client.force_login(self.vendedor)
+
+        busca = self.client.get(
+            reverse('whatsapp_agent:crm-nova-conversa-dados'),
+            {'conexao': conexao.pk, 'q': 'Cliente'},
+        )
+        tentativa_alheia = self.client.post(
+            reverse('whatsapp_agent:crm-nova-conversa-iniciar'),
+            data=json.dumps({'conexao_id': conexao.pk, 'cliente_id': cliente_alheio.pk}),
+            content_type='application/json',
+        )
+        inicio = self.client.post(
+            reverse('whatsapp_agent:crm-nova-conversa-iniciar'),
+            data=json.dumps({'conexao_id': conexao.pk, 'cliente_id': cliente_carteira.pk}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(busca.status_code, 200)
+        self.assertEqual(
+            [item['nome'] for item in busca.json()['clientes']],
+            ['Cliente da minha carteira'],
+        )
+        self.assertEqual(tentativa_alheia.status_code, 403)
+        self.assertEqual(inicio.status_code, 200, inicio.content)
+        conversa = ConversaWhatsApp.objects.get(nome_contato='Cliente da minha carteira')
+        self.assertEqual(conversa.conexao_vendedor, conexao)
+        self.assertFalse(conversa.fora_carteira)
 
     def test_vendedor_nao_acessa_conversa_fora_da_carteira(self):
         conexao = self._conexao_qr()

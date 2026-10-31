@@ -133,6 +133,10 @@ class OrcamentoCRMTests(TestCase):
             data=json.dumps(self._payload()), content_type='application/json',
         )
 
+    @staticmethod
+    def _pedido(orcamento):
+        return PedidoVenda.objects.get(pk=orcamento.pedido_operacional_id)
+
     def test_editor_busca_preco_da_tabela_do_cliente(self):
         inbox = self.client.get(
             reverse('whatsapp_agent:crm-inbox-detail', args=[self.conversa.pk]),
@@ -154,8 +158,8 @@ class OrcamentoCRMTests(TestCase):
         resposta = self._salvar()
 
         self.assertEqual(resposta.status_code, 200, resposta.content)
-        orcamento = OrcamentoWhatsApp.objects.select_related('pedido').get()
-        pedido = orcamento.pedido
+        orcamento = OrcamentoWhatsApp.objects.get()
+        pedido = self._pedido(orcamento)
         self.assertEqual(pedido.tipo, PedidoVenda.Tipo.ORCAMENTO)
         self.assertEqual(pedido.origem, PedidoVenda.Origem.WHATSAPP)
         self.assertEqual(pedido.valor_produtos, Decimal('16.00'))
@@ -191,18 +195,19 @@ class OrcamentoCRMTests(TestCase):
         )
         self.assertEqual(aprovacao.status_code, 200)
         orcamento.refresh_from_db()
-        orcamento.pedido.refresh_from_db()
+        pedido = self._pedido(orcamento)
         self.assertEqual(orcamento.status, OrcamentoWhatsApp.Status.APROVADO)
-        self.assertEqual(orcamento.pedido.tipo, PedidoVenda.Tipo.PEDIDO)
-        self.assertEqual(orcamento.pedido.status, PedidoVenda.Status.APROVADO)
+        self.assertEqual(pedido.tipo, PedidoVenda.Tipo.PEDIDO)
+        self.assertEqual(pedido.status, PedidoVenda.Status.APROVADO)
 
     def test_cliente_recusa_e_motivo_fica_registrado(self):
         self._salvar()
         orcamento = OrcamentoWhatsApp.objects.get()
         orcamento.status = OrcamentoWhatsApp.Status.ENVIADO
         orcamento.save(update_fields=['status'])
-        orcamento.pedido.status = PedidoVenda.Status.AGUARDANDO_APROVACAO
-        orcamento.pedido.save(update_fields=['status'])
+        pedido = self._pedido(orcamento)
+        pedido.status = PedidoVenda.Status.AGUARDANDO_APROVACAO
+        pedido.save(update_fields=['status'])
 
         resposta = self.client.post(
             reverse('orcamento_publico:detalhe', args=[orcamento.token_publico]),
@@ -211,18 +216,19 @@ class OrcamentoCRMTests(TestCase):
 
         self.assertEqual(resposta.status_code, 200)
         orcamento.refresh_from_db()
-        orcamento.pedido.refresh_from_db()
+        pedido.refresh_from_db()
         self.assertEqual(orcamento.status, OrcamentoWhatsApp.Status.RECUSADO)
         self.assertIn('outro prazo', orcamento.motivo_recusa)
-        self.assertEqual(orcamento.pedido.status, PedidoVenda.Status.CANCELADO)
+        self.assertEqual(pedido.status, PedidoVenda.Status.CANCELADO)
 
     def test_orcamento_enviado_pode_ser_editado_e_volta_a_rascunho(self):
         self._salvar()
         orcamento = OrcamentoWhatsApp.objects.get()
         orcamento.status = OrcamentoWhatsApp.Status.ENVIADO
         orcamento.save(update_fields=['status'])
-        orcamento.pedido.status = PedidoVenda.Status.AGUARDANDO_APROVACAO
-        orcamento.pedido.save(update_fields=['status'])
+        pedido = self._pedido(orcamento)
+        pedido.status = PedidoVenda.Status.AGUARDANDO_APROVACAO
+        pedido.save(update_fields=['status'])
         payload = self._payload()
         payload['orcamento_id'] = orcamento.pk
         payload['observacao'] = 'Versão revisada pelo vendedor.'
@@ -234,14 +240,15 @@ class OrcamentoCRMTests(TestCase):
 
         self.assertEqual(resposta.status_code, 200, resposta.content)
         orcamento.refresh_from_db()
-        orcamento.pedido.refresh_from_db()
+        pedido.refresh_from_db()
         self.assertEqual(orcamento.status, OrcamentoWhatsApp.Status.RASCUNHO)
-        self.assertEqual(orcamento.pedido.status, PedidoVenda.Status.RASCUNHO)
-        self.assertEqual(orcamento.pedido.observacao, 'Versão revisada pelo vendedor.')
+        self.assertEqual(pedido.status, PedidoVenda.Status.RASCUNHO)
+        self.assertEqual(pedido.observacao, 'Versão revisada pelo vendedor.')
 
     @patch('apps.whatsapp_agent.gateway.MetaCloudClient.enviar_template')
     @patch('apps.whatsapp_agent.views.EvolutionClient.enviar_texto')
-    def test_envio_do_orcamento_bloqueia_apos_24h_sem_template(self, enviar, template):
+    def test_envio_humano_do_orcamento_funciona_apos_24h_sem_template(self, enviar, template):
+        enviar.return_value = {'key': {'id': 'orcamento-manual-24h'}}
         self._salvar()
         orcamento = OrcamentoWhatsApp.objects.get()
         self.conversa.ultima_mensagem_cliente_em = timezone.now() - timedelta(hours=25)
@@ -252,7 +259,6 @@ class OrcamentoCRMTests(TestCase):
             args=[self.conversa.pk, orcamento.pk],
         ))
 
-        self.assertEqual(resposta.status_code, 400)
-        self.assertIn('24 horas', resposta.json()['erro'])
-        enviar.assert_not_called()
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        enviar.assert_called_once()
         template.assert_not_called()

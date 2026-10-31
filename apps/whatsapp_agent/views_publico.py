@@ -7,6 +7,7 @@ from django.views import View
 from apps.core.tenant_context import get_current_database_alias
 
 from .models import OrcamentoWhatsApp
+from .orcamento_service import pedido_do_orcamento
 
 
 def _privado(response):
@@ -19,10 +20,7 @@ def _privado(response):
 def _buscar(token, *, bloquear=False):
     if len(token) != 43:
         raise Http404
-    queryset = OrcamentoWhatsApp.objects.select_related(
-        'pedido__filial__empresa', 'pedido__cliente',
-        'pedido__forma_pagamento', 'pedido__condicao_pagamento',
-    ).prefetch_related('pedido__itens__produto__unidade_medida')
+    queryset = OrcamentoWhatsApp.objects.using('default')
     if bloquear:
         queryset = queryset.select_for_update()
     return get_object_or_404(queryset, token_publico=token)
@@ -36,11 +34,13 @@ class OrcamentoPublicoView(View):
 
     def post(self, request, token):
         alias = get_current_database_alias()
-        with transaction.atomic(using=alias):
+        with transaction.atomic(using=alias), transaction.atomic(using='default'):
             orcamento = _buscar(token, bloquear=True)
+            if orcamento.tenant_alias != alias:
+                raise Http404
             if orcamento.status != OrcamentoWhatsApp.Status.ENVIADO:
                 return self._render(request, orcamento)
-            pedido = orcamento.pedido
+            pedido = pedido_do_orcamento(orcamento, bloquear=True)
             if pedido.data_validade_orcamento and pedido.data_validade_orcamento < timezone.localdate():
                 return self._render(request, orcamento, erro='Este orçamento passou da validade.')
 
@@ -86,5 +86,11 @@ class OrcamentoPublicoView(View):
             raise Http404
 
     def _render(self, request, orcamento, **extra):
-        contexto = {'orcamento': orcamento, 'pedido': orcamento.pedido, **extra}
+        if orcamento.tenant_alias != get_current_database_alias():
+            raise Http404
+        contexto = {
+            'orcamento': orcamento,
+            'pedido': pedido_do_orcamento(orcamento),
+            **extra,
+        }
         return _privado(render(request, self.template_name, contexto))

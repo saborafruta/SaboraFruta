@@ -842,9 +842,9 @@ class OrcamentoWhatsApp(TimestampedModel):
     conversa = models.ForeignKey(
         ConversaWhatsApp, on_delete=models.PROTECT, related_name='orcamentos',
     )
-    pedido = models.OneToOneField(
-        'vendas.PedidoVenda', on_delete=models.PROTECT,
-        related_name='orcamento_whatsapp',
+    tenant_alias = models.SlugField(max_length=80, default='default', db_index=True)
+    pedido_operacional_id = models.PositiveBigIntegerField(
+        help_text='ID do PedidoVenda dentro do banco operacional indicado por tenant_alias.',
     )
     token_publico = models.CharField(
         max_length=64, unique=True, default=gerar_token_orcamento_whatsapp,
@@ -871,9 +871,15 @@ class OrcamentoWhatsApp(TimestampedModel):
             models.Index(fields=['conversa', '-created_at']),
             models.Index(fields=['token_publico']),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant_alias', 'pedido_operacional_id'],
+                name='whatsapp_orcamento_tenant_pedido_unico',
+            ),
+        ]
 
     def __str__(self):
-        return f'Orçamento {self.pedido.numero_pedido} — {self.get_status_display()}'
+        return f'Orçamento #{self.pedido_operacional_id} — {self.get_status_display()}'
 
 
 class ConsentimentoCobrancaWhatsApp(TimestampedModel):

@@ -65,8 +65,17 @@ def endereco_cliente(cliente):
     return ', '.join(str(item) for item in partes if item)
 
 
+def pedido_do_orcamento(orcamento, *, bloquear=False):
+    queryset = PedidoVenda.objects.using(orcamento.tenant_alias).select_related(
+        'filial__empresa', 'cliente', 'forma_pagamento', 'condicao_pagamento',
+    ).prefetch_related('itens__produto__unidade_medida')
+    if bloquear:
+        queryset = queryset.select_for_update()
+    return queryset.get(pk=orcamento.pedido_operacional_id)
+
+
 def serializar_orcamento(orcamento):
-    pedido = orcamento.pedido
+    pedido = pedido_do_orcamento(orcamento)
     return {
         'id': orcamento.pk,
         'numero': pedido.numero_pedido,
@@ -106,11 +115,7 @@ def serializar_orcamento(orcamento):
 
 def dados_editor(conversa, filial):
     cliente = cliente_da_conversa(conversa, filial)
-    orcamentos = list(
-        conversa.orcamentos.select_related(
-            'pedido', 'pedido__forma_pagamento', 'pedido__condicao_pagamento',
-        ).prefetch_related('pedido__itens__produto__unidade_medida')[:20]
-    )
+    orcamentos = list(conversa.orcamentos.using('default').all()[:20])
     formas = FormaPagamento.objects.filter(
         empresa=filial.empresa, ativo=True,
     ).filter(Q(filial=filial) | Q(filial__isnull=True))
@@ -166,12 +171,12 @@ def buscar_produtos(conversa, filial, termo):
 
 def salvar_orcamento(*, conversa, filial, usuario, payload):
     alias = get_current_database_alias()
-    with transaction.atomic(using=alias):
+    with transaction.atomic(using=alias), transaction.atomic(using='default'):
         cliente = cliente_da_conversa(conversa, filial)
         orcamento_id = payload.get('orcamento_id')
         orcamento = None
         if orcamento_id:
-            orcamento = conversa.orcamentos.select_for_update().select_related('pedido').filter(
+            orcamento = conversa.orcamentos.using('default').select_for_update().filter(
                 pk=orcamento_id,
                 status__in=[
                     OrcamentoWhatsApp.Status.RASCUNHO,
@@ -180,7 +185,9 @@ def salvar_orcamento(*, conversa, filial, usuario, payload):
             ).first()
             if not orcamento:
                 raise DadosInvalidosError('Este orçamento não pode mais ser editado.')
-            pedido = orcamento.pedido
+            if orcamento.tenant_alias != alias:
+                raise DadosInvalidosError('O orçamento pertence a outro banco operacional.')
+            pedido = pedido_do_orcamento(orcamento, bloquear=True)
             pedido.status = PedidoVenda.Status.RASCUNHO
             pedido.save(update_fields=['status', 'updated_at'])
             pedido.itens.all().delete()
@@ -191,8 +198,10 @@ def salvar_orcamento(*, conversa, filial, usuario, payload):
                 observacao=(payload.get('observacao') or '').strip(),
             )
             pedido.origem = PedidoVenda.Origem.WHATSAPP
-            orcamento = OrcamentoWhatsApp.objects.create(
-                conversa=conversa, pedido=pedido,
+            orcamento = OrcamentoWhatsApp.objects.using('default').create(
+                conversa_id=conversa.pk,
+                tenant_alias=alias,
+                pedido_operacional_id=pedido.pk,
             )
 
         itens = payload.get('itens') or []
@@ -295,7 +304,7 @@ def salvar_orcamento(*, conversa, filial, usuario, payload):
 
 
 def resumo_para_whatsapp(orcamento, link):
-    pedido = orcamento.pedido
+    pedido = pedido_do_orcamento(orcamento)
     linhas = [
         f'*Orçamento {pedido.numero_pedido}*',
         f'*Cliente:* {pedido.cliente.nome_display}',

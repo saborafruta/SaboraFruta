@@ -22,8 +22,15 @@ class CarteiraService:
         queryset = queryset.filter(filial__empresa=empresa)
         if cls.pode_supervisionar(usuario):
             return queryset
+        return cls.filtrar_clientes_do_vendedor(
+            queryset, vendedor=usuario, empresa=empresa,
+        )
+
+    @staticmethod
+    def filtrar_clientes_do_vendedor(queryset: QuerySet, *, vendedor, empresa):
+        queryset = queryset.filter(filial__empresa=empresa)
         grupos = CarteiraCliente.objects.filter(
-            empresa=empresa, vendedor=usuario,
+            empresa=empresa, vendedor=vendedor,
         ).values('grupo_cliente')
         return queryset.filter(grupo_replicacao__in=grupos)
 
@@ -70,6 +77,30 @@ class CarteiraService:
             cliente=cliente,
             vendedor=vendedor,
             atribuido_por=atribuido_por,
+        ), True
+
+    @classmethod
+    @tenant_atomic
+    def registrar_cliente_criado(cls, *, cliente, criado_por):
+        """Entrega automaticamente ao vendedor apenas o cliente que ele acabou de criar."""
+        if not criado_por or not getattr(criado_por, 'is_authenticated', False):
+            return None, False
+        if criado_por.empresa_id != cliente.filial.empresa_id:
+            raise ValidationError('O usuário e o cliente pertencem a empresas diferentes.')
+        # Gestores continuam usando a tela gerencial para escolher o vendedor.
+        if cls.pode_supervisionar(criado_por):
+            return None, False
+        existente = CarteiraCliente.objects.filter(
+            empresa_id=cliente.filial.empresa_id,
+            grupo_cliente=cliente.grupo_replicacao,
+        ).first()
+        if existente:
+            return existente, False
+        return CarteiraCliente.objects.create(
+            empresa=cliente.filial.empresa,
+            cliente=cliente,
+            vendedor=criado_por,
+            atribuido_por=criado_por,
         ), True
 
     @classmethod

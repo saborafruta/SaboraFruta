@@ -125,7 +125,7 @@ Por decisão de experiência operacional, os números dos vendedores usarão con
 
 Essa modalidade utiliza uma sessão do WhatsApp Web por meio do gateway Evolution e não equivale à Cloud API oficial da Meta. Ela exige monitoramento de conexão e pode depender de nova leitura de QR Code quando a sessão for encerrada pelo WhatsApp. A chave do gateway permanece somente no servidor e não aparece para vendedores ou gestores.
 
-Mesmo sem a exigência técnica da janela oficial da Cloud API, o CRM manterá a regra comercial definida: depois de 24 horas sem mensagem do cliente, o envio humano pelo iTED ficará bloqueado até o cliente escrever novamente. Não haverá templates nem automações.
+Como a conexão dos vendedores usa uma sessão por QR Code, o CRM permitirá que a pessoa envie mensagens manuais mesmo depois de 24 horas. O iTED não enviará templates aprovados, cobranças ou automações para iniciar ou retomar uma conversa.
 
 O número geral da filial não precisa ser migrado junto com os números dos vendedores. Cada canal terá conexão, credenciais, estado e estratégia de migração próprios.
 
@@ -137,7 +137,7 @@ Antes da expansão, o piloto deverá confirmar:
 4. sincronização de texto, imagem, áudio e documentos;
 5. comportamento de edição e exclusão;
 6. histórico disponibilizado durante o onboarding;
-7. bloqueio comercial da janela de 24 horas;
+7. envio manual depois de 24 horas, sem template nem automação;
 8. continuidade do uso no celular;
 9. ausência de impacto no número geral da filial.
 
@@ -151,6 +151,8 @@ Pode:
 - visualizar somente clientes da própria carteira;
 - pesquisar somente clientes autorizados;
 - ler e responder às próprias conversas;
+- iniciar uma nova conversa pesquisando exclusivamente a própria carteira;
+- conversar imediatamente com um cliente que ele mesmo acabou de cadastrar;
 - enviar textos, imagens, documentos e áudios suportados;
 - criar oportunidades e orçamentos para clientes da carteira;
 - enviar orçamento para aprovação;
@@ -163,6 +165,7 @@ Não pode:
 - pesquisar ou iniciar conversa com cliente de outra carteira pelo CRM;
 - usar outro número comercial;
 - alterar a titularidade de uma carteira;
+- atribuir a si mesmo um cliente já existente;
 - alterar mensagens já armazenadas;
 - aplicar descontos fora das regras comerciais existentes.
 
@@ -204,6 +207,8 @@ Em outras palavras:
 - no CRM, o mesmo cliente não fica simultaneamente na carteira de dois vendedores.
 
 Não haverá fluxo de transferência de carteira nem substituição temporária. Quando outro vendedor passar a atender determinado cliente, o gestor ou administrador fará uma reatribuição simples daquele cliente antes do novo contato. O vínculo anterior será substituído, sem processo de aceite entre vendedores.
+
+Somente gestor ou administrador pode atribuir e reatribuir clientes já existentes. Quando o próprio vendedor cadastra um cliente novo, o iTED cria automaticamente o vínculo desse novo cadastro com a carteira do vendedor criador. Esse vínculo automático não permite que ele tome para si um cadastro que já existia.
 
 Toda operação do backend deve validar essa propriedade. Não basta esconder o cliente na interface.
 
@@ -248,7 +253,7 @@ A tela principal do vendedor deve adotar o padrão de interação do WhatsApp We
 
 ### 6.2 Coluna central — chat
 
-- cabeçalho com cliente, telefone e situação da janela de atendimento;
+- cabeçalho com cliente, telefone e indicação da última atividade;
 - histórico cronológico de mensagens;
 - indicação interna da origem: celular, CRM, automação ou sistema;
 - status de envio, entrega e leitura;
@@ -257,7 +262,7 @@ A tela principal do vendedor deve adotar o padrão de interação do WhatsApp We
 - resposta contextual, quando suportada;
 - campo de composição fixo;
 - anexos, áudio e envio;
-- aviso quando a API exigir modelo aprovado em vez de texto livre.
+- aviso de que contatos após 24 horas continuam sendo exclusivamente manuais.
 
 ### 6.3 Coluna direita — contexto comercial
 
@@ -297,13 +302,12 @@ A tela principal do vendedor deve adotar o padrão de interação do WhatsApp We
 
 1. O vendedor escreve a mensagem.
 2. O backend valida empresa, número, vendedor e carteira.
-3. O backend confirma que a última mensagem do cliente ocorreu há no máximo 24 horas.
-4. A mensagem é persistida como pendente.
-5. O gateway da sessão realiza o envio.
-6. O identificador externo e os estados posteriores são armazenados.
-7. A mensagem aparece também no WhatsApp conectado ao celular.
+3. A mensagem é persistida como pendente.
+4. O gateway da sessão realiza o envio humano.
+5. O identificador externo e os estados posteriores são armazenados.
+6. A mensagem aparece também no WhatsApp conectado ao celular.
 
-Se a janela de 24 horas estiver encerrada, nenhuma mensagem será criada ou enviada. O iTED não substituirá o texto por modelo aprovado, não cobrará o envio e não tentará iniciar uma nova conversa automaticamente. O campo de resposta permanecerá bloqueado até uma nova mensagem recebida do cliente reabrir a janela.
+Mesmo depois de 24 horas sem mensagem do cliente, o campo permanece disponível para uma ação manual do vendedor. O iTED não substituirá o texto por modelo aprovado, não disparará cobrança e não tentará iniciar ou retomar a conversa automaticamente.
 
 ### 7.4 Edição e exclusão
 
@@ -636,7 +640,7 @@ Esses itens podem ser incorporados depois que o fluxo humano de atendimento e ve
 6. O mesmo `PedidoVenda` será convertido de orçamento em pedido e seguirá para a força de vendas.
 7. O pedido terá origem `WHATSAPP` e vínculo com a conversa.
 8. Não haverá mensagens automáticas por mudança de status no primeiro momento.
-9. O CRM dos vendedores enviará somente mensagens digitadas por pessoas; não usará modelos aprovados nem automações para contornar a janela de 24 horas.
+9. O CRM dos vendedores enviará somente mensagens digitadas por pessoas, inclusive após 24 horas; não usará modelos aprovados nem automações.
 
 ### 15.2 Decisões que não impedem o início
 

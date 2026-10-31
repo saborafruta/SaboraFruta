@@ -29,6 +29,10 @@ class ClienteService:
         cliente = Cliente(filial=filial, **dados_limpos)
         cliente.save()
         ReplicacaoCadastrosService.sincronizar_cliente(cliente)
+        from apps.crm.services import CarteiraService
+        CarteiraService.registrar_cliente_criado(
+            cliente=cliente, criado_por=usuario,
+        )
         return cliente
 
     @staticmethod

@@ -1,8 +1,9 @@
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
 from apps.cadastros.models import Cliente
+from apps.cadastros.services.cliente_service import ClienteService
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
 from apps.crm.models import CarteiraCliente
 from apps.crm.models import OportunidadeCRM
@@ -117,6 +118,14 @@ class CarteiraServiceTests(TestCase):
         resposta = self.client.get(reverse('crm:carteiras'))
         self.assertRedirects(resposta, reverse('crm:funil'))
 
+    def test_vendedor_nao_consegue_atribuir_cliente_existente_a_si_mesmo(self):
+        with self.assertRaises(PermissionDenied):
+            CarteiraService.atribuir(
+                cliente=self.cliente_b,
+                vendedor=self.vendedor_a,
+                atribuido_por=self.vendedor_a,
+            )
+
     def test_gestor_pode_reatribuir_cliente_pela_tela(self):
         self._autenticar(self.gestor)
         resposta = self.client.post(reverse('crm:carteiras'), {
@@ -126,6 +135,35 @@ class CarteiraServiceTests(TestCase):
         self.assertRedirects(resposta, reverse('crm:carteiras'))
         carteira = CarteiraCliente.objects.get(grupo_cliente=self.cliente_a.grupo_replicacao)
         self.assertEqual(carteira.vendedor, self.vendedor_b)
+
+    def test_cliente_criado_pelo_vendedor_entra_automaticamente_na_carteira_dele(self):
+        cliente = ClienteService.criar(
+            {
+                'razao_social': 'Cliente cadastrado pelo vendedor',
+                'cpf_cnpj': '33333333333', 'tipo_pessoa': 'F',
+                'celular': '84999990000',
+            },
+            usuario=self.vendedor_a,
+            filial=self.filial,
+        )
+
+        carteira = CarteiraCliente.objects.get(grupo_cliente=cliente.grupo_replicacao)
+        self.assertEqual(carteira.vendedor, self.vendedor_a)
+        self.assertEqual(carteira.atribuido_por, self.vendedor_a)
+
+    def test_cliente_criado_pelo_gestor_nao_recebe_atribuicao_automatica(self):
+        cliente = ClienteService.criar(
+            {
+                'razao_social': 'Cliente cadastrado pelo gestor',
+                'cpf_cnpj': '44444444444', 'tipo_pessoa': 'F',
+            },
+            usuario=self.gestor,
+            filial=self.filial,
+        )
+
+        self.assertFalse(
+            CarteiraCliente.objects.filter(grupo_cliente=cliente.grupo_replicacao).exists(),
+        )
 
     def test_funil_do_vendedor_nao_exibe_oportunidade_de_outra_carteira(self):
         pipeline = ComercialService.obter_pipeline_padrao(self.filial)
