@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+  <meta name="theme-color" media="(prefers-color-scheme:light)" content="#f4f7f6">
+  <meta name="theme-color" media="(prefers-color-scheme:dark)" content="#071b17">
+  <title>Orçamento {{ pedido.numero_pedido }}</title>
+  <style>
+    :root{color-scheme:light dark;--bg:#f4f7f6;--card:#fff;--ink:#14201d;--muted:#65736f;--line:#dce5e2;--brand:#087c68;--brand2:#0d9b82;--danger:#b42318;--soft:#e8f5f1}*{box-sizing:border-box}html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}body{margin:0;background:radial-gradient(circle at top,#dff3ed 0,transparent 32rem),var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{width:min(760px,100%);margin:auto;padding:clamp(1rem,4vw,2rem) max(1rem,env(safe-area-inset-right)) max(2rem,env(safe-area-inset-bottom)) max(1rem,env(safe-area-inset-left))}.brand{display:flex;justify-content:space-between;gap:1rem;align-items:center;margin-bottom:1rem}.brand strong{font-size:1.05rem}.status{padding:.35rem .7rem;border-radius:999px;background:var(--soft);color:var(--brand);font-size:.76rem;font-weight:800}.card{overflow:hidden;border:1px solid var(--line);border-radius:20px;background:var(--card);box-shadow:0 18px 55px rgba(19,51,43,.09)}header{padding:clamp(1.2rem,5vw,2rem);border-bottom:1px solid var(--line)}h1{margin:0;font-size:clamp(1.55rem,6vw,2.25rem);letter-spacing:-.035em}header p{margin:.35rem 0 0;color:var(--muted)}.meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;padding:1.25rem}.meta div{min-width:0}.meta span,.totals span{display:block;color:var(--muted);font-size:.74rem}.meta strong{display:block;margin-top:.15rem;overflow-wrap:anywhere}.items{padding:0 1.25rem 1rem}.item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.4rem 1rem;padding:.85rem 0;border-top:1px solid var(--line)}.item p{margin:.15rem 0 0;color:var(--muted);font-size:.78rem}.item .price{text-align:right;white-space:nowrap}.totals{margin:0 1.25rem 1.25rem;padding:1rem;border-radius:14px;background:var(--soft)}.total-row{display:flex;justify-content:space-between;gap:1rem;margin:.25rem 0}.total-row.grand{margin-top:.65rem;padding-top:.65rem;border-top:1px solid color-mix(in srgb,var(--brand) 20%,transparent);font-size:1.2rem}.message{margin:0 1.25rem 1rem;padding:.8rem 1rem;border-radius:12px;background:var(--soft);color:var(--brand);font-weight:700}.message.error{background:#fff0ee;color:var(--danger)}.actions{display:grid;gap:.75rem;padding:1.25rem;border-top:1px solid var(--line)}button,textarea{font:inherit}button{min-height:48px;border:0;border-radius:12px;padding:.75rem 1rem;background:var(--brand);color:white;font-weight:850;cursor:pointer;touch-action:manipulation;user-select:none;transition:transform 140ms cubic-bezier(.23,1,.32,1),background 140ms ease}button:active{transform:scale(.98)}button.secondary{background:transparent;color:var(--danger);border:1px solid #efc2bd}textarea{width:100%;min-height:94px;margin-top:.55rem;padding:.8rem;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);resize:vertical}.refuse{display:none}.refuse.open{display:block}.done{padding:1rem 1.25rem;border-top:1px solid var(--line);color:var(--muted)}@media(max-width:560px){.meta{grid-template-columns:1fr}.brand{align-items:flex-start}.item{grid-template-columns:1fr}.item .price{text-align:left}}@media(pointer:coarse){textarea{font-size:16px}}@media(prefers-color-scheme:dark){:root{--bg:#07110f;--card:#10201c;--ink:#edf7f4;--muted:#9db0aa;--line:#29403a;--soft:#133b32;--brand:#18a98d;--brand2:#22c5a3}body{background:radial-gradient(circle at top,#123f35 0,transparent 32rem),var(--bg)}}
+  </style>
+</head>
+<body>
+<main class="page">
+  <div class="brand"><strong>{{ pedido.filial.nome_fantasia|default:pedido.filial.razao_social }}</strong><span class="status">{{ orcamento.get_status_display }}</span></div>
+  <article class="card">
+    <header><h1>Orçamento {{ pedido.numero_pedido }}</h1><p>Confira os dados antes de responder.</p></header>
+    {% if sucesso %}<div class="message">{{ sucesso }}</div>{% endif %}
+    {% if erro %}<div class="message error">{{ erro }}</div>{% endif %}
+    <section class="meta">
+      <div><span>Cliente</span><strong>{{ pedido.cliente.nome_display }}</strong><small>{{ pedido.cliente.cpf_cnpj }}</small></div>
+      <div><span>Validade</span><strong>{{ pedido.data_validade_orcamento|date:'d/m/Y'|default:'A combinar' }}</strong></div>
+      <div><span>Pagamento</span><strong>{{ pedido.forma_pagamento|default:'A combinar' }}</strong><small>{{ pedido.condicao_pagamento|default:'' }}</small></div>
+      <div><span>Endereço de entrega</span><strong>{{ pedido.endereco_entrega_avulso.descricao|default:'A combinar' }}</strong></div>
+    </section>
+    <section class="items">
+      {% for item in pedido.itens.all %}<div class="item"><div><strong>{{ item.produto.descricao }}</strong><p>{{ item.quantidade|floatformat:3 }} {{ item.produto.unidade_medida }} × R$ {{ item.valor_unitario|floatformat:2 }}{% if item.percentual_desconto %} · desconto {{ item.percentual_desconto|floatformat:2 }}%{% endif %}</p></div><strong class="price">R$ {{ item.valor_total|floatformat:2 }}</strong></div>{% endfor %}
+    </section>
+    <section class="totals">
+      <div class="total-row"><span>Produtos</span><strong>R$ {{ pedido.valor_produtos|floatformat:2 }}</strong></div>
+      {% if pedido.valor_desconto %}<div class="total-row"><span>Descontos</span><strong>− R$ {{ pedido.valor_desconto|floatformat:2 }}</strong></div>{% endif %}
+      <div class="total-row"><span>Frete</span><strong>R$ {{ pedido.valor_frete|floatformat:2 }}</strong></div>
+      <div class="total-row grand"><span>Total</span><strong>R$ {{ pedido.valor_total|floatformat:2 }}</strong></div>
+    </section>
+    {% if pedido.observacao %}<section class="meta"><div><span>Observações</span><strong>{{ pedido.observacao|linebreaksbr }}</strong></div></section>{% endif %}
+    {% if orcamento.status == 'enviado' %}
+      <section class="actions">
+        <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="aprovar"><button type="submit">Aprovar orçamento</button></form>
+        <button class="secondary" type="button" id="show-refuse">Não aprovar</button>
+        <form method="post" class="refuse" id="refuse-form">{% csrf_token %}<input type="hidden" name="acao" value="recusar"><label for="motivo"><strong>O que impediu a aprovação?</strong></label><textarea id="motivo" name="motivo" required minlength="3" maxlength="2000" placeholder="Ex.: prazo, preço, quantidade ou forma de pagamento"></textarea><button class="secondary" type="submit">Enviar motivo</button></form>
+      </section>
+    {% else %}
+      <div class="done">Esta proposta já recebeu uma resposta. Se precisar de uma alteração, fale com o vendedor pelo WhatsApp.</div>
+    {% endif %}
+  </article>
+</main>
+<script>document.getElementById('show-refuse')?.addEventListener('click',()=>{const form=document.getElementById('refuse-form');form.classList.toggle('open');if(form.classList.contains('open'))document.getElementById('motivo').focus()})</script>
+</body>
+</html>

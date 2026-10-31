@@ -17,6 +17,7 @@ class TenantPublicLinkService:
         (re.compile(r'^/boleto/([^/]+)(?:/pdf/)?$'), 'boleto', 'financeiro.Boleto', 'public_token'),
         (re.compile(r'^/cardapio/([^/]+)(?:/.*)?$'), 'cardapio', 'food_service.Mesa', 'qr_token'),
         (re.compile(r'^/entregas/([^/]+)(?:/.*)?$'), 'rota_delivery', 'pdv.RotaDelivery', 'token'),
+        (re.compile(r'^/orcamento/([^/]+)(?:/.*)?$'), 'orcamento', 'whatsapp_agent.OrcamentoWhatsApp', 'token_publico'),
         (re.compile(r'^/pedido/entrega/([^/]+)/?$'), 'entrega', 'moda.Expedicao', 'codigo'),
         (re.compile(r'^/pedido/([^/]+)(?:/.*)?$'), 'pedido', 'moda.PedidoProducao', 'token_publico'),
     )

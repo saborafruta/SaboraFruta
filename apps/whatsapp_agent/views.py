@@ -18,7 +18,10 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from apps.core.models import Empresa
+from apps.core.services.exceptions import DadosInvalidosError
 from apps.core.services.permissions import PermissaoRequiredMixin
+from apps.core.services.tenant_public_link_service import TenantPublicLinkService
+from apps.core.tenant_context import get_current_database_alias
 from apps.crm.services import CarteiraService
 
 from .conversation_service import encerrar_conversa, encerrar_conversas_inativas
@@ -34,8 +37,12 @@ from .gateway import (
 )
 from .models import (
     ConexaoWhatsAppVendedor, ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp,
-    MenuWhatsApp, OpcaoMenuWhatsApp,
+    MenuWhatsApp, OpcaoMenuWhatsApp, OrcamentoWhatsApp,
     UsoIAWhatsApp,
+)
+from .orcamento_service import (
+    buscar_produtos, dados_editor, resumo_para_whatsapp, salvar_orcamento,
+    serializar_orcamento,
 )
 from .webhook import receber_evento, receber_evento_meta
 
@@ -611,6 +618,146 @@ class CRMWhatsAppInboxView(PermissaoRequiredMixin, View):
         })
 
 
+def _enviar_texto_humano_crm(conversa, texto, usuario):
+    conexao = conversa.conexao_vendedor
+    mensagem = MensagemWhatsApp.objects.create(
+        conversa=conversa,
+        direcao=MensagemWhatsApp.Direcao.SAIDA,
+        origem=MensagemWhatsApp.Origem.CRM,
+        autor_nome=usuario.nome,
+        autor_email=usuario.email,
+        texto=texto,
+        texto_original=texto,
+        tipo='texto',
+        status='pendente',
+    )
+    try:
+        retorno = EvolutionClient(conexao).enviar_texto(conversa.telefone, texto)
+        mensagem.identificador_externo = identificador_envio(retorno)
+        mensagem.status = 'enviada'
+        conversa.ultima_mensagem_em = timezone.now()
+        conversa.save(update_fields=['ultima_mensagem_em', 'updated_at'])
+    except GatewayWhatsAppError as exc:
+        mensagem.status = 'erro'
+        mensagem.dados_evento = {'erro': str(exc)}
+        mensagem.save(update_fields=['status', 'dados_evento', 'updated_at'])
+        raise
+    mensagem.save(update_fields=[
+        'identificador_externo', 'status', 'dados_evento', 'updated_at',
+    ])
+    return mensagem
+
+
+def _partes_whatsapp(texto, limite=3900):
+    partes, atual = [], []
+    tamanho = 0
+    for linha in texto.splitlines():
+        acrescimo = len(linha) + (1 if atual else 0)
+        if atual and tamanho + acrescimo > limite:
+            partes.append('\n'.join(atual))
+            atual, tamanho = [], 0
+        atual.append(linha)
+        tamanho += len(linha) + (1 if tamanho else 0)
+    if atual:
+        partes.append('\n'.join(atual))
+    return partes
+
+
+class CRMOrcamentoEditorView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'crm'
+    permissao_acao = 'ver'
+
+    def get(self, request, pk):
+        conversa = get_object_or_404(_conversas_crm_permitidas(request), pk=pk)
+        try:
+            return JsonResponse(dados_editor(conversa, request.filial_ativa))
+        except DadosInvalidosError as exc:
+            return JsonResponse({'erro': str(exc)}, status=400)
+
+
+class CRMOrcamentoProdutosView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'crm'
+    permissao_acao = 'ver'
+
+    def get(self, request, pk):
+        conversa = get_object_or_404(_conversas_crm_permitidas(request), pk=pk)
+        try:
+            produtos = buscar_produtos(
+                conversa, request.filial_ativa, request.GET.get('q', ''),
+            )
+            return JsonResponse({'produtos': produtos})
+        except DadosInvalidosError as exc:
+            return JsonResponse({'erro': str(exc)}, status=400)
+
+
+@method_decorator(require_POST, name='dispatch')
+class CRMOrcamentoSalvarView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'crm'
+    permissao_acao = 'criar'
+
+    def post(self, request, pk):
+        conversa = get_object_or_404(_conversas_crm_permitidas(request), pk=pk)
+        try:
+            payload = json.loads(request.body or b'{}')
+            orcamento = salvar_orcamento(
+                conversa=conversa, filial=request.filial_ativa,
+                usuario=request.user, payload=payload,
+            )
+            return JsonResponse({'ok': True, 'orcamento': serializar_orcamento(orcamento)})
+        except (json.JSONDecodeError, DadosInvalidosError) as exc:
+            return JsonResponse({'erro': str(exc)}, status=400)
+
+
+@method_decorator(require_POST, name='dispatch')
+class CRMOrcamentoEnviarView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'crm'
+    permissao_acao = 'criar'
+
+    def post(self, request, pk, orcamento_pk):
+        conversa = get_object_or_404(
+            _conversas_crm_permitidas(request).select_related('conexao_vendedor'),
+            pk=pk,
+        )
+        orcamento = get_object_or_404(
+            conversa.orcamentos.select_related(
+                'pedido__cliente', 'pedido__forma_pagamento',
+                'pedido__condicao_pagamento',
+            ).prefetch_related('pedido__itens__produto'),
+            pk=orcamento_pk, status=OrcamentoWhatsApp.Status.RASCUNHO,
+        )
+        if not conversa.janela_atendimento_ativa:
+            return JsonResponse({
+                'erro': (
+                    'A janela de 24 horas terminou. O iTED não enviará modelo; '
+                    'aguarde o cliente escrever novamente.'
+                ),
+            }, status=400)
+        if not conversa.conexao_vendedor:
+            return JsonResponse({'erro': 'A conexão do vendedor não está configurada.'}, status=400)
+
+        link = request.build_absolute_uri(
+            reverse('orcamento_publico:detalhe', args=[orcamento.token_publico]),
+        )
+        TenantPublicLinkService.register(
+            kind='orcamento', token=orcamento.token_publico,
+            db_alias=get_current_database_alias(),
+        )
+        texto = resumo_para_whatsapp(orcamento, link)
+        try:
+            for parte in _partes_whatsapp(texto):
+                _enviar_texto_humano_crm(conversa, parte, request.user)
+        except GatewayWhatsAppError as exc:
+            return JsonResponse({'erro': f'Não foi possível enviar o orçamento: {exc}'}, status=502)
+
+        orcamento.status = OrcamentoWhatsApp.Status.ENVIADO
+        orcamento.enviado_em = timezone.now()
+        orcamento.save(update_fields=['status', 'enviado_em', 'updated_at'])
+        pedido = orcamento.pedido
+        pedido.status = pedido.Status.AGUARDANDO_APROVACAO
+        pedido.save(update_fields=['status', 'updated_at'])
+        return JsonResponse({'ok': True, 'mensagem': 'Orçamento enviado para o cliente.'})
+
+
 @method_decorator(require_POST, name='dispatch')
 class CRMWhatsAppEnviarView(PermissaoRequiredMixin, View):
     permissao_modulo = 'crm'
@@ -642,31 +789,11 @@ class CRMWhatsAppEnviarView(PermissaoRequiredMixin, View):
             )
             return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
 
-        mensagem = MensagemWhatsApp.objects.create(
-            conversa=conversa,
-            direcao=MensagemWhatsApp.Direcao.SAIDA,
-            origem=MensagemWhatsApp.Origem.CRM,
-            autor_nome=request.user.nome,
-            autor_email=request.user.email,
-            texto=texto,
-            texto_original=texto,
-            tipo='texto',
-            status='pendente',
-        )
         try:
-            retorno = EvolutionClient(conexao).enviar_texto(conversa.telefone, texto)
-            mensagem.identificador_externo = identificador_envio(retorno)
-            mensagem.status = 'enviada'
-            conversa.ultima_mensagem_em = timezone.now()
-            conversa.save(update_fields=['ultima_mensagem_em', 'updated_at'])
+            _enviar_texto_humano_crm(conversa, texto, request.user)
             messages.success(request, 'Mensagem enviada pelo CRM.')
         except GatewayWhatsAppError as exc:
-            mensagem.status = 'erro'
-            mensagem.dados_evento = {'erro': str(exc)}
             messages.error(request, f'Não foi possível enviar a mensagem: {exc}')
-        mensagem.save(update_fields=[
-            'identificador_externo', 'status', 'dados_evento', 'updated_at',
-        ])
         return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
 
 

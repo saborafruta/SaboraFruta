@@ -1,0 +1,258 @@
+import json
+from datetime import timedelta
+from decimal import Decimal
+from unittest.mock import patch
+
+from django.test import TestCase, override_settings
+from django.urls import reverse
+from django.utils import timezone
+
+from apps.cadastros.models import Cliente, ClienteFilial
+from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
+from apps.financeiro.constants.enums import TipoFormaPagamento
+from apps.financeiro.models import CondicaoPagamento, FormaPagamento
+from apps.produtos.models import (
+    CategoriaProduto, CategoriaProdutoFilial, ItemTabelaPreco, Produto,
+    ProdutoFilial, TabelaPreco, TabelaPrecoFilial, UnidadeMedida,
+    UnidadeMedidaFilial,
+)
+from apps.vendas.models import PedidoVenda
+from apps.whatsapp_agent.models import (
+    ConexaoWhatsAppVendedor, ConversaWhatsApp, MensagemWhatsApp,
+    OrcamentoWhatsApp,
+)
+
+
+@override_settings(
+    WHATSAPP_EVOLUTION_URL='https://evolution.example.com',
+    WHATSAPP_EVOLUTION_API_KEY='chave-teste',
+)
+class OrcamentoCRMTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.empresa = Empresa.objects.create(
+            razao_social='Empresa Orçamento CRM', cnpj='99111222000144',
+            regime_tributario='simples', codigo_regime_tributario=1,
+        )
+        cls.filial = Filial.objects.create(
+            empresa=cls.empresa, razao_social='Matriz Orçamento CRM',
+            nome_fantasia='Matriz', cnpj='99111222000145', uf='RN',
+            cidade='Natal', is_matriz=True,
+        )
+        cls.perfil = PerfilAcesso.objects.create(
+            empresa=cls.empresa, nome='Vendedor CRM', ativo=True,
+        )
+        Permissao.objects.create(
+            perfil=cls.perfil, modulo='crm', pode_ver=True,
+            pode_criar=True, pode_editar=True,
+        )
+        cls.vendedor = Usuario.objects.create_user(
+            email='orcamento@example.com', nome='Vendedor Orçamento',
+            password='teste1234', empresa=cls.empresa, filial=cls.filial,
+            perfil=cls.perfil,
+        )
+        cls.unidade = UnidadeMedida.objects.create(
+            empresa=cls.empresa, sigla='UN', descricao='Unidade',
+            tipo=UnidadeMedida.Tipo.UNIDADE,
+        )
+        UnidadeMedidaFilial.objects.create(unidade=cls.unidade, filial=cls.filial)
+        cls.categoria = CategoriaProduto.objects.create(
+            empresa=cls.empresa, filial=cls.filial, nome='Congelados',
+        )
+        CategoriaProdutoFilial.objects.create(categoria=cls.categoria, filial=cls.filial)
+        cls.produto = Produto.objects.create(
+            filial=cls.filial, unidade_medida=cls.unidade, categoria=cls.categoria,
+            descricao='Polpa de acerola', codigo='ACE-01', ncm='20089900',
+            preco_venda=Decimal('10.00'), preco_custo=Decimal('4.00'),
+            controla_lote=False, permite_venda_sem_estoque=True,
+        )
+        ProdutoFilial.objects.create(produto=cls.produto, filial=cls.filial)
+        cls.tabela = TabelaPreco.objects.create(
+            filial=cls.filial, descricao='Carteira CRM', tipo=TabelaPreco.Tipo.ATACADO,
+        )
+        TabelaPrecoFilial.objects.create(tabela=cls.tabela, filial=cls.filial)
+        ItemTabelaPreco.objects.create(
+            tabela=cls.tabela, produto=cls.produto,
+            preco_unitario=Decimal('8.00'), quantidade_minima=0,
+        )
+        cls.cliente = Cliente.objects.create(
+            filial=cls.filial, tipo_pessoa='J', razao_social='Mercado do Cliente',
+            nome_fantasia='Mercado do Cliente', cpf_cnpj='99111222000146',
+            endereco='Rua das Flores', numero='50', bairro='Centro',
+            cidade='Natal', uf='RN', tabela_preco=cls.tabela,
+            limite_credito=Decimal('1000'), ativo=True,
+        )
+        ClienteFilial.objects.create(cliente=cls.cliente, filial=cls.filial)
+        cls.forma = FormaPagamento.objects.create(
+            empresa=cls.empresa, filial=cls.filial, descricao='PIX',
+            tipo=TipoFormaPagamento.PIX,
+        )
+        cls.condicao = CondicaoPagamento.objects.create(
+            empresa=cls.empresa, descricao='À vista', numero_parcelas=1,
+        )
+        cls.conexao = ConexaoWhatsAppVendedor.objects.create(
+            empresa=cls.empresa, filial_padrao=cls.filial, vendedor=cls.vendedor,
+            numero_conectado='5584991112222',
+            status=ConexaoWhatsAppVendedor.Status.CONECTADO,
+        )
+
+    def setUp(self):
+        self.conversa = ConversaWhatsApp.objects.create(
+            filial=self.filial, conexao_vendedor=self.conexao,
+            cliente=self.cliente, cliente_operacional_id=self.cliente.pk,
+            cliente_grupo_replicacao=self.cliente.grupo_replicacao,
+            remote_jid='5584993334444@s.whatsapp.net', telefone='5584993334444',
+            nome_contato='Mercado do Cliente', fora_carteira=False,
+            ultima_mensagem_cliente_em=timezone.now(),
+        )
+        self.client.force_login(self.vendedor)
+        session = self.client.session
+        session['filial_ativa_id'] = self.filial.pk
+        session.save()
+
+    def _payload(self):
+        return {
+            'itens': [{
+                'produto_id': self.produto.pk, 'quantidade': '2',
+                # O servidor recalcula pela tabela; este valor adulterado é ignorado.
+                'valor_unitario': '0.01', 'desconto_percentual': '10',
+            }],
+            'forma_pagamento': self.forma.pk,
+            'condicao_pagamento': self.condicao.pk,
+            'validade': '2027-01-15',
+            'endereco': 'Rua das Flores, 50, Centro, Natal/RN',
+            'observacao': 'Entregar pela manhã.',
+            'valor_frete': '3.00',
+            'desconto_geral_tipo': 'valor',
+            'desconto_geral_valor': '2.00',
+        }
+
+    def _salvar(self):
+        return self.client.post(
+            reverse('whatsapp_agent:crm-orcamento-salvar', args=[self.conversa.pk]),
+            data=json.dumps(self._payload()), content_type='application/json',
+        )
+
+    def test_editor_busca_preco_da_tabela_do_cliente(self):
+        inbox = self.client.get(
+            reverse('whatsapp_agent:crm-inbox-detail', args=[self.conversa.pk]),
+        )
+        editor = self.client.get(
+            reverse('whatsapp_agent:crm-orcamento-editor', args=[self.conversa.pk]),
+        )
+        busca = self.client.get(
+            reverse('whatsapp_agent:crm-orcamento-produtos', args=[self.conversa.pk]),
+            {'q': 'acerola'},
+        )
+
+        self.assertContains(inbox, 'Orçamento')
+        self.assertEqual(editor.status_code, 200)
+        self.assertEqual(editor.json()['cliente']['nome'], 'Mercado do Cliente')
+        self.assertEqual(busca.json()['produtos'][0]['preco'], '8.0000')
+
+    def test_salva_itens_descontos_entrega_e_pagamento(self):
+        resposta = self._salvar()
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        orcamento = OrcamentoWhatsApp.objects.select_related('pedido').get()
+        pedido = orcamento.pedido
+        self.assertEqual(pedido.tipo, PedidoVenda.Tipo.ORCAMENTO)
+        self.assertEqual(pedido.origem, PedidoVenda.Origem.WHATSAPP)
+        self.assertEqual(pedido.valor_produtos, Decimal('16.00'))
+        self.assertEqual(pedido.valor_desconto, Decimal('3.60'))
+        self.assertEqual(pedido.valor_total, Decimal('15.40'))
+        self.assertEqual(pedido.forma_pagamento, self.forma)
+        self.assertEqual(pedido.endereco_entrega_avulso['descricao'], 'Rua das Flores, 50, Centro, Natal/RN')
+
+    @patch('apps.whatsapp_agent.views.TenantPublicLinkService.register')
+    @patch('apps.whatsapp_agent.views.EvolutionClient.enviar_texto')
+    def test_envio_humano_manda_link_e_cliente_aprova_pedido(self, enviar, registrar):
+        enviar.return_value = {'key': {'id': 'orcamento-enviado-1'}}
+        self._salvar()
+        orcamento = OrcamentoWhatsApp.objects.get()
+
+        resposta = self.client.post(reverse(
+            'whatsapp_agent:crm-orcamento-enviar',
+            args=[self.conversa.pk, orcamento.pk],
+        ))
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        registrar.assert_called_once()
+        texto = enviar.call_args.args[1]
+        self.assertIn('/orcamento/', texto)
+        self.assertIn('Polpa de acerola', texto)
+        self.assertTrue(MensagemWhatsApp.objects.filter(origem='crm').exists())
+        orcamento.refresh_from_db()
+        self.assertEqual(orcamento.status, OrcamentoWhatsApp.Status.ENVIADO)
+
+        aprovacao = self.client.post(
+            reverse('orcamento_publico:detalhe', args=[orcamento.token_publico]),
+            {'acao': 'aprovar'},
+        )
+        self.assertEqual(aprovacao.status_code, 200)
+        orcamento.refresh_from_db()
+        orcamento.pedido.refresh_from_db()
+        self.assertEqual(orcamento.status, OrcamentoWhatsApp.Status.APROVADO)
+        self.assertEqual(orcamento.pedido.tipo, PedidoVenda.Tipo.PEDIDO)
+        self.assertEqual(orcamento.pedido.status, PedidoVenda.Status.APROVADO)
+
+    def test_cliente_recusa_e_motivo_fica_registrado(self):
+        self._salvar()
+        orcamento = OrcamentoWhatsApp.objects.get()
+        orcamento.status = OrcamentoWhatsApp.Status.ENVIADO
+        orcamento.save(update_fields=['status'])
+        orcamento.pedido.status = PedidoVenda.Status.AGUARDANDO_APROVACAO
+        orcamento.pedido.save(update_fields=['status'])
+
+        resposta = self.client.post(
+            reverse('orcamento_publico:detalhe', args=[orcamento.token_publico]),
+            {'acao': 'recusar', 'motivo': 'Preciso de outro prazo de pagamento.'},
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        orcamento.refresh_from_db()
+        orcamento.pedido.refresh_from_db()
+        self.assertEqual(orcamento.status, OrcamentoWhatsApp.Status.RECUSADO)
+        self.assertIn('outro prazo', orcamento.motivo_recusa)
+        self.assertEqual(orcamento.pedido.status, PedidoVenda.Status.CANCELADO)
+
+    def test_orcamento_enviado_pode_ser_editado_e_volta_a_rascunho(self):
+        self._salvar()
+        orcamento = OrcamentoWhatsApp.objects.get()
+        orcamento.status = OrcamentoWhatsApp.Status.ENVIADO
+        orcamento.save(update_fields=['status'])
+        orcamento.pedido.status = PedidoVenda.Status.AGUARDANDO_APROVACAO
+        orcamento.pedido.save(update_fields=['status'])
+        payload = self._payload()
+        payload['orcamento_id'] = orcamento.pk
+        payload['observacao'] = 'Versão revisada pelo vendedor.'
+
+        resposta = self.client.post(
+            reverse('whatsapp_agent:crm-orcamento-salvar', args=[self.conversa.pk]),
+            data=json.dumps(payload), content_type='application/json',
+        )
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        orcamento.refresh_from_db()
+        orcamento.pedido.refresh_from_db()
+        self.assertEqual(orcamento.status, OrcamentoWhatsApp.Status.RASCUNHO)
+        self.assertEqual(orcamento.pedido.status, PedidoVenda.Status.RASCUNHO)
+        self.assertEqual(orcamento.pedido.observacao, 'Versão revisada pelo vendedor.')
+
+    @patch('apps.whatsapp_agent.gateway.MetaCloudClient.enviar_template')
+    @patch('apps.whatsapp_agent.views.EvolutionClient.enviar_texto')
+    def test_envio_do_orcamento_bloqueia_apos_24h_sem_template(self, enviar, template):
+        self._salvar()
+        orcamento = OrcamentoWhatsApp.objects.get()
+        self.conversa.ultima_mensagem_cliente_em = timezone.now() - timedelta(hours=25)
+        self.conversa.save(update_fields=['ultima_mensagem_cliente_em'])
+
+        resposta = self.client.post(reverse(
+            'whatsapp_agent:crm-orcamento-enviar',
+            args=[self.conversa.pk, orcamento.pk],
+        ))
+
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn('24 horas', resposta.json()['erro'])
+        enviar.assert_not_called()
+        template.assert_not_called()

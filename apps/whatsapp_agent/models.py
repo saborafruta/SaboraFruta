@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import secrets
 import uuid
 from datetime import time, timedelta
 from decimal import Decimal
@@ -819,6 +820,60 @@ class MensagemWhatsApp(TimestampedModel):
                 name='whatsapp_mensagem_externa_unica',
             ),
         ]
+
+
+def gerar_token_orcamento_whatsapp():
+    return secrets.token_urlsafe(32)
+
+
+class OrcamentoWhatsApp(TimestampedModel):
+    """Proposta criada dentro da conversa e vinculada ao PedidoVenda operacional."""
+
+    class Status(models.TextChoices):
+        RASCUNHO = 'rascunho', 'Rascunho'
+        ENVIADO = 'enviado', 'Aguardando cliente'
+        APROVADO = 'aprovado', 'Aprovado'
+        RECUSADO = 'recusado', 'Não aprovado'
+
+    class TipoDesconto(models.TextChoices):
+        VALOR = 'valor', 'Valor (R$)'
+        PERCENTUAL = 'percentual', 'Percentual (%)'
+
+    conversa = models.ForeignKey(
+        ConversaWhatsApp, on_delete=models.PROTECT, related_name='orcamentos',
+    )
+    pedido = models.OneToOneField(
+        'vendas.PedidoVenda', on_delete=models.PROTECT,
+        related_name='orcamento_whatsapp',
+    )
+    token_publico = models.CharField(
+        max_length=64, unique=True, default=gerar_token_orcamento_whatsapp,
+        editable=False,
+    )
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.RASCUNHO,
+        db_index=True,
+    )
+    desconto_geral_tipo = models.CharField(
+        max_length=12, choices=TipoDesconto.choices, default=TipoDesconto.VALOR,
+    )
+    desconto_geral_valor = models.DecimalField(
+        max_digits=14, decimal_places=2, default=0,
+    )
+    enviado_em = models.DateTimeField(null=True, blank=True)
+    respondido_em = models.DateTimeField(null=True, blank=True)
+    motivo_recusa = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'whatsapp_orcamentos'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['conversa', '-created_at']),
+            models.Index(fields=['token_publico']),
+        ]
+
+    def __str__(self):
+        return f'Orçamento {self.pedido.numero_pedido} — {self.get_status_display()}'
 
 
 class ConsentimentoCobrancaWhatsApp(TimestampedModel):

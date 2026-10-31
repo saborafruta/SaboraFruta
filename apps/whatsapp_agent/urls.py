@@ -42,6 +42,22 @@ urlpatterns = [
         'crm/<int:pk>/enviar/', views.CRMWhatsAppEnviarView.as_view(),
         name='crm-enviar',
     ),
+    path(
+        'crm/<int:pk>/orcamento/', views.CRMOrcamentoEditorView.as_view(),
+        name='crm-orcamento-editor',
+    ),
+    path(
+        'crm/<int:pk>/orcamento/produtos/', views.CRMOrcamentoProdutosView.as_view(),
+        name='crm-orcamento-produtos',
+    ),
+    path(
+        'crm/<int:pk>/orcamento/salvar/', views.CRMOrcamentoSalvarView.as_view(),
+        name='crm-orcamento-salvar',
+    ),
+    path(
+        'crm/<int:pk>/orcamento/<int:orcamento_pk>/enviar/',
+        views.CRMOrcamentoEnviarView.as_view(), name='crm-orcamento-enviar',
+    ),
     path('conversas/', views.ConversaListView.as_view(), name='conversa-list'),
     path('conversas/<int:pk>/', views.ConversaDetailView.as_view(), name='conversa-detail'),
     path('conversas/<int:pk>/retomar/', views.RetomarAgenteView.as_view(), name='retomar-agente'),

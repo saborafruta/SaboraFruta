@@ -33,6 +33,7 @@ urlpatterns = [
     path('catalogo/', include('apps.catalogo.urls', namespace='catalogo')),
     path('pedir/', include('apps.catalogo.urls_publico', namespace='catalogo_publico')),
     path('whatsapp/', include('apps.whatsapp_agent.urls', namespace='whatsapp_agent')),
+    path('orcamento/', include('apps.whatsapp_agent.urls_publico', namespace='orcamento_publico')),
     path('estoque/', include('apps.estoque.urls', namespace='estoque')),
     path('producao/', include('apps.producao.urls', namespace='producao')),
     path('vendas/', include('apps.vendas.urls', namespace='vendas')),
