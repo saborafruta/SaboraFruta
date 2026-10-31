@@ -3,6 +3,7 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.db.models.query import QuerySet
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -439,6 +440,29 @@ class OrcamentoCRMTests(TestCase):
         self.assertEqual(pedido.tipo, PedidoVenda.Tipo.PEDIDO)
         self.assertEqual(pedido.status, PedidoVenda.Status.APROVADO)
         self.assertEqual(pedido.origem, PedidoVenda.Origem.WHATSAPP)
+
+    def test_aprovacao_bloqueia_somente_pedido_sem_travar_joins_opcionais(self):
+        self._salvar()
+        orcamento = OrcamentoWhatsApp.objects.get()
+        orcamento.status = OrcamentoWhatsApp.Status.ENVIADO
+        orcamento.save(update_fields=['status'])
+        pedido = self._pedido(orcamento)
+        pedido.status = PedidoVenda.Status.AGUARDANDO_APROVACAO
+        pedido.save(update_fields=['status'])
+        original_select_for_update = QuerySet.select_for_update
+        bloqueios = []
+
+        def registrar_bloqueio(queryset, *args, **kwargs):
+            bloqueios.append(kwargs.copy())
+            return original_select_for_update(queryset, *args, **kwargs)
+
+        with patch.object(QuerySet, 'select_for_update', new=registrar_bloqueio):
+            resposta = self._resposta_publica(
+                orcamento, {'acao': 'aprovar'},
+            )
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        self.assertIn({'of': ('self',)}, bloqueios)
 
     def test_resposta_publica_recusa_token_assinado_invalido(self):
         self._salvar()

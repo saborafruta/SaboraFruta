@@ -81,7 +81,10 @@ def pedido_do_orcamento(orcamento, *, bloquear=False):
         'filial__empresa', 'cliente', 'forma_pagamento', 'condicao_pagamento',
     ).prefetch_related('itens__produto__unidade_medida')
     if bloquear:
-        queryset = queryset.select_for_update()
+        # O pedido possui relacionamentos opcionais carregados com LEFT JOIN.
+        # No PostgreSQL, um FOR UPDATE sem ``of`` tenta bloquear também esses
+        # relacionamentos e falha por eles estarem no lado anulável da junção.
+        queryset = queryset.select_for_update(of=('self',))
     return queryset.get(pk=orcamento.pedido_operacional_id)
 
 
