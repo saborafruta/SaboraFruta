@@ -11,9 +11,9 @@
       <p>{% if pode_supervisionar %}Visão da empresa: acompanhe e responda por qualquer vendedor.{% else %}Seu número comercial e os clientes da sua carteira.{% endif %}</p>
     </div>
     <div class="wa-actions">
-      <button class="wa-btn primary" type="button" id="open-new-chat">+ Nova conversa</button>
-      {% if pode_supervisionar %}<a class="wa-btn secondary" href="{% url 'crm:carteiras' %}">Gerenciar carteiras</a>{% endif %}
-      <a class="wa-btn secondary" href="{% url 'crm:funil' %}">Funil comercial</a>
+      <button class="wa-btn primary crm-wa-page-action" type="button" id="open-new-chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span>Nova conversa</span></button>
+      {% if pode_supervisionar %}<a class="wa-btn secondary crm-wa-page-action" href="{% url 'crm:carteiras' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>Carteiras</span></a>{% endif %}
+      <a class="wa-btn secondary crm-wa-page-action" href="{% url 'crm:funil' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16l-6 7v6l-4 3v-9z"></path></svg><span>Funil</span></a>
     </div>
   </header>
 
@@ -39,11 +39,14 @@
     <main class="crm-wa-chat">
       {% if conversa_selecionada %}
         <div class="crm-wa-chat-head">
+          <a class="crm-wa-back" href="{% url 'whatsapp_agent:crm-inbox' %}" aria-label="Voltar para conversas"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></a>
           <span class="crm-wa-avatar">{{ conversa_selecionada.nome_contato|default:conversa_selecionada.telefone|first|upper }}</span>
-          <div><strong>{{ conversa_selecionada.nome_contato|default:conversa_selecionada.telefone }}</strong><small>{{ conversa_selecionada.telefone }} · vendedor {{ conversa_selecionada.conexao_vendedor.vendedor.nome }}</small></div>
-          <button class="crm-wa-quote-trigger" type="button" id="open-quote">Orçamento</button>
-          {% if conversa_selecionada.fora_carteira %}<span class="crm-wa-alert">Fora da carteira</span>{% endif %}
-          {% if conversa_selecionada.janela_atendimento_ativa %}<span class="crm-wa-window open">Cliente ativo nas últimas 24h</span>{% else %}<span class="crm-wa-window closed">Envio somente manual</span>{% endif %}
+          <div class="crm-wa-chat-person"><strong>{{ conversa_selecionada.nome_contato|default:conversa_selecionada.telefone }}</strong><small>{{ conversa_selecionada.telefone }} · vendedor {{ conversa_selecionada.conexao_vendedor.vendedor.nome }}</small></div>
+          <div class="crm-wa-chat-actions">
+            <button class="crm-wa-quote-trigger" type="button" id="open-quote"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"></path><path d="M9 7h6M9 11h6M9 15h4"></path></svg><span>Orçamento</span></button>
+            {% if conversa_selecionada.fora_carteira %}<span class="crm-wa-alert">Fora da carteira</span>{% endif %}
+            {% if conversa_selecionada.janela_atendimento_ativa %}<span class="crm-wa-window open">Ativo há menos de 24h</span>{% else %}<span class="crm-wa-window closed">Envio somente manual</span>{% endif %}
+          </div>
         </div>
         <div class="crm-wa-messages" id="crm-message-list" aria-live="polite">
           {% for mensagem in conversa_selecionada.mensagens.all %}
@@ -77,7 +80,7 @@
             </div>
           </div>
           <textarea name="mensagem" maxlength="4096" rows="1" enterkeyhint="send" placeholder="Digite uma mensagem humana"></textarea>
-          <button type="submit" aria-label="Enviar mensagem">Enviar</button>
+          <button type="submit" aria-label="Enviar mensagem" title="Enviar mensagem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 18-8-8 18-2.5-7.5z"></path><path d="m10.5 13.5 5-5"></path></svg><span class="sr-only">Enviar</span></button>
           <div class="crm-wa-file-draft" id="crm-file-draft" hidden>
             <img id="crm-file-preview" alt="Pré-visualização do anexo" hidden>
             <span><strong id="crm-file-name"></strong><small id="crm-file-size"></small></span>
@@ -179,6 +182,12 @@
   .crm-wa-text{overflow-wrap:anywhere;word-break:break-word}.crm-wa-text a{color:#53bdeb;text-decoration:underline;text-underline-offset:2px}.crm-wa-text code{padding:.06rem .22rem;border-radius:.22rem;background:rgba(0,0,0,.22);font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.crm-wa-media{margin:-.2rem -.35rem .4rem}.crm-wa-media img,.crm-wa-media video{display:block;width:min(360px,100%);max-height:360px;border-radius:.45rem;object-fit:cover;background:#0b141a}.crm-wa-media audio{display:block;width:min(330px,72vw);height:42px}.crm-wa-document{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:.65rem;min-width:min(340px,72vw);padding:.65rem;border-radius:.5rem;background:rgba(11,20,26,.38);color:inherit;text-decoration:none}.crm-wa-document>span:first-child{font-size:1.6rem}.crm-wa-document>span:nth-child(2){display:grid;min-width:0}.crm-wa-document strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.crm-wa-document small{color:#aebac1}.crm-wa-document em{color:#53bdeb;font-size:.7rem;font-style:normal;font-weight:800}.crm-wa-media-missing{padding:.55rem;border:1px dashed #6b7280;border-radius:.45rem;color:#aebac1;font-size:.74rem}.crm-wa-message-meta{display:flex;align-items:center;justify-content:flex-end;gap:.25rem;flex-wrap:wrap}.crm-wa-check{font-size:.78rem;font-weight:900;letter-spacing:-.18em;padding-right:.18em;color:#aebac1}.crm-wa-check.read{color:#53bdeb}.crm-wa-check.error{display:inline-grid;place-items:center;width:1rem;height:1rem;padding:0;border-radius:50%;background:#ef4444;color:#fff;letter-spacing:0}.crm-wa-bubble.pending{opacity:.72}.crm-wa-bubble.error{outline:1px solid #ef4444}.crm-wa-send-status{padding:.35rem 1rem;background:#202c33;color:#fca5a5;font-size:.72rem;text-align:center}.crm-wa-compose button:disabled{opacity:.58;cursor:wait}.crm-product-results[hidden]{display:none}.crm-product-results{overscroll-behavior:contain}
   .crm-wa-tool,.crm-wa-emoji-picker button,.crm-wa-file-draft button{touch-action:manipulation;user-select:none;-webkit-user-select:none;transition:transform 120ms cubic-bezier(.23,1,.32,1)}.crm-wa-tool:active,.crm-wa-emoji-picker button:active,.crm-wa-file-draft button:active{transform:scale(.97)}
   body.tema-claro .crm-wa-send-status{background:#f0f2f5;color:#b91c1c}
+  .crm-wa-page{max-width:1580px}.crm-wa-header{margin-bottom:.65rem}.crm-wa-header h1{font-size:1.3rem}.crm-wa-header .wa-actions{gap:.45rem}.crm-wa-page-action{display:inline-flex;align-items:center;justify-content:center;gap:.42rem;min-height:38px;padding:.48rem .72rem;font-size:.78rem}.crm-wa-page-action svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.crm-wa-app{grid-template-columns:320px minmax(0,1fr);height:calc(100vh - 172px);height:calc(100dvh - 172px);min-height:560px}.crm-wa-sidebar,.crm-wa-chat{min-height:0;overflow:hidden}.crm-wa-contacts,.crm-wa-messages{min-height:0}.crm-wa-chat-head{flex:0 0 auto;gap:.6rem;min-height:58px;padding:.55rem .8rem}.crm-wa-chat-person{flex:1}.crm-wa-chat-actions{display:flex!important;align-items:center;justify-content:flex-end;gap:.4rem}.crm-wa-back{display:none;place-items:center;flex:0 0 auto;width:38px;height:38px;border-radius:50%;color:#aebac1;touch-action:manipulation}.crm-wa-back svg,.crm-wa-quote-trigger svg,.crm-wa-compose>button[type=submit] svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.crm-wa-quote-trigger{display:inline-flex;align-items:center;justify-content:center;gap:.38rem;margin-left:0;min-height:36px;padding:.4rem .62rem;border-radius:999px;font-size:.72rem}.crm-wa-alert,.crm-wa-window{padding:.23rem .48rem;font-size:.61rem}.crm-wa-messages{flex:1 1 0;padding:1rem clamp(1rem,5vw,5rem)}.crm-wa-compose{z-index:2;flex:0 0 auto;align-items:center;gap:.4rem;padding:.55rem max(.7rem,env(safe-area-inset-right)) max(.55rem,env(safe-area-inset-bottom)) max(.7rem,env(safe-area-inset-left));box-shadow:0 -1px 0 rgba(255,255,255,.05)}.crm-wa-compose textarea{min-height:42px;max-height:120px;resize:none;padding:.62rem .85rem;line-height:1.35}.crm-wa-compose>button[type=submit]{display:grid;place-items:center;flex:0 0 auto;width:42px;height:42px;min-height:42px;padding:0;border-radius:50%;transition:transform 120ms cubic-bezier(.23,1,.32,1),background-color 160ms ease}.crm-wa-compose>button[type=submit]:active{transform:scale(.96)}.crm-wa-human-note,.crm-wa-send-status{flex:0 0 auto}
+  @media(hover:hover) and (pointer:fine){.crm-wa-back:hover{background:#2a3942;color:#fff}.crm-wa-compose>button[type=submit]:hover{background:#06b394}}
+  @media(max-width:1080px){.crm-wa-app{grid-template-columns:290px minmax(0,1fr)}.crm-wa-window{display:none}}
+  @media(max-width:800px){.crm-wa-header{gap:.65rem}.crm-wa-header .wa-actions{display:flex;flex-wrap:wrap;width:auto}.crm-wa-header .wa-actions .wa-btn{width:auto;min-height:38px}.crm-wa-app[data-selected-conversation]{height:calc(100vh - 190px);height:calc(100dvh - 190px);min-height:520px}.crm-wa-app[data-selected-conversation] .crm-wa-sidebar{display:none}.crm-wa-app[data-selected-conversation] .crm-wa-chat{min-height:0}.crm-wa-back{display:grid}.crm-wa-bubble{max-width:84%}}
+  @media(max-width:520px){.crm-wa-page-action{padding:.45rem .58rem}.crm-wa-chat-head{align-items:center;flex-wrap:nowrap;gap:.42rem;padding:.45rem .5rem}.crm-wa-chat-head>.crm-wa-avatar{width:38px;height:38px;flex-basis:38px}.crm-wa-chat-person strong,.crm-wa-chat-person small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.crm-wa-chat-actions .crm-wa-alert,.crm-wa-chat-actions .crm-wa-window{display:none}.crm-wa-quote-trigger{order:initial;width:38px;min-height:38px;margin:0;padding:0}.crm-wa-quote-trigger span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.crm-wa-messages{padding:.7rem}.crm-wa-compose{gap:.15rem;padding-inline:.3rem}.crm-wa-compose-tools{gap:0}.crm-wa-tool{width:36px;height:40px}.crm-wa-compose>button[type=submit]{width:40px;height:40px;min-height:40px}.crm-wa-compose textarea{min-width:0;padding-inline:.65rem}}
+  @media(prefers-reduced-motion:reduce){.crm-wa-page-action,.crm-wa-back,.crm-wa-compose>button[type=submit]{transition:none}}
 </style>
 <script>
 (()=>{

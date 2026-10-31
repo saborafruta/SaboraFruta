@@ -561,6 +561,16 @@ class ConexaoWhatsAppVendedorTests(TestCase):
         self.assertContains(pagina, 'id="crm-file-input"')
         self.assertContains(pagina, 'crm-wa-media-slot')
         self.assertContains(pagina, 'schedule(delay=document.hidden?5000:700)')
+        self.assertContains(pagina, 'class="crm-wa-compose"')
+        self.assertContains(pagina, 'class="wa-btn primary crm-wa-page-action"')
+        self.assertContains(
+            pagina,
+            '.crm-wa-sidebar,.crm-wa-chat{min-height:0;overflow:hidden}',
+        )
+        self.assertContains(
+            pagina,
+            '.crm-wa-app[data-selected-conversation] .crm-wa-sidebar{display:none}',
+        )
 
     def test_sincronizacao_incremental_entrega_novas_mensagens(self):
         conexao = self._conexao_qr()
