@@ -835,6 +835,31 @@ class MensagemWhatsApp(TimestampedModel):
         ]
 
 
+class LeituraConversaWhatsApp(TimestampedModel):
+    """Última mensagem visualizada por usuário em cada conversa do CRM."""
+
+    conversa = models.ForeignKey(
+        ConversaWhatsApp, on_delete=models.CASCADE, related_name='leituras_crm',
+    )
+    usuario_email = models.EmailField(db_index=True)
+    ultima_mensagem_id = models.PositiveBigIntegerField(default=0)
+
+    class Meta:
+        db_table = 'whatsapp_leituras_conversa'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['conversa', 'usuario_email'],
+                name='whatsapp_leitura_conversa_usuario_unica',
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=['usuario_email', 'conversa'],
+                name='whatsapp_le_usuario_0f3a8d_idx',
+            ),
+        ]
+
+
 def gerar_token_orcamento_whatsapp():
     return secrets.token_urlsafe(32)
 

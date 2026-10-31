@@ -10,7 +10,8 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.db.models import Count, OuterRef, Q, Subquery, Sum
+from django.db.models import BigIntegerField, Count, F, Max, OuterRef, Q, Subquery, Sum, Value
+from django.db.models.functions import Coalesce
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -44,7 +45,7 @@ from .gateway import (
 )
 from .models import (
     ConexaoWhatsAppVendedor, ConfiguracaoWhatsApp, ConversaWhatsApp, MensagemWhatsApp,
-    MenuWhatsApp, OpcaoMenuWhatsApp, OrcamentoWhatsApp,
+    LeituraConversaWhatsApp, MenuWhatsApp, OpcaoMenuWhatsApp, OrcamentoWhatsApp,
     UsoIAWhatsApp,
 )
 from .orcamento_service import (
@@ -204,6 +205,57 @@ def _preview_mensagem_crm(mensagem):
     )
 
 
+def _email_leitura_crm(usuario):
+    return (getattr(usuario, 'email', '') or '').strip().lower()
+
+
+def _marcar_conversa_lida(conversa, usuario, *, ate=None):
+    email = _email_leitura_crm(usuario)
+    if not email:
+        return
+    mensagens = conversa.mensagens.all()
+    if ate is not None:
+        mensagens = mensagens.filter(created_at__lte=ate)
+    ultima_mensagem_id = mensagens.aggregate(maior=Max('pk'))['maior'] or 0
+    LeituraConversaWhatsApp.objects.update_or_create(
+        conversa=conversa,
+        usuario_email=email,
+        defaults={'ultima_mensagem_id': ultima_mensagem_id},
+    )
+
+
+def _conversas_crm_com_resumo(queryset, usuario):
+    ultima_mensagem = MensagemWhatsApp.objects.filter(
+        conversa_id=OuterRef('pk'),
+    ).order_by('-created_at')
+    ultima_leitura = LeituraConversaWhatsApp.objects.filter(
+        conversa_id=OuterRef('pk'),
+        usuario_email=_email_leitura_crm(usuario),
+    ).values('ultima_mensagem_id')[:1]
+    return queryset.annotate(
+        ultima_mensagem_texto=Subquery(ultima_mensagem.values('texto')[:1]),
+        ultima_mensagem_direcao=Subquery(ultima_mensagem.values('direcao')[:1]),
+        ultima_mensagem_tipo=Subquery(ultima_mensagem.values('tipo')[:1]),
+        ultima_mensagem_arquivo_nome=Subquery(
+            ultima_mensagem.values('arquivo_nome_original')[:1],
+        ),
+        ultima_mensagem_lida_id=Coalesce(
+            Subquery(ultima_leitura, output_field=BigIntegerField()),
+            Value(0),
+        ),
+    ).annotate(
+        nao_lidas=Count(
+            'mensagens',
+            filter=Q(
+                mensagens__direcao=MensagemWhatsApp.Direcao.ENTRADA,
+                mensagens__apagada_em__isnull=True,
+                mensagens__pk__gt=F('ultima_mensagem_lida_id'),
+            ),
+            distinct=True,
+        ),
+    )
+
+
 def _serializar_mensagem_crm(mensagem):
     criada_em = timezone.localtime(mensagem.created_at)
     partes_rodape = []
@@ -248,6 +300,7 @@ def _serializar_conversa_crm(conversa, *, pode_supervisionar):
         'inicial': (conversa.nome_contato or conversa.telefone or '?')[:1].upper(),
         'ultima_mensagem': _preview_mensagem_crm(conversa),
         'ultima_direcao': conversa.ultima_mensagem_direcao or '',
+        'nao_lidas': conversa.nao_lidas or 0,
         'ultima_hora': timezone.localtime(ultima_em).strftime('%H:%M'),
         'ordem': ultima_em.timestamp(),
         'vendedor': (
@@ -743,19 +796,12 @@ class CRMWhatsAppInboxView(PermissaoRequiredMixin, View):
     permissao_acao = 'ver'
 
     def get(self, request, pk=None):
-        ultima_mensagem = MensagemWhatsApp.objects.filter(
-            conversa_id=OuterRef('pk'),
-        ).order_by('-created_at')
         conversas = list(
-            _conversas_crm_permitidas(request)
-            .select_related('conexao_vendedor', 'conexao_vendedor__vendedor')
-            .annotate(
-                ultima_mensagem_texto=Subquery(ultima_mensagem.values('texto')[:1]),
-                ultima_mensagem_direcao=Subquery(ultima_mensagem.values('direcao')[:1]),
-                ultima_mensagem_tipo=Subquery(ultima_mensagem.values('tipo')[:1]),
-                ultima_mensagem_arquivo_nome=Subquery(
-                    ultima_mensagem.values('arquivo_nome_original')[:1],
+            _conversas_crm_com_resumo(
+                _conversas_crm_permitidas(request).select_related(
+                    'conexao_vendedor', 'conexao_vendedor__vendedor',
                 ),
+                request.user,
             )
             .order_by('-ultima_mensagem_em', '-created_at')[:200]
         )
@@ -775,6 +821,12 @@ class CRMWhatsAppInboxView(PermissaoRequiredMixin, View):
                 .prefetch_related('mensagens')
                 .get(pk=selecionada.pk)
             )
+        if selecionada:
+            _marcar_conversa_lida(selecionada, request.user)
+            for conversa in conversas:
+                if conversa.pk == selecionada.pk:
+                    conversa.nao_lidas = 0
+                    break
         return render(request, 'whatsapp_agent/crm_inbox.html', {
             'conversas': conversas,
             'conversa_selecionada': selecionada,
@@ -791,6 +843,7 @@ class CRMWhatsAppAtualizacoesView(PermissaoRequiredMixin, View):
     def get(self, request, pk):
         conversa = get_object_or_404(_conversas_crm_permitidas(request), pk=pk)
         limite = timezone.now()
+        _marcar_conversa_lida(conversa, request.user, ate=limite)
         desde = parse_datetime((request.GET.get('desde') or '').strip())
         if desde and timezone.is_naive(desde):
             desde = timezone.make_aware(desde)
@@ -803,19 +856,12 @@ class CRMWhatsAppAtualizacoesView(PermissaoRequiredMixin, View):
             conversas = conversas.filter(updated_at__gt=desde)
 
         mensagens = list(mensagens.order_by('-updated_at')[:500])
-        ultima_mensagem = MensagemWhatsApp.objects.filter(
-            conversa_id=OuterRef('pk'),
-        ).order_by('-created_at')
         conversas = list(
-            conversas.select_related(
-                'conexao_vendedor', 'conexao_vendedor__vendedor',
-            ).annotate(
-                ultima_mensagem_texto=Subquery(ultima_mensagem.values('texto')[:1]),
-                ultima_mensagem_direcao=Subquery(ultima_mensagem.values('direcao')[:1]),
-                ultima_mensagem_tipo=Subquery(ultima_mensagem.values('tipo')[:1]),
-                ultima_mensagem_arquivo_nome=Subquery(
-                    ultima_mensagem.values('arquivo_nome_original')[:1],
+            _conversas_crm_com_resumo(
+                conversas.select_related(
+                    'conexao_vendedor', 'conexao_vendedor__vendedor',
                 ),
+                request.user,
             ).order_by('-ultima_mensagem_em', '-created_at')[:200]
         )
         return JsonResponse({

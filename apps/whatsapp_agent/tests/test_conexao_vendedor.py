@@ -559,6 +559,8 @@ class ConexaoWhatsAppVendedorTests(TestCase):
         self.assertContains(pagina, 'id="crm-image-button"')
         self.assertContains(pagina, 'id="crm-attach-button"')
         self.assertContains(pagina, 'id="crm-file-input"')
+        self.assertContains(pagina, 'crm-wa-media-slot')
+        self.assertContains(pagina, 'schedule(delay=document.hidden?5000:700)')
 
     def test_sincronizacao_incremental_entrega_novas_mensagens(self):
         conexao = self._conexao_qr()
@@ -598,6 +600,95 @@ class ConexaoWhatsAppVendedorTests(TestCase):
             ['Chegou agora'],
         )
         self.assertEqual(incremental.json()['total_conversas'], 1)
+
+    def test_contador_de_nao_lidas_e_individual_por_usuario(self):
+        conexao = self._conexao_qr()
+        conversa_aberta = ConversaWhatsApp.objects.create(
+            conexao_vendedor=conexao, filial=self.filial,
+            remote_jid='5584999991717@s.whatsapp.net', telefone='5584999991717',
+            nome_contato='Cliente aberto', fora_carteira=False,
+        )
+        conversa_pendente = ConversaWhatsApp.objects.create(
+            conexao_vendedor=conexao, filial=self.filial,
+            remote_jid='5584999991818@s.whatsapp.net', telefone='5584999991818',
+            nome_contato='Cliente pendente', fora_carteira=False,
+        )
+        for texto in ('Mensagem um', 'Mensagem dois'):
+            mensagem = MensagemWhatsApp.objects.create(
+                conversa=conversa_pendente, direcao='entrada', origem='cliente',
+                texto=texto, texto_original=texto,
+            )
+            conversa_pendente.ultima_mensagem_em = mensagem.created_at
+        conversa_pendente.save(update_fields=['ultima_mensagem_em', 'updated_at'])
+
+        self.client.force_login(self.vendedor)
+        vendedor = self.client.get(
+            reverse('whatsapp_agent:crm-atualizacoes', args=[conversa_aberta.pk]),
+        ).json()
+        resumo_vendedor = {
+            item['id']: item['nao_lidas'] for item in vendedor['conversas']
+        }
+
+        self.client.force_login(self.gestor)
+        gestor = self.client.get(
+            reverse('whatsapp_agent:crm-atualizacoes', args=[conversa_aberta.pk]),
+        ).json()
+        resumo_gestor = {
+            item['id']: item['nao_lidas'] for item in gestor['conversas']
+        }
+
+        self.assertEqual(resumo_vendedor[conversa_aberta.pk], 0)
+        self.assertEqual(resumo_vendedor[conversa_pendente.pk], 2)
+        self.assertEqual(resumo_gestor[conversa_pendente.pk], 2)
+
+        self.client.force_login(self.vendedor)
+        self.client.get(
+            reverse('whatsapp_agent:crm-atualizacoes', args=[conversa_pendente.pk]),
+        )
+        vendedor_depois = self.client.get(
+            reverse('whatsapp_agent:crm-atualizacoes', args=[conversa_aberta.pk]),
+        ).json()
+        self.assertEqual(
+            next(
+                item['nao_lidas'] for item in vendedor_depois['conversas']
+                if item['id'] == conversa_pendente.pk
+            ),
+            0,
+        )
+
+        self.client.force_login(self.gestor)
+        gestor_depois = self.client.get(
+            reverse('whatsapp_agent:crm-atualizacoes', args=[conversa_aberta.pk]),
+        ).json()
+        self.assertEqual(
+            next(
+                item['nao_lidas'] for item in gestor_depois['conversas']
+                if item['id'] == conversa_pendente.pk
+            ),
+            2,
+        )
+
+    def test_nova_mensagem_da_conversa_aberta_nao_fica_nao_lida(self):
+        conexao = self._conexao_qr()
+        conversa = ConversaWhatsApp.objects.create(
+            conexao_vendedor=conexao, filial=self.filial,
+            remote_jid='5584999991919@s.whatsapp.net', telefone='5584999991919',
+            nome_contato='Cliente em leitura', fora_carteira=False,
+        )
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa, direcao='entrada', origem='cliente',
+            texto='Mensagem instantânea', texto_original='Mensagem instantânea',
+        )
+        conversa.ultima_mensagem_em = mensagem.created_at
+        conversa.save(update_fields=['ultima_mensagem_em', 'updated_at'])
+        self.client.force_login(self.vendedor)
+
+        resposta = self.client.get(
+            reverse('whatsapp_agent:crm-atualizacoes', args=[conversa.pk]),
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.json()['conversas'][0]['nao_lidas'], 0)
 
     @patch('apps.whatsapp_agent.gateway.MetaCloudClient.enviar_template')
     @patch('apps.whatsapp_agent.views.EvolutionClient.enviar_texto')
