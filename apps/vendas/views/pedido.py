@@ -335,7 +335,7 @@ class FaturarPedidoView(PermissaoRequiredMixin, View):
             pagamento_confirmado = None
             prazo = None
             referencia = ''
-            if pedido.origem == PedidoVenda.Origem.EXTERNO:
+            if pedido.origem in PedidoVenda.ORIGENS_FORCA_VENDAS:
                 forma = FormaPagamento.objects.filter(
                     pk=request.POST.get('forma_pagamento'),
                     empresa=request.filial_ativa.empresa,

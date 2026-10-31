@@ -8,6 +8,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from apps.core.tenant_context import get_current_database_alias
+from apps.vendas.services.venda_service import VendaService
 
 from .models import OrcamentoWhatsApp
 from .orcamento_service import pedido_do_orcamento
@@ -87,6 +88,7 @@ class OrcamentoPublicoView(View):
                 pedido.save(update_fields=[
                     'tipo', 'status', 'data_aprovacao', 'observacao_interna', 'updated_at',
                 ])
+                VendaService.confirmar_pedido(pedido, pedido.usuario)
                 orcamento.save(update_fields=[
                     'status', 'respondido_em', 'motivo_recusa', 'updated_at',
                 ])

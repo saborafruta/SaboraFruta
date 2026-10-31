@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
@@ -341,6 +342,33 @@ class ForcaVendasTests(TestCase):
         self.assertEqual(resposta.context['vendas']['pedidos'], 1)
         self.assertEqual(resposta.context['vendas']['valor'], Decimal('12.00'))
         self.assertNotContains(resposta, self.usuario.nome)
+
+    def test_pedido_whatsapp_aparece_no_acompanhamento_e_na_separacao(self):
+        pedido = VendaService.criar_pedido(
+            self.filial, self.usuario, self.cliente,
+        )
+        VendaService.adicionar_item(
+            pedido, self.produto, Decimal('2'),
+        )
+        pedido.origem = PedidoVenda.Origem.WHATSAPP
+        pedido.status = PedidoVenda.Status.CONFIRMADO
+        pedido.data_aprovacao = timezone.now()
+        pedido.save(update_fields=[
+            'origem', 'status', 'data_aprovacao', 'updated_at',
+        ])
+
+        acompanhamento = self.client.get(reverse('vendas:pedido-kanban'))
+        fila = self.client.get(reverse('vendas:pedido-separacao'))
+
+        self.assertEqual(acompanhamento.status_code, 200)
+        self.assertContains(acompanhamento, pedido.numero_pedido)
+        coluna = next(
+            item for item in acompanhamento.context['colunas']
+            if item['chave'] == 'aguardando_separacao'
+        )
+        self.assertIn(pedido, coluna['pedidos'])
+        self.assertEqual(fila.status_code, 200)
+        self.assertContains(fila, pedido.numero_pedido)
 
     def test_busca_produto_exibe_preco_da_tabela_do_cliente(self):
         self.produto.foto_url = 'https://cdn.example/produtos/polpa.jpg'

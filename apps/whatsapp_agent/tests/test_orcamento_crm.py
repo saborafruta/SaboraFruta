@@ -393,7 +393,10 @@ class OrcamentoCRMTests(TestCase):
         pedido = self._pedido(orcamento)
         self.assertEqual(orcamento.status, OrcamentoWhatsApp.Status.APROVADO)
         self.assertEqual(pedido.tipo, PedidoVenda.Tipo.PEDIDO)
-        self.assertEqual(pedido.status, PedidoVenda.Status.APROVADO)
+        self.assertEqual(pedido.status, PedidoVenda.Status.CONFIRMADO)
+        self.assertEqual(
+            pedido.itens.get().quantidade_reservada, Decimal('2.000'),
+        )
 
     def test_cliente_recusa_e_motivo_fica_registrado(self):
         self._salvar()
@@ -438,7 +441,7 @@ class OrcamentoCRMTests(TestCase):
         pedido.refresh_from_db()
         self.assertEqual(orcamento.status, OrcamentoWhatsApp.Status.APROVADO)
         self.assertEqual(pedido.tipo, PedidoVenda.Tipo.PEDIDO)
-        self.assertEqual(pedido.status, PedidoVenda.Status.APROVADO)
+        self.assertEqual(pedido.status, PedidoVenda.Status.CONFIRMADO)
         self.assertEqual(pedido.origem, PedidoVenda.Origem.WHATSAPP)
 
     def test_aprovacao_bloqueia_somente_pedido_sem_travar_joins_opcionais(self):

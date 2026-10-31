@@ -938,7 +938,7 @@ class PedidosMobileView(MobileTenantAPIView):
     def get(self, request):
         qs = (
             PedidoVenda.objects.for_filial(request.filial_ativa)
-            .filter(origem=PedidoVenda.Origem.EXTERNO)
+            .filter(origem__in=PedidoVenda.ORIGENS_FORCA_VENDAS)
             .select_related('cliente', 'usuario')
             .prefetch_related('itens__produto__unidade_medida')
         )
@@ -1071,7 +1071,7 @@ class SeparacoesMobileView(MobileTenantAPIView):
         pedidos = list(
             PedidoVenda.objects.for_filial(request.filial_ativa)
             .filter(
-                origem=PedidoVenda.Origem.EXTERNO,
+                origem__in=PedidoVenda.ORIGENS_FORCA_VENDAS,
                 status__in=[PedidoVenda.Status.CONFIRMADO, PedidoVenda.Status.EM_SEPARACAO],
             )
             .select_related('cliente', 'usuario')
@@ -1196,7 +1196,7 @@ class ConcluirSeparacaoMobileView(MobileTenantAPIView):
             PedidoVenda.objects.for_filial(request.filial_ativa)
             .filter(
                 pk=pedido_id,
-                origem=PedidoVenda.Origem.EXTERNO,
+                origem__in=PedidoVenda.ORIGENS_FORCA_VENDAS,
                 status=PedidoVenda.Status.CONFIRMADO,
             )
             .first()

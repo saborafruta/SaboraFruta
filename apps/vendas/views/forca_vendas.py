@@ -39,7 +39,7 @@ def _pode_ver_equipe(request):
 def _pedidos_visiveis(request):
     qs = (
         PedidoVenda.objects.for_filial(request.filial_ativa)
-        .filter(origem=PedidoVenda.Origem.EXTERNO)
+        .filter(origem__in=PedidoVenda.ORIGENS_FORCA_VENDAS)
         .select_related('cliente', 'usuario', 'representante', 'tabela_preco')
         .prefetch_related('itens__produto')
     )
@@ -386,7 +386,7 @@ class PedidoSeparacaoFilaView(PermissaoRequiredMixin, View):
         pedidos = list(
             PedidoVenda.objects.for_filial(request.filial_ativa)
             .filter(
-                origem=PedidoVenda.Origem.EXTERNO,
+                origem__in=PedidoVenda.ORIGENS_FORCA_VENDAS,
                 status__in=[
                     PedidoVenda.Status.CONFIRMADO,
                     PedidoVenda.Status.EM_SEPARACAO,

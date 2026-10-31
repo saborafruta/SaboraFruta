@@ -40,6 +40,8 @@ class PedidoVenda(FilialScopedModel):
         WHATSAPP = 'whatsapp', 'WhatsApp'
         TELEFONE = 'telefone', 'Telefone'
 
+    ORIGENS_FORCA_VENDAS = (Origem.EXTERNO, Origem.WHATSAPP)
+
     class Prioridade(models.TextChoices):
         NORMAL = 'normal', 'Normal'
         URGENTE = 'urgente', 'Urgente'
@@ -206,7 +208,7 @@ class PedidoVenda(FilialScopedModel):
 
     @property
     def pode_faturar(self):
-        if self.origem == self.Origem.EXTERNO:
+        if self.origem in self.ORIGENS_FORCA_VENDAS:
             return self.status == self.Status.EM_SEPARACAO
         return self.status in (self.Status.CONFIRMADO, self.Status.EM_SEPARACAO)
 

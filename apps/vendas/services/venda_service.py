@@ -260,9 +260,9 @@ class VendaService:
                 ativo=True,
             )
         }
-        if pedido.origem == PedidoVenda.Origem.EXTERNO and itens_conferidos is None:
+        if pedido.origem in PedidoVenda.ORIGENS_FORCA_VENDAS and itens_conferidos is None:
             raise DadosInvalidosError(
-                'A separação de pedido externo exige a conferência de todos os itens.'
+                'A separação de pedido da força de vendas exige a conferência de todos os itens.'
             )
         if itens_conferidos is None:
             itens_conferidos = [
@@ -413,7 +413,7 @@ class VendaService:
         ])
 
         for item in itens_finais:
-            if pedido.origem == PedidoVenda.Origem.EXTERNO:
+            if pedido.origem in PedidoVenda.ORIGENS_FORCA_VENDAS:
                 # A conferência é a última barreira operacional de estoque.
                 # A transação inteira volta se não houver saldo, portanto não
                 # existe separação concluída sem a correspondente saída.
@@ -565,7 +565,7 @@ class VendaService:
                 f'Pedido não pode ser faturado no status "{pedido.get_status_display()}".'
             )
 
-        if pedido.origem == PedidoVenda.Origem.EXTERNO and not (
+        if pedido.origem in PedidoVenda.ORIGENS_FORCA_VENDAS and not (
             forma_pagamento or pedido.forma_pagamento_id
         ):
             raise DadosInvalidosError('Informe a forma de pagamento antes de faturar.')
@@ -588,7 +588,7 @@ class VendaService:
             status=SeparacaoPedido.Status.CONCLUIDA,
         ).order_by('-data_inicio').first()
         estoque_baixado_na_separacao = bool(
-            pedido.origem == PedidoVenda.Origem.EXTERNO and separacao
+            pedido.origem in PedidoVenda.ORIGENS_FORCA_VENDAS and separacao
         )
 
         for item in pedido.itens.select_related('produto'):
@@ -804,7 +804,7 @@ class VendaService:
             PedidoVenda.Status.CONFIRMADO, PedidoVenda.Status.EM_SEPARACAO,
         ):
             if (
-                pedido.origem == PedidoVenda.Origem.EXTERNO
+                pedido.origem in PedidoVenda.ORIGENS_FORCA_VENDAS
                 and pedido.status == PedidoVenda.Status.EM_SEPARACAO
             ):
                 saidas = list(
