@@ -18,6 +18,7 @@ from .models import OrcamentoWhatsApp
 
 
 CENTAVOS = Decimal('0.01')
+MILÉSIMOS = Decimal('0.001')
 
 
 def _decimal(valor, *, padrao='0'):
@@ -100,15 +101,29 @@ def serializar_orcamento(orcamento):
         'itens': [
             {
                 'produto_id': item.produto_id,
-                'codigo': item.produto.codigo,
-                'descricao': item.produto.descricao,
-                'unidade': str(item.produto.unidade_medida),
-                'quantidade': str(item.quantidade),
-                'valor_unitario': str(item.valor_unitario),
+                'apresentacao_id': item.apresentacao_id,
+                'codigo': (
+                    item.apresentacao.codigo
+                    if item.apresentacao_id and item.apresentacao.codigo
+                    else item.produto.codigo
+                ),
+                'descricao': (
+                    f'{item.produto.descricao} — {item.apresentacao_descricao}'
+                    if item.apresentacao_descricao else item.produto.descricao
+                ),
+                'unidade': (
+                    item.apresentacao_unidade or str(item.produto.unidade_medida)
+                ),
+                'quantidade': str(item.quantidade_comercial or item.quantidade),
+                'valor_unitario': str(
+                    item.valor_unitario_comercial or item.valor_unitario
+                ),
                 'desconto_percentual': str(item.percentual_desconto),
                 'valor_total': str(item.valor_total),
             }
-            for item in pedido.itens.select_related('produto__unidade_medida').all()
+            for item in pedido.itens.select_related(
+                'produto__unidade_medida', 'apresentacao',
+            ).all()
         ],
     }
 
@@ -187,28 +202,37 @@ def buscar_produtos(conversa, filial, termo):
         por_produto.setdefault(apresentacao.produto_id, []).append(apresentacao)
     retorno = []
     for produto in produtos:
-        detalhe = PrecoService.preco_cliente_detalhado(
-            produto, Decimal('1'), cliente=cliente,
-            tabela=cliente.tabela_preco, filial=filial,
-        )
-        retorno.append({
-            'id': produto.pk,
-            'codigo': produto.codigo,
-            'descricao': produto.descricao,
-            'unidade': str(produto.unidade_medida),
-            'preco': str(Decimal(detalhe['preco']).quantize(Decimal('0.0001'))),
-            'origem_preco': detalhe.get('origem', 'Preço de venda'),
-            'apresentacoes': [
-                {
-                    'id': item.pk,
-                    'codigo': item.codigo,
-                    'descricao': item.descricao,
-                    'unidade': str(item.unidade),
-                    'fator': str(item.fator_conversao),
-                }
-                for item in por_produto.get(produto.pk, [])
-            ],
-        })
+        opcoes = por_produto.get(produto.pk, [])
+        if not any(item.fator_conversao == 1 for item in opcoes):
+            opcoes = [None, *opcoes]
+        for apresentacao in opcoes or [None]:
+            fator = apresentacao.fator_conversao if apresentacao else Decimal('1')
+            detalhe = PrecoService.preco_cliente_detalhado(
+                produto, fator, cliente=cliente,
+                tabela=cliente.tabela_preco, filial=filial,
+                apresentacao=apresentacao,
+            )
+            preco_base = Decimal(detalhe['preco'])
+            preco_comercial = (preco_base * fator).quantize(Decimal('0.0001'))
+            retorno.append({
+                'id': produto.pk,
+                'apresentacao_id': apresentacao.pk if apresentacao else None,
+                'codigo': (
+                    apresentacao.codigo
+                    if apresentacao and apresentacao.codigo else produto.codigo
+                ),
+                'descricao': (
+                    f'{produto.descricao} — {apresentacao.descricao}'
+                    if apresentacao else produto.descricao
+                ),
+                'unidade': (
+                    str(apresentacao.unidade)
+                    if apresentacao else str(produto.unidade_medida)
+                ),
+                'fator': str(fator),
+                'preco': str(preco_comercial),
+                'origem_preco': detalhe.get('origem', 'Preço de venda'),
+            })
     return retorno
 
 
@@ -262,22 +286,53 @@ def salvar_orcamento(*, conversa, filial, usuario, payload):
         if len(produtos) != len({str(linha.get('produto_id')) for linha in itens}):
             raise DadosInvalidosError('Um dos produtos não está disponível nesta filial.')
 
+        try:
+            apresentacao_ids = {
+                int(linha['apresentacao_id'])
+                for linha in itens
+                if linha.get('apresentacao_id') not in (None, '')
+            }
+        except (TypeError, ValueError) as exc:
+            raise DadosInvalidosError('Uma das embalagens informadas é inválida.') from exc
+        apresentacoes = {
+            item.pk: item
+            for item in ProdutoApresentacao.objects.for_filial_com_fallback_legado(
+                filial,
+            ).filter(pk__in=apresentacao_ids, permite_venda=True).select_related('unidade')
+        }
+        if len(apresentacoes) != len(apresentacao_ids):
+            raise DadosInvalidosError('Uma das embalagens não está disponível nesta filial.')
+
         for linha in itens:
             try:
                 produto = produtos[int(linha.get('produto_id'))]
             except (KeyError, TypeError, ValueError) as exc:
                 raise DadosInvalidosError('Um dos produtos informados é inválido.') from exc
-            quantidade = _decimal(linha.get('quantidade'))
+            quantidade_comercial = _decimal(linha.get('quantidade'))
             desconto = _decimal(linha.get('desconto_percentual'))
-            if quantidade <= 0 or not Decimal('0') <= desconto <= Decimal('100'):
+            if quantidade_comercial <= 0 or not Decimal('0') <= desconto <= Decimal('100'):
                 raise DadosInvalidosError('Revise quantidade, preço e desconto dos produtos.')
+            apresentacao_id = linha.get('apresentacao_id')
+            apresentacao = (
+                apresentacoes.get(int(apresentacao_id))
+                if apresentacao_id not in (None, '') else None
+            )
+            if apresentacao and apresentacao.produto_id != produto.pk:
+                raise DadosInvalidosError('A embalagem não pertence ao produto selecionado.')
+            fator = apresentacao.fator_conversao if apresentacao else Decimal('1')
+            quantidade = (quantidade_comercial * fator).quantize(
+                MILÉSIMOS, rounding=ROUND_HALF_UP,
+            )
             preco = PrecoService.preco_cliente_detalhado(
                 produto, quantidade, cliente=cliente,
                 tabela=cliente.tabela_preco, filial=filial,
+                apresentacao=apresentacao,
             )
             valor_unitario = Decimal(preco['preco'])
             VendaService.adicionar_item(
                 pedido, produto, quantidade, valor_unitario, desconto,
+                apresentacao=apresentacao,
+                quantidade_comercial=quantidade_comercial,
             )
 
         forma = FormaPagamento.objects.filter(
@@ -353,10 +408,15 @@ def resumo_para_whatsapp(orcamento, link):
         f'*Cliente:* {pedido.cliente.nome_display}',
         '',
     ]
-    for item in pedido.itens.select_related('produto').all():
+    for item in pedido.itens.select_related('produto', 'apresentacao').all():
+        quantidade = item.quantidade_comercial or item.quantidade
+        valor_unitario = item.valor_unitario_comercial or item.valor_unitario
+        descricao = item.produto.descricao
+        if item.apresentacao_descricao:
+            descricao = f'{descricao} — {item.apresentacao_descricao}'
         linhas.append(
-            f'{item.quantidade:g}x {item.produto.descricao} — '
-            f'R$ {item.valor_unitario:.2f} — total R$ {item.valor_total:.2f}'
+            f'{quantidade:g}x {descricao} — '
+            f'R$ {valor_unitario:.2f} — total R$ {item.valor_total:.2f}'
         )
         if item.percentual_desconto:
             linhas.append(f'  Desconto do item: {item.percentual_desconto:.2f}%')

@@ -251,6 +251,21 @@ class ItemPedidoVenda(TimestampedModel):
     produto = models.ForeignKey(
         'produtos.Produto', on_delete=models.PROTECT, related_name='+',
     )
+    apresentacao = models.ForeignKey(
+        'produtos.ProdutoApresentacao', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+',
+    )
+    apresentacao_descricao = models.CharField(max_length=120, blank=True)
+    apresentacao_unidade = models.CharField(max_length=20, blank=True)
+    apresentacao_fator_conversao = models.DecimalField(
+        max_digits=14, decimal_places=6, null=True, blank=True,
+    )
+    quantidade_comercial = models.DecimalField(
+        max_digits=12, decimal_places=3, null=True, blank=True,
+    )
+    valor_unitario_comercial = models.DecimalField(
+        max_digits=14, decimal_places=4, null=True, blank=True,
+    )
     numero_item = models.SmallIntegerField(default=1)
 
     # Preço e quantidade

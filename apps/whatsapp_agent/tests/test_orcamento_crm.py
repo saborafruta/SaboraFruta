@@ -160,10 +160,11 @@ class OrcamentoCRMTests(TestCase):
         self.assertEqual(busca_codigo.json()['produtos'][0]['codigo'], 'ACE-01')
 
     def test_busca_localiza_produto_por_id_e_por_embalagem(self):
-        ProdutoApresentacao.objects.create(
+        apresentacao = ProdutoApresentacao.objects.create(
             produto=self.produto, unidade=self.unidade,
             descricao='Caixa com 12 unidades', codigo='CX-12',
-            fator_conversao=Decimal('12'), permite_venda=True,
+            fator_conversao=Decimal('12'), preco_venda=Decimal('60'),
+            permite_venda=True,
         )
         url = reverse(
             'whatsapp_agent:crm-orcamento-produtos', args=[self.conversa.pk],
@@ -174,10 +175,106 @@ class OrcamentoCRMTests(TestCase):
 
         self.assertEqual(por_id.status_code, 200)
         self.assertEqual(por_id.json()['produtos'][0]['id'], self.produto.pk)
+        self.assertEqual(len(por_id.json()['produtos']), 2)
         self.assertEqual(por_embalagem.status_code, 200)
-        produto = por_embalagem.json()['produtos'][0]
-        self.assertEqual(produto['id'], self.produto.pk)
-        self.assertEqual(produto['apresentacoes'][0]['descricao'], 'Caixa com 12 unidades')
+        self.assertEqual(len(por_embalagem.json()['produtos']), 2)
+        embalagem = next(
+            item for item in por_embalagem.json()['produtos']
+            if item['apresentacao_id'] == apresentacao.pk
+        )
+        self.assertEqual(embalagem['descricao'], 'Polpa de acerola — Caixa com 12 unidades')
+        self.assertEqual(embalagem['preco'], '60.0000')
+
+    def test_edita_orcamento_enviado_e_adiciona_embalagem(self):
+        apresentacao = ProdutoApresentacao.objects.create(
+            produto=self.produto, unidade=self.unidade,
+            descricao='Caixa com 12 unidades', codigo='CX-12',
+            fator_conversao=Decimal('12'), preco_venda=Decimal('60'),
+            permite_venda=True,
+        )
+        self._salvar()
+        orcamento = OrcamentoWhatsApp.objects.get()
+        orcamento.status = OrcamentoWhatsApp.Status.ENVIADO
+        orcamento.save(update_fields=['status'])
+        payload = self._payload()
+        payload['orcamento_id'] = orcamento.pk
+        payload['itens'].append({
+            'produto_id': self.produto.pk,
+            'apresentacao_id': apresentacao.pk,
+            'quantidade': '2',
+            'valor_unitario': '0.01',
+            'desconto_percentual': '0',
+        })
+
+        resposta = self.client.post(
+            reverse('whatsapp_agent:crm-orcamento-salvar', args=[self.conversa.pk]),
+            data=json.dumps(payload), content_type='application/json',
+        )
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        pedido = self._pedido(orcamento)
+        self.assertEqual(pedido.itens.count(), 2)
+        item = pedido.itens.get(apresentacao=apresentacao)
+        self.assertEqual(item.quantidade, Decimal('24.000'))
+        self.assertEqual(item.quantidade_comercial, Decimal('2.000'))
+        self.assertEqual(item.valor_unitario_comercial, Decimal('60.0000'))
+        serializado = resposta.json()['orcamento']['itens'][1]
+        self.assertEqual(serializado['quantidade'], '2.000')
+        self.assertEqual(serializado['valor_unitario'], '60.0000')
+        with (
+            patch('apps.whatsapp_agent.views.TenantPublicLinkService.register'),
+            patch(
+                'apps.whatsapp_agent.views.EvolutionClient.enviar_texto',
+                return_value={'key': {'id': 'orcamento-embalagem-1'}},
+            ) as enviar,
+        ):
+            envio = self.client.post(reverse(
+                'whatsapp_agent:crm-orcamento-enviar',
+                args=[self.conversa.pk, orcamento.pk],
+            ))
+        self.assertEqual(envio.status_code, 200, envio.content)
+        self.assertIn('Caixa com 12 unidades', enviar.call_args.args[1])
+
+    @patch('apps.whatsapp_agent.views.salvar_orcamento', side_effect=RuntimeError('falha'))
+    def test_falha_inesperada_ao_salvar_ainda_retorna_json(self, salvar):
+        resposta = self.client.post(
+            reverse('whatsapp_agent:crm-orcamento-salvar', args=[self.conversa.pk]),
+            data=json.dumps(self._payload()), content_type='application/json',
+        )
+
+        self.assertEqual(resposta.status_code, 500)
+        self.assertEqual(resposta['Content-Type'], 'application/json')
+        self.assertIn('erro', resposta.json())
+
+    @patch(
+        'apps.whatsapp_agent.views.TenantPublicLinkService.register',
+        side_effect=RuntimeError('falha'),
+    )
+    def test_falha_inesperada_ao_enviar_ainda_retorna_json(self, register):
+        self._salvar()
+        orcamento = OrcamentoWhatsApp.objects.get()
+
+        resposta = self.client.post(reverse(
+            'whatsapp_agent:crm-orcamento-enviar',
+            args=[self.conversa.pk, orcamento.pk],
+        ))
+
+        self.assertEqual(resposta.status_code, 500)
+        self.assertEqual(resposta['Content-Type'], 'application/json')
+        self.assertIn('erro', resposta.json())
+
+    def test_conversa_consolidada_retorna_json_em_vez_de_pagina_html(self):
+        self.conversa.ativa = False
+        self.conversa.save(update_fields=['ativa'])
+
+        resposta = self.client.post(
+            reverse('whatsapp_agent:crm-orcamento-salvar', args=[self.conversa.pk]),
+            data=json.dumps(self._payload()), content_type='application/json',
+        )
+
+        self.assertEqual(resposta.status_code, 404)
+        self.assertEqual(resposta['Content-Type'], 'application/json')
+        self.assertIn('Recarregue', resposta.json()['erro'])
 
     def test_salva_itens_descontos_entrega_e_pagamento(self):
         resposta = self._salvar()

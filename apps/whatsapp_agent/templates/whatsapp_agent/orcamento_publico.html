@@ -24,7 +24,7 @@
       <div><span>Endereço de entrega</span><strong>{{ pedido.endereco_entrega_avulso.descricao|default:'A combinar' }}</strong></div>
     </section>
     <section class="items">
-      {% for item in pedido.itens.all %}<div class="item"><div><strong>{{ item.produto.descricao }}</strong><p>{{ item.quantidade|floatformat:3 }} {{ item.produto.unidade_medida }} × R$ {{ item.valor_unitario|floatformat:2 }}{% if item.percentual_desconto %} · desconto {{ item.percentual_desconto|floatformat:2 }}%{% endif %}</p></div><strong class="price">R$ {{ item.valor_total|floatformat:2 }}</strong></div>{% endfor %}
+      {% for item in pedido.itens.all %}<div class="item"><div><strong>{{ item.produto.descricao }}{% if item.apresentacao_descricao %} — {{ item.apresentacao_descricao }}{% endif %}</strong><p>{% if item.quantidade_comercial %}{{ item.quantidade_comercial|floatformat:3 }} {{ item.apresentacao_unidade }} × R$ {{ item.valor_unitario_comercial|floatformat:2 }}{% else %}{{ item.quantidade|floatformat:3 }} {{ item.produto.unidade_medida }} × R$ {{ item.valor_unitario|floatformat:2 }}{% endif %}{% if item.percentual_desconto %} · desconto {{ item.percentual_desconto|floatformat:2 }}%{% endif %}</p></div><strong class="price">R$ {{ item.valor_total|floatformat:2 }}</strong></div>{% endfor %}
     </section>
     <section class="totals">
       <div class="total-row"><span>Produtos</span><strong>R$ {{ pedido.valor_produtos|floatformat:2 }}</strong></div>

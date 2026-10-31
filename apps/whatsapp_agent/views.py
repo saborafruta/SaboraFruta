@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import logging
 import re
 
 from django.conf import settings
@@ -20,7 +21,7 @@ from django.views.decorators.http import require_POST
 
 from apps.cadastros.models import Cliente
 from apps.core.models import Empresa, Filial, Usuario
-from apps.core.services.exceptions import DadosInvalidosError
+from apps.core.services.exceptions import DadosInvalidosError, DomainError
 from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.services.tenant_public_link_service import TenantPublicLinkService
 from apps.core.tenant_context import get_current_database_alias
@@ -49,6 +50,9 @@ from .orcamento_service import (
 )
 from .templatetags.whatsapp_ui import whatsapp_status
 from .webhook import receber_evento, receber_evento_meta
+
+
+logger = logging.getLogger(__name__)
 
 
 def _configuracao(request):
@@ -944,7 +948,11 @@ class CRMOrcamentoEditorView(PermissaoRequiredMixin, View):
     permissao_acao = 'ver'
 
     def get(self, request, pk):
-        conversa = get_object_or_404(_conversas_crm_permitidas(request), pk=pk)
+        conversa = _conversas_crm_permitidas(request).filter(pk=pk).first()
+        if not conversa:
+            return JsonResponse({
+                'erro': 'Esta conversa foi atualizada. Recarregue o CRM para continuar.',
+            }, status=404)
         try:
             return JsonResponse(dados_editor(conversa, request.filial_ativa))
         except DadosInvalidosError as exc:
@@ -956,7 +964,11 @@ class CRMOrcamentoProdutosView(PermissaoRequiredMixin, View):
     permissao_acao = 'ver'
 
     def get(self, request, pk):
-        conversa = get_object_or_404(_conversas_crm_permitidas(request), pk=pk)
+        conversa = _conversas_crm_permitidas(request).filter(pk=pk).first()
+        if not conversa:
+            return JsonResponse({
+                'erro': 'Esta conversa foi atualizada. Recarregue o CRM para continuar.',
+            }, status=404)
         try:
             produtos = buscar_produtos(
                 conversa, request.filial_ativa, request.GET.get('q', ''),
@@ -972,7 +984,11 @@ class CRMOrcamentoSalvarView(PermissaoRequiredMixin, View):
     permissao_acao = 'criar'
 
     def post(self, request, pk):
-        conversa = get_object_or_404(_conversas_crm_permitidas(request), pk=pk)
+        conversa = _conversas_crm_permitidas(request).filter(pk=pk).first()
+        if not conversa:
+            return JsonResponse({
+                'erro': 'Esta conversa foi atualizada. Recarregue o CRM para continuar.',
+            }, status=404)
         try:
             payload = json.loads(request.body or b'{}')
             orcamento = salvar_orcamento(
@@ -980,8 +996,18 @@ class CRMOrcamentoSalvarView(PermissaoRequiredMixin, View):
                 usuario=request.user, payload=payload,
             )
             return JsonResponse({'ok': True, 'orcamento': serializar_orcamento(orcamento)})
-        except (json.JSONDecodeError, DadosInvalidosError) as exc:
+        except (json.JSONDecodeError, DomainError) as exc:
             return JsonResponse({'erro': str(exc)}, status=400)
+        except Exception:
+            logger.exception('Falha inesperada ao salvar orçamento do CRM', extra={
+                'conversa_id': conversa.pk,
+            })
+            return JsonResponse({
+                'erro': (
+                    'Não foi possível salvar o orçamento. Atualize a página e tente novamente; '
+                    'se o erro continuar, informe o horário ao suporte.'
+                ),
+            }, status=500)
 
 
 @method_decorator(require_POST, name='dispatch')
@@ -990,14 +1016,20 @@ class CRMOrcamentoEnviarView(PermissaoRequiredMixin, View):
     permissao_acao = 'criar'
 
     def post(self, request, pk, orcamento_pk):
-        conversa = get_object_or_404(
-            _conversas_crm_permitidas(request).select_related('conexao_vendedor'),
-            pk=pk,
-        )
-        orcamento = get_object_or_404(
-            conversa.orcamentos.using('default'),
+        conversa = _conversas_crm_permitidas(request).select_related(
+            'conexao_vendedor',
+        ).filter(pk=pk).first()
+        if not conversa:
+            return JsonResponse({
+                'erro': 'Esta conversa foi atualizada. Recarregue o CRM para continuar.',
+            }, status=404)
+        orcamento = conversa.orcamentos.using('default').filter(
             pk=orcamento_pk, status=OrcamentoWhatsApp.Status.RASCUNHO,
-        )
+        ).first()
+        if not orcamento:
+            return JsonResponse({
+                'erro': 'O orçamento não está mais disponível para envio. Reabra o editor.',
+            }, status=404)
         if orcamento.tenant_alias != get_current_database_alias():
             return JsonResponse({'erro': 'O orçamento pertence a outro banco operacional.'}, status=400)
         if not conversa.conexao_vendedor:
@@ -1006,16 +1038,27 @@ class CRMOrcamentoEnviarView(PermissaoRequiredMixin, View):
         link = request.build_absolute_uri(
             reverse('orcamento_publico:detalhe', args=[orcamento.token_publico]),
         )
-        TenantPublicLinkService.register(
-            kind='orcamento', token=orcamento.token_publico,
-            db_alias=get_current_database_alias(),
-        )
-        texto = resumo_para_whatsapp(orcamento, link)
         try:
+            TenantPublicLinkService.register(
+                kind='orcamento', token=orcamento.token_publico,
+                db_alias=get_current_database_alias(),
+            )
+            texto = resumo_para_whatsapp(orcamento, link)
             for parte in _partes_whatsapp(texto):
                 _enviar_texto_humano_crm(conversa, parte, request.user)
         except GatewayWhatsAppError as exc:
             return JsonResponse({'erro': f'Não foi possível enviar o orçamento: {exc}'}, status=502)
+        except Exception:
+            logger.exception('Falha inesperada ao enviar orçamento do CRM', extra={
+                'conversa_id': conversa.pk,
+                'orcamento_id': orcamento.pk,
+            })
+            return JsonResponse({
+                'erro': (
+                    'Não foi possível enviar o orçamento. Atualize a página e tente novamente; '
+                    'se o erro continuar, informe o horário ao suporte.'
+                ),
+            }, status=500)
 
         orcamento.status = OrcamentoWhatsApp.Status.ENVIADO
         orcamento.enviado_em = timezone.now()

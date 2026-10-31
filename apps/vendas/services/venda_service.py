@@ -88,6 +88,7 @@ class VendaService:
     def adicionar_item(
         cls, pedido: PedidoVenda, produto, quantidade: Decimal,
         valor_unitario: Decimal | None = None, percentual_desconto: Decimal = Decimal('0'),
+        *, apresentacao=None, quantidade_comercial: Decimal | None = None,
     ) -> ItemPedidoVenda:
         """Adiciona ou atualiza item no pedido (rascunho)."""
         if pedido.status != PedidoVenda.Status.RASCUNHO:
@@ -102,6 +103,7 @@ class VendaService:
             quantidade=quantidade,
             cliente=pedido.cliente,
             tabela_preco=pedido.tabela_preco,
+            apresentacao=apresentacao,
         )
 
         if valor_unitario is None:
@@ -117,6 +119,17 @@ class VendaService:
             valor_unitario=valor_unitario,
             percentual_desconto=percentual_desconto,
             custo_unitario_snapshot=contrato['custo_atual'],
+            apresentacao=apresentacao,
+            apresentacao_descricao=(apresentacao.descricao if apresentacao else ''),
+            apresentacao_unidade=(str(apresentacao.unidade) if apresentacao else ''),
+            apresentacao_fator_conversao=(
+                apresentacao.fator_conversao if apresentacao else None
+            ),
+            quantidade_comercial=(quantidade_comercial if apresentacao else None),
+            valor_unitario_comercial=(
+                (valor_unitario * apresentacao.fator_conversao).quantize(Decimal('0.0001'))
+                if apresentacao else None
+            ),
         )
         item.calcular_totais()
         item.save()

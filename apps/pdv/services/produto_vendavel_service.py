@@ -119,6 +119,7 @@ class ProdutoVendavelService:
         quantidade=Decimal("1"),
         cliente=None,
         tabela_preco=None,
+        apresentacao=None,
     ) -> dict:
         contrato = cls.consultar(
             produto=produto,
@@ -126,6 +127,7 @@ class ProdutoVendavelService:
             quantidade=quantidade,
             cliente=cliente,
             tabela_preco=tabela_preco,
+            apresentacao=apresentacao,
         )
         if contrato["bloqueios"]:
             labels = "; ".join(item["label"] for item in contrato["bloqueios"])
