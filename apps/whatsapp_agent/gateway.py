@@ -122,13 +122,25 @@ class EvolutionClient:
         })
 
     def enviar_documento(self, telefone, conteudo, nome_arquivo, legenda=''):
+        return self.enviar_midia(
+            telefone, conteudo, nome_arquivo, 'application/pdf',
+            tipo='documento', legenda=legenda,
+        )
+
+    def enviar_midia(
+        self, telefone, conteudo, nome_arquivo, mimetype, *, tipo='documento', legenda='',
+    ):
+        mediatype = {
+            'imagem': 'image', 'audio': 'audio', 'video': 'video',
+            'documento': 'document',
+        }.get(tipo, 'document')
         return self._request(
             'POST',
             f'/message/sendMedia/{quote(self.configuracao.instancia)}',
             json={
                 'number': telefone,
-                'mediatype': 'document',
-                'mimetype': 'application/pdf',
+                'mediatype': mediatype,
+                'mimetype': mimetype,
                 'caption': legenda,
                 'media': base64.b64encode(conteudo).decode('ascii'),
                 'fileName': nome_arquivo,
@@ -241,21 +253,38 @@ class MetaCloudClient:
         })
 
     def enviar_documento(self, telefone, conteudo, nome_arquivo, legenda=''):
+        return self.enviar_midia(
+            telefone, conteudo, nome_arquivo, 'application/pdf',
+            tipo='documento', legenda=legenda,
+        )
+
+    def enviar_midia(
+        self, telefone, conteudo, nome_arquivo, mimetype, *, tipo='documento', legenda='',
+    ):
+        tipo_meta = {
+            'imagem': 'image', 'audio': 'audio', 'video': 'video',
+            'documento': 'document',
+        }.get(tipo, 'document')
         midia = self._request(
             'POST',
             f'/{quote(self.phone_number_id)}/media',
-            data={'messaging_product': 'whatsapp', 'type': 'application/pdf'},
-            files={'file': (nome_arquivo, conteudo, 'application/pdf')},
+            data={'messaging_product': 'whatsapp', 'type': mimetype},
+            files={'file': (nome_arquivo, conteudo, mimetype)},
         )
         media_id = midia.get('id')
         if not media_id:
-            raise GatewayWhatsAppError('A API oficial não devolveu o ID do documento.')
+            raise GatewayWhatsAppError('A API oficial não devolveu o ID da mídia.')
+        detalhe = {'id': media_id}
+        if tipo_meta == 'document':
+            detalhe['filename'] = nome_arquivo
+        if legenda and tipo_meta != 'audio':
+            detalhe['caption'] = legenda
         return self._request('POST', f'/{quote(self.phone_number_id)}/messages', json={
             'messaging_product': 'whatsapp',
             'recipient_type': 'individual',
             'to': telefone,
-            'type': 'document',
-            'document': {'id': media_id, 'filename': nome_arquivo, 'caption': legenda},
+            'type': tipo_meta,
+            tipo_meta: detalhe,
         })
 
     def obter_midia_base64(self, dados_mensagem):

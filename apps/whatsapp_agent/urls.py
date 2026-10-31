@@ -56,6 +56,10 @@ urlpatterns = [
         name='crm-enviar',
     ),
     path(
+        'crm/<int:pk>/mensagens/<int:mensagem_pk>/arquivo/',
+        views.CRMWhatsAppMidiaView.as_view(), name='crm-midia',
+    ),
+    path(
         'crm/<int:pk>/orcamento/', views.CRMOrcamentoEditorView.as_view(),
         name='crm-orcamento-editor',
     ),

@@ -1461,6 +1461,24 @@ class EvolutionClientTests(SimpleTestCase):
         self.assertEqual(payload['media'], 'JVBERi0=')
 
     @patch('apps.whatsapp_agent.gateway.requests.request')
+    def test_envia_imagem_com_mimetype_e_legenda(self, requisicao):
+        resposta = Mock(status_code=200)
+        resposta.json.return_value = {'key': {'id': 'imagem-1'}}
+        requisicao.return_value = resposta
+
+        retorno = EvolutionClient(self.configuracao()).enviar_midia(
+            '5584999990000', b'imagem', 'produto.png', 'image/png',
+            tipo='imagem', legenda='Foto do produto',
+        )
+
+        self.assertEqual(retorno['key']['id'], 'imagem-1')
+        payload = requisicao.call_args.kwargs['json']
+        self.assertEqual(payload['mediatype'], 'image')
+        self.assertEqual(payload['mimetype'], 'image/png')
+        self.assertEqual(payload['caption'], 'Foto do produto')
+        self.assertEqual(payload['media'], 'aW1hZ2Vt')
+
+    @patch('apps.whatsapp_agent.gateway.requests.request')
     def test_baixa_audio_em_base64_pela_evolution(self, requisicao):
         resposta = Mock(status_code=200)
         resposta.json.return_value = {

@@ -1,8 +1,12 @@
+import base64
 import json
+import shutil
+import tempfile
 from datetime import timedelta
 from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -26,6 +30,11 @@ from apps.whatsapp_agent.templatetags.whatsapp_ui import formatar_texto_whatsapp
 )
 class ConexaoWhatsAppVendedorTests(TestCase):
     def setUp(self):
+        self.media_root = tempfile.mkdtemp(prefix='ited-whatsapp-media-')
+        self.media_override = override_settings(MEDIA_ROOT=self.media_root)
+        self.media_override.enable()
+        self.addCleanup(self.media_override.disable)
+        self.addCleanup(shutil.rmtree, self.media_root, True)
         self.empresa = Empresa.objects.create(
             razao_social='Empresa WhatsApp CRM', cnpj='44555666000113',
             regime_tributario='simples', codigo_regime_tributario=1,
@@ -241,6 +250,83 @@ class ConexaoWhatsAppVendedorTests(TestCase):
         self.assertEqual(mensagem.origem, MensagemWhatsApp.Origem.CLIENTE)
         self.assertEqual(mensagem.texto_original, 'Quero um orçamento')
 
+    @patch('apps.whatsapp_agent.webhook.EvolutionClient.obter_midia_base64')
+    def test_foto_e_audio_recebidos_ficam_disponiveis_no_crm(self, obter_midia):
+        obter_midia.side_effect = [
+            {
+                'base64': base64.b64encode(b'conteudo-imagem').decode('ascii'),
+                'mimetype': 'image/jpeg',
+            },
+            {
+                'base64': base64.b64encode(b'conteudo-audio').decode('ascii'),
+                'mimetype': 'audio/ogg',
+            },
+        ]
+        conexao = self._conexao_qr()
+        eventos = [
+            ('midia-foto-1', {
+                'imageMessage': {
+                    'mimetype': 'image/jpeg', 'caption': 'Foto do produto',
+                    'fileName': 'produto.jpg',
+                },
+            }),
+            ('midia-audio-1', {
+                'audioMessage': {'mimetype': 'audio/ogg', 'ptt': True},
+            }),
+        ]
+        for identificador, message in eventos:
+            resposta = self._post_evolution(conexao, 'messages.upsert', {
+                'key': {
+                    'id': identificador, 'fromMe': False,
+                    'remoteJid': '5584999991111@s.whatsapp.net',
+                },
+                'pushName': 'Cliente com mídia',
+                'message': message,
+            })
+            self.assertEqual(resposta.status_code, 200)
+            self.assertEqual(resposta.json()['resultado'], 'recebido')
+
+        foto = MensagemWhatsApp.objects.get(identificador_externo='midia-foto-1')
+        audio = MensagemWhatsApp.objects.get(identificador_externo='midia-audio-1')
+        self.assertEqual(foto.tipo, 'imagem')
+        self.assertEqual(foto.arquivo_nome_original, 'produto.jpg')
+        self.assertEqual(foto.arquivo_mimetype, 'image/jpeg')
+        self.assertEqual(audio.tipo, 'audio')
+        self.assertTrue(audio.arquivo)
+
+        foto.conversa.fora_carteira = False
+        foto.conversa.save(update_fields=['fora_carteira', 'updated_at'])
+        self.client.force_login(self.vendedor)
+        arquivo_foto = self.client.get(reverse(
+            'whatsapp_agent:crm-midia', args=[foto.conversa_id, foto.pk],
+        ))
+        arquivo_audio = self.client.get(reverse(
+            'whatsapp_agent:crm-midia', args=[audio.conversa_id, audio.pk],
+        ))
+        self.assertEqual(arquivo_foto.status_code, 200)
+        self.assertEqual(b''.join(arquivo_foto.streaming_content), b'conteudo-imagem')
+        self.assertEqual(arquivo_audio.status_code, 200)
+        self.assertEqual(b''.join(arquivo_audio.streaming_content), b'conteudo-audio')
+
+        outro_vendedor = Usuario.objects.create_user(
+            email='midia-alheia@example.com', nome='Outro vendedor',
+            password='teste1234', empresa=self.empresa, filial=self.filial,
+            perfil=self.perfil,
+        )
+        self.client.force_login(outro_vendedor)
+        bloqueado = self.client.get(reverse(
+            'whatsapp_agent:crm-midia', args=[foto.conversa_id, foto.pk],
+        ))
+        self.assertEqual(bloqueado.status_code, 404)
+
+        exclusao = self._post_evolution(conexao, 'messages.delete', {
+            'key': {'id': 'midia-foto-1'},
+        })
+        foto.refresh_from_db()
+        self.assertEqual(exclusao.json()['resultado'], 'mensagem_apagada')
+        self.assertEqual(foto.status, 'apagada')
+        self.assertTrue(foto.arquivo)
+
     def test_eco_do_celular_e_exclusao_preservam_historico(self):
         conexao = self._conexao_qr()
         eco = self._post_evolution(conexao, 'messages.upsert', {
@@ -392,6 +478,87 @@ class ConexaoWhatsAppVendedorTests(TestCase):
             'Mensagem sem atualizar a página',
         )
         self.assertEqual(resposta.json()['mensagem']['status'], 'enviada')
+
+    @patch('apps.whatsapp_agent.views.EvolutionClient.enviar_midia')
+    def test_vendedor_envia_imagem_com_legenda_sem_recarregar(self, enviar_midia):
+        enviar_midia.return_value = {'key': {'id': 'evolution.imagem-1'}}
+        conexao = self._conexao_qr()
+        conversa = ConversaWhatsApp.objects.create(
+            conexao_vendedor=conexao, filial=self.filial,
+            remote_jid='5584999991414@s.whatsapp.net', telefone='5584999991414',
+            nome_contato='Cliente da imagem', fora_carteira=False,
+        )
+        self.client.force_login(self.vendedor)
+        imagem = SimpleUploadedFile(
+            'produto.png', b'png-de-teste', content_type='image/png',
+        )
+
+        resposta = self.client.post(
+            reverse('whatsapp_agent:crm-enviar', args=[conversa.pk]),
+            {'mensagem': 'Veja este produto', 'arquivo': imagem},
+            HTTP_ACCEPT='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        mensagem = MensagemWhatsApp.objects.get()
+        self.assertEqual(mensagem.tipo, 'imagem')
+        self.assertEqual(mensagem.texto, 'Veja este produto')
+        self.assertEqual(mensagem.arquivo_nome_original, 'produto.png')
+        self.assertTrue(mensagem.arquivo)
+        self.assertEqual(resposta.json()['mensagem']['arquivo']['tipo'], 'imagem')
+        enviar_midia.assert_called_once_with(
+            '5584999991414', b'png-de-teste', 'produto.png', 'image/png',
+            tipo='imagem', legenda='Veja este produto',
+        )
+
+    @patch('apps.whatsapp_agent.views.EvolutionClient.enviar_midia')
+    def test_vendedor_envia_documento_sem_exigir_texto(self, enviar_midia):
+        enviar_midia.return_value = {'key': {'id': 'evolution.documento-1'}}
+        conexao = self._conexao_qr()
+        conversa = ConversaWhatsApp.objects.create(
+            conexao_vendedor=conexao, filial=self.filial,
+            remote_jid='5584999991616@s.whatsapp.net', telefone='5584999991616',
+            nome_contato='Cliente do documento', fora_carteira=False,
+        )
+        self.client.force_login(self.vendedor)
+
+        resposta = self.client.post(
+            reverse('whatsapp_agent:crm-enviar', args=[conversa.pk]),
+            {'mensagem': '', 'arquivo': SimpleUploadedFile(
+                'catalogo.pdf', b'%PDF-teste', content_type='application/pdf',
+            )},
+            HTTP_ACCEPT='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        mensagem = MensagemWhatsApp.objects.get()
+        self.assertEqual(mensagem.tipo, 'documento')
+        self.assertEqual(mensagem.texto, '')
+        self.assertEqual(mensagem.arquivo_nome_original, 'catalogo.pdf')
+        enviar_midia.assert_called_once_with(
+            '5584999991616', b'%PDF-teste', 'catalogo.pdf', 'application/pdf',
+            tipo='documento', legenda='',
+        )
+
+    def test_compositor_expoe_emoji_imagem_e_anexo(self):
+        conexao = self._conexao_qr()
+        conversa = ConversaWhatsApp.objects.create(
+            conexao_vendedor=conexao, filial=self.filial,
+            remote_jid='5584999991515@s.whatsapp.net', telefone='5584999991515',
+            nome_contato='Cliente compositor', fora_carteira=False,
+        )
+        self.client.force_login(self.vendedor)
+
+        pagina = self.client.get(reverse(
+            'whatsapp_agent:crm-inbox-detail', args=[conversa.pk],
+        ))
+
+        self.assertContains(pagina, 'id="crm-emoji-button"')
+        self.assertContains(pagina, 'id="crm-image-button"')
+        self.assertContains(pagina, 'id="crm-attach-button"')
+        self.assertContains(pagina, 'id="crm-file-input"')
 
     def test_sincronizacao_incremental_entrega_novas_mensagens(self):
         conexao = self._conexao_qr()

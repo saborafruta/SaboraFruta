@@ -2,19 +2,22 @@ import hashlib
 import hmac
 import json
 import logging
+import mimetypes
 import re
+from pathlib import Path
 
 from django.conf import settings
 from django.contrib import messages
+from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Count, OuterRef, Q, Subquery, Sum
-from django.http import HttpResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.decorators import method_decorator
-from django.utils.text import slugify
+from django.utils.text import get_valid_filename, slugify
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -53,6 +56,21 @@ from .webhook import receber_evento, receber_evento_meta
 
 
 logger = logging.getLogger(__name__)
+
+MIMETYPES_IMAGEM_CRM = {'image/jpeg', 'image/png', 'image/webp'}
+MIMETYPES_ANEXO_CRM = {
+    'application/pdf', 'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/zip', 'text/csv', 'text/plain',
+    'audio/mpeg', 'audio/ogg', 'audio/mp4', 'audio/wav',
+    'video/mp4', 'video/3gpp',
+}
+LIMITE_IMAGEM_CRM = 8 * 1024 * 1024
+LIMITE_ANEXO_CRM = 20 * 1024 * 1024
 
 
 def _configuracao(request):
@@ -164,6 +182,28 @@ def _clientes_da_carteira_da_conexao(request, conexao, busca=''):
     return clientes, vendedor
 
 
+def _rotulo_midia_crm(tipo, nome=''):
+    rotulos = {
+        'imagem': '📷 Foto', 'audio': '🎵 Áudio',
+        'video': '🎬 Vídeo', 'documento': '📎 Documento',
+    }
+    rotulo = rotulos.get(tipo, '📎 Anexo')
+    return f'{rotulo}: {nome}' if nome and tipo == 'documento' else rotulo
+
+
+def _preview_mensagem_crm(mensagem):
+    texto = (getattr(mensagem, 'ultima_mensagem_texto', '') or '').strip()
+    if texto:
+        return texto
+    tipo = getattr(mensagem, 'ultima_mensagem_tipo', '') or ''
+    if not tipo:
+        return 'Sem mensagens'
+    return _rotulo_midia_crm(
+        tipo,
+        getattr(mensagem, 'ultima_mensagem_arquivo_nome', ''),
+    )
+
+
 def _serializar_mensagem_crm(mensagem):
     criada_em = timezone.localtime(mensagem.created_at)
     partes_rodape = []
@@ -173,10 +213,24 @@ def _serializar_mensagem_crm(mensagem):
         mensagem.get_origem_display(),
         criada_em.strftime('%d/%m %H:%M'),
     ])
+    arquivo = None
+    if mensagem.arquivo:
+        arquivo = {
+            'url': reverse(
+                'whatsapp_agent:crm-midia',
+                args=[mensagem.conversa_id, mensagem.pk],
+            ),
+            'nome': mensagem.arquivo_nome_original or Path(mensagem.arquivo.name).name,
+            'mimetype': mensagem.arquivo_mimetype or 'application/octet-stream',
+            'tamanho': mensagem.arquivo_tamanho,
+            'tipo': mensagem.tipo,
+        }
     return {
         'id': mensagem.pk,
         'direcao': mensagem.direcao,
+        'tipo': mensagem.tipo,
         'texto': mensagem.texto,
+        'arquivo': arquivo,
         'apagada': bool(mensagem.apagada_em),
         'rodape': ' · '.join(partes_rodape),
         'status': mensagem.status,
@@ -192,7 +246,7 @@ def _serializar_conversa_crm(conversa, *, pode_supervisionar):
         'nome': conversa.nome_contato or conversa.telefone,
         'telefone': conversa.telefone,
         'inicial': (conversa.nome_contato or conversa.telefone or '?')[:1].upper(),
-        'ultima_mensagem': conversa.ultima_mensagem_texto or 'Sem mensagens',
+        'ultima_mensagem': _preview_mensagem_crm(conversa),
         'ultima_direcao': conversa.ultima_mensagem_direcao or '',
         'ultima_hora': timezone.localtime(ultima_em).strftime('%H:%M'),
         'ordem': ultima_em.timestamp(),
@@ -698,6 +752,10 @@ class CRMWhatsAppInboxView(PermissaoRequiredMixin, View):
             .annotate(
                 ultima_mensagem_texto=Subquery(ultima_mensagem.values('texto')[:1]),
                 ultima_mensagem_direcao=Subquery(ultima_mensagem.values('direcao')[:1]),
+                ultima_mensagem_tipo=Subquery(ultima_mensagem.values('tipo')[:1]),
+                ultima_mensagem_arquivo_nome=Subquery(
+                    ultima_mensagem.values('arquivo_nome_original')[:1],
+                ),
             )
             .order_by('-ultima_mensagem_em', '-created_at')[:200]
         )
@@ -754,6 +812,10 @@ class CRMWhatsAppAtualizacoesView(PermissaoRequiredMixin, View):
             ).annotate(
                 ultima_mensagem_texto=Subquery(ultima_mensagem.values('texto')[:1]),
                 ultima_mensagem_direcao=Subquery(ultima_mensagem.values('direcao')[:1]),
+                ultima_mensagem_tipo=Subquery(ultima_mensagem.values('tipo')[:1]),
+                ultima_mensagem_arquivo_nome=Subquery(
+                    ultima_mensagem.values('arquivo_nome_original')[:1],
+                ),
             ).order_by('-ultima_mensagem_em', '-created_at')[:200]
         )
         return JsonResponse({
@@ -928,6 +990,75 @@ def _enviar_texto_humano_crm(conversa, texto, usuario):
     return mensagem
 
 
+def _dados_arquivo_crm(arquivo):
+    nome = get_valid_filename(Path(arquivo.name or 'anexo').name)[:255] or 'anexo'
+    mimetype = str(
+        getattr(arquivo, 'content_type', '')
+        or mimetypes.guess_type(nome)[0]
+        or 'application/octet-stream'
+    ).split(';', 1)[0].strip().lower()
+    if mimetype in MIMETYPES_IMAGEM_CRM:
+        tipo, limite = 'imagem', LIMITE_IMAGEM_CRM
+    elif mimetype in MIMETYPES_ANEXO_CRM:
+        if mimetype.startswith('audio/'):
+            tipo = 'audio'
+        elif mimetype.startswith('video/'):
+            tipo = 'video'
+        else:
+            tipo = 'documento'
+        limite = LIMITE_ANEXO_CRM
+    else:
+        raise DadosInvalidosError(
+            'Formato de arquivo não permitido. Envie imagem, PDF, documento, planilha, '
+            'áudio ou vídeo compatível com o WhatsApp.'
+        )
+    if arquivo.size <= 0:
+        raise DadosInvalidosError('O arquivo selecionado está vazio.')
+    if arquivo.size > limite:
+        limite_mb = limite // (1024 * 1024)
+        raise DadosInvalidosError(f'O arquivo ultrapassa o limite de {limite_mb} MB.')
+    return nome, mimetype, tipo
+
+
+def _enviar_midia_humana_crm(conversa, arquivo, legenda, usuario):
+    nome, mimetype, tipo = _dados_arquivo_crm(arquivo)
+    conteudo = arquivo.read()
+    mensagem = MensagemWhatsApp(
+        conversa=conversa,
+        direcao=MensagemWhatsApp.Direcao.SAIDA,
+        origem=MensagemWhatsApp.Origem.CRM,
+        autor_nome=usuario.nome,
+        autor_email=usuario.email,
+        texto=legenda,
+        texto_original=legenda,
+        tipo=tipo,
+        status='pendente',
+        arquivo_nome_original=nome,
+        arquivo_mimetype=mimetype,
+        arquivo_tamanho=len(conteudo),
+    )
+    mensagem.arquivo.save(nome, ContentFile(conteudo), save=False)
+    mensagem.save()
+    try:
+        retorno = EvolutionClient(conversa.conexao_vendedor).enviar_midia(
+            conversa.telefone, conteudo, nome, mimetype,
+            tipo=tipo, legenda=legenda,
+        )
+        mensagem.identificador_externo = identificador_envio(retorno)
+        mensagem.status = 'enviada'
+        conversa.ultima_mensagem_em = timezone.now()
+        conversa.save(update_fields=['ultima_mensagem_em', 'updated_at'])
+    except GatewayWhatsAppError as exc:
+        mensagem.status = 'erro'
+        mensagem.dados_evento = {'erro': str(exc)}
+        mensagem.save(update_fields=['status', 'dados_evento', 'updated_at'])
+        raise
+    mensagem.save(update_fields=[
+        'identificador_externo', 'status', 'dados_evento', 'updated_at',
+    ])
+    return mensagem
+
+
 def _partes_whatsapp(texto, limite=3900):
     partes, atual = [], []
     tamanho = 0
@@ -1082,17 +1213,23 @@ class CRMWhatsAppEnviarView(PermissaoRequiredMixin, View):
             pk=pk,
         )
         texto = (request.POST.get('mensagem') or '').strip()
-        if not texto:
-            if _request_quer_json(request):
-                return JsonResponse({'erro': 'Digite uma mensagem antes de enviar.'}, status=400)
-            messages.error(request, 'Digite uma mensagem antes de enviar.')
-            return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
-        if len(texto) > 4096:
+        arquivo = request.FILES.get('arquivo')
+        if not texto and not arquivo:
             if _request_quer_json(request):
                 return JsonResponse({
-                    'erro': 'A mensagem deve ter no máximo 4.096 caracteres.',
+                    'erro': 'Digite uma mensagem ou selecione um arquivo para enviar.',
                 }, status=400)
-            messages.error(request, 'A mensagem deve ter no máximo 4.096 caracteres.')
+            messages.error(request, 'Digite uma mensagem ou selecione um arquivo para enviar.')
+            return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
+        limite_texto = 1024 if arquivo else 4096
+        if len(texto) > limite_texto:
+            detalhe = (
+                'A legenda do arquivo deve ter no máximo 1.024 caracteres.'
+                if arquivo else 'A mensagem deve ter no máximo 4.096 caracteres.'
+            )
+            if _request_quer_json(request):
+                return JsonResponse({'erro': detalhe}, status=400)
+            messages.error(request, detalhe)
             return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
         conexao = conversa.conexao_vendedor
         if not conexao:
@@ -1103,27 +1240,71 @@ class CRMWhatsAppEnviarView(PermissaoRequiredMixin, View):
             messages.error(request, 'A conexão deste vendedor não está configurada.')
             return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
         try:
-            mensagem = _enviar_texto_humano_crm(conversa, texto, request.user)
+            mensagem = (
+                _enviar_midia_humana_crm(
+                    conversa, arquivo, texto, request.user,
+                )
+                if arquivo else
+                _enviar_texto_humano_crm(conversa, texto, request.user)
+            )
             if _request_quer_json(request):
                 return JsonResponse({
                     'ok': True,
                     'mensagem': _serializar_mensagem_crm(mensagem),
                 })
             messages.success(request, 'Mensagem enviada pelo CRM.')
+        except DadosInvalidosError as exc:
+            if _request_quer_json(request):
+                return JsonResponse({'erro': str(exc)}, status=400)
+            messages.error(request, str(exc))
         except GatewayWhatsAppError as exc:
             if _request_quer_json(request):
-                mensagem = conversa.mensagens.filter(
+                filtro_erro = conversa.mensagens.filter(
                     origem=MensagemWhatsApp.Origem.CRM,
                     autor_email=request.user.email,
                     texto=texto,
                     status='erro',
-                ).order_by('-created_at').first()
+                )
+                if arquivo:
+                    filtro_erro = filtro_erro.filter(
+                        arquivo_nome_original=get_valid_filename(
+                            Path(arquivo.name or 'anexo').name,
+                        )[:255],
+                    )
+                mensagem = filtro_erro.order_by('-created_at').first()
                 resposta = {'erro': f'Não foi possível enviar a mensagem: {exc}'}
                 if mensagem:
                     resposta['mensagem'] = _serializar_mensagem_crm(mensagem)
                 return JsonResponse(resposta, status=502)
             messages.error(request, f'Não foi possível enviar a mensagem: {exc}')
         return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
+
+
+class CRMWhatsAppMidiaView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'crm'
+    permissao_acao = 'ver'
+
+    def get(self, request, pk, mensagem_pk):
+        conversa = get_object_or_404(_conversas_crm_permitidas(request), pk=pk)
+        mensagem = get_object_or_404(
+            conversa.mensagens.all(), pk=mensagem_pk,
+        )
+        if not mensagem.arquivo:
+            return HttpResponse('Arquivo não encontrado.', status=404)
+        try:
+            arquivo = mensagem.arquivo.open('rb')
+        except (FileNotFoundError, OSError):
+            return HttpResponse('Arquivo não encontrado.', status=404)
+        nome = mensagem.arquivo_nome_original or Path(mensagem.arquivo.name).name
+        response = FileResponse(
+            arquivo,
+            as_attachment=mensagem.tipo not in {'imagem', 'audio', 'video'},
+            filename=nome,
+            content_type=mensagem.arquivo_mimetype or 'application/octet-stream',
+        )
+        response['X-Content-Type-Options'] = 'nosniff'
+        response['Cache-Control'] = 'private, max-age=300'
+        return response
 
 
 class ConversaListView(PermissaoRequiredMixin, View):

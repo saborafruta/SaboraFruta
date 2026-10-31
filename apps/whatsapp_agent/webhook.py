@@ -1,8 +1,13 @@
+import base64
 import logging
+import mimetypes
+from pathlib import Path
 
+from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.text import get_valid_filename
 
 from apps.cadastros.models import Cliente
 from apps.core.models import EmpresaBanco, Usuario
@@ -25,6 +30,8 @@ from .models import (
 
 
 logger = logging.getLogger(__name__)
+
+LIMITE_MIDIA_RECEBIDA = 25 * 1024 * 1024
 
 
 def _cliente_whatsapp(configuracao):
@@ -152,23 +159,96 @@ def _dados_mensagem(payload):
         or (mensagem.get('extendedTextMessage') or {}).get('text')
         or (mensagem.get('imageMessage') or {}).get('caption')
         or (mensagem.get('videoMessage') or {}).get('caption')
+        or (mensagem.get('documentMessage') or {}).get('caption')
         or ''
     )
-    audio = mensagem.get('audioMessage') or {}
+    especificacoes = (
+        ('imageMessage', 'imagem'),
+        ('audioMessage', 'audio'),
+        ('documentMessage', 'documento'),
+        ('videoMessage', 'video'),
+        ('stickerMessage', 'imagem'),
+    )
+    chave_midia, tipo, midia = '', 'texto', {}
+    for chave_candidata, tipo_candidato in especificacoes:
+        candidata = mensagem.get(chave_candidata)
+        if isinstance(candidata, dict) and candidata:
+            chave_midia, tipo, midia = chave_candidata, tipo_candidato, candidata
+            break
     return {
         'id': str(chave.get('id') or dados.get('id') or ''),
         'from_me': bool(chave.get('fromMe')),
         **identidade,
         'nome': str(dados.get('pushName') or payload.get('sender') or '')[:150],
         'texto': str(texto).strip(),
-        'tipo': 'audio' if audio else 'texto',
-        'mimetype': str(audio.get('mimetype') or 'audio/ogg'),
+        'tipo': tipo,
+        'mimetype': str(
+            midia.get('mimetype') or midia.get('mimeType')
+            or ('audio/ogg' if tipo == 'audio' else 'application/octet-stream')
+        ),
+        'nome_arquivo': str(
+            midia.get('fileName') or midia.get('filename') or ''
+        )[:255],
+        'chave_midia': chave_midia,
         'dados_gateway': payload.get('_meta_media') or {
             'key': chave,
             'message': mensagem,
             'messageTimestamp': dados.get('messageTimestamp'),
         },
     }
+
+
+def _nome_midia_recebida(dados, mimetype):
+    bruto = Path(dados.get('nome_arquivo') or '').name
+    nome = get_valid_filename(bruto) if bruto else ''
+    if nome:
+        return nome[:255]
+    extensao = mimetypes.guess_extension(mimetype) or {
+        'imagem': '.jpg', 'audio': '.ogg', 'video': '.mp4',
+    }.get(dados.get('tipo'), '.bin')
+    return f"whatsapp-{dados.get('id') or 'midia'}{extensao}"[:255]
+
+
+def _persistir_midia_comercial(configuracao, mensagem, dados):
+    """Baixa e preserva a mídia do canal comercial no armazenamento privado."""
+    if dados.get('tipo') == 'texto' or not dados.get('chave_midia'):
+        return
+    try:
+        midia = _cliente_whatsapp(configuracao).obter_midia_base64(
+            dados['dados_gateway'],
+        )
+        conteudo = base64.b64decode(midia['base64'], validate=False)
+        if not conteudo:
+            raise GatewayWhatsAppError('A mídia recebida está vazia.')
+        if len(conteudo) > LIMITE_MIDIA_RECEBIDA:
+            raise GatewayWhatsAppError('A mídia recebida ultrapassa o limite de 25 MB.')
+        mimetype = str(
+            midia.get('mimetype') or dados.get('mimetype')
+            or 'application/octet-stream'
+        ).split(';', 1)[0].strip().lower()
+        nome = _nome_midia_recebida(dados, mimetype)
+        mensagem.arquivo.save(nome, ContentFile(conteudo), save=False)
+        mensagem.arquivo_nome_original = nome
+        mensagem.arquivo_mimetype = mimetype
+        mensagem.arquivo_tamanho = len(conteudo)
+        mensagem.dados_evento = {
+            **(mensagem.dados_evento or {}),
+            'mimetype': mimetype,
+            'midia_preservada': True,
+        }
+        mensagem.save(update_fields=[
+            'arquivo', 'arquivo_nome_original', 'arquivo_mimetype',
+            'arquivo_tamanho', 'dados_evento', 'updated_at',
+        ])
+    except Exception as exc:
+        mensagem.dados_evento = {
+            **(mensagem.dados_evento or {}), 'erro_midia': str(exc),
+        }
+        mensagem.save(update_fields=['dados_evento', 'updated_at'])
+        logger.warning(
+            'Falha ao preservar mídia comercial do WhatsApp %s: %s',
+            mensagem.pk, exc,
+        )
 
 
 STATUS_EVOLUTION = {
@@ -298,7 +378,7 @@ def receber_evento(configuracao, payload):
                 conversa.ultima_mensagem_em = agora
                 conversa.save(update_fields=['ultima_mensagem_em', 'updated_at'])
             return 'ignorado'
-        if not dados['texto'] and dados['tipo'] != 'audio':
+        if not dados['texto'] and dados['tipo'] == 'texto':
             return 'sem_texto'
         telefone = dados['telefone']
         if not telefone:
@@ -327,7 +407,7 @@ def receber_evento(configuracao, payload):
             else:
                 conversa.ultima_mensagem_em = agora
                 conversa.save(update_fields=['ultima_mensagem_em', 'updated_at'])
-            MensagemWhatsApp.objects.create(
+            mensagem = MensagemWhatsApp.objects.create(
                 conversa=conversa,
                 identificador_externo=dados['id'],
                 direcao=MensagemWhatsApp.Direcao.SAIDA,
@@ -340,8 +420,9 @@ def receber_evento(configuracao, payload):
                 status='enviada',
                 dados_evento={'evento': evento, 'origem': 'smb_message_echoes'},
             )
+        _persistir_midia_comercial(configuracao, mensagem, dados)
         return 'eco_registrado'
-    if not dados['texto'] and dados['tipo'] != 'audio':
+    if not dados['texto'] and dados['tipo'] == 'texto':
         return 'sem_texto'
 
     telefone = dados['telefone']
@@ -411,6 +492,7 @@ def receber_evento(configuracao, payload):
             return 'duplicado'
 
     if _conexao_comercial(configuracao):
+        _persistir_midia_comercial(configuracao, mensagem, dados)
         return 'recebido'
 
     texto_processado = dados['texto']
@@ -513,7 +595,19 @@ def receber_evento_meta(configuracao, payload):
                 telefone = str(mensagem.get('from') or '')
                 tipo = str(mensagem.get('type') or 'text')
                 texto = str((mensagem.get('text') or {}).get('body') or '')
-                audio = mensagem.get('audio') or {}
+                midia = mensagem.get(tipo) or {}
+                chave_evolution = {
+                    'image': 'imageMessage', 'audio': 'audioMessage',
+                    'document': 'documentMessage', 'video': 'videoMessage',
+                    'sticker': 'stickerMessage',
+                }.get(tipo)
+                conteudo_convertido = {'conversation': texto}
+                if chave_evolution:
+                    conteudo_convertido = {chave_evolution: {
+                        'mimetype': midia.get('mime_type') or '',
+                        'fileName': midia.get('filename') or '',
+                        'caption': midia.get('caption') or '',
+                    }}
                 convertido = {
                     'event': 'messages.upsert',
                     'data': {
@@ -524,18 +618,12 @@ def receber_evento_meta(configuracao, payload):
                         },
                         'pushName': contatos.get(telefone, ''),
                         'messageTimestamp': mensagem.get('timestamp'),
-                        'message': (
-                            {'audioMessage': {
-                                'mimetype': audio.get('mime_type') or 'audio/ogg',
-                            }}
-                            if tipo == 'audio'
-                            else {'conversation': texto}
-                        ),
+                        'message': conteudo_convertido,
                     },
                     '_meta_media': {
-                        'id': audio.get('id'),
-                        'audio': audio,
-                    } if tipo == 'audio' else {},
+                        'id': midia.get('id'),
+                        tipo: midia,
+                    } if chave_evolution else {},
                 }
                 resultados.append(receber_evento(configuracao, convertido))
             if _conexao_comercial(configuracao):

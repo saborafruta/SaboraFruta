@@ -814,6 +814,12 @@ class MensagemWhatsApp(TimestampedModel):
     autor_email = models.EmailField(blank=True)
     status = models.CharField(max_length=30, blank=True)
     dados_evento = models.JSONField(default=dict, blank=True)
+    arquivo = models.FileField(
+        upload_to='whatsapp/mensagens/%Y/%m/%d/', max_length=500, blank=True,
+    )
+    arquivo_nome_original = models.CharField(max_length=255, blank=True)
+    arquivo_mimetype = models.CharField(max_length=120, blank=True)
+    arquivo_tamanho = models.PositiveBigIntegerField(default=0)
     editada_em = models.DateTimeField(null=True, blank=True)
     apagada_em = models.DateTimeField(null=True, blank=True)
 
