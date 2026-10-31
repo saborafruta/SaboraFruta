@@ -1,13 +1,19 @@
+from django.core import signing
 from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
 
 from apps.core.tenant_context import get_current_database_alias
 
 from .models import OrcamentoWhatsApp
 from .orcamento_service import pedido_do_orcamento
+
+
+SALT_RESPOSTA_ORCAMENTO = 'whatsapp_agent.orcamento_publico.resposta'
 
 
 def _privado(response):
@@ -26,6 +32,24 @@ def _buscar(token, *, bloquear=False):
     return get_object_or_404(queryset, token_publico=token)
 
 
+def _token_resposta(token):
+    return signing.dumps(
+        {'orcamento': token}, salt=SALT_RESPOSTA_ORCAMENTO,
+        compress=True,
+    )
+
+
+def _resposta_autentica(token, assinatura):
+    try:
+        dados = signing.loads(
+            assinatura or '', salt=SALT_RESPOSTA_ORCAMENTO,
+        )
+    except signing.BadSignature:
+        return False
+    return dados.get('orcamento') == token
+
+
+@method_decorator(csrf_exempt, name='dispatch')
 class OrcamentoPublicoView(View):
     template_name = 'whatsapp_agent/orcamento_publico.html'
 
@@ -33,6 +57,11 @@ class OrcamentoPublicoView(View):
         return self._render(request, _buscar(token))
 
     def post(self, request, token):
+        if not _resposta_autentica(token, request.POST.get('resposta_token')):
+            return self._render(
+                request, _buscar(token),
+                erro='A página foi atualizada. Confirme sua resposta novamente.',
+            )
         alias = get_current_database_alias()
         with transaction.atomic(using=alias), transaction.atomic(using='default'):
             orcamento = _buscar(token, bloquear=True)
@@ -91,6 +120,7 @@ class OrcamentoPublicoView(View):
         contexto = {
             'orcamento': orcamento,
             'pedido': pedido_do_orcamento(orcamento),
+            'resposta_token': _token_resposta(orcamento.token_publico),
             **extra,
         }
         return _privado(render(request, self.template_name, contexto))

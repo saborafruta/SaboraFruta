@@ -35,9 +35,9 @@
     {% if pedido.observacao %}<section class="meta"><div><span>Observações</span><strong>{{ pedido.observacao|linebreaksbr }}</strong></div></section>{% endif %}
     {% if orcamento.status == 'enviado' %}
       <section class="actions">
-        <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="aprovar"><button type="submit">Aprovar orçamento</button></form>
+        <form method="post"><input type="hidden" name="resposta_token" value="{{ resposta_token }}"><input type="hidden" name="acao" value="aprovar"><button type="submit">Aprovar orçamento</button></form>
         <button class="secondary" type="button" id="show-refuse">Não aprovar</button>
-        <form method="post" class="refuse" id="refuse-form">{% csrf_token %}<input type="hidden" name="acao" value="recusar"><label for="motivo"><strong>O que impediu a aprovação?</strong></label><textarea id="motivo" name="motivo" required minlength="3" maxlength="2000" placeholder="Ex.: prazo, preço, quantidade ou forma de pagamento"></textarea><button class="secondary" type="submit">Enviar motivo</button></form>
+        <form method="post" class="refuse" id="refuse-form"><input type="hidden" name="resposta_token" value="{{ resposta_token }}"><input type="hidden" name="acao" value="recusar"><label for="motivo"><strong>O que impediu a aprovação?</strong></label><textarea id="motivo" name="motivo" required minlength="3" maxlength="2000" placeholder="Ex.: prazo, preço, quantidade ou forma de pagamento"></textarea><button class="secondary" type="submit">Enviar motivo</button></form>
       </section>
     {% else %}
       <div class="done">Esta proposta já recebeu uma resposta. Se precisar de uma alteração, fale com o vendedor pelo WhatsApp.</div>

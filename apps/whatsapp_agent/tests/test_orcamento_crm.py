@@ -3,7 +3,7 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -137,6 +137,19 @@ class OrcamentoCRMTests(TestCase):
     @staticmethod
     def _pedido(orcamento):
         return PedidoVenda.objects.get(pk=orcamento.pedido_operacional_id)
+
+    def _resposta_publica(self, orcamento, dados, *, cliente=None, **extra):
+        cliente = cliente or self.client
+        url = reverse(
+            'orcamento_publico:detalhe', args=[orcamento.token_publico],
+        )
+        pagina = cliente.get(url)
+        self.assertEqual(pagina.status_code, 200)
+        return cliente.post(
+            url,
+            {**dados, 'resposta_token': pagina.context['resposta_token']},
+            **extra,
+        )
 
     def test_editor_busca_preco_da_tabela_do_cliente(self):
         inbox = self.client.get(
@@ -371,9 +384,8 @@ class OrcamentoCRMTests(TestCase):
         orcamento.refresh_from_db()
         self.assertEqual(orcamento.status, OrcamentoWhatsApp.Status.ENVIADO)
 
-        aprovacao = self.client.post(
-            reverse('orcamento_publico:detalhe', args=[orcamento.token_publico]),
-            {'acao': 'aprovar'},
+        aprovacao = self._resposta_publica(
+            orcamento, {'acao': 'aprovar'},
         )
         self.assertEqual(aprovacao.status_code, 200)
         orcamento.refresh_from_db()
@@ -391,9 +403,11 @@ class OrcamentoCRMTests(TestCase):
         pedido.status = PedidoVenda.Status.AGUARDANDO_APROVACAO
         pedido.save(update_fields=['status'])
 
-        resposta = self.client.post(
-            reverse('orcamento_publico:detalhe', args=[orcamento.token_publico]),
-            {'acao': 'recusar', 'motivo': 'Preciso de outro prazo de pagamento.'},
+        resposta = self._resposta_publica(
+            orcamento, {
+                'acao': 'recusar',
+                'motivo': 'Preciso de outro prazo de pagamento.',
+            },
         )
 
         self.assertEqual(resposta.status_code, 200)
@@ -402,6 +416,45 @@ class OrcamentoCRMTests(TestCase):
         self.assertEqual(orcamento.status, OrcamentoWhatsApp.Status.RECUSADO)
         self.assertIn('outro prazo', orcamento.motivo_recusa)
         self.assertEqual(pedido.status, PedidoVenda.Status.CANCELADO)
+
+    def test_aprovacao_funciona_no_navegador_whatsapp_com_origin_null(self):
+        self._salvar()
+        orcamento = OrcamentoWhatsApp.objects.get()
+        orcamento.status = OrcamentoWhatsApp.Status.ENVIADO
+        orcamento.save(update_fields=['status'])
+        pedido = self._pedido(orcamento)
+        pedido.status = PedidoVenda.Status.AGUARDANDO_APROVACAO
+        pedido.save(update_fields=['status'])
+        navegador_whatsapp = Client(enforce_csrf_checks=True)
+
+        resposta = self._resposta_publica(
+            orcamento, {'acao': 'aprovar'},
+            cliente=navegador_whatsapp, secure=True, HTTP_ORIGIN='null',
+        )
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        orcamento.refresh_from_db()
+        pedido.refresh_from_db()
+        self.assertEqual(orcamento.status, OrcamentoWhatsApp.Status.APROVADO)
+        self.assertEqual(pedido.tipo, PedidoVenda.Tipo.PEDIDO)
+        self.assertEqual(pedido.status, PedidoVenda.Status.APROVADO)
+        self.assertEqual(pedido.origem, PedidoVenda.Origem.WHATSAPP)
+
+    def test_resposta_publica_recusa_token_assinado_invalido(self):
+        self._salvar()
+        orcamento = OrcamentoWhatsApp.objects.get()
+        orcamento.status = OrcamentoWhatsApp.Status.ENVIADO
+        orcamento.save(update_fields=['status'])
+
+        resposta = self.client.post(
+            reverse('orcamento_publico:detalhe', args=[orcamento.token_publico]),
+            {'acao': 'aprovar', 'resposta_token': 'assinatura-invalida'},
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, 'Confirme sua resposta novamente')
+        orcamento.refresh_from_db()
+        self.assertEqual(orcamento.status, OrcamentoWhatsApp.Status.ENVIADO)
 
     def test_orcamento_enviado_pode_ser_editado_e_volta_a_rascunho(self):
         self._salvar()
