@@ -3,6 +3,7 @@ import json
 import shutil
 import tempfile
 from datetime import timedelta
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
@@ -22,6 +23,7 @@ from apps.whatsapp_agent.models import (
     MensagemWhatsApp,
 )
 from apps.whatsapp_agent.templatetags.whatsapp_ui import formatar_texto_whatsapp
+from apps.whatsapp_agent.views import _vendedor_operacional_da_conexao
 
 
 @override_settings(
@@ -80,6 +82,15 @@ class ConexaoWhatsAppVendedorTests(TestCase):
         self.assertEqual(conexao.obter_meta_verify_token(), 'verify-secreto')
         self.assertEqual(conexao.obter_meta_app_secret(), 'app-secreto')
         self.assertTrue(conexao.somente_atendimento_humano)
+
+    def test_resolve_vendedor_sem_carregar_relacoes_no_banco_operacional(self):
+        conexao = self._conexao_qr()
+
+        vendedor = _vendedor_operacional_da_conexao(
+            SimpleNamespace(pk=conexao.pk),
+        )
+
+        self.assertEqual(vendedor, self.vendedor)
 
     def test_gestor_cadastra_numero_e_segue_para_qr_code(self):
         self.client.force_login(self.gestor)

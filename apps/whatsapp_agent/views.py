@@ -133,9 +133,16 @@ def _conexoes_crm_permitidas(request):
 
 
 def _vendedor_operacional_da_conexao(conexao):
+    identidade = ConexaoWhatsAppVendedor.objects.using('default').filter(
+        pk=conexao.pk,
+    ).values(
+        'vendedor__email', 'empresa__cnpj',
+    ).first()
+    if not identidade:
+        return None
     return Usuario.objects.using(get_current_database_alias()).filter(
-        email__iexact=conexao.vendedor.email,
-        empresa__cnpj=conexao.empresa.cnpj,
+        email__iexact=identidade['vendedor__email'],
+        empresa__cnpj=identidade['empresa__cnpj'],
         ativo=True,
     ).first()
 
