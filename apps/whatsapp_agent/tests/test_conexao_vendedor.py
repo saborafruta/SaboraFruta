@@ -17,6 +17,7 @@ from apps.whatsapp_agent.models import (
     ConversaWhatsApp,
     MensagemWhatsApp,
 )
+from apps.whatsapp_agent.templatetags.whatsapp_ui import formatar_texto_whatsapp
 
 
 @override_settings(
@@ -265,6 +266,66 @@ class ConexaoWhatsAppVendedorTests(TestCase):
         self.assertIsNotNone(mensagem.apagada_em)
         self.assertEqual(mensagem.texto, 'Segue a proposta')
         self.assertEqual(mensagem.texto_original, 'Segue a proposta')
+
+    def test_lid_e_nome_do_whatsapp_reutilizam_conversa_pelo_numero(self):
+        conexao = self._conexao_qr()
+        conversa = ConversaWhatsApp.objects.create(
+            conexao_vendedor=conexao, filial=self.filial,
+            remote_jid='5584999991111@s.whatsapp.net', telefone='5584999991111',
+            nome_contato='Nome cadastrado no iTED', fora_carteira=False,
+        )
+
+        resposta = self._post_evolution(conexao, 'messages.upsert', {
+            'key': {
+                'id': 'evolution-lid-1', 'fromMe': False,
+                'remoteJid': '123456789012345@lid',
+                'remoteJidAlt': '5584999991111@s.whatsapp.net',
+            },
+            'pushName': 'Nome diferente no WhatsApp',
+            'message': {'conversation': 'Resposta pelo celular'},
+        })
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(ConversaWhatsApp.objects.filter(ativa=True).count(), 1)
+        conversa.refresh_from_db()
+        self.assertEqual(conversa.nome_contato, 'Nome cadastrado no iTED')
+        self.assertTrue(conversa.mensagens.filter(texto='Resposta pelo celular').exists())
+
+    def test_evento_de_status_marca_mensagem_como_entregue_e_lida(self):
+        conexao = self._conexao_qr()
+        conversa = ConversaWhatsApp.objects.create(
+            conexao_vendedor=conexao, filial=self.filial,
+            remote_jid='5584999991111@s.whatsapp.net', telefone='5584999991111',
+            nome_contato='Cliente CRM', fora_carteira=False,
+        )
+        mensagem = MensagemWhatsApp.objects.create(
+            conversa=conversa, direcao='saida', origem='crm', texto='Olá',
+            texto_original='Olá', identificador_externo='status-1', status='enviada',
+        )
+
+        entregue = self._post_evolution(conexao, 'messages.update', {
+            'key': {'id': 'status-1'}, 'update': {'status': 'DELIVERY_ACK'},
+        })
+        mensagem.refresh_from_db()
+        self.assertEqual(entregue.json()['resultado'], 'status_atualizado')
+        self.assertEqual(mensagem.status, 'entregue')
+
+        lida = self._post_evolution(conexao, 'messages.update', {
+            'key': {'id': 'status-1'}, 'update': {'status': 4},
+        })
+        mensagem.refresh_from_db()
+        self.assertEqual(lida.json()['resultado'], 'status_atualizado')
+        self.assertEqual(mensagem.status, 'lida')
+
+    def test_formatacao_whatsapp_renderiza_sem_permitir_html(self):
+        html = str(formatar_texto_whatsapp(
+            '*Orçamento* <script>alert(1)</script> https://ited.app.br/orcamento/abc',
+        ))
+
+        self.assertIn('<strong>Orçamento</strong>', html)
+        self.assertNotIn('<script>', html)
+        self.assertIn('&lt;script&gt;', html)
+        self.assertIn('href="https://ited.app.br/orcamento/abc"', html)
 
     @patch('apps.whatsapp_agent.views.EvolutionClient.enviar_texto')
     def test_vendedor_envia_pelo_crm_e_mensagem_identifica_a_origem(

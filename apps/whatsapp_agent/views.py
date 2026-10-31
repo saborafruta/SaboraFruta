@@ -27,6 +27,7 @@ from apps.core.tenant_context import get_current_database_alias
 from apps.crm.services import CarteiraService
 
 from .conversation_service import encerrar_conversa, encerrar_conversas_inativas
+from .conversation_identity import conversa_ativa_por_telefone
 from .flow import garantir_fluxo_padrao
 from .forms import (
     ConexaoWhatsAppVendedorForm,
@@ -46,6 +47,7 @@ from .orcamento_service import (
     buscar_produtos, dados_editor, pedido_do_orcamento, resumo_para_whatsapp,
     salvar_orcamento, serializar_orcamento,
 )
+from .templatetags.whatsapp_ui import whatsapp_status
 from .webhook import receber_evento, receber_evento_meta
 
 
@@ -82,6 +84,7 @@ def _conversas_crm_permitidas(request):
     """Isola conversas por empresa e, para vendedor, pelo próprio número/carteira."""
     queryset = ConversaWhatsApp.objects.filter(
         conexao_vendedor__empresa__cnpj=request.filial_ativa.empresa.cnpj,
+        ativa=True,
     )
     if CarteiraService.pode_supervisionar(request.user):
         return queryset
@@ -166,8 +169,6 @@ def _serializar_mensagem_crm(mensagem):
         mensagem.get_origem_display(),
         criada_em.strftime('%d/%m %H:%M'),
     ])
-    if mensagem.status:
-        partes_rodape.append(mensagem.status)
     return {
         'id': mensagem.pk,
         'direcao': mensagem.direcao,
@@ -175,6 +176,7 @@ def _serializar_mensagem_crm(mensagem):
         'apagada': bool(mensagem.apagada_em),
         'rodape': ' · '.join(partes_rodape),
         'status': mensagem.status,
+        'status_ui': whatsapp_status(mensagem.status),
         'updated_at': mensagem.updated_at.isoformat(),
     }
 
@@ -844,9 +846,13 @@ class CRMNovaConversaIniciarView(PermissaoRequiredMixin, View):
         if not filial_central:
             return JsonResponse({'erro': 'A filial central da conexão não foi localizada.'}, status=400)
         remote_jid = f'{telefone}@s.whatsapp.net'
-        conversa = ConversaWhatsApp.objects.using('default').filter(
-            conexao_vendedor_id=conexao.pk, remote_jid=remote_jid, ativa=True,
-        ).first()
+        conversa = conversa_ativa_por_telefone(
+            ConversaWhatsApp.objects.using('default').filter(
+                conexao_vendedor_id=conexao.pk,
+            ),
+            telefone=telefone,
+            remote_jid=remote_jid,
+        )
         if conversa and (
             conversa.cliente_grupo_replicacao
             and conversa.cliente_grupo_replicacao != cliente.grupo_replicacao

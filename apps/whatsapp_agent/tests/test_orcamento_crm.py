@@ -13,7 +13,7 @@ from apps.financeiro.constants.enums import TipoFormaPagamento
 from apps.financeiro.models import CondicaoPagamento, FormaPagamento
 from apps.produtos.models import (
     CategoriaProduto, CategoriaProdutoFilial, ItemTabelaPreco, Produto,
-    ProdutoFilial, TabelaPreco, TabelaPrecoFilial, UnidadeMedida,
+    ProdutoApresentacao, ProdutoFilial, TabelaPreco, TabelaPrecoFilial, UnidadeMedida,
     UnidadeMedidaFilial,
 )
 from apps.vendas.models import PedidoVenda
@@ -158,6 +158,26 @@ class OrcamentoCRMTests(TestCase):
         self.assertEqual(editor.json()['cliente']['nome'], 'Mercado do Cliente')
         self.assertEqual(busca.json()['produtos'][0]['preco'], '8.0000')
         self.assertEqual(busca_codigo.json()['produtos'][0]['codigo'], 'ACE-01')
+
+    def test_busca_localiza_produto_por_id_e_por_embalagem(self):
+        ProdutoApresentacao.objects.create(
+            produto=self.produto, unidade=self.unidade,
+            descricao='Caixa com 12 unidades', codigo='CX-12',
+            fator_conversao=Decimal('12'), permite_venda=True,
+        )
+        url = reverse(
+            'whatsapp_agent:crm-orcamento-produtos', args=[self.conversa.pk],
+        )
+
+        por_id = self.client.get(url, {'q': str(self.produto.pk)})
+        por_embalagem = self.client.get(url, {'q': 'CX-12'})
+
+        self.assertEqual(por_id.status_code, 200)
+        self.assertEqual(por_id.json()['produtos'][0]['id'], self.produto.pk)
+        self.assertEqual(por_embalagem.status_code, 200)
+        produto = por_embalagem.json()['produtos'][0]
+        self.assertEqual(produto['id'], self.produto.pk)
+        self.assertEqual(produto['apresentacoes'][0]['descricao'], 'Caixa com 12 unidades')
 
     def test_salva_itens_descontos_entrega_e_pagamento(self):
         resposta = self._salvar()

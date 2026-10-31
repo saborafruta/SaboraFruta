@@ -11,6 +11,9 @@ from apps.crm.models import CarteiraCliente
 
 from .agent import localizar_cliente, processar_mensagem, somente_digitos
 from .conversation_service import encerrar_se_expirada
+from .conversation_identity import (
+    conversa_ativa_por_telefone, identidade_mensagem_evolution,
+)
 from .gateway import (
     EvolutionClient, GatewayWhatsAppError, MetaCloudClient, identificador_envio,
 )
@@ -105,6 +108,7 @@ def _resolver_cliente_comercial(conexao, telefone):
         'cliente_operacional_id': cliente.pk,
         'cliente_grupo_replicacao': cliente.grupo_replicacao,
         'fora_carteira': not pertence,
+        'nome_cliente': cliente.nome_display,
     }
 
 
@@ -141,6 +145,7 @@ def _conteudo_mensagem(mensagem):
 def _dados_mensagem(payload):
     dados = payload.get('data') or {}
     chave = dados.get('key') or {}
+    identidade = identidade_mensagem_evolution(chave, dados)
     mensagem = _conteudo_mensagem(dados.get('message') or {})
     texto = (
         mensagem.get('conversation')
@@ -153,7 +158,7 @@ def _dados_mensagem(payload):
     return {
         'id': str(chave.get('id') or dados.get('id') or ''),
         'from_me': bool(chave.get('fromMe')),
-        'remote_jid': str(chave.get('remoteJid') or dados.get('remoteJid') or ''),
+        **identidade,
         'nome': str(dados.get('pushName') or payload.get('sender') or '')[:150],
         'texto': str(texto).strip(),
         'tipo': 'audio' if audio else 'texto',
@@ -164,6 +169,58 @@ def _dados_mensagem(payload):
             'messageTimestamp': dados.get('messageTimestamp'),
         },
     }
+
+
+STATUS_EVOLUTION = {
+    '0': 'erro', 'ERROR': 'erro',
+    '1': 'pendente', 'PENDING': 'pendente',
+    '2': 'enviada', 'SERVER_ACK': 'enviada', 'SENT': 'enviada',
+    '3': 'entregue', 'DELIVERY_ACK': 'entregue', 'DELIVERED': 'entregue',
+    '4': 'lida', 'READ': 'lida',
+    '5': 'lida', 'PLAYED': 'lida',
+}
+ORDEM_STATUS = {'erro': 0, 'pendente': 1, 'enviada': 2, 'entregue': 3, 'lida': 4}
+
+
+def _atualizar_status_mensagem(configuracao, payload):
+    dados = payload.get('data') or {}
+    itens = dados if isinstance(dados, list) else [dados]
+    atualizadas = 0
+    for item in itens:
+        if not isinstance(item, dict):
+            continue
+        chave = item.get('key') or {}
+        atualizacao = item.get('update') or item.get('messageUpdate') or {}
+        identificador = str(
+            chave.get('id') or item.get('id') or item.get('keyId') or ''
+        )
+        bruto = (
+            atualizacao.get('status') if isinstance(atualizacao, dict) else None
+        )
+        if bruto is None:
+            bruto = item.get('status')
+        status = STATUS_EVOLUTION.get(str(bruto).upper())
+        if not identificador or not status:
+            continue
+        mensagens = MensagemWhatsApp.objects.filter(
+            **_filtro_canal(configuracao, prefixo='conversa__'),
+            identificador_externo=identificador,
+            direcao=MensagemWhatsApp.Direcao.SAIDA,
+        )
+        for mensagem in mensagens:
+            atual = mensagem.status.lower()
+            if atual == 'apagada':
+                continue
+            if status != 'erro' and ORDEM_STATUS.get(status, 0) < ORDEM_STATUS.get(atual, 0):
+                continue
+            mensagem.status = status
+            mensagem.dados_evento = {
+                **(mensagem.dados_evento or {}),
+                'evolution_status': item,
+            }
+            mensagem.save(update_fields=['status', 'dados_evento', 'updated_at'])
+            atualizadas += 1
+    return atualizadas
 
 
 def _identificador_mensagem_apagada(payload):
@@ -200,6 +257,12 @@ def receber_evento(configuracao, payload):
         return 'conexao_atualizada'
 
     configuracao.save(update_fields=['ultimo_evento_em', 'updated_at'])
+    if evento == 'MESSAGES_UPDATE':
+        return (
+            'status_atualizado'
+            if _atualizar_status_mensagem(configuracao, payload)
+            else 'mensagem_nao_localizada'
+        )
     identificador_apagado = _identificador_mensagem_apagada(payload)
     if identificador_apagado:
         atualizadas = MensagemWhatsApp.objects.filter(
@@ -237,20 +300,27 @@ def receber_evento(configuracao, payload):
             return 'ignorado'
         if not dados['texto'] and dados['tipo'] != 'audio':
             return 'sem_texto'
-        telefone = somente_digitos(dados['remote_jid'].split('@')[0])
+        telefone = dados['telefone']
+        if not telefone:
+            return 'ignorado'
         with transaction.atomic():
             if dados['id'] and MensagemWhatsApp.objects.filter(
                 **_filtro_canal(configuracao, prefixo='conversa__'),
                 identificador_externo=dados['id'],
             ).exists():
                 return 'duplicado'
+            conversa = conversa_ativa_por_telefone(
+                ConversaWhatsApp.objects.filter(**_filtro_canal(configuracao)),
+                telefone=telefone, remote_jid=dados['remote_jid'],
+            )
             if conversa is None:
                 resolucao = _resolver_cliente_comercial(configuracao, telefone)
+                nome_cliente = resolucao.pop('nome_cliente', '')
                 conversa = ConversaWhatsApp.objects.create(
                     **_dados_canal(configuracao),
                     remote_jid=dados['remote_jid'],
                     telefone=telefone,
-                    nome_contato=dados['nome'],
+                    nome_contato=nome_cliente or dados['nome'],
                     ultima_mensagem_em=agora,
                     **resolucao,
                 )
@@ -274,22 +344,20 @@ def receber_evento(configuracao, payload):
     if not dados['texto'] and dados['tipo'] != 'audio':
         return 'sem_texto'
 
-    telefone = somente_digitos(dados['remote_jid'].split('@')[0])
+    telefone = dados['telefone']
+    if not telefone:
+        return 'ignorado'
     with transaction.atomic():
         if dados['id'] and MensagemWhatsApp.objects.filter(
             **_filtro_canal(configuracao, prefixo='conversa__'),
             identificador_externo=dados['id'],
         ).exists():
             return 'duplicado'
-        conversa = (
-            ConversaWhatsApp.objects.select_for_update()
-            .filter(
+        conversa = conversa_ativa_por_telefone(
+            ConversaWhatsApp.objects.select_for_update().filter(
                 **_filtro_canal(configuracao),
-                remote_jid=dados['remote_jid'],
-                ativa=True,
-            )
-            .order_by('-ultima_mensagem_em', '-created_at')
-            .first()
+            ),
+            telefone=telefone, remote_jid=dados['remote_jid'],
         )
         if (
             conversa
@@ -304,11 +372,12 @@ def receber_evento(configuracao, payload):
                 if _conexao_comercial(configuracao)
                 else {}
             )
+            nome_cliente = resolucao.pop('nome_cliente', '')
             conversa = ConversaWhatsApp.objects.create(
                 **_dados_canal(configuracao),
                 remote_jid=dados['remote_jid'],
                 telefone=telefone,
-                nome_contato=dados['nome'],
+                nome_contato=nome_cliente or dados['nome'],
                 cliente=(
                     None if _conexao_comercial(configuracao)
                     else localizar_cliente(configuracao.filial, telefone)

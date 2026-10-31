@@ -758,6 +758,13 @@ class ConversaWhatsApp(FilialScopedModel):
                 condition=models.Q(ativa=True, conexao_vendedor__isnull=False),
                 name='whatsapp_conversa_vendedor_remota_ativa_unica',
             ),
+            models.UniqueConstraint(
+                fields=['conexao_vendedor', 'telefone'],
+                condition=models.Q(
+                    ativa=True, conexao_vendedor__isnull=False,
+                ) & ~models.Q(telefone=''),
+                name='whatsapp_conversa_vendedor_telefone_ativo_unico',
+            ),
             models.CheckConstraint(
                 condition=(
                     models.Q(configuracao__isnull=False, conexao_vendedor__isnull=True)

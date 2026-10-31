@@ -9,7 +9,7 @@ from apps.cadastros.models import Cliente
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.core.tenant_context import get_current_database_alias
 from apps.financeiro.models import CondicaoPagamento, FormaPagamento
-from apps.produtos.models import Produto
+from apps.produtos.models import Produto, ProdutoApresentacao
 from apps.produtos.services.preco_service import PrecoService
 from apps.vendas.models import PedidoVenda
 from apps.vendas.services.venda_service import VendaService
@@ -147,11 +147,25 @@ def buscar_produtos(conversa, filial, termo):
     termo = (termo or '').strip()
     if not termo:
         return []
-    produtos = (
+    busca = (
+        Q(descricao__icontains=termo)
+        | Q(codigo__icontains=termo)
+        | Q(apresentacoes__ativo=True, apresentacoes__permite_venda=True,
+            apresentacoes__descricao__icontains=termo)
+        | Q(apresentacoes__ativo=True, apresentacoes__permite_venda=True,
+            apresentacoes__codigo__icontains=termo)
+        | Q(codigos_barras__ativo=True, codigos_barras__ean__icontains=termo)
+    )
+    prioridade_id = []
+    if termo.isdigit():
+        busca |= Q(pk=int(termo))
+        prioridade_id.append(When(pk=int(termo), then=Value(-1)))
+    produtos = list(
         Produto.objects.for_filial(filial).vendaveis()
-        .filter(Q(descricao__icontains=termo) | Q(codigo__icontains=termo))
+        .filter(busca)
         .annotate(
             _prioridade_busca=Case(
+                *prioridade_id,
                 When(codigo__iexact=termo, then=Value(0)),
                 When(codigo__istartswith=termo, then=Value(1)),
                 When(descricao__istartswith=termo, then=Value(2)),
@@ -160,8 +174,17 @@ def buscar_produtos(conversa, filial, termo):
             ),
         )
         .order_by('_prioridade_busca', 'descricao')
-        .select_related('unidade_medida')[:20]
+        .select_related('unidade_medida').distinct()[:20]
     )
+    apresentacoes = ProdutoApresentacao.objects.for_filial_com_fallback_legado(
+        filial,
+    ).filter(
+        produto_id__in=[produto.pk for produto in produtos],
+        permite_venda=True,
+    ).select_related('unidade').order_by('produto_id', 'fator_conversao')
+    por_produto = {}
+    for apresentacao in apresentacoes:
+        por_produto.setdefault(apresentacao.produto_id, []).append(apresentacao)
     retorno = []
     for produto in produtos:
         detalhe = PrecoService.preco_cliente_detalhado(
@@ -175,6 +198,16 @@ def buscar_produtos(conversa, filial, termo):
             'unidade': str(produto.unidade_medida),
             'preco': str(Decimal(detalhe['preco']).quantize(Decimal('0.0001'))),
             'origem_preco': detalhe.get('origem', 'Preço de venda'),
+            'apresentacoes': [
+                {
+                    'id': item.pk,
+                    'codigo': item.codigo,
+                    'descricao': item.descricao,
+                    'unidade': str(item.unidade),
+                    'fator': str(item.fator_conversao),
+                }
+                for item in por_produto.get(produto.pk, [])
+            ],
         })
     return retorno
 
