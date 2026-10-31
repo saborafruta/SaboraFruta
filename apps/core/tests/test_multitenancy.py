@@ -247,11 +247,23 @@ class MultitenancyFoundationTests(TestCase):
             '/entregas/rota-secreta/pedido/1/concluir/': ('rota_delivery', 'rota-secreta'),
             '/pedido/token-456/responder/': ('pedido', 'token-456'),
             '/pedido/entrega/EXP-789/': ('entrega', 'EXP-789'),
+            '/orcamento/token-crm-123/': ('orcamento', 'token-crm-123'),
         }
         for path, esperado in casos.items():
             with self.subTest(path=path):
                 rota = TenantPublicLinkService.route_for_path(path)
                 self.assertEqual((rota[0], rota[3]), esperado)
+
+    def test_orcamento_publico_desconhecido_nao_varre_bancos(self):
+        with patch(
+            'apps.core.services.tenant_public_link_service.register_tenant_database',
+        ) as registrar:
+            alias = TenantPublicLinkService.resolve_path(
+                '/orcamento/token-inexistente/',
+            )
+
+        self.assertIsNone(alias)
+        registrar.assert_not_called()
 
     def test_link_legado_da_agenda_e_reparado_antes_da_varredura(self):
         token = 'token-legado-whatsapp'

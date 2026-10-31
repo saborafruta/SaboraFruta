@@ -111,6 +111,12 @@ class TenantPublicLinkService:
             if repaired_alias:
                 return repaired_alias
 
+        # Orçamentos do CRM sempre são registrados no índice antes do envio.
+        # Não varra bancos operacionais para um token desconhecido: além de
+        # caro, tenants ainda em migração podem não possuir a tabela nova.
+        if kind == 'orcamento':
+            return None
+
         model = apps.get_model(model_label)
         for banco in EmpresaBanco.objects.using('default').filter(
             ativo=True, status=EmpresaBanco.Status.ATIVO,
