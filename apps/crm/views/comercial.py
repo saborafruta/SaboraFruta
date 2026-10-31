@@ -50,6 +50,13 @@ class FunilComercialView(PermissaoRequiredMixin, View):
 
     def get(self, request):
         filial = request.filial_ativa
+        from apps.whatsapp_agent.funil_service import reconciliar_funil_whatsapp
+
+        reconciliar_funil_whatsapp(
+            filial=filial,
+            usuario=request.user,
+            pode_supervisionar=CarteiraService.pode_supervisionar(request.user),
+        )
         ComercialService.obter_pipeline_padrao(filial)
         pipelines = PipelineCRM.objects.filter(filial=filial, ativo=True).order_by('nome')
         pipeline_id = request.GET.get('pipeline', '').strip()

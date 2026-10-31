@@ -8,8 +8,10 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from apps.core.tenant_context import get_current_database_alias
+from apps.crm.services.comercial_service import EtapaAutomaticaCRM
 from apps.vendas.services.venda_service import VendaService
 
+from .funil_service import sincronizar_funil_whatsapp
 from .models import OrcamentoWhatsApp
 from .orcamento_service import pedido_do_orcamento
 
@@ -92,6 +94,11 @@ class OrcamentoPublicoView(View):
                 orcamento.save(update_fields=[
                     'status', 'respondido_em', 'motivo_recusa', 'updated_at',
                 ])
+                sincronizar_funil_whatsapp(
+                    orcamento.conversa,
+                    EtapaAutomaticaCRM.APROVADOS,
+                    pedido=pedido,
+                )
                 return self._render(request, orcamento, sucesso='Orçamento aprovado com sucesso.')
 
             if acao == 'recusar':
@@ -110,6 +117,12 @@ class OrcamentoPublicoView(View):
                 orcamento.save(update_fields=[
                     'status', 'respondido_em', 'motivo_recusa', 'updated_at',
                 ])
+                sincronizar_funil_whatsapp(
+                    orcamento.conversa,
+                    EtapaAutomaticaCRM.RECUSADOS,
+                    pedido=pedido,
+                    motivo_perda=motivo,
+                )
                 return self._render(
                     request, orcamento,
                     sucesso='Resposta registrada. O vendedor verá o motivo no CRM.',

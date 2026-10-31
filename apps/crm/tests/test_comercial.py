@@ -10,6 +10,7 @@ from apps.crm.models import (
     AtividadeCRM, CarteiraCliente, EtapaPipelineCRM, OportunidadeCRM, PipelineCRM,
 )
 from apps.crm.services import ComercialService
+from apps.crm.services.comercial_service import EtapaAutomaticaCRM
 
 
 class ComercialServiceTests(TestCase):
@@ -71,8 +72,37 @@ class ComercialServiceTests(TestCase):
         self.assertEqual(primeiro.etapas.count(), 5)
         self.assertEqual(
             list(primeiro.etapas.order_by('ordem').values_list('nome', flat=True)),
-            ['Novo contato', 'Qualificação', 'Proposta', 'Ganho', 'Perdido'],
+            [
+                'Conversas', 'Orçando', 'Aguardando aprovação',
+                'Aprovados', 'Recusados',
+            ],
         )
+
+    def test_conversa_whatsapp_cria_um_cartao_e_move_o_mesmo_cartao(self):
+        criada = ComercialService.sincronizar_conversa_whatsapp(
+            conversa_id=123,
+            filial=self.filial,
+            cliente=self.cliente,
+            responsavel=self.usuario,
+            etapa_nome=EtapaAutomaticaCRM.CONVERSAS,
+            autor=self.usuario,
+        )
+        movida = ComercialService.sincronizar_conversa_whatsapp(
+            conversa_id=123,
+            filial=self.filial,
+            cliente=self.cliente,
+            responsavel=self.usuario,
+            etapa_nome=EtapaAutomaticaCRM.AGUARDANDO_APROVACAO,
+            valor_estimado=Decimal('350.00'),
+            autor=self.usuario,
+        )
+
+        self.assertEqual(criada.pk, movida.pk)
+        self.assertEqual(OportunidadeCRM.objects.count(), 1)
+        self.assertEqual(movida.etapa.nome, 'Aguardando aprovação')
+        self.assertEqual(movida.valor_estimado, Decimal('350.00'))
+        self.assertEqual(movida.origem, OportunidadeCRM.Origem.WHATSAPP)
+        self.assertEqual(movida.atividades.count(), 2)
 
     def test_criacao_registra_atividade_auditavel(self):
         oportunidade = self._criar_oportunidade()
@@ -80,7 +110,7 @@ class ComercialServiceTests(TestCase):
         atividade = oportunidade.atividades.get()
         self.assertEqual(atividade.tipo, AtividadeCRM.Tipo.CRIACAO)
         self.assertEqual(atividade.autor, self.usuario)
-        self.assertIn('Novo contato', atividade.descricao)
+        self.assertIn('Conversas', atividade.descricao)
 
     def test_movimentacao_para_ganho_fecha_oportunidade_e_registra_historico(self):
         oportunidade = self._criar_oportunidade()

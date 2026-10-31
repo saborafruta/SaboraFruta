@@ -13,6 +13,7 @@ from apps.cadastros.models import Cliente
 from apps.core.models import EmpresaBanco, Usuario
 from apps.core.tenant_registry import register_tenant_database
 from apps.crm.models import CarteiraCliente
+from apps.crm.services.comercial_service import EtapaAutomaticaCRM
 
 from .agent import localizar_cliente, processar_mensagem, somente_digitos
 from .conversation_service import encerrar_se_expirada
@@ -22,6 +23,7 @@ from .conversation_identity import (
 from .gateway import (
     EvolutionClient, GatewayWhatsAppError, MetaCloudClient, identificador_envio,
 )
+from .funil_service import sincronizar_funil_whatsapp
 from .ai_service import IAWhatsAppError, OpenAIWhatsAppClient
 from .intelligent_agent import processar_com_ia, resposta_fora_horario
 from .models import (
@@ -446,8 +448,8 @@ def receber_evento(configuracao, payload):
             and encerrar_se_expirada(conversa, agora=agora)
         ):
             conversa = None
-        criada = conversa is None
-        if criada:
+        conversa_criada = conversa is None
+        if conversa_criada:
             resolucao = (
                 _resolver_cliente_comercial(configuracao, telefone)
                 if _conexao_comercial(configuracao)
@@ -493,6 +495,10 @@ def receber_evento(configuracao, payload):
 
     if _conexao_comercial(configuracao):
         _persistir_midia_comercial(configuracao, mensagem, dados)
+        if conversa_criada:
+            sincronizar_funil_whatsapp(
+                conversa, EtapaAutomaticaCRM.CONVERSAS,
+            )
         return 'recebido'
 
     texto_processado = dados['texto']

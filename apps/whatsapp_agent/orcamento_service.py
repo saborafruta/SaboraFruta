@@ -8,6 +8,7 @@ from django.utils import timezone
 from apps.cadastros.models import Cliente
 from apps.core.services.exceptions import DadosInvalidosError
 from apps.core.tenant_context import get_current_database_alias
+from apps.crm.services.comercial_service import EtapaAutomaticaCRM
 from apps.financeiro.models import CondicaoPagamento, FormaPagamento
 from apps.produtos.models import Produto, ProdutoApresentacao
 from apps.produtos.services.preco_service import PrecoService
@@ -15,6 +16,7 @@ from apps.vendas.models import PedidoVenda
 from apps.vendas.services.venda_service import VendaService
 
 from .models import OrcamentoWhatsApp
+from .funil_service import sincronizar_funil_whatsapp
 
 
 CENTAVOS = Decimal('0.01')
@@ -413,6 +415,15 @@ def salvar_orcamento(*, conversa, filial, usuario, payload, cliente=None):
         orcamento.respondido_em = None
         orcamento.motivo_recusa = ''
         orcamento.save()
+        sincronizar_funil_whatsapp(
+            conversa,
+            EtapaAutomaticaCRM.ORCANDO,
+            filial=filial,
+            cliente=cliente,
+            responsavel=usuario,
+            pedido=pedido,
+            autor=usuario,
+        )
         return orcamento
 
 

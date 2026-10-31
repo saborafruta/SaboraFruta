@@ -12,7 +12,7 @@ from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
 from apps.financeiro.constants.enums import TipoFormaPagamento
 from apps.financeiro.models import CondicaoPagamento, FormaPagamento
-from apps.crm.models import CarteiraCliente
+from apps.crm.models import CarteiraCliente, OportunidadeCRM
 from apps.produtos.models import (
     CategoriaProduto, CategoriaProdutoFilial, ItemTabelaPreco, Produto,
     ProdutoApresentacao, ProdutoFilial, TabelaPreco, TabelaPrecoFilial, UnidadeMedida,
@@ -85,6 +85,12 @@ class OrcamentoCRMTests(TestCase):
             limite_credito=Decimal('1000'), ativo=True,
         )
         ClienteFilial.objects.create(cliente=cls.cliente, filial=cls.filial)
+        CarteiraCliente.objects.create(
+            empresa=cls.empresa,
+            cliente=cls.cliente,
+            vendedor=cls.vendedor,
+            atribuido_por=cls.vendedor,
+        )
         cls.forma = FormaPagamento.objects.create(
             empresa=cls.empresa, filial=cls.filial, descricao='PIX',
             tipo=TipoFormaPagamento.PIX,
@@ -363,6 +369,9 @@ class OrcamentoCRMTests(TestCase):
         self.assertEqual(pedido.valor_total, Decimal('15.40'))
         self.assertEqual(pedido.forma_pagamento, self.forma)
         self.assertEqual(pedido.endereco_entrega_avulso['descricao'], 'Rua das Flores, 50, Centro, Natal/RN')
+        oportunidade = OportunidadeCRM.objects.get(conversa_whatsapp_id=self.conversa.pk)
+        self.assertEqual(oportunidade.etapa.nome, 'Orçando')
+        self.assertEqual(oportunidade.valor_estimado, Decimal('15.40'))
 
     @patch('apps.whatsapp_agent.views.TenantPublicLinkService.register')
     @patch('apps.whatsapp_agent.views.EvolutionClient.enviar_texto')
@@ -384,6 +393,8 @@ class OrcamentoCRMTests(TestCase):
         self.assertTrue(MensagemWhatsApp.objects.filter(origem='crm').exists())
         orcamento.refresh_from_db()
         self.assertEqual(orcamento.status, OrcamentoWhatsApp.Status.ENVIADO)
+        oportunidade = OportunidadeCRM.objects.get(conversa_whatsapp_id=self.conversa.pk)
+        self.assertEqual(oportunidade.etapa.nome, 'Aguardando aprovação')
 
         aprovacao = self._resposta_publica(
             orcamento, {'acao': 'aprovar'},
@@ -397,6 +408,12 @@ class OrcamentoCRMTests(TestCase):
         self.assertEqual(
             pedido.itens.get().quantidade_reservada, Decimal('2.000'),
         )
+        oportunidade.refresh_from_db()
+        self.assertEqual(oportunidade.etapa.nome, 'Aprovados')
+        funil = self.client.get(reverse('crm:funil'))
+        self.assertEqual(funil.status_code, 200)
+        self.assertContains(funil, 'Abrir conversa · atualização automática')
+        self.assertContains(funil, 'Aprovados')
 
     def test_cliente_recusa_e_motivo_fica_registrado(self):
         self._salvar()
@@ -420,6 +437,9 @@ class OrcamentoCRMTests(TestCase):
         self.assertEqual(orcamento.status, OrcamentoWhatsApp.Status.RECUSADO)
         self.assertIn('outro prazo', orcamento.motivo_recusa)
         self.assertEqual(pedido.status, PedidoVenda.Status.CANCELADO)
+        oportunidade = OportunidadeCRM.objects.get(conversa_whatsapp_id=self.conversa.pk)
+        self.assertEqual(oportunidade.etapa.nome, 'Recusados')
+        self.assertIn('outro prazo', oportunidade.motivo_perda)
 
     def test_aprovacao_funciona_no_navegador_whatsapp_com_origin_null(self):
         self._salvar()

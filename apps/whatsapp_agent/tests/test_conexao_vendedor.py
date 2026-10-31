@@ -15,6 +15,7 @@ from django.utils import timezone
 from apps.cadastros.models import Cliente
 from apps.cadastros.services.cliente_service import ClienteService
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
+from apps.crm.models import OportunidadeCRM
 from apps.crm.services import CarteiraService
 from apps.whatsapp_agent.forms import ConexaoWhatsAppVendedorForm
 from apps.whatsapp_agent.models import (
@@ -798,6 +799,9 @@ class ConexaoWhatsAppVendedorTests(TestCase):
         conversa = ConversaWhatsApp.objects.get(nome_contato='Cliente da minha carteira')
         self.assertEqual(conversa.conexao_vendedor, conexao)
         self.assertFalse(conversa.fora_carteira)
+        oportunidade = OportunidadeCRM.objects.get(conversa_whatsapp_id=conversa.pk)
+        self.assertEqual(oportunidade.etapa.nome, 'Conversas')
+        self.assertEqual(oportunidade.responsavel, self.vendedor)
 
     def test_vendedor_nao_acessa_conversa_fora_da_carteira(self):
         conexao = self._conexao_qr()

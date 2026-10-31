@@ -30,10 +30,12 @@ from apps.core.services.permissions import PermissaoRequiredMixin
 from apps.core.services.tenant_public_link_service import TenantPublicLinkService
 from apps.core.tenant_context import get_current_database_alias
 from apps.crm.services import CarteiraService
+from apps.crm.services.comercial_service import EtapaAutomaticaCRM
 
 from .conversation_service import encerrar_conversa, encerrar_conversas_inativas
 from .conversation_identity import conversa_ativa_por_telefone
 from .flow import garantir_fluxo_padrao
+from .funil_service import sincronizar_funil_whatsapp
 from .forms import (
     ConexaoWhatsAppVendedorForm,
     ConfiguracaoWhatsAppForm,
@@ -1034,6 +1036,14 @@ class CRMNovaConversaIniciarView(PermissaoRequiredMixin, View):
                 'cliente_grupo_replicacao', 'fora_carteira',
                 'atendimento_humano', 'updated_at',
             ])
+        sincronizar_funil_whatsapp(
+            conversa,
+            EtapaAutomaticaCRM.CONVERSAS,
+            filial=request.filial_ativa,
+            cliente=cliente,
+            responsavel=vendedor,
+            autor=request.user,
+        )
         return JsonResponse({
             'ok': True,
             'url': reverse('whatsapp_agent:crm-inbox-detail', args=[conversa.pk]),
@@ -1317,6 +1327,12 @@ class CRMOrcamentoEnviarView(PermissaoRequiredMixin, View):
         pedido = pedido_do_orcamento(orcamento)
         pedido.status = pedido.Status.AGUARDANDO_APROVACAO
         pedido.save(update_fields=['status', 'updated_at'])
+        sincronizar_funil_whatsapp(
+            conversa,
+            EtapaAutomaticaCRM.AGUARDANDO_APROVACAO,
+            pedido=pedido,
+            autor=request.user,
+        )
         return JsonResponse({'ok': True, 'mensagem': 'Orçamento enviado para o cliente.'})
 
 
