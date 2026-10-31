@@ -306,6 +306,71 @@ class ConexaoWhatsAppVendedorTests(TestCase):
         self.assertEqual(mensagem.autor_email, self.vendedor.email)
         self.assertEqual(mensagem.identificador_externo, 'evolution.crm-1')
 
+    @patch('apps.whatsapp_agent.views.EvolutionClient.enviar_texto')
+    def test_envio_ajax_retorna_mensagem_sem_redirecionar(self, enviar_texto):
+        enviar_texto.return_value = {'key': {'id': 'evolution.ajax-1'}}
+        conexao = self._conexao_qr()
+        conversa = ConversaWhatsApp.objects.create(
+            conexao_vendedor=conexao, filial=self.filial,
+            remote_jid='5584999991212@s.whatsapp.net', telefone='5584999991212',
+            nome_contato='Cliente em tempo real', fora_carteira=False,
+        )
+        self.client.force_login(self.vendedor)
+
+        resposta = self.client.post(
+            reverse('whatsapp_agent:crm-enviar', args=[conversa.pk]),
+            {'mensagem': 'Mensagem sem atualizar a página'},
+            HTTP_ACCEPT='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        self.assertTrue(resposta.json()['ok'])
+        self.assertEqual(
+            resposta.json()['mensagem']['texto'],
+            'Mensagem sem atualizar a página',
+        )
+        self.assertEqual(resposta.json()['mensagem']['status'], 'enviada')
+
+    def test_sincronizacao_incremental_entrega_novas_mensagens(self):
+        conexao = self._conexao_qr()
+        conversa = ConversaWhatsApp.objects.create(
+            conexao_vendedor=conexao, filial=self.filial,
+            remote_jid='5584999991313@s.whatsapp.net', telefone='5584999991313',
+            nome_contato='Cliente sincronizado', fora_carteira=False,
+        )
+        primeira = MensagemWhatsApp.objects.create(
+            conversa=conversa, direcao='entrada', origem='cliente',
+            texto='Primeira mensagem', texto_original='Primeira mensagem',
+        )
+        conversa.ultima_mensagem_em = primeira.created_at
+        conversa.save(update_fields=['ultima_mensagem_em', 'updated_at'])
+        self.client.force_login(self.vendedor)
+
+        inicial = self.client.get(
+            reverse('whatsapp_agent:crm-atualizacoes', args=[conversa.pk]),
+        )
+        desde = inicial.json()['sincronizado_em']
+        MensagemWhatsApp.objects.create(
+            conversa=conversa, direcao='entrada', origem='cliente',
+            texto='Chegou agora', texto_original='Chegou agora',
+        )
+        conversa.ultima_mensagem_em = timezone.now()
+        conversa.save(update_fields=['ultima_mensagem_em', 'updated_at'])
+        incremental = self.client.get(
+            reverse('whatsapp_agent:crm-atualizacoes', args=[conversa.pk]),
+            {'desde': desde},
+        )
+
+        self.assertEqual(inicial.status_code, 200)
+        self.assertEqual(inicial.json()['mensagens'][0]['texto'], 'Primeira mensagem')
+        self.assertEqual(incremental.status_code, 200)
+        self.assertEqual(
+            [item['texto'] for item in incremental.json()['mensagens']],
+            ['Chegou agora'],
+        )
+        self.assertEqual(incremental.json()['total_conversas'], 1)
+
     @patch('apps.whatsapp_agent.gateway.MetaCloudClient.enviar_template')
     @patch('apps.whatsapp_agent.views.EvolutionClient.enviar_texto')
     def test_crm_permite_envio_humano_apos_24_horas_sem_usar_modelo(
@@ -408,8 +473,12 @@ class ConexaoWhatsAppVendedorTests(TestCase):
         resposta = self.client.get(
             reverse('whatsapp_agent:crm-inbox-detail', kwargs={'pk': conversa.pk}),
         )
+        atualizacoes = self.client.get(
+            reverse('whatsapp_agent:crm-atualizacoes', kwargs={'pk': conversa.pk}),
+        )
 
         self.assertEqual(resposta.status_code, 404)
+        self.assertEqual(atualizacoes.status_code, 404)
 
         self.client.force_login(self.gestor)
         resposta_gestor = self.client.get(

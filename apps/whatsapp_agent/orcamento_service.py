@@ -2,7 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Case, IntegerField, Q, Value, When
 from django.utils import timezone
 
 from apps.cadastros.models import Cliente
@@ -145,11 +145,21 @@ def dados_editor(conversa, filial):
 def buscar_produtos(conversa, filial, termo):
     cliente = cliente_da_conversa(conversa, filial)
     termo = (termo or '').strip()
-    if len(termo) < 2:
+    if not termo:
         return []
     produtos = (
         Produto.objects.for_filial(filial).vendaveis()
         .filter(Q(descricao__icontains=termo) | Q(codigo__icontains=termo))
+        .annotate(
+            _prioridade_busca=Case(
+                When(codigo__iexact=termo, then=Value(0)),
+                When(codigo__istartswith=termo, then=Value(1)),
+                When(descricao__istartswith=termo, then=Value(2)),
+                default=Value(3),
+                output_field=IntegerField(),
+            ),
+        )
+        .order_by('_prioridade_busca', 'descricao')
         .select_related('unidade_medida')[:20]
     )
     retorno = []

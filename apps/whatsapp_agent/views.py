@@ -11,6 +11,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.utils.decorators import method_decorator
 from django.utils.text import slugify
 from django.views import View
@@ -154,6 +155,53 @@ def _clientes_da_carteira_da_conexao(request, conexao, busca=''):
         if len(clientes) >= 30:
             break
     return clientes, vendedor
+
+
+def _serializar_mensagem_crm(mensagem):
+    criada_em = timezone.localtime(mensagem.created_at)
+    partes_rodape = []
+    if mensagem.autor_nome:
+        partes_rodape.append(mensagem.autor_nome)
+    partes_rodape.extend([
+        mensagem.get_origem_display(),
+        criada_em.strftime('%d/%m %H:%M'),
+    ])
+    if mensagem.status:
+        partes_rodape.append(mensagem.status)
+    return {
+        'id': mensagem.pk,
+        'direcao': mensagem.direcao,
+        'texto': mensagem.texto,
+        'apagada': bool(mensagem.apagada_em),
+        'rodape': ' · '.join(partes_rodape),
+        'status': mensagem.status,
+        'updated_at': mensagem.updated_at.isoformat(),
+    }
+
+
+def _serializar_conversa_crm(conversa, *, pode_supervisionar):
+    ultima_em = conversa.ultima_mensagem_em or conversa.created_at
+    return {
+        'id': conversa.pk,
+        'nome': conversa.nome_contato or conversa.telefone,
+        'telefone': conversa.telefone,
+        'inicial': (conversa.nome_contato or conversa.telefone or '?')[:1].upper(),
+        'ultima_mensagem': conversa.ultima_mensagem_texto or 'Sem mensagens',
+        'ultima_direcao': conversa.ultima_mensagem_direcao or '',
+        'ultima_hora': timezone.localtime(ultima_em).strftime('%H:%M'),
+        'ordem': ultima_em.timestamp(),
+        'vendedor': (
+            conversa.conexao_vendedor.vendedor.nome if pode_supervisionar else ''
+        ),
+        'url': reverse('whatsapp_agent:crm-inbox-detail', args=[conversa.pk]),
+    }
+
+
+def _request_quer_json(request):
+    return (
+        'application/json' in request.headers.get('Accept', '')
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    )
 
 
 class ConfiguracaoView(PermissaoRequiredMixin, View):
@@ -670,6 +718,55 @@ class CRMWhatsAppInboxView(PermissaoRequiredMixin, View):
         })
 
 
+class CRMWhatsAppAtualizacoesView(PermissaoRequiredMixin, View):
+    """Sincronização incremental da caixa, sem recarregar a página."""
+
+    permissao_modulo = 'crm'
+    permissao_acao = 'ver'
+
+    def get(self, request, pk):
+        conversa = get_object_or_404(_conversas_crm_permitidas(request), pk=pk)
+        limite = timezone.now()
+        desde = parse_datetime((request.GET.get('desde') or '').strip())
+        if desde and timezone.is_naive(desde):
+            desde = timezone.make_aware(desde)
+        pode_supervisionar = CarteiraService.pode_supervisionar(request.user)
+
+        mensagens = conversa.mensagens.filter(updated_at__lte=limite)
+        conversas = _conversas_crm_permitidas(request).filter(updated_at__lte=limite)
+        if desde:
+            mensagens = mensagens.filter(updated_at__gt=desde)
+            conversas = conversas.filter(updated_at__gt=desde)
+
+        mensagens = list(mensagens.order_by('-updated_at')[:500])
+        ultima_mensagem = MensagemWhatsApp.objects.filter(
+            conversa_id=OuterRef('pk'),
+        ).order_by('-created_at')
+        conversas = list(
+            conversas.select_related(
+                'conexao_vendedor', 'conexao_vendedor__vendedor',
+            ).annotate(
+                ultima_mensagem_texto=Subquery(ultima_mensagem.values('texto')[:1]),
+                ultima_mensagem_direcao=Subquery(ultima_mensagem.values('direcao')[:1]),
+            ).order_by('-ultima_mensagem_em', '-created_at')[:200]
+        )
+        return JsonResponse({
+            'sincronizado_em': limite.isoformat(),
+            'conversa_id': conversa.pk,
+            'mensagens': [
+                _serializar_mensagem_crm(item)
+                for item in sorted(mensagens, key=lambda item: (item.created_at, item.pk))
+            ],
+            'conversas': [
+                _serializar_conversa_crm(
+                    item, pode_supervisionar=pode_supervisionar,
+                )
+                for item in conversas
+            ],
+            'total_conversas': _conversas_crm_permitidas(request).count(),
+        })
+
+
 class CRMNovaConversaDadosView(PermissaoRequiredMixin, View):
     permissao_modulo = 'crm'
     permissao_acao = 'ver'
@@ -937,19 +1034,45 @@ class CRMWhatsAppEnviarView(PermissaoRequiredMixin, View):
         )
         texto = (request.POST.get('mensagem') or '').strip()
         if not texto:
+            if _request_quer_json(request):
+                return JsonResponse({'erro': 'Digite uma mensagem antes de enviar.'}, status=400)
             messages.error(request, 'Digite uma mensagem antes de enviar.')
             return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
         if len(texto) > 4096:
+            if _request_quer_json(request):
+                return JsonResponse({
+                    'erro': 'A mensagem deve ter no máximo 4.096 caracteres.',
+                }, status=400)
             messages.error(request, 'A mensagem deve ter no máximo 4.096 caracteres.')
             return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
         conexao = conversa.conexao_vendedor
         if not conexao:
+            if _request_quer_json(request):
+                return JsonResponse({
+                    'erro': 'A conexão deste vendedor não está configurada.',
+                }, status=400)
             messages.error(request, 'A conexão deste vendedor não está configurada.')
             return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
         try:
-            _enviar_texto_humano_crm(conversa, texto, request.user)
+            mensagem = _enviar_texto_humano_crm(conversa, texto, request.user)
+            if _request_quer_json(request):
+                return JsonResponse({
+                    'ok': True,
+                    'mensagem': _serializar_mensagem_crm(mensagem),
+                })
             messages.success(request, 'Mensagem enviada pelo CRM.')
         except GatewayWhatsAppError as exc:
+            if _request_quer_json(request):
+                mensagem = conversa.mensagens.filter(
+                    origem=MensagemWhatsApp.Origem.CRM,
+                    autor_email=request.user.email,
+                    texto=texto,
+                    status='erro',
+                ).order_by('-created_at').first()
+                resposta = {'erro': f'Não foi possível enviar a mensagem: {exc}'}
+                if mensagem:
+                    resposta['mensagem'] = _serializar_mensagem_crm(mensagem)
+                return JsonResponse(resposta, status=502)
             messages.error(request, f'Não foi possível enviar a mensagem: {exc}')
         return redirect('whatsapp_agent:crm-inbox-detail', pk=pk)
 

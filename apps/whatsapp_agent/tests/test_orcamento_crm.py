@@ -148,11 +148,16 @@ class OrcamentoCRMTests(TestCase):
             reverse('whatsapp_agent:crm-orcamento-produtos', args=[self.conversa.pk]),
             {'q': 'acerola'},
         )
+        busca_codigo = self.client.get(
+            reverse('whatsapp_agent:crm-orcamento-produtos', args=[self.conversa.pk]),
+            {'q': 'A'},
+        )
 
         self.assertContains(inbox, 'Orçamento')
         self.assertEqual(editor.status_code, 200)
         self.assertEqual(editor.json()['cliente']['nome'], 'Mercado do Cliente')
         self.assertEqual(busca.json()['produtos'][0]['preco'], '8.0000')
+        self.assertEqual(busca_codigo.json()['produtos'][0]['codigo'], 'ACE-01')
 
     def test_salva_itens_descontos_entrega_e_pagamento(self):
         resposta = self._salvar()
