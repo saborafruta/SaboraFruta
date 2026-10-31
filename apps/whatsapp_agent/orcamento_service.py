@@ -66,6 +66,16 @@ def endereco_cliente(cliente):
     return ', '.join(str(item) for item in partes if item)
 
 
+def serializar_cliente_orcamento(cliente):
+    return {
+        'id': cliente.pk,
+        'nome': cliente.nome_display,
+        'documento': cliente.cpf_cnpj,
+        'telefone': cliente.celular or cliente.telefone or '',
+        'endereco': endereco_cliente(cliente),
+    }
+
+
 def pedido_do_orcamento(orcamento, *, bloquear=False):
     queryset = PedidoVenda.objects.using(orcamento.tenant_alias).select_related(
         'filial__empresa', 'cliente', 'forma_pagamento', 'condicao_pagamento',
@@ -98,6 +108,7 @@ def serializar_orcamento(orcamento):
         'desconto_total': str(pedido.valor_desconto),
         'total': str(pedido.valor_total),
         'motivo_recusa': orcamento.motivo_recusa,
+        'cliente': serializar_cliente_orcamento(pedido.cliente),
         'itens': [
             {
                 'produto_id': item.produto_id,
@@ -138,12 +149,7 @@ def dados_editor(conversa, filial):
         empresa=filial.empresa, ativo=True,
     ).order_by('descricao')
     return {
-        'cliente': {
-            'id': cliente.pk,
-            'nome': cliente.nome_display,
-            'documento': cliente.cpf_cnpj,
-            'endereco': endereco_cliente(cliente),
-        },
+        'cliente': serializar_cliente_orcamento(cliente),
         'formas_pagamento': [
             {'id': item.pk, 'descricao': item.descricao_com_conta}
             for item in formas.order_by('descricao').distinct()
@@ -157,8 +163,8 @@ def dados_editor(conversa, filial):
     }
 
 
-def buscar_produtos(conversa, filial, termo):
-    cliente = cliente_da_conversa(conversa, filial)
+def buscar_produtos(conversa, filial, termo, *, cliente=None):
+    cliente = cliente or cliente_da_conversa(conversa, filial)
     termo = (termo or '').strip()
     if not termo:
         return []
@@ -236,10 +242,10 @@ def buscar_produtos(conversa, filial, termo):
     return retorno
 
 
-def salvar_orcamento(*, conversa, filial, usuario, payload):
+def salvar_orcamento(*, conversa, filial, usuario, payload, cliente=None):
     alias = get_current_database_alias()
     with transaction.atomic(using=alias), transaction.atomic(using='default'):
-        cliente = cliente_da_conversa(conversa, filial)
+        cliente = cliente or cliente_da_conversa(conversa, filial)
         orcamento_id = payload.get('orcamento_id')
         orcamento = None
         if orcamento_id:
@@ -256,7 +262,13 @@ def salvar_orcamento(*, conversa, filial, usuario, payload):
                 raise DadosInvalidosError('O orçamento pertence a outro banco operacional.')
             pedido = pedido_do_orcamento(orcamento, bloquear=True)
             pedido.status = PedidoVenda.Status.RASCUNHO
-            pedido.save(update_fields=['status', 'updated_at'])
+            pedido.cliente = cliente
+            pedido.tabela_preco = PrecoService.tabela_cliente_vigente(
+                cliente=cliente, filial=filial, tabela=cliente.tabela_preco,
+            )
+            pedido.save(update_fields=[
+                'status', 'cliente', 'tabela_preco', 'updated_at',
+            ])
             pedido.itens.all().delete()
         else:
             pedido = VendaService.criar_pedido(

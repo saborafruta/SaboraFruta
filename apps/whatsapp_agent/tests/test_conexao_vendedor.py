@@ -353,7 +353,7 @@ class ConexaoWhatsAppVendedorTests(TestCase):
         self.assertEqual(mensagem.texto, 'Segue a proposta')
         self.assertEqual(mensagem.texto_original, 'Segue a proposta')
 
-    def test_lid_e_nome_do_whatsapp_reutilizam_conversa_pelo_numero(self):
+    def test_lid_nome_e_celular_sem_nono_digito_reutilizam_conversa(self):
         conexao = self._conexao_qr()
         conversa = ConversaWhatsApp.objects.create(
             conexao_vendedor=conexao, filial=self.filial,
@@ -365,7 +365,7 @@ class ConexaoWhatsAppVendedorTests(TestCase):
             'key': {
                 'id': 'evolution-lid-1', 'fromMe': False,
                 'remoteJid': '123456789012345@lid',
-                'remoteJidAlt': '5584999991111@s.whatsapp.net',
+                'remoteJidAlt': '558499991111@s.whatsapp.net',
             },
             'pushName': 'Nome diferente no WhatsApp',
             'message': {'conversation': 'Resposta pelo celular'},

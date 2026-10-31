@@ -11,6 +11,7 @@ from apps.cadastros.models import Cliente, ClienteFilial
 from apps.core.models import Empresa, Filial, PerfilAcesso, Permissao, Usuario
 from apps.financeiro.constants.enums import TipoFormaPagamento
 from apps.financeiro.models import CondicaoPagamento, FormaPagamento
+from apps.crm.models import CarteiraCliente
 from apps.produtos.models import (
     CategoriaProduto, CategoriaProdutoFilial, ItemTabelaPreco, Produto,
     ProdutoApresentacao, ProdutoFilial, TabelaPreco, TabelaPrecoFilial, UnidadeMedida,
@@ -158,6 +159,65 @@ class OrcamentoCRMTests(TestCase):
         self.assertEqual(editor.json()['cliente']['nome'], 'Mercado do Cliente')
         self.assertEqual(busca.json()['produtos'][0]['preco'], '8.0000')
         self.assertEqual(busca_codigo.json()['produtos'][0]['codigo'], 'ACE-01')
+
+    def test_pode_trocar_cliente_do_orcamento_dentro_da_carteira(self):
+        outro_cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='J', razao_social='Grupo Cliente Filial Sul',
+            nome_fantasia='Filial Sul', cpf_cnpj='99111222000147',
+            celular='84988887777', endereco='Avenida Sul', numero='200',
+            bairro='Distrito', cidade='Natal', uf='RN', tabela_preco=self.tabela,
+            limite_credito=Decimal('2000'), ativo=True,
+        )
+        ClienteFilial.objects.create(cliente=outro_cliente, filial=self.filial)
+        CarteiraCliente.objects.create(
+            empresa=self.empresa, cliente=outro_cliente,
+            grupo_cliente=outro_cliente.grupo_replicacao,
+            vendedor=self.vendedor, atribuido_por=self.vendedor,
+        )
+        clientes_url = reverse(
+            'whatsapp_agent:crm-orcamento-clientes', args=[self.conversa.pk],
+        )
+        busca_cliente = self.client.get(clientes_url, {'q': 'Filial Sul'})
+        self.assertEqual(busca_cliente.status_code, 200)
+        self.assertEqual(busca_cliente.json()['clientes'][0]['id'], outro_cliente.pk)
+
+        produtos_url = reverse(
+            'whatsapp_agent:crm-orcamento-produtos', args=[self.conversa.pk],
+        )
+        busca_produto = self.client.get(produtos_url, {
+            'q': 'acerola', 'cliente_id': outro_cliente.pk,
+        })
+        self.assertEqual(busca_produto.status_code, 200)
+
+        payload = self._payload()
+        payload['cliente_id'] = outro_cliente.pk
+        resposta = self.client.post(
+            reverse('whatsapp_agent:crm-orcamento-salvar', args=[self.conversa.pk]),
+            data=json.dumps(payload), content_type='application/json',
+        )
+
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        orcamento = OrcamentoWhatsApp.objects.get()
+        pedido = self._pedido(orcamento)
+        self.assertEqual(pedido.cliente, outro_cliente)
+        self.assertEqual(resposta.json()['orcamento']['cliente']['id'], outro_cliente.pk)
+
+    def test_nao_permite_cliente_fora_da_carteira_no_orcamento(self):
+        outro_cliente = Cliente.objects.create(
+            filial=self.filial, tipo_pessoa='J', razao_social='Cliente de outro vendedor',
+            cpf_cnpj='99111222000148', ativo=True,
+        )
+        ClienteFilial.objects.create(cliente=outro_cliente, filial=self.filial)
+        payload = self._payload()
+        payload['cliente_id'] = outro_cliente.pk
+
+        resposta = self.client.post(
+            reverse('whatsapp_agent:crm-orcamento-salvar', args=[self.conversa.pk]),
+            data=json.dumps(payload), content_type='application/json',
+        )
+
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn('carteira', resposta.json()['erro'])
 
     def test_busca_localiza_produto_por_id_e_por_embalagem(self):
         apresentacao = ProdutoApresentacao.objects.create(

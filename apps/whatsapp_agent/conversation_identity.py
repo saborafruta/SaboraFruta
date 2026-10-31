@@ -11,6 +11,16 @@ def normalizar_telefone_whatsapp(valor):
     digitos = re.sub(r'\D', '', valor.split('@', 1)[0])
     if len(digitos) in (10, 11):
         digitos = f'55{digitos}'
+    # O WhatsApp ainda pode devolver celulares brasileiros no formato antigo,
+    # sem o nono dígito. O cadastro e o envio, por sua vez, normalmente usam o
+    # formato atual. Canonizar os dois evita abrir duas conversas para a mesma
+    # pessoa (55 + DDD + número móvel de 8/9 dígitos).
+    if (
+        len(digitos) == 12
+        and digitos.startswith('55')
+        and digitos[4:5] in {'6', '7', '8', '9'}
+    ):
+        digitos = f'{digitos[:4]}9{digitos[4:]}'
     return digitos if 12 <= len(digitos) <= 15 else ''
 
 

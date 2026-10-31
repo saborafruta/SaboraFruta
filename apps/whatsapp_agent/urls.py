@@ -68,6 +68,10 @@ urlpatterns = [
         name='crm-orcamento-produtos',
     ),
     path(
+        'crm/<int:pk>/orcamento/clientes/', views.CRMOrcamentoClientesView.as_view(),
+        name='crm-orcamento-clientes',
+    ),
+    path(
         'crm/<int:pk>/orcamento/salvar/', views.CRMOrcamentoSalvarView.as_view(),
         name='crm-orcamento-salvar',
     ),

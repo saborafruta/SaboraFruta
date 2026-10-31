@@ -50,7 +50,7 @@ from .models import (
 )
 from .orcamento_service import (
     buscar_produtos, dados_editor, pedido_do_orcamento, resumo_para_whatsapp,
-    salvar_orcamento, serializar_orcamento,
+    salvar_orcamento, serializar_cliente_orcamento, serializar_orcamento,
 )
 from .templatetags.whatsapp_ui import whatsapp_status
 from .webhook import receber_evento, receber_evento_meta
@@ -147,10 +147,10 @@ def _telefone_whatsapp_cliente(cliente):
     return digitos if 12 <= len(digitos) <= 15 else ''
 
 
-def _clientes_da_carteira_da_conexao(request, conexao, busca=''):
+def _queryset_clientes_da_carteira_da_conexao(request, conexao, busca=''):
     vendedor = _vendedor_operacional_da_conexao(conexao)
     if not vendedor:
-        return [], None
+        return Cliente.objects.none(), None
     queryset = Cliente.objects.for_empresa(request.filial_ativa.empresa).filter(ativo=True)
     queryset = CarteiraService.filtrar_clientes_do_vendedor(
         queryset, vendedor=vendedor, empresa=request.filial_ativa.empresa,
@@ -164,6 +164,15 @@ def _clientes_da_carteira_da_conexao(request, conexao, busca=''):
             | Q(celular__icontains=busca)
             | Q(telefone__icontains=busca)
         )
+    return queryset, vendedor
+
+
+def _clientes_da_carteira_da_conexao(request, conexao, busca=''):
+    queryset, vendedor = _queryset_clientes_da_carteira_da_conexao(
+        request, conexao, busca,
+    )
+    if not vendedor:
+        return [], None
     clientes, grupos = [], set()
     for cliente in queryset.select_related('filial').order_by('razao_social', 'pk')[:100]:
         if cliente.grupo_replicacao in grupos:
@@ -181,6 +190,24 @@ def _clientes_da_carteira_da_conexao(request, conexao, busca=''):
         if len(clientes) >= 30:
             break
     return clientes, vendedor
+
+
+def _cliente_orcamento_permitido(request, conversa, cliente_id):
+    if not conversa.conexao_vendedor_id:
+        raise DadosInvalidosError('A conexão do vendedor não está configurada.')
+    queryset, vendedor = _queryset_clientes_da_carteira_da_conexao(
+        request, conversa.conexao_vendedor,
+    )
+    try:
+        cliente_pk = int(cliente_id)
+    except (TypeError, ValueError):
+        cliente_pk = 0
+    cliente = queryset.filter(pk=cliente_pk).first() if vendedor else None
+    if not cliente:
+        raise DadosInvalidosError(
+            'Selecione um cliente da carteira deste vendedor.',
+        )
+    return cliente
 
 
 def _rotulo_midia_crm(tipo, nome=''):
@@ -1136,6 +1163,35 @@ class CRMOrcamentoEditorView(PermissaoRequiredMixin, View):
             return JsonResponse({'erro': str(exc)}, status=400)
 
 
+class CRMOrcamentoClientesView(PermissaoRequiredMixin, View):
+    permissao_modulo = 'crm'
+    permissao_acao = 'ver'
+
+    def get(self, request, pk):
+        conversa = _conversas_crm_permitidas(request).select_related(
+            'conexao_vendedor',
+        ).filter(pk=pk).first()
+        if not conversa:
+            return JsonResponse({
+                'erro': 'Esta conversa foi atualizada. Recarregue o CRM para continuar.',
+            }, status=404)
+        termo = (request.GET.get('q') or '').strip()
+        if len(termo) < 2:
+            return JsonResponse({'clientes': []})
+        queryset, vendedor = _queryset_clientes_da_carteira_da_conexao(
+            request, conversa.conexao_vendedor, termo,
+        )
+        if not vendedor:
+            return JsonResponse({'erro': 'O vendedor não foi localizado.'}, status=400)
+        clientes = [
+            serializar_cliente_orcamento(cliente)
+            for cliente in queryset.select_related('filial').order_by(
+                'razao_social', 'pk',
+            )[:30]
+        ]
+        return JsonResponse({'clientes': clientes})
+
+
 class CRMOrcamentoProdutosView(PermissaoRequiredMixin, View):
     permissao_modulo = 'crm'
     permissao_acao = 'ver'
@@ -1147,8 +1203,14 @@ class CRMOrcamentoProdutosView(PermissaoRequiredMixin, View):
                 'erro': 'Esta conversa foi atualizada. Recarregue o CRM para continuar.',
             }, status=404)
         try:
+            cliente = None
+            if request.GET.get('cliente_id'):
+                cliente = _cliente_orcamento_permitido(
+                    request, conversa, request.GET['cliente_id'],
+                )
             produtos = buscar_produtos(
                 conversa, request.filial_ativa, request.GET.get('q', ''),
+                cliente=cliente,
             )
             return JsonResponse({'produtos': produtos})
         except DadosInvalidosError as exc:
@@ -1168,9 +1230,14 @@ class CRMOrcamentoSalvarView(PermissaoRequiredMixin, View):
             }, status=404)
         try:
             payload = json.loads(request.body or b'{}')
+            cliente = None
+            if payload.get('cliente_id'):
+                cliente = _cliente_orcamento_permitido(
+                    request, conversa, payload['cliente_id'],
+                )
             orcamento = salvar_orcamento(
                 conversa=conversa, filial=request.filial_ativa,
-                usuario=request.user, payload=payload,
+                usuario=request.user, payload=payload, cliente=cliente,
             )
             return JsonResponse({'ok': True, 'orcamento': serializar_orcamento(orcamento)})
         except (json.JSONDecodeError, DomainError) as exc:
